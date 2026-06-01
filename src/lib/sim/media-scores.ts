@@ -57,11 +57,11 @@ export function computeDriverMediaScores(
         if (dq < tq) qualWins++
       }
 
-      const df = dr.dnf ? null : dr.finishPosition
-      const tf = tr.dnf ? null : tr.finishPosition
-      if (df !== null || tf !== null) {
+      // Only count races where BOTH were classified — a DNF (usually mechanical)
+      // must not count for or against either driver in the head-to-head.
+      if (!dr.dnf && !tr.dnf && dr.finishPosition !== null && tr.finishPosition !== null) {
         raceTotal++
-        if (df !== null && (tf === null || df < tf)) raceWins++
+        if (dr.finishPosition < tr.finishPosition) raceWins++
       }
     }
 
