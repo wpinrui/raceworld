@@ -11,14 +11,32 @@ import type {
   DevUpgradeEvent,
   ConstructorSeasonRecord,
   EndOfSeasonSummary,
+  DriverProgressionEvent,
 } from '@/lib/sim/types'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
-import { computeFundingTiers, initDevPlans, applyFundingPenalties, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
-import { applyDriverProgression } from '@/lib/sim/progression'
+import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
+import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, determineRetirements, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
 
 const TOTAL_ROUNDS = calendar2026.length
+
+type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
+
+// Snapshot the four stats of every grid driver, keyed by id.
+function snapshotStats(drivers: Driver[]): StatSnapshot {
+  const snap: StatSnapshot = {}
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    snap[d.id] = {
+      pace: d.pace,
+      wetWeatherPace: d.wetWeatherPace,
+      overtaking: d.overtaking,
+      smoothness: d.smoothness,
+    }
+  }
+  return snap
+}
 
 function computeDriverStandings(
   drivers: Driver[],
@@ -113,6 +131,8 @@ interface SeasonStore {
   allUpgradeEvents: DevUpgradeEvent[]
   endOfSeasonSummary: EndOfSeasonSummary | null
   pendingNextSeasonState: { drivers: Driver[]; teams: Team[] } | null
+  // Snapshot of each grid driver's stats at season start, for the net-development summary.
+  seasonStartStats: Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
 
   // Computed
   driverStandings: DriverStanding[]
@@ -144,6 +164,7 @@ export const useSeasonStore = create<SeasonStore>()(
       allUpgradeEvents: [],
       endOfSeasonSummary: null,
       pendingNextSeasonState: null,
+      seasonStartStats: {},
       driverStandings: [],
       constructorStandings: [],
 
@@ -172,6 +193,7 @@ export const useSeasonStore = create<SeasonStore>()(
           allUpgradeEvents: [],
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
+          seasonStartStats: snapshotStats(allDrivers),
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -182,21 +204,22 @@ export const useSeasonStore = create<SeasonStore>()(
         const updated = [...raceResults]
         updated[currentRound - 1] = results
 
-        // Apply upgrade events for this round, then funding penalties
-        const { upgradeEvents, updatedTeams: teamsAfterUpgrades, updatedDevPlans: plansAfterUpgrades } =
+        // Deliver any car upgrades due this round (funding penalty is baked into the upgrade).
+        const { upgradeEvents, updatedTeams, updatedDevPlans } =
           applyUpgradeEvents(currentRound, teams, devPlans, Math.random)
 
-        const { updatedTeams, updatedDevPlans } =
-          applyFundingPenalties(teamsAfterUpgrades, plansAfterUpgrades)
+        // Driver development applies after each race.
+        const { updatedDrivers } = applyRaceProgression(drivers, Math.random)
 
         set({
           raceResults: updated,
           phase: 'post-race',
           teams: updatedTeams,
+          drivers: updatedDrivers,
           devPlans: updatedDevPlans,
           allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
-          driverStandings: computeDriverStandings(drivers, updatedTeams, updated),
-          constructorStandings: computeConstructorStandings(updatedTeams, drivers, updated),
+          driverStandings: computeDriverStandings(updatedDrivers, updatedTeams, updated),
+          constructorStandings: computeConstructorStandings(updatedTeams, updatedDrivers, updated),
         })
       },
 
@@ -219,6 +242,7 @@ export const useSeasonStore = create<SeasonStore>()(
           allUpgradeEvents,
           driverStandings,
           constructorStandings,
+          seasonStartStats,
         } = get()
 
         const totalTeams = teams.length
@@ -234,11 +258,25 @@ export const useSeasonStore = create<SeasonStore>()(
         )
         const teamMediaScores = computeTeamMediaScores(teams, constructorHistory, constructorRankInfo)
 
-        // 2. Driver progression (age increment + stat changes)
-        const { updatedDrivers: agedDrivers, events: progressionEvents } =
-          applyDriverProgression(drivers, Math.random)
+        // 2. Net development this season = current stats vs the season-start snapshot
+        //    (the actual improvement/decline already happened race-by-race).
+        const progressionEvents: DriverProgressionEvent[] = []
+        for (const d of drivers) {
+          const start = seasonStartStats[d.id]
+          if (!start) continue
+          for (const stat of ['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const) {
+            if (Math.abs(d[stat] - start[stat]) >= 0.05) {
+              progressionEvents.push({
+                driverId: d.id, driverName: d.name, stat,
+                before: start[stat], after: d[stat],
+                direction: d[stat] > start[stat] ? 'improved' : 'declined',
+              })
+            }
+          }
+        }
 
-        // 3. Retirements
+        // 3. Age every driver one year, then assess retirements.
+        const agedDrivers = ageDrivers(drivers)
         const retiredDriverIds = determineRetirements(agedDrivers, driverMediaScores, year)
 
         // 4. Car reshuffle
@@ -382,6 +420,7 @@ export const useSeasonStore = create<SeasonStore>()(
         allUpgradeEvents: state.allUpgradeEvents,
         endOfSeasonSummary: state.endOfSeasonSummary,
         pendingNextSeasonState: state.pendingNextSeasonState,
+        seasonStartStats: state.seasonStartStats,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

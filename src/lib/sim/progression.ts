@@ -8,53 +8,77 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-export function applyDriverProgression(
+// Cosmetic overall used to test whether a driver has reached their potential.
+export function overall(d: Pick<Driver, 'pace' | 'smoothness' | 'overtaking' | 'wetWeatherPace'>): number {
+  return 0.6 * d.pace + 0.2 * d.smoothness + 0.1 * d.overtaking + 0.1 * d.wetWeatherPace
+}
+
+// Driver development applies AFTER EACH RACE (GDD §Driver progression curve).
+// Pre-prime: improve toward potential at a rate that fills the remaining gap over
+// (20 × years-till-prime) races. That per-race value is the lower quartile of a normal
+// curve whose median is 1.5× larger. Post-prime: decline, accelerating with age.
+export function applyRaceProgression(
   drivers: Driver[],
   rng: () => number,
 ): { updatedDrivers: Driver[]; events: DriverProgressionEvent[] } {
   const events: DriverProgressionEvent[] = []
+
   const updatedDrivers = drivers.map((driver) => {
-    const newAge = driver.age + 1
-    const updated = { ...driver, age: newAge }
+    // Only drivers on an F1 seat develop from racing.
+    if (driver.teamId === '') return driver
+
+    const ov = overall(driver)
+    const next = { ...driver }
+
+    if (driver.age < driver.primeEnd) {
+      // Developing — stop once potential is reached (plateau until prime end).
+      if (ov >= driver.peakPotential) return driver
+
+      const yearsTillPrime = Math.max(0.001, driver.primeEnd - driver.age)
+      const racesToPotential = Math.max(1, 20 * yearsTillPrime)
+      const gap = driver.peakPotential - ov
+
+      const q1 = gap / racesToPotential       // lower quartile
+      const median = q1 * 1.5                  // median = 1.5 × Q1
+      const sigma = (median - q1) / 0.6745     // Q1 = μ − 0.6745σ
+      const improvement = Math.max(0, sampleNormal(median, sigma, rng))
+
+      // Don't overshoot potential on average.
+      const actualGain = Math.min(improvement, gap)
+      for (const stat of STATS) {
+        const jitter = Math.max(0, sampleNormal(1, 0.15, rng)) // small per-stat noise
+        next[stat] = Math.min(100, round1(driver[stat] + actualGain * jitter))
+      }
+    } else {
+      // Declining — accelerates the further past prime end.
+      const yearsPast = driver.age - driver.primeEnd + 1
+      const declineMedian = 0.04 * yearsPast
+      for (const stat of STATS) {
+        const drop = Math.max(0, sampleNormal(declineMedian, declineMedian * 0.3 + 0.02, rng))
+        next[stat] = Math.max(20, round1(driver[stat] - drop))
+      }
+    }
 
     for (const stat of STATS) {
-      const before = driver[stat]
-      let after = before
-
-      if (newAge <= driver.primeEnd) {
-        // Pre-prime: chance to improve toward peakPotential
-        const gap = driver.peakPotential - before
-        const probability = gap > 10 ? 0.55 : gap > 3 ? 0.35 : 0.15
-        if (rng() < probability) {
-          const delta = Math.max(0.1, Math.min(gap, sampleNormal(0.8, 0.6, rng)))
-          after = round1(Math.min(driver.peakPotential, before + delta))
-        }
-      } else {
-        // Post-prime: decline, accelerating each year past prime
-        const yearsOver = newAge - driver.primeEnd
-        const baseDrop = 0.4 + (yearsOver - 1) * 0.15
-        const delta = Math.max(0, Math.min(3.5, sampleNormal(baseDrop, 0.3, rng)))
-        after = round1(Math.max(20, before - delta))
-      }
-
-      // Clamp to [20, 100]
-      after = Math.max(20, Math.min(100, after))
-      updated[stat] = after
-
-      if (Math.abs(after - before) >= 0.05) {
+      if (Math.abs(next[stat] - driver[stat]) >= 0.05) {
         events.push({
           driverId: driver.id,
           driverName: driver.name,
           stat,
-          before,
-          after,
-          direction: after > before ? 'improved' : after < before ? 'declined' : 'unchanged',
+          before: driver[stat],
+          after: next[stat],
+          direction: next[stat] > driver[stat] ? 'improved' : 'declined',
         })
       }
     }
 
-    return updated
+    return next
   })
 
   return { updatedDrivers, events }
+}
+
+// Age every driver by one year (runs once at end of season).
+export function ageDrivers(drivers: Driver[]): Driver[] {
+  return drivers.map((d) => ({ ...d, age: d.age + 1 }))
 }
