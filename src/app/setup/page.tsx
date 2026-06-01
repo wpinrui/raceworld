@@ -19,6 +19,85 @@ const STAT_LABELS: Record<StatKey, string> = {
 
 const DRIVERS_PER_TEAM = 2
 
+// Red (#DC143C) ≤50 → Green (#10B981) ≥90, linear between
+function statColor(value: number): string {
+  const clamped = Math.max(0, Math.min(100, value))
+  if (clamped <= 50) return '#DC143C'
+  if (clamped >= 90) return '#10B981'
+  const t = (clamped - 50) / 40
+  const r = Math.round(220 + (16 - 220) * t)
+  const g = Math.round(20 + (185 - 20) * t)
+  const b = Math.round(60 + (129 - 60) * t)
+  return `rgb(${r},${g},${b})`
+}
+
+function computeOverall(d: Driver): number {
+  return Math.round(0.6 * d.pace + 0.2 * d.smoothness + 0.1 * d.overtaking + 0.1 * d.wetWeatherPace)
+}
+
+function OverallRing({ overall }: { overall: number }) {
+  const size = 44
+  const cx = 22
+  const cy = 22
+  const r = 17
+  const sw = 3
+  const color = statColor(overall)
+  const fraction = Math.min(overall / 100, 0.9999)
+  const angle = 2 * Math.PI * fraction
+  const sx = cx + r * Math.cos(-Math.PI / 2)
+  const sy = cy + r * Math.sin(-Math.PI / 2)
+  const ex = cx + r * Math.cos(-Math.PI / 2 + angle)
+  const ey = cy + r * Math.sin(-Math.PI / 2 + angle)
+  const large = fraction > 0.5 ? 1 : 0
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#2A3142" strokeWidth={sw} />
+        <path
+          d={`M ${sx} ${sy} A ${r} ${r} 0 ${large} 1 ${ex} ${ey}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={sw}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[11px] font-bold" style={{ color }}>{overall}</span>
+      </div>
+    </div>
+  )
+}
+
+function StatBar({ label, value }: { label: string; value: number }) {
+  const color = statColor(value)
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[#A0A9B8] w-20 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-[#2A3142] overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${value}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-sm font-semibold w-8 text-right shrink-0" style={{ color }}>{value}</span>
+    </div>
+  )
+}
+
+function StatSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const color = statColor(value)
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[#A0A9B8] w-20 shrink-0">{label}</span>
+      <input
+        type="range" min={0} max={100} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 h-1 cursor-pointer"
+        style={{ accentColor: color }}
+      />
+      <span className="text-sm font-semibold w-8 text-right shrink-0" style={{ color }}>{value}</span>
+    </div>
+  )
+}
+
 function makeDefaultDriver(teamId: string): Driver {
   return {
     id: `driver-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -36,56 +115,7 @@ function makeDefaultDriver(teamId: string): Driver {
   }
 }
 
-function StatBar({ label, value, color, onChange }: {
-  label: string
-  value: number
-  color: string
-  onChange?: (v: number) => void
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-[#A0A9B8] w-20 shrink-0">{label}</span>
-      <div className="flex-1 h-2 rounded-full bg-[#2A3142] overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${value}%`, backgroundColor: color }}
-        />
-      </div>
-      <span className="text-sm font-semibold text-[#E8EAED] w-8 text-right shrink-0">{value}</span>
-    </div>
-  )
-}
-
-function StatSlider({ label, value, color, onChange }: {
-  label: string
-  value: number
-  color: string
-  onChange: (v: number) => void
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-[#A0A9B8] w-20 shrink-0">{label}</span>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="flex-1 h-1 cursor-pointer"
-        style={{ accentColor: color }}
-      />
-      <span className="text-sm font-semibold text-[#E8EAED] w-8 text-right shrink-0">{value}</span>
-    </div>
-  )
-}
-
-function DriverCard({
-  driver,
-  teamColor,
-  teams,
-  onUpdate,
-  onRemove,
-}: {
+function DriverCard({ driver, teamColor, teams, onUpdate, onRemove }: {
   driver: Driver
   teamColor: string
   teams: Team[]
@@ -93,56 +123,48 @@ function DriverCard({
   onRemove: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const overall = computeOverall(driver)
 
   return (
     <div className="rounded-xl bg-[#2A3142] overflow-hidden">
-      {/* Always-visible card */}
       <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <div className="text-base font-semibold text-[#E8EAED]">{driver.name}</div>
-            <div className="text-xs text-[#A0A9B8] mt-0.5">Age {driver.age}</div>
+        {/* Header: ring + name + controls */}
+        <div className="flex items-center gap-3 mb-4">
+          <OverallRing overall={overall} />
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-semibold text-[#E8EAED] truncate">{driver.name}</div>
+            <div className="text-xs text-[#A0A9B8]">Age {driver.age}</div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setExpanded((x) => !x)}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#303848] transition-colors"
-            >
-              Edit
-              <ChevronDown size={12} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </button>
-            <button
-              onClick={onRemove}
-              className="p-1 rounded text-[#A0A9B8] hover:text-[#F87171] hover:bg-[#3A1A1A] transition-colors"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
+          <button
+            onClick={() => setExpanded((x) => !x)}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#303848] transition-colors shrink-0"
+          >
+            Edit
+            <ChevronDown size={12} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+          <button
+            onClick={onRemove}
+            className="p-1 rounded text-[#A0A9B8] hover:text-[#F87171] hover:bg-[#3A1A1A] transition-colors shrink-0"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
 
         {/* Stat bars */}
         <div className="space-y-2">
           {STAT_KEYS.map((k) => (
-            <StatBar
-              key={k}
-              label={STAT_LABELS[k]}
-              value={driver[k]}
-              color={teamColor}
-            />
+            <StatBar key={k} label={STAT_LABELS[k]} value={driver[k]} />
           ))}
         </div>
       </div>
 
-      {/* Expanded editor */}
       {expanded && (
         <div className="border-t border-[#303848] p-4 space-y-4">
-          {/* Name + team + age row */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-[#A0A9B8] block mb-1">Name</label>
               <input
-                type="text"
-                value={driver.name}
+                type="text" value={driver.name}
                 onChange={(e) => onUpdate({ name: e.target.value })}
                 className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
               />
@@ -154,24 +176,20 @@ function DriverCard({
                 onChange={(e) => onUpdate({ teamId: e.target.value })}
                 className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
               >
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-[#A0A9B8] block mb-1">Age</label>
-                <input
-                  type="number" min={16} max={60} value={driver.age}
+                <input type="number" min={16} max={60} value={driver.age}
                   onChange={(e) => onUpdate({ age: Number(e.target.value) })}
                   className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
                 />
               </div>
               <div>
                 <label className="text-xs text-[#A0A9B8] block mb-1">Potential</label>
-                <input
-                  type="number" min={0} max={100} value={driver.peakPotential}
+                <input type="number" min={0} max={100} value={driver.peakPotential}
                   onChange={(e) => onUpdate({ peakPotential: Number(e.target.value) })}
                   className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
                 />
@@ -179,18 +197,15 @@ function DriverCard({
             </div>
           </div>
 
-          {/* Stat sliders */}
           <div className="space-y-2.5">
             {STAT_KEYS.map((k) => (
               <StatSlider
                 key={k}
                 label={STAT_LABELS[k]}
                 value={driver[k]}
-                color={teamColor}
                 onChange={(v) => onUpdate({ [k]: v })}
               />
             ))}
-            {/* Narrative modifier */}
             <div className="flex items-center gap-3">
               <span className="text-xs text-[#A0A9B8] w-20 shrink-0">Narrative</span>
               <input
@@ -259,9 +274,8 @@ export default function SetupPage() {
     reader.onload = (ev) => {
       try {
         const parsed = JSON.parse(ev.target?.result as string)
-        if (!Array.isArray(parsed.drivers) || !Array.isArray(parsed.teams)) {
+        if (!Array.isArray(parsed.drivers) || !Array.isArray(parsed.teams))
           throw new Error('JSON must have "drivers" and "teams" arrays')
-        }
         setLocalDrivers(parsed.drivers as Driver[])
         setLocalTeams(parsed.teams as Team[])
       } catch (err) {
@@ -277,8 +291,7 @@ export default function SetupPage() {
   }
 
   function addDriver(teamId: string) {
-    const existing = localDrivers.filter((d) => d.teamId === teamId)
-    if (existing.length >= DRIVERS_PER_TEAM) return
+    if (localDrivers.filter((d) => d.teamId === teamId).length >= DRIVERS_PER_TEAM) return
     setLocalDrivers((prev) => [...prev, makeDefaultDriver(teamId)])
   }
 
@@ -302,7 +315,6 @@ export default function SetupPage() {
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
       <div className="max-w-5xl mx-auto px-6 py-8">
 
-        {/* Header */}
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
@@ -341,11 +353,9 @@ export default function SetupPage() {
           </div>
         )}
 
-        {/* Teams grid — 2 columns */}
         <div className="space-y-6">
           {driversByTeam.map(({ team, drivers: teamDrivers }) => (
             <div key={team.id} className="rounded-xl bg-[#1E2431] overflow-hidden">
-              {/* Team header */}
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
                 <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: team.color }} />
                 <div className="flex-1">
@@ -356,10 +366,9 @@ export default function SetupPage() {
                   style={{ backgroundColor: team.color + '25', color: team.color }}>
                   {team.shortName}
                 </span>
-                <span className="text-xs text-[#A0A9B8]">{teamDrivers.length}/{DRIVERS_PER_TEAM} drivers</span>
+                <span className="text-xs text-[#A0A9B8]">{teamDrivers.length}/{DRIVERS_PER_TEAM}</span>
               </div>
 
-              {/* Driver cards — side by side */}
               <div className="grid grid-cols-2 gap-4 p-4">
                 {teamDrivers.map((driver) => (
                   <DriverCard
@@ -371,14 +380,9 @@ export default function SetupPage() {
                     onRemove={() => removeDriver(driver.id)}
                   />
                 ))}
-
-                {/* Empty slot(s) */}
                 {Array.from({ length: DRIVERS_PER_TEAM - teamDrivers.length }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => addDriver(team.id)}
-                    className="min-h-[140px] rounded-xl border-2 border-dashed border-[#2A3142] hover:border-[#A0A9B8] text-[#A0A9B8] hover:text-[#E8EAED] flex flex-col items-center justify-center gap-2 transition-colors"
-                  >
+                  <button key={i} onClick={() => addDriver(team.id)}
+                    className="min-h-[160px] rounded-xl border-2 border-dashed border-[#2A3142] hover:border-[#A0A9B8] text-[#A0A9B8] hover:text-[#E8EAED] flex flex-col items-center justify-center gap-2 transition-colors">
                     <Plus size={20} />
                     <span className="text-sm font-semibold">Add Driver</span>
                   </button>
