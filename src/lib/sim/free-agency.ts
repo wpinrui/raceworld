@@ -1,4 +1,4 @@
-import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest, SeatContestDriver } from './types'
+import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest, SeatContestDriver, DroppedDriver } from './types'
 import { sampleNormal } from './rng-utils'
 import { generateRookie } from './driver-generation'
 
@@ -70,9 +70,10 @@ export function runDriverMarket(
   teamMediaScores: TeamMediaScore[],
   newYear: number,
   rng: () => number,
-): { updatedDrivers: Driver[]; marketMoves: MarketMove[]; seatContests: SeatContest[] } {
+): { updatedDrivers: Driver[]; marketMoves: MarketMove[]; seatContests: SeatContest[]; droppedDrivers: DroppedDriver[] } {
   const scoreMap = new Map(driverMediaScores.map((s) => [s.driverId, s.score]))
   const teamScoreMap = new Map(teamMediaScores.map((s) => [s.teamId, s.score]))
+  const teamNameMap = new Map(teams.map((t) => [t.id, t.name]))
   const driverMedia = (id: string) => scoreMap.get(id) ?? 0
   const teamMedia = (id: string) => teamScoreMap.get(id) ?? 50
   const currentYear = newYear - 1
@@ -215,6 +216,17 @@ export function runDriverMarket(
     }
   }
 
+  // Dropped = had a seat last season, contract expired, signed nowhere this window.
+  const droppedDrivers: DroppedDriver[] = drivers
+    .filter((d) => !stayingDriverIds.has(d.id) && d.teamId !== '' && !driverUpdates.has(d.id))
+    .map((d) => ({
+      driverId: d.id,
+      driverName: d.name,
+      fromTeamId: d.teamId,
+      fromTeamName: teamNameMap.get(d.teamId) ?? d.teamId,
+      mediaScore: driverMedia(d.id),
+    }))
+
   const updatedDrivers = [
     ...drivers.map((d) => {
       const update = driverUpdates.get(d.id)
@@ -227,5 +239,5 @@ export function runDriverMarket(
     ...rookies,
   ]
 
-  return { updatedDrivers, marketMoves, seatContests }
+  return { updatedDrivers, marketMoves, seatContests, droppedDrivers }
 }

@@ -15,8 +15,9 @@ export function MarketPanel({ summary, teams }: Props) {
   const sorted = [...summary.marketMoves].sort((a, b) => b.mediaScore - a.mediaScore)
   const realMoves = sorted.filter((m) => !m.isResignation)
   const reSignings = sorted.filter((m) => m.isResignation)
+  const dropped = [...summary.droppedDrivers].sort((a, b) => b.mediaScore - a.mediaScore)
 
-  if (sorted.length === 0) {
+  if (sorted.length === 0 && dropped.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">No market activity this off-season.</p>
   }
 
@@ -112,6 +113,35 @@ export function MarketPanel({ summary, teams }: Props) {
                       <span className="text-[#FFFFFF] ml-1 text-xs">(until {m.contractExpiresAfterSeason})</span>
                     </td>
                     <td className="py-2 text-right tabular-nums font-semibold text-[#00D9FF]">{m.mediaScore.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Dropped — lost their seat, no new deal */}
+      {dropped.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2">
+            Dropped <span className="text-[#DC143C]">· {dropped.length}</span>
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+                  <th className="text-left pb-2 pr-4 font-medium">Driver</th>
+                  <th className="text-left pb-2 px-3 font-medium">Released by</th>
+                  <th className="text-right pb-2 font-medium">Media</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dropped.map((d) => (
+                  <tr key={d.driverId} className="border-b border-[#2A3142]/50">
+                    <td className="py-2 pr-4"><DriverLink id={d.driverId} className="text-[#FFFFFF] font-medium">{d.driverName}</DriverLink></td>
+                    <td className="py-2 px-3">{teamPill(d.fromTeamId, d.fromTeamName)}</td>
+                    <td className="py-2 text-right tabular-nums font-semibold text-[#FFFFFF]">{d.mediaScore.toFixed(1)}</td>
                   </tr>
                 ))}
               </tbody>

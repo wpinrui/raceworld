@@ -250,6 +250,16 @@ export interface SeatContestDriver {
   incumbent: boolean      // the driver's expiring contract was with this team
 }
 
+// A driver whose contract expired and who was NOT re-signed anywhere — dropped
+// to the free-agent pool this off-season.
+export interface DroppedDriver {
+  driverId: string
+  driverName: string
+  fromTeamId: string
+  fromTeamName: string
+  mediaScore: number
+}
+
 // A team's seat battle from the deferred-acceptance market — raw material for
 // newsroom transfer stories. `winners` are who the team signed, `rivals` are the
 // free agents it turned away; teamPerceived is the "why".
@@ -290,6 +300,7 @@ export interface EndOfSeasonSummary {
   carReshuffleOldPaces: Record<string, number>
   carReshuffleNewPaces: Record<string, number>
   marketMoves: MarketMove[]
+  droppedDrivers: DroppedDriver[]
   seatContests: SeatContest[]
   driverMediaScores: DriverMediaScore[]
   teamMediaScores: TeamMediaScore[]
