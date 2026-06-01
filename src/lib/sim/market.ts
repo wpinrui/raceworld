@@ -229,10 +229,11 @@ export function generateFreeAgentPool(
     const { name, nationality } = pickName(usedNames)
 
     const age = 17 + Math.floor(rng() * 5) // 17–21
-    const peakPotential = Math.max(55, Math.min(99, Math.round(sampleNormal(68, 8, rng))))
-    // Stats must start below peakPotential — young drivers haven't hit their ceiling yet
+    const peakPotential = Math.max(55, Math.min(99, Math.round(sampleNormal(72, 10, rng))))
+    // Young drivers sit at ~80% of their ceiling — high-potential ones already look promising
     const statCap = Math.floor(peakPotential * 0.92)
-    const pace = Math.max(45, Math.min(statCap, Math.round(sampleNormal(peakPotential * 0.78, 5, rng))))
+    const paceMean = peakPotential * 0.80
+    const pace = Math.max(45, Math.min(statCap, Math.round(sampleNormal(paceMean, 5, rng))))
     const stat = () => Math.max(40, Math.min(statCap, Math.round(sampleNormal(pace - 2, 6, rng))))
     const primeEnd = Math.max(age + 1, Math.round(Math.max(27, Math.min(35, sampleNormal(30, 2, rng)))))
 

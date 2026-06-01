@@ -155,7 +155,7 @@ export const useSeasonStore = create<SeasonStore>()(
         const existingPool = get().drivers.filter((d) => d.teamId === '')
         const poolDrivers = existingPool.length > 0
           ? existingPool
-          : generateFreeAgentPool(12, year, drivers, Math.random)
+          : generateFreeAgentPool(25, year, drivers, Math.random)
         const allDrivers = [
           ...drivers.filter((d) => d.teamId !== ''),
           ...poolDrivers,
@@ -326,8 +326,8 @@ export const useSeasonStore = create<SeasonStore>()(
         const { drivers: pendingDrivers, teams } = pendingNextSeasonState
         // Ensure at least 8 free agents in the pool; top up if needed
         const existingPool = pendingDrivers.filter((d) => d.teamId === '')
-        const topUp = existingPool.length < 8
-          ? generateFreeAgentPool(8 - existingPool.length, newYear, pendingDrivers, Math.random)
+        const topUp = existingPool.length < 15
+          ? generateFreeAgentPool(15 - existingPool.length, newYear, pendingDrivers, Math.random)
           : []
         const drivers = [...pendingDrivers, ...topUp]
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
