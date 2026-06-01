@@ -9,19 +9,19 @@ export function computeTyreLife(
 
   switch (compound) {
     case 'soft':
-      basePercent = 0.15 + Math.random() * 0.10 // 15-25%
+      basePercent = 0.12 + Math.random() * 0.08 // 12-20%
       break
     case 'medium':
-      basePercent = 0.25 + Math.random() * 0.15 // 25-40%
+      basePercent = 0.20 + Math.random() * 0.15 // 20-35%
       break
     case 'hard':
-      basePercent = 0.40 + Math.random() * 0.15 // 40-55%
+      basePercent = 0.35 + Math.random() * 0.15 // 35-50%
       break
     case 'intermediate':
-      basePercent = 0.25 + Math.random() * 0.15 // 25-40%
+      basePercent = 0.20 + Math.random() * 0.15 // 20-35%
       break
     case 'wet':
-      basePercent = 0.40 + Math.random() * 0.15 // 40-55%
+      basePercent = 0.35 + Math.random() * 0.15 // 35-50%
       break
   }
 
@@ -31,7 +31,7 @@ export function computeTyreLife(
 }
 
 export function degradeTyre(tyre: TyreState): number {
-  return Math.max(0, tyre.condition - 100 / tyre.maxLifeLaps)
+  return Math.max(0, Math.round(tyre.condition - 100 / tyre.maxLifeLaps))
 }
 
 export function isTyreInWindow(compound: TyreCompound, moisture: number): boolean {

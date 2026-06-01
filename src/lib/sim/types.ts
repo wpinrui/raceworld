@@ -51,6 +51,10 @@ export interface DriverRaceState {
   retired: boolean
   retirementLap: number | null
   lastPitLap: number
+  pitStops: number
+  stintHistory: Array<{ compound: TyreCompound; laps: number }>
+  targetPitLap: number | null   // lap the team plans to pit; null = no planned stop
+  targetNextCompound: TyreCompound
   gap: number            // gap to car directly ahead in seconds; leader = 0
   dsq: boolean
 }
@@ -88,6 +92,10 @@ export interface WeatherPoint {
   moisture: number       // 0-1
 }
 
+// Per-team assumed tyre wear rates (condition lost per lap per compound).
+// Sampled once at race start with noise — both drivers share the same team assumptions.
+export type TeamTyreAssumptions = Record<TyreCompound, number>
+
 export interface RaceState {
   circuitId: string
   totalLaps: number
@@ -100,10 +108,13 @@ export interface RaceState {
   qualifyingSessions: QualifyingSessionResult[]
   speed: SimSpeed
   paused: boolean
+  strategyNoise: number                                    // 0–1; tunable
+  teamAssumptions: Record<string, TeamTyreAssumptions>     // teamId -> compound -> wear rate/lap
 }
 
 export interface GodModeAction {
-  type: 'set-tyre-condition' | 'force-retire' | 'set-form'
+  type: 'set-tyre-condition' | 'force-retire' | 'set-form' | 'force-pit' | 'cancel-pit'
   driverId: string
   value?: number
+  compound?: TyreCompound  // used with force-pit
 }

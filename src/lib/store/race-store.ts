@@ -11,8 +11,12 @@ interface RaceStore {
   teams: Team[]
   selectedCircuitId: string
   forms: Record<string, number>
+  strategyNoise: number   // 0–1; controls team tyre assumption accuracy
 
   setCircuit: (circuitId: string) => void
+  updateDriverForm: (driverId: string, value: number) => void
+  updateDriverStat: (driverId: string, stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness', value: number) => void
+  setStrategyNoise: (n: number) => void
   initSession: () => void
   tickLap: (godModeActions?: GodModeAction[]) => void
   setSpeed: (speed: SimSpeed) => void
@@ -22,25 +26,45 @@ interface RaceStore {
 
 export const useRaceStore = create<RaceStore>((set, get) => ({
   raceState: null,
-  drivers: drivers2026,
+  drivers: drivers2026.map((d) => ({ ...d })),
   teams: teams2026,
   selectedCircuitId: 'australia',
-  forms: {},
+  forms: rollForms(drivers2026.map((d) => d.id)),
+  strategyNoise: 0.35,
 
   setCircuit: (circuitId) => {
-    set({ selectedCircuitId: circuitId })
+    const { drivers } = get()
+    set({
+      selectedCircuitId: circuitId,
+      forms: rollForms(drivers.map((d) => d.id)),
+    })
   },
 
+  updateDriverForm: (driverId, value) => {
+    set((state) => ({
+      forms: { ...state.forms, [driverId]: Math.min(10, Math.max(0, value)) },
+    }))
+  },
+
+  updateDriverStat: (driverId, stat, value) => {
+    set((state) => ({
+      drivers: state.drivers.map((d) =>
+        d.id === driverId ? { ...d, [stat]: Math.min(100, Math.max(0, value)) } : d
+      ),
+    }))
+  },
+
+  setStrategyNoise: (n) => set({ strategyNoise: Math.min(1, Math.max(0, n)) }),
+
   initSession: () => {
-    const { drivers, teams, selectedCircuitId } = get()
+    const { drivers, teams, selectedCircuitId, forms, strategyNoise } = get()
     const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
     if (!circuit) return
 
-    const forms = rollForms(drivers.map((d) => d.id))
     const { results, sessions } = runQualifying(drivers, teams, circuit, forms)
-    const raceState = initRaceState(drivers, teams, circuit, results, sessions, forms)
+    const raceState = initRaceState(drivers, teams, circuit, results, sessions, forms, strategyNoise)
 
-    set({ forms, raceState })
+    set({ raceState })
   },
 
   tickLap: (godModeActions) => {
@@ -67,6 +91,11 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   },
 
   resetSession: () => {
-    set({ raceState: null, forms: {} })
+    const freshDrivers = drivers2026.map((d) => ({ ...d }))
+    set({
+      raceState: null,
+      drivers: freshDrivers,
+      forms: rollForms(freshDrivers.map((d) => d.id)),
+    })
   },
 }))

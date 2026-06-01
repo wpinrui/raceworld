@@ -9,47 +9,30 @@ import type {
   TyreState,
   WeatherPoint,
 } from './types'
+// WeatherPoint used in computeLapTime call signature only
 import { computeLapTime } from './engine'
 
-function rollSessionMoisture(): number {
-  if (Math.random() < 0.67) {
-    return 0
-  }
-  return Math.min(1, 0.01 + Math.random() * 0.99)
-}
-
-function selectQualifyingTyre(moisture: number): TyreCompound {
-  if (moisture < 0.10) return 'soft'
-  if (moisture <= 0.35) return 'intermediate'
-  return 'wet'
+function selectQualifyingTyre(): TyreCompound {
+  return 'soft' // M1: always dry, always softs in qualifying
 }
 
 function simulateQualifyingLap(
   driver: Driver,
   team: Team,
   circuit: Circuit,
-  moisture: number,
   form: number,
 ): number {
-  const compound = selectQualifyingTyre(moisture)
   const tyre: TyreState = {
-    compound,
+    compound: selectQualifyingTyre(),
     condition: 100,
     maxLifeLaps: 999,
   }
-  const weather: WeatherPoint[] = [{ lap: 1, moisture }]
+  const weather: WeatherPoint[] = [{ lap: 1, moisture: 0 }]
 
   const result = computeLapTime({
-    driver,
-    team,
-    tyre,
-    form,
-    fuelLaps: 0,
-    lap: 1,
-    totalLaps: 1,
-    weather,
-    gapToCarAhead: Infinity,
-    carAheadLapTime: null,
+    driver, team, tyre, form,
+    fuelLaps: 0, lap: 1, totalLaps: 1,
+    weather, gapToCarAhead: Infinity, carAheadLapTime: null,
     circuitFlatModifier: circuit.flatModifier,
   })
 
@@ -92,7 +75,6 @@ export function runQualifying(
   const q2Eliminate = 5
 
   // --- Q1 ---
-  const q1Moisture = rollSessionMoisture()
   const q1SessionLaps: QualifyingLap[] = []
 
   for (const driverId of activeDriverIds) {
@@ -100,8 +82,8 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, q1Moisture, form)
-    const lap2 = simulateQualifyingLap(driver, team, circuit, q1Moisture, form)
+    const lap1 = simulateQualifyingLap(driver, team, circuit, form)
+    const lap2 = simulateQualifyingLap(driver, team, circuit, form)
     const best = Math.min(lap1, lap2)
 
     q1SessionLaps.push({ driverId, lap1, lap2, best })
@@ -134,7 +116,6 @@ export function runQualifying(
   activeDriverIds = activeDriverIds.filter((id) => !q1Eliminated.includes(id))
 
   // --- Q2 ---
-  const q2Moisture = rollSessionMoisture()
   const q2SessionLaps: QualifyingLap[] = []
 
   for (const driverId of activeDriverIds) {
@@ -142,8 +123,8 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, q2Moisture, form)
-    const lap2 = simulateQualifyingLap(driver, team, circuit, q2Moisture, form)
+    const lap1 = simulateQualifyingLap(driver, team, circuit, form)
+    const lap2 = simulateQualifyingLap(driver, team, circuit, form)
     const best = Math.min(lap1, lap2)
 
     q2SessionLaps.push({ driverId, lap1, lap2, best })
@@ -175,7 +156,6 @@ export function runQualifying(
   activeDriverIds = activeDriverIds.filter((id) => !q2Eliminated.includes(id))
 
   // --- Q3 ---
-  const q3Moisture = rollSessionMoisture()
   const q3SessionLaps: QualifyingLap[] = []
 
   for (const driverId of activeDriverIds) {
@@ -183,8 +163,8 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, q3Moisture, form)
-    const lap2 = simulateQualifyingLap(driver, team, circuit, q3Moisture, form)
+    const lap1 = simulateQualifyingLap(driver, team, circuit, form)
+    const lap2 = simulateQualifyingLap(driver, team, circuit, form)
     const best = Math.min(lap1, lap2)
 
     q3SessionLaps.push({ driverId, lap1, lap2, best })

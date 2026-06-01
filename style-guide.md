@@ -42,17 +42,21 @@ Derived from F1 Manager 24 visual reference. All values are implementation-ready
 
 ## Typography
 
-**Font family:** Inter (fallback: system-ui, sans-serif)
+**Body font:** Inter (fallback: system-ui, sans-serif)
+**Display font:** Formula1-Bold — used for screen headings, section headers, nav brand, lap counter, any ALL-CAPS hero labels. Not for body text or table cells.
+**Mono font:** JetBrains Mono — lap times, gaps, stat values, position numbers.
+**Base font size:** 17px (set on `html`; all `rem` values scale from this)
 
 ### Scale
-| Role | Size | Weight | Case | Letter-spacing |
-|---|---|---|---|---|
-| Screen heading | 22–26px | 800 | ALL-CAPS | +0.8px |
-| Section heading | 16–18px | 700 | ALL-CAPS | +0.5px |
-| Card title | 14–16px | 600 | Title Case | 0 |
-| Body | 13–15px | 400 | Sentence | 0 |
-| Label / small | 11–13px | 500 | ALL-CAPS or Sentence | +0.3px |
-| Stat value | 14–18px | 700 | — | 0 |
+| Role | Size | Font | Weight | Case | Letter-spacing |
+|---|---|---|---|---|---|
+| Nav brand | 20–22px | Formula1 | — | ALL-CAPS | +0.8px |
+| Screen heading | 26–30px | Formula1 | — | ALL-CAPS | +0.8px |
+| Section heading | 18–20px | Formula1 | — | ALL-CAPS | +0.5px |
+| Card title | 17–19px | Inter | 600 | Title Case | 0 |
+| Body | 16–18px | Inter | 400 | Sentence | 0 |
+| Label / small | 14–15px | Inter | 500 | ALL-CAPS or Sentence | +0.3px |
+| Stat value | 17–20px | JetBrains Mono | 700 | — | 0 |
 
 ### Numeric formatting
 - Race positions use superscript ordinals: 1<sup>ST</sup>, 3<sup>RD</sup>

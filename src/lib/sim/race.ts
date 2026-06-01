@@ -8,11 +8,12 @@ import type {
   QualifyingSessionResult,
   GodModeAction,
   TyreState,
+  TeamTyreAssumptions,
 } from './types'
 import { generateWeatherCurve, getMoistureAtLap } from './weather'
 import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
 import { computeLapTime } from './engine'
-import { decidePit } from './pit-ai'
+import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
 
 export function rollForms(driverIds: string[]): Record<string, number> {
@@ -34,11 +35,18 @@ export function initRaceState(
   qualifyingResults: QualifyingResult[],
   qualifyingSessions: QualifyingSessionResult[],
   forms: Record<string, number>,
+  strategyNoise: number = 0.35,
 ): RaceState {
   const weather = generateWeatherCurve(circuit.laps)
   const lap1Moisture = getMoistureAtLap(weather, 1)
 
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
+
+  // Sample one set of tyre assumptions per team — both drivers share these
+  const teamAssumptions: Record<string, TeamTyreAssumptions> = {}
+  for (const team of teams) {
+    teamAssumptions[team.id] = sampleTeamAssumptions(circuit.laps, strategyNoise)
+  }
 
   // Sort by grid position
   const sortedResults = [...qualifyingResults].sort(
@@ -59,6 +67,9 @@ export function initRaceState(
       maxLifeLaps,
     }
 
+    const assumptions = teamAssumptions[team.id]
+    const initialPlan = planStrategy(1, circuit.laps, 100, compound, maxLifeLaps, assumptions, lap1Moisture)
+
     return {
       driverId: driver.id,
       position: qr.gridPosition,
@@ -71,6 +82,10 @@ export function initRaceState(
       retired: false,
       retirementLap: null,
       lastPitLap: 0,
+      pitStops: 0,
+      stintHistory: [],
+      targetPitLap: initialPlan.targetPitLap,
+      targetNextCompound: initialPlan.targetNextCompound,
       gap: 0,
       dsq: false,
     }
@@ -88,6 +103,8 @@ export function initRaceState(
     qualifyingSessions,
     speed: 1,
     paused: false,
+    strategyNoise,
+    teamAssumptions,
   }
 }
 
@@ -169,14 +186,35 @@ export function simulateLap(
       continue
     }
 
-    // 2c. Pit decision
-    const pitDecision = decidePit(
-      current,
-      state.totalLaps,
+    // Resolve driver/team early — needed for pit AI and lap time
+    const driver = driverMap.get(current.driverId)!
+    const team = teamMap.get(driver.teamId)!
+
+    // 2c. Re-solve strategy this lap (adapts to weather changes, actual wear, etc.)
+    const assumptions = state.teamAssumptions[team.id]
+    const newPlan = planStrategy(
       state.currentLap,
-      state.weather,
-      Array.from(updatedStates.values()),
+      state.totalLaps,
+      current.currentTyre.condition,
+      current.currentTyre.compound,
+      current.currentTyre.maxLifeLaps,
+      assumptions,
+      currentMoisture,
     )
+    current = { ...current, targetPitLap: newPlan.targetPitLap, targetNextCompound: newPlan.targetNextCompound }
+
+    // 2d. Decide whether to pit this lap based on the plan
+    let pitDecision = decidePit(current, state.currentLap, state.totalLaps, state.weather)
+
+    // God mode pit overrides
+    const godActionsForDriver = (godModeActions ?? []).filter(a => a.driverId === current.driverId)
+    const forcePit = [...godActionsForDriver].reverse().find(a => a.type === 'force-pit')
+    const cancelPit = godActionsForDriver.find(a => a.type === 'cancel-pit')
+    if (forcePit) {
+      pitDecision = { shouldPit: true, targetCompound: forcePit.compound ?? pitDecision.targetCompound }
+    } else if (cancelPit) {
+      pitDecision = { shouldPit: false, targetCompound: pitDecision.targetCompound }
+    }
 
     let pitPenalty = 0
     let pitted = false
@@ -184,7 +222,6 @@ export function simulateLap(
     if (pitDecision.shouldPit) {
       pitted = true
       pitPenalty = 20 + Math.random() * 4
-      const driver = driverMap.get(current.driverId)!
       const newMaxLifeLaps = computeTyreLife(
         pitDecision.targetCompound,
         driver.smoothness,
@@ -197,12 +234,14 @@ export function simulateLap(
           condition: 100,
           maxLifeLaps: newMaxLifeLaps,
         },
+        stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap }],
         stintLap: 0,
         lastPitLap: state.currentLap,
+        pitStops: current.pitStops + 1,
       }
     }
 
-    // 2d. Find car ahead
+    // 2e. Find car ahead
     const carAheadState = sortedByPosition.find(
       (d) =>
         !d.retired &&
@@ -219,9 +258,6 @@ export function simulateLap(
     }
 
     // 2e. Compute lap time
-    const driver = driverMap.get(current.driverId)!
-    const team = teamMap.get(driver.teamId)!
-
     const lapResult = computeLapTime({
       driver,
       team,
