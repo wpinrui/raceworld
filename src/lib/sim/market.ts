@@ -228,27 +228,10 @@ export function generateFreeAgentPool(
     generatedCounter++
     const { name, nationality } = pickName(usedNames)
 
-    // Varied archetypes: young prospect, journeyman, veteran
-    const roll = rng()
-    let ageBand: [number, number]
-    let paceBand: [number, number]
-    let potBand: [number, number]
-
-    if (roll < 0.35) {
-      // Young prospect — low stats, high ceiling
-      ageBand = [18, 23]; paceBand = [58, 74]; potBand = [80, 93]
-    } else if (roll < 0.70) {
-      // Journeyman — mid stats, moderate ceiling
-      ageBand = [24, 31]; paceBand = [68, 80]; potBand = [75, 85]
-    } else {
-      // Veteran — decent stats, low ceiling (past prime or near it)
-      ageBand = [32, 40]; paceBand = [72, 82]; potBand = [76, 84]
-    }
-
-    const age = ageBand[0] + Math.floor(rng() * (ageBand[1] - ageBand[0] + 1))
-    const pace = Math.round(paceBand[0] + rng() * (paceBand[1] - paceBand[0]))
+    const age = 17 + Math.floor(rng() * 5) // 17–21
+    const pace = Math.round(58 + rng() * 16)  // 58–74
     const stat = () => Math.max(45, Math.min(85, Math.round(sampleNormal(pace - 2, 6, rng))))
-    const peakPotential = Math.round(potBand[0] + rng() * (potBand[1] - potBand[0]))
+    const peakPotential = Math.round(80 + rng() * 13)  // 80–93
     const primeEnd = Math.max(age + 1, 28 + Math.floor(rng() * 6))
 
     pool.push({
