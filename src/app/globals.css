@@ -10,6 +10,24 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* RaceWorld design tokens */
+  --color-surface-base: #0F1419;
+  --color-surface-card: #1E2431;
+  --color-surface-raised: #2A3142;
+  --color-surface-hover: #303848;
+  --color-text-primary: #E8EAED;
+  --color-text-secondary: #A0A9B8;
+  --color-text-muted: #6B7280;
+  --color-text-inverse: #0F1419;
+  --color-accent-cyan: #00D9FF;
+  --color-accent-cyan-dim: #009CB8;
+  --color-accent-red: #DC143C;
+  --color-accent-purple: #A855F7;
+  --color-accent-yellow: #FCD34D;
+  --color-positive: #10B981;
+  --color-negative: #DC143C;
+  --color-neutral: #6B7280;
 }
 
 @media (prefers-color-scheme: dark) {
