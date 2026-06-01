@@ -286,12 +286,6 @@ export default function StandingsPage() {
           </div>
         )}
 
-        {/* Progress indicator */}
-        {!selectedArchive && (
-          <p className="mt-4 text-xs text-[#FFFFFF] text-right">
-            {completedRounds}/{totalRounds} rounds completed
-          </p>
-        )}
       </div>
     </div>
   )

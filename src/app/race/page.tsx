@@ -335,7 +335,7 @@ export default function RacePage() {
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
                     <h2 className="font-semibold text-sm tracking-widest text-[#E8EAED] uppercase">Driver Forms</h2>
-                    <span className="text-xs text-[#FFFFFF]">(randomised — edit before qualifying)</span>
+
                   </div>
                   <table className="w-full border-collapse">
                     <thead>

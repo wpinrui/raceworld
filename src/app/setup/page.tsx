@@ -326,7 +326,7 @@ export default function SetupPage() {
               <h1 className="font-display text-2xl tracking-wider uppercase">Setup</h1>
             </div>
             <p className="text-[#FFFFFF] text-sm ml-3.5">
-              Configure the {seasonStore.year} grid — {DRIVERS_PER_TEAM} drivers per team
+
             </p>
           </div>
 
