@@ -65,9 +65,9 @@ export default function StandingsPage() {
               <div className="flex items-center gap-4 rounded-xl bg-[#1E2431] border border-[#E8C547]/40 px-5 py-4">
                 <Trophy size={28} className="text-[#E8C547] shrink-0" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[#A0A9B8]">{season.year} World Champion</p>
+                  <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">{season.year} World Champion</p>
                   <p className="font-display text-lg tracking-wide text-[#FFFFFF]">{champDriver.driverName}</p>
-                  <p className="text-xs text-[#A0A9B8] tabular-nums">{champDriver.points} pts · {champDriver.teamName}</p>
+                  <p className="text-xs text-[#FFFFFF] tabular-nums">{champDriver.points} pts · {champDriver.teamName}</p>
                 </div>
               </div>
             )}
@@ -75,9 +75,9 @@ export default function StandingsPage() {
               <div className="flex items-center gap-4 rounded-xl bg-[#1E2431] border border-[#E8C547]/40 px-5 py-4">
                 <Trophy size={28} className="text-[#E8C547] shrink-0" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[#A0A9B8]">{season.year} Constructors&apos; Champion</p>
+                  <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">{season.year} Constructors&apos; Champion</p>
                   <p className="font-display text-lg tracking-wide text-[#FFFFFF]">{champConstructor.teamName}</p>
-                  <p className="text-xs text-[#A0A9B8] tabular-nums">{champConstructor.points} pts</p>
+                  <p className="text-xs text-[#FFFFFF] tabular-nums">{champConstructor.points} pts</p>
                 </div>
               </div>
             )}

@@ -24,7 +24,7 @@ interface LiveRow {
 function DeltaArrow({ delta }: { delta: number }) {
   if (delta > 0) return <span className="flex items-center text-[#10B981]"><ChevronUp size={13} />{delta}</span>
   if (delta < 0) return <span className="flex items-center text-[#DC143C]"><ChevronDown size={13} />{-delta}</span>
-  return <span className="text-[#6B7280]"><Minus size={12} /></span>
+  return <span className="text-[#FFFFFF]"><Minus size={12} /></span>
 }
 
 export function LiveChampionship({ states, drivers, teams, baselineDrivers, baselineConstructors }: Props) {

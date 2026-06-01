@@ -69,7 +69,7 @@ export function OffSeasonPanel() {
             </h2>
           </div>
           {season.driverStandings[0] && (
-            <p className="text-[#A0A9B8] text-sm ml-3.5">
+            <p className="text-[#FFFFFF] text-sm ml-3.5">
               World Champion:{' '}
               <span className="text-[#FFFFFF] font-semibold">{season.driverStandings[0].driverName}</span>
               {' '}·{' '}
@@ -77,7 +77,7 @@ export function OffSeasonPanel() {
             </p>
           )}
           {season.constructorStandings[0] && (
-            <p className="text-[#A0A9B8] text-sm ml-3.5">
+            <p className="text-[#FFFFFF] text-sm ml-3.5">
               Constructors:{' '}
               <span className="text-[#FFFFFF] font-semibold">{season.constructorStandings[0].teamName}</span>
             </p>
@@ -110,8 +110,8 @@ export function OffSeasonPanel() {
                 i === phaseIdx
                   ? 'text-[#00D9FF] font-semibold'
                   : i < phaseIdx
-                    ? 'text-[#A0A9B8]'
-                    : 'text-[#6B7280]'
+                    ? 'text-[#FFFFFF]'
+                    : 'text-[#FFFFFF]'
               }
             >
               {PHASE_META[p].title}
@@ -122,7 +122,7 @@ export function OffSeasonPanel() {
       </div>
 
       <div className="p-5">
-        <p className="text-sm text-[#A0A9B8] mb-4">{PHASE_META[season.phase].blurb}</p>
+        <p className="text-sm text-[#FFFFFF] mb-4">{PHASE_META[season.phase].blurb}</p>
         {season.phase === 'end-of-season' && (
           <ProgressionPanel summary={summary} drivers={season.drivers} />
         )}

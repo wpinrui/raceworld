@@ -13,7 +13,7 @@ interface Props {
 const FUEL_STYLE: Record<FuelBand, string> = {
   full: 'text-[#DC143C]',
   heavy: 'text-[#F59E0B]',
-  medium: 'text-[#A0A9B8]',
+  medium: 'text-[#FFFFFF]',
   light: 'text-[#10B981]',
 }
 
@@ -28,7 +28,7 @@ export function TestingPanel({ summary, teams }: Props) {
   const test = summary.preSeasonTest
 
   if (!test || test.entries.length === 0) {
-    return <p className="text-sm text-[#6B7280]">No testing data.</p>
+    return <p className="text-sm text-[#FFFFFF]">No testing data.</p>
   }
 
   const colorOf = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
@@ -37,12 +37,12 @@ export function TestingPanel({ summary, teams }: Props) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-[#A0A9B8]">
+        <p className="text-sm text-[#FFFFFF]">
           Pre-season test · <span className="text-[#FFFFFF]">{test.circuitName}</span>
         </p>
         <button
           onClick={() => setReveal((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#A0A9B8] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
         >
           {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
           {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
@@ -52,7 +52,7 @@ export function TestingPanel({ summary, teams }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-[#6B7280] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+            <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
               <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
               <th className="text-left pb-2 pr-4 font-medium">Driver</th>
               <th className="text-left pb-2 px-3 font-medium">Team</th>
@@ -66,12 +66,12 @@ export function TestingPanel({ summary, teams }: Props) {
           <tbody>
             {test.entries.map((e, i) => (
               <tr key={e.teamId} className="border-b border-[#2A3142]/50">
-                <td className="py-2 pr-3 tabular-nums text-[#6B7280]">{i + 1}</td>
+                <td className="py-2 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
                 <td className="py-2 pr-4 text-[#FFFFFF] font-medium">{e.driverName}</td>
                 <td className="py-2 px-3">
                   <span className="flex items-center gap-2">
                     <span className="inline-block w-2 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: colorOf(e.teamId) }} />
-                    <span className="text-[#A0A9B8]">{e.teamName}</span>
+                    <span className="text-[#FFFFFF]">{e.teamName}</span>
                   </span>
                 </td>
                 <td className="py-2 px-3">
@@ -81,7 +81,7 @@ export function TestingPanel({ summary, teams }: Props) {
                 </td>
                 <td className={`py-2 px-3 font-semibold capitalize ${FUEL_STYLE[e.fuelBand]}`}>{e.fuelBand}</td>
                 <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF] font-semibold">{fmtTime(e.lapTime)}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-[#6B7280]">
+                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
                   {i === 0 ? '—' : `+${(e.lapTime - fastest).toFixed(3)}`}
                 </td>
                 {reveal && (

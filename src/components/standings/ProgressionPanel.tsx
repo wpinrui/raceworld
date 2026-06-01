@@ -43,14 +43,14 @@ export function ProgressionPanel({ summary, drivers }: Props) {
   }
 
   if (driverOrder.length === 0) {
-    return <p className="text-sm text-[#6B7280]">No stat changes this off-season.</p>
+    return <p className="text-sm text-[#FFFFFF]">No stat changes this off-season.</p>
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-[#6B7280] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+          <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
             <th className="text-left pb-2 pr-4 font-medium">Driver</th>
             <th className="text-right pb-2 px-3 font-medium">Media</th>
             <th className="text-left pb-2 px-3 font-medium">Stat</th>
@@ -66,29 +66,29 @@ export function ProgressionPanel({ summary, drivers }: Props) {
               return (
                 <tr key={id} className="border-b border-[#2A3142]/50">
                   <td className="py-1.5 pr-4 text-[#FFFFFF] font-medium">{name}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]">
+                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">
                     {score !== undefined ? score.toFixed(1) : '—'}
                   </td>
-                  <td colSpan={4} className="py-1.5 px-3 text-[#6B7280] italic">No change</td>
+                  <td colSpan={4} className="py-1.5 px-3 text-[#FFFFFF] italic">No change</td>
                 </tr>
               )
             }
             return evs.map((ev, i) => {
               const delta = ev.after - ev.before
-              const color = delta > 0 ? 'text-[#10B981]' : delta < 0 ? 'text-[#DC143C]' : 'text-[#6B7280]'
+              const color = delta > 0 ? 'text-[#10B981]' : delta < 0 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'
               const sign = delta > 0 ? '+' : ''
               return (
                 <tr key={`${id}-${ev.stat}`} className="border-b border-[#2A3142]/50">
                   {i === 0 && (
                     <>
                       <td className="py-1.5 pr-4 text-[#FFFFFF] font-medium" rowSpan={evs.length}>{name}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]" rowSpan={evs.length}>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]" rowSpan={evs.length}>
                         {score !== undefined ? score.toFixed(1) : '—'}
                       </td>
                     </>
                   )}
-                  <td className="py-1.5 px-3 text-[#A0A9B8] text-xs font-mono uppercase">{STAT_LABEL[ev.stat] ?? ev.stat}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]">{ev.before.toFixed(1)}</td>
+                  <td className="py-1.5 px-3 text-[#FFFFFF] text-xs font-mono uppercase">{STAT_LABEL[ev.stat] ?? ev.stat}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{ev.before.toFixed(1)}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{ev.after.toFixed(1)}</td>
                   <td className={`py-1.5 text-right tabular-nums font-semibold ${color}`}>
                     {sign}{delta.toFixed(1)}

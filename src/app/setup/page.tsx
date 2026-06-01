@@ -217,7 +217,7 @@ export default function SetupPage() {
               <div className="w-1.5 h-8 rounded-full bg-[#6B7280]" />
               <div className="flex-1">
                 <div className="font-semibold text-[#FFFFFF]">Free Agents</div>
-                <div className="text-xs text-[#6B7280]">{freeAgents.length} available</div>
+                <div className="text-xs text-[#FFFFFF]">{freeAgents.length} available</div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 p-4">

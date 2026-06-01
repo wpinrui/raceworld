@@ -72,7 +72,7 @@ export default function Nav() {
 
         <button
           onClick={() => setConfirmOpen(true)}
-          className="px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wide text-[#6B7280] hover:text-[#DC143C] hover:bg-[#2A3142] transition-colors"
+          className="px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#DC143C] hover:bg-[#2A3142] transition-colors"
         >
           Clear Save
         </button>
@@ -92,7 +92,7 @@ export default function Nav() {
               <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
               <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Clear Save</h2>
             </div>
-            <p className="text-sm text-[#A0A9B8] mb-5">
+            <p className="text-sm text-[#FFFFFF] mb-5">
               This will wipe all local save data — season progress, driver stats, and history. Cannot be undone.
             </p>
             <div className="flex justify-end gap-3">

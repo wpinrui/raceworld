@@ -14,14 +14,14 @@ export function MarketPanel({ summary, teams }: Props) {
   const moves = [...summary.marketMoves].sort((a, b) => b.mediaScore - a.mediaScore)
 
   if (moves.length === 0) {
-    return <p className="text-sm text-[#6B7280]">No market activity this off-season.</p>
+    return <p className="text-sm text-[#FFFFFF]">No market activity this off-season.</p>
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-[#6B7280] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+          <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
             <th className="text-left pb-2 pr-4 font-medium">Driver</th>
             <th className="text-left pb-2 px-3 font-medium">From</th>
             <th className="text-left pb-2 px-3 font-medium">To</th>
@@ -50,10 +50,10 @@ export function MarketPanel({ summary, teams }: Props) {
                       {fromColor && (
                         <span className="inline-block w-1.5 h-3.5 rounded-sm" style={{ backgroundColor: fromColor }} />
                       )}
-                      <span className="text-[#A0A9B8]">{teamNameMap.get(m.fromTeamId!) ?? m.fromTeamId}</span>
+                      <span className="text-[#FFFFFF]">{teamNameMap.get(m.fromTeamId!) ?? m.fromTeamId}</span>
                     </span>
                   ) : (
-                    <span className="text-[#6B7280] italic">Free Agent</span>
+                    <span className="text-[#FFFFFF] italic">Free Agent</span>
                   )}
                 </td>
                 <td className="py-2 px-3">
@@ -64,9 +64,9 @@ export function MarketPanel({ summary, teams }: Props) {
                     <span className="text-[#FFFFFF]">{m.toTeamName}</span>
                   </span>
                 </td>
-                <td className="py-2 px-3 text-right tabular-nums text-[#A0A9B8]">
+                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
                   {m.contractLength}yr
-                  <span className="text-[#6B7280] ml-1 text-xs">(until {m.contractExpiresAfterSeason})</span>
+                  <span className="text-[#FFFFFF] ml-1 text-xs">(until {m.contractExpiresAfterSeason})</span>
                 </td>
                 <td className="py-2 text-right tabular-nums font-semibold text-[#00D9FF]">
                   {isRookie ? '—' : m.mediaScore.toFixed(1)}
