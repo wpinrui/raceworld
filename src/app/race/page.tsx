@@ -76,7 +76,7 @@ export default function RacePage() {
         e.preventDefault()
         setPaused(!paused)
       }
-      if (phase === 'racing' || phase === 'pre-race') {
+      if (phase === 'racing') {
         if (e.key === '1') handleSpeedClick(1)
         if (e.key === '2') handleSpeedClick(2)
         if (e.key === '3') handleSpeedClick(3)
