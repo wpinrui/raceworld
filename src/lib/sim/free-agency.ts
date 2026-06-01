@@ -40,7 +40,7 @@ const RETIREMENT_SEASONS_OUT = 5
 // last season), their perceived value takes this flat hit. Keeps the grid from
 // churning wildly as pool drivers and seated drivers trade places every year —
 // big enough to favour proven drivers, small enough that a star prospect breaks in.
-const OUT_OF_F1_PENALTY = 8
+const OUT_OF_F1_PENALTY = 5
 
 // Run after the driver market has settled. A driver holding a seat for the
 // coming season resets to 0; a driver without one accrues another season out

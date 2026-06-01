@@ -169,7 +169,7 @@ A driver who has not held an F1 seat for five consecutive seasons is removed fro
 The media-perceived score is computed at the end of each season and used for contract length, the Home Screen driver rankings, and pundit predictions. It is a number on a 0–100 scale derived from four inputs.
 
 **Component A — Raw results score (weight: 50%)**
-The driver's championship points expressed as a percentile within the current season standings. The last-place driver scores 0, the leader scores 100. This is the dominant signal because it is what the media most visibly tracks.
+The driver's championship points expressed as a percentile **within the current grid** (drivers who actually raced; free agents are excluded so they don't dilute the percentile). The last-place driver scores 0, the leader scores 100. This is the dominant signal because it is what the media most visibly tracks.
 
 **Component B — Teammate H2H score (weight: 30%)**
 Captures how the driver performed against their teammate in the same car. The H2H ratio combines qualifying and race head-to-head:
@@ -177,10 +177,10 @@ Captures how the driver performed against their teammate in the same car. The H2
 - Race H2H: fraction of races where the driver finished ahead of their teammate, among races both drivers finished (0–1)
 - Combined ratio: `h2h_ratio = 0.4 × qual_h2h + 0.6 × race_h2h`
 
-To account for teammate quality, the score is anchored to the **teammate's Component A score** rather than a neutral 50:
-> `B = teammate_A + (h2h_ratio − 0.5) × 40`, clamped to [0, 100]
+The score swings around a **neutral baseline of 50**:
+> `B = clamp( 50 + (h2h_ratio − 0.5) × 40 , 0, 100 )`
 
-Beating a Verstappen-tier teammate lifts you into the 90s; dominating an Ocon-tier teammate barely moves the needle.
+An even split scores 50, dominating a teammate reaches 70, being dominated drops to 30. B is deliberately **not** anchored to the teammate's own results: a bad car suppresses both drivers' points, so anchoring B to the teammate's score would penalise a driver twice for the same bad car. Beating your teammate is worth the same regardless of the car — absolute performance is already captured by Component A.
 
 **Component C — Car-adjusted overperformance (weight: 20%)**
 Measures how much the driver outperformed their expected share of team points, scaled by how hard their car made that task:
@@ -196,7 +196,12 @@ This partially rewards drivers who maximise an uncompetitive car without allowin
 A constant per-driver value in the range [−20, +20], defaulting to 0. Added to the final weighted score after A, B, and C are combined. Represents the media halo (or deficit) a driver carries independent of results — some drivers are perceived as generational talents, others are chronically underrated or overrated by pundits. When pre-populating real-world 2026 drivers, sensible non-zero defaults are applied. Procedurally generated drivers always start at 0. The player can edit this value at any time via god mode.
 
 **Final score**
-> `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier, 0, 100)`
+> `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier + pace_narrative, 0, 100)`
+
+**Free agents (didn't race)** run through the *same* formula, which lands them at a low baseline — `A = 0` (no points), `B = 50` (no teammate), `C = 50` (no constructor) → `0.5×0 + 0.3×50 + 0.2×50 = 25`. With no results to judge, their raw pace is the only signal, so it is converted into a narrative swing:
+> `pace_narrative = clamp( (pace − 68) × 0.8 , −20, +20 )`  (free agents only; 0 for everyone who raced)
+
+So an average-pace free agent sits well below proven grid drivers, while a genuinely fast prospect can climb toward the midfield — but rarely past a proven driver, especially once the market's out-of-F1 ring-rust penalty is applied on top.
 
 # In-race retirements
 Each lap, every active driver has a flat per-lap mechanical retirement probability of **0.28%** (calibrated to a ~58-lap race, targeting an average of 3 retirements per 20-car field). Longer circuits with more laps will naturally produce slightly more retirements; shorter circuits slightly fewer. No other factors influence the mechanical retirement rate. When triggered, the retirement is treated identically to a god-mode forced retirement — the car is out and cannot return.

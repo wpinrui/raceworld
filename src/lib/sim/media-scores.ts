@@ -14,11 +14,13 @@ export function computeDriverMediaScores(
   constructorRankInfo: Array<{ teamId: string; points: number; finalPosition: number }>,
   totalTeams: number,
 ): DriverMediaScore[] {
+  // Component A is a percentile within the current grid only — free agents (who
+  // didn't race) are not part of the championship and must not dilute it.
   const pointsMap = new Map<string, number>()
-  for (const d of drivers) pointsMap.set(d.id, 0)
+  for (const d of drivers) if (d.teamId !== '') pointsMap.set(d.id, 0)
   for (const round of raceResults) {
     for (const r of round) {
-      pointsMap.set(r.driverId, (pointsMap.get(r.driverId) ?? 0) + r.points)
+      if (pointsMap.has(r.driverId)) pointsMap.set(r.driverId, (pointsMap.get(r.driverId) ?? 0) + r.points)
     }
   }
 
@@ -26,26 +28,16 @@ export function computeDriverMediaScores(
   const N = sortedPoints.length
 
   function componentA(driverId: string): number {
+    if (!pointsMap.has(driverId)) return 0 // not on the grid (free agent)
     const pts = pointsMap.get(driverId) ?? 0
     const rankFromBottom = sortedPoints.filter((p) => p < pts).length
     return N > 1 ? (rankFromBottom / (N - 1)) * 100 : 50
   }
 
-  // Drivers who never took part in a race this season have no results-based
-  // signal. The media falls back to raw ability (pace-weighted overall) so a
-  // strong free-agent prospect outranks a weak one instead of all tying at zero.
-  const racedIds = new Set<string>()
-  for (const round of raceResults) for (const r of round) racedIds.add(r.driverId)
-
-  function abilityScore(driver: Driver): number {
-    const ovr = 0.6 * driver.pace + 0.2 * driver.smoothness + 0.1 * driver.overtaking + 0.1 * driver.wetWeatherPace
-    return Math.max(0, Math.min(100, ovr + driver.narrativeModifier))
-  }
-
-  const aScores = new Map<string, number>()
-  for (const d of drivers) aScores.set(d.id, componentA(d.id))
-
+  // Teammate H2H around a neutral baseline of 50 — NOT anchored to the
+  // teammate's (car-suppressed) score, so a bad car can't penalise B twice.
   function componentB(driver: Driver): number {
+    if (driver.teamId === '') return 50 // free agent: no teammate
     const teammates = drivers.filter((d) => d.teamId === driver.teamId && d.id !== driver.id)
     if (teammates.length === 0) return 50
 
@@ -76,8 +68,7 @@ export function computeDriverMediaScores(
     const qualH2H = qualTotal > 0 ? qualWins / qualTotal : 0.5
     const raceH2H = raceTotal > 0 ? raceWins / raceTotal : 0.5
     const h2hRatio = 0.4 * qualH2H + 0.6 * raceH2H
-    const teammateA = aScores.get(teammate.id) ?? 50
-    return Math.max(0, Math.min(100, teammateA + (h2hRatio - 0.5) * 40))
+    return Math.max(0, Math.min(100, 50 + (h2hRatio - 0.5) * 40))
   }
 
   function componentC(driver: Driver): number {
@@ -93,13 +84,13 @@ export function computeDriverMediaScores(
   }
 
   return drivers.map((driver) => {
-    if (!racedIds.has(driver.id)) {
-      return { driverId: driver.id, score: abilityScore(driver) }
-    }
-    const A = aScores.get(driver.id) ?? 50
+    const A = componentA(driver.id)
     const B = componentB(driver)
     const C = componentC(driver)
-    const score = Math.max(0, Math.min(100, 0.5 * A + 0.3 * B + 0.2 * C + driver.narrativeModifier))
+    // A free agent has no results, so their raw pace is converted into a
+    // narrative swing — the only signal we have on an unproven driver.
+    const paceNarrative = driver.teamId === '' ? Math.max(-20, Math.min(20, (driver.pace - 68) * 0.8)) : 0
+    const score = Math.max(0, Math.min(100, 0.5 * A + 0.3 * B + 0.2 * C + driver.narrativeModifier + paceNarrative))
     return { driverId: driver.id, score }
   })
 }
