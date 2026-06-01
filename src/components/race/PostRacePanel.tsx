@@ -18,7 +18,7 @@ export function PostRacePanel({ results, teams, currentRound, saving, onSaveAndC
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1 h-6 bg-[#00D9FF] rounded-sm" />
-          <h2 className="font-semibold text-sm tracking-widest uppercase text-[#E8EAED]">Race Results</h2>
+          <h2 className="font-semibold text-sm tracking-widest uppercase text-[#FFFFFF]">Race Results</h2>
         </div>
 
         <table className="w-full border-collapse text-sm">
@@ -34,13 +34,13 @@ export function PostRacePanel({ results, teams, currentRound, saving, onSaveAndC
               const team = teams.find((t) => t.id === r.teamId)
               return (
                 <tr key={r.driverId} className="border-b border-[#1a2030]">
-                  <td className="py-1 px-1 font-bold text-[#E8EAED]">
+                  <td className="py-1 px-1 font-bold text-[#FFFFFF]">
                     {r.dnf ? <span className="text-[#C084FC] text-xs">DNF</span> : r.finishPosition}
                   </td>
                   <td className="py-1 px-1">
                     <div className="flex items-center gap-1.5">
                       <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#FFFFFF' }} />
-                      <span className="text-[#E8EAED] truncate">{r.driverName}</span>
+                      <span className="text-[#FFFFFF] truncate">{r.driverName}</span>
                     </div>
                   </td>
                   <td className="py-1 px-1 text-right font-bold">

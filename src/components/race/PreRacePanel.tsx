@@ -22,7 +22,7 @@ export function PreRacePanel({ raceState, drivers, teams, currentCircuit, onStar
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#2A3142]">
-        <h2 className="font-display text-lg tracking-widest uppercase text-[#E8EAED]">
+        <h2 className="font-display text-lg tracking-widest uppercase text-[#FFFFFF]">
           Qualifying — {currentCircuit?.name}
         </h2>
         <button
@@ -50,7 +50,7 @@ export function PreRacePanel({ raceState, drivers, teams, currentCircuit, onStar
               const driver = drivers.find((d) => d.id === qr.driverId)
               const team = driver ? teams.find((t) => t.id === driver.teamId) : undefined
               return (
-                <tr key={qr.driverId} className="border-b border-[#1E2431] text-[#E8EAED] hover:bg-[#2A3142] transition-colors">
+                <tr key={qr.driverId} className="border-b border-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142] transition-colors">
                   <td className="py-1 px-2 font-bold">{qr.gridPosition}</td>
                   <td className="py-1 px-2">
                     <div className="flex items-center gap-2.5">

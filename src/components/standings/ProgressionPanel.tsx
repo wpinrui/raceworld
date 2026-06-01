@@ -65,7 +65,7 @@ export function ProgressionPanel({ summary, drivers }: Props) {
             if (evs.length === 0) {
               return (
                 <tr key={id} className="border-b border-[#2A3142]/50">
-                  <td className="py-1.5 pr-4 text-[#E8EAED] font-medium">{name}</td>
+                  <td className="py-1.5 pr-4 text-[#FFFFFF] font-medium">{name}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]">
                     {score !== undefined ? score.toFixed(1) : '—'}
                   </td>
@@ -81,7 +81,7 @@ export function ProgressionPanel({ summary, drivers }: Props) {
                 <tr key={`${id}-${ev.stat}`} className="border-b border-[#2A3142]/50">
                   {i === 0 && (
                     <>
-                      <td className="py-1.5 pr-4 text-[#E8EAED] font-medium" rowSpan={evs.length}>{name}</td>
+                      <td className="py-1.5 pr-4 text-[#FFFFFF] font-medium" rowSpan={evs.length}>{name}</td>
                       <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]" rowSpan={evs.length}>
                         {score !== undefined ? score.toFixed(1) : '—'}
                       </td>
@@ -89,7 +89,7 @@ export function ProgressionPanel({ summary, drivers }: Props) {
                   )}
                   <td className="py-1.5 px-3 text-[#A0A9B8] text-xs font-mono uppercase">{STAT_LABEL[ev.stat] ?? ev.stat}</td>
                   <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]">{ev.before.toFixed(1)}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#E8EAED]">{ev.after.toFixed(1)}</td>
+                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{ev.after.toFixed(1)}</td>
                   <td className={`py-1.5 text-right tabular-nums font-semibold ${color}`}>
                     {sign}{delta.toFixed(1)}
                   </td>

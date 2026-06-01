@@ -40,7 +40,7 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
                 <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
                   <div className="flex items-center gap-2">
                     <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
-                    <span className="font-semibold text-[#E8EAED] whitespace-nowrap">{standing.driverName}</span>
+                    <span className="font-semibold text-[#FFFFFF] whitespace-nowrap">{standing.driverName}</span>
                   </div>
                 </td>
                 <td className="py-1.5 px-3 text-[#FFFFFF] text-xs">{standing.teamName}</td>
@@ -49,7 +49,7 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
                     ? <ResultCell key={i} position={standing.results[i] ?? null} />
                     : <td key={i} className="px-0.5 py-0.5"><div className="w-8 h-7" /></td>
                 ))}
-                <td className="py-1.5 px-3 text-right font-bold text-[#E8EAED]">{standing.points}</td>
+                <td className="py-1.5 px-3 text-right font-bold text-[#FFFFFF]">{standing.points}</td>
               </tr>
             )
           })}

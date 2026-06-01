@@ -111,7 +111,7 @@ export default function SetupPage() {
   }))
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
+    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="max-w-5xl mx-auto px-6 py-8">
 
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
@@ -133,18 +133,18 @@ export default function SetupPage() {
             {!isActive && (
               <>
                 <button onClick={handlePrePopulate}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
                   <RotateCcw size={13} /> Pre-populate 2026
                 </button>
                 <button onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
                   <Upload size={13} /> Import JSON
                 </button>
               </>
             )}
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
             <button onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
               <Download size={13} /> Export JSON
             </button>
             {isActive ? (
@@ -173,13 +173,13 @@ export default function SetupPage() {
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
                 <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: team.color }} />
                 <div className="flex-1">
-                  <div className="font-semibold text-[#E8EAED]">{team.name}</div>
+                  <div className="font-semibold text-[#FFFFFF]">{team.name}</div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-[#FFFFFF]">Car pace</span>
                     <input
                       type="number" min={0} max={100} value={team.carPace}
                       onChange={(e) => updateTeam(team.id, { carPace: Math.min(100, Math.max(0, Number(e.target.value))) })}
-                      className="w-12 px-1 py-0.5 rounded bg-[#0F1419] text-[#E8EAED] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none text-center"
+                      className="w-12 px-1 py-0.5 rounded bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none text-center"
                     />
                   </div>
                 </div>
@@ -200,7 +200,7 @@ export default function SetupPage() {
                 ))}
                 {Array.from({ length: DRIVERS_PER_TEAM - teamDrivers.length }).map((_, i) => (
                   <button key={i} onClick={() => addDriver(team.id)}
-                    className="min-h-[160px] rounded-xl border-2 border-dashed border-[#2A3142] hover:border-[#FFFFFF] text-[#FFFFFF] hover:text-[#E8EAED] flex flex-col items-center justify-center gap-2 transition-colors">
+                    className="min-h-[160px] rounded-xl border-2 border-dashed border-[#2A3142] hover:border-[#FFFFFF] text-[#FFFFFF] hover:text-[#FFFFFF] flex flex-col items-center justify-center gap-2 transition-colors">
                     <Plus size={20} />
                     <span className="text-sm font-semibold">Add Driver</span>
                   </button>
@@ -216,7 +216,7 @@ export default function SetupPage() {
             <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
               <div className="w-1.5 h-8 rounded-full bg-[#6B7280]" />
               <div className="flex-1">
-                <div className="font-semibold text-[#E8EAED]">Free Agents</div>
+                <div className="font-semibold text-[#FFFFFF]">Free Agents</div>
                 <div className="text-xs text-[#6B7280]">{freeAgents.length} available</div>
               </div>
             </div>

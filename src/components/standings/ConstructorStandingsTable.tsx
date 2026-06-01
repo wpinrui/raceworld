@@ -57,7 +57,7 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
-                        <span className="font-semibold text-[#E8EAED] whitespace-nowrap">{standing.teamName}</span>
+                        <span className="font-semibold text-[#FFFFFF] whitespace-nowrap">{standing.teamName}</span>
                       </div>
                     </td>
                   )}
@@ -70,7 +70,7 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
                   {isFirst && (
                     <td
                       rowSpan={teamDrivers.length}
-                      className="py-2 px-3 text-right font-bold text-[#E8EAED] align-middle"
+                      className="py-2 px-3 text-right font-bold text-[#FFFFFF] align-middle"
                     >
                       {standing.points}
                     </td>

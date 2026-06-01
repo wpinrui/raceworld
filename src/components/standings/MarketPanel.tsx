@@ -37,7 +37,7 @@ export function MarketPanel({ summary, teams }: Props) {
             return (
               <tr key={m.driverId} className="border-b border-[#2A3142]/50">
                 <td className="py-2 pr-4">
-                  <span className="text-[#E8EAED] font-medium">{m.driverName}</span>
+                  <span className="text-[#FFFFFF] font-medium">{m.driverName}</span>
                   {isRookie && (
                     <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] rounded px-1.5 py-0.5">
                       NEW
@@ -61,7 +61,7 @@ export function MarketPanel({ summary, teams }: Props) {
                     {toColor && (
                       <span className="inline-block w-1.5 h-3.5 rounded-sm" style={{ backgroundColor: toColor }} />
                     )}
-                    <span className="text-[#E8EAED]">{m.toTeamName}</span>
+                    <span className="text-[#FFFFFF]">{m.toTeamName}</span>
                   </span>
                 </td>
                 <td className="py-2 px-3 text-right tabular-nums text-[#A0A9B8]">

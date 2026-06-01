@@ -64,29 +64,29 @@ export function OffSeasonPanel() {
         <div>
           <div className="flex items-center gap-2.5 mb-1">
             <div className="w-1 h-6 rounded-sm bg-[#00D9FF]" />
-            <h2 className="font-display text-xl tracking-wider uppercase text-[#E8EAED]">
+            <h2 className="font-display text-xl tracking-wider uppercase text-[#FFFFFF]">
               Season {season.year} · {PHASE_META[season.phase].title}
             </h2>
           </div>
           {season.driverStandings[0] && (
-            <p className="text-[#FFFFFF] text-sm ml-3.5">
+            <p className="text-[#A0A9B8] text-sm ml-3.5">
               World Champion:{' '}
-              <span className="text-[#00D9FF] font-semibold">{season.driverStandings[0].driverName}</span>
+              <span className="text-[#FFFFFF] font-semibold">{season.driverStandings[0].driverName}</span>
               {' '}·{' '}
-              <span className="tabular-nums">{season.driverStandings[0].points} pts</span>
+              <span className="text-[#FFFFFF] tabular-nums">{season.driverStandings[0].points} pts</span>
             </p>
           )}
           {season.constructorStandings[0] && (
             <p className="text-[#A0A9B8] text-sm ml-3.5">
               Constructors:{' '}
-              <span className="text-[#E8EAED] font-semibold">{season.constructorStandings[0].teamName}</span>
+              <span className="text-[#FFFFFF] font-semibold">{season.constructorStandings[0].teamName}</span>
             </p>
           )}
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={handleReturnToSetup}
-            className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors"
+            className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors"
           >
             Return to Setup
           </button>

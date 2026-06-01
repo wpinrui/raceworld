@@ -41,11 +41,11 @@ export function ReshufflePanel({ summary, teams }: Props) {
                       className="inline-block w-2 h-4 rounded-sm flex-shrink-0"
                       style={{ backgroundColor: color }}
                     />
-                    <span className="text-[#E8EAED] font-medium">{name}</span>
+                    <span className="text-[#FFFFFF] font-medium">{name}</span>
                   </span>
                 </td>
                 <td className="py-2 px-3 text-right tabular-nums text-[#A0A9B8]">{oldPace.toFixed(1)}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-[#E8EAED] font-semibold">{newPace.toFixed(1)}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF] font-semibold">{newPace.toFixed(1)}</td>
                 <td className={`py-2 text-right tabular-nums font-semibold ${deltaColor}`}>
                   {delta > 0 ? '+' : ''}{delta.toFixed(1)}
                 </td>

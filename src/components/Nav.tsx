@@ -31,7 +31,7 @@ export default function Nav() {
       {/* Brand */}
       <div className="flex items-center gap-2.5 mr-4">
         <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
-        <span className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">
+        <span className="font-display text-sm tracking-widest text-[#FFFFFF] uppercase">
           RaceWorld
         </span>
       </div>
@@ -48,7 +48,7 @@ export default function Nav() {
                 'px-3 py-1.5 rounded text-xs font-semibold tracking-wider transition-colors',
                 active
                   ? 'bg-[#00D9FF]/10 text-[#00D9FF]'
-                  : 'text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#2A3142]',
+                  : 'text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#2A3142]',
               ].join(' ')}
             >
               {label}
@@ -61,7 +61,7 @@ export default function Nav() {
       <div className="ml-auto flex items-center gap-4 text-xs tabular-nums text-[#FFFFFF]">
         {seasonActive && circuit ? (
           <span>
-            <span className="text-[#E8EAED]">
+            <span className="text-[#FFFFFF]">
               {year} · Round {String(currentRound).padStart(2, '0')}/{String(calendar2026.length).padStart(2, '0')}
             </span>
             <span className="text-[#FFFFFF]"> · {circuit.name}</span>
@@ -90,7 +90,7 @@ export default function Nav() {
           >
             <div className="flex items-center gap-2.5 mb-3">
               <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
-              <h2 className="font-display text-sm tracking-wider uppercase text-[#E8EAED]">Clear Save</h2>
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Clear Save</h2>
             </div>
             <p className="text-sm text-[#A0A9B8] mb-5">
               This will wipe all local save data — season progress, driver stats, and history. Cannot be undone.
@@ -98,7 +98,7 @@ export default function Nav() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmOpen(false)}
-                className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#E8EAED] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors"
               >
                 Cancel
               </button>

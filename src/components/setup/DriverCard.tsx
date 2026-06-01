@@ -46,7 +46,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
           <OverallRing overall={overall} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-base font-semibold text-[#E8EAED] truncate">{driver.name}</span>
+              <span className="text-base font-semibold text-[#FFFFFF] truncate">{driver.name}</span>
               <ReactCountryFlag
                 countryCode={driver.nationality || 'GB'}
                 svg
@@ -60,7 +60,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
           </div>
           <button
             onClick={() => setExpanded((x) => !x)}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] transition-colors shrink-0"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors shrink-0"
           >
             Edit
             <ChevronDown size={12} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -89,7 +89,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
               <input
                 type="text" value={driver.name}
                 onChange={(e) => onUpdate({ name: e.target.value })}
-                className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
+                className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
               />
             </div>
             <div>
@@ -97,7 +97,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
               <select
                 value={driver.teamId}
                 onChange={(e) => onUpdate({ teamId: e.target.value })}
-                className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
+                className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
               >
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
@@ -107,14 +107,14 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
                 <label className="text-xs text-[#FFFFFF] block mb-1">Age</label>
                 <input type="number" min={16} max={60} value={driver.age}
                   onChange={(e) => onUpdate({ age: Number(e.target.value) })}
-                  className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
+                  className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
                 />
               </div>
               <div>
                 <label className="text-xs text-[#FFFFFF] block mb-1">Potential</label>
                 <input type="number" min={0} max={100} value={driver.peakPotential}
                   onChange={(e) => onUpdate({ peakPotential: Number(e.target.value) })}
-                  className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#E8EAED] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
+                  className="w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
                 />
               </div>
             </div>

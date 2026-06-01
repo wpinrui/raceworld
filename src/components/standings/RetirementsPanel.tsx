@@ -22,7 +22,7 @@ export function RetirementsPanel({ summary, drivers }: Props) {
       {retired.map(({ id, name, age }) => (
         <div key={id} className="flex items-center justify-between rounded-lg bg-[#2A3142] px-4 py-3">
           <div>
-            <span className="text-[#E8EAED] font-medium">{name}</span>
+            <span className="text-[#FFFFFF] font-medium">{name}</span>
             <span className="ml-2 text-[#6B7280] text-sm">Age {age}</span>
           </div>
           <span className="text-sm text-[#A0A9B8]">Out of F1 for 5 seasons</span>

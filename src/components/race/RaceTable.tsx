@@ -57,7 +57,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
           {sorted.map((ds) => {
             const driver = driverMap.get(ds.driverId)
             const team = driver ? teamMap.get(driver.teamId) : undefined
-            const rowColor = ds.retired ? 'text-[#FFFFFF]' : 'text-[#E8EAED]'
+            const rowColor = ds.retired ? 'text-[#FFFFFF]' : 'text-[#FFFFFF]'
             const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#FFFFFF]'
 
             return (
@@ -109,7 +109,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                     ))}
                     <div className="flex items-center gap-0.5">
                       <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
-                      <span className="text-xs text-[#E8EAED]">{ds.stintLap}</span>
+                      <span className="text-xs text-[#FFFFFF]">{ds.stintLap}</span>
                     </div>
                   </div>
                 </td>

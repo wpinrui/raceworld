@@ -75,7 +75,7 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
       <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-6 bg-[#00D9FF] rounded-sm" />
-          <h2 className="font-semibold text-sm tracking-widest text-[#E8EAED] uppercase">Championship</h2>
+          <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">Championship</h2>
         </div>
         <div className="flex rounded overflow-hidden border border-[#2A3142]">
           {(['drivers', 'constructors'] as const).map((t) => (
@@ -97,12 +97,12 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-b border-[#1a2030]">
-                <td className="py-1 pr-1 font-bold text-[#E8EAED] w-5 text-right">{i + 1}</td>
+                <td className="py-1 pr-1 font-bold text-[#FFFFFF] w-5 text-right">{i + 1}</td>
                 <td className="py-1 px-1 w-8"><DeltaArrow delta={r.delta} /></td>
                 <td className="py-1 px-1">
                   <div className="flex items-center gap-1.5">
                     <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                    <span className="text-[#E8EAED] text-xs truncate">{r.label}</span>
+                    <span className="text-[#FFFFFF] text-xs truncate">{r.label}</span>
                   </div>
                 </td>
                 <td className="py-1 pl-1 text-right font-bold text-[#FFFFFF] tabular-nums">{r.livePoints}</td>

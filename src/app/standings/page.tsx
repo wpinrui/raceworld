@@ -55,7 +55,7 @@ export default function StandingsPage() {
   if (!hydrated) return null
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
+    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="max-w-full px-4 py-6">
 
         {/* Champion trophies (year end only) */}
@@ -66,7 +66,7 @@ export default function StandingsPage() {
                 <Trophy size={28} className="text-[#E8C547] shrink-0" />
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-[#A0A9B8]">{season.year} World Champion</p>
-                  <p className="font-display text-lg tracking-wide text-[#E8EAED]">{champDriver.driverName}</p>
+                  <p className="font-display text-lg tracking-wide text-[#FFFFFF]">{champDriver.driverName}</p>
                   <p className="text-xs text-[#A0A9B8] tabular-nums">{champDriver.points} pts · {champDriver.teamName}</p>
                 </div>
               </div>
@@ -76,7 +76,7 @@ export default function StandingsPage() {
                 <Trophy size={28} className="text-[#E8C547] shrink-0" />
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-[#A0A9B8]">{season.year} Constructors&apos; Champion</p>
-                  <p className="font-display text-lg tracking-wide text-[#E8EAED]">{champConstructor.teamName}</p>
+                  <p className="font-display text-lg tracking-wide text-[#FFFFFF]">{champConstructor.teamName}</p>
                   <p className="text-xs text-[#A0A9B8] tabular-nums">{champConstructor.points} pts</p>
                 </div>
               </div>
@@ -104,7 +104,7 @@ export default function StandingsPage() {
                   const s = archivedSeasons.find((a) => a.id === Number(e.target.value))
                   if (s) loadArchivedSeason(s)
                 }}
-                className="px-3 py-1.5 rounded-lg bg-[#2A3142] text-[#E8EAED] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none"
+                className="px-3 py-1.5 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none"
               >
                 <option value="">Current Season ({season.year})</option>
                 {archivedSeasons.map((s) => (
@@ -123,7 +123,7 @@ export default function StandingsPage() {
                   className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
                     tab === t
                       ? 'bg-[#00D9FF] text-[#0F1419]'
-                      : 'text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#2A3142]'
+                      : 'text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#2A3142]'
                   }`}
                 >
                   {t}

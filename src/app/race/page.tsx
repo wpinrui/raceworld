@@ -201,7 +201,7 @@ export default function RacePage() {
   const selectedDriverId = godModeDriverId
 
   return (
-    <div className="h-full bg-[#0F1419] text-[#E8EAED] flex flex-col overflow-hidden">
+    <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
       <RaceHeader
         phase={phase} raceState={raceState} lapProgress={lapProgress}
         currentCircuit={currentCircuit} autoSimming={autoSimming}

@@ -38,11 +38,11 @@ export function TestingPanel({ summary, teams }: Props) {
     <div>
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm text-[#A0A9B8]">
-          Pre-season test · <span className="text-[#E8EAED]">{test.circuitName}</span>
+          Pre-season test · <span className="text-[#FFFFFF]">{test.circuitName}</span>
         </p>
         <button
           onClick={() => setReveal((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#303848] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#A0A9B8] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
         >
           {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
           {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
@@ -67,7 +67,7 @@ export function TestingPanel({ summary, teams }: Props) {
             {test.entries.map((e, i) => (
               <tr key={e.teamId} className="border-b border-[#2A3142]/50">
                 <td className="py-2 pr-3 tabular-nums text-[#6B7280]">{i + 1}</td>
-                <td className="py-2 pr-4 text-[#E8EAED] font-medium">{e.driverName}</td>
+                <td className="py-2 pr-4 text-[#FFFFFF] font-medium">{e.driverName}</td>
                 <td className="py-2 px-3">
                   <span className="flex items-center gap-2">
                     <span className="inline-block w-2 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: colorOf(e.teamId) }} />
@@ -80,7 +80,7 @@ export function TestingPanel({ summary, teams }: Props) {
                   </span>
                 </td>
                 <td className={`py-2 px-3 font-semibold capitalize ${FUEL_STYLE[e.fuelBand]}`}>{e.fuelBand}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-[#E8EAED] font-semibold">{fmtTime(e.lapTime)}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF] font-semibold">{fmtTime(e.lapTime)}</td>
                 <td className="py-2 px-3 text-right tabular-nums text-[#6B7280]">
                   {i === 0 ? '—' : `+${(e.lapTime - fastest).toFixed(3)}`}
                 </td>

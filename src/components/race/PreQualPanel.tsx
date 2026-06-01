@@ -71,7 +71,7 @@ function Th({ col, children, right, activeSortKey, sortDir, onSort }: ThProps) {
     <th
       className={`py-1 px-2 cursor-pointer select-none whitespace-nowrap transition-colors
         ${right ? 'text-right' : 'text-left'}
-        ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#E8EAED]'}`}
+        ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#FFFFFF]'}`}
       onClick={() => onSort(col)}
     >
       <span className={`inline-flex items-center gap-0.5 ${right ? 'justify-end w-full' : ''}`}>
@@ -109,7 +109,7 @@ export function PreQualPanel({
       <div className="shrink-0 flex items-end gap-4 px-6 pt-5 pb-4 border-b border-[#2A3142]">
         <div className="flex-1">
           <p className="text-xs text-[#FFFFFF] uppercase tracking-wider mb-1">Race Weekend</p>
-          <h2 className="font-display text-xl tracking-wider uppercase text-[#E8EAED]">
+          <h2 className="font-display text-xl tracking-wider uppercase text-[#FFFFFF]">
             {currentCircuit?.name ?? '—'}
           </h2>
           <p className="text-sm text-[#FFFFFF] mt-0.5">
@@ -147,7 +147,7 @@ export function PreQualPanel({
       <div className="flex-1 overflow-y-auto min-h-0 px-6 py-3">
         <div className="flex items-center gap-2.5 mb-3">
           <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-          <h2 className="font-semibold text-sm tracking-widest text-[#E8EAED] uppercase">Driver Forms</h2>
+          <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">Driver Forms</h2>
         </div>
 
         <table className="w-full border-collapse">
@@ -173,7 +173,7 @@ export function PreQualPanel({
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />
                       <ReactCountryFlag countryCode={d.nationality || 'GB'} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
-                      <span className="text-sm font-medium text-[#E8EAED]">{d.name}</span>
+                      <span className="text-sm font-medium text-[#FFFFFF]">{d.name}</span>
                     </div>
                   </td>
                   <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.name ?? '—'}</td>
@@ -192,7 +192,7 @@ export function PreQualPanel({
                   </td>
                   <td className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">{team?.carPace ?? '—'}</td>
                   {(['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const).map((stat) => (
-                    <td key={stat} className="py-1 px-2 text-right text-sm font-semibold text-[#E8EAED]">{d[stat]}</td>
+                    <td key={stat} className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">{d[stat]}</td>
                   ))}
                 </tr>
               )

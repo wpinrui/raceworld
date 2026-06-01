@@ -100,13 +100,13 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-          <h2 className="font-semibold text-sm tracking-wider text-[#E8EAED] uppercase">God Mode</h2>
+          <h2 className="font-semibold text-sm tracking-wider text-[#FFFFFF] uppercase">God Mode</h2>
         </div>
       </div>
     )
   }
 
-  const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#E8EAED]'
+  const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#FFFFFF]'
   const formColor = ds.form > 5 ? 'text-[#10B981]' : ds.form < 5 ? 'text-red-400' : 'text-[#FFFFFF]'
 
   return (
@@ -115,10 +115,10 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       {/* Header */}
       <div className="flex items-center gap-2.5">
         <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-        <h2 className="font-semibold text-sm tracking-wider text-[#E8EAED] uppercase">God Mode</h2>
+        <h2 className="font-semibold text-sm tracking-wider text-[#FFFFFF] uppercase">God Mode</h2>
         <div className="ml-2 flex items-center gap-1.5">
           <div className="w-1 h-4 rounded-full" style={{ backgroundColor: team.color }} />
-          <span className="text-sm font-bold text-[#E8EAED]">{driver.name}</span>
+          <span className="text-sm font-bold text-[#FFFFFF]">{driver.name}</span>
           <span className="text-xs text-[#FFFFFF]">{team.shortName}</span>
           <span className="text-sm font-bold text-[#00D9FF] ml-1">P{ds.position}</span>
         </div>
@@ -140,7 +140,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Stint</span>
-              <span className="text-[#E8EAED]">{ds.stintLap}</span>
+              <span className="text-[#FFFFFF]">{ds.stintLap}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Form</span>
@@ -148,11 +148,11 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Last lap</span>
-              <span className="font-mono text-[#E8EAED]">{formatLapTime(ds.lapTimes)}</span>
+              <span className="font-mono text-[#FFFFFF]">{formatLapTime(ds.lapTimes)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Gap</span>
-              <span className="font-mono text-[#E8EAED]">{ds.gap === 0 ? 'LEAD' : `+${ds.gap.toFixed(2)}s`}</span>
+              <span className="font-mono text-[#FFFFFF]">{ds.gap === 0 ? 'LEAD' : `+${ds.gap.toFixed(2)}s`}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#FFFFFF]">AI pit</span>
@@ -175,7 +175,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             <div>
               <div className="flex justify-between mb-0.5">
                 <label className="text-xs text-[#FFFFFF]">Tyre cond.</label>
-                <span className="text-xs text-[#E8EAED]">{Math.round(nextCond)}%</span>
+                <span className="text-xs text-[#FFFFFF]">{Math.round(nextCond)}%</span>
               </div>
               <input type="range" min={0} max={100} step={1}
                 value={nextCond}
@@ -207,8 +207,8 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
                           ? 'bg-[#00D9FF] text-[#0F1419]'
                           : mode === 'no-pit'
                           ? 'bg-[#DC143C] text-white'
-                          : 'bg-[#2A3142] text-[#E8EAED] ring-1 ring-[#FFFFFF]'
-                        : 'bg-[#1E2431] text-[#FFFFFF] hover:text-[#E8EAED]'
+                          : 'bg-[#2A3142] text-[#FFFFFF] ring-1 ring-[#FFFFFF]'
+                        : 'bg-[#1E2431] text-[#FFFFFF] hover:text-[#FFFFFF]'
                     }`}
                   >
                     {mode === 'no-pit' ? 'No Pit' : mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -218,7 +218,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             </div>
             {pitOverride === 'pit' && (
               <select value={forceCompound} onChange={e => fireForceCompound(e.target.value as TyreCompound)}
-                className="w-full bg-[#2A3142] text-[#E8EAED] text-xs px-2 py-1 rounded border border-[#3a4255] focus:outline-none focus:border-[#00D9FF]"
+                className="w-full bg-[#2A3142] text-[#FFFFFF] text-xs px-2 py-1 rounded border border-[#3a4255] focus:outline-none focus:border-[#00D9FF]"
               >
                 {COMPOUNDS.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
               </select>

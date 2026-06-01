@@ -27,7 +27,7 @@ export function RaceHeader({
                 className="absolute inset-y-0 left-0 bg-[#00D9FF]/20"
                 style={{ width: `${phase === 'racing' ? lapProgress : 100}%` }}
               />
-              <span className="relative font-display text-sm tracking-widest uppercase text-[#E8EAED]">
+              <span className="relative font-display text-sm tracking-widest uppercase text-[#FFFFFF]">
                 Lap {Math.min(raceState.currentLap, raceState.totalLaps)}/{raceState.totalLaps}
               </span>
             </div>

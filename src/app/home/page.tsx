@@ -13,7 +13,7 @@ export default function HomePage() {
   if (!hydrated) return null
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
+    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="max-w-full px-4 py-6">
         {isOffSeason(phase) ? (
           <OffSeasonPanel />
