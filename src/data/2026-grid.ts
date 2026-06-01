@@ -10,8 +10,8 @@ export const teams2026: Team[] = [
   { id: 'racingbulls', name: 'Racing Bulls',   shortName: 'RB',  color: '#6692FF', carPace: 50 }, // 6th
   { id: 'haas',        name: 'Haas',           shortName: 'HAA', color: '#B6BABD', carPace: 45 }, // 7th
   { id: 'williams',    name: 'Williams',       shortName: 'WIL', color: '#64C4FF', carPace: 40 }, // 8th
-  { id: 'audi',        name: 'Audi',           shortName: 'AUD', color: '#52E252', carPace: 35 }, // 9th
-  { id: 'cadillac',    name: 'Cadillac',       shortName: 'CAD', color: '#CC0000', carPace: 30 }, // 10th (new entrant, 0 pts)
+  { id: 'audi',        name: 'Audi',           shortName: 'AUD', color: '#BB0020', carPace: 35 }, // 9th
+  { id: 'cadillac',    name: 'Cadillac',       shortName: 'CAD', color: '#94A3B8', carPace: 30 }, // 10th (new entrant, 0 pts)
   { id: 'astonmartin', name: 'Aston Martin',   shortName: 'AMR', color: '#229971', carPace: 25 }, // 11th (0 pts)
 ]
 
