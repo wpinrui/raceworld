@@ -101,6 +101,9 @@ export default function SetupPage() {
   if (!hydrated) return null
 
   const freeAgents = localDrivers.filter((d) => d.teamId === '')
+  // Pre-populating the 2026 defaults wipes the grid — only ever offer it on a
+  // brand-new game (no season completed yet), never between seasons.
+  const isFreshGame = seasonStore.constructorHistory.length === 0
   const expiringCount = localDrivers.filter(
     (d) => d.teamId !== '' && d.contractExpiresAfterSeason <= seasonStore.year,
   ).length
@@ -132,10 +135,12 @@ export default function SetupPage() {
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {!isActive && (
               <>
-                <button onClick={handlePrePopulate}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
-                  <RotateCcw size={13} /> Pre-populate 2026
-                </button>
+                {isFreshGame && (
+                  <button onClick={handlePrePopulate}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                    <RotateCcw size={13} /> Pre-populate 2026
+                  </button>
+                )}
                 <button onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
                   <Upload size={13} /> Import JSON
