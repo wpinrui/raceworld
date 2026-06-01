@@ -12,6 +12,7 @@ import { StatSlider } from '@/components/setup/StatSlider'
 import { STAT_KEYS, STAT_LABELS } from '@/components/setup/stat-utils'
 import { ResultChip } from '@/components/standings/ResultCell'
 import { TeamLink } from '@/components/world/EntityLink'
+import { CountrySelect } from '@/components/CountrySelect'
 
 function StatTile({ label, value }: { label: string; value: string | number }) {
   return (
@@ -89,7 +90,7 @@ export default function DriverPage() {
                         </div>
                         <div>
                           <label className="text-xs text-[#FFFFFF] block mb-1">Nationality</label>
-                          <input type="text" maxLength={2} value={liveDriver.nationality} onChange={(e) => updateDriver(id, { nationality: e.target.value.toUpperCase() })} className={`${inputClass} uppercase`} />
+                          <CountrySelect value={liveDriver.nationality} onChange={(code) => updateDriver(id, { nationality: code })} />
                         </div>
                         <div>
                           <label className="text-xs text-[#FFFFFF] block mb-1">Age</label>
