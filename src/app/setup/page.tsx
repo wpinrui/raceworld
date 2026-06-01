@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Download, Plus, Trash2, ChevronRight, RotateCcw, ChevronDown } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useRaceStore } from '@/lib/store/race-store'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import type { Driver, Team } from '@/lib/sim/types'
 
@@ -305,6 +306,7 @@ export default function SetupPage() {
 
   function handleStartSeason() {
     seasonStore.initSeason(localDrivers, localTeams, seasonStore.year)
+    useRaceStore.getState().resetSession()
     router.push('/race')
   }
 
