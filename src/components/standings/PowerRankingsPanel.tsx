@@ -55,7 +55,7 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
               {godMode && <th className="text-right pb-2 px-3 font-medium">Car-adj ·20%</th>}
               {godMode && <th className="text-right pb-2 px-3 font-medium">Narr</th>}
               {godMode && <th className="text-right pb-2 px-3 font-medium">Pace</th>}
-              <th className="text-right pb-2 pl-3 font-medium">Media</th>
+              {godMode && <th className="text-right pb-2 pl-3 font-medium">Media</th>}
             </tr>
           </thead>
           <tbody>
@@ -78,7 +78,7 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
                   {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.c.toFixed(0)}</td>}
                   {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.narrative === 0 ? '—' : signed(bd.narrative)}</td>}
                   {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.paceNarrative === 0 ? '—' : signed(bd.paceNarrative)}</td>}
-                  <td className="py-1.5 pl-3 text-right tabular-nums font-bold text-[#00D9FF]">{bd.score.toFixed(1)}</td>
+                  {godMode && <td className="py-1.5 pl-3 text-right tabular-nums font-bold text-[#00D9FF]">{bd.score.toFixed(1)}</td>}
                 </tr>
               )
             })}

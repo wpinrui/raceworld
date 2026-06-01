@@ -57,6 +57,15 @@ body {
   font-family: 'Formula1', system-ui, sans-serif;
 }
 
+/* Tailwind v4's reset drops the pointer cursor on buttons — put it back. */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
 /* Thin custom scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
