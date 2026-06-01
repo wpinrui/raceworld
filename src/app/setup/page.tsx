@@ -133,7 +133,7 @@ function ContractBadge({ expiresAfter, currentYear }: { expiresAfter: number; cu
     </span>
   )
   return (
-    <span className="text-xs text-[#A0A9B8] tabular-nums">until {expiresAfter}</span>
+    <span className="text-xs text-white tabular-nums">until {expiresAfter}</span>
   )
 }
 
@@ -150,20 +150,20 @@ function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
   return (
     <div className="rounded-xl bg-[#2A3142] overflow-hidden">
       <div className="p-4">
-        {/* Header: flag + ring + name + controls */}
+        {/* Header: ring + name + flag + controls */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="shrink-0">
-            <ReactCountryFlag
-              countryCode={driver.nationality || 'GB'}
-              svg
-              style={{ width: '1.5em', height: '1.5em', borderRadius: '2px' }}
-            />
-          </div>
           <OverallRing overall={overall} />
           <div className="flex-1 min-w-0">
-            <div className="text-base font-semibold text-[#E8EAED] truncate">{driver.name}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold text-[#E8EAED] truncate">{driver.name}</span>
+              <ReactCountryFlag
+                countryCode={driver.nationality || 'GB'}
+                svg
+                style={{ width: '1.25em', height: '1.25em', borderRadius: '2px', flexShrink: 0 }}
+              />
+            </div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-[#A0A9B8]">Age {driver.age}</span>
+              <span className="text-xs text-white">Age {driver.age}</span>
               <ContractBadge expiresAfter={driver.contractExpiresAfterSeason} currentYear={currentYear} />
             </div>
           </div>
