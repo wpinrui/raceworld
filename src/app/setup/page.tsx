@@ -19,16 +19,14 @@ const STAT_LABELS: Record<StatKey, string> = {
 
 const DRIVERS_PER_TEAM = 2
 
-// Red (#DC143C) ≤50 → Green (#10B981) ≥90, linear between
+// HSL hue 0 (red) → 122 (green), fixed saturation+lightness so every value is equally vivid on dark bg
 function statColor(value: number): string {
   const clamped = Math.max(0, Math.min(100, value))
-  if (clamped <= 50) return '#DC143C'
-  if (clamped >= 90) return '#10B981'
+  if (clamped <= 50) return 'hsl(0, 90%, 62%)'
+  if (clamped >= 90) return 'hsl(122, 72%, 52%)'
   const t = (clamped - 50) / 40
-  const r = Math.round(220 + (16 - 220) * t)
-  const g = Math.round(20 + (185 - 20) * t)
-  const b = Math.round(60 + (129 - 60) * t)
-  return `rgb(${r},${g},${b})`
+  const hue = Math.round(t * 122)
+  return `hsl(${hue}, 85%, 58%)`
 }
 
 function computeOverall(d: Driver): number {
