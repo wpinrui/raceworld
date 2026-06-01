@@ -41,7 +41,12 @@ export default function RacePage() {
   const [saving, setSaving] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [lapProgress, setLapProgress] = useState(0)
+
+  // Timing refs for pause-resume accuracy
+  const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const nextTickAtRef = useRef<number>(0)  // absolute timestamp of next scheduled tick
+  const doTickRef = useRef<() => void>(() => {})
 
   const currentCircuit = calendar2026[season.currentRound - 1]
   const isSeasonActive = season.phase !== 'idle'
@@ -89,10 +94,13 @@ export default function RacePage() {
     tickLap(actions)
   }, [pendingGodModeActions, tickLap])
 
+  // Keep a stable ref so the recursive setTimeout can always call the latest doTick
+  useEffect(() => { doTickRef.current = doTick }, [doTick])
+
   // Speed 4 loop
   useEffect(() => {
     if (phase !== 'racing' || paused || speed !== 4 || !speed4Confirmed) return
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+    if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
     let cancelled = false
     const run = async () => {
       while (!cancelled) {
@@ -106,16 +114,54 @@ export default function RacePage() {
     return () => { cancelled = true }
   }, [phase, paused, speed, speed4Confirmed])
 
-  // Interval loop speeds 1-3
+  // Speeds 1-3: recursive setTimeout so pause/resume preserves remaining delay
   useEffect(() => {
-    if (phase !== 'racing' || paused || speed === 4) {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
+    if (phase !== 'racing' || speed === 4) {
+      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
       return
     }
+    if (paused) {
+      // Just clear; nextTickAtRef already holds when the next tick was due
+      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
+      return
+    }
+
     const ms = SPEED_INTERVALS[speed]
-    intervalRef.current = setInterval(doTick, ms)
-    return () => { if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null } }
-  }, [phase, paused, speed, doTick])
+    // Resume from remaining time if we have a future tick scheduled, otherwise fresh interval
+    const remaining = nextTickAtRef.current > Date.now()
+      ? Math.min(nextTickAtRef.current - Date.now(), ms)
+      : ms
+
+    const schedule = (delay: number) => {
+      nextTickAtRef.current = Date.now() + delay
+      tickTimerRef.current = setTimeout(() => {
+        doTickRef.current()
+        const s = useRaceStore.getState().raceState
+        if (s?.phase === 'racing' && !s.paused && s.speed !== 4) {
+          schedule(SPEED_INTERVALS[s.speed as SimSpeed])
+        }
+      }, delay)
+    }
+
+    schedule(remaining)
+    return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
+  }, [phase, paused, speed]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Progress bar animation (50ms ticks)
+  useEffect(() => {
+    if (phase !== 'racing' || paused || speed === 4) {
+      setLapProgress(paused ? Math.max(0, Math.min(100,
+        (1 - (nextTickAtRef.current - Date.now()) / SPEED_INTERVALS[speed]) * 100
+      )) : 0)
+      return
+    }
+    const timer = setInterval(() => {
+      const ms = SPEED_INTERVALS[speed]
+      const remaining = nextTickAtRef.current - Date.now()
+      setLapProgress(Math.max(0, Math.min(100, (1 - remaining / ms) * 100)))
+    }, 50)
+    return () => clearInterval(timer)
+  }, [phase, paused, speed])
 
   const handleSpeedClick = (s: SimSpeed) => {
     if (s === 4) { setShowSpeed4Modal(true); return }
@@ -215,9 +261,15 @@ export default function RacePage() {
         <div className="flex items-center gap-3">
           {(phase === 'racing' || phase === 'finished') && raceState ? (
             <>
-              <span className="font-display text-sm tracking-widest uppercase text-[#E8EAED]">
-                Lap {Math.max(1, raceState.currentLap - 1)}/{raceState.totalLaps}
-              </span>
+              <div className="relative overflow-hidden rounded px-3 py-1 bg-[#2A3142]">
+                <div
+                  className="absolute inset-y-0 left-0 bg-[#00D9FF]/20"
+                  style={{ width: `${phase === 'racing' ? lapProgress : 100}%` }}
+                />
+                <span className="relative font-display text-sm tracking-widest uppercase text-[#E8EAED]">
+                  Lap {Math.max(1, raceState.currentLap - 1)}/{raceState.totalLaps}
+                </span>
+              </div>
               <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name}</span>
               {phase === 'finished' && (
                 <span className="font-display text-xs tracking-widest text-[#00D9FF] uppercase animate-pulse ml-1">
