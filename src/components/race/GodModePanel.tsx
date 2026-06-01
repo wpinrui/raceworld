@@ -100,7 +100,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-          <h2 className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">God Mode</h2>
+          <h2 className="font-semibold text-sm tracking-wider text-[#E8EAED] uppercase">God Mode</h2>
         </div>
         <p className="text-[#FFFFFF] text-sm italic">Select a driver from the standings.</p>
       </div>
@@ -116,7 +116,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       {/* Header */}
       <div className="flex items-center gap-2.5">
         <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-        <h2 className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">God Mode</h2>
+        <h2 className="font-semibold text-sm tracking-wider text-[#E8EAED] uppercase">God Mode</h2>
         <div className="ml-2 flex items-center gap-1.5">
           <div className="w-1 h-4 rounded-full" style={{ backgroundColor: team.color }} />
           <span className="text-sm font-bold text-[#E8EAED]">{driver.name}</span>

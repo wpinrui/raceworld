@@ -272,7 +272,7 @@ export default function RacePage() {
               </div>
               <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name}</span>
               {phase === 'finished' && (
-                <span className="font-display text-xs tracking-widest text-[#00D9FF] uppercase animate-pulse ml-1">
+                <span className="font-semibold text-xs tracking-wider text-[#00D9FF] uppercase animate-pulse ml-1">
                   Finished
                 </span>
               )}
@@ -334,7 +334,7 @@ export default function RacePage() {
                 <div className="px-6 py-3">
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-                    <h2 className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">Driver Forms</h2>
+                    <h2 className="font-semibold text-sm tracking-widest text-[#E8EAED] uppercase">Driver Forms</h2>
                     <span className="text-xs text-[#FFFFFF]">(randomised — edit before qualifying)</span>
                   </div>
                   <table className="w-full border-collapse">
@@ -475,7 +475,7 @@ export default function RacePage() {
               <div className="flex-1 min-h-0 overflow-y-auto p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-1 h-6 bg-[#00D9FF] rounded-sm" />
-                  <h2 className="font-display text-sm tracking-widest uppercase text-[#E8EAED]">Race Results</h2>
+                  <h2 className="font-semibold text-sm tracking-widest uppercase text-[#E8EAED]">Race Results</h2>
                 </div>
                 <table className="w-full border-collapse text-sm">
                   <thead>
@@ -551,7 +551,7 @@ export default function RacePage() {
                   <div className="flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-                      <h2 className="font-display text-sm tracking-widest text-[#FFFFFF] uppercase">God Mode</h2>
+                      <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">God Mode</h2>
                     </div>
                     <p className="text-[#FFFFFF] text-sm italic">Available during race.</p>
                   </div>
@@ -595,7 +595,7 @@ export default function RacePage() {
       {showRestartConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-[#1E2431] border border-[#2A3142] rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="font-display text-sm tracking-widest uppercase text-[#E8EAED] mb-3">Restart Weekend?</h3>
+            <h3 className="font-semibold text-sm tracking-widest uppercase text-[#E8EAED] mb-3">Restart Weekend?</h3>
             <p className="text-[#FFFFFF] text-sm mb-6">
               This will discard the current session and restart qualifying for Round {season.currentRound}. Race results will not be saved.
             </p>
@@ -624,7 +624,7 @@ export default function RacePage() {
       {showSpeed4Modal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-[#1E2431] border border-[#2A3142] rounded-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="font-display text-sm tracking-widest uppercase text-[#E8EAED] mb-3">Simulate to End?</h3>
+            <h3 className="font-semibold text-sm tracking-widest uppercase text-[#E8EAED] mb-3">Simulate to End?</h3>
             <p className="text-[#FFFFFF] text-sm mb-6">The race will be simulated to the end without delay.</p>
             <div className="flex gap-3">
               <button onClick={confirmSpeed4} className="flex-1 py-3 bg-[#00D9FF] hover:bg-[#009CB8] text-[#0F1419] text-sm font-black tracking-widest uppercase rounded transition-colors">
