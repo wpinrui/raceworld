@@ -118,3 +118,42 @@ export interface GodModeAction {
   value?: number
   compound?: TyreCompound  // used with force-pit
 }
+
+// --- Season / standings types ---
+
+export type SeasonPhase = 'idle' | 'pre-race' | 'post-race' | 'end-of-season'
+
+export interface RaceResult {
+  driverId: string
+  driverName: string
+  teamId: string
+  teamName: string
+  gridPosition: number
+  finishPosition: number | null  // null = DNF
+  points: number
+  lapsCompleted: number
+  totalTime: number | null
+  dnf: boolean
+  stints: Array<{ compound: TyreCompound; laps: number }>
+  q1Time: number | null
+  q2Time: number | null
+  q3Time: number | null
+}
+
+export interface DriverStanding {
+  driverId: string
+  driverName: string
+  teamId: string
+  teamName: string
+  points: number
+  wins: number
+  results: (number | null)[]  // finishPosition per round index; null = DNF or not yet raced
+}
+
+export interface ConstructorStanding {
+  teamId: string
+  teamName: string
+  points: number
+  wins: number
+  results: (number | null)[][]  // [driverIdx][roundIdx]
+}

@@ -14,7 +14,6 @@ interface RaceTableProps {
   onSelectDriver?: (id: string) => void
 }
 
-
 function formatGap(gap: number, retired: boolean): string {
   if (retired) return 'DNF'
   if (gap === 0) return 'LEADER'
@@ -43,7 +42,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="text-[#6B7280] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+          <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
             <th className="text-left py-1.5 px-2 w-8">P</th>
             <th className="text-left py-1.5 px-2">Driver</th>
             <th className="text-left py-1.5 px-2">Team</th>
@@ -57,8 +56,8 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
           {sorted.map((ds) => {
             const driver = driverMap.get(ds.driverId)
             const team = driver ? teamMap.get(driver.teamId) : undefined
-            const rowColor = ds.retired ? 'text-[#6B7280]' : 'text-[#E8EAED]'
-            const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#6B7280]'
+            const rowColor = ds.retired ? 'text-[#FFFFFF]' : 'text-[#E8EAED]'
+            const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#FFFFFF]'
 
             return (
               <tr
@@ -70,7 +69,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                     : 'hover:bg-[#1E2431]'
                 }`}
               >
-                <td className="py-1 px-2 font-mono font-bold text-sm">{ds.position}</td>
+                <td className="py-1 px-2 font-bold text-sm">{ds.position}</td>
                 <td className="py-1 px-2">
                   <div className="flex items-center gap-2">
                     {team && (
@@ -81,7 +80,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                     </span>
                   </div>
                 </td>
-                <td className="py-1 px-2 font-mono text-xs text-[#A0A9B8]">
+                <td className="py-1 px-2 text-xs text-[#FFFFFF]">
                   {team?.shortName ?? '---'}
                 </td>
                 <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
@@ -91,7 +90,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                   <div className="flex items-center gap-1.5 justify-center">
                     <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
                     {!ds.retired && (
-                      <span className={`font-mono text-xs ${condColor}`}>
+                      <span className={`text-xs ${condColor}`}>
                         {ds.currentTyre.condition}%
                       </span>
                     )}
@@ -105,13 +104,12 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                     {ds.stintHistory.map((s, i) => (
                       <div key={i} className="flex items-center gap-0.5">
                         <TyreIndicator compound={s.compound} size="sm" />
-                        <span className="font-mono text-xs text-[#6B7280]">{s.laps}</span>
+                        <span className="text-xs text-[#FFFFFF]">{s.laps}</span>
                       </div>
                     ))}
-                    {/* Current stint */}
                     <div className="flex items-center gap-0.5">
                       <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
-                      <span className="font-mono text-xs text-[#E8EAED]">{ds.stintLap}</span>
+                      <span className="text-xs text-[#E8EAED]">{ds.stintLap}</span>
                     </div>
                   </div>
                 </td>

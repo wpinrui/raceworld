@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { Driver, Team, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
-import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
@@ -11,46 +10,47 @@ interface RaceStore {
   teams: Team[]
   selectedCircuitId: string
   forms: Record<string, number>
-  strategyNoise: number   // 0–1; controls team tyre assumption accuracy
+  strategyNoise: number
+  godModeDriverId: string | null  // persists across races
 
-  setCircuit: (circuitId: string) => void
+  loadFromSeason: (drivers: Driver[], teams: Team[], circuitId: string) => void
+  setGodModeDriver: (driverId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
-  updateDriverStat: (driverId: string, stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness', value: number) => void
   setStrategyNoise: (n: number) => void
   initSession: () => void
   tickLap: (godModeActions?: GodModeAction[]) => void
   setSpeed: (speed: SimSpeed) => void
   setPaused: (paused: boolean) => void
-  resetSession: () => void
+  resetSession: (drivers?: Driver[], teams?: Team[], circuitId?: string) => void
 }
 
 export const useRaceStore = create<RaceStore>((set, get) => ({
   raceState: null,
-  drivers: drivers2026.map((d) => ({ ...d })),
-  teams: teams2026,
+  drivers: [],
+  teams: [],
   selectedCircuitId: 'australia',
-  forms: Object.fromEntries(drivers2026.map((d) => [d.id, 5])),
+  forms: {},
   strategyNoise: 0.35,
+  godModeDriverId: null,
 
-  setCircuit: (circuitId) => {
-    const { drivers } = get()
+  loadFromSeason: (drivers, teams, circuitId) => {
+    const { godModeDriverId } = get()
+    // Keep selection if the driver is still on the grid, otherwise clear
+    const stillExists = godModeDriverId && drivers.some((d) => d.id === godModeDriverId)
     set({
+      drivers: drivers.map((d) => ({ ...d })),
+      teams: teams.map((t) => ({ ...t })),
       selectedCircuitId: circuitId,
       forms: rollForms(drivers.map((d) => d.id)),
+      godModeDriverId: stillExists ? godModeDriverId : null,
     })
   },
+
+  setGodModeDriver: (driverId) => set({ godModeDriverId: driverId }),
 
   updateDriverForm: (driverId, value) => {
     set((state) => ({
       forms: { ...state.forms, [driverId]: Math.min(10, Math.max(0, value)) },
-    }))
-  },
-
-  updateDriverStat: (driverId, stat, value) => {
-    set((state) => ({
-      drivers: state.drivers.map((d) =>
-        d.id === driverId ? { ...d, [stat]: Math.min(100, Math.max(0, value)) } : d
-      ),
     }))
   },
 
@@ -60,22 +60,17 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const { drivers, teams, selectedCircuitId, forms, strategyNoise } = get()
     const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
     if (!circuit) return
-
     const { results, sessions } = runQualifying(drivers, teams, circuit, forms)
     const raceState = initRaceState(drivers, teams, circuit, results, sessions, forms, strategyNoise)
-
     set({ raceState })
   },
 
   tickLap: (godModeActions) => {
     const { raceState, drivers, teams, selectedCircuitId } = get()
     if (!raceState || raceState.phase !== 'racing') return
-
     const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
     if (!circuit) return
-
-    const nextState = simulateLap(raceState, drivers, teams, circuit, godModeActions)
-    set({ raceState: nextState })
+    set({ raceState: simulateLap(raceState, drivers, teams, circuit, godModeActions) })
   },
 
   setSpeed: (speed) => {
@@ -90,12 +85,14 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set({ raceState: { ...raceState, paused } })
   },
 
-  resetSession: () => {
-    const freshDrivers = drivers2026.map((d) => ({ ...d }))
+  resetSession: (drivers, teams, circuitId) => {
+    const nextDrivers = (drivers ?? get().drivers).map((d) => ({ ...d }))
     set({
       raceState: null,
-      drivers: freshDrivers,
-      forms: rollForms(freshDrivers.map((d) => d.id)),
+      drivers: nextDrivers,
+      teams: teams ? teams.map((t) => ({ ...t })) : get().teams,
+      selectedCircuitId: circuitId ?? get().selectedCircuitId,
+      forms: rollForms(nextDrivers.map((d) => d.id)),
     })
   },
 }))

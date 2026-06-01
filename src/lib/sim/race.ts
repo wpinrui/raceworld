@@ -232,7 +232,7 @@ export function simulateLap(
           condition: 100,
           maxLifeLaps: newMaxLifeLaps,
         },
-        stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap }],
+        stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap + 1 }],
         stintLap: 0,
         lastPitLap: state.currentLap,
         pitStops: current.pitStops + 1,
@@ -301,9 +301,10 @@ export function simulateLap(
     // 2k. Append lapTime
     current = { ...current, lapTimes: [...current.lapTimes, finalLapTime] }
 
-    // Mark pit in state if pitted
+    // Pit lap belongs to the old stint (already counted via +1 in history).
+    // Undo the increment so the new stint starts at 0; out-lap becomes lap 1 next tick.
     if (pitted) {
-      current = { ...current, stintLap: 1 }
+      current = { ...current, stintLap: 0 }
     }
 
     updatedStates.set(current.driverId, current)
