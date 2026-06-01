@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:init": "node -e \"require('./src/lib/db/client').getDb()\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

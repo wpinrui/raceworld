@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { Driver, Team, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
-import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
@@ -13,6 +12,7 @@ interface RaceStore {
   forms: Record<string, number>
   strategyNoise: number   // 0–1; controls team tyre assumption accuracy
 
+  loadFromSeason: (drivers: Driver[], teams: Team[], circuitId: string) => void
   setCircuit: (circuitId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
   updateDriverStat: (driverId: string, stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness', value: number) => void
@@ -21,16 +21,25 @@ interface RaceStore {
   tickLap: (godModeActions?: GodModeAction[]) => void
   setSpeed: (speed: SimSpeed) => void
   setPaused: (paused: boolean) => void
-  resetSession: () => void
+  resetSession: (drivers?: Driver[], teams?: Team[], circuitId?: string) => void
 }
 
 export const useRaceStore = create<RaceStore>((set, get) => ({
   raceState: null,
-  drivers: drivers2026.map((d) => ({ ...d })),
-  teams: teams2026,
+  drivers: [],
+  teams: [],
   selectedCircuitId: 'australia',
-  forms: Object.fromEntries(drivers2026.map((d) => [d.id, 5])),
+  forms: {},
   strategyNoise: 0.35,
+
+  loadFromSeason: (drivers, teams, circuitId) => {
+    set({
+      drivers: drivers.map((d) => ({ ...d })),
+      teams: teams.map((t) => ({ ...t })),
+      selectedCircuitId: circuitId,
+      forms: rollForms(drivers.map((d) => d.id)),
+    })
+  },
 
   setCircuit: (circuitId) => {
     const { drivers } = get()
@@ -90,12 +99,14 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set({ raceState: { ...raceState, paused } })
   },
 
-  resetSession: () => {
-    const freshDrivers = drivers2026.map((d) => ({ ...d }))
+  resetSession: (drivers, teams, circuitId) => {
+    const nextDrivers = (drivers ?? get().drivers).map((d) => ({ ...d }))
     set({
       raceState: null,
-      drivers: freshDrivers,
-      forms: rollForms(freshDrivers.map((d) => d.id)),
+      drivers: nextDrivers,
+      teams: teams ? teams.map((t) => ({ ...t })) : get().teams,
+      selectedCircuitId: circuitId ?? get().selectedCircuitId,
+      forms: rollForms(nextDrivers.map((d) => d.id)),
     })
   },
 }))
