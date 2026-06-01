@@ -11,6 +11,7 @@ import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
 import RaceTable from '@/components/race/RaceTable'
 import GodModePanel from '@/components/race/GodModePanel'
 import CommentaryFeed from '@/components/race/CommentaryFeed'
+import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { RaceHeader } from '@/components/race/RaceHeader'
 import { PreQualPanel } from '@/components/race/PreQualPanel'
 import { PreRacePanel } from '@/components/race/PreRacePanel'
@@ -254,10 +255,21 @@ export default function RacePage() {
             />
           ) : (
             <>
-              <div className="h-[40%] min-h-0 p-4 border-b border-[#2A3142] flex flex-col overflow-hidden">
-                <CommentaryFeed entries={raceState?.commentary ?? []} />
+              <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">
+                <div className="w-1/2 min-h-0 p-4 border-r border-[#2A3142] flex flex-col overflow-hidden">
+                  <CommentaryFeed entries={raceState?.commentary ?? []} />
+                </div>
+                <div className="w-1/2 min-h-0 p-4 flex flex-col overflow-hidden">
+                  <LiveChampionship
+                    states={raceState?.drivers ?? []}
+                    drivers={drivers}
+                    teams={teams}
+                    baselineDrivers={season.driverStandings}
+                    baselineConstructors={season.constructorStandings}
+                  />
+                </div>
               </div>
-              <div className="h-[60%] min-h-0 p-4 overflow-y-auto">
+              <div className="h-[55%] min-h-0 p-4 overflow-y-auto">
                 {raceState && phase === 'racing' ? (
                   <GodModePanel
                     drivers={drivers} teams={teams} states={raceState.drivers}
