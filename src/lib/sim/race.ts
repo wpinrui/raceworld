@@ -15,15 +15,12 @@ import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
+import { sampleNormal } from './rng-utils'
 
 export function rollForms(driverIds: string[]): Record<string, number> {
   const forms: Record<string, number> = {}
   for (const id of driverIds) {
-    const r1 = Math.random()
-    const r2 = Math.random()
-    const r3 = Math.random()
-    const val = 5 + (r1 + r2 + r3 - 1.5) * 3
-    forms[id] = Math.min(10, Math.max(0, val))
+    forms[id] = Math.min(10, Math.max(0, sampleNormal(5, 1.8, Math.random)))
   }
   return forms
 }
