@@ -3,17 +3,29 @@ import type {
   Team,
   RaceResult,
   DriverMediaScore,
+  DriverMediaBreakdown,
   TeamMediaScore,
   ConstructorSeasonRecord,
 } from './types'
 
 export function computeDriverMediaScores(
   drivers: Driver[],
-  _teams: Team[],
+  teams: Team[],
   raceResults: RaceResult[][],
   constructorRankInfo: Array<{ teamId: string; points: number; finalPosition: number }>,
   totalTeams: number,
 ): DriverMediaScore[] {
+  return computeDriverMediaBreakdowns(drivers, teams, raceResults, constructorRankInfo, totalTeams)
+    .map(({ driverId, score }) => ({ driverId, score }))
+}
+
+export function computeDriverMediaBreakdowns(
+  drivers: Driver[],
+  _teams: Team[],
+  raceResults: RaceResult[][],
+  constructorRankInfo: Array<{ teamId: string; points: number; finalPosition: number }>,
+  totalTeams: number,
+): DriverMediaBreakdown[] {
   // Component A is a percentile within the current grid only — free agents (who
   // didn't race) are not part of the championship and must not dilute it.
   const pointsMap = new Map<string, number>()
@@ -84,14 +96,14 @@ export function computeDriverMediaScores(
   }
 
   return drivers.map((driver) => {
-    const A = componentA(driver.id)
-    const B = componentB(driver)
-    const C = componentC(driver)
+    const a = componentA(driver.id)
+    const b = componentB(driver)
+    const c = componentC(driver)
     // A free agent has no results, so their raw pace is converted into a
     // narrative swing — the only signal we have on an unproven driver.
     const paceNarrative = driver.teamId === '' ? Math.max(-20, Math.min(20, (driver.pace - 68) * 0.8)) : 0
-    const score = Math.max(0, Math.min(100, 0.5 * A + 0.3 * B + 0.2 * C + driver.narrativeModifier + paceNarrative))
-    return { driverId: driver.id, score }
+    const score = Math.max(0, Math.min(100, 0.5 * a + 0.3 * b + 0.2 * c + driver.narrativeModifier + paceNarrative))
+    return { driverId: driver.id, a, b, c, narrative: driver.narrativeModifier, paceNarrative, score }
   })
 }
 

@@ -218,6 +218,18 @@ export interface DriverProgressionEvent {
 export interface DriverMediaScore { driverId: string; score: number }
 export interface TeamMediaScore   { teamId: string;   score: number }
 
+// Full media breakdown for the power-rankings view — the component values that
+// feed `media_score = 0.5·a + 0.3·b + 0.2·c + narrative + paceNarrative`.
+export interface DriverMediaBreakdown {
+  driverId: string
+  a: number              // results percentile (grid only)
+  b: number              // teammate H2H
+  c: number              // car-adjusted overperformance
+  narrative: number      // god-mode narrative modifier
+  paceNarrative: number  // pace-derived swing (free agents only)
+  score: number
+}
+
 export interface MarketMove {
   driverId: string
   driverName: string

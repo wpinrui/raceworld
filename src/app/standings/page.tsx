@@ -7,17 +7,19 @@ import { calendar2026 } from '@/data/calendar'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
 import { TeammateH2HPanel } from '@/components/standings/TeammateH2HPanel'
+import { PowerRankingsPanel } from '@/components/standings/PowerRankingsPanel'
 import { actionGetArchivedSeasons, actionGetSeasonStandings } from '@/lib/db/actions'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import type { DbSeason } from '@/lib/db/queries'
 
-type Tab = 'drivers' | 'constructors' | 'h2h'
+type Tab = 'drivers' | 'constructors' | 'h2h' | 'power'
 
 const TABS: [Tab, string][] = [
   ['drivers', 'Drivers'],
   ['constructors', 'Constructors'],
   ['h2h', 'Teammates'],
+  ['power', 'Power Rankings'],
 ]
 
 interface ArchivedView {
@@ -174,6 +176,23 @@ export default function StandingsPage() {
               </p>
             )}
             <TeammateH2HPanel raceResults={season.raceResults} drivers={season.drivers} teams={season.teams} />
+          </>
+        )}
+
+        {/* Driver power rankings (current season) */}
+        {tab === 'power' && (
+          <>
+            {selectedArchive && (
+              <p className="text-sm text-[#FFFFFF] mb-4">
+                Power rankings reflect the current season ({season.year}).
+              </p>
+            )}
+            <PowerRankingsPanel
+              drivers={season.drivers}
+              teams={season.teams}
+              raceResults={season.raceResults}
+              constructorStandings={season.constructorStandings}
+            />
           </>
         )}
 
