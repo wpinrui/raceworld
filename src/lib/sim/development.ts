@@ -70,7 +70,7 @@ export function applyFundingPenalties(
     const plan = devPlans.find((p) => p.teamId === team.id)
     if (!plan) return team
     const penalty = TIER_PENALTY[plan.fundingTier]
-    return { ...team, carPace: Math.max(5, team.carPace + penalty) }
+    return { ...team, carPace: Math.round(Math.max(5, team.carPace + penalty) * 10) / 10 }
   })
 
   const updatedDevPlans = devPlans.map((plan) => {
@@ -110,7 +110,7 @@ export function applyUpgradeEvents(
 
     const team = teamMap.get(plan.teamId)
     if (team) {
-      team.carPace = Math.max(5, Math.min(100, team.carPace + paceDelta))
+      team.carPace = Math.round(Math.max(5, Math.min(100, team.carPace + paceDelta)) * 10) / 10
       teamMap.set(plan.teamId, team)
     }
 
