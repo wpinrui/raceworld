@@ -61,7 +61,8 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
   )
 
   const rows: Row[] = drivers
-    .filter((d) => bdMap.has(d.id))
+    // Free agents are a god-mode-only detail; the public ranking is grid drivers.
+    .filter((d) => bdMap.has(d.id) && (godMode || d.teamId !== ''))
     .map((d) => {
       const bd = bdMap.get(d.id)!
       const team = teamMap.get(d.teamId)
@@ -109,8 +110,8 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
           {godMode ? 'Hide breakdown' : 'God mode: breakdown'}
         </button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="text-sm">
+      <div className={`overflow-x-auto ${godMode ? 'max-w-5xl' : 'max-w-2xl'}`}>
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
               <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
