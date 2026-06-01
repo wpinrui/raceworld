@@ -36,7 +36,7 @@ Funding tier is tracked by the relative performance of the teams in the past fiv
 Tier 1 teams receive no penalty to their upgrades. Tier 2 teams will receive a 0.1 per race penalty. Tier 3 teams will receive a 0.15 per race penalty. Tier 4 teams will receive a 0.2 per race penalty. For instance, if a tier 3 team has a 4-race development cycle upgrade that randomised to a +3.7, then they will receive a penalty of 0.15\*4 = 0.6 -> their upgrade becomes a +3.1 upgrade. If the upgrade has a smaller value than the penalty or fails, then the result is clamped to 0 (no negative development should occur.)
 
 ## Driver progression curve
-Each driver's age is tracked, along with their peak potential and prime end. The period before a driver reaches their peak is when they will develop at a fast rate (slowing down as they age but continuing to be positive until their potential is reached). At their prime end age, whether or not they have reached their potential, they will start to decline, with the decline accelerating as they age further past their prime end. Different drivers have different potentials and prime end ages. Every season, a new batch of random drivers in the market are generated. These new drivers are generated such that they cannot immediately be the top drivers, but some can have the potential to do so.
+Each driver's age is tracked, along with their peak potential and prime end. The period before a driver reaches their peak is when they will develop at a fast rate (slowing down as they age but continuing to be positive until their potential is reached). At their prime end age, whether or not they have reached their potential, they will start to decline, with the decline accelerating as they age further past their prime end. Different drivers have different potentials and prime end ages. At setup, a pool of free-agent drivers is generated; thereafter, new drivers are generated each season only as needed to fill any seats left vacant after the free-agent market has run. These generated drivers cannot immediately be the top drivers, but some can have the potential to do so.
 
 The progression happens after each race. Generation happens after each season. After each season, drivers who have not been in F1 for five years are removed from the driver market. Drivers who have driven in F1 who are retired will have their history archived.
 
@@ -141,8 +141,6 @@ Seat-filling proceeds in order of media driver score (highest first), giving the
 
 **Incumbent advantage**: when a team evaluates a driver already on their roster whose contract just expired, that driver's media score receives a +5 flat bonus — loyalty friction without a separate mechanic.
 
-Mid-season vacancy (caused by a god-mode forced retirement) is filled immediately from uncontracted drivers only, using the same matching logic but with only that one seat open.
-
 ## God-mode overrides
 The player can, at any time during the End of season or Pre-season windows:
 - Forcibly release a driver from their contract (the seat opens immediately for that window).
@@ -153,10 +151,10 @@ The player can, at any time during the End of season or Pre-season windows:
 Teams can only enter or exit the grid via a god-mode action, and only take effect at the start of the **following** season (i.e., the remainder of the current season plus one full additional season plays out under the existing grid before the change takes effect). New teams enter with the lowest-ranked car pace on the grid. Departing teams are removed cleanly at season end; any drivers on their roster re-enter the driver market.
 
 # Driver Retirement
-The only trigger for a driver retiring from F1 is their **media-perceived ability** falling below an acceptable threshold. A driver whose perceived ability is assessed as too low at the end of a season will retire and have their history archived.
+A driver who has not held an F1 seat for five consecutive seasons is removed from the driver market. Drivers who have driven in F1 keep their archived history when removed; generated drivers who never made the grid are discarded.
 
-## Media-perceived ability algorithm
-The media-perceived score is computed at the end of each season and used for retirement assessment, contract length, the Home Screen driver rankings, and pundit predictions. It is a number on a 0–100 scale derived from four inputs.
+# Media-perceived ability
+The media-perceived score is computed at the end of each season and used for contract length, the Home Screen driver rankings, and pundit predictions. It is a number on a 0–100 scale derived from four inputs.
 
 **Component A — Raw results score (weight: 50%)**
 The driver's championship points expressed as a percentile within the current season standings. The last-place driver scores 0, the leader scores 100. This is the dominant signal because it is what the media most visibly tracks.
@@ -188,9 +186,7 @@ A constant per-driver value in the range [−20, +20], defaulting to 0. Added to
 **Final score**
 > `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier, 0, 100)`
 
-A driver whose `media_score` falls below a threshold (to be tuned during implementation, roughly 25–30) at end of season is assessed as no longer F1-calibre and retires.
-
-## Natural in-race retirements
+# In-race retirements
 Each lap, every active driver has a flat per-lap mechanical retirement probability of **0.28%** (calibrated to a ~58-lap race, targeting an average of 3 retirements per 20-car field). Longer circuits with more laps will naturally produce slightly more retirements; shorter circuits slightly fewer. No other factors influence the mechanical retirement rate. When triggered, the retirement is treated identically to a god-mode forced retirement — the car is out and cannot return.
 
 # Standings Screen — Colour Coding
