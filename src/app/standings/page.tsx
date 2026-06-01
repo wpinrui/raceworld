@@ -1,34 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { Trophy } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
-import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
-import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
-import { MarketPanel } from '@/components/standings/MarketPanel'
-import { TestingPanel } from '@/components/standings/TestingPanel'
-import {
-  actionGetArchivedSeasons,
-  actionGetSeasonStandings,
-  actionArchiveSeason,
-  actionInsertConstructorStandings,
-  actionGetRecentConstructorHistory,
-} from '@/lib/db/actions'
+import { actionGetArchivedSeasons, actionGetSeasonStandings } from '@/lib/db/actions'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
-import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
+import { isOffSeason } from '@/lib/sim/types'
 import type { DbSeason } from '@/lib/db/queries'
 
 type Tab = 'drivers' | 'constructors'
-
-const PHASE_META: Record<string, { title: string; blurb: string }> = {
-  'end-of-season': { title: 'End of Season', blurb: 'Final standings and how each driver developed.' },
-  'contract-negotiations': { title: 'Contract Negotiations', blurb: 'Driver market moves for the coming season.' },
-  'driver-retirements': { title: 'Driver Retirements', blurb: 'Drivers leaving the grid.' },
-  'pre-season-testing': { title: 'Pre-Season Testing', blurb: 'A first, obscured look at next season’s cars.' },
-}
 
 interface ArchivedView {
   seasonId: number
@@ -38,7 +21,6 @@ interface ArchivedView {
 }
 
 export default function StandingsPage() {
-  const router = useRouter()
   const season = useSeasonStore()
   const [tab, setTab] = useState<Tab>('drivers')
   const [archivedSeasons, setArchivedSeasons] = useState<DbSeason[]>([])
@@ -51,42 +33,11 @@ export default function StandingsPage() {
     actionGetArchivedSeasons().then(setArchivedSeasons)
   }, [])
 
-  const offSeason = isOffSeason(season.phase) && !selectedArchive
-  const phaseIdx = OFF_SEASON_PHASES.indexOf(season.phase)
-  const isLastPhase = phaseIdx === OFF_SEASON_PHASES.length - 1
-
-  function advancePhase() {
-    if (season.phase === 'end-of-season') season.runContractNegotiations()
-    else if (season.phase === 'contract-negotiations') season.runDriverRetirements()
-    else if (season.phase === 'driver-retirements') season.runPreSeasonTesting()
-  }
-
   async function loadArchivedSeason(s: DbSeason) {
     setLoadingArchive(true)
     const data = await actionGetSeasonStandings(s.id)
     setSelectedArchive({ seasonId: s.id, year: s.year, ...data })
     setLoadingArchive(false)
-  }
-
-  async function handleArchiveAndNewSeason() {
-    if (season.dbSeasonId) {
-      await actionArchiveSeason(season.dbSeasonId)
-      const constructorFinalPositions = season.constructorStandings.map((cs, idx) => ({
-        teamId: cs.teamId,
-        finalPosition: idx + 1,
-        points: cs.points,
-      }))
-      await actionInsertConstructorStandings(season.dbSeasonId, constructorFinalPositions)
-    }
-    const freshHistory = await actionGetRecentConstructorHistory(5)
-    season.loadConstructorHistory(freshHistory)
-    season.startNewSeason()
-    router.push('/setup')
-  }
-
-  function handleReturnToSetup() {
-    season.resetToIdle()
-    router.push('/setup')
   }
 
   const totalRounds = calendar2026.length
@@ -96,7 +47,10 @@ export default function StandingsPage() {
   const displayConstructors = selectedArchive ? selectedArchive.constructorStandings : season.constructorStandings
   const displayYear = selectedArchive ? selectedArchive.year : season.year
 
-  const summary = season.endOfSeasonSummary
+  // At year end the standings are final — celebrate the two champions.
+  const showChampions = isOffSeason(season.phase) && !selectedArchive
+  const champDriver = displayDrivers[0]
+  const champConstructor = displayConstructors[0]
 
   if (!hydrated) return null
 
@@ -104,86 +58,29 @@ export default function StandingsPage() {
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
       <div className="max-w-full px-4 py-6">
 
-        {/* Off-season phase sequence */}
-        {offSeason && summary && (
-          <div className="mb-6 rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 overflow-hidden">
-            {/* Champion header */}
-            <div className="p-5 flex items-center justify-between flex-wrap gap-4 border-b border-[#2A3142]">
-              <div>
-                <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-1 h-6 rounded-sm bg-[#00D9FF]" />
-                  <h2 className="font-display text-xl tracking-wider uppercase text-[#E8EAED]">
-                    Season {season.year} · {PHASE_META[season.phase].title}
-                  </h2>
+        {/* Champion trophies (year end only) */}
+        {showChampions && (champDriver || champConstructor) && (
+          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+            {champDriver && (
+              <div className="flex items-center gap-4 rounded-xl bg-[#1E2431] border border-[#E8C547]/40 px-5 py-4">
+                <Trophy size={28} className="text-[#E8C547] shrink-0" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-[#A0A9B8]">{season.year} World Champion</p>
+                  <p className="font-display text-lg tracking-wide text-[#E8EAED]">{champDriver.driverName}</p>
+                  <p className="text-xs text-[#A0A9B8] tabular-nums">{champDriver.points} pts · {champDriver.teamName}</p>
                 </div>
-                {displayDrivers[0] && (
-                  <p className="text-[#FFFFFF] text-sm ml-3.5">
-                    World Champion:{' '}
-                    <span className="text-[#00D9FF] font-semibold">{displayDrivers[0].driverName}</span>
-                    {' '}·{' '}
-                    <span className="tabular-nums">{displayDrivers[0].points} pts</span>
-                  </p>
-                )}
-                {season.constructorStandings[0] && (
-                  <p className="text-[#A0A9B8] text-sm ml-3.5">
-                    Constructors:{' '}
-                    <span className="text-[#E8EAED] font-semibold">{season.constructorStandings[0].teamName}</span>
-                  </p>
-                )}
               </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleReturnToSetup}
-                  className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors"
-                >
-                  Return to Setup
-                </button>
-                <button
-                  onClick={isLastPhase ? handleArchiveAndNewSeason : advancePhase}
-                  className="px-5 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors"
-                >
-                  {isLastPhase
-                    ? `Start ${season.year + 1} Season →`
-                    : `${PHASE_META[OFF_SEASON_PHASES[phaseIdx + 1]].title} →`}
-                </button>
+            )}
+            {champConstructor && (
+              <div className="flex items-center gap-4 rounded-xl bg-[#1E2431] border border-[#E8C547]/40 px-5 py-4">
+                <Trophy size={28} className="text-[#E8C547] shrink-0" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-[#A0A9B8]">{season.year} Constructors&apos; Champion</p>
+                  <p className="font-display text-lg tracking-wide text-[#E8EAED]">{champConstructor.teamName}</p>
+                  <p className="text-xs text-[#A0A9B8] tabular-nums">{champConstructor.points} pts</p>
+                </div>
               </div>
-            </div>
-
-            {/* Phase stepper */}
-            <div className="flex items-center gap-2 px-5 py-2.5 border-b border-[#2A3142] text-xs flex-wrap">
-              {OFF_SEASON_PHASES.map((p, i) => (
-                <span key={p} className="flex items-center gap-2">
-                  <span
-                    className={
-                      i === phaseIdx
-                        ? 'text-[#00D9FF] font-semibold'
-                        : i < phaseIdx
-                          ? 'text-[#A0A9B8]'
-                          : 'text-[#6B7280]'
-                    }
-                  >
-                    {PHASE_META[p].title}
-                  </span>
-                  {i < OFF_SEASON_PHASES.length - 1 && <span className="text-[#3A4152]">→</span>}
-                </span>
-              ))}
-            </div>
-
-            <div className="p-5">
-              <p className="text-sm text-[#A0A9B8] mb-4">{PHASE_META[season.phase].blurb}</p>
-              {season.phase === 'end-of-season' && (
-                <ProgressionPanel summary={summary} drivers={season.drivers} />
-              )}
-              {season.phase === 'contract-negotiations' && (
-                <MarketPanel summary={summary} teams={season.teams} />
-              )}
-              {season.phase === 'driver-retirements' && (
-                <RetirementsPanel summary={summary} drivers={season.drivers} />
-              )}
-              {season.phase === 'pre-season-testing' && (
-                <TestingPanel summary={summary} teams={season.teams} />
-              )}
-            </div>
+            )}
           </div>
         )}
 

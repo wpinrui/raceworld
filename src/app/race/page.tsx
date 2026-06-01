@@ -54,7 +54,7 @@ export default function RacePage() {
   useEffect(() => {
     setHydrated(true)
     if (season.phase === 'idle') { router.replace('/setup'); return }
-    if (isOffSeason(season.phase)) { router.replace('/standings'); return }
+    if (isOffSeason(season.phase)) { router.replace('/home'); return }
     if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit.id)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -181,7 +181,7 @@ export default function RacePage() {
       if (!dbSeasonId) { dbSeasonId = await actionCreateSeason(season.year); season.setDbSeasonId(dbSeasonId) }
       await actionFlushRaceResult(dbSeasonId, season.currentRound, currentCircuit.id, currentCircuit.name, results)
       if (season.currentRound >= calendar2026.length) {
-        season.endSeason(); router.push('/standings')
+        season.endSeason(); router.push('/home')
       } else {
         season.advanceRound()
         const { currentRound, drivers: sd, teams: st } = useSeasonStore.getState()

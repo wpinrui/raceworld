@@ -20,6 +20,7 @@ export default function Nav() {
   const circuit = calendar2026[currentRound - 1]
 
   const links = [
+    { href: '/home', label: 'HOME' },
     { href: '/setup', label: seasonActive ? 'MARKET' : 'SETUP' },
     { href: '/standings', label: 'STANDINGS' },
     { href: '/race', label: 'RACE' },
