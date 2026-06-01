@@ -19,14 +19,17 @@ const STAT_LABELS: Record<StatKey, string> = {
 
 const DRIVERS_PER_TEAM = 2
 
-// HSL hue 0 (red) → 122 (green), fixed saturation+lightness so every value is equally vivid on dark bg
+const COLOR_LOW = 60   // ≤ this → solid red
+const COLOR_HIGH = 90  // ≥ this → solid green
+const HUE_RED = 0
+const HUE_GREEN = 122
+
 function statColor(value: number): string {
   const clamped = Math.max(0, Math.min(100, value))
-  if (clamped <= 50) return 'hsl(0, 90%, 62%)'
-  if (clamped >= 90) return 'hsl(122, 72%, 52%)'
-  const t = (clamped - 50) / 40
-  const hue = Math.round(t * 122)
-  return `hsl(${hue}, 85%, 58%)`
+  if (clamped <= COLOR_LOW) return `hsl(${HUE_RED}, 90%, 62%)`
+  if (clamped >= COLOR_HIGH) return `hsl(${HUE_GREEN}, 72%, 52%)`
+  const t = (clamped - COLOR_LOW) / (COLOR_HIGH - COLOR_LOW)
+  return `hsl(${Math.round(t * HUE_GREEN)}, 85%, 58%)`
 }
 
 function computeOverall(d: Driver): number {
@@ -212,11 +215,10 @@ function DriverCard({ driver, teamColor, teams, onUpdate, onRemove }: {
                 className="flex-1 h-1 cursor-pointer"
                 style={{ accentColor: '#A855F7' }}
               />
-              <span className={`text-sm font-semibold w-8 text-right shrink-0 ${
-                driver.narrativeModifier > 0 ? 'text-[#10B981]'
-                : driver.narrativeModifier < 0 ? 'text-[#DC143C]'
-                : 'text-[#FFFFFF]'
-              }`}>
+              <span className={`text-sm font-semibold w-8 text-right shrink-0 ${driver.narrativeModifier > 0 ? 'text-[#10B981]'
+                  : driver.narrativeModifier < 0 ? 'text-[#DC143C]'
+                    : 'text-[#FFFFFF]'
+                }`}>
                 {driver.narrativeModifier > 0 ? '+' : ''}{driver.narrativeModifier}
               </span>
             </div>
@@ -360,7 +362,7 @@ export default function SetupPage() {
                   <div className="font-semibold text-[#E8EAED]">{team.name}</div>
                   <div className="text-xs text-[#FFFFFF]">Car pace {team.carPace}</div>
                 </div>
-                
+
                 <span className="text-xs text-[#FFFFFF]">{teamDrivers.length}/{DRIVERS_PER_TEAM}</span>
               </div>
 
