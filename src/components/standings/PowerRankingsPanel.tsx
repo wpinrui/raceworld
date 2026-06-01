@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import type { Driver, Team, RaceResult, ConstructorStanding } from '@/lib/sim/types'
 import { computeDriverMediaBreakdowns } from '@/lib/sim/media-scores'
 
@@ -11,6 +13,8 @@ interface Props {
 }
 
 export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings }: Props) {
+  const [godMode, setGodMode] = useState(false)
+
   const teamMap = new Map(teams.map((t) => [t.id, t]))
   const constructorRankInfo = constructorStandings.map((cs, i) => ({
     teamId: cs.teamId,
@@ -30,9 +34,15 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
 
   return (
     <div>
-      <p className="text-sm text-[#FFFFFF] mb-3">
-        Media-perceived ability · media = 0.5·A + 0.3·B + 0.2·C + narrative + pace
-      </p>
+      <div className="flex justify-end mb-3">
+        <button
+          onClick={() => setGodMode((v) => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+        >
+          {godMode ? <EyeOff size={13} /> : <Eye size={13} />}
+          {godMode ? 'Hide breakdown' : 'God mode: breakdown'}
+        </button>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -40,11 +50,11 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
               <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
               <th className="text-left pb-2 pr-4 font-medium">Driver</th>
               <th className="text-left pb-2 px-3 font-medium">Team</th>
-              <th className="text-right pb-2 px-3 font-medium">Results ·50%</th>
-              <th className="text-right pb-2 px-3 font-medium">H2H ·30%</th>
-              <th className="text-right pb-2 px-3 font-medium">Car-adj ·20%</th>
-              <th className="text-right pb-2 px-3 font-medium">Narr</th>
-              <th className="text-right pb-2 px-3 font-medium">Pace</th>
+              {godMode && <th className="text-right pb-2 px-3 font-medium">Results ·50%</th>}
+              {godMode && <th className="text-right pb-2 px-3 font-medium">H2H ·30%</th>}
+              {godMode && <th className="text-right pb-2 px-3 font-medium">Car-adj ·20%</th>}
+              {godMode && <th className="text-right pb-2 px-3 font-medium">Narr</th>}
+              {godMode && <th className="text-right pb-2 px-3 font-medium">Pace</th>}
               <th className="text-right pb-2 pl-3 font-medium">Media</th>
             </tr>
           </thead>
@@ -63,11 +73,11 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
                   <td className="py-1.5 px-3 text-[#FFFFFF]">
                     {team ? team.name : <span className="italic">Free Agent</span>}
                   </td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.a.toFixed(0)}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.b.toFixed(0)}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.c.toFixed(0)}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.narrative === 0 ? '—' : signed(bd.narrative)}</td>
-                  <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.paceNarrative === 0 ? '—' : signed(bd.paceNarrative)}</td>
+                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.a.toFixed(0)}</td>}
+                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.b.toFixed(0)}</td>}
+                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.c.toFixed(0)}</td>}
+                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.narrative === 0 ? '—' : signed(bd.narrative)}</td>}
+                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.paceNarrative === 0 ? '—' : signed(bd.paceNarrative)}</td>}
                   <td className="py-1.5 pl-3 text-right tabular-nums font-bold text-[#00D9FF]">{bd.score.toFixed(1)}</td>
                 </tr>
               )
