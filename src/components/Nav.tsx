@@ -3,14 +3,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { EllipsisVertical } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { actionResetDatabase } from '@/lib/db/actions'
+import WorldSearch from '@/components/WorldSearch'
 
 export default function Nav() {
   const pathname = usePathname()
   const { phase, currentRound, year } = useSeasonStore()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   async function handleClearSave() {
     await actionResetDatabase()
@@ -25,6 +28,7 @@ export default function Nav() {
     { href: '/home', label: 'HOME' },
     { href: '/setup', label: seasonActive ? 'MARKET' : 'SETUP' },
     { href: '/standings', label: 'STANDINGS' },
+    { href: '/world', label: 'WORLD' },
     { href: '/race', label: 'RACE' },
   ]
 
@@ -59,8 +63,13 @@ export default function Nav() {
         })}
       </div>
 
-      {/* Season indicator */}
-      <div className="ml-auto flex items-center gap-4 text-xs tabular-nums text-[#FFFFFF]">
+      {/* Centralized search in the dead space */}
+      <div className="flex-1 flex justify-center px-4">
+        <WorldSearch />
+      </div>
+
+      {/* Season indicator + overflow menu */}
+      <div className="flex items-center gap-4 text-xs tabular-nums text-[#FFFFFF]">
         {seasonActive && circuit ? (
           <span>
             <span className="text-[#FFFFFF]">
@@ -72,12 +81,25 @@ export default function Nav() {
           <span className="text-[#FFFFFF]">No active season</span>
         )}
 
-        <button
-          onClick={() => setConfirmOpen(true)}
-          className="px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#DC143C] hover:bg-[#2A3142] transition-colors"
-        >
-          Clear Save
-        </button>
+        <div className="relative" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setMenuOpen(false) }}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="p-1 rounded text-[#FFFFFF] hover:bg-[#2A3142] transition-colors"
+            aria-label="Menu"
+          >
+            <EllipsisVertical size={16} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-8 z-50 w-44 rounded-lg bg-[#1E2431] border border-[#2A3142] shadow-xl py-1">
+              <button
+                onClick={() => { setMenuOpen(false); setConfirmOpen(true) }}
+                className="w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] hover:text-[#DC143C] transition-colors"
+              >
+                Clear Save
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Confirm modal */}
