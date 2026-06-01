@@ -132,15 +132,26 @@ A 5-year contract is a special case reserved exclusively for the single highest-
 ## Free agency and seat-filling
 At the end of each season, drivers whose `contract_expires_after_season` matches the completed season, and who are not retiring, enter the free agent pool.
 
-Seat-filling proceeds in order of media driver score (highest first), giving the best available drivers first pick:
+Seat-filling uses **driver-proposing deferred acceptance** (Gale–Shapley with team capacity). This yields a *stable* outcome: there is no free agent and team who would both rather have each other than what they ended up with. Both sides matter — a driver cannot take a seat the team doesn't also want them in.
 
-1. Each free agent samples a perceived attractiveness for every team with an open seat: `perceived = media_team_score + Normal(0, 10)`. They choose the team with the highest sampled score.
-2. The team simultaneously samples a perceived value for each driver expressing interest: `perceived = media_driver_score + Normal(0, 10)`. The team and driver sign if they are each other's top mutual choice.
-3. Signed drivers and filled seats are removed from the pool. Repeat until no seats remain or no free agents are left.
+Preferences are sampled **once** and then held fixed for the whole process:
+
+- Each free agent ranks every team that has an open seat by perceived attractiveness: `perceived = media_team_score + Normal(0, 10)`.
+- Each team scores every free agent by perceived value: `perceived = media_driver_score + Normal(0, 10)` (plus the incumbent bonus below, minus the ring-rust penalty below).
+
+The matching then runs:
+
+1. Each unsigned free agent proposes to the most attractive team on their list that they have not yet approached.
+2. Each team tentatively holds the best proposers up to its number of open seats (by the team's perceived value) and turns the rest away.
+3. A turned-away driver proposes to their next choice; a held driver can later be bumped if a stronger proposer arrives. Repeat until no driver has an untried team left.
+
+Tentative holds become signings once it settles. Any seat still empty (more seats than free agents) is filled by a generated rookie. For each team, the free agents it turned away are recorded against the seats it filled — the raw material for "who beat whom, and why" transfer stories. Proposing in any order produces the same stable result, so processing order does not matter.
 
 **Media team score** is derived from constructors championship points over the last 1–3 available seasons, weighted 3:2:1 toward the most recent, normalised to a 0–100 scale.
 
-**Incumbent advantage**: when a team evaluates a driver already on their roster whose contract just expired, that driver's media score receives a +5 flat bonus — loyalty friction without a separate mechanic.
+**Incumbent advantage**: when a team evaluates a driver already on its roster whose contract just expired, that driver's perceived value receives a +5 flat bonus — loyalty friction without a separate mechanic. (Team side only; a driver has no built-in pull to stay.)
+
+**Ring rust**: when a team evaluates a free agent who is currently out of F1 (held no seat last season), their perceived value takes a small flat penalty. Teams favour proven drivers, so the grid does not churn wildly between the pool and seated drivers every year — but the penalty is small enough that a standout prospect still forces their way in.
 
 ## God-mode overrides
 The player can, at any time during the End of season or Pre-season windows:

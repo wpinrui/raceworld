@@ -1,4 +1,4 @@
-import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest } from './types'
+import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest, SeatContestDriver } from './types'
 import { sampleNormal } from './rng-utils'
 import { generateRookie } from './driver-generation'
 
@@ -36,6 +36,12 @@ function contractLength(
 
 const RETIREMENT_SEASONS_OUT = 5
 
+// Ring rust: when a team weighs a free agent who is currently OUT of F1 (no seat
+// last season), their perceived value takes this flat hit. Keeps the grid from
+// churning wildly as pool drivers and seated drivers trade places every year —
+// big enough to favour proven drivers, small enough that a star prospect breaks in.
+const OUT_OF_F1_PENALTY = 8
+
 // Run after the driver market has settled. A driver holding a seat for the
 // coming season resets to 0; a driver without one accrues another season out
 // of F1 and is removed from the market once they reach RETIREMENT_SEASONS_OUT.
@@ -67,106 +73,131 @@ export function runDriverMarket(
 ): { updatedDrivers: Driver[]; marketMoves: MarketMove[]; seatContests: SeatContest[] } {
   const scoreMap = new Map(driverMediaScores.map((s) => [s.driverId, s.score]))
   const teamScoreMap = new Map(teamMediaScores.map((s) => [s.teamId, s.score]))
+  const driverMedia = (id: string) => scoreMap.get(id) ?? 0
+  const teamMedia = (id: string) => teamScoreMap.get(id) ?? 50
   const currentYear = newYear - 1
+  const round1 = (n: number) => Math.round(n * 10) / 10
 
   const stayingDriverIds = new Set(
     drivers
-      .filter(
-        (d) =>
-          d.teamId !== '' &&
-          d.contractExpiresAfterSeason > currentYear,
-      )
+      .filter((d) => d.teamId !== '' && d.contractExpiresAfterSeason > currentYear)
       .map((d) => d.id),
   )
 
-  const freeAgents = drivers
-    .filter((d) => !stayingDriverIds.has(d.id))
-    .sort((a, b) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0))
+  const freeAgents = drivers.filter((d) => !stayingDriverIds.has(d.id))
+  const faById = new Map(freeAgents.map((d) => [d.id, d]))
 
-  const seatsPerTeam = new Map<string, number>()
+  const capacity = new Map<string, number>()
   for (const team of teams) {
     const filled = drivers.filter((d) => d.teamId === team.id && stayingDriverIds.has(d.id)).length
-    seatsPerTeam.set(team.id, Math.max(0, 2 - filled))
+    capacity.set(team.id, Math.max(0, 2 - filled))
   }
+  const openTeams = teams.filter((t) => (capacity.get(t.id) ?? 0) > 0)
 
-  // Each free agent's most-wanted team (deterministic desire, no noise) — used
-  // to attribute who else was chasing a seat once it's won.
-  const preferredTeam = new Map<string, string>()
-  for (const fa of freeAgents) {
-    let bestId = teams[0]?.id ?? '', bestVal = -Infinity
-    for (const t of teams) {
-      const v = (teamScoreMap.get(t.id) ?? 50) + (fa.teamId === t.id ? 5 : 0)
-      if (v > bestVal) { bestVal = v; bestId = t.id }
+  // Preferences are sampled once and then fixed, so the matching is stable.
+  // Team's perceived value of a driver: media + incumbent bonus + noise (§142).
+  const tpKey = (teamId: string, driverId: string) => `${teamId}|${driverId}`
+  const teamPerceived = new Map<string, number>()
+  for (const t of openTeams) {
+    for (const fa of freeAgents) {
+      const incumbent = fa.teamId === t.id ? 5 : 0
+      const rust = fa.teamId === '' ? OUT_OF_F1_PENALTY : 0
+      teamPerceived.set(tpKey(t.id, fa.id), driverMedia(fa.id) + incumbent - rust + sampleNormal(0, 10, rng))
     }
-    preferredTeam.set(fa.id, bestId)
+  }
+  // Each free agent's ranking of open-seat teams: team media + noise, desc.
+  const prefList = new Map<string, string[]>()
+  for (const fa of freeAgents) {
+    const ranked = openTeams
+      .map((t) => ({ id: t.id, v: teamMedia(t.id) + sampleNormal(0, 10, rng) }))
+      .sort((a, b) => b.v - a.v)
+      .map((x) => x.id)
+    prefList.set(fa.id, ranked)
   }
 
+  // Driver-proposing deferred acceptance (Gale–Shapley, teams have capacity).
+  const held = new Map<string, Set<string>>()        // teamId -> tentatively-held driverIds
+  const applicants = new Map<string, Set<string>>()  // teamId -> everyone who ever proposed
+  for (const t of openTeams) { held.set(t.id, new Set()); applicants.set(t.id, new Set()) }
+  const nextProposal = new Map<string, number>(freeAgents.map((d) => [d.id, 0]))
+  const free = freeAgents.map((d) => d.id)
+
+  while (free.length > 0) {
+    const did = free.pop()!
+    const prefs = prefList.get(did)!
+    const idx = nextProposal.get(did)!
+    if (idx >= prefs.length) continue // no teams left to try — stays unsigned
+    const tid = prefs[idx]
+    nextProposal.set(did, idx + 1)
+
+    applicants.get(tid)!.add(did)
+    const pool = held.get(tid)!
+    pool.add(did)
+
+    if (pool.size > (capacity.get(tid) ?? 0)) {
+      const ranked = [...pool].sort(
+        (a, b) => (teamPerceived.get(tpKey(tid, b)) ?? 0) - (teamPerceived.get(tpKey(tid, a)) ?? 0),
+      )
+      const cap = capacity.get(tid) ?? 0
+      held.set(tid, new Set(ranked.slice(0, cap)))
+      for (const dropped of ranked.slice(cap)) {
+        if (nextProposal.get(dropped)! < prefList.get(dropped)!.length) free.push(dropped)
+      }
+    }
+  }
+
+  // Settle: tentative holds become signings.
+  const bestFreeAgentId = [...freeAgents].sort((a, b) => driverMedia(b.id) - driverMedia(a.id))[0]?.id
   const marketMoves: MarketMove[] = []
   const seatContests: SeatContest[] = []
   const driverUpdates = new Map<string, Partial<Driver>>()
-  const placedIds = new Set<string>()
 
-  const bestFreeAgentId = freeAgents[0]?.id
-
-  for (const fa of freeAgents) {
-    const vacantTeams = teams.filter((t) => (seatsPerTeam.get(t.id) ?? 0) > 0)
-    if (vacantTeams.length === 0) break
-
-    const scored = vacantTeams.map((t) => {
-      const base = teamScoreMap.get(t.id) ?? 50
-      const incumbentBonus = fa.teamId === t.id ? 5 : 0
-      return { team: t, perceived: base + incumbentBonus + sampleNormal(0, 10, rng) }
-    })
-    scored.sort((a, b) => b.perceived - a.perceived)
-
-    const chosen = scored[0].team
-    seatsPerTeam.set(chosen.id, (seatsPerTeam.get(chosen.id) ?? 0) - 1)
-
-    const faScore = scoreMap.get(fa.id) ?? 50
-    const isBest = fa.id === bestFreeAgentId
-    const len = contractLength(fa, faScore, isBest, rng)
-
-    driverUpdates.set(fa.id, {
-      teamId: chosen.id,
-      contractExpiresAfterSeason: currentYear + len,
-    })
-
-    // Rivals = still-unsigned free agents who also wanted this team but were
-    // edged out (lower media score, processed later).
-    const rivals = freeAgents
-      .filter((r) => r.id !== fa.id && !placedIds.has(r.id) && preferredTeam.get(r.id) === chosen.id)
-      .map((r) => ({ driverId: r.id, driverName: r.name, mediaScore: scoreMap.get(r.id) ?? 0 }))
-      .sort((a, b) => b.mediaScore - a.mediaScore)
-    if (rivals.length > 0) {
-      seatContests.push({
-        teamId: chosen.id,
-        teamName: chosen.name,
-        winnerDriverId: fa.id,
-        winnerDriverName: fa.name,
-        winnerMediaScore: faScore,
-        incumbent: fa.teamId === chosen.id,
-        rivals,
+  for (const t of openTeams) {
+    for (const did of held.get(t.id)!) {
+      const d = faById.get(did)!
+      const score = driverMedia(did)
+      const len = contractLength(d, score, did === bestFreeAgentId, rng)
+      driverUpdates.set(did, { teamId: t.id, contractExpiresAfterSeason: currentYear + len })
+      marketMoves.push({
+        driverId: did,
+        driverName: d.name,
+        fromTeamId: d.teamId === '' ? null : d.teamId,
+        toTeamId: t.id,
+        toTeamName: t.name,
+        contractLength: len,
+        contractExpiresAfterSeason: currentYear + len,
+        mediaScore: score,
+        isResignation: d.teamId === t.id,
       })
     }
 
-    placedIds.add(fa.id)
-
-    marketMoves.push({
-      driverId: fa.id,
-      driverName: fa.name,
-      fromTeamId: fa.teamId === '' ? null : fa.teamId,
-      toTeamId: chosen.id,
-      toTeamName: chosen.name,
-      contractLength: len,
-      contractExpiresAfterSeason: currentYear + len,
-      mediaScore: faScore,
-      isResignation: fa.teamId === chosen.id,
+    // Record the seat battle: who the team signed and who it turned away.
+    const apps = applicants.get(t.id)!
+    if (apps.size === 0) continue
+    const winnersSet = held.get(t.id)!
+    const toEntry = (did: string): SeatContestDriver => {
+      const d = faById.get(did)!
+      return {
+        driverId: did,
+        driverName: d.name,
+        teamPerceived: round1(teamPerceived.get(tpKey(t.id, did)) ?? 0),
+        incumbent: d.teamId === t.id,
+      }
+    }
+    const byPerceived = (a: SeatContestDriver, b: SeatContestDriver) => b.teamPerceived - a.teamPerceived
+    seatContests.push({
+      teamId: t.id,
+      teamName: t.name,
+      seats: capacity.get(t.id) ?? 0,
+      winners: [...winnersSet].map(toEntry).sort(byPerceived),
+      rivals: [...apps].filter((id) => !winnersSet.has(id)).map(toEntry).sort(byPerceived),
     })
   }
 
+  // Any seat still empty (more seats than free agents) goes to a rookie.
   const rookies: Driver[] = []
   for (const team of teams) {
-    const remaining = seatsPerTeam.get(team.id) ?? 0
+    const remaining = (capacity.get(team.id) ?? 0) - (held.get(team.id)?.size ?? 0)
     for (let i = 0; i < remaining; i++) {
       const rookie = generateRookie(team.id, newYear, rng)
       rookies.push(rookie)

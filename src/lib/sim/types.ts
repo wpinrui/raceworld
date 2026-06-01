@@ -230,23 +230,22 @@ export interface MarketMove {
   isResignation: boolean   // re-signed with the same team (from === to)
 }
 
-export interface SeatContestRival {
+export interface SeatContestDriver {
   driverId: string
   driverName: string
-  mediaScore: number
+  teamPerceived: number   // the team's perceived value: driver media + incumbent bonus + noise
+  incumbent: boolean      // the driver's expiring contract was with this team
 }
 
-// Who won a seat and who they beat to it — raw material for newsroom transfer
-// stories. Recorded per signing where the winner edged out other interested
-// free agents; the media scores are the "why".
+// A team's seat battle from the deferred-acceptance market — raw material for
+// newsroom transfer stories. `winners` are who the team signed, `rivals` are the
+// free agents it turned away; teamPerceived is the "why".
 export interface SeatContest {
   teamId: string
   teamName: string
-  winnerDriverId: string
-  winnerDriverName: string
-  winnerMediaScore: number
-  incumbent: boolean              // winner re-signed their own seat
-  rivals: SeatContestRival[]      // other free agents who wanted this seat, by media desc
+  seats: number                    // open seats the team was filling
+  winners: SeatContestDriver[]     // signed, best-perceived first
+  rivals: SeatContestDriver[]      // applied but turned away, best-perceived first
 }
 
 // Fuel load is revealed to the player only as a qualitative band, never the
