@@ -196,7 +196,9 @@ This partially rewards drivers who maximise an uncompetitive car without allowin
 A constant per-driver value in the range [−20, +20], defaulting to 0. Added to the final weighted score after A, B, and C are combined. Represents the media halo (or deficit) a driver carries independent of results — some drivers are perceived as generational talents, others are chronically underrated or overrated by pundits. When pre-populating real-world 2026 drivers, sensible non-zero defaults are applied. Procedurally generated drivers always start at 0. The player can edit this value at any time via god mode.
 
 **Final score**
-> `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier, 0, 100)`
+> `media_score = max( clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier, 0, 100), ability_floor )`
+
+**Ability floor**: perception can never fall below the driver's raw ability — `ability_floor = clamp(overall + narrative_modifier, 0, 100)`, where `overall` is the cosmetic stat (`0.6×pace + 0.2×smoothness + 0.1×overtake + 0.1×wet`). Results (A/B/C) only ever push perception *above* this floor as an overperformance premium. This means a genuinely elite driver stranded in a poor car is under-rewarded but never buried — they stay valued and cannot be dropped from the grid on results alone. (Drivers who never raced are scored purely on the floor.)
 
 # In-race retirements
 Each lap, every active driver has a flat per-lap mechanical retirement probability of **0.28%** (calibrated to a ~58-lap race, targeting an average of 3 retirements per 20-car field). Longer circuits with more laps will naturally produce slightly more retirements; shorter circuits slightly fewer. No other factors influence the mechanical retirement rate. When triggered, the retirement is treated identically to a god-mode forced retirement — the car is out and cannot return.
