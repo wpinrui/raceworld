@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { OFF_SEASON_PHASES } from '@/lib/sim/types'
@@ -25,13 +26,29 @@ export function OffSeasonPanel() {
   const season = useSeasonStore()
   const summary = season.endOfSeasonSummary
 
-  const phaseIdx = OFF_SEASON_PHASES.indexOf(season.phase)
-  const isLastPhase = phaseIdx === OFF_SEASON_PHASES.length - 1
+  // progressIdx = how far the off-season has actually advanced (store phase).
+  // viewIdx = which completed phase the player is currently looking at. The two
+  // are decoupled so already-run phases stay revisitable; only reaching the
+  // frontier runs the next phase's (irreversible) sim.
+  const progressIdx = OFF_SEASON_PHASES.indexOf(season.phase)
+  const [viewIdx, setViewIdx] = useState(progressIdx)
+  // Clamp the view to the real progress (e.g. after a remount the store may have
+  // moved on, or a stale higher index could linger).
+  const safeViewIdx = Math.min(Math.max(viewIdx, 0), progressIdx)
+  const viewPhase = OFF_SEASON_PHASES[safeViewIdx]
+  const atFrontier = safeViewIdx === progressIdx
+  const isLastView = safeViewIdx === OFF_SEASON_PHASES.length - 1
 
-  function advancePhase() {
+  function runNextPhase() {
     if (season.phase === 'end-of-season') season.runContractNegotiations()
     else if (season.phase === 'contract-negotiations') season.runDriverRetirements()
     else if (season.phase === 'driver-retirements') season.runPreSeasonTesting()
+  }
+
+  function handleNext() {
+    if (isLastView) { handleArchiveAndNewSeason(); return }
+    if (atFrontier) runNextPhase()   // run the next phase's sim only at the frontier
+    setViewIdx(safeViewIdx + 1)
   }
 
   async function handleArchiveAndNewSeason() {
@@ -50,11 +67,6 @@ export function OffSeasonPanel() {
     router.push('/setup')
   }
 
-  function handleReturnToSetup() {
-    season.resetToIdle()
-    router.push('/setup')
-  }
-
   if (!summary) return null
 
   return (
@@ -65,7 +77,7 @@ export function OffSeasonPanel() {
           <div className="flex items-center gap-2.5 mb-1">
             <div className="w-1 h-6 rounded-sm bg-[#00D9FF]" />
             <h2 className="font-display text-xl tracking-wider uppercase text-[#FFFFFF]">
-              Season {season.year} · {PHASE_META[season.phase].title}
+              Season {season.year} · {PHASE_META[viewPhase].title}
             </h2>
           </div>
           {season.driverStandings[0] && (
@@ -85,45 +97,44 @@ export function OffSeasonPanel() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={handleReturnToSetup}
-            className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors"
-          >
-            Return to Setup
-          </button>
-          <button
-            onClick={isLastPhase ? handleArchiveAndNewSeason : advancePhase}
+            onClick={handleNext}
             className="px-5 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors"
           >
-            {isLastPhase
+            {isLastView
               ? `Start ${season.year + 1} Season →`
-              : `${PHASE_META[OFF_SEASON_PHASES[phaseIdx + 1]].title} →`}
+              : `${PHASE_META[OFF_SEASON_PHASES[safeViewIdx + 1]].title} →`}
           </button>
         </div>
       </div>
 
-      {/* Phase stepper */}
+      {/* Phase stepper — completed phases are clickable to revisit */}
       <div className="flex items-center gap-2 px-5 py-2.5 border-b border-[#2A3142] text-xs flex-wrap">
-        {OFF_SEASON_PHASES.map((p, i) => (
-          <span key={p} className="flex items-center gap-2">
-            <span
-              className={
-                i === phaseIdx
-                  ? 'text-[#00D9FF] font-semibold'
-                  : i < phaseIdx
-                    ? 'text-[#FFFFFF]'
-                    : 'text-[#FFFFFF]'
-              }
-            >
-              {PHASE_META[p].title}
+        {OFF_SEASON_PHASES.map((p, i) => {
+          const reached = i <= progressIdx
+          return (
+            <span key={p} className="flex items-center gap-2">
+              <button
+                onClick={() => reached && setViewIdx(i)}
+                disabled={!reached}
+                className={
+                  i === safeViewIdx
+                    ? 'text-[#00D9FF] font-semibold'
+                    : reached
+                      ? 'text-[#FFFFFF] hover:text-[#00D9FF] cursor-pointer'
+                      : 'text-[#6B7280] cursor-default'
+                }
+              >
+                {PHASE_META[p].title}
+              </button>
+              {i < OFF_SEASON_PHASES.length - 1 && <span className="text-[#3A4152]">→</span>}
             </span>
-            {i < OFF_SEASON_PHASES.length - 1 && <span className="text-[#3A4152]">→</span>}
-          </span>
-        ))}
+          )
+        })}
       </div>
 
       <div className="p-5">
-        <p className="text-sm text-[#FFFFFF] mb-4">{PHASE_META[season.phase].blurb}</p>
-        {season.phase === 'end-of-season' && (
+        <p className="text-sm text-[#FFFFFF] mb-4">{PHASE_META[viewPhase].blurb}</p>
+        {viewPhase === 'end-of-season' && (
           <SeasonReviewPanel
             summary={summary}
             drivers={season.drivers}
@@ -132,13 +143,13 @@ export function OffSeasonPanel() {
             constructorStandings={season.constructorStandings}
           />
         )}
-        {season.phase === 'contract-negotiations' && (
+        {viewPhase === 'contract-negotiations' && (
           <MarketPanel summary={summary} teams={season.teams} />
         )}
-        {season.phase === 'driver-retirements' && (
+        {viewPhase === 'driver-retirements' && (
           <RetirementsPanel summary={summary} drivers={season.drivers} />
         )}
-        {season.phase === 'pre-season-testing' && (
+        {viewPhase === 'pre-season-testing' && (
           <TestingPanel summary={summary} teams={season.teams} />
         )}
       </div>

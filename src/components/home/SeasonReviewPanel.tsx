@@ -1,6 +1,6 @@
 'use client'
 
-import { Trophy, TrendingUp, TrendingDown } from 'lucide-react'
+import { Trophy, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import type { EndOfSeasonSummary, Driver, Team, DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
 
@@ -97,6 +97,10 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
   const hasImproved = mostImproved && mostImproved.delta > 0
   const hasDeclined = steepestDecline && steepestDecline.delta < 0
 
+  // Best uncontracted prospect by raw pace.
+  const freeAgents = drivers.filter((d) => d.teamId === '')
+  const oneToWatch = freeAgents.length ? freeAgents.reduce((a, b) => (b.pace > a.pace ? b : a)) : undefined
+
   const topFive = driverStandings.slice(0, 5)
 
   return (
@@ -129,11 +133,24 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
         </p>
       )}
 
-      {/* Season superlatives */}
-      {(hasImproved || hasDeclined) && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <MoverCard label="Most Improved" mover={hasImproved ? mostImproved : undefined} up />
-          <MoverCard label="Steepest Decline" mover={hasDeclined ? steepestDecline : undefined} up={false} />
+      {/* Season superlatives + standout prospect */}
+      {(hasImproved || hasDeclined || oneToWatch) && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {hasImproved && <MoverCard label="Most Improved" mover={mostImproved} up />}
+          {hasDeclined && <MoverCard label="Steepest Decline" mover={steepestDecline} up={false} />}
+          {oneToWatch && (
+            <div className="rounded-xl bg-[#0F1419] border border-[#2A3142] px-5 py-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Star size={15} className="text-[#00D9FF]" />
+                <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">One to Watch</p>
+              </div>
+              <p className="font-semibold text-[#FFFFFF]">{oneToWatch.name}</p>
+              <p className="text-xs text-[#FFFFFF] flex items-center justify-between">
+                <span>Free agent · age {oneToWatch.age}</span>
+                <span className="tabular-nums font-semibold text-[#00D9FF]">{oneToWatch.pace} pace</span>
+              </p>
+            </div>
+          )}
         </div>
       )}
 
