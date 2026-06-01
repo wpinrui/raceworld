@@ -59,6 +59,7 @@ export function generateFreeAgentPool(
       primeEnd,
       narrativeModifier: 0,
       contractExpiresAfterSeason: year - 1,
+      seasonsSinceF1Seat: 0,
     })
   }
 
@@ -83,5 +84,6 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
     primeEnd: 29 + Math.floor(rng() * 3),
     narrativeModifier: 0,
     contractExpiresAfterSeason: newYear,
+    seasonsSinceF1Seat: 0,
   }
 }

@@ -16,6 +16,7 @@ export interface Driver {
   primeEnd: number       // age at which decline starts
   narrativeModifier: number // -20 to +20
   contractExpiresAfterSeason: number
+  seasonsSinceF1Seat?: number // consecutive seasons without an F1 seat; removed from the market at 5
 }
 
 export interface Team {

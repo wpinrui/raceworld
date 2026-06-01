@@ -17,7 +17,7 @@ import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
-import { computeDriverMediaScores, computeTeamMediaScores, determineRetirements, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
+import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 
 const TOTAL_ROUNDS = calendar2026.length
@@ -279,9 +279,8 @@ export const useSeasonStore = create<SeasonStore>()(
           }
         }
 
-        // 3. Age every driver one year, then assess retirements.
+        // 3. Age every driver one year.
         const agedDrivers = ageDrivers(drivers)
-        const retiredDriverIds = determineRetirements(agedDrivers, driverMediaScores)
 
         // 4. Car reshuffle
         const { updatedTeams: reshuffledTeams, oldPaces, newPaces } =
@@ -289,17 +288,19 @@ export const useSeasonStore = create<SeasonStore>()(
 
         // 5. Driver market
         const newYear = year + 1
-        const { updatedDrivers: finalDrivers, marketMoves } = runDriverMarket(
+        const { updatedDrivers: signedDrivers, marketMoves } = runDriverMarket(
           agedDrivers,
           reshuffledTeams,
-          retiredDriverIds,
           driverMediaScores,
           teamMediaScores,
           newYear,
           Math.random,
         )
 
-        // 6. Build summary
+        // 6. Attrition: drivers without a seat for 5 consecutive seasons leave the market.
+        const { drivers: finalDrivers, retiredDriverIds } = applyMarketAttrition(signedDrivers)
+
+        // 7. Build summary
         const summary: EndOfSeasonSummary = {
           seasonYear: year,
           driverChampion: driverStandings[0]?.driverId ?? '',
@@ -314,7 +315,7 @@ export const useSeasonStore = create<SeasonStore>()(
           upgradeEvents: allUpgradeEvents,
         }
 
-        // 7. Update constructor history (prepend current season, dedupe, keep ≤55)
+        // 8. Update constructor history (prepend current season, dedupe, keep ≤55)
         const newHistoryEntries: ConstructorSeasonRecord[] = constructorRankInfo.map((cs) => ({
           seasonYear: year,
           teamId: cs.teamId,

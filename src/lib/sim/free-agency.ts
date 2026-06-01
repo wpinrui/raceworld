@@ -34,27 +34,32 @@ function contractLength(
   return Math.max(1, Math.min(5, len))
 }
 
-export function determineRetirements(
-  drivers: Driver[],
-  driverMediaScores: DriverMediaScore[],
-): string[] {
-  const scoreMap = new Map(driverMediaScores.map((s) => [s.driverId, s.score]))
-  const retired: string[] = []
+const RETIREMENT_SEASONS_OUT = 5
 
-  for (const driver of drivers) {
-    const score = scoreMap.get(driver.id) ?? 50
-    const tooOld = driver.age > driver.primeEnd + 5
-    const scoreTooLow = score < 27
-    if (tooOld || scoreTooLow) retired.push(driver.id)
+// Run after the driver market has settled. A driver holding a seat for the
+// coming season resets to 0; a driver without one accrues another season out
+// of F1 and is removed from the market once they reach RETIREMENT_SEASONS_OUT.
+export function applyMarketAttrition(
+  drivers: Driver[],
+): { drivers: Driver[]; retiredDriverIds: string[] } {
+  const retiredDriverIds: string[] = []
+  const updated: Driver[] = []
+
+  for (const d of drivers) {
+    const seasonsOut = d.teamId === '' ? (d.seasonsSinceF1Seat ?? 0) + 1 : 0
+    if (seasonsOut >= RETIREMENT_SEASONS_OUT) {
+      retiredDriverIds.push(d.id)
+      continue
+    }
+    updated.push({ ...d, seasonsSinceF1Seat: seasonsOut })
   }
 
-  return retired
+  return { drivers: updated, retiredDriverIds }
 }
 
 export function runDriverMarket(
   drivers: Driver[],
   teams: Team[],
-  retiredDriverIds: string[],
   driverMediaScores: DriverMediaScore[],
   teamMediaScores: TeamMediaScore[],
   newYear: number,
@@ -69,18 +74,13 @@ export function runDriverMarket(
       .filter(
         (d) =>
           d.teamId !== '' &&
-          d.contractExpiresAfterSeason > currentYear &&
-          !retiredDriverIds.includes(d.id),
+          d.contractExpiresAfterSeason > currentYear,
       )
       .map((d) => d.id),
   )
 
   const freeAgents = drivers
-    .filter(
-      (d) =>
-        !retiredDriverIds.includes(d.id) &&
-        !stayingDriverIds.has(d.id),
-    )
+    .filter((d) => !stayingDriverIds.has(d.id))
     .sort((a, b) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0))
 
   const seatsPerTeam = new Map<string, number>()
@@ -151,12 +151,14 @@ export function runDriverMarket(
   }
 
   const updatedDrivers = [
-    ...drivers
-      .filter((d) => !retiredDriverIds.includes(d.id))
-      .map((d) => {
-        const update = driverUpdates.get(d.id)
-        return update ? { ...d, ...update } : d
-      }),
+    ...drivers.map((d) => {
+      const update = driverUpdates.get(d.id)
+      if (update) return { ...d, ...update }
+      // A free agent who didn't sign this window holds no seat — clear any
+      // stale teamId left over from an expired contract.
+      if (!stayingDriverIds.has(d.id) && d.teamId !== '') return { ...d, teamId: '' }
+      return d
+    }),
     ...rookies,
   ]
 
