@@ -231,7 +231,7 @@ export function generateFreeAgentPool(
     const age = 17 + Math.floor(rng() * 5) // 17–21
     const pace = Math.round(58 + rng() * 16)  // 58–74
     const stat = () => Math.max(45, Math.min(85, Math.round(sampleNormal(pace - 2, 6, rng))))
-    const peakPotential = Math.round(80 + rng() * 13)  // 80–93
+    const peakPotential = Math.round(60 + rng() * 20)  // 60–80
     const primeEnd = Math.max(age + 1, 28 + Math.floor(rng() * 6))
 
     pool.push({
