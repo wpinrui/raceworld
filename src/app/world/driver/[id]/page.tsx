@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { Pencil, Check } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import { useDriverCareer } from '@/lib/world/hooks'
+import { useSeasonStore } from '@/lib/store/season-store'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { StatBar } from '@/components/setup/StatBar'
+import { StatSlider } from '@/components/setup/StatSlider'
+import { STAT_KEYS, STAT_LABELS } from '@/components/setup/stat-utils'
 import { ResultChip } from '@/components/standings/ResultCell'
 import { TeamLink } from '@/components/world/EntityLink'
 
@@ -21,9 +25,14 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
 export default function DriverPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useDriverCareer(id)
+  const updateDriver = useSeasonStore((s) => s.updateDriver)
+  const liveDriver = useSeasonStore((s) => s.drivers.find((d) => d.id === id))
+  const [editing, setEditing] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
+
+  const inputClass = 'w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
@@ -58,13 +67,49 @@ export default function DriverPage() {
               {/* Attributes */}
               {a && (
                 <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-3">Attributes</p>
-                  <div className="space-y-2 max-w-md">
-                    <StatBar label="Pace" value={a.pace} />
-                    <StatBar label="Wet" value={a.wetWeatherPace} />
-                    <StatBar label="Overtaking" value={a.overtaking} />
-                    <StatBar label="Smoothness" value={a.smoothness} />
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Attributes</p>
+                    {liveDriver && (
+                      <button
+                        onClick={() => setEditing((v) => !v)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+                      >
+                        {editing ? <Check size={13} /> : <Pencil size={13} />}
+                        {editing ? 'Done' : 'God mode: edit'}
+                      </button>
+                    )}
                   </div>
+
+                  {editing && liveDriver ? (
+                    <div className="space-y-4 max-w-md">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-xs text-[#FFFFFF] block mb-1">Name</label>
+                          <input type="text" value={liveDriver.name} onChange={(e) => updateDriver(id, { name: e.target.value })} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-[#FFFFFF] block mb-1">Nationality</label>
+                          <input type="text" maxLength={2} value={liveDriver.nationality} onChange={(e) => updateDriver(id, { nationality: e.target.value.toUpperCase() })} className={`${inputClass} uppercase`} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-[#FFFFFF] block mb-1">Age</label>
+                          <input type="number" min={16} max={60} value={liveDriver.age} onChange={(e) => updateDriver(id, { age: Number(e.target.value) })} className={inputClass} />
+                        </div>
+                      </div>
+                      <div className="space-y-2.5">
+                        {STAT_KEYS.map((k) => (
+                          <StatSlider key={k} label={STAT_LABELS[k]} value={liveDriver[k]} onChange={(v) => updateDriver(id, { [k]: v })} />
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-w-md">
+                      <StatBar label="Pace" value={a.pace} />
+                      <StatBar label="Wet" value={a.wetWeatherPace} />
+                      <StatBar label="Overtaking" value={a.overtaking} />
+                      <StatBar label="Smoothness" value={a.smoothness} />
+                    </div>
+                  )}
                 </div>
               )}
 

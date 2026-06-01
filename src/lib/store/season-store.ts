@@ -136,6 +136,7 @@ interface SeasonStore {
   // Actions
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
+  updateDriver: (id: string, patch: Partial<Driver>) => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
@@ -207,6 +208,17 @@ export const useSeasonStore = create<SeasonStore>()(
           teams,
           driverStandings: computeDriverStandings(drivers, teams, raceResults),
           constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
+        })
+      },
+
+      // God-mode edit of a single driver (e.g. from the world driver page).
+      updateDriver: (id, patch) => {
+        const { drivers, teams, raceResults } = get()
+        const next = drivers.map((d) => (d.id === id ? { ...d, ...patch } : d))
+        set({
+          drivers: next,
+          driverStandings: computeDriverStandings(next, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, next, raceResults),
         })
       },
 
