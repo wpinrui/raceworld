@@ -1,5 +1,6 @@
 'use client'
 
+import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, DriverRaceState, RacePhase } from '@/lib/sim/types'
 import TyreIndicator from './TyreIndicator'
 
@@ -72,16 +73,15 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                 <td className="py-1 px-2 font-bold text-sm">{ds.position}</td>
                 <td className="py-1 px-2">
                   <div className="flex items-center gap-2">
-                    {team && (
-                      <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color }} />
-                    )}
+                    {team && <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color }} />}
+                    <ReactCountryFlag countryCode={driver?.nationality || 'GB'} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
                     <span className="text-sm font-medium truncate max-w-[130px]">
                       {driver?.name ?? ds.driverId}
                     </span>
                   </div>
                 </td>
                 <td className="py-1 px-2 text-xs text-[#FFFFFF]">
-                  {team?.shortName ?? '---'}
+                  {team?.name ?? '---'}
                 </td>
                 <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
                   {formatGap(ds.gap, ds.retired)}

@@ -1,5 +1,6 @@
 'use client'
 
+import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, Circuit } from '@/lib/sim/types'
 
 interface Props {
@@ -68,6 +69,7 @@ export function PreQualPanel({
           <thead>
             <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
               <th className="text-left py-1 pr-2">Driver</th>
+              <th className="text-left py-1 px-2">Team</th>
               <th className="text-center py-1 px-2 w-36">Form</th>
               <th className="text-center py-1 px-2 w-16">Car</th>
               <th className="text-center py-1 px-2 w-16">Pace</th>
@@ -85,10 +87,11 @@ export function PreQualPanel({
                   <td className="py-1 pr-2">
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />
+                      <ReactCountryFlag countryCode={d.nationality || 'GB'} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
                       <span className="text-sm font-medium text-[#E8EAED]">{d.name}</span>
-                      <span className="text-xs text-[#FFFFFF]">{team?.shortName}</span>
                     </div>
                   </td>
+                  <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.name ?? '—'}</td>
                   <td className="py-1 px-2">
                     <div className="flex items-center gap-1.5">
                       <input

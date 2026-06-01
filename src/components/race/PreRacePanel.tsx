@@ -1,5 +1,6 @@
 'use client'
 
+import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, RaceState, Circuit } from '@/lib/sim/types'
 
 function formatQualTime(t: number | null): string {
@@ -54,10 +55,11 @@ export function PreRacePanel({ raceState, drivers, teams, currentCircuit, onStar
                   <td className="py-1 px-2">
                     <div className="flex items-center gap-2.5">
                       {team && <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: team.color }} />}
+                      <ReactCountryFlag countryCode={driver?.nationality || 'GB'} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
                       <span>{driver?.name ?? qr.driverId}</span>
                     </div>
                   </td>
-                  <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.shortName ?? '---'}</td>
+                  <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.name ?? '---'}</td>
                   <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatQualTime(qr.q1Time)}</td>
                   <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatQualTime(qr.q2Time)}</td>
                   <td className="py-1 px-2 text-right font-mono text-sm font-bold">{formatQualTime(qr.q3Time)}</td>
