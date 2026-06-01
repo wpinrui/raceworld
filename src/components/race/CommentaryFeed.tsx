@@ -24,14 +24,14 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-2.5 mb-3 shrink-0">
         <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-        <h2 className="font-semibold text-base tracking-widest text-[#E8EAED] uppercase">
+        <h2 className="font-semibold text-sm tracking-widest text-[#E8EAED] uppercase">
           Commentary
         </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 space-y-1.5 pr-1">
         {reversed.length === 0 ? (
-          <p className="text-[#FFFFFF] text-base italic">Awaiting race start...</p>
+          <p className="text-[#FFFFFF] text-sm italic">Awaiting race start...</p>
         ) : (
           reversed.map((entry, i) => {
             const cfg = TYPE_CONFIG[entry.type] ?? TYPE_CONFIG.info
