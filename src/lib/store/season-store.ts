@@ -300,6 +300,7 @@ export const useSeasonStore = create<SeasonStore>()(
           carReshuffleOldPaces: {},
           carReshuffleNewPaces: {},
           marketMoves: [],
+          seatContests: [],
           driverMediaScores,
           teamMediaScores,
           upgradeEvents: allUpgradeEvents,
@@ -337,7 +338,7 @@ export const useSeasonStore = create<SeasonStore>()(
         if (!pendingNextSeasonState || !endOfSeasonSummary) return
         const { drivers, teams } = pendingNextSeasonState
 
-        const { updatedDrivers, marketMoves } = runDriverMarket(
+        const { updatedDrivers, marketMoves, seatContests } = runDriverMarket(
           drivers,
           teams,
           endOfSeasonSummary.driverMediaScores,
@@ -348,7 +349,7 @@ export const useSeasonStore = create<SeasonStore>()(
 
         set({
           phase: 'contract-negotiations',
-          endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves },
+          endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests },
           pendingNextSeasonState: { drivers: updatedDrivers, teams },
         })
       },

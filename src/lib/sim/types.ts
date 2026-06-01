@@ -227,6 +227,26 @@ export interface MarketMove {
   contractLength: number
   contractExpiresAfterSeason: number
   mediaScore: number
+  isResignation: boolean   // re-signed with the same team (from === to)
+}
+
+export interface SeatContestRival {
+  driverId: string
+  driverName: string
+  mediaScore: number
+}
+
+// Who won a seat and who they beat to it — raw material for newsroom transfer
+// stories. Recorded per signing where the winner edged out other interested
+// free agents; the media scores are the "why".
+export interface SeatContest {
+  teamId: string
+  teamName: string
+  winnerDriverId: string
+  winnerDriverName: string
+  winnerMediaScore: number
+  incumbent: boolean              // winner re-signed their own seat
+  rivals: SeatContestRival[]      // other free agents who wanted this seat, by media desc
 }
 
 // Fuel load is revealed to the player only as a qualitative band, never the
@@ -258,6 +278,7 @@ export interface EndOfSeasonSummary {
   carReshuffleOldPaces: Record<string, number>
   carReshuffleNewPaces: Record<string, number>
   marketMoves: MarketMove[]
+  seatContests: SeatContest[]
   driverMediaScores: DriverMediaScore[]
   teamMediaScores: TeamMediaScore[]
   upgradeEvents: DevUpgradeEvent[]

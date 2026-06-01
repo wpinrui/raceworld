@@ -1,4 +1,4 @@
-import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove } from './types'
+import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest } from './types'
 import { sampleNormal } from './rng-utils'
 import { generateRookie } from './driver-generation'
 
@@ -64,7 +64,7 @@ export function runDriverMarket(
   teamMediaScores: TeamMediaScore[],
   newYear: number,
   rng: () => number,
-): { updatedDrivers: Driver[]; marketMoves: MarketMove[] } {
+): { updatedDrivers: Driver[]; marketMoves: MarketMove[]; seatContests: SeatContest[] } {
   const scoreMap = new Map(driverMediaScores.map((s) => [s.driverId, s.score]))
   const teamScoreMap = new Map(teamMediaScores.map((s) => [s.teamId, s.score]))
   const currentYear = newYear - 1
@@ -89,7 +89,20 @@ export function runDriverMarket(
     seatsPerTeam.set(team.id, Math.max(0, 2 - filled))
   }
 
+  // Each free agent's most-wanted team (deterministic desire, no noise) — used
+  // to attribute who else was chasing a seat once it's won.
+  const preferredTeam = new Map<string, string>()
+  for (const fa of freeAgents) {
+    let bestId = teams[0]?.id ?? '', bestVal = -Infinity
+    for (const t of teams) {
+      const v = (teamScoreMap.get(t.id) ?? 50) + (fa.teamId === t.id ? 5 : 0)
+      if (v > bestVal) { bestVal = v; bestId = t.id }
+    }
+    preferredTeam.set(fa.id, bestId)
+  }
+
   const marketMoves: MarketMove[] = []
+  const seatContests: SeatContest[] = []
   const driverUpdates = new Map<string, Partial<Driver>>()
   const placedIds = new Set<string>()
 
@@ -117,6 +130,25 @@ export function runDriverMarket(
       teamId: chosen.id,
       contractExpiresAfterSeason: currentYear + len,
     })
+
+    // Rivals = still-unsigned free agents who also wanted this team but were
+    // edged out (lower media score, processed later).
+    const rivals = freeAgents
+      .filter((r) => r.id !== fa.id && !placedIds.has(r.id) && preferredTeam.get(r.id) === chosen.id)
+      .map((r) => ({ driverId: r.id, driverName: r.name, mediaScore: scoreMap.get(r.id) ?? 0 }))
+      .sort((a, b) => b.mediaScore - a.mediaScore)
+    if (rivals.length > 0) {
+      seatContests.push({
+        teamId: chosen.id,
+        teamName: chosen.name,
+        winnerDriverId: fa.id,
+        winnerDriverName: fa.name,
+        winnerMediaScore: faScore,
+        incumbent: fa.teamId === chosen.id,
+        rivals,
+      })
+    }
+
     placedIds.add(fa.id)
 
     marketMoves.push({
@@ -128,6 +160,7 @@ export function runDriverMarket(
       contractLength: len,
       contractExpiresAfterSeason: currentYear + len,
       mediaScore: faScore,
+      isResignation: fa.teamId === chosen.id,
     })
   }
 
@@ -146,6 +179,7 @@ export function runDriverMarket(
         contractLength: 1,
         contractExpiresAfterSeason: newYear,
         mediaScore: 0,
+        isResignation: false,
       })
     }
   }
@@ -162,5 +196,5 @@ export function runDriverMarket(
     ...rookies,
   ]
 
-  return { updatedDrivers, marketMoves }
+  return { updatedDrivers, marketMoves, seatContests }
 }

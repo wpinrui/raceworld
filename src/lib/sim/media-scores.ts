@@ -31,6 +31,17 @@ export function computeDriverMediaScores(
     return N > 1 ? (rankFromBottom / (N - 1)) * 100 : 50
   }
 
+  // Drivers who never took part in a race this season have no results-based
+  // signal. The media falls back to raw ability (pace-weighted overall) so a
+  // strong free-agent prospect outranks a weak one instead of all tying at zero.
+  const racedIds = new Set<string>()
+  for (const round of raceResults) for (const r of round) racedIds.add(r.driverId)
+
+  function abilityScore(driver: Driver): number {
+    const ovr = 0.6 * driver.pace + 0.2 * driver.smoothness + 0.1 * driver.overtaking + 0.1 * driver.wetWeatherPace
+    return Math.max(0, Math.min(100, ovr + driver.narrativeModifier))
+  }
+
   const aScores = new Map<string, number>()
   for (const d of drivers) aScores.set(d.id, componentA(d.id))
 
@@ -82,6 +93,9 @@ export function computeDriverMediaScores(
   }
 
   return drivers.map((driver) => {
+    if (!racedIds.has(driver.id)) {
+      return { driverId: driver.id, score: abilityScore(driver) }
+    }
     const A = aScores.get(driver.id) ?? 50
     const B = componentB(driver)
     const C = componentC(driver)
