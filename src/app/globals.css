@@ -18,6 +18,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-mono);
+  --font-display: 'Formula1', system-ui, sans-serif;
 
   /* RaceWorld design tokens */
   --color-surface-base: #0F1419;
