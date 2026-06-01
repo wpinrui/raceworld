@@ -331,8 +331,9 @@ export default function SetupPage() {
   if (!hydrated) return null
 
   const isActive = seasonStore.phase !== 'idle'
+  const freeAgents = localDrivers.filter((d) => d.teamId === '')
   const expiringCount = localDrivers.filter(
-    (d) => d.contractExpiresAfterSeason <= seasonStore.year,
+    (d) => d.teamId !== '' && d.contractExpiresAfterSeason <= seasonStore.year,
   ).length
 
   const driversByTeam = localTeams.map((team) => ({
@@ -440,6 +441,32 @@ export default function SetupPage() {
             </div>
           ))}
         </div>
+
+        {/* Free agents */}
+        {freeAgents.length > 0 && (
+          <div className="mt-6 rounded-xl bg-[#1E2431] overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
+              <div className="w-1.5 h-8 rounded-full bg-[#6B7280]" />
+              <div className="flex-1">
+                <div className="font-semibold text-[#E8EAED]">Free Agents</div>
+                <div className="text-xs text-[#6B7280]">{freeAgents.length} available</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 p-4">
+              {freeAgents.map((driver) => (
+                <DriverCard
+                  key={driver.id}
+                  driver={driver}
+                  teamColor="#6B7280"
+                  teams={localTeams}
+                  onUpdate={(patch) => updateDriver(driver.id, patch)}
+                  onRemove={() => removeDriver(driver.id)}
+                  currentYear={seasonStore.year}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {!isActive && (
           <div className="mt-8 flex justify-end">

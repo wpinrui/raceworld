@@ -16,7 +16,7 @@ import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
 import { computeFundingTiers, initDevPlans, applyFundingPenalties, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
 import { applyDriverProgression } from '@/lib/sim/progression'
-import { computeDriverMediaScores, computeTeamMediaScores, determineRetirements, runDriverMarket } from '@/lib/sim/market'
+import { computeDriverMediaScores, computeTeamMediaScores, determineRetirements, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
 
 const TOTAL_ROUNDS = calendar2026.length
 
@@ -151,10 +151,19 @@ export const useSeasonStore = create<SeasonStore>()(
         const { constructorHistory } = get()
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+        // Keep existing free agents from store; generate pool only if none present
+        const existingPool = get().drivers.filter((d) => d.teamId === '')
+        const poolDrivers = existingPool.length > 0
+          ? existingPool
+          : generateFreeAgentPool(12, year, drivers, Math.random)
+        const allDrivers = [
+          ...drivers.filter((d) => d.teamId !== ''),
+          ...poolDrivers,
+        ]
         set({
           phase: 'pre-race',
           year,
-          drivers,
+          drivers: allDrivers,
           teams,
           currentRound: 1,
           raceResults: [],
@@ -314,7 +323,13 @@ export const useSeasonStore = create<SeasonStore>()(
           return
         }
 
-        const { drivers, teams } = pendingNextSeasonState
+        const { drivers: pendingDrivers, teams } = pendingNextSeasonState
+        // Ensure at least 8 free agents in the pool; top up if needed
+        const existingPool = pendingDrivers.filter((d) => d.teamId === '')
+        const topUp = existingPool.length < 8
+          ? generateFreeAgentPool(8 - existingPool.length, newYear, pendingDrivers, Math.random)
+          : []
+        const drivers = [...pendingDrivers, ...topUp]
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = initDevPlans(teams, fundingTiers, Math.random)
 

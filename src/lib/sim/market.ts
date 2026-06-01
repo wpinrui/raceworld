@@ -8,6 +8,7 @@ import type {
   MarketMove,
 } from './types'
 import { sampleNormal } from './rng-utils'
+import { FAKER_LOCALES } from '@/data/driver-name-pool'
 
 // ─── Media score computation ────────────────────────────────────────────────
 
@@ -192,6 +193,77 @@ function contractLength(
   return Math.max(1, Math.min(5, len))
 }
 
+let generatedCounter = 0
+
+function pickName(usedNames: Set<string>): string {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const f = FAKER_LOCALES[Math.floor(Math.random() * FAKER_LOCALES.length)]
+    const name = `${f.person.firstName()} ${f.person.lastName()}`
+    if (!usedNames.has(name)) {
+      usedNames.add(name)
+      return name
+    }
+  }
+  generatedCounter++
+  return `Driver ${generatedCounter}`
+}
+
+/** Generate a pool of free-agent drivers for the market (teamId = ''). */
+export function generateFreeAgentPool(
+  count: number,
+  year: number,
+  existingDrivers: Driver[],
+  rng: () => number,
+): Driver[] {
+  const usedNames = new Set(existingDrivers.map((d) => d.name))
+  const pool: Driver[] = []
+
+  for (let i = 0; i < count; i++) {
+    generatedCounter++
+    const name = pickName(usedNames)
+
+    // Varied archetypes: young prospect, journeyman, veteran
+    const roll = rng()
+    let ageBand: [number, number]
+    let paceBand: [number, number]
+    let potBand: [number, number]
+
+    if (roll < 0.35) {
+      // Young prospect — low stats, high ceiling
+      ageBand = [18, 23]; paceBand = [58, 74]; potBand = [80, 93]
+    } else if (roll < 0.70) {
+      // Journeyman — mid stats, moderate ceiling
+      ageBand = [24, 31]; paceBand = [68, 80]; potBand = [75, 85]
+    } else {
+      // Veteran — decent stats, low ceiling (past prime or near it)
+      ageBand = [32, 40]; paceBand = [72, 82]; potBand = [76, 84]
+    }
+
+    const age = ageBand[0] + Math.floor(rng() * (ageBand[1] - ageBand[0] + 1))
+    const pace = Math.round(paceBand[0] + rng() * (paceBand[1] - paceBand[0]))
+    const stat = () => Math.max(45, Math.min(85, Math.round(sampleNormal(pace - 2, 6, rng))))
+    const peakPotential = Math.round(potBand[0] + rng() * (potBand[1] - potBand[0]))
+    const primeEnd = Math.max(age + 1, 28 + Math.floor(rng() * 6))
+
+    pool.push({
+      id: `gen-${year}-${generatedCounter}`,
+      name,
+      teamId: '',
+      pace,
+      wetWeatherPace: stat(),
+      overtaking: stat(),
+      smoothness: stat(),
+      age,
+      peakPotential,
+      primeEnd,
+      narrativeModifier: 0,
+      contractExpiresAfterSeason: year - 1, // no active contract
+    })
+  }
+
+  return pool
+}
+
 let rookieCounter = 0
 
 function generateRookie(teamId: string, newYear: number, rng: () => number): Driver {
@@ -226,45 +298,44 @@ export function runDriverMarket(
   const teamScoreMap = new Map(teamMediaScores.map((s) => [s.teamId, s.score]))
   const currentYear = newYear - 1
 
-  // Drivers who stay (under contract and not retired)
+  // Drivers staying (active contract, not retired, on a real team)
   const stayingDriverIds = new Set(
     drivers
       .filter(
         (d) =>
-          d.contractExpiresAfterSeason > currentYear && !retiredDriverIds.includes(d.id),
+          d.teamId !== '' &&
+          d.contractExpiresAfterSeason > currentYear &&
+          !retiredDriverIds.includes(d.id),
       )
       .map((d) => d.id),
   )
 
-  // Free agents: contract expired and not retired
+  // Free agents: expired/uncontracted grid drivers + market pool (teamId=''), not retired
   const freeAgents = drivers
     .filter(
       (d) =>
-        d.contractExpiresAfterSeason <= currentYear && !retiredDriverIds.includes(d.id),
+        !retiredDriverIds.includes(d.id) &&
+        !stayingDriverIds.has(d.id),
     )
     .sort((a, b) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0))
 
-  // Count vacant seats per team (2 per team)
+  // Vacant seats per team
   const seatsPerTeam = new Map<string, number>()
   for (const team of teams) {
-    const occupiedByStaying = drivers.filter(
-      (d) => d.teamId === team.id && stayingDriverIds.has(d.id),
-    ).length
-    const vacancies = Math.max(0, 2 - occupiedByStaying)
-    seatsPerTeam.set(team.id, vacancies)
+    const filled = drivers.filter((d) => d.teamId === team.id && stayingDriverIds.has(d.id)).length
+    seatsPerTeam.set(team.id, Math.max(0, 2 - filled))
   }
 
   const marketMoves: MarketMove[] = []
   const driverUpdates = new Map<string, Partial<Driver>>()
+  const placedIds = new Set<string>()
 
   const bestFreeAgentId = freeAgents[0]?.id
 
   for (const fa of freeAgents) {
-    // Find teams with vacancies
     const vacantTeams = teams.filter((t) => (seatsPerTeam.get(t.id) ?? 0) > 0)
     if (vacantTeams.length === 0) break
 
-    // Score each vacant team (with incumbent advantage)
     const scored = vacantTeams.map((t) => {
       const base = teamScoreMap.get(t.id) ?? 50
       const incumbentBonus = fa.teamId === t.id ? 5 : 0
@@ -283,11 +354,12 @@ export function runDriverMarket(
       teamId: chosen.id,
       contractExpiresAfterSeason: currentYear + len,
     })
+    placedIds.add(fa.id)
 
     marketMoves.push({
       driverId: fa.id,
       driverName: fa.name,
-      fromTeamId: fa.teamId,
+      fromTeamId: fa.teamId === '' ? null : fa.teamId,
       toTeamId: chosen.id,
       toTeamName: chosen.name,
       contractLength: len,
@@ -296,7 +368,7 @@ export function runDriverMarket(
     })
   }
 
-  // Fill remaining vacancies with rookies
+  // Fill any still-vacant seats with generated rookies
   const rookies: Driver[] = []
   for (const team of teams) {
     const remaining = seatsPerTeam.get(team.id) ?? 0
@@ -316,7 +388,12 @@ export function runDriverMarket(
     }
   }
 
-  // Build final driver list
+  // Build final driver list:
+  // - Keep staying drivers unchanged
+  // - Apply updates to placed free agents
+  // - Unplaced free agents stay with teamId='' (remain in market pool)
+  // - Drop retired drivers
+  // - Add rookies placed into teams
   const updatedDrivers = [
     ...drivers
       .filter((d) => !retiredDriverIds.includes(d.id))
