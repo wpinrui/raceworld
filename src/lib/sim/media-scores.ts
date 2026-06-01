@@ -99,11 +99,8 @@ export function computeDriverMediaScores(
     const A = aScores.get(driver.id) ?? 50
     const B = componentB(driver)
     const C = componentC(driver)
-    const resultsScore = Math.max(0, Math.min(100, 0.5 * A + 0.3 * B + 0.2 * C + driver.narrativeModifier))
-    // Perception is floored at raw ability: a genuinely elite driver stuck in a
-    // poor car can be under-rewarded on results, but never buried below their
-    // talent — so they stay valued and cannot be dropped on results alone.
-    return { driverId: driver.id, score: Math.max(resultsScore, abilityScore(driver)) }
+    const score = Math.max(0, Math.min(100, 0.5 * A + 0.3 * B + 0.2 * C + driver.narrativeModifier))
+    return { driverId: driver.id, score }
   })
 }
 
