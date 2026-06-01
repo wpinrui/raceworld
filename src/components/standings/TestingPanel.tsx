@@ -24,7 +24,7 @@ function fmtTime(t: number): string {
   return `${m}:${s.toFixed(3).padStart(6, '0')}`
 }
 
-type SortKey = 'time' | 'pace'
+type SortKey = 'time' | 'pace' | 'wcc'
 
 export function TestingPanel({ summary, teams, constructorStandings }: Props) {
   const [reveal, setReveal] = useState(false)
@@ -41,10 +41,14 @@ export function TestingPanel({ summary, teams, constructorStandings }: Props) {
   const fastest = Math.min(...test.entries.map((e) => e.lapTime))
 
   // True pace is only known under god mode, so that sort only applies while revealed.
-  const activeSort: SortKey = reveal && sortKey === 'pace' ? 'pace' : 'time'
-  const rows = [...test.entries].sort((a, b) =>
-    activeSort === 'pace' ? b.carPace - a.carPace : a.lapTime - b.lapTime,
-  )
+  const activeSort: SortKey = sortKey === 'pace' && !reveal ? 'time' : sortKey
+  const rows = [...test.entries].sort((a, b) => {
+    if (activeSort === 'pace') return b.carPace - a.carPace
+    if (activeSort === 'wcc') {
+      return (prevFinish.get(a.teamId) ?? Infinity) - (prevFinish.get(b.teamId) ?? Infinity)
+    }
+    return a.lapTime - b.lapTime
+  })
   const headClass = (key: SortKey) =>
     `cursor-pointer select-none transition-colors ${activeSort === key ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#00D9FF]'}`
 
@@ -70,16 +74,18 @@ export function TestingPanel({ summary, teams, constructorStandings }: Props) {
               <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
               <th className="text-left pb-2 pr-4 font-medium">Driver</th>
               <th className="text-left pb-2 px-3 font-medium">Team</th>
-              <th className="text-right pb-2 px-3 font-medium whitespace-nowrap">{summary.seasonYear} WCC</th>
               <th className="text-center pb-2 px-3 font-medium">Tyre</th>
               <th className="text-left pb-2 px-3 font-medium">Fuel</th>
               <th className={`text-right pb-2 px-3 font-medium ${headClass('time')}`} onClick={() => setSortKey('time')}>Time</th>
               <th className="text-right pb-2 px-3 font-medium">Gap</th>
               {reveal && (
-                <th className={`text-right pb-2 pl-3 font-medium ${headClass('pace')}`} onClick={() => setSortKey('pace')}>
+                <th className={`text-right pb-2 px-3 font-medium ${headClass('pace')}`} onClick={() => setSortKey('pace')}>
                   True Pace
                 </th>
               )}
+              <th className={`text-right pb-2 pl-3 font-medium whitespace-nowrap ${headClass('wcc')}`} onClick={() => setSortKey('wcc')}>
+                {summary.seasonYear} WCC
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -93,9 +99,6 @@ export function TestingPanel({ summary, teams, constructorStandings }: Props) {
                     <span className="text-[#FFFFFF]">{e.teamName}</span>
                   </span>
                 </td>
-                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
-                  {prevFinish.has(e.teamId) ? `P${prevFinish.get(e.teamId)}` : '—'}
-                </td>
                 <td className="py-2 px-3">
                   <span className="flex justify-center">
                     <TyreIndicator compound={e.tyre} size="sm" />
@@ -107,8 +110,11 @@ export function TestingPanel({ summary, teams, constructorStandings }: Props) {
                   {i === 0 ? '—' : `+${(e.lapTime - fastest).toFixed(3)}`}
                 </td>
                 {reveal && (
-                  <td className="py-2 pl-3 text-right tabular-nums text-[#00D9FF] font-semibold">{e.carPace.toFixed(1)}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-[#00D9FF] font-semibold">{e.carPace.toFixed(1)}</td>
                 )}
+                <td className="py-2 pl-3 text-right tabular-nums text-[#FFFFFF]">
+                  {prevFinish.has(e.teamId) ? `P${prevFinish.get(e.teamId)}` : '—'}
+                </td>
               </tr>
             ))}
           </tbody>
