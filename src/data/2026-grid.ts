@@ -21,8 +21,7 @@ export const drivers2026: Driver[] = [
     id: 'lando-norris',
     name: 'Lando Norris',
     teamId: 'mclaren',
-    // 2025 WDC, slight edge on Piastri in 2026 Canada pace; inconsistency noted in quali errors
-    // Good overtaker (aggressive style), consistent race pace when clean
+    nationality: 'GB',
     pace: 91, wetWeatherPace: 87, overtaking: 89, smoothness: 80,
     age: 26, peakPotential: 94, primeEnd: 32, narrativeModifier: 3,
     contractExpiresAfterSeason: 2027,
@@ -31,8 +30,7 @@ export const drivers2026: Driver[] = [
     id: 'oscar-piastri',
     name: 'Oscar Piastri',
     teamId: 'mclaren',
-    // Faster than Norris in early 2026 by metrics (0.14s quicker in quali, 0.24s/lap in race)
-    // But accident-prone in 2026 (Canada crash into Albon); wet Brasil Q3 off in 2025
+    nationality: 'AU',
     pace: 92, wetWeatherPace: 83, overtaking: 82, smoothness: 86,
     age: 25, peakPotential: 95, primeEnd: 31, narrativeModifier: 2,
     contractExpiresAfterSeason: 2026,
@@ -43,8 +41,7 @@ export const drivers2026: Driver[] = [
     id: 'charles-leclerc',
     name: 'Charles Leclerc',
     teamId: 'ferrari',
-    // 3rd in 2026 standings, dominant over Hamilton in 2025; wet weather weakness confirmed
-    // Repeatedly drags Ferrari beyond its means; elite qualifier
+    nationality: 'MC',
     pace: 93, wetWeatherPace: 80, overtaking: 85, smoothness: 83,
     age: 29, peakPotential: 95, primeEnd: 33, narrativeModifier: 4,
     contractExpiresAfterSeason: 2027,
@@ -53,9 +50,7 @@ export const drivers2026: Driver[] = [
     id: 'lewis-hamilton',
     name: 'Lewis Hamilton',
     teamId: 'ferrari',
-    // 2025 worst season ever, dominated by Leclerc; BUT 2026 revival — 2nd in Canada,
-    // battling Verstappen hard. Career-long wet weather excellence; "last in quali in Las Vegas rain" caveat
-    // High smoothness/tyre management reputation remains foundational
+    nationality: 'GB',
     pace: 87, wetWeatherPace: 90, overtaking: 85, smoothness: 93,
     age: 41, peakPotential: 97, primeEnd: 35, narrativeModifier: 7,
     contractExpiresAfterSeason: 2026,
@@ -66,9 +61,7 @@ export const drivers2026: Driver[] = [
     id: 'max-verstappen',
     name: 'Max Verstappen',
     teamId: 'redbull',
-    // Universally rated #1 driver by peers and analysts even in 2026 with midfield car
-    // 8 wins in 2025 in inferior machinery; wet weather had some uncharacteristic errors in 2025
-    // Aggressive overtaker — every analyst cites his overtaking as elite
+    nationality: 'NL',
     pace: 97, wetWeatherPace: 93, overtaking: 97, smoothness: 88,
     age: 28, peakPotential: 98, primeEnd: 34, narrativeModifier: 5,
     contractExpiresAfterSeason: 2028,
@@ -77,8 +70,7 @@ export const drivers2026: Driver[] = [
     id: 'isack-hadjar',
     name: 'Isack Hadjar',
     teamId: 'redbull',
-    // Strong 2025 rookie — podium at Zandvoort, comfortably beat Lawson, Q3 regularly
-    // Promoted to Red Bull for 2026, 5th in Canada; sharp overtaker per analysis
+    nationality: 'FR',
     pace: 80, wetWeatherPace: 76, overtaking: 79, smoothness: 75,
     age: 21, peakPotential: 91, primeEnd: 31, narrativeModifier: 2,
     contractExpiresAfterSeason: 2027,
@@ -89,8 +81,7 @@ export const drivers2026: Driver[] = [
     id: 'george-russell',
     name: 'George Russell',
     teamId: 'mercedes',
-    // 2nd in 2026 standings but being out-paced by Antonelli; 2 wins + 7 podiums in 2025
-    // Consistently rated top 3-5 by all sources; wet weather solid but not elite
+    nationality: 'GB',
     pace: 90, wetWeatherPace: 87, overtaking: 83, smoothness: 87,
     age: 28, peakPotential: 92, primeEnd: 33, narrativeModifier: 2,
     contractExpiresAfterSeason: 2027,
@@ -99,9 +90,7 @@ export const drivers2026: Driver[] = [
     id: 'kimi-antonelli',
     name: 'Kimi Antonelli',
     teamId: 'mercedes',
-    // Dominant in 2026 — 4 consecutive wins, leads championship by 43pts
-    // Faster than Russell in quali and race pace; sprint pole in Miami 2025 showed early promise
-    // Still young — some rookie errors but extraordinary trajectory
+    nationality: 'IT',
     pace: 88, wetWeatherPace: 82, overtaking: 78, smoothness: 80,
     age: 19, peakPotential: 95, primeEnd: 31, narrativeModifier: 3,
     contractExpiresAfterSeason: 2027,
@@ -112,9 +101,7 @@ export const drivers2026: Driver[] = [
     id: 'fernando-alonso',
     name: 'Fernando Alonso',
     teamId: 'astonmartin',
-    // Zero points in 2026 so far (car is nowhere), but driver talent unimpeachable
-    // Wet weather consistently top 3-5 across multiple seasons; elite overtaker and racecraft
-    // 24-0 quali whitewash over Stroll in 2025
+    nationality: 'ES',
     pace: 87, wetWeatherPace: 91, overtaking: 90, smoothness: 91,
     age: 44, peakPotential: 95, primeEnd: 36, narrativeModifier: 10,
     contractExpiresAfterSeason: 2026,
@@ -123,7 +110,7 @@ export const drivers2026: Driver[] = [
     id: 'lance-stroll',
     name: 'Lance Stroll',
     teamId: 'astonmartin',
-    // 0-24 in quali vs Alonso in 2025; Q1 eliminations repeatedly; anonymous
+    nationality: 'CA',
     pace: 61, wetWeatherPace: 63, overtaking: 54, smoothness: 64,
     age: 27, peakPotential: 70, primeEnd: 30, narrativeModifier: -5,
     contractExpiresAfterSeason: 2028,
@@ -134,8 +121,7 @@ export const drivers2026: Driver[] = [
     id: 'pierre-gasly',
     name: 'Pierre Gasly',
     teamId: 'alpine',
-    // Scored 100% of Alpine's points in 2025; Alpine punching above weight in 2026
-    // Verstappen couldn't pass him for 7th in Japan 2026; consistent performer
+    nationality: 'FR',
     pace: 83, wetWeatherPace: 81, overtaking: 79, smoothness: 80,
     age: 30, peakPotential: 86, primeEnd: 32, narrativeModifier: 1,
     contractExpiresAfterSeason: 2027,
@@ -144,8 +130,7 @@ export const drivers2026: Driver[] = [
     id: 'franco-colapinto',
     name: 'Franco Colapinto',
     teamId: 'alpine',
-    // 6th in Canada 2026 (best F1 result), improving strongly; earned Alpine contract on merit
-    // Crash-prone early (Australia wet crash 2025) but developing fast
+    nationality: 'AR',
     pace: 76, wetWeatherPace: 68, overtaking: 73, smoothness: 68,
     age: 22, peakPotential: 86, primeEnd: 30, narrativeModifier: 2,
     contractExpiresAfterSeason: 2026,
@@ -156,8 +141,7 @@ export const drivers2026: Driver[] = [
     id: 'alexander-albon',
     name: 'Alexander Albon',
     teamId: 'williams',
-    // Strong first half of 2025, fell away in second half; Williams struggling in 2026
-    // Solid racecraft, decent wet weather; contributed 53% of Williams 2025 points
+    nationality: 'TH',
     pace: 80, wetWeatherPace: 77, overtaking: 76, smoothness: 79,
     age: 30, peakPotential: 84, primeEnd: 32, narrativeModifier: 0,
     contractExpiresAfterSeason: 2027,
@@ -166,8 +150,7 @@ export const drivers2026: Driver[] = [
     id: 'carlos-sainz',
     name: 'Carlos Sainz',
     teamId: 'williams',
-    // "Mr Smooth Operator" — multiple analyst cites; 2 podiums in 2025 for Williams
-    // Williams struggling in 2026 new regs; elite tyre/smoothness rep
+    nationality: 'ES',
     pace: 87, wetWeatherPace: 84, overtaking: 82, smoothness: 91,
     age: 31, peakPotential: 90, primeEnd: 33, narrativeModifier: 3,
     contractExpiresAfterSeason: 2027,
@@ -178,8 +161,7 @@ export const drivers2026: Driver[] = [
     id: 'liam-lawson',
     name: 'Liam Lawson',
     teamId: 'racingbulls',
-    // Demoted from Red Bull after failing vs Verstappen; comfortably beaten by Hadjar in 2025
-    // Still a capable midfield driver but took a clear step back in perception
+    nationality: 'NZ',
     pace: 78, wetWeatherPace: 74, overtaking: 76, smoothness: 73,
     age: 24, peakPotential: 86, primeEnd: 30, narrativeModifier: 0,
     contractExpiresAfterSeason: 2026,
@@ -188,7 +170,7 @@ export const drivers2026: Driver[] = [
     id: 'arvid-lindblad',
     name: 'Arvid Lindblad',
     teamId: 'racingbulls',
-    // Scored points in 2026 (Racing Bulls 6th in constructors); limited data but promising
+    nationality: 'GB',
     pace: 70, wetWeatherPace: 66, overtaking: 67, smoothness: 68,
     age: 19, peakPotential: 88, primeEnd: 30, narrativeModifier: 1,
     contractExpiresAfterSeason: 2027,
@@ -199,9 +181,7 @@ export const drivers2026: Driver[] = [
     id: 'oliver-bearman',
     name: 'Oliver Bearman',
     teamId: 'haas',
-    // Beat Ocon statistically in 2025 (very rare for rookie vs established driver)
-    // Fearless overtaking cited; 50G crash in Japan 2026 — raw but genuinely fast
-    // Mexico 2025: raced Piastri and Verstappen wheel to wheel convincingly
+    nationality: 'GB',
     pace: 76, wetWeatherPace: 71, overtaking: 78, smoothness: 68,
     age: 20, peakPotential: 88, primeEnd: 29, narrativeModifier: 2,
     contractExpiresAfterSeason: 2027,
@@ -210,8 +190,7 @@ export const drivers2026: Driver[] = [
     id: 'esteban-ocon',
     name: 'Esteban Ocon',
     teamId: 'haas',
-    // Lost teammate battle to rookie Bearman in 2025; scored 1pt in 2026 Canada
-    // Solid but unspectacular; Haas 7pts in constructors
+    nationality: 'FR',
     pace: 77, wetWeatherPace: 74, overtaking: 71, smoothness: 76,
     age: 29, peakPotential: 82, primeEnd: 32, narrativeModifier: -1,
     contractExpiresAfterSeason: 2026,
@@ -222,8 +201,7 @@ export const drivers2026: Driver[] = [
     id: 'nico-hulkenberg',
     name: 'Nico Hulkenberg',
     teamId: 'audi',
-    // Top 5 wet weather driver 2025 (Silverstone podium in rain); racecraft and pace management praised
-    // 0pts in 2026 so far but Audi is a backmarker; outqualified by Bortoleto in 2025
+    nationality: 'DE',
     pace: 77, wetWeatherPace: 82, overtaking: 72, smoothness: 75,
     age: 38, peakPotential: 80, primeEnd: 32, narrativeModifier: -1,
     contractExpiresAfterSeason: 2026,
@@ -232,8 +210,7 @@ export const drivers2026: Driver[] = [
     id: 'gabriel-bortoleto',
     name: 'Gabriel Bortoleto',
     teamId: 'audi',
-    // Outqualified Hulkenberg in 2025; raw pace evident; 2pts in 2026
-    // Converting qualifying pace to race results remains the challenge
+    nationality: 'BR',
     pace: 72, wetWeatherPace: 66, overtaking: 68, smoothness: 68,
     age: 21, peakPotential: 88, primeEnd: 30, narrativeModifier: 1,
     contractExpiresAfterSeason: 2027,
@@ -244,8 +221,7 @@ export const drivers2026: Driver[] = [
     id: 'sergio-perez',
     name: 'Sergio Perez',
     teamId: 'cadillac',
-    // 0pts in 2026 with Cadillac; extracted more from car than Bottas in Canada
-    // Race management and smoothness still respectable; pace faded significantly in 2024-25
+    nationality: 'MX',
     pace: 78, wetWeatherPace: 76, overtaking: 74, smoothness: 82,
     age: 36, peakPotential: 86, primeEnd: 33, narrativeModifier: -2,
     contractExpiresAfterSeason: 2027,
@@ -254,7 +230,7 @@ export const drivers2026: Driver[] = [
     id: 'valtteri-bottas',
     name: 'Valtteri Bottas',
     teamId: 'cadillac',
-    // 0pts in 2026; underperformed vs Perez in Canada specifically noted
+    nationality: 'FI',
     pace: 77, wetWeatherPace: 75, overtaking: 70, smoothness: 79,
     age: 36, peakPotential: 84, primeEnd: 32, narrativeModifier: -3,
     contractExpiresAfterSeason: 2027,

@@ -6,6 +6,7 @@ export interface Driver {
   id: string
   name: string
   teamId: string
+  nationality: string    // ISO 3166-1 alpha-2
   pace: number           // 0-100
   wetWeatherPace: number // 0-100
   overtaking: number     // 0-100

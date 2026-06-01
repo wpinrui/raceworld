@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Download, Plus, Trash2, ChevronRight, RotateCcw, ChevronDown } from 'lucide-react'
+import ReactCountryFlag from 'react-country-flag'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
@@ -105,6 +106,7 @@ function makeDefaultDriver(teamId: string): Driver {
     id: `driver-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: 'New Driver',
     teamId,
+    nationality: 'GB',
     pace: 70,
     wetWeatherPace: 70,
     overtaking: 70,
@@ -121,23 +123,22 @@ function ContractBadge({ expiresAfter, currentYear }: { expiresAfter: number; cu
   const expiring = expiresAfter === currentYear
   const expired = expiresAfter < currentYear
   if (expired) return (
-    <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#DC143C] text-white rounded px-1.5 py-0.5">
+    <span className="text-xs font-semibold uppercase tracking-wide bg-[#DC143C] text-white rounded px-1.5 py-0.5">
       Free Agent
     </span>
   )
   if (expiring) return (
-    <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#FCD34D] text-[#0F1419] rounded px-1.5 py-0.5">
+    <span className="text-xs font-semibold uppercase tracking-wide bg-[#FCD34D] text-[#0F1419] rounded px-1.5 py-0.5">
       Expiring
     </span>
   )
   return (
-    <span className="text-[10px] text-[#6B7280] tabular-nums">until {expiresAfter}</span>
+    <span className="text-xs text-[#A0A9B8] tabular-nums">until {expiresAfter}</span>
   )
 }
 
-function DriverCard({ driver, teamColor, teams, onUpdate, onRemove, currentYear }: {
+function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
   driver: Driver
-  teamColor: string
   teams: Team[]
   onUpdate: (patch: Partial<Driver>) => void
   onRemove: () => void
@@ -149,13 +150,20 @@ function DriverCard({ driver, teamColor, teams, onUpdate, onRemove, currentYear 
   return (
     <div className="rounded-xl bg-[#2A3142] overflow-hidden">
       <div className="p-4">
-        {/* Header: ring + name + controls */}
+        {/* Header: flag + ring + name + controls */}
         <div className="flex items-center gap-3 mb-4">
+          <div className="shrink-0">
+            <ReactCountryFlag
+              countryCode={driver.nationality || 'GB'}
+              svg
+              style={{ width: '1.5em', height: '1.5em', borderRadius: '2px' }}
+            />
+          </div>
           <OverallRing overall={overall} />
           <div className="flex-1 min-w-0">
             <div className="text-base font-semibold text-[#E8EAED] truncate">{driver.name}</div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-[#6B7280]">Age {driver.age}</span>
+              <span className="text-xs text-[#A0A9B8]">Age {driver.age}</span>
               <ContractBadge expiresAfter={driver.contractExpiresAfterSeason} currentYear={currentYear} />
             </div>
           </div>
@@ -423,7 +431,7 @@ export default function SetupPage() {
                   <DriverCard
                     key={driver.id}
                     driver={driver}
-                    teamColor={team.color}
+
                     teams={localTeams}
                     onUpdate={(patch) => updateDriver(driver.id, patch)}
                     onRemove={() => removeDriver(driver.id)}
@@ -457,7 +465,7 @@ export default function SetupPage() {
                 <DriverCard
                   key={driver.id}
                   driver={driver}
-                  teamColor="#6B7280"
+
                   teams={localTeams}
                   onUpdate={(patch) => updateDriver(driver.id, patch)}
                   onRemove={() => removeDriver(driver.id)}
