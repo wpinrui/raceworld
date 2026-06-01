@@ -553,7 +553,7 @@ export default function RacePage() {
                       <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
                       <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">God Mode</h2>
                     </div>
-                    <p className="text-[#FFFFFF] text-sm italic">Available during race.</p>
+                    <p className="text-[#FFFFFF] text-sm">Available during race.</p>
                   </div>
                 )}
               </div>

@@ -102,7 +102,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
           <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
           <h2 className="font-semibold text-sm tracking-wider text-[#E8EAED] uppercase">God Mode</h2>
         </div>
-        <p className="text-[#FFFFFF] text-sm italic">Select a driver from the standings.</p>
+        <p className="text-[#FFFFFF] text-sm">Select a driver from the standings.</p>
       </div>
     )
   }

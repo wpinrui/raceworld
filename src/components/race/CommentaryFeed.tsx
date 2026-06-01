@@ -31,7 +31,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
 
       <div className="flex-1 overflow-y-auto min-h-0 space-y-1.5 pr-1">
         {reversed.length === 0 ? (
-          <p className="text-[#FFFFFF] text-sm italic">Awaiting race start...</p>
+          <p className="text-[#FFFFFF] text-sm">Awaiting race start...</p>
         ) : (
           reversed.map((entry, i) => {
             const cfg = TYPE_CONFIG[entry.type] ?? TYPE_CONFIG.info
