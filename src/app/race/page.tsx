@@ -40,6 +40,7 @@ export default function RacePage() {
   const [speed4Confirmed, setSpeed4Confirmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const currentCircuit = calendar2026[season.currentRound - 1]
@@ -231,10 +232,8 @@ export default function RacePage() {
           )}
         </div>
         <button
-          onClick={() => {
-            if (currentCircuit) resetSession(season.drivers, season.teams, currentCircuit.id)
-          }}
-          className="text-xs text-[#FFFFFF] hover:text-[#FFFFFF] tracking-wider uppercase transition-colors"
+          onClick={() => setShowRestartConfirm(true)}
+          className="text-xs text-[#FFFFFF] hover:text-[#DC143C] tracking-wider uppercase transition-colors cursor-pointer"
         >
           Restart Weekend
         </button>
@@ -537,6 +536,35 @@ export default function RacePage() {
             {paused ? 'Resume' : 'Pause'}
           </button>
           <div className="ml-auto text-sm text-[#FFFFFF]">Space · 1 2 3 4</div>
+        </div>
+      )}
+
+      {/* Restart confirmation modal */}
+      {showRestartConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-lg p-6 max-w-sm w-full mx-4">
+            <h3 className="font-display text-sm tracking-widest uppercase text-[#E8EAED] mb-3">Restart Weekend?</h3>
+            <p className="text-[#FFFFFF] text-sm mb-6">
+              This will discard the current session and restart qualifying for Round {season.currentRound}. Race results will not be saved.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  if (currentCircuit) resetSession(season.drivers, season.teams, currentCircuit.id)
+                  setShowRestartConfirm(false)
+                }}
+                className="flex-1 py-3 bg-[#DC143C] hover:bg-[#b01030] text-white text-sm font-black tracking-widest uppercase rounded transition-colors cursor-pointer"
+              >
+                Restart
+              </button>
+              <button
+                onClick={() => setShowRestartConfirm(false)}
+                className="flex-1 py-3 bg-[#2A3142] hover:bg-[#303848] text-[#FFFFFF] text-sm font-bold tracking-widest uppercase rounded transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
