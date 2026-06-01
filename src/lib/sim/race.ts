@@ -232,7 +232,7 @@ export function simulateLap(
           condition: 100,
           maxLifeLaps: newMaxLifeLaps,
         },
-        stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap }],
+        stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap + 1 }],
         stintLap: 0,
         lastPitLap: state.currentLap,
         pitStops: current.pitStops + 1,
