@@ -5,13 +5,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
+import { actionResetDatabase } from '@/lib/db/actions'
 
 export default function Nav() {
   const pathname = usePathname()
   const { phase, currentRound, year } = useSeasonStore()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  function handleClearSave() {
+  async function handleClearSave() {
+    await actionResetDatabase()
     localStorage.removeItem('raceworld-season')
     window.location.href = '/setup'
   }

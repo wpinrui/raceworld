@@ -46,6 +46,18 @@ export function archiveSeason(seasonId: number): void {
   getDb().prepare("UPDATE seasons SET status = 'archived' WHERE id = ?").run(seasonId)
 }
 
+// Wipe all season/race data. The DB is a single file that outlives a localStorage
+// save, so a new game must clear it or archived seasons pile up across playthroughs.
+export function resetDatabase(): void {
+  const db = getDb()
+  db.transaction(() => {
+    db.prepare('DELETE FROM race_results').run()
+    db.prepare('DELETE FROM races').run()
+    db.prepare('DELETE FROM season_constructor_standings').run()
+    db.prepare('DELETE FROM seasons').run()
+  })()
+}
+
 export function createRace(seasonId: number, round: number, circuitId: string, circuitName: string): number {
   const result = getDb()
     .prepare('INSERT INTO races (season_id, round, circuit_id, circuit_name, status) VALUES (?, ?, ?, ?, ?)')

@@ -10,12 +10,17 @@ import {
   getSeasonStandings,
   insertConstructorStandings,
   getRecentConstructorHistory,
+  resetDatabase,
   type DbSeason,
 } from './queries'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 
 export async function actionCreateSeason(year: number): Promise<number> {
   return createSeason(year)
+}
+
+export async function actionResetDatabase(): Promise<void> {
+  resetDatabase()
 }
 
 export async function actionFlushRaceResult(
