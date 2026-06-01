@@ -42,6 +42,7 @@ export default function RacePage() {
   const [hydrated, setHydrated] = useState(false)
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const [lapProgress, setLapProgress] = useState(0)
+  const [autoSimming, setAutoSimming] = useState(false)
 
   // Timing refs for pause-resume accuracy
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -163,6 +164,27 @@ export default function RacePage() {
     return () => clearInterval(timer)
   }, [phase, paused, speed])
 
+  // Auto-sim coordinator — drives phase transitions without user input
+  useEffect(() => {
+    if (!autoSimming) return
+    if (season.phase === 'end-of-season') { setAutoSimming(false); return }
+
+    if (phase === 'pre-qualifying') {
+      const t = setTimeout(() => initSession(), 100)
+      return () => clearTimeout(t)
+    }
+    if (phase === 'pre-race') {
+      if (raceState) useRaceStore.setState({ raceState: { ...raceState, phase: 'racing' } })
+      setSpeed4Confirmed(true)
+      setSpeed(4)
+      return
+    }
+    if (phase === 'finished' && !saving) {
+      handleSaveAndContinue()
+      return
+    }
+  }, [autoSimming, phase, saving, season.phase]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSpeedClick = (s: SimSpeed) => {
     if (s === 4) { setShowSpeed4Modal(true); return }
     setSpeed4Confirmed(false)
@@ -283,12 +305,22 @@ export default function RacePage() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowRestartConfirm(true)}
-          className="text-xs text-[#FFFFFF] hover:text-[#DC143C] tracking-wider uppercase transition-colors cursor-pointer"
-        >
-          Restart Weekend
-        </button>
+        <div className="flex items-center gap-4">
+          {autoSimming && (
+            <button
+              onClick={() => setAutoSimming(false)}
+              className="text-xs text-[#DC143C] hover:text-[#ff4466] tracking-wider uppercase transition-colors cursor-pointer animate-pulse"
+            >
+              Stop Auto-Sim
+            </button>
+          )}
+          <button
+            onClick={() => setShowRestartConfirm(true)}
+            className="text-xs text-[#FFFFFF] hover:text-[#DC143C] tracking-wider uppercase transition-colors cursor-pointer"
+          >
+            Restart Weekend
+          </button>
+        </div>
       </div>
 
       {/* Main — fills remaining height */}
@@ -326,6 +358,13 @@ export default function RacePage() {
                   className="px-6 py-2.5 bg-[#00D9FF] hover:bg-[#009CB8] text-[#0F1419] text-sm font-black tracking-widest uppercase rounded transition-colors shrink-0"
                 >
                   Begin Race Weekend
+                </button>
+                <button
+                  onClick={() => setAutoSimming(true)}
+                  className="px-4 py-2.5 bg-[#2A3142] hover:bg-[#303848] text-[#FFFFFF] text-xs font-bold tracking-widest uppercase rounded transition-colors shrink-0 cursor-pointer"
+                  title="Debug: simulate all remaining races automatically"
+                >
+                  Sim Rest of Season
                 </button>
               </div>
 
