@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import type { EndOfSeasonSummary, Team, FuelBand } from '@/lib/sim/types'
+import type { EndOfSeasonSummary, Team, FuelBand, ConstructorStanding } from '@/lib/sim/types'
 import TyreIndicator from '@/components/race/TyreIndicator'
 
 interface Props {
   summary: EndOfSeasonSummary
   teams: Team[]
+  constructorStandings: ConstructorStanding[]
 }
 
 const FUEL_STYLE: Record<FuelBand, string> = {
@@ -25,7 +26,7 @@ function fmtTime(t: number): string {
 
 type SortKey = 'time' | 'pace'
 
-export function TestingPanel({ summary, teams }: Props) {
+export function TestingPanel({ summary, teams, constructorStandings }: Props) {
   const [reveal, setReveal] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('time')
   const test = summary.preSeasonTest
@@ -35,6 +36,8 @@ export function TestingPanel({ summary, teams }: Props) {
   }
 
   const colorOf = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
+  // Previous season's constructors' championship finish (1-indexed).
+  const prevFinish = new Map(constructorStandings.map((cs, i) => [cs.teamId, i + 1]))
   const fastest = Math.min(...test.entries.map((e) => e.lapTime))
 
   // True pace is only known under god mode, so that sort only applies while revealed.
@@ -67,6 +70,7 @@ export function TestingPanel({ summary, teams }: Props) {
               <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
               <th className="text-left pb-2 pr-4 font-medium">Driver</th>
               <th className="text-left pb-2 px-3 font-medium">Team</th>
+              <th className="text-right pb-2 px-3 font-medium whitespace-nowrap">{summary.seasonYear} WCC</th>
               <th className="text-center pb-2 px-3 font-medium">Tyre</th>
               <th className="text-left pb-2 px-3 font-medium">Fuel</th>
               <th className={`text-right pb-2 px-3 font-medium ${headClass('time')}`} onClick={() => setSortKey('time')}>Time</th>
@@ -88,6 +92,9 @@ export function TestingPanel({ summary, teams }: Props) {
                     <span className="inline-block w-2 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: colorOf(e.teamId) }} />
                     <span className="text-[#FFFFFF]">{e.teamName}</span>
                   </span>
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
+                  {prevFinish.has(e.teamId) ? `P${prevFinish.get(e.teamId)}` : '—'}
                 </td>
                 <td className="py-2 px-3">
                   <span className="flex justify-center">
