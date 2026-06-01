@@ -24,9 +24,8 @@ export function applyRaceProgression(
   const events: DriverProgressionEvent[] = []
 
   const updatedDrivers = drivers.map((driver) => {
-    // Only drivers on an F1 seat develop from racing.
-    if (driver.teamId === '') return driver
-
+    // Development is age-based maturation toward potential (GDD §Driver progression
+    // curve), applied once per race tick to EVERY driver — free agents included.
     const ov = overall(driver)
     const next = { ...driver }
 

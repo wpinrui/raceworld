@@ -2,17 +2,12 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import type { EndOfSeasonSummary, Team, TyreCompound, FuelBand } from '@/lib/sim/types'
+import type { EndOfSeasonSummary, Team, FuelBand } from '@/lib/sim/types'
+import TyreIndicator from '@/components/race/TyreIndicator'
 
 interface Props {
   summary: EndOfSeasonSummary
   teams: Team[]
-}
-
-const TYRE_STYLE: Record<string, string> = {
-  soft: 'bg-[#DC143C] text-white',
-  medium: 'bg-[#E8C547] text-[#0F1419]',
-  hard: 'bg-[#E8EAED] text-[#0F1419]',
 }
 
 const FUEL_STYLE: Record<FuelBand, string> = {
@@ -20,10 +15,6 @@ const FUEL_STYLE: Record<FuelBand, string> = {
   heavy: 'text-[#F59E0B]',
   medium: 'text-[#A0A9B8]',
   light: 'text-[#10B981]',
-}
-
-function tyreLabel(c: TyreCompound): string {
-  return c.charAt(0).toUpperCase() + c.slice(1)
 }
 
 function fmtTime(t: number): string {
@@ -47,8 +38,7 @@ export function TestingPanel({ summary, teams }: Props) {
     <div>
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm text-[#A0A9B8]">
-          Pre-season test · <span className="text-[#E8EAED]">{test.circuitName}</span> · one car per team,
-          random tyre &amp; fuel load
+          Pre-season test · <span className="text-[#E8EAED]">{test.circuitName}</span>
         </p>
         <button
           onClick={() => setReveal((v) => !v)}
@@ -84,9 +74,9 @@ export function TestingPanel({ summary, teams }: Props) {
                     <span className="text-[#A0A9B8]">{e.teamName}</span>
                   </span>
                 </td>
-                <td className="py-2 px-3 text-center">
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${TYRE_STYLE[e.tyre] ?? 'bg-[#2A3142] text-[#E8EAED]'}`}>
-                    {tyreLabel(e.tyre)}
+                <td className="py-2 px-3">
+                  <span className="flex justify-center">
+                    <TyreIndicator compound={e.tyre} size="sm" />
                   </span>
                 </td>
                 <td className={`py-2 px-3 font-semibold capitalize ${FUEL_STYLE[e.fuelBand]}`}>{e.fuelBand}</td>
