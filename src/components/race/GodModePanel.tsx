@@ -5,7 +5,6 @@ import type { Driver, Team, DriverRaceState, GodModeAction, TyreCompound, RaceSt
 import { planStrategy, sampleTeamAssumptions, type StrategyStint } from '@/lib/sim/pit-ai'
 import { degradeTyre } from '@/lib/sim/tyres'
 import TyreIndicator from './TyreIndicator'
-import { getMoistureAtLap } from '@/lib/sim/weather'
 
 interface GodModePanelProps {
   drivers: Driver[]
@@ -70,12 +69,11 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
 
   const perfectPit = useMemo(() => {
     if (!ds || !driver || !team) return null
-    const moisture = getMoistureAtLap(raceState.weather, raceState.currentLap)
     const exactAssumptions = sampleTeamAssumptions(raceState.totalLaps, 0)
     return planStrategy(
       raceState.currentLap, raceState.totalLaps,
       ds.currentTyre.condition, ds.currentTyre.compound, ds.currentTyre.maxLifeLaps,
-      exactAssumptions, moisture,
+      exactAssumptions,
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDriverId, raceState.currentLap, ds?.currentTyre.condition, ds?.currentTyre.compound])

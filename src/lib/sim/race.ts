@@ -56,7 +56,6 @@ export function initRaceState(
   const driverStates: DriverRaceState[] = sortedResults.map((qr) => {
     const driver = drivers.find((d) => d.id === qr.driverId)!
     const team = teamMap.get(driver.teamId)!
-    void team // used implicitly for context
 
     const compound = recommendTyre(lap1Moisture)
     const maxLifeLaps = computeTyreLife(compound, driver.smoothness, circuit.laps)
@@ -68,7 +67,7 @@ export function initRaceState(
     }
 
     const assumptions = teamAssumptions[team.id]
-    const initialPlan = planStrategy(1, circuit.laps, 100, compound, maxLifeLaps, assumptions, lap1Moisture)
+    const initialPlan = planStrategy(1, circuit.laps, 100, compound, maxLifeLaps, assumptions)
 
     return {
       driverId: driver.id,
@@ -86,7 +85,7 @@ export function initRaceState(
       stintHistory: [],
       targetPitLap: initialPlan.targetPitLap,
       targetNextCompound: initialPlan.targetNextCompound,
-      gap: 0,
+      gap: (qr.gridPosition - 1) * 0.5,
       dsq: false,
     }
   })
@@ -199,7 +198,6 @@ export function simulateLap(
       current.currentTyre.compound,
       current.currentTyre.maxLifeLaps,
       assumptions,
-      currentMoisture,
     )
     current = { ...current, targetPitLap: newPlan.targetPitLap, targetNextCompound: newPlan.targetNextCompound }
 
@@ -265,7 +263,6 @@ export function simulateLap(
       form: current.form,
       fuelLaps: current.fuelLaps,
       lap: state.currentLap,
-      totalLaps: state.totalLaps,
       weather: state.weather,
       gapToCarAhead,
       carAheadLapTime,
@@ -278,14 +275,11 @@ export function simulateLap(
     // 2f. If overtook: swap positions with car ahead
     if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
-      const newAheadPos = current.position
-      const newCurrentPos = aheadUpdated.position
-
       updatedStates.set(carAheadState.driverId, {
         ...aheadUpdated,
-        position: newCurrentPos,
+        position: current.position,
       })
-      current = { ...current, position: newAheadPos }
+      current = { ...current, position: aheadUpdated.position }
     }
 
     // 2g. Degrade tyre

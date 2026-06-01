@@ -12,7 +12,6 @@ export function generateCommentary(
   const entries: CommentaryEntry[] = []
 
   const prevMap = new Map<string, DriverRaceState>(prevStates.map((d) => [d.driverId, d]))
-  const newMap = new Map<string, DriverRaceState>(newStates.map((d) => [d.driverId, d]))
 
   // 1. Retirements
   for (const newState of newStates) {
@@ -112,10 +111,6 @@ export function generateCommentary(
 
   // 6. Finish commentary (lap == totalLaps)
   if (lap === totalLaps) {
-    const sorted = [...newStates]
-      .filter((d) => !d.retired)
-      .sort((a, b) => a.position - b.position)
-
     const allSorted = [...newStates].sort((a, b) => a.position - b.position)
 
     for (const state of allSorted) {
@@ -134,8 +129,6 @@ export function generateCommentary(
 
       entries.push({ lap, text, type: 'finish' })
     }
-
-    void sorted // suppress unused variable warning
   }
 
   return entries

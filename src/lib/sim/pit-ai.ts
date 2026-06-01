@@ -1,5 +1,4 @@
 import type { DriverRaceState, TyreCompound, WeatherPoint, TeamTyreAssumptions } from './types'
-import { getMoistureAtLap } from './weather'
 
 export interface PitDecision {
   shouldPit: boolean
@@ -78,7 +77,6 @@ export function planStrategy(
   currentCompound: TyreCompound,
   currentMaxLifeLaps: number,
   assumptions: TeamTyreAssumptions,
-  moisture: number,
 ): StrategyPlan {
   const lapsRemaining = totalLaps - currentLap
   const currentWearRate = 100 / currentMaxLifeLaps
@@ -158,7 +156,6 @@ export function decidePit(
   totalLaps: number,
   weather: WeatherPoint[],
 ): PitDecision {
-  const moisture = getMoistureAtLap(weather, currentLap)
   const lapsRemaining = totalLaps - currentLap
 
   if (lapsRemaining <= 2) {

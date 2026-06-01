@@ -31,7 +31,7 @@ function simulateQualifyingLap(
 
   const result = computeLapTime({
     driver, team, tyre, form,
-    fuelLaps: 0, lap: 1, totalLaps: 1,
+    fuelLaps: 0, lap: 1,
     weather, gapToCarAhead: Infinity, carAheadLapTime: null,
     circuitFlatModifier: circuit.flatModifier,
   })
@@ -72,7 +72,6 @@ export function runQualifying(
   // Q1: all drivers; eliminate bottom (totalDrivers - 15) to get 15 for Q2
   // Q2: 15 remaining; eliminate bottom 5 to get 10 for Q3
   const q1Eliminate = Math.max(0, totalDrivers - 15)
-  const q2Eliminate = 5
 
   // --- Q1 ---
   const q1SessionLaps: QualifyingLap[] = []

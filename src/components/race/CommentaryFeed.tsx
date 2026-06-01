@@ -38,7 +38,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
             const Icon = cfg.icon
             return (
               <div
-                key={i}
+                key={`${entry.lap}-${entry.type}-${i}`}
                 className={`flex items-start gap-3 px-3 py-2 rounded border ${cfg.bg} ${cfg.border}`}
               >
                 <Icon size={15} className={`${cfg.color} mt-0.5 shrink-0`} />

@@ -9,7 +9,6 @@ export interface LapInput {
   form: number
   fuelLaps: number
   lap: number
-  totalLaps: number
   weather: WeatherPoint[]
   gapToCarAhead: number       // Infinity if leading
   carAheadLapTime: number | null

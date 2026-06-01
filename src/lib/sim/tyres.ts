@@ -34,10 +34,6 @@ export function degradeTyre(tyre: TyreState): number {
   return Math.max(0, Math.round(tyre.condition - 100 / tyre.maxLifeLaps))
 }
 
-export function isTyreInWindow(compound: TyreCompound, moisture: number): boolean {
-  return tyreStepsOutOfWindow(compound, moisture) === 0
-}
-
 export function tyreStepsOutOfWindow(compound: TyreCompound, moisture: number): number {
   switch (compound) {
     case 'soft':
