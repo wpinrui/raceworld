@@ -63,7 +63,7 @@ export default function RacePage() {
       return
     }
     if (!raceState && currentCircuit) {
-      loadFromSeason(season.drivers, season.teams, currentCircuit.id)
+      loadFromSeason(season.drivers.filter(d => d.teamId !== ''), season.teams, currentCircuit.id)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -651,7 +651,7 @@ export default function RacePage() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  if (currentCircuit) resetSession(season.drivers, season.teams, currentCircuit.id)
+                  if (currentCircuit) resetSession(season.drivers.filter(d => d.teamId !== ''), season.teams, currentCircuit.id)
                   setShowRestartConfirm(false)
                 }}
                 className="flex-1 py-3 bg-[#DC143C] hover:bg-[#b01030] text-white text-sm font-black tracking-widest uppercase rounded transition-colors cursor-pointer"

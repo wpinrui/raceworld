@@ -27,7 +27,7 @@ function computeDriverStandings(
 ): DriverStanding[] {
   const map = new Map<string, DriverStanding>()
 
-  for (const driver of drivers) {
+  for (const driver of drivers.filter((d) => d.teamId !== '')) {
     const team = teams.find((t) => t.id === driver.teamId)
     map.set(driver.id, {
       driverId: driver.id,
