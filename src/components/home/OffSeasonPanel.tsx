@@ -8,6 +8,7 @@ import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
 import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
 import { MarketPanel } from '@/components/standings/MarketPanel'
 import { TestingPanel } from '@/components/standings/TestingPanel'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import {
   actionArchiveSeason,
   actionInsertConstructorStandings,
@@ -83,7 +84,7 @@ export function OffSeasonPanel() {
           {season.driverStandings[0] && (
             <p className="text-[#FFFFFF] text-sm ml-3.5">
               World Champion:{' '}
-              <span className="text-[#FFFFFF] font-semibold">{season.driverStandings[0].driverName}</span>
+              <DriverLink id={season.driverStandings[0].driverId} className="text-[#FFFFFF] font-semibold">{season.driverStandings[0].driverName}</DriverLink>
               {' '}·{' '}
               <span className="text-[#FFFFFF] tabular-nums">{season.driverStandings[0].points} pts</span>
             </p>
@@ -91,7 +92,7 @@ export function OffSeasonPanel() {
           {season.constructorStandings[0] && (
             <p className="text-[#FFFFFF] text-sm ml-3.5">
               Constructors:{' '}
-              <span className="text-[#FFFFFF] font-semibold">{season.constructorStandings[0].teamName}</span>
+              <TeamLink id={season.constructorStandings[0].teamId} className="text-[#FFFFFF] font-semibold">{season.constructorStandings[0].teamName}</TeamLink>
             </p>
           )}
         </div>

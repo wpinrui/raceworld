@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
 import type { Driver, Team, RaceResult, ConstructorStanding, DriverStanding } from '@/lib/sim/types'
 import { computeDriverMediaBreakdowns } from '@/lib/sim/media-scores'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
   drivers: Driver[]
@@ -133,11 +134,11 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
                 <td className="py-1.5 px-3">
                   <span className="flex items-center gap-2">
                     <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: r.teamColor }} />
-                    <span className="text-[#FFFFFF] font-medium whitespace-nowrap">{r.driver.name}</span>
+                    <DriverLink id={r.driver.id} className="text-[#FFFFFF] font-medium whitespace-nowrap">{r.driver.name}</DriverLink>
                   </span>
                 </td>
                 <td className="py-1.5 px-3 text-[#FFFFFF] whitespace-nowrap">
-                  <span className={r.teamName === 'Free Agent' ? 'italic' : ''}>{r.teamName}</span>
+                  <TeamLink id={r.driver.teamId} className={r.teamName === 'Free Agent' ? 'italic' : ''}>{r.teamName}</TeamLink>
                 </td>
                 <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.champ != null ? `P${r.champ}` : '—'}</td>
                 {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.a.toFixed(0)}</td>}

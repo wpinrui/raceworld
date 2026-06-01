@@ -1,6 +1,7 @@
 'use client'
 
 import type { EndOfSeasonSummary, Team, MarketMove } from '@/lib/sim/types'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
   summary: EndOfSeasonSummary
@@ -24,7 +25,7 @@ export function MarketPanel({ summary, teams }: Props) {
     return (
       <span className="flex items-center gap-1.5">
         {color && <span className="inline-block w-1.5 h-3.5 rounded-sm" style={{ backgroundColor: color }} />}
-        <span className="text-[#FFFFFF]">{label}</span>
+        <TeamLink id={teamId} className="text-[#FFFFFF]">{label}</TeamLink>
       </span>
     )
   }
@@ -56,7 +57,7 @@ export function MarketPanel({ summary, teams }: Props) {
                   return (
                     <tr key={m.driverId} className="border-b border-[#2A3142]/50">
                       <td className="py-2 pr-4">
-                        <span className="text-[#FFFFFF] font-medium">{m.driverName}</span>
+                        <DriverLink id={m.driverId} className="text-[#FFFFFF] font-medium">{m.driverName}</DriverLink>
                         {isRookie && (
                           <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] rounded px-1.5 py-0.5">
                             NEW
@@ -104,7 +105,7 @@ export function MarketPanel({ summary, teams }: Props) {
               <tbody>
                 {reSignings.map((m) => (
                   <tr key={m.driverId} className="border-b border-[#2A3142]/50">
-                    <td className="py-2 pr-4 text-[#FFFFFF] font-medium">{m.driverName}</td>
+                    <td className="py-2 pr-4"><DriverLink id={m.driverId} className="text-[#FFFFFF] font-medium">{m.driverName}</DriverLink></td>
                     <td className="py-2 px-3">{teamPill(m.toTeamId, m.toTeamName)}</td>
                     <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
                       {m.contractLength}yr

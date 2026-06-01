@@ -1,6 +1,7 @@
 'use client'
 
 import type { RaceResult, Driver, Team } from '@/lib/sim/types'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
   raceResults: RaceResult[][]
@@ -136,16 +137,16 @@ export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
           <div key={team.id} className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 space-y-3">
             <div className="flex items-center gap-2.5">
               <div className="w-1 h-5 rounded-sm" style={{ backgroundColor: team.color }} />
-              <h3 className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{team.name}</h3>
+              <TeamLink id={team.id} className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{team.name}</TeamLink>
             </div>
             <div className="flex items-center gap-5 text-xs">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c1 }} />
-                <span className="text-[#FFFFFF]">{a.name}</span>
+                <DriverLink id={a.id} className="text-[#FFFFFF]">{a.name}</DriverLink>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c2 }} />
-                <span className="text-[#FFFFFF]">{b.name}</span>
+                <DriverLink id={b.id} className="text-[#FFFFFF]">{b.name}</DriverLink>
               </span>
             </div>
             <div className="space-y-2">

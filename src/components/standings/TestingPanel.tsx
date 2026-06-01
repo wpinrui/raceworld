@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import type { EndOfSeasonSummary, Team, FuelBand, ConstructorStanding } from '@/lib/sim/types'
 import TyreIndicator from '@/components/race/TyreIndicator'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
   summary: EndOfSeasonSummary
@@ -92,11 +93,11 @@ export function TestingPanel({ summary, teams, constructorStandings }: Props) {
             {rows.map((e, i) => (
               <tr key={e.teamId} className="border-b border-[#2A3142]/50">
                 <td className="py-2 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
-                <td className="py-2 pr-4 text-[#FFFFFF] font-medium">{e.driverName}</td>
+                <td className="py-2 pr-4"><DriverLink id={e.driverId} className="text-[#FFFFFF] font-medium">{e.driverName}</DriverLink></td>
                 <td className="py-2 px-3">
                   <span className="flex items-center gap-2">
                     <span className="inline-block w-2 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: colorOf(e.teamId) }} />
-                    <span className="text-[#FFFFFF]">{e.teamName}</span>
+                    <TeamLink id={e.teamId} className="text-[#FFFFFF]">{e.teamName}</TeamLink>
                   </span>
                 </td>
                 <td className="py-2 px-3">

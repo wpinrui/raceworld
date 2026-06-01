@@ -1,5 +1,6 @@
 import type { DriverStanding, Team } from '@/lib/sim/types'
 import { ResultCell } from './ResultCell'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
   standings: DriverStanding[]
@@ -40,10 +41,10 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
                 <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
                   <div className="flex items-center gap-2">
                     <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
-                    <span className="font-semibold text-[#FFFFFF] whitespace-nowrap">{standing.driverName}</span>
+                    <DriverLink id={standing.driverId} className="font-semibold text-[#FFFFFF] whitespace-nowrap">{standing.driverName}</DriverLink>
                   </div>
                 </td>
-                <td className="py-1.5 px-3 text-[#FFFFFF] text-xs">{standing.teamName}</td>
+                <td className="py-1.5 px-3 text-[#FFFFFF] text-xs"><TeamLink id={standing.teamId}>{standing.teamName}</TeamLink></td>
                 {Array.from({ length: totalRounds }, (_, i) => (
                   i < completedRounds
                     ? <ResultCell key={i} position={standing.results[i] ?? null} />

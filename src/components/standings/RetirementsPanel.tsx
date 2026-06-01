@@ -1,6 +1,7 @@
 'use client'
 
 import type { EndOfSeasonSummary, Driver } from '@/lib/sim/types'
+import { DriverLink } from '@/components/world/EntityLink'
 
 interface Props {
   summary: EndOfSeasonSummary
@@ -22,7 +23,7 @@ export function RetirementsPanel({ summary, drivers }: Props) {
       {retired.map(({ id, name, age }) => (
         <div key={id} className="flex items-center justify-between rounded-lg bg-[#2A3142] px-4 py-3">
           <div>
-            <span className="text-[#FFFFFF] font-medium">{name}</span>
+            <DriverLink id={id} className="text-[#FFFFFF] font-medium">{name}</DriverLink>
             <span className="ml-2 text-[#FFFFFF] text-sm">Age {age}</span>
           </div>
           <span className="text-sm text-[#FFFFFF]">Out of F1 for 5 seasons</span>
