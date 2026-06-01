@@ -14,10 +14,8 @@ interface RaceStore {
   godModeDriverId: string | null  // persists across races
 
   loadFromSeason: (drivers: Driver[], teams: Team[], circuitId: string) => void
-  setCircuit: (circuitId: string) => void
   setGodModeDriver: (driverId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
-  updateDriverStat: (driverId: string, stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness', value: number) => void
   setStrategyNoise: (n: number) => void
   initSession: () => void
   tickLap: (godModeActions?: GodModeAction[]) => void
@@ -48,24 +46,11 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     })
   },
 
-  setCircuit: (circuitId) => {
-    const { drivers } = get()
-    set({ selectedCircuitId: circuitId, forms: rollForms(drivers.map((d) => d.id)) })
-  },
-
   setGodModeDriver: (driverId) => set({ godModeDriverId: driverId }),
 
   updateDriverForm: (driverId, value) => {
     set((state) => ({
       forms: { ...state.forms, [driverId]: Math.min(10, Math.max(0, value)) },
-    }))
-  },
-
-  updateDriverStat: (driverId, stat, value) => {
-    set((state) => ({
-      drivers: state.drivers.map((d) =>
-        d.id === driverId ? { ...d, [stat]: Math.min(100, Math.max(0, value)) } : d
-      ),
     }))
   },
 

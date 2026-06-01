@@ -42,7 +42,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
                 className={`flex items-start gap-3 px-3 py-2 rounded border ${cfg.bg} ${cfg.border}`}
               >
                 <Icon size={15} className={`${cfg.color} mt-0.5 shrink-0`} />
-                <span className="text-[#FFFFFF] text-xs text-[#FFFFFF] shrink-0 w-10 pt-px">
+                <span className="text-[#FFFFFF] text-xs shrink-0 w-10 pt-px">
                   L{entry.lap}
                 </span>
                 <span className={`text-sm leading-snug ${cfg.color}`}>{entry.text}</span>

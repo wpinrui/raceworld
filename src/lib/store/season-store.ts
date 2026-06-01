@@ -92,11 +92,11 @@ function computeConstructorStandings(
   })
 }
 
-// Reset car paces to initial order (75, 70, 65, ...) maintaining team order
+// Reset car paces to initial order (75, 70, 65, ...) with a floor of 5
 function resetCarPaces(teams: Team[]): Team[] {
   return teams.map((team, idx) => ({
     ...team,
-    carPace: Math.max(25, 75 - idx * 5),
+    carPace: Math.max(5, 75 - idx * 5),
   }))
 }
 
@@ -114,11 +114,7 @@ interface SeasonStore {
   constructorStandings: ConstructorStanding[]
 
   // Actions
-  loadFromGrid: () => void
-  setDrivers: (drivers: Driver[]) => void
-  setTeams: (teams: Team[]) => void
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
-  startRaceWeekend: () => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
@@ -140,35 +136,6 @@ export const useSeasonStore = create<SeasonStore>()(
       driverStandings: [],
       constructorStandings: [],
 
-      loadFromGrid: () => {
-        const drivers = drivers2026.map((d) => ({ ...d }))
-        const teams = teams2026.map((t) => ({ ...t }))
-        set({
-          drivers,
-          teams,
-          driverStandings: computeDriverStandings(drivers, teams, []),
-          constructorStandings: computeConstructorStandings(teams, drivers, []),
-        })
-      },
-
-      setDrivers: (drivers) => {
-        const { teams, raceResults } = get()
-        set({
-          drivers,
-          driverStandings: computeDriverStandings(drivers, teams, raceResults),
-          constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
-        })
-      },
-
-      setTeams: (teams) => {
-        const { drivers, raceResults } = get()
-        set({
-          teams,
-          driverStandings: computeDriverStandings(drivers, teams, raceResults),
-          constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
-        })
-      },
-
       initSeason: (drivers, teams, year) => {
         set({
           phase: 'pre-race',
@@ -182,8 +149,6 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
       },
-
-      startRaceWeekend: () => set({ phase: 'race-weekend' }),
 
       recordRaceResult: (results) => {
         const { drivers, teams, raceResults, currentRound } = get()

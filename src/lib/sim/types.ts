@@ -121,7 +121,7 @@ export interface GodModeAction {
 
 // --- Season / standings types ---
 
-export type SeasonPhase = 'idle' | 'pre-race' | 'race-weekend' | 'post-race' | 'end-of-season'
+export type SeasonPhase = 'idle' | 'pre-race' | 'post-race' | 'end-of-season'
 
 export interface RaceResult {
   driverId: string

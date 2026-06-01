@@ -52,7 +52,7 @@ export function createRace(seasonId: number, round: number, circuitId: string, c
   return result.lastInsertRowid as number
 }
 
-export function completeRace(raceId: number): void {
+function completeRace(raceId: number): void {
   getDb().prepare("UPDATE races SET status = 'completed' WHERE id = ?").run(raceId)
 }
 
@@ -97,10 +97,6 @@ export function getArchivedSeasons(): DbSeason[] {
   return getDb().prepare("SELECT * FROM seasons WHERE status = 'archived' ORDER BY year DESC").all() as DbSeason[]
 }
 
-export function getAllSeasons(): DbSeason[] {
-  return getDb().prepare('SELECT * FROM seasons ORDER BY year DESC').all() as DbSeason[]
-}
-
 export function getRacesForSeason(seasonId: number): DbRace[] {
   return getDb()
     .prepare('SELECT * FROM races WHERE season_id = ? ORDER BY round')
@@ -120,12 +116,22 @@ export function getSeasonStandings(seasonId: number): {
   const races = getRacesForSeason(seasonId)
   const totalRounds = races.length
 
-  // Map: driverId → standing accumulator
+  // Fetch all results up front and do a pre-pass to discover driver order per team
+  const raceResults = races.map((race) => ({ race, results: getResultsForRace(race.id) }))
+
+  const teamDriverOrder = new Map<string, string[]>()
+  for (const { results } of raceResults) {
+    for (const r of results) {
+      if (!teamDriverOrder.has(r.team_id)) teamDriverOrder.set(r.team_id, [])
+      const drivers = teamDriverOrder.get(r.team_id)!
+      if (!drivers.includes(r.driver_id)) drivers.push(r.driver_id)
+    }
+  }
+
   const driverMap = new Map<string, DriverStanding>()
   const constructorMap = new Map<string, ConstructorStanding>()
 
-  for (const race of races) {
-    const results = getResultsForRace(race.id)
+  for (const { race, results } of raceResults) {
     for (const r of results) {
       if (!driverMap.has(r.driver_id)) {
         driverMap.set(r.driver_id, {
@@ -144,17 +150,23 @@ export function getSeasonStandings(seasonId: number): {
       d.results[race.round - 1] = r.dnf ? null : r.finish_position
 
       if (!constructorMap.has(r.team_id)) {
+        const driverOrder = teamDriverOrder.get(r.team_id) ?? []
         constructorMap.set(r.team_id, {
           teamId: r.team_id,
           teamName: r.team_name,
           points: 0,
           wins: 0,
-          results: [],
+          results: driverOrder.map(() => Array(totalRounds).fill(null)),
         })
       }
       const c = constructorMap.get(r.team_id)!
       c.points += r.points
       if (r.finish_position === 1) c.wins++
+      const driverOrder = teamDriverOrder.get(r.team_id) ?? []
+      const driverIdx = driverOrder.indexOf(r.driver_id)
+      if (driverIdx >= 0) {
+        c.results[driverIdx][race.round - 1] = r.dnf ? null : r.finish_position
+      }
     }
   }
 

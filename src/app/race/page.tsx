@@ -50,7 +50,6 @@ export default function RacePage() {
   const doTickRef = useRef<() => void>(() => {})
 
   const currentCircuit = calendar2026[season.currentRound - 1]
-  const isSeasonActive = season.phase !== 'idle'
 
   // On mount: redirect if no season, or load from season into race store
   useEffect(() => {
@@ -174,7 +173,8 @@ export default function RacePage() {
       return () => clearTimeout(t)
     }
     if (phase === 'pre-race') {
-      if (raceState) useRaceStore.setState({ raceState: { ...raceState, phase: 'racing' } })
+      const rs = useRaceStore.getState().raceState
+      if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'racing' } })
       setSpeed4Confirmed(true)
       setSpeed(4)
       return
@@ -240,33 +240,39 @@ export default function RacePage() {
     if (saving || !currentCircuit) return
     setSaving(true)
 
-    const results = computeResults()
-    season.recordRaceResult(results)
+    try {
+      const results = computeResults()
+      season.recordRaceResult(results)
 
-    // Ensure season exists in DB; create it on first race
-    let dbSeasonId = season.dbSeasonId
-    if (!dbSeasonId) {
-      dbSeasonId = await actionCreateSeason(season.year)
-      season.setDbSeasonId(dbSeasonId)
-    }
+      // Ensure season exists in DB; create it on first race
+      let dbSeasonId = season.dbSeasonId
+      if (!dbSeasonId) {
+        dbSeasonId = await actionCreateSeason(season.year)
+        season.setDbSeasonId(dbSeasonId)
+      }
 
-    await actionFlushRaceResult(
-      dbSeasonId,
-      season.currentRound,
-      currentCircuit.id,
-      currentCircuit.name,
-      results,
-    )
+      await actionFlushRaceResult(
+        dbSeasonId,
+        season.currentRound,
+        currentCircuit.id,
+        currentCircuit.name,
+        results,
+      )
 
-    const isLastRound = season.currentRound >= calendar2026.length
+      const isLastRound = season.currentRound >= calendar2026.length
 
-    if (isLastRound) {
-      season.endSeason()
-      router.push('/standings')
-    } else {
-      season.advanceRound()
-      const nextCircuit = calendar2026[season.currentRound] // currentRound hasn't incremented yet in store
-      resetSession(season.drivers, season.teams, nextCircuit?.id ?? currentCircuit.id)
+      if (isLastRound) {
+        season.endSeason()
+        router.push('/standings')
+      } else {
+        season.advanceRound()
+        const { currentRound, drivers, teams } = useSeasonStore.getState()
+        const nextCircuit = calendar2026[currentRound - 1]
+        resetSession(drivers, teams, nextCircuit?.id ?? currentCircuit.id)
+        setSaving(false)
+      }
+    } catch (err) {
+      console.error('Failed to save race result:', err)
       setSaving(false)
     }
   }
