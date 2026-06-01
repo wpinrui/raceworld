@@ -4,7 +4,7 @@ export function ResultCell({ position, round }: { position: number | null | unde
     // Future round
     return (
       <td className="px-0.5 py-0.5">
-        <div className="w-8 h-7 flex items-center justify-center rounded text-[10px] font-mono text-[#6B7280] border border-dashed border-[#2A3142]">
+        <div className="w-8 h-7 flex items-center justify-center rounded text-[10px] font-mono text-[#A0A9B8] border border-dashed border-[#2A3142]">
           {round !== undefined ? String(round + 1).padStart(2, '0') : '·'}
         </div>
       </td>

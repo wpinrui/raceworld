@@ -47,7 +47,7 @@ function StatSlider({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] font-mono text-[#6B7280] w-7 uppercase">{label}</span>
+      <span className="text-[10px] tabular-nums text-[#A0A9B8] w-7 uppercase">{label}</span>
       <input
         type="range"
         min={0}
@@ -57,7 +57,7 @@ function StatSlider({
         className="flex-1 h-1 cursor-pointer"
         style={{ accentColor }}
       />
-      <span className="text-[11px] font-mono text-[#E8EAED] w-6 text-right">{value}</span>
+      <span className="text-[11px] tabular-nums text-[#E8EAED] w-6 text-right">{value}</span>
     </div>
   )
 }
@@ -217,13 +217,13 @@ export default function SetupPage() {
                 <div className="w-1.5 h-8 rounded-sm" style={{ backgroundColor: team.color }} />
                 <div>
                   <div className="font-semibold text-[#E8EAED]">{team.name}</div>
-                  <div className="text-xs text-[#6B7280]">
+                  <div className="text-xs text-[#A0A9B8]">
                     Car pace:{' '}
-                    <span className="font-mono text-[#A0A9B8]">{team.carPace}</span>
+                    <span className="tabular-nums text-[#A0A9B8]">{team.carPace}</span>
                   </div>
                 </div>
                 <span
-                  className="ml-auto text-[10px] font-mono px-2 py-0.5 rounded"
+                  className="ml-auto text-[10px] tabular-nums px-2 py-0.5 rounded"
                   style={{ backgroundColor: team.color + '22', color: team.color }}
                 >
                   {team.shortName}
@@ -241,21 +241,21 @@ export default function SetupPage() {
                         onClick={() => setExpandedDriver(expanded ? null : driver.id)}
                       >
                         <span className="text-sm font-semibold text-[#E8EAED] flex-1 truncate">{driver.name}</span>
-                        <div className="flex items-center gap-3 text-xs font-mono text-[#A0A9B8]">
+                        <div className="flex items-center gap-3 text-xs tabular-nums">
                           {STAT_KEYS.map((k) => (
                             <span key={k} className="hidden sm:inline">
-                              <span className="text-[#6B7280] mr-0.5">{STAT_LABELS[k]} </span>
-                              {driver[k]}
+                              <span className="text-[#A0A9B8] mr-0.5">{STAT_LABELS[k]}</span>
+                              <span className="text-[#E8EAED] font-bold">{driver[k]}</span>
                             </span>
                           ))}
-                          <span className="text-[#6B7280]">Age {driver.age}</span>
+                          <span className="text-[#A0A9B8]">Age <span className="text-[#E8EAED]">{driver.age}</span></span>
                         </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             removeDriver(driver.id)
                           }}
-                          className="p-1 rounded text-[#6B7280] hover:text-[#F87171] hover:bg-[#3A1A1A] transition-colors"
+                          className="p-1 rounded text-[#A0A9B8] hover:text-[#F87171] hover:bg-[#3A1A1A] transition-colors"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -266,7 +266,7 @@ export default function SetupPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <div>
-                                <label className="text-[10px] text-[#6B7280] uppercase tracking-wider">Name</label>
+                                <label className="text-[10px] text-[#A0A9B8] uppercase tracking-wider">Name</label>
                                 <input
                                   type="text"
                                   value={driver.name}
@@ -275,7 +275,7 @@ export default function SetupPage() {
                                 />
                               </div>
                               <div>
-                                <label className="text-[10px] text-[#6B7280] uppercase tracking-wider">Team</label>
+                                <label className="text-[10px] text-[#A0A9B8] uppercase tracking-wider">Team</label>
                                 <select
                                   value={driver.teamId}
                                   onChange={(e) => updateDriver(driver.id, { teamId: e.target.value })}
@@ -291,7 +291,7 @@ export default function SetupPage() {
                               <div className="flex gap-2">
                                 {(['age', 'peakPotential', 'primeEnd'] as const).map((field) => (
                                   <div key={field} className="flex-1">
-                                    <label className="text-[10px] text-[#6B7280] uppercase tracking-wider">
+                                    <label className="text-[10px] text-[#A0A9B8] uppercase tracking-wider">
                                       {field === 'age' ? 'Age' : field === 'peakPotential' ? 'Potential' : 'Prime End'}
                                     </label>
                                     <input
@@ -317,7 +317,7 @@ export default function SetupPage() {
                                 />
                               ))}
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-mono text-[#6B7280] w-7 uppercase">NRT</span>
+                                <span className="text-[10px] tabular-nums text-[#A0A9B8] w-7 uppercase">NRT</span>
                                 <input
                                   type="range"
                                   min={-20}
@@ -330,12 +330,12 @@ export default function SetupPage() {
                                   style={{ accentColor: '#A855F7' }}
                                 />
                                 <span
-                                  className={`text-[11px] font-mono w-7 text-right ${
+                                  className={`text-[11px] tabular-nums w-7 text-right ${
                                     driver.narrativeModifier > 0
                                       ? 'text-[#10B981]'
                                       : driver.narrativeModifier < 0
                                       ? 'text-[#DC143C]'
-                                      : 'text-[#6B7280]'
+                                      : 'text-[#A0A9B8]'
                                   }`}
                                 >
                                   {driver.narrativeModifier > 0 ? '+' : ''}
@@ -352,7 +352,7 @@ export default function SetupPage() {
 
                 <button
                   onClick={addDriver}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-[#303848] text-[#6B7280] hover:border-[#00D9FF] hover:text-[#00D9FF] text-xs font-semibold uppercase tracking-wide transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-[#303848] text-[#A0A9B8] hover:border-[#00D9FF] hover:text-[#00D9FF] text-xs font-semibold uppercase tracking-wide transition-colors"
                 >
                   <Plus size={13} />
                   Add Driver

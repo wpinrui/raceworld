@@ -31,7 +31,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
 
       <div className="flex-1 overflow-y-auto min-h-0 space-y-1.5 pr-1">
         {reversed.length === 0 ? (
-          <p className="text-[#6B7280] text-base italic">Awaiting race start...</p>
+          <p className="text-[#A0A9B8] text-base italic">Awaiting race start...</p>
         ) : (
           reversed.map((entry, i) => {
             const cfg = TYPE_CONFIG[entry.type] ?? TYPE_CONFIG.info
@@ -42,7 +42,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
                 className={`flex items-start gap-3 px-3 py-2 rounded border ${cfg.bg} ${cfg.border}`}
               >
                 <Icon size={15} className={`${cfg.color} mt-0.5 shrink-0`} />
-                <span className="text-[#6B7280] font-mono text-sm shrink-0 w-10 pt-px">
+                <span className="text-[#A0A9B8] text-xs text-[#A0A9B8] shrink-0 w-10 pt-px">
                   L{entry.lap}
                 </span>
                 <span className={`text-sm leading-snug ${cfg.color}`}>{entry.text}</span>

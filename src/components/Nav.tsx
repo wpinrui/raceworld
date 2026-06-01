@@ -50,16 +50,16 @@ export default function Nav() {
       </div>
 
       {/* Season indicator */}
-      <div className="ml-auto text-xs font-mono text-[#A0A9B8]">
+      <div className="ml-auto text-xs tabular-nums text-[#A0A9B8]">
         {seasonActive && circuit ? (
           <span>
             <span className="text-[#E8EAED]">
               {year} · Round {String(currentRound).padStart(2, '0')}/{String(calendar2026.length).padStart(2, '0')}
             </span>
-            <span className="text-[#6B7280]"> · {circuit.name}</span>
+            <span className="text-[#A0A9B8]"> · {circuit.name}</span>
           </span>
         ) : (
-          <span className="text-[#6B7280]">No active season</span>
+          <span className="text-[#A0A9B8]">No active season</span>
         )}
       </div>
     </nav>

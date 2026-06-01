@@ -217,7 +217,7 @@ export default function RacePage() {
               <span className="font-display text-sm tracking-widest uppercase text-[#E8EAED]">
                 Lap {Math.max(1, raceState.currentLap - 1)}/{raceState.totalLaps}
               </span>
-              <span className="text-[#6B7280] text-sm">{currentCircuit?.name}</span>
+              <span className="text-[#A0A9B8] text-sm">{currentCircuit?.name}</span>
               {phase === 'finished' && (
                 <span className="font-display text-xs tracking-widest text-[#00D9FF] uppercase animate-pulse ml-1">
                   Finished
@@ -234,7 +234,7 @@ export default function RacePage() {
           onClick={() => {
             if (currentCircuit) resetSession(season.drivers, season.teams, currentCircuit.id)
           }}
-          className="text-xs text-[#6B7280] hover:text-[#A0A9B8] tracking-wider uppercase transition-colors"
+          className="text-xs text-[#A0A9B8] hover:text-[#A0A9B8] tracking-wider uppercase transition-colors"
         >
           Restart Weekend
         </button>
@@ -251,7 +251,7 @@ export default function RacePage() {
             <div className="flex flex-col h-full min-h-0">
               <div className="shrink-0 flex items-end gap-4 px-6 pt-5 pb-4 border-b border-[#2A3142]">
                 <div className="flex-1">
-                  <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">Race Weekend</p>
+                  <p className="text-xs text-[#A0A9B8] uppercase tracking-wider mb-1">Race Weekend</p>
                   <h2 className="font-display text-xl tracking-wider uppercase text-[#E8EAED]">
                     {currentCircuit?.name ?? '—'}
                   </h2>
@@ -260,7 +260,7 @@ export default function RacePage() {
                   </p>
                 </div>
                 <div className="shrink-0">
-                  <label className="block text-xs font-bold tracking-wider text-[#6B7280] uppercase mb-2">
+                  <label className="block text-xs font-bold tracking-wider text-[#A0A9B8] uppercase mb-2">
                     Strategy Noise <span className="text-[#00D9FF]">{Math.round(strategyNoise * 100)}%</span>
                   </label>
                   <input
@@ -284,11 +284,11 @@ export default function RacePage() {
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
                     <h2 className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">Driver Forms</h2>
-                    <span className="text-xs text-[#6B7280]">(randomised — edit before qualifying)</span>
+                    <span className="text-xs text-[#A0A9B8]">(randomised — edit before qualifying)</span>
                   </div>
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="text-[#6B7280] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+                      <tr className="text-[#A0A9B8] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
                         <th className="text-left py-1 pr-2">Driver</th>
                         <th className="text-center py-1 px-2 w-36">Form</th>
                         <th className="text-center py-1 px-2 w-16">Pace</th>
@@ -307,7 +307,7 @@ export default function RacePage() {
                               <div className="flex items-center gap-2">
                                 <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />
                                 <span className="text-sm font-medium text-[#E8EAED]">{d.name}</span>
-                                <span className="text-xs text-[#6B7280]">{team?.shortName}</span>
+                                <span className="text-xs text-[#A0A9B8]">{team?.shortName}</span>
                               </div>
                             </td>
                             <td className="py-1 px-2">
@@ -318,13 +318,13 @@ export default function RacePage() {
                                   onChange={(e) => updateDriverForm(d.id, Number(e.target.value))}
                                   className="w-20 accent-[#00D9FF]"
                                 />
-                                <span className={`text-xs font-mono w-6 text-right ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#6B7280]'}`}>
+                                <span className={`text-xs w-6 text-right ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#A0A9B8]'}`}>
                                   {form.toFixed(1)}
                                 </span>
                               </div>
                             </td>
                             {(['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const).map((stat) => (
-                              <td key={stat} className="py-1 px-2 text-center font-mono text-sm text-[#A0A9B8]">
+                              <td key={stat} className="py-1 px-2 text-center text-sm font-semibold text-[#E8EAED]">
                                 {d[stat]}
                               </td>
                             ))}
@@ -364,7 +364,7 @@ export default function RacePage() {
               <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="text-[#6B7280] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+                    <tr className="text-[#A0A9B8] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
                       <th className="text-left py-1 px-2 w-10">Pos</th>
                       <th className="text-left py-1 px-2">Driver</th>
                       <th className="text-left py-1 px-2">Team</th>
@@ -379,14 +379,14 @@ export default function RacePage() {
                       const team = driver ? teams.find((t) => t.id === driver.teamId) : undefined
                       return (
                         <tr key={qr.driverId} className="border-b border-[#1E2431] text-[#E8EAED] hover:bg-[#2A3142] transition-colors">
-                          <td className="py-1 px-2 font-mono font-bold">{qr.gridPosition}</td>
+                          <td className="py-1 px-2 font-bold">{qr.gridPosition}</td>
                           <td className="py-1 px-2">
                             <div className="flex items-center gap-2.5">
                               {team && <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: team.color }} />}
                               <span>{driver?.name ?? qr.driverId}</span>
                             </div>
                           </td>
-                          <td className="py-1 px-2 font-mono text-sm text-[#A0A9B8]">{team?.shortName ?? '---'}</td>
+                          <td className="py-1 px-2 text-sm text-[#A0A9B8]">{team?.shortName ?? '---'}</td>
                           <td className="py-1 px-2 text-right font-mono text-sm text-[#A0A9B8]">{formatQualTime(qr.q1Time)}</td>
                           <td className="py-1 px-2 text-right font-mono text-sm text-[#A0A9B8]">{formatQualTime(qr.q2Time)}</td>
                           <td className="py-1 px-2 text-right font-mono text-sm font-bold">{formatQualTime(qr.q3Time)}</td>
@@ -428,7 +428,7 @@ export default function RacePage() {
                 </div>
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="text-[#6B7280] text-xs tracking-wider uppercase border-b border-[#2A3142]">
+                    <tr className="text-[#A0A9B8] text-xs tracking-wider uppercase border-b border-[#2A3142]">
                       <th className="text-left py-1 px-1 w-8">Pos</th>
                       <th className="text-left py-1 px-1">Driver</th>
                       <th className="text-right py-1 px-1 w-8">Pts</th>
@@ -439,20 +439,20 @@ export default function RacePage() {
                       const team = teams.find((t) => t.id === r.teamId)
                       return (
                         <tr key={r.driverId} className="border-b border-[#1a2030]">
-                          <td className="py-1 px-1 font-mono font-bold text-[#E8EAED]">
+                          <td className="py-1 px-1 font-bold text-[#E8EAED]">
                             {r.dnf ? <span className="text-[#C084FC] text-xs">DNF</span> : r.finishPosition}
                           </td>
                           <td className="py-1 px-1">
                             <div className="flex items-center gap-1.5">
-                              <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#6B7280' }} />
+                              <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#A0A9B8' }} />
                               <span className="text-[#E8EAED] truncate">{r.driverName}</span>
                             </div>
                           </td>
-                          <td className="py-1 px-1 text-right font-mono font-bold">
+                          <td className="py-1 px-1 text-right font-bold">
                             {r.points > 0 ? (
                               <span className="text-[#00D9FF]">{r.points}</span>
                             ) : (
-                              <span className="text-[#6B7280]">0</span>
+                              <span className="text-[#A0A9B8]">0</span>
                             )}
                           </td>
                         </tr>
@@ -464,7 +464,7 @@ export default function RacePage() {
 
               {/* Save CTA */}
               <div className="shrink-0 p-4 border-t border-[#2A3142]">
-                <p className="text-xs text-[#6B7280] mb-3">
+                <p className="text-xs text-[#A0A9B8] mb-3">
                   Round {season.currentRound}/{calendar2026.length} complete
                 </p>
                 <button
@@ -500,9 +500,9 @@ export default function RacePage() {
                   <div className="flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-                      <h2 className="font-display text-sm tracking-widest text-[#6B7280] uppercase">God Mode</h2>
+                      <h2 className="font-display text-sm tracking-widest text-[#A0A9B8] uppercase">God Mode</h2>
                     </div>
-                    <p className="text-[#6B7280] text-sm italic">Available during race.</p>
+                    <p className="text-[#A0A9B8] text-sm italic">Available during race.</p>
                   </div>
                 )}
               </div>
@@ -536,7 +536,7 @@ export default function RacePage() {
           >
             {paused ? 'Resume' : 'Pause'}
           </button>
-          <div className="ml-auto text-sm text-[#6B7280]">Space · 1 2 3 4</div>
+          <div className="ml-auto text-sm text-[#A0A9B8]">Space · 1 2 3 4</div>
         </div>
       )}
 

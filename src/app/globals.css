@@ -26,7 +26,7 @@
   --color-surface-hover: #303848;
   --color-text-primary: #E8EAED;
   --color-text-secondary: #A0A9B8;
-  --color-text-muted: #6B7280;
+  --color-text-muted: #A0A9B8;
   --color-text-inverse: #0F1419;
   --color-accent-cyan: #00D9FF;
   --color-accent-cyan-dim: #009CB8;
@@ -35,7 +35,7 @@
   --color-accent-yellow: #FCD34D;
   --color-positive: #10B981;
   --color-negative: #DC143C;
-  --color-neutral: #6B7280;
+  --color-neutral: #A0A9B8;
 }
 
 html {
