@@ -23,8 +23,11 @@ function fmtTime(t: number): string {
   return `${m}:${s.toFixed(3).padStart(6, '0')}`
 }
 
+type SortKey = 'time' | 'pace'
+
 export function TestingPanel({ summary, teams }: Props) {
   const [reveal, setReveal] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('time')
   const test = summary.preSeasonTest
 
   if (!test || test.entries.length === 0) {
@@ -32,7 +35,15 @@ export function TestingPanel({ summary, teams }: Props) {
   }
 
   const colorOf = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
-  const fastest = test.entries[0].lapTime
+  const fastest = Math.min(...test.entries.map((e) => e.lapTime))
+
+  // True pace is only known under god mode, so that sort only applies while revealed.
+  const activeSort: SortKey = reveal && sortKey === 'pace' ? 'pace' : 'time'
+  const rows = [...test.entries].sort((a, b) =>
+    activeSort === 'pace' ? b.carPace - a.carPace : a.lapTime - b.lapTime,
+  )
+  const headClass = (key: SortKey) =>
+    `cursor-pointer select-none transition-colors ${activeSort === key ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#00D9FF]'}`
 
   return (
     <div>
@@ -58,13 +69,17 @@ export function TestingPanel({ summary, teams }: Props) {
               <th className="text-left pb-2 px-3 font-medium">Team</th>
               <th className="text-center pb-2 px-3 font-medium">Tyre</th>
               <th className="text-left pb-2 px-3 font-medium">Fuel</th>
-              <th className="text-right pb-2 px-3 font-medium">Time</th>
+              <th className={`text-right pb-2 px-3 font-medium ${headClass('time')}`} onClick={() => setSortKey('time')}>Time</th>
               <th className="text-right pb-2 px-3 font-medium">Gap</th>
-              {reveal && <th className="text-right pb-2 pl-3 font-medium">True Pace</th>}
+              {reveal && (
+                <th className={`text-right pb-2 pl-3 font-medium ${headClass('pace')}`} onClick={() => setSortKey('pace')}>
+                  True Pace
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {test.entries.map((e, i) => (
+            {rows.map((e, i) => (
               <tr key={e.teamId} className="border-b border-[#2A3142]/50">
                 <td className="py-2 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
                 <td className="py-2 pr-4 text-[#FFFFFF] font-medium">{e.driverName}</td>
