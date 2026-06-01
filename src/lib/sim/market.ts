@@ -228,10 +228,12 @@ export function generateFreeAgentPool(
     generatedCounter++
     const { name, nationality } = pickName(usedNames)
 
-    const age = 17 + Math.floor(rng() * 5) // 17–21, discrete uniform (all ages equally likely)
-    const pace = Math.max(55, Math.min(78, Math.round(sampleNormal(65, 5, rng))))
-    const stat = () => Math.max(45, Math.min(85, Math.round(sampleNormal(pace - 2, 6, rng))))
+    const age = 17 + Math.floor(rng() * 5) // 17–21
     const peakPotential = Math.max(55, Math.min(95, Math.round(sampleNormal(68, 8, rng))))
+    // Stats must start below peakPotential — young drivers haven't hit their ceiling yet
+    const statCap = Math.floor(peakPotential * 0.92)
+    const pace = Math.max(45, Math.min(statCap, Math.round(sampleNormal(peakPotential * 0.78, 5, rng))))
+    const stat = () => Math.max(40, Math.min(statCap, Math.round(sampleNormal(pace - 2, 6, rng))))
     const primeEnd = Math.max(age + 1, Math.round(Math.max(27, Math.min(35, sampleNormal(30, 2, rng)))))
 
     pool.push({
