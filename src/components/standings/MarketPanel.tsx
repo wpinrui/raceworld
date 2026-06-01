@@ -15,7 +15,7 @@ export function MarketPanel({ summary, teams }: Props) {
   const sorted = [...summary.marketMoves].sort((a, b) => b.mediaScore - a.mediaScore)
   const realMoves = sorted.filter((m) => !m.isResignation)
   const reSignings = sorted.filter((m) => m.isResignation)
-  const dropped = [...summary.droppedDrivers].sort((a, b) => b.mediaScore - a.mediaScore)
+  const dropped = [...(summary.droppedDrivers ?? [])].sort((a, b) => b.mediaScore - a.mediaScore)
 
   if (sorted.length === 0 && dropped.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">No market activity this off-season.</p>
