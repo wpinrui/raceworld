@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { OFF_SEASON_PHASES } from '@/lib/sim/types'
-import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
+import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
 import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
 import { MarketPanel } from '@/components/standings/MarketPanel'
 import { TestingPanel } from '@/components/standings/TestingPanel'
@@ -14,7 +14,7 @@ import {
 } from '@/lib/db/actions'
 
 const PHASE_META: Record<string, { title: string; blurb: string }> = {
-  'end-of-season': { title: 'End of Season', blurb: 'Final standings and how each driver developed.' },
+  'end-of-season': { title: 'End of Season', blurb: 'Your season in review.' },
   'contract-negotiations': { title: 'Contract Negotiations', blurb: 'Driver market moves for the coming season.' },
   'driver-retirements': { title: 'Driver Retirements', blurb: 'Drivers leaving the grid.' },
   'pre-season-testing': { title: 'Pre-Season Testing', blurb: 'A first, obscured look at next season’s cars.' },
@@ -124,7 +124,13 @@ export function OffSeasonPanel() {
       <div className="p-5">
         <p className="text-sm text-[#FFFFFF] mb-4">{PHASE_META[season.phase].blurb}</p>
         {season.phase === 'end-of-season' && (
-          <ProgressionPanel summary={summary} drivers={season.drivers} />
+          <SeasonReviewPanel
+            summary={summary}
+            drivers={season.drivers}
+            teams={season.teams}
+            driverStandings={season.driverStandings}
+            constructorStandings={season.constructorStandings}
+          />
         )}
         {season.phase === 'contract-negotiations' && (
           <MarketPanel summary={summary} teams={season.teams} />
