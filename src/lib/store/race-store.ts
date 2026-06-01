@@ -29,7 +29,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   drivers: drivers2026.map((d) => ({ ...d })),
   teams: teams2026,
   selectedCircuitId: 'australia',
-  forms: rollForms(drivers2026.map((d) => d.id)),
+  forms: Object.fromEntries(drivers2026.map((d) => [d.id, 5])),
   strategyNoise: 0.35,
 
   setCircuit: (circuitId) => {
