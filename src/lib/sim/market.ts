@@ -231,11 +231,7 @@ export function generateFreeAgentPool(
     const age = 17 + Math.floor(rng() * 5) // 17–21
     const pace = Math.round(58 + rng() * 16)  // 58–74
     const stat = () => Math.max(45, Math.min(85, Math.round(sampleNormal(pace - 2, 6, rng))))
-    // Most are 60-75, rare gems can hit 90+
-    const potRoll = rng()
-    const peakPotential = potRoll > 0.9
-      ? Math.round(85 + rng() * 10)   // top 10%: 85–95
-      : Math.round(60 + rng() * 16)   // rest: 60–76
+    const peakPotential = Math.max(55, Math.min(95, Math.round(sampleNormal(68, 8, rng))))
     const primeEnd = Math.max(age + 1, 28 + Math.floor(rng() * 6))
 
     pool.push({
