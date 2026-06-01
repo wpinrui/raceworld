@@ -42,7 +42,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="text-[#A0A9B8] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+          <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
             <th className="text-left py-1.5 px-2 w-8">P</th>
             <th className="text-left py-1.5 px-2">Driver</th>
             <th className="text-left py-1.5 px-2">Team</th>
@@ -56,8 +56,8 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
           {sorted.map((ds) => {
             const driver = driverMap.get(ds.driverId)
             const team = driver ? teamMap.get(driver.teamId) : undefined
-            const rowColor = ds.retired ? 'text-[#A0A9B8]' : 'text-[#E8EAED]'
-            const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#A0A9B8]'
+            const rowColor = ds.retired ? 'text-[#FFFFFF]' : 'text-[#E8EAED]'
+            const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#FFFFFF]'
 
             return (
               <tr
@@ -80,7 +80,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                     </span>
                   </div>
                 </td>
-                <td className="py-1 px-2 text-xs text-[#A0A9B8]">
+                <td className="py-1 px-2 text-xs text-[#FFFFFF]">
                   {team?.shortName ?? '---'}
                 </td>
                 <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
@@ -104,7 +104,7 @@ export default function RaceTable({ drivers, teams, states, phase, selectedDrive
                     {ds.stintHistory.map((s, i) => (
                       <div key={i} className="flex items-center gap-0.5">
                         <TyreIndicator compound={s.compound} size="sm" />
-                        <span className="text-xs text-[#A0A9B8]">{s.laps}</span>
+                        <span className="text-xs text-[#FFFFFF]">{s.laps}</span>
                       </div>
                     ))}
                     <div className="flex items-center gap-0.5">

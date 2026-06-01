@@ -102,13 +102,13 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
           <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
           <h2 className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">God Mode</h2>
         </div>
-        <p className="text-[#A0A9B8] text-sm italic">Select a driver from the standings.</p>
+        <p className="text-[#FFFFFF] text-sm italic">Select a driver from the standings.</p>
       </div>
     )
   }
 
   const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#E8EAED]'
-  const formColor = ds.form > 5 ? 'text-[#10B981]' : ds.form < 5 ? 'text-red-400' : 'text-[#A0A9B8]'
+  const formColor = ds.form > 5 ? 'text-[#10B981]' : ds.form < 5 ? 'text-red-400' : 'text-[#FFFFFF]'
 
   return (
     <div className="flex flex-col gap-3">
@@ -120,7 +120,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
         <div className="ml-2 flex items-center gap-1.5">
           <div className="w-1 h-4 rounded-full" style={{ backgroundColor: team.color }} />
           <span className="text-sm font-bold text-[#E8EAED]">{driver.name}</span>
-          <span className="text-xs text-[#A0A9B8]">{team.shortName}</span>
+          <span className="text-xs text-[#FFFFFF]">{team.shortName}</span>
           <span className="text-sm font-bold text-[#00D9FF] ml-1">P{ds.position}</span>
         </div>
       </div>
@@ -130,40 +130,40 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
 
         {/* Current lap */}
         <div className="bg-[#1E2431] rounded p-2.5">
-          <div className="text-xs font-bold tracking-widest text-[#A0A9B8] uppercase mb-2">Now</div>
+          <div className="text-xs font-bold tracking-widest text-[#FFFFFF] uppercase mb-2">Now</div>
           <div className="flex flex-col gap-1 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-[#A0A9B8]">Tyre</span>
+              <span className="text-[#FFFFFF]">Tyre</span>
               <div className="flex items-center gap-1.5">
                 <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
                 <span className={`text-sm ${condColor}`}>{ds.currentTyre.condition}%</span>
               </div>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#A0A9B8]">Stint</span>
+              <span className="text-[#FFFFFF]">Stint</span>
               <span className="text-[#E8EAED]">{ds.stintLap}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#A0A9B8]">Form</span>
+              <span className="text-[#FFFFFF]">Form</span>
               <span className={formColor}>{ds.form.toFixed(1)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#A0A9B8]">Last lap</span>
+              <span className="text-[#FFFFFF]">Last lap</span>
               <span className="font-mono text-[#E8EAED]">{formatLapTime(ds.lapTimes)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#A0A9B8]">Gap</span>
+              <span className="text-[#FFFFFF]">Gap</span>
               <span className="font-mono text-[#E8EAED]">{ds.gap === 0 ? 'LEAD' : `+${ds.gap.toFixed(2)}s`}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-[#A0A9B8]">AI pit</span>
+              <span className="text-[#FFFFFF]">AI pit</span>
               {ds.targetPitLap !== null ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-[#A0A9B8]">L{ds.targetPitLap}</span>
+                  <span className="text-xs text-[#FFFFFF]">L{ds.targetPitLap}</span>
                   <TyreIndicator compound={ds.targetNextCompound} size="sm" />
                 </div>
               ) : (
-                <span className="text-xs text-[#A0A9B8]">none</span>
+                <span className="text-xs text-[#FFFFFF]">none</span>
               )}
             </div>
           </div>
@@ -171,11 +171,11 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
 
         {/* Next lap overrides */}
         <div className="bg-[#1E2431] rounded p-2.5">
-          <div className="text-xs font-bold tracking-widest text-[#A0A9B8] uppercase mb-2">Next lap</div>
+          <div className="text-xs font-bold tracking-widest text-[#FFFFFF] uppercase mb-2">Next lap</div>
           <div className="flex flex-col gap-2">
             <div>
               <div className="flex justify-between mb-0.5">
-                <label className="text-xs text-[#A0A9B8]">Tyre cond.</label>
+                <label className="text-xs text-[#FFFFFF]">Tyre cond.</label>
                 <span className="text-xs text-[#E8EAED]">{Math.round(nextCond)}%</span>
               </div>
               <input type="range" min={0} max={100} step={1}
@@ -186,8 +186,8 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             </div>
             <div>
               <div className="flex justify-between mb-0.5">
-                <label className="text-xs text-[#A0A9B8]">Form</label>
-                <span className={`text-xs ${nextForm > 5 ? 'text-[#10B981]' : nextForm < 5 ? 'text-red-400' : 'text-[#A0A9B8]'}`}>{Number(nextForm).toFixed(1)}</span>
+                <label className="text-xs text-[#FFFFFF]">Form</label>
+                <span className={`text-xs ${nextForm > 5 ? 'text-[#10B981]' : nextForm < 5 ? 'text-red-400' : 'text-[#FFFFFF]'}`}>{Number(nextForm).toFixed(1)}</span>
               </div>
               <input type="range" min={0} max={10} step={0.5}
                 value={nextForm}
@@ -196,7 +196,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
               />
             </div>
             <div>
-              <label className="text-xs text-[#A0A9B8] block mb-1">This lap</label>
+              <label className="text-xs text-[#FFFFFF] block mb-1">This lap</label>
               <div className="flex gap-1.5">
                 {(['auto', 'pit', 'no-pit'] as const).map((mode) => (
                   <button
@@ -208,8 +208,8 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
                           ? 'bg-[#00D9FF] text-[#0F1419]'
                           : mode === 'no-pit'
                           ? 'bg-[#DC143C] text-white'
-                          : 'bg-[#2A3142] text-[#E8EAED] ring-1 ring-[#A0A9B8]'
-                        : 'bg-[#1E2431] text-[#A0A9B8] hover:text-[#E8EAED]'
+                          : 'bg-[#2A3142] text-[#E8EAED] ring-1 ring-[#FFFFFF]'
+                        : 'bg-[#1E2431] text-[#FFFFFF] hover:text-[#E8EAED]'
                     }`}
                   >
                     {mode === 'no-pit' ? 'No Pit' : mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -231,13 +231,13 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       {/* Perfect strategy */}
       {perfectPit && (
         <div className="bg-[#0d2230] rounded p-2.5 border border-[#00D9FF]/20">
-          <div className="text-xs font-bold tracking-widest text-[#A0A9B8] uppercase mb-2">Perfect strategy</div>
+          <div className="text-xs font-bold tracking-widest text-[#FFFFFF] uppercase mb-2">Perfect strategy</div>
           <div className="flex flex-col gap-1">
             {perfectPit.stints.map((stint: StrategyStint, i: number) => (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <TyreIndicator compound={stint.compound} size="sm" />
-                <span className="text-[#A0A9B8]">L{stint.fromLap}–{stint.toLap}</span>
-                <span className="text-[#A0A9B8] text-xs">({stint.toLap - stint.fromLap + 1} laps)</span>
+                <span className="text-[#FFFFFF]">L{stint.fromLap}–{stint.toLap}</span>
+                <span className="text-[#FFFFFF] text-xs">({stint.toLap - stint.fromLap + 1} laps)</span>
                 {i < perfectPit.stints.length - 1 && (
                   <span className="text-[#00D9FF] text-xs ml-auto">pit →</span>
                 )}

@@ -40,7 +40,7 @@ export default function Nav() {
                 'px-3 py-1.5 rounded text-xs font-semibold tracking-wider transition-colors',
                 active
                   ? 'bg-[#00D9FF]/10 text-[#00D9FF]'
-                  : 'text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#2A3142]',
+                  : 'text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#2A3142]',
               ].join(' ')}
             >
               {label}
@@ -50,16 +50,16 @@ export default function Nav() {
       </div>
 
       {/* Season indicator */}
-      <div className="ml-auto text-xs tabular-nums text-[#A0A9B8]">
+      <div className="ml-auto text-xs tabular-nums text-[#FFFFFF]">
         {seasonActive && circuit ? (
           <span>
             <span className="text-[#E8EAED]">
               {year} · Round {String(currentRound).padStart(2, '0')}/{String(calendar2026.length).padStart(2, '0')}
             </span>
-            <span className="text-[#A0A9B8]"> · {circuit.name}</span>
+            <span className="text-[#FFFFFF]"> · {circuit.name}</span>
           </span>
         ) : (
-          <span className="text-[#A0A9B8]">No active season</span>
+          <span className="text-[#FFFFFF]">No active season</span>
         )}
       </div>
     </nav>

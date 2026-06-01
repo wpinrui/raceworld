@@ -217,7 +217,7 @@ export default function RacePage() {
               <span className="font-display text-sm tracking-widest uppercase text-[#E8EAED]">
                 Lap {Math.max(1, raceState.currentLap - 1)}/{raceState.totalLaps}
               </span>
-              <span className="text-[#A0A9B8] text-sm">{currentCircuit?.name}</span>
+              <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name}</span>
               {phase === 'finished' && (
                 <span className="font-display text-xs tracking-widest text-[#00D9FF] uppercase animate-pulse ml-1">
                   Finished
@@ -225,7 +225,7 @@ export default function RacePage() {
               )}
             </>
           ) : (
-            <span className="text-[#A0A9B8] text-sm">
+            <span className="text-[#FFFFFF] text-sm">
               {currentCircuit?.name ?? '—'}
             </span>
           )}
@@ -234,7 +234,7 @@ export default function RacePage() {
           onClick={() => {
             if (currentCircuit) resetSession(season.drivers, season.teams, currentCircuit.id)
           }}
-          className="text-xs text-[#A0A9B8] hover:text-[#A0A9B8] tracking-wider uppercase transition-colors"
+          className="text-xs text-[#FFFFFF] hover:text-[#FFFFFF] tracking-wider uppercase transition-colors"
         >
           Restart Weekend
         </button>
@@ -251,16 +251,16 @@ export default function RacePage() {
             <div className="flex flex-col h-full min-h-0">
               <div className="shrink-0 flex items-end gap-4 px-6 pt-5 pb-4 border-b border-[#2A3142]">
                 <div className="flex-1">
-                  <p className="text-xs text-[#A0A9B8] uppercase tracking-wider mb-1">Race Weekend</p>
+                  <p className="text-xs text-[#FFFFFF] uppercase tracking-wider mb-1">Race Weekend</p>
                   <h2 className="font-display text-xl tracking-wider uppercase text-[#E8EAED]">
                     {currentCircuit?.name ?? '—'}
                   </h2>
-                  <p className="text-sm text-[#A0A9B8] mt-0.5">
+                  <p className="text-sm text-[#FFFFFF] mt-0.5">
                     {currentCircuit?.location} · {currentCircuit?.laps} laps
                   </p>
                 </div>
                 <div className="shrink-0">
-                  <label className="block text-xs font-bold tracking-wider text-[#A0A9B8] uppercase mb-2">
+                  <label className="block text-xs font-bold tracking-wider text-[#FFFFFF] uppercase mb-2">
                     Strategy Noise <span className="text-[#00D9FF]">{Math.round(strategyNoise * 100)}%</span>
                   </label>
                   <input
@@ -284,11 +284,11 @@ export default function RacePage() {
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
                     <h2 className="font-display text-sm tracking-widest text-[#E8EAED] uppercase">Driver Forms</h2>
-                    <span className="text-xs text-[#A0A9B8]">(randomised — edit before qualifying)</span>
+                    <span className="text-xs text-[#FFFFFF]">(randomised — edit before qualifying)</span>
                   </div>
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="text-[#A0A9B8] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+                      <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
                         <th className="text-left py-1 pr-2">Driver</th>
                         <th className="text-center py-1 px-2 w-36">Form</th>
                         <th className="text-center py-1 px-2 w-16">Pace</th>
@@ -307,7 +307,7 @@ export default function RacePage() {
                               <div className="flex items-center gap-2">
                                 <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />
                                 <span className="text-sm font-medium text-[#E8EAED]">{d.name}</span>
-                                <span className="text-xs text-[#A0A9B8]">{team?.shortName}</span>
+                                <span className="text-xs text-[#FFFFFF]">{team?.shortName}</span>
                               </div>
                             </td>
                             <td className="py-1 px-2">
@@ -318,7 +318,7 @@ export default function RacePage() {
                                   onChange={(e) => updateDriverForm(d.id, Number(e.target.value))}
                                   className="w-20 accent-[#00D9FF]"
                                 />
-                                <span className={`text-xs w-6 text-right ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#A0A9B8]'}`}>
+                                <span className={`text-xs w-6 text-right ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}`}>
                                   {form.toFixed(1)}
                                 </span>
                               </div>
@@ -341,7 +341,7 @@ export default function RacePage() {
           {/* Qualifying in progress */}
           {phase === 'qualifying' && (
             <div className="flex items-center justify-center h-full">
-              <p className="text-[#A0A9B8] text-xl tracking-widest uppercase animate-pulse">
+              <p className="text-[#FFFFFF] text-xl tracking-widest uppercase animate-pulse">
                 Qualifying in progress...
               </p>
             </div>
@@ -364,7 +364,7 @@ export default function RacePage() {
               <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="text-[#A0A9B8] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+                    <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
                       <th className="text-left py-1 px-2 w-10">Pos</th>
                       <th className="text-left py-1 px-2">Driver</th>
                       <th className="text-left py-1 px-2">Team</th>
@@ -386,9 +386,9 @@ export default function RacePage() {
                               <span>{driver?.name ?? qr.driverId}</span>
                             </div>
                           </td>
-                          <td className="py-1 px-2 text-sm text-[#A0A9B8]">{team?.shortName ?? '---'}</td>
-                          <td className="py-1 px-2 text-right font-mono text-sm text-[#A0A9B8]">{formatQualTime(qr.q1Time)}</td>
-                          <td className="py-1 px-2 text-right font-mono text-sm text-[#A0A9B8]">{formatQualTime(qr.q2Time)}</td>
+                          <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.shortName ?? '---'}</td>
+                          <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatQualTime(qr.q1Time)}</td>
+                          <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatQualTime(qr.q2Time)}</td>
                           <td className="py-1 px-2 text-right font-mono text-sm font-bold">{formatQualTime(qr.q3Time)}</td>
                         </tr>
                       )
@@ -428,7 +428,7 @@ export default function RacePage() {
                 </div>
                 <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="text-[#A0A9B8] text-xs tracking-wider uppercase border-b border-[#2A3142]">
+                    <tr className="text-[#FFFFFF] text-xs tracking-wider uppercase border-b border-[#2A3142]">
                       <th className="text-left py-1 px-1 w-8">Pos</th>
                       <th className="text-left py-1 px-1">Driver</th>
                       <th className="text-right py-1 px-1 w-8">Pts</th>
@@ -444,7 +444,7 @@ export default function RacePage() {
                           </td>
                           <td className="py-1 px-1">
                             <div className="flex items-center gap-1.5">
-                              <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#A0A9B8' }} />
+                              <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#FFFFFF' }} />
                               <span className="text-[#E8EAED] truncate">{r.driverName}</span>
                             </div>
                           </td>
@@ -452,7 +452,7 @@ export default function RacePage() {
                             {r.points > 0 ? (
                               <span className="text-[#00D9FF]">{r.points}</span>
                             ) : (
-                              <span className="text-[#A0A9B8]">0</span>
+                              <span className="text-[#FFFFFF]">0</span>
                             )}
                           </td>
                         </tr>
@@ -464,7 +464,7 @@ export default function RacePage() {
 
               {/* Save CTA */}
               <div className="shrink-0 p-4 border-t border-[#2A3142]">
-                <p className="text-xs text-[#A0A9B8] mb-3">
+                <p className="text-xs text-[#FFFFFF] mb-3">
                   Round {season.currentRound}/{calendar2026.length} complete
                 </p>
                 <button
@@ -500,9 +500,9 @@ export default function RacePage() {
                   <div className="flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-                      <h2 className="font-display text-sm tracking-widest text-[#A0A9B8] uppercase">God Mode</h2>
+                      <h2 className="font-display text-sm tracking-widest text-[#FFFFFF] uppercase">God Mode</h2>
                     </div>
-                    <p className="text-[#A0A9B8] text-sm italic">Available during race.</p>
+                    <p className="text-[#FFFFFF] text-sm italic">Available during race.</p>
                   </div>
                 )}
               </div>
@@ -520,7 +520,7 @@ export default function RacePage() {
                 key={s}
                 onClick={() => handleSpeedClick(s)}
                 className={`px-4 py-2 text-sm font-bold rounded transition-colors ${
-                  speed === s ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#A0A9B8] hover:bg-[#303848]'
+                  speed === s ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
                 }`}
               >
                 {s}x
@@ -531,12 +531,12 @@ export default function RacePage() {
           <button
             onClick={() => setPaused(!paused)}
             className={`px-5 py-2 text-sm font-bold tracking-widest uppercase rounded transition-colors ${
-              paused ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#A0A9B8] hover:bg-[#303848]'
+              paused ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
             }`}
           >
             {paused ? 'Resume' : 'Pause'}
           </button>
-          <div className="ml-auto text-sm text-[#A0A9B8]">Space · 1 2 3 4</div>
+          <div className="ml-auto text-sm text-[#FFFFFF]">Space · 1 2 3 4</div>
         </div>
       )}
 
@@ -545,12 +545,12 @@ export default function RacePage() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-[#1E2431] border border-[#2A3142] rounded-lg p-6 max-w-sm w-full mx-4">
             <h3 className="font-display text-sm tracking-widest uppercase text-[#E8EAED] mb-3">Simulate to End?</h3>
-            <p className="text-[#A0A9B8] text-sm mb-6">The race will be simulated to the end without delay.</p>
+            <p className="text-[#FFFFFF] text-sm mb-6">The race will be simulated to the end without delay.</p>
             <div className="flex gap-3">
               <button onClick={confirmSpeed4} className="flex-1 py-3 bg-[#00D9FF] hover:bg-[#009CB8] text-[#0F1419] text-sm font-black tracking-widest uppercase rounded transition-colors">
                 Confirm
               </button>
-              <button onClick={() => setShowSpeed4Modal(false)} className="flex-1 py-3 bg-[#2A3142] hover:bg-[#303848] text-[#A0A9B8] text-sm font-bold tracking-widest uppercase rounded transition-colors">
+              <button onClick={() => setShowSpeed4Modal(false)} className="flex-1 py-3 bg-[#2A3142] hover:bg-[#303848] text-[#FFFFFF] text-sm font-bold tracking-widest uppercase rounded transition-colors">
                 Cancel
               </button>
             </div>

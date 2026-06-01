@@ -8,13 +8,13 @@ interface CommentaryFeedProps {
 }
 
 const TYPE_CONFIG = {
-  pit:        { icon: Wrench,       color: 'text-[#A0A9B8]', bg: 'bg-[#1E2431]',  border: 'border-[#2A3142]' },
+  pit:        { icon: Wrench,       color: 'text-[#FFFFFF]', bg: 'bg-[#1E2431]',  border: 'border-[#2A3142]' },
   overtake:   { icon: ChevronsUp,   color: 'text-[#00D9FF]', bg: 'bg-[#0d2230]',  border: 'border-[#00D9FF]/30' },
   closing:    { icon: ChevronRight,  color: 'text-[#FCD34D]', bg: 'bg-[#1E2431]',  border: 'border-[#FCD34D]/30' },
   weather:    { icon: CloudRain,     color: 'text-[#60a5fa]', bg: 'bg-[#0d1a2e]',  border: 'border-[#60a5fa]/30' },
   retirement: { icon: CircleX,       color: 'text-[#DC143C]', bg: 'bg-[#2a0d12]',  border: 'border-[#DC143C]/40' },
   finish:     { icon: Flag,          color: 'text-[#D4AC00]', bg: 'bg-[#1e1a00]',  border: 'border-[#D4AC00]/40' },
-  info:       { icon: Info,          color: 'text-[#A0A9B8]', bg: 'bg-[#1E2431]',  border: 'border-[#2A3142]' },
+  info:       { icon: Info,          color: 'text-[#FFFFFF]', bg: 'bg-[#1E2431]',  border: 'border-[#2A3142]' },
 } as const
 
 export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
@@ -31,7 +31,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
 
       <div className="flex-1 overflow-y-auto min-h-0 space-y-1.5 pr-1">
         {reversed.length === 0 ? (
-          <p className="text-[#A0A9B8] text-base italic">Awaiting race start...</p>
+          <p className="text-[#FFFFFF] text-base italic">Awaiting race start...</p>
         ) : (
           reversed.map((entry, i) => {
             const cfg = TYPE_CONFIG[entry.type] ?? TYPE_CONFIG.info
@@ -42,7 +42,7 @@ export default function CommentaryFeed({ entries }: CommentaryFeedProps) {
                 className={`flex items-start gap-3 px-3 py-2 rounded border ${cfg.bg} ${cfg.border}`}
               >
                 <Icon size={15} className={`${cfg.color} mt-0.5 shrink-0`} />
-                <span className="text-[#A0A9B8] text-xs text-[#A0A9B8] shrink-0 w-10 pt-px">
+                <span className="text-[#FFFFFF] text-xs text-[#FFFFFF] shrink-0 w-10 pt-px">
                   L{entry.lap}
                 </span>
                 <span className={`text-sm leading-snug ${cfg.color}`}>{entry.text}</span>

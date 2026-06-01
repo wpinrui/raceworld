@@ -80,7 +80,7 @@ export default function StandingsPage() {
                   </h2>
                 </div>
                 {displayDrivers[0] && (
-                  <p className="text-[#A0A9B8] text-sm ml-3.5">
+                  <p className="text-[#FFFFFF] text-sm ml-3.5">
                     World Champion:{' '}
                     <span className="text-[#00D9FF] font-semibold">{displayDrivers[0].driverName}</span>
                     {' '}·{' '}
@@ -91,7 +91,7 @@ export default function StandingsPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleReturnToSetup}
-                  className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors"
+                  className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors"
                 >
                   Return to Setup
                 </button>
@@ -111,7 +111,7 @@ export default function StandingsPage() {
           <div className="flex items-center gap-2.5">
             <div className="w-1 h-6 rounded-sm bg-[#DC143C]" />
             <h1 className="font-display text-2xl tracking-wider uppercase">Standings</h1>
-            <span className="ml-2 text-sm text-[#A0A9B8] tabular-nums">{displayYear}</span>
+            <span className="ml-2 text-sm text-[#FFFFFF] tabular-nums">{displayYear}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -147,7 +147,7 @@ export default function StandingsPage() {
                   className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
                     tab === t
                       ? 'bg-[#00D9FF] text-[#0F1419]'
-                      : 'text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#2A3142]'
+                      : 'text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#2A3142]'
                   }`}
                 >
                   {t}
@@ -158,7 +158,7 @@ export default function StandingsPage() {
         </div>
 
         {loadingArchive && (
-          <p className="text-[#A0A9B8] text-sm animate-pulse mb-4">Loading archived season...</p>
+          <p className="text-[#FFFFFF] text-sm animate-pulse mb-4">Loading archived season...</p>
         )}
 
         {/* Driver standings */}
@@ -166,7 +166,7 @@ export default function StandingsPage() {
           <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="text-[#A0A9B8] text-xs tracking-wider uppercase border-b border-[#2A3142]">
+                <tr className="text-[#FFFFFF] text-xs tracking-wider uppercase border-b border-[#2A3142]">
                   <th className="text-left py-2 px-3 w-8 sticky left-0 bg-[#1E2431]">P</th>
                   <th className="text-left py-2 px-3 sticky left-8 bg-[#1E2431] min-w-[140px]">Driver</th>
                   <th className="text-left py-2 px-3 min-w-[80px]">Team</th>
@@ -183,13 +183,13 @@ export default function StandingsPage() {
                 {displayDrivers.map((standing, idx) => {
                   const team = season.teams.find((t) => t.id === standing.teamId) ??
                     (selectedArchive ? null : null)
-                  const teamColor = team?.color ?? '#A0A9B8'
+                  const teamColor = team?.color ?? '#FFFFFF'
                   return (
                     <tr
                       key={standing.driverId}
                       className="border-b border-[#2A3142]/50 hover:bg-[#2A3142]/40 transition-colors"
                     >
-                      <td className="py-1.5 px-3 tabular-nums font-bold text-[#A0A9B8] sticky left-0 bg-[#1E2431]">
+                      <td className="py-1.5 px-3 tabular-nums font-bold text-[#FFFFFF] sticky left-0 bg-[#1E2431]">
                         {idx + 1}
                       </td>
                       <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
@@ -198,9 +198,9 @@ export default function StandingsPage() {
                           <span className="font-semibold text-[#E8EAED] whitespace-nowrap">{standing.driverName}</span>
                         </div>
                       </td>
-                      <td className="py-1.5 px-3 text-[#A0A9B8] text-xs">{standing.teamName}</td>
+                      <td className="py-1.5 px-3 text-[#FFFFFF] text-xs">{standing.teamName}</td>
                       <td className="py-1.5 px-3 text-right tabular-nums font-bold text-[#E8EAED]">{standing.points}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-[#A0A9B8]">{standing.wins}</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{standing.wins}</td>
                       {Array.from({ length: totalRounds }, (_, i) => {
                         if (i >= completedRounds && !selectedArchive) {
                           return <ResultCell key={i} position={undefined} round={i} />
@@ -220,7 +220,7 @@ export default function StandingsPage() {
           <div className="rounded-xl bg-[#1E2431] overflow-hidden">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="text-[#A0A9B8] text-xs tracking-wider uppercase border-b border-[#2A3142]">
+                <tr className="text-[#FFFFFF] text-xs tracking-wider uppercase border-b border-[#2A3142]">
                   <th className="text-left py-2 px-3 w-8">P</th>
                   <th className="text-left py-2 px-3">Constructor</th>
                   <th className="text-right py-2 px-3 w-16">Pts</th>
@@ -235,18 +235,18 @@ export default function StandingsPage() {
                       key={standing.teamId}
                       className="border-b border-[#2A3142]/50 hover:bg-[#2A3142]/40 transition-colors"
                     >
-                      <td className="py-2 px-3 tabular-nums font-bold text-[#A0A9B8]">{idx + 1}</td>
+                      <td className="py-2 px-3 tabular-nums font-bold text-[#FFFFFF]">{idx + 1}</td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-2.5">
                           <div
                             className="w-3 h-3 rounded-sm shrink-0"
-                            style={{ backgroundColor: team?.color ?? '#A0A9B8' }}
+                            style={{ backgroundColor: team?.color ?? '#FFFFFF' }}
                           />
                           <span className="font-semibold text-[#E8EAED]">{standing.teamName}</span>
                         </div>
                       </td>
                       <td className="py-2 px-3 text-right tabular-nums font-bold text-[#E8EAED]">{standing.points}</td>
-                      <td className="py-2 px-3 text-right tabular-nums text-[#A0A9B8]">{standing.wins}</td>
+                      <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{standing.wins}</td>
                     </tr>
                   )
                 })}
@@ -257,7 +257,7 @@ export default function StandingsPage() {
 
         {/* Progress indicator */}
         {!selectedArchive && (
-          <p className="mt-4 text-xs text-[#A0A9B8] text-right">
+          <p className="mt-4 text-xs text-[#FFFFFF] text-right">
             {completedRounds}/{totalRounds} rounds completed
           </p>
         )}
