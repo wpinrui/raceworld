@@ -133,7 +133,7 @@ export function computeCarReshuffle(
 
   const scored = teams.map((t) => ({
     ...t,
-    score: t.carPace + (rng() * 4.5 - 1.5),  // Uniform(-1.5, 3)
+    score: t.carPace + sampleNormal(0.75, 1.5, rng),  // N(0.75, 1.5), slight positive skew
   }))
 
   scored.sort((a, b) => b.score - a.score)
