@@ -170,7 +170,7 @@ export default function StandingsPage() {
                   <th className="text-left py-2 px-3 w-8 sticky left-0 bg-[#1E2431]">P</th>
                   <th className="text-left py-2 px-3 sticky left-8 bg-[#1E2431] min-w-[140px]">Driver</th>
                   <th className="text-left py-2 px-3 min-w-[80px]">Team</th>
-                  {Array.from({ length: completedRounds }, (_, i) => (
+                  {Array.from({ length: totalRounds }, (_, i) => (
                     <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px]">
                       {String(i + 1).padStart(2, '0')}
                     </th>
@@ -197,8 +197,10 @@ export default function StandingsPage() {
                         </div>
                       </td>
                       <td className="py-1.5 px-3 text-[#FFFFFF] text-xs">{standing.teamName}</td>
-                      {Array.from({ length: completedRounds }, (_, i) => (
-                        <ResultCell key={i} position={standing.results[i] ?? null} />
+                      {Array.from({ length: totalRounds }, (_, i) => (
+                        i < completedRounds
+                          ? <ResultCell key={i} position={standing.results[i] ?? null} />
+                          : <td key={i} className="px-0.5 py-0.5"><div className="w-8 h-7" /></td>
                       ))}
                       <td className="py-1.5 px-3 text-right font-bold text-[#E8EAED]">{standing.points}</td>
                     </tr>
@@ -218,7 +220,7 @@ export default function StandingsPage() {
                   <th className="text-left py-2 px-3 w-8 sticky left-0 bg-[#1E2431]">P</th>
                   <th className="text-left py-2 px-3 sticky left-8 bg-[#1E2431] min-w-[140px]">Constructor</th>
                   <th className="text-left py-2 px-3 min-w-[130px]">Driver</th>
-                  {Array.from({ length: completedRounds }, (_, i) => (
+                  {Array.from({ length: totalRounds }, (_, i) => (
                     <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px]">
                       {String(i + 1).padStart(2, '0')}
                     </th>
@@ -262,8 +264,10 @@ export default function StandingsPage() {
                           </td>
                         )}
                         <td className="py-1.5 px-3 text-[#FFFFFF] text-xs whitespace-nowrap">{driver.name}</td>
-                        {Array.from({ length: completedRounds }, (_, i) => (
-                          <ResultCell key={i} position={driverResults[i] ?? null} />
+                        {Array.from({ length: totalRounds }, (_, i) => (
+                          i < completedRounds
+                            ? <ResultCell key={i} position={driverResults[i] ?? null} />
+                            : <td key={i} className="px-0.5 py-0.5"><div className="w-8 h-7" /></td>
                         ))}
                         {isFirst && (
                           <td
