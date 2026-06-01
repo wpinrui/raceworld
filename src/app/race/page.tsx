@@ -267,7 +267,7 @@ export default function RacePage() {
                   style={{ width: `${phase === 'racing' ? lapProgress : 100}%` }}
                 />
                 <span className="relative font-display text-sm tracking-widest uppercase text-[#E8EAED]">
-                  Lap {Math.max(1, raceState.currentLap - 1)}/{raceState.totalLaps}
+                  Lap {Math.min(raceState.currentLap, raceState.totalLaps)}/{raceState.totalLaps}
                 </span>
               </div>
               <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name}</span>
