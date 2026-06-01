@@ -286,6 +286,10 @@ export default function SetupPage() {
     e.target.value = ''
   }
 
+  function updateTeam(id: string, patch: Partial<Team>) {
+    setLocalTeams((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+  }
+
   function updateDriver(id: string, patch: Partial<Driver>) {
     setLocalDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
   }
@@ -360,7 +364,14 @@ export default function SetupPage() {
                 <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: team.color }} />
                 <div className="flex-1">
                   <div className="font-semibold text-[#E8EAED]">{team.name}</div>
-                  <div className="text-xs text-[#FFFFFF]">Car pace {team.carPace}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-[#FFFFFF]">Car pace</span>
+                    <input
+                      type="number" min={0} max={100} value={team.carPace}
+                      onChange={(e) => updateTeam(team.id, { carPace: Math.min(100, Math.max(0, Number(e.target.value))) })}
+                      className="w-12 px-1 py-0.5 rounded bg-[#0F1419] text-[#E8EAED] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none text-center"
+                    />
+                  </div>
                 </div>
 
                 <span className="text-xs text-[#FFFFFF]">{teamDrivers.length}/{DRIVERS_PER_TEAM}</span>
