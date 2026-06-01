@@ -18,6 +18,7 @@ import { calendar2026 } from '@/data/calendar'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, determineRetirements, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
+import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 
 const TOTAL_ROUNDS = calendar2026.length
 
@@ -68,14 +69,7 @@ function computeDriverStandings(
     }
   }
 
-  return [...map.values()].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    for (let pos = 1; pos <= 22; pos++) {
-      const diff = b.results.filter((r) => r === pos).length - a.results.filter((r) => r === pos).length
-      if (diff !== 0) return diff
-    }
-    return 0
-  })
+  return sortDriverStandings([...map.values()])
 }
 
 function computeConstructorStandings(
@@ -110,10 +104,7 @@ function computeConstructorStandings(
     }
   }
 
-  return [...map.values()].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    return b.wins - a.wins
-  })
+  return sortConstructorStandings([...map.values()])
 }
 
 interface SeasonStore {
@@ -277,7 +268,7 @@ export const useSeasonStore = create<SeasonStore>()(
 
         // 3. Age every driver one year, then assess retirements.
         const agedDrivers = ageDrivers(drivers)
-        const retiredDriverIds = determineRetirements(agedDrivers, driverMediaScores, year)
+        const retiredDriverIds = determineRetirements(agedDrivers, driverMediaScores)
 
         // 4. Car reshuffle
         const { updatedTeams: reshuffledTeams, oldPaces, newPaces } =

@@ -1,5 +1,6 @@
 import { getDb } from './client'
 import type { RaceResult, DriverStanding, ConstructorStanding, ConstructorSeasonRecord } from '@/lib/sim/types'
+import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 
 export interface DbSeason {
   id: number
@@ -211,8 +212,8 @@ export function getSeasonStandings(seasonId: number): {
     }
   }
 
-  const driverStandings = [...driverMap.values()].sort((a, b) => b.points - a.points)
-  const constructorStandings = [...constructorMap.values()].sort((a, b) => b.points - a.points)
+  const driverStandings = sortDriverStandings([...driverMap.values()])
+  const constructorStandings = sortConstructorStandings([...constructorMap.values()])
 
   return { driverStandings, constructorStandings }
 }
