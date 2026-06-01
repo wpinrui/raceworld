@@ -198,7 +198,8 @@ let generatedCounter = 0
 function pickName(usedNames: Set<string>): string {
   for (let attempt = 0; attempt < 40; attempt++) {
     const f = FAKER_LOCALES[Math.floor(Math.random() * FAKER_LOCALES.length)]
-    const name = `${f.person.firstName()} ${f.person.lastName()}`
+    const sex = Math.random() < 0.05 ? 'female' : 'male'
+    const name = `${f.person.firstName(sex)} ${f.person.lastName()}`
     if (!usedNames.has(name)) {
       usedNames.add(name)
       return name
