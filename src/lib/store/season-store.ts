@@ -131,6 +131,7 @@ interface SeasonStore {
 
   // Actions
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
+  updateGrid: (drivers: Driver[], teams: Team[]) => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
@@ -187,6 +188,18 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonStartStats: snapshotStats(allDrivers),
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
+        })
+      },
+
+      // Persist in-place edits to the grid (driver market screen) without
+      // resetting the season. Recompute standings so renames / team moves show.
+      updateGrid: (drivers, teams) => {
+        const { raceResults } = get()
+        set({
+          drivers,
+          teams,
+          driverStandings: computeDriverStandings(drivers, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
         })
       },
 

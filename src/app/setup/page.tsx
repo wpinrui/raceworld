@@ -64,21 +64,36 @@ export default function SetupPage() {
     e.target.value = ''
   }
 
+  // During an active season this screen is the Driver Market: edits must persist
+  // straight to the store. Before the season starts, edits stay local until
+  // "Start Season" commits them via initSeason().
+  const isActive = seasonStore.phase !== 'idle'
+
+  function commitDrivers(next: Driver[]) {
+    setLocalDrivers(next)
+    if (isActive) seasonStore.updateGrid(next, localTeams)
+  }
+
+  function commitTeams(next: Team[]) {
+    setLocalTeams(next)
+    if (isActive) seasonStore.updateGrid(localDrivers, next)
+  }
+
   function updateTeam(id: string, patch: Partial<Team>) {
-    setLocalTeams((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+    commitTeams(localTeams.map((t) => (t.id === id ? { ...t, ...patch } : t)))
   }
 
   function updateDriver(id: string, patch: Partial<Driver>) {
-    setLocalDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
+    commitDrivers(localDrivers.map((d) => (d.id === id ? { ...d, ...patch } : d)))
   }
 
   function addDriver(teamId: string) {
     if (localDrivers.filter((d) => d.teamId === teamId).length >= DRIVERS_PER_TEAM) return
-    setLocalDrivers((prev) => [...prev, makeDefaultDriver(teamId)])
+    commitDrivers([...localDrivers, makeDefaultDriver(teamId)])
   }
 
   function removeDriver(id: string) {
-    setLocalDrivers((prev) => prev.filter((d) => d.id !== id))
+    commitDrivers(localDrivers.filter((d) => d.id !== id))
   }
 
   function handleStartSeason() {
@@ -89,7 +104,6 @@ export default function SetupPage() {
 
   if (!hydrated) return null
 
-  const isActive = seasonStore.phase !== 'idle'
   const freeAgents = localDrivers.filter((d) => d.teamId === '')
   const expiringCount = localDrivers.filter(
     (d) => d.teamId !== '' && d.contractExpiresAfterSeason <= seasonStore.year,

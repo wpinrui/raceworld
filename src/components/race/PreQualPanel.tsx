@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, Circuit } from '@/lib/sim/types'
 
@@ -15,10 +17,84 @@ interface Props {
   onAutoSim: () => void
 }
 
+type SortKey = 'driver' | 'team' | 'form' | 'car' | 'pace' | 'wet' | 'ovt' | 'smt'
+type SortDir = 'asc' | 'desc'
+
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  driver: 'asc',
+  team: 'asc',
+  form: 'desc',
+  car: 'desc',
+  pace: 'desc',
+  wet: 'desc',
+  ovt: 'desc',
+  smt: 'desc',
+}
+
+function sortDrivers(
+  drivers: Driver[],
+  teams: Team[],
+  forms: Record<string, number>,
+  key: SortKey,
+  dir: SortDir,
+): Driver[] {
+  const cmp = (a: Driver, b: Driver): number => {
+    const ta = teams.find((t) => t.id === a.teamId)
+    const tb = teams.find((t) => t.id === b.teamId)
+    switch (key) {
+      case 'driver': return a.name.localeCompare(b.name)
+      case 'team':   return (ta?.name ?? '').localeCompare(tb?.name ?? '')
+      case 'form':   return (forms[a.id] ?? 5) - (forms[b.id] ?? 5)
+      case 'car':    return (ta?.carPace ?? 0) - (tb?.carPace ?? 0)
+      case 'pace':   return a.pace - b.pace
+      case 'wet':    return a.wetWeatherPace - b.wetWeatherPace
+      case 'ovt':    return a.overtaking - b.overtaking
+      case 'smt':    return a.smoothness - b.smoothness
+    }
+  }
+  const sorted = [...drivers].sort(cmp)
+  return dir === 'desc' ? sorted.reverse() : sorted
+}
+
 export function PreQualPanel({
   drivers, teams, forms, strategyNoise, currentCircuit,
   onStrategyNoiseChange, onFormChange, onBegin, onAutoSim,
 }: Props) {
+  const [sortKey, setSortKey] = useState<SortKey>('car')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir(DEFAULT_DIR[key])
+    }
+  }
+
+  const sorted = sortDrivers(drivers, teams, forms, sortKey, sortDir)
+
+  function Th({ col, children, right }: { col: SortKey; children: React.ReactNode; right?: boolean }) {
+    const active = col === sortKey
+    return (
+      <th
+        className={`py-1 px-2 cursor-pointer select-none whitespace-nowrap transition-colors
+          ${right ? 'text-right' : 'text-left'}
+          ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#E8EAED]'}`}
+        onClick={() => handleSort(col)}
+      >
+        <span className={`inline-flex items-center gap-0.5 ${right ? 'justify-end w-full' : ''}`}>
+          {children}
+          {active
+            ? sortDir === 'asc'
+              ? <ChevronUp size={11} className="shrink-0" />
+              : <ChevronDown size={11} className="shrink-0" />
+            : <span className="w-[11px]" />}
+        </span>
+      </th>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-end gap-4 px-6 pt-5 pb-4 border-b border-[#2A3142]">
@@ -67,19 +143,19 @@ export function PreQualPanel({
 
         <table className="w-full border-collapse">
           <thead>
-            <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
-              <th className="text-left py-1 pr-2">Driver</th>
-              <th className="text-left py-1 px-2">Team</th>
-              <th className="text-center py-1 px-2 w-36">Form</th>
-              <th className="text-center py-1 px-2 w-16">Car</th>
-              <th className="text-center py-1 px-2 w-16">Pace</th>
-              <th className="text-center py-1 px-2 w-16">Wet</th>
-              <th className="text-center py-1 px-2 w-16">Ovt</th>
-              <th className="text-center py-1 px-2 w-16">Smt</th>
+            <tr className="text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
+              <Th col="driver">Driver</Th>
+              <Th col="team">Team</Th>
+              <Th col="form">Form</Th>
+              <Th col="car" right>Car</Th>
+              <Th col="pace" right>Pace</Th>
+              <Th col="wet" right>Wet</Th>
+              <Th col="ovt" right>Ovt</Th>
+              <Th col="smt" right>Smt</Th>
             </tr>
           </thead>
           <tbody>
-            {drivers.map((d) => {
+            {sorted.map((d) => {
               const team = teams.find((t) => t.id === d.teamId)
               const form = forms[d.id] ?? 5
               return (
@@ -105,9 +181,9 @@ export function PreQualPanel({
                       </span>
                     </div>
                   </td>
-                  <td className="py-1 px-2 text-center text-sm font-semibold text-[#FFFFFF]">{team?.carPace ?? '—'}</td>
+                  <td className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">{team?.carPace ?? '—'}</td>
                   {(['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const).map((stat) => (
-                    <td key={stat} className="py-1 px-2 text-center text-sm font-semibold text-[#E8EAED]">{d[stat]}</td>
+                    <td key={stat} className="py-1 px-2 text-right text-sm font-semibold text-[#E8EAED]">{d[stat]}</td>
                   ))}
                 </tr>
               )
