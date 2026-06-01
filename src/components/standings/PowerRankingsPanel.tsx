@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
-import type { Driver, Team, RaceResult, ConstructorStanding } from '@/lib/sim/types'
+import { Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
+import type { Driver, Team, RaceResult, ConstructorStanding, DriverStanding } from '@/lib/sim/types'
 import { computeDriverMediaBreakdowns } from '@/lib/sim/media-scores'
 
 interface Props {
@@ -10,25 +10,91 @@ interface Props {
   teams: Team[]
   raceResults: RaceResult[][]
   constructorStandings: ConstructorStanding[]
+  driverStandings: DriverStanding[]
 }
 
-export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings }: Props) {
+type SortKey = 'driver' | 'team' | 'champ' | 'a' | 'b' | 'c' | 'narr' | 'pace' | 'media'
+type SortDir = 'asc' | 'desc'
+
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  driver: 'asc', team: 'asc', champ: 'asc',
+  a: 'desc', b: 'desc', c: 'desc', narr: 'desc', pace: 'desc', media: 'desc',
+}
+
+interface Row {
+  driver: Driver
+  teamName: string
+  teamColor: string
+  champ: number | null
+  a: number; b: number; c: number; narr: number; pace: number; media: number
+}
+
+function Th({ k, label, right, sortKey, sortDir, onSort }: {
+  k: SortKey; label: string; right?: boolean; sortKey: SortKey; sortDir: SortDir; onSort: (k: SortKey) => void
+}) {
+  const active = sortKey === k
+  return (
+    <th
+      onClick={() => onSort(k)}
+      className={`pb-2 px-3 font-medium select-none whitespace-nowrap ${right ? 'text-right' : 'text-left'} ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#00D9FF]'}`}
+    >
+      <span className={`inline-flex items-center gap-0.5 ${right ? 'justify-end w-full' : ''}`}>
+        {label}
+        {active ? (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <span className="w-[11px]" />}
+      </span>
+    </th>
+  )
+}
+
+export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings, driverStandings }: Props) {
   const [godMode, setGodMode] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('media')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const teamMap = new Map(teams.map((t) => [t.id, t]))
+  const champMap = new Map(driverStandings.map((s, i) => [s.driverId, i + 1]))
   const constructorRankInfo = constructorStandings.map((cs, i) => ({
-    teamId: cs.teamId,
-    points: cs.points,
-    finalPosition: i + 1,
+    teamId: cs.teamId, points: cs.points, finalPosition: i + 1,
   }))
+  const bdMap = new Map(
+    computeDriverMediaBreakdowns(drivers, teams, raceResults, constructorRankInfo, teams.length).map((b) => [b.driverId, b]),
+  )
 
-  const breakdowns = computeDriverMediaBreakdowns(drivers, teams, raceResults, constructorRankInfo, teams.length)
-  const bdMap = new Map(breakdowns.map((b) => [b.driverId, b]))
+  const rows: Row[] = drivers
+    .filter((d) => bdMap.has(d.id))
+    .map((d) => {
+      const bd = bdMap.get(d.id)!
+      const team = teamMap.get(d.teamId)
+      return {
+        driver: d,
+        teamName: team ? team.name : 'Free Agent',
+        teamColor: team?.color ?? '#6B7280',
+        champ: champMap.get(d.id) ?? null,
+        a: bd.a, b: bd.b, c: bd.c, narr: bd.narrative, pace: bd.paceNarrative, media: bd.score,
+      }
+    })
 
-  const rows = drivers
-    .map((d) => ({ driver: d, bd: bdMap.get(d.id)! }))
-    .filter((r) => r.bd)
-    .sort((a, b) => b.bd.score - a.bd.score)
+  const val = (r: Row): number | string => {
+    switch (sortKey) {
+      case 'driver': return r.driver.name
+      case 'team': return r.teamName
+      case 'champ': return r.champ ?? Infinity
+      default: return r[sortKey]
+    }
+  }
+  rows.sort((a, b) => {
+    const av = val(a), bv = val(b)
+    const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  function handleSort(k: SortKey) {
+    if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(k); setSortDir(DEFAULT_DIR[k]) }
+  }
+  const th = (k: SortKey, label: string, right = false) => (
+    <Th k={k} label={label} right={right} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+  )
 
   const signed = (n: number) => (n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1))
 
@@ -44,44 +110,43 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="text-sm">
           <thead>
             <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
               <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
-              <th className="text-left pb-2 pr-4 font-medium">Driver</th>
-              <th className="text-left pb-2 px-3 font-medium">Team</th>
-              {godMode && <th className="text-right pb-2 px-3 font-medium">Results ·50%</th>}
-              {godMode && <th className="text-right pb-2 px-3 font-medium">H2H ·30%</th>}
-              {godMode && <th className="text-right pb-2 px-3 font-medium">Car-adj ·20%</th>}
-              {godMode && <th className="text-right pb-2 px-3 font-medium">Narr</th>}
-              {godMode && <th className="text-right pb-2 px-3 font-medium">Pace</th>}
-              {godMode && <th className="text-right pb-2 pl-3 font-medium">Media</th>}
+              {th('driver', 'Driver')}
+              {th('team', 'Team')}
+              {th('champ', 'Champ', true)}
+              {godMode && th('a', 'Results ·50%', true)}
+              {godMode && th('b', 'H2H ·30%', true)}
+              {godMode && th('c', 'Car-adj ·20%', true)}
+              {godMode && th('narr', 'Narr', true)}
+              {godMode && th('pace', 'Pace', true)}
+              {godMode && th('media', 'Media', true)}
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ driver, bd }, i) => {
-              const team = teamMap.get(driver.teamId)
-              return (
-                <tr key={driver.id} className="border-b border-[#2A3142]/50">
-                  <td className="py-1.5 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
-                  <td className="py-1.5 pr-4">
-                    <span className="flex items-center gap-2">
-                      <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: team?.color ?? '#6B7280' }} />
-                      <span className="text-[#FFFFFF] font-medium">{driver.name}</span>
-                    </span>
-                  </td>
-                  <td className="py-1.5 px-3 text-[#FFFFFF]">
-                    {team ? team.name : <span className="italic">Free Agent</span>}
-                  </td>
-                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.a.toFixed(0)}</td>}
-                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.b.toFixed(0)}</td>}
-                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.c.toFixed(0)}</td>}
-                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.narrative === 0 ? '—' : signed(bd.narrative)}</td>}
-                  {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{bd.paceNarrative === 0 ? '—' : signed(bd.paceNarrative)}</td>}
-                  {godMode && <td className="py-1.5 pl-3 text-right tabular-nums font-bold text-[#00D9FF]">{bd.score.toFixed(1)}</td>}
-                </tr>
-              )
-            })}
+            {rows.map((r, i) => (
+              <tr key={r.driver.id} className="border-b border-[#2A3142]/50">
+                <td className="py-1.5 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
+                <td className="py-1.5 px-3">
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: r.teamColor }} />
+                    <span className="text-[#FFFFFF] font-medium whitespace-nowrap">{r.driver.name}</span>
+                  </span>
+                </td>
+                <td className="py-1.5 px-3 text-[#FFFFFF] whitespace-nowrap">
+                  <span className={r.teamName === 'Free Agent' ? 'italic' : ''}>{r.teamName}</span>
+                </td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.champ != null ? `P${r.champ}` : '—'}</td>
+                {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.a.toFixed(0)}</td>}
+                {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.b.toFixed(0)}</td>}
+                {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.c.toFixed(0)}</td>}
+                {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.narr === 0 ? '—' : signed(r.narr)}</td>}
+                {godMode && <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.pace === 0 ? '—' : signed(r.pace)}</td>}
+                {godMode && <td className="py-1.5 px-3 text-right tabular-nums font-bold text-[#00D9FF]">{r.media.toFixed(1)}</td>}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

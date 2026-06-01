@@ -192,6 +192,7 @@ export default function StandingsPage() {
               teams={season.teams}
               raceResults={season.raceResults}
               constructorStandings={season.constructorStandings}
+              driverStandings={season.driverStandings}
             />
           </>
         )}
