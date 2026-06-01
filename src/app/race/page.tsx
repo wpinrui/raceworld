@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
+import { isOffSeason } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 import { getPoints } from '@/lib/sim/points'
 import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
@@ -53,7 +54,7 @@ export default function RacePage() {
   useEffect(() => {
     setHydrated(true)
     if (season.phase === 'idle') { router.replace('/setup'); return }
-    if (season.phase === 'end-of-season') { router.replace('/standings'); return }
+    if (isOffSeason(season.phase)) { router.replace('/standings'); return }
     if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit.id)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -134,7 +135,7 @@ export default function RacePage() {
 
   useEffect(() => {
     if (!autoSimming) return
-    if (season.phase === 'end-of-season') { setAutoSimming(false); return }
+    if (isOffSeason(season.phase)) { setAutoSimming(false); return }
     if (phase === 'pre-qualifying') { const t = setTimeout(() => initSession(), 100); return () => clearTimeout(t) }
     if (phase === 'pre-race') {
       const rs = useRaceStore.getState().raceState

@@ -8,8 +8,8 @@ import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
 import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
-import { ReshufflePanel } from '@/components/standings/ReshufflePanel'
 import { MarketPanel } from '@/components/standings/MarketPanel'
+import { TestingPanel } from '@/components/standings/TestingPanel'
 import {
   actionGetArchivedSeasons,
   actionGetSeasonStandings,
@@ -18,10 +18,17 @@ import {
   actionGetRecentConstructorHistory,
 } from '@/lib/db/actions'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
+import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
 import type { DbSeason } from '@/lib/db/queries'
 
 type Tab = 'drivers' | 'constructors'
-type EosTab = 'progression' | 'retirements' | 'reshuffle' | 'market'
+
+const PHASE_META: Record<string, { title: string; blurb: string }> = {
+  'end-of-season': { title: 'End of Season', blurb: 'Final standings and how each driver developed.' },
+  'contract-negotiations': { title: 'Contract Negotiations', blurb: 'Driver market moves for the coming season.' },
+  'driver-retirements': { title: 'Driver Retirements', blurb: 'Drivers leaving the grid.' },
+  'pre-season-testing': { title: 'Pre-Season Testing', blurb: 'A first, obscured look at next season’s cars.' },
+}
 
 interface ArchivedView {
   seasonId: number
@@ -34,7 +41,6 @@ export default function StandingsPage() {
   const router = useRouter()
   const season = useSeasonStore()
   const [tab, setTab] = useState<Tab>('drivers')
-  const [eosTab, setEosTab] = useState<EosTab>('progression')
   const [archivedSeasons, setArchivedSeasons] = useState<DbSeason[]>([])
   const [selectedArchive, setSelectedArchive] = useState<ArchivedView | null>(null)
   const [loadingArchive, setLoadingArchive] = useState(false)
@@ -45,7 +51,15 @@ export default function StandingsPage() {
     actionGetArchivedSeasons().then(setArchivedSeasons)
   }, [])
 
-  const isEndOfSeason = season.phase === 'end-of-season'
+  const offSeason = isOffSeason(season.phase) && !selectedArchive
+  const phaseIdx = OFF_SEASON_PHASES.indexOf(season.phase)
+  const isLastPhase = phaseIdx === OFF_SEASON_PHASES.length - 1
+
+  function advancePhase() {
+    if (season.phase === 'end-of-season') season.runContractNegotiations()
+    else if (season.phase === 'contract-negotiations') season.runDriverRetirements()
+    else if (season.phase === 'driver-retirements') season.runPreSeasonTesting()
+  }
 
   async function loadArchivedSeason(s: DbSeason) {
     setLoadingArchive(true)
@@ -90,8 +104,8 @@ export default function StandingsPage() {
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
       <div className="max-w-full px-4 py-6">
 
-        {/* End-of-season panel */}
-        {isEndOfSeason && !selectedArchive && (
+        {/* Off-season phase sequence */}
+        {offSeason && summary && (
           <div className="mb-6 rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 overflow-hidden">
             {/* Champion header */}
             <div className="p-5 flex items-center justify-between flex-wrap gap-4 border-b border-[#2A3142]">
@@ -99,7 +113,7 @@ export default function StandingsPage() {
                 <div className="flex items-center gap-2.5 mb-1">
                   <div className="w-1 h-6 rounded-sm bg-[#00D9FF]" />
                   <h2 className="font-display text-xl tracking-wider uppercase text-[#E8EAED]">
-                    Season {season.year} Complete
+                    Season {season.year} · {PHASE_META[season.phase].title}
                   </h2>
                 </div>
                 {displayDrivers[0] && (
@@ -125,56 +139,51 @@ export default function StandingsPage() {
                   Return to Setup
                 </button>
                 <button
-                  onClick={handleArchiveAndNewSeason}
+                  onClick={isLastPhase ? handleArchiveAndNewSeason : advancePhase}
                   className="px-5 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors"
                 >
-                  Start {season.year + 1} Season →
+                  {isLastPhase
+                    ? `Start ${season.year + 1} Season →`
+                    : `${PHASE_META[OFF_SEASON_PHASES[phaseIdx + 1]].title} →`}
                 </button>
               </div>
             </div>
 
-            {/* Sub-tabs (only if summary is available) */}
-            {summary && (
-              <>
-                <div className="flex border-b border-[#2A3142]">
-                  {(
-                    [
-                      ['progression', 'Driver Stats'],
-                      ['retirements', `Retirements (${summary.retiredDriverIds.length})`],
-                      ['reshuffle', 'Car Reshuffle'],
-                      ['market', `Transfers (${summary.marketMoves.length})`],
-                    ] as [EosTab, string][]
-                  ).map(([t, label]) => (
-                    <button
-                      key={t}
-                      onClick={() => setEosTab(t)}
-                      className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors border-b-2 ${
-                        eosTab === t
-                          ? 'text-[#00D9FF] border-[#00D9FF]'
-                          : 'text-[#A0A9B8] border-transparent hover:text-[#E8EAED]'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            {/* Phase stepper */}
+            <div className="flex items-center gap-2 px-5 py-2.5 border-b border-[#2A3142] text-xs flex-wrap">
+              {OFF_SEASON_PHASES.map((p, i) => (
+                <span key={p} className="flex items-center gap-2">
+                  <span
+                    className={
+                      i === phaseIdx
+                        ? 'text-[#00D9FF] font-semibold'
+                        : i < phaseIdx
+                          ? 'text-[#A0A9B8]'
+                          : 'text-[#6B7280]'
+                    }
+                  >
+                    {PHASE_META[p].title}
+                  </span>
+                  {i < OFF_SEASON_PHASES.length - 1 && <span className="text-[#3A4152]">→</span>}
+                </span>
+              ))}
+            </div>
 
-                <div className="p-5">
-                  {eosTab === 'progression' && (
-                    <ProgressionPanel summary={summary} drivers={season.drivers} />
-                  )}
-                  {eosTab === 'retirements' && (
-                    <RetirementsPanel summary={summary} drivers={season.drivers} />
-                  )}
-                  {eosTab === 'reshuffle' && (
-                    <ReshufflePanel summary={summary} teams={season.teams} />
-                  )}
-                  {eosTab === 'market' && (
-                    <MarketPanel summary={summary} teams={season.teams} />
-                  )}
-                </div>
-              </>
-            )}
+            <div className="p-5">
+              <p className="text-sm text-[#A0A9B8] mb-4">{PHASE_META[season.phase].blurb}</p>
+              {season.phase === 'end-of-season' && (
+                <ProgressionPanel summary={summary} drivers={season.drivers} />
+              )}
+              {season.phase === 'contract-negotiations' && (
+                <MarketPanel summary={summary} teams={season.teams} />
+              )}
+              {season.phase === 'driver-retirements' && (
+                <RetirementsPanel summary={summary} drivers={season.drivers} />
+              )}
+              {season.phase === 'pre-season-testing' && (
+                <TestingPanel summary={summary} teams={season.teams} />
+              )}
+            </div>
           </div>
         )}
 

@@ -123,7 +123,27 @@ export interface GodModeAction {
 
 // --- Season / standings types ---
 
-export type SeasonPhase = 'idle' | 'pre-race' | 'post-race' | 'end-of-season'
+export type SeasonPhase =
+  | 'idle'
+  | 'pre-race'
+  | 'post-race'
+  | 'end-of-season'
+  | 'contract-negotiations'
+  | 'driver-retirements'
+  | 'pre-season-testing'
+
+// Off-season phases that run sequentially after the final race, each presenting
+// its own slice of info before rolling into the next pre-season.
+export const OFF_SEASON_PHASES: SeasonPhase[] = [
+  'end-of-season',
+  'contract-negotiations',
+  'driver-retirements',
+  'pre-season-testing',
+]
+
+export function isOffSeason(phase: SeasonPhase): boolean {
+  return OFF_SEASON_PHASES.includes(phase)
+}
 
 export interface RaceResult {
   driverId: string
@@ -209,6 +229,26 @@ export interface MarketMove {
   mediaScore: number
 }
 
+// Fuel load is revealed to the player only as a qualitative band, never the
+// exact number — so a fast lap on a full tank reads as genuinely quick.
+export type FuelBand = 'full' | 'heavy' | 'medium' | 'light'
+
+export interface PreSeasonTestEntry {
+  teamId: string
+  teamName: string
+  driverId: string
+  driverName: string
+  tyre: TyreCompound
+  fuelBand: FuelBand
+  lapTime: number   // simulated representative lap (seconds)
+  carPace: number   // true new-season pace; only surfaced via god-mode reveal
+}
+
+export interface PreSeasonTest {
+  circuitName: string
+  entries: PreSeasonTestEntry[]   // sorted by lapTime ascending
+}
+
 export interface EndOfSeasonSummary {
   seasonYear: number
   driverChampion: string
@@ -221,4 +261,5 @@ export interface EndOfSeasonSummary {
   driverMediaScores: DriverMediaScore[]
   teamMediaScores: TeamMediaScore[]
   upgradeEvents: DevUpgradeEvent[]
+  preSeasonTest: PreSeasonTest | null
 }

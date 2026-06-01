@@ -1,0 +1,107 @@
+'use client'
+
+import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import type { EndOfSeasonSummary, Team, TyreCompound, FuelBand } from '@/lib/sim/types'
+
+interface Props {
+  summary: EndOfSeasonSummary
+  teams: Team[]
+}
+
+const TYRE_STYLE: Record<string, string> = {
+  soft: 'bg-[#DC143C] text-white',
+  medium: 'bg-[#E8C547] text-[#0F1419]',
+  hard: 'bg-[#E8EAED] text-[#0F1419]',
+}
+
+const FUEL_STYLE: Record<FuelBand, string> = {
+  full: 'text-[#DC143C]',
+  heavy: 'text-[#F59E0B]',
+  medium: 'text-[#A0A9B8]',
+  light: 'text-[#10B981]',
+}
+
+function tyreLabel(c: TyreCompound): string {
+  return c.charAt(0).toUpperCase() + c.slice(1)
+}
+
+function fmtTime(t: number): string {
+  const m = Math.floor(t / 60)
+  const s = t - m * 60
+  return `${m}:${s.toFixed(3).padStart(6, '0')}`
+}
+
+export function TestingPanel({ summary, teams }: Props) {
+  const [reveal, setReveal] = useState(false)
+  const test = summary.preSeasonTest
+
+  if (!test || test.entries.length === 0) {
+    return <p className="text-sm text-[#6B7280]">No testing data.</p>
+  }
+
+  const colorOf = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
+  const fastest = test.entries[0].lapTime
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm text-[#A0A9B8]">
+          Pre-season test · <span className="text-[#E8EAED]">{test.circuitName}</span> · one car per team,
+          random tyre &amp; fuel load
+        </p>
+        <button
+          onClick={() => setReveal((v) => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#A0A9B8] hover:text-[#E8EAED] hover:bg-[#303848] transition-colors"
+        >
+          {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+          {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
+        </button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[#6B7280] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+              <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
+              <th className="text-left pb-2 pr-4 font-medium">Driver</th>
+              <th className="text-left pb-2 px-3 font-medium">Team</th>
+              <th className="text-center pb-2 px-3 font-medium">Tyre</th>
+              <th className="text-left pb-2 px-3 font-medium">Fuel</th>
+              <th className="text-right pb-2 px-3 font-medium">Time</th>
+              <th className="text-right pb-2 px-3 font-medium">Gap</th>
+              {reveal && <th className="text-right pb-2 pl-3 font-medium">True Pace</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {test.entries.map((e, i) => (
+              <tr key={e.teamId} className="border-b border-[#2A3142]/50">
+                <td className="py-2 pr-3 tabular-nums text-[#6B7280]">{i + 1}</td>
+                <td className="py-2 pr-4 text-[#E8EAED] font-medium">{e.driverName}</td>
+                <td className="py-2 px-3">
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: colorOf(e.teamId) }} />
+                    <span className="text-[#A0A9B8]">{e.teamName}</span>
+                  </span>
+                </td>
+                <td className="py-2 px-3 text-center">
+                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${TYRE_STYLE[e.tyre] ?? 'bg-[#2A3142] text-[#E8EAED]'}`}>
+                    {tyreLabel(e.tyre)}
+                  </span>
+                </td>
+                <td className={`py-2 px-3 font-semibold capitalize ${FUEL_STYLE[e.fuelBand]}`}>{e.fuelBand}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-[#E8EAED] font-semibold">{fmtTime(e.lapTime)}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-[#6B7280]">
+                  {i === 0 ? '—' : `+${(e.lapTime - fastest).toFixed(3)}`}
+                </td>
+                {reveal && (
+                  <td className="py-2 pl-3 text-right tabular-nums text-[#00D9FF] font-semibold">{e.carPace.toFixed(1)}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

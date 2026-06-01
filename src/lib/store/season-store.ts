@@ -18,9 +18,13 @@ import { calendar2026 } from '@/data/calendar'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
+import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 
 const TOTAL_ROUNDS = calendar2026.length
+
+// Pre-season testing always runs at Barcelona/Catalunya.
+const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[0]
 
 type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
 
@@ -135,6 +139,9 @@ interface SeasonStore {
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
+  runContractNegotiations: () => void
+  runDriverRetirements: () => void
+  runPreSeasonTesting: () => void
   setDbSeasonId: (id: number) => void
   startNewSeason: () => void
   resetToIdle: () => void
@@ -279,43 +286,27 @@ export const useSeasonStore = create<SeasonStore>()(
           }
         }
 
-        // 3. Age every driver one year.
+        // 3. Age every driver one year. Reshuffle, market and attrition are
+        //    deferred to their own off-season phases (run lazily on entry).
         const agedDrivers = ageDrivers(drivers)
 
-        // 4. Car reshuffle
-        const { updatedTeams: reshuffledTeams, oldPaces, newPaces } =
-          computeCarReshuffle(teams, Math.random)
-
-        // 5. Driver market
-        const newYear = year + 1
-        const { updatedDrivers: signedDrivers, marketMoves } = runDriverMarket(
-          agedDrivers,
-          reshuffledTeams,
-          driverMediaScores,
-          teamMediaScores,
-          newYear,
-          Math.random,
-        )
-
-        // 6. Attrition: drivers without a seat for 5 consecutive seasons leave the market.
-        const { drivers: finalDrivers, retiredDriverIds } = applyMarketAttrition(signedDrivers)
-
-        // 7. Build summary
+        // 4. Build the partial summary; later phases fill in their slices.
         const summary: EndOfSeasonSummary = {
           seasonYear: year,
           driverChampion: driverStandings[0]?.driverId ?? '',
           constructorChampion: constructorStandings[0]?.teamId ?? '',
           progressionEvents,
-          retiredDriverIds,
-          carReshuffleOldPaces: oldPaces,
-          carReshuffleNewPaces: newPaces,
-          marketMoves,
+          retiredDriverIds: [],
+          carReshuffleOldPaces: {},
+          carReshuffleNewPaces: {},
+          marketMoves: [],
           driverMediaScores,
           teamMediaScores,
           upgradeEvents: allUpgradeEvents,
+          preSeasonTest: null,
         }
 
-        // 8. Update constructor history (prepend current season, dedupe, keep ≤55)
+        // 5. Update constructor history (prepend current season, dedupe, keep ≤55)
         const newHistoryEntries: ConstructorSeasonRecord[] = constructorRankInfo.map((cs) => ({
           seasonYear: year,
           teamId: cs.teamId,
@@ -336,7 +327,66 @@ export const useSeasonStore = create<SeasonStore>()(
           phase: 'end-of-season',
           endOfSeasonSummary: summary,
           constructorHistory: updatedHistory,
-          pendingNextSeasonState: { drivers: finalDrivers, teams: reshuffledTeams },
+          pendingNextSeasonState: { drivers: agedDrivers, teams },
+        })
+      },
+
+      // Phase 2: free agents sign for the coming season.
+      runContractNegotiations: () => {
+        const { pendingNextSeasonState, endOfSeasonSummary, year } = get()
+        if (!pendingNextSeasonState || !endOfSeasonSummary) return
+        const { drivers, teams } = pendingNextSeasonState
+
+        const { updatedDrivers, marketMoves } = runDriverMarket(
+          drivers,
+          teams,
+          endOfSeasonSummary.driverMediaScores,
+          endOfSeasonSummary.teamMediaScores,
+          year + 1,
+          Math.random,
+        )
+
+        set({
+          phase: 'contract-negotiations',
+          endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves },
+          pendingNextSeasonState: { drivers: updatedDrivers, teams },
+        })
+      },
+
+      // Phase 3: drivers without a seat for 5 seasons leave the market.
+      runDriverRetirements: () => {
+        const { pendingNextSeasonState, endOfSeasonSummary } = get()
+        if (!pendingNextSeasonState || !endOfSeasonSummary) return
+        const { drivers, teams } = pendingNextSeasonState
+
+        const { drivers: survivors, retiredDriverIds } = applyMarketAttrition(drivers)
+
+        set({
+          phase: 'driver-retirements',
+          endOfSeasonSummary: { ...endOfSeasonSummary, retiredDriverIds },
+          pendingNextSeasonState: { drivers: survivors, teams },
+        })
+      },
+
+      // Phase 4: car reshuffle for next season, revealed obliquely via a test session.
+      runPreSeasonTesting: () => {
+        const { pendingNextSeasonState, endOfSeasonSummary } = get()
+        if (!pendingNextSeasonState || !endOfSeasonSummary) return
+        const { drivers, teams } = pendingNextSeasonState
+
+        const { updatedTeams: reshuffledTeams, oldPaces, newPaces } =
+          computeCarReshuffle(teams, Math.random)
+        const preSeasonTest = runPreSeasonTest(drivers, reshuffledTeams, TEST_CIRCUIT, Math.random)
+
+        set({
+          phase: 'pre-season-testing',
+          endOfSeasonSummary: {
+            ...endOfSeasonSummary,
+            carReshuffleOldPaces: oldPaces,
+            carReshuffleNewPaces: newPaces,
+            preSeasonTest,
+          },
+          pendingNextSeasonState: { drivers, teams: reshuffledTeams },
         })
       },
 
