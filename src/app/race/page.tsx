@@ -342,6 +342,7 @@ export default function RacePage() {
                       <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
                         <th className="text-left py-1 pr-2">Driver</th>
                         <th className="text-center py-1 px-2 w-36">Form</th>
+                        <th className="text-center py-1 px-2 w-16">Car</th>
                         <th className="text-center py-1 px-2 w-16">Pace</th>
                         <th className="text-center py-1 px-2 w-16">Wet</th>
                         <th className="text-center py-1 px-2 w-16">Ovt</th>
@@ -373,6 +374,9 @@ export default function RacePage() {
                                   {form.toFixed(1)}
                                 </span>
                               </div>
+                            </td>
+                            <td className="py-1 px-2 text-center text-sm font-semibold text-[#FFFFFF]">
+                              {team?.carPace ?? '—'}
                             </td>
                             {(['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const).map((stat) => (
                               <td key={stat} className="py-1 px-2 text-center text-sm font-semibold text-[#E8EAED]">
