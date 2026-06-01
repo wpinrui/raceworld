@@ -117,12 +117,31 @@ function makeDefaultDriver(teamId: string): Driver {
   }
 }
 
-function DriverCard({ driver, teamColor, teams, onUpdate, onRemove }: {
+function ContractBadge({ expiresAfter, currentYear }: { expiresAfter: number; currentYear: number }) {
+  const expiring = expiresAfter === currentYear
+  const expired = expiresAfter < currentYear
+  if (expired) return (
+    <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#DC143C] text-white rounded px-1.5 py-0.5">
+      Free Agent
+    </span>
+  )
+  if (expiring) return (
+    <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#FCD34D] text-[#0F1419] rounded px-1.5 py-0.5">
+      Expiring
+    </span>
+  )
+  return (
+    <span className="text-[10px] text-[#6B7280] tabular-nums">until {expiresAfter}</span>
+  )
+}
+
+function DriverCard({ driver, teamColor, teams, onUpdate, onRemove, currentYear }: {
   driver: Driver
   teamColor: string
   teams: Team[]
   onUpdate: (patch: Partial<Driver>) => void
   onRemove: () => void
+  currentYear: number
 }) {
   const [expanded, setExpanded] = useState(false)
   const overall = computeOverall(driver)
@@ -135,7 +154,10 @@ function DriverCard({ driver, teamColor, teams, onUpdate, onRemove }: {
           <OverallRing overall={overall} />
           <div className="flex-1 min-w-0">
             <div className="text-base font-semibold text-[#E8EAED] truncate">{driver.name}</div>
-            <div className="text-xs text-[#FFFFFF]">Age {driver.age}</div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs text-[#6B7280]">Age {driver.age}</span>
+              <ContractBadge expiresAfter={driver.contractExpiresAfterSeason} currentYear={currentYear} />
+            </div>
           </div>
           <button
             onClick={() => setExpanded((x) => !x)}
@@ -242,10 +264,6 @@ export default function SetupPage() {
 
   useEffect(() => {
     setHydrated(true)
-    if (seasonStore.phase !== 'idle') {
-      router.replace('/race')
-      return
-    }
     setLocalDrivers(seasonStore.drivers.map((d) => ({ ...d })))
     setLocalTeams(seasonStore.teams.map((t) => ({ ...t })))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -312,6 +330,11 @@ export default function SetupPage() {
 
   if (!hydrated) return null
 
+  const isActive = seasonStore.phase !== 'idle'
+  const expiringCount = localDrivers.filter(
+    (d) => d.contractExpiresAfterSeason <= seasonStore.year,
+  ).length
+
   const driversByTeam = localTeams.map((team) => ({
     team,
     drivers: localDrivers.filter((d) => d.teamId === team.id),
@@ -325,31 +348,46 @@ export default function SetupPage() {
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-1 h-6 rounded-sm bg-[#DC143C]" />
-              <h1 className="font-display text-2xl tracking-wider uppercase">Setup</h1>
+              <h1 className="font-display text-2xl tracking-wider uppercase">
+                {isActive ? 'Driver Market' : 'Setup'}
+              </h1>
             </div>
-            <p className="text-[#FFFFFF] text-sm ml-3.5">
-
-            </p>
+            {isActive && expiringCount > 0 && (
+              <p className="text-sm ml-3.5 text-[#FCD34D]">
+                {expiringCount} contract{expiringCount > 1 ? 's' : ''} expiring after {seasonStore.year}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button onClick={handlePrePopulate}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
-              <RotateCcw size={13} /> Pre-populate 2026
-            </button>
-            <button onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
-              <Upload size={13} /> Import JSON
-            </button>
+            {!isActive && (
+              <>
+                <button onClick={handlePrePopulate}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                  <RotateCcw size={13} /> Pre-populate 2026
+                </button>
+                <button onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                  <Upload size={13} /> Import JSON
+                </button>
+              </>
+            )}
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
             <button onClick={handleExport}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#E8EAED] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
               <Download size={13} /> Export JSON
             </button>
-            <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              Start Season {seasonStore.year} <ChevronRight size={14} />
-            </button>
+            {isActive ? (
+              <button onClick={() => router.push('/race')}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors">
+                Back to Race <ChevronRight size={14} />
+              </button>
+            ) : (
+              <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                Start Season {seasonStore.year} <ChevronRight size={14} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -388,6 +426,7 @@ export default function SetupPage() {
                     teams={localTeams}
                     onUpdate={(patch) => updateDriver(driver.id, patch)}
                     onRemove={() => removeDriver(driver.id)}
+                    currentYear={seasonStore.year}
                   />
                 ))}
                 {Array.from({ length: DRIVERS_PER_TEAM - teamDrivers.length }).map((_, i) => (
@@ -402,12 +441,14 @@ export default function SetupPage() {
           ))}
         </div>
 
-        <div className="mt-8 flex justify-end">
-          <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-sm uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-            Start Season {seasonStore.year} <ChevronRight size={16} />
-          </button>
-        </div>
+        {!isActive && (
+          <div className="mt-8 flex justify-end">
+            <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
+              className="flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-sm uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              Start Season {seasonStore.year} <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
