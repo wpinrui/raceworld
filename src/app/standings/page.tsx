@@ -170,26 +170,24 @@ export default function StandingsPage() {
                   <th className="text-left py-2 px-3 w-8 sticky left-0 bg-[#1E2431]">P</th>
                   <th className="text-left py-2 px-3 sticky left-8 bg-[#1E2431] min-w-[140px]">Driver</th>
                   <th className="text-left py-2 px-3 min-w-[80px]">Team</th>
-                  <th className="text-right py-2 px-3 w-16">Pts</th>
-                  <th className="text-right py-2 px-3 w-12">Wins</th>
-                  {Array.from({ length: totalRounds }, (_, i) => (
+                  {Array.from({ length: completedRounds }, (_, i) => (
                     <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px]">
                       {String(i + 1).padStart(2, '0')}
                     </th>
                   ))}
+                  <th className="text-right py-2 px-3 w-16">Pts</th>
                 </tr>
               </thead>
               <tbody>
                 {displayDrivers.map((standing, idx) => {
-                  const team = season.teams.find((t) => t.id === standing.teamId) ??
-                    (selectedArchive ? null : null)
+                  const team = season.teams.find((t) => t.id === standing.teamId)
                   const teamColor = team?.color ?? '#FFFFFF'
                   return (
                     <tr
                       key={standing.driverId}
                       className="border-b border-[#2A3142]/50 hover:bg-[#2A3142]/40 transition-colors"
                     >
-                      <td className="py-1.5 px-3 tabular-nums font-bold text-[#FFFFFF] sticky left-0 bg-[#1E2431]">
+                      <td className="py-1.5 px-3 font-bold text-[#FFFFFF] sticky left-0 bg-[#1E2431]">
                         {idx + 1}
                       </td>
                       <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
@@ -199,14 +197,10 @@ export default function StandingsPage() {
                         </div>
                       </td>
                       <td className="py-1.5 px-3 text-[#FFFFFF] text-xs">{standing.teamName}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums font-bold text-[#E8EAED]">{standing.points}</td>
-                      <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{standing.wins}</td>
-                      {Array.from({ length: totalRounds }, (_, i) => {
-                        if (i >= completedRounds && !selectedArchive) {
-                          return <ResultCell key={i} position={undefined} round={i} />
-                        }
-                        return <ResultCell key={i} position={standing.results[i] ?? null} />
-                      })}
+                      {Array.from({ length: completedRounds }, (_, i) => (
+                        <ResultCell key={i} position={standing.results[i] ?? null} />
+                      ))}
+                      <td className="py-1.5 px-3 text-right font-bold text-[#E8EAED]">{standing.points}</td>
                     </tr>
                   )
                 })}

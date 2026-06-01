@@ -45,7 +45,12 @@ function computeDriverStandings(
 
   return [...map.values()].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points
-    return b.wins - a.wins
+    // Countback: compare number of each position 1→22. DNF (null) never matches, so it loses to any finish.
+    for (let pos = 1; pos <= 22; pos++) {
+      const diff = b.results.filter((r) => r === pos).length - a.results.filter((r) => r === pos).length
+      if (diff !== 0) return diff
+    }
+    return 0
   })
 }
 
