@@ -25,8 +25,8 @@ export default function RacePage() {
   const router = useRouter()
   const season = useSeasonStore()
   const {
-    raceState, drivers, teams, forms, strategyNoise,
-    loadFromSeason, updateDriverForm, setStrategyNoise,
+    raceState, drivers, teams, forms, strategyNoise, godModeDriverId,
+    loadFromSeason, updateDriverForm, setStrategyNoise, setGodModeDriver,
     initSession, tickLap, setSpeed, setPaused, resetSession,
   } = useRaceStore()
 
@@ -35,7 +35,7 @@ export default function RacePage() {
   const paused = raceState?.paused ?? false
 
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
-  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
+  const selectedDriverId = godModeDriverId
   const [showSpeed4Modal, setShowSpeed4Modal] = useState(false)
   const [speed4Confirmed, setSpeed4Confirmed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -408,7 +408,7 @@ export default function RacePage() {
                 totalLaps={raceState.totalLaps}
                 phase={phase}
                 selectedDriverId={selectedDriverId}
-                onSelectDriver={setSelectedDriverId}
+                onSelectDriver={setGodModeDriver}
               />
             </div>
           )}
