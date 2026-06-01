@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+raceworld.db
+raceworld.db-shm
+raceworld.db-wal
