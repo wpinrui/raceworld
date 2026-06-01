@@ -95,11 +95,30 @@ export default function DriverPage() {
                           <label className="text-xs text-[#FFFFFF] block mb-1">Age</label>
                           <input type="number" min={16} max={60} value={liveDriver.age} onChange={(e) => updateDriver(id, { age: Number(e.target.value) })} className={inputClass} />
                         </div>
+                        <div>
+                          <label className="text-xs text-[#FFFFFF] block mb-1">Potential</label>
+                          <input type="number" min={0} max={100} value={liveDriver.peakPotential} onChange={(e) => updateDriver(id, { peakPotential: Number(e.target.value) })} className={inputClass} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-[#FFFFFF] block mb-1">Contract until</label>
+                          <input type="number" value={liveDriver.contractExpiresAfterSeason} onChange={(e) => updateDriver(id, { contractExpiresAfterSeason: Number(e.target.value) })} className={inputClass} />
+                        </div>
                       </div>
                       <div className="space-y-2.5">
                         {STAT_KEYS.map((k) => (
                           <StatSlider key={k} label={STAT_LABELS[k]} value={liveDriver[k]} onChange={(v) => updateDriver(id, { [k]: v })} />
                         ))}
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-[#FFFFFF] w-20 shrink-0">Narrative</span>
+                          <input
+                            type="range" min={-20} max={20} value={liveDriver.narrativeModifier}
+                            onChange={(e) => updateDriver(id, { narrativeModifier: Number(e.target.value) })}
+                            className="flex-1 h-1 cursor-pointer" style={{ accentColor: '#A855F7' }}
+                          />
+                          <span className={`text-sm font-semibold w-8 text-right shrink-0 ${liveDriver.narrativeModifier > 0 ? 'text-[#10B981]' : liveDriver.narrativeModifier < 0 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}`}>
+                            {liveDriver.narrativeModifier > 0 ? '+' : ''}{liveDriver.narrativeModifier}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ) : (
