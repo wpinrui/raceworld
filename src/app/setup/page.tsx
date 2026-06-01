@@ -69,31 +69,27 @@ export default function SetupPage() {
   // "Start Season" commits them via initSeason().
   const isActive = seasonStore.phase !== 'idle'
 
-  function commitDrivers(next: Driver[]) {
-    setLocalDrivers(next)
-    if (isActive) seasonStore.updateGrid(next, localTeams)
-  }
-
-  function commitTeams(next: Team[]) {
-    setLocalTeams(next)
-    if (isActive) seasonStore.updateGrid(localDrivers, next)
-  }
+  // Drive updateGrid from committed React state rather than from inside setters,
+  // so the store always receives the latest localDrivers + localTeams together.
+  useEffect(() => {
+    if (isActive && hydrated) seasonStore.updateGrid(localDrivers, localTeams)
+  }, [localDrivers, localTeams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateTeam(id: string, patch: Partial<Team>) {
-    commitTeams(localTeams.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+    setLocalTeams((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
   }
 
   function updateDriver(id: string, patch: Partial<Driver>) {
-    commitDrivers(localDrivers.map((d) => (d.id === id ? { ...d, ...patch } : d)))
+    setLocalDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
   }
 
   function addDriver(teamId: string) {
     if (localDrivers.filter((d) => d.teamId === teamId).length >= DRIVERS_PER_TEAM) return
-    commitDrivers([...localDrivers, makeDefaultDriver(teamId)])
+    setLocalDrivers((prev) => [...prev, makeDefaultDriver(teamId)])
   }
 
   function removeDriver(id: string) {
-    commitDrivers(localDrivers.filter((d) => d.id !== id))
+    setLocalDrivers((prev) => prev.filter((d) => d.id !== id))
   }
 
   function handleStartSeason() {

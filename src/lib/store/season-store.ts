@@ -186,8 +186,8 @@ export const useSeasonStore = create<SeasonStore>()(
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
           seasonStartStats: snapshotStats(allDrivers),
-          driverStandings: computeDriverStandings(drivers, teams, []),
-          constructorStandings: computeConstructorStandings(teams, drivers, []),
+          driverStandings: computeDriverStandings(allDrivers, teams, []),
+          constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
       },
 

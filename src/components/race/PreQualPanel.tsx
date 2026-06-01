@@ -56,6 +56,36 @@ function sortDrivers(
   return dir === 'desc' ? sorted.reverse() : sorted
 }
 
+interface ThProps {
+  col: SortKey
+  children: React.ReactNode
+  right?: boolean
+  activeSortKey: SortKey
+  sortDir: SortDir
+  onSort: (key: SortKey) => void
+}
+
+function Th({ col, children, right, activeSortKey, sortDir, onSort }: ThProps) {
+  const active = col === activeSortKey
+  return (
+    <th
+      className={`py-1 px-2 cursor-pointer select-none whitespace-nowrap transition-colors
+        ${right ? 'text-right' : 'text-left'}
+        ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#E8EAED]'}`}
+      onClick={() => onSort(col)}
+    >
+      <span className={`inline-flex items-center gap-0.5 ${right ? 'justify-end w-full' : ''}`}>
+        {children}
+        {active
+          ? sortDir === 'asc'
+            ? <ChevronUp size={11} className="shrink-0" />
+            : <ChevronDown size={11} className="shrink-0" />
+          : <span className="w-[11px]" />}
+      </span>
+    </th>
+  )
+}
+
 export function PreQualPanel({
   drivers, teams, forms, strategyNoise, currentCircuit,
   onStrategyNoiseChange, onFormChange, onBegin, onAutoSim,
@@ -73,27 +103,6 @@ export function PreQualPanel({
   }
 
   const sorted = sortDrivers(drivers, teams, forms, sortKey, sortDir)
-
-  function Th({ col, children, right }: { col: SortKey; children: React.ReactNode; right?: boolean }) {
-    const active = col === sortKey
-    return (
-      <th
-        className={`py-1 px-2 cursor-pointer select-none whitespace-nowrap transition-colors
-          ${right ? 'text-right' : 'text-left'}
-          ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#E8EAED]'}`}
-        onClick={() => handleSort(col)}
-      >
-        <span className={`inline-flex items-center gap-0.5 ${right ? 'justify-end w-full' : ''}`}>
-          {children}
-          {active
-            ? sortDir === 'asc'
-              ? <ChevronUp size={11} className="shrink-0" />
-              : <ChevronDown size={11} className="shrink-0" />
-            : <span className="w-[11px]" />}
-        </span>
-      </th>
-    )
-  }
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -144,14 +153,14 @@ export function PreQualPanel({
         <table className="w-full border-collapse">
           <thead>
             <tr className="text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
-              <Th col="driver">Driver</Th>
-              <Th col="team">Team</Th>
-              <Th col="form">Form</Th>
-              <Th col="car" right>Car</Th>
-              <Th col="pace" right>Pace</Th>
-              <Th col="wet" right>Wet</Th>
-              <Th col="ovt" right>Ovt</Th>
-              <Th col="smt" right>Smt</Th>
+              <Th col="driver" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Driver</Th>
+              <Th col="team" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Team</Th>
+              <Th col="form" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Form</Th>
+              <Th col="car" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Car</Th>
+              <Th col="pace" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Pace</Th>
+              <Th col="wet" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Wet</Th>
+              <Th col="ovt" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Ovt</Th>
+              <Th col="smt" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Smt</Th>
             </tr>
           </thead>
           <tbody>
