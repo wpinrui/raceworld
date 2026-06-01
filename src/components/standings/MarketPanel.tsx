@@ -1,6 +1,7 @@
 'use client'
 
-import type { EndOfSeasonSummary, Team, MarketMove } from '@/lib/sim/types'
+import { ArrowRight } from 'lucide-react'
+import type { EndOfSeasonSummary, Team } from '@/lib/sim/types'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
@@ -8,10 +9,47 @@ interface Props {
   teams: Team[]
 }
 
-export function MarketPanel({ summary, teams }: Props) {
-  const teamColorMap = new Map(teams.map((t) => [t.id, t.color]))
-  const teamNameMap = new Map(teams.map((t) => [t.id, t.name]))
+function TeamPill({ id, name, color }: { id: string; name: string; color?: string }) {
+  return (
+    <span className="flex items-center gap-1.5 min-w-0">
+      {color && <span className="w-1.5 h-3.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />}
+      <TeamLink id={id} className="text-[#FFFFFF] truncate">{name}</TeamLink>
+    </span>
+  )
+}
 
+const Arrow = () => <ArrowRight size={13} className="text-[#FFFFFF] shrink-0" />
+
+function MoveRow({ driverId, driverName, badge, movement, contract, media }: {
+  driverId: string; driverName: string; badge?: boolean
+  movement: React.ReactNode; contract?: React.ReactNode; media: string
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#0F1419]/60">
+      <span className="w-40 shrink-0 flex items-center gap-1.5 min-w-0">
+        <DriverLink id={driverId} className="text-[#FFFFFF] font-medium truncate">{driverName}</DriverLink>
+        {badge && <span className="text-[9px] font-bold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] rounded px-1 py-0.5 shrink-0">New</span>}
+      </span>
+      <span className="flex-1 flex items-center gap-2 text-xs min-w-0">{movement}</span>
+      <span className="w-28 text-right text-xs text-[#FFFFFF] tabular-nums shrink-0">{contract}</span>
+      <span className="w-10 text-right text-sm font-semibold text-[#00D9FF] tabular-nums shrink-0">{media}</span>
+    </div>
+  )
+}
+
+function Section({ title, count, tone, children }: { title: string; count: number; tone: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1 px-3">
+        {title} <span style={{ color: tone }}>· {count}</span>
+      </p>
+      <div className="divide-y divide-[#2A3142]/40">{children}</div>
+    </div>
+  )
+}
+
+export function MarketPanel({ summary, teams }: Props) {
+  const color = (id: string) => teams.find((t) => t.id === id)?.color
   const sorted = [...summary.marketMoves].sort((a, b) => b.mediaScore - a.mediaScore)
   const realMoves = sorted.filter((m) => !m.isResignation)
   const reSignings = sorted.filter((m) => m.isResignation)
@@ -21,133 +59,68 @@ export function MarketPanel({ summary, teams }: Props) {
     return <p className="text-sm text-[#FFFFFF]">No market activity this off-season.</p>
   }
 
-  const teamPill = (teamId: string, label: string) => {
-    const color = teamColorMap.get(teamId)
-    return (
-      <span className="flex items-center gap-1.5">
-        {color && <span className="inline-block w-1.5 h-3.5 rounded-sm" style={{ backgroundColor: color }} />}
-        <TeamLink id={teamId} className="text-[#FFFFFF]">{label}</TeamLink>
-      </span>
-    )
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Real changes — transfers and new signings */}
-      <div>
-        <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2">
-          Transfers &amp; Signings {realMoves.length > 0 && <span className="text-[#00D9FF]">· {realMoves.length}</span>}
-        </p>
-        {realMoves.length === 0 ? (
-          <p className="text-sm text-[#FFFFFF]">No driver changed teams this off-season.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                  <th className="text-left pb-2 pr-4 font-medium">Driver</th>
-                  <th className="text-left pb-2 px-3 font-medium">From</th>
-                  <th className="text-left pb-2 px-3 font-medium">To</th>
-                  <th className="text-right pb-2 px-3 font-medium">Contract</th>
-                  <th className="text-right pb-2 font-medium">Media</th>
-                </tr>
-              </thead>
-              <tbody>
-                {realMoves.map((m: MarketMove) => {
-                  const isRookie = m.mediaScore === 0
-                  return (
-                    <tr key={m.driverId} className="border-b border-[#2A3142]/50">
-                      <td className="py-2 pr-4">
-                        <DriverLink id={m.driverId} className="text-[#FFFFFF] font-medium">{m.driverName}</DriverLink>
-                        {isRookie && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] rounded px-1.5 py-0.5">
-                            NEW
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3">
-                        {m.fromTeamId
-                          ? teamPill(m.fromTeamId, teamNameMap.get(m.fromTeamId) ?? m.fromTeamId)
-                          : <span className="text-[#FFFFFF] italic">Free Agent</span>}
-                      </td>
-                      <td className="py-2 px-3">{teamPill(m.toTeamId, m.toTeamName)}</td>
-                      <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
-                        {m.contractLength}yr
-                        <span className="text-[#FFFFFF] ml-1 text-xs">(until {m.contractExpiresAfterSeason})</span>
-                      </td>
-                      <td className="py-2 text-right tabular-nums font-semibold text-[#00D9FF]">
-                        {isRookie ? '—' : m.mediaScore.toFixed(1)}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+    <div className="max-w-3xl space-y-5">
+      <Section title="Transfers & Signings" count={realMoves.length} tone="#00D9FF">
+        {realMoves.length === 0
+          ? <p className="px-3 py-2 text-sm text-[#FFFFFF]">No driver changed teams.</p>
+          : realMoves.map((m) => {
+              const isRookie = m.mediaScore === 0
+              return (
+                <MoveRow
+                  key={m.driverId}
+                  driverId={m.driverId}
+                  driverName={m.driverName}
+                  badge={isRookie}
+                  movement={
+                    <>
+                      {m.fromTeamId
+                        ? <TeamPill id={m.fromTeamId} name={teams.find((t) => t.id === m.fromTeamId)?.name ?? m.fromTeamId} color={color(m.fromTeamId)} />
+                        : <span className="italic text-[#FFFFFF] truncate">{isRookie ? 'Debut' : 'Free Agent'}</span>}
+                      <Arrow />
+                      <TeamPill id={m.toTeamId} name={m.toTeamName} color={color(m.toTeamId)} />
+                    </>
+                  }
+                  contract={`${m.contractLength}yr · ${m.contractExpiresAfterSeason}`}
+                  media={isRookie ? '—' : m.mediaScore.toFixed(1)}
+                />
+              )
+            })}
+      </Section>
 
-      {/* Re-signings — stayed put */}
       {reSignings.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2">
-            Re-signings <span className="text-[#FFFFFF]">· {reSignings.length}</span>
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                  <th className="text-left pb-2 pr-4 font-medium">Driver</th>
-                  <th className="text-left pb-2 px-3 font-medium">Team</th>
-                  <th className="text-right pb-2 px-3 font-medium">Contract</th>
-                  <th className="text-right pb-2 font-medium">Media</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reSignings.map((m) => (
-                  <tr key={m.driverId} className="border-b border-[#2A3142]/50">
-                    <td className="py-2 pr-4"><DriverLink id={m.driverId} className="text-[#FFFFFF] font-medium">{m.driverName}</DriverLink></td>
-                    <td className="py-2 px-3">{teamPill(m.toTeamId, m.toTeamName)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
-                      {m.contractLength}yr
-                      <span className="text-[#FFFFFF] ml-1 text-xs">(until {m.contractExpiresAfterSeason})</span>
-                    </td>
-                    <td className="py-2 text-right tabular-nums font-semibold text-[#00D9FF]">{m.mediaScore.toFixed(1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Section title="Re-signings" count={reSignings.length} tone="#FFFFFF">
+          {reSignings.map((m) => (
+            <MoveRow
+              key={m.driverId}
+              driverId={m.driverId}
+              driverName={m.driverName}
+              movement={<TeamPill id={m.toTeamId} name={m.toTeamName} color={color(m.toTeamId)} />}
+              contract={`${m.contractLength}yr · ${m.contractExpiresAfterSeason}`}
+              media={m.mediaScore.toFixed(1)}
+            />
+          ))}
+        </Section>
       )}
 
-      {/* Dropped — lost their seat, no new deal */}
       {dropped.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2">
-            Dropped <span className="text-[#DC143C]">· {dropped.length}</span>
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                  <th className="text-left pb-2 pr-4 font-medium">Driver</th>
-                  <th className="text-left pb-2 px-3 font-medium">Released by</th>
-                  <th className="text-right pb-2 font-medium">Media</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dropped.map((d) => (
-                  <tr key={d.driverId} className="border-b border-[#2A3142]/50">
-                    <td className="py-2 pr-4"><DriverLink id={d.driverId} className="text-[#FFFFFF] font-medium">{d.driverName}</DriverLink></td>
-                    <td className="py-2 px-3">{teamPill(d.fromTeamId, d.fromTeamName)}</td>
-                    <td className="py-2 text-right tabular-nums font-semibold text-[#FFFFFF]">{d.mediaScore.toFixed(1)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Section title="Dropped" count={dropped.length} tone="#DC143C">
+          {dropped.map((d) => (
+            <MoveRow
+              key={d.driverId}
+              driverId={d.driverId}
+              driverName={d.driverName}
+              movement={
+                <>
+                  <TeamPill id={d.fromTeamId} name={d.fromTeamName} color={color(d.fromTeamId)} />
+                  <Arrow />
+                  <span className="italic text-[#DC143C] shrink-0">Released</span>
+                </>
+              }
+              media={d.mediaScore.toFixed(1)}
+            />
+          ))}
+        </Section>
       )}
     </div>
   )
