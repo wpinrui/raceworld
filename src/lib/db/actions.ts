@@ -1,6 +1,6 @@
 'use server'
 
-import type { RaceResult } from '@/lib/sim/types'
+import type { RaceResult, ConstructorSeasonRecord } from '@/lib/sim/types'
 import {
   createSeason,
   createRace,
@@ -8,6 +8,8 @@ import {
   archiveSeason,
   getArchivedSeasons,
   getSeasonStandings,
+  insertConstructorStandings,
+  getRecentConstructorHistory,
   type DbSeason,
 } from './queries'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
@@ -40,4 +42,17 @@ export async function actionGetSeasonStandings(seasonId: number): Promise<{
   constructorStandings: ConstructorStanding[]
 }> {
   return getSeasonStandings(seasonId)
+}
+
+export async function actionInsertConstructorStandings(
+  seasonId: number,
+  standings: Array<{ teamId: string; finalPosition: number; points: number }>,
+): Promise<void> {
+  insertConstructorStandings(seasonId, standings)
+}
+
+export async function actionGetRecentConstructorHistory(
+  maxSeasons: number,
+): Promise<ConstructorSeasonRecord[]> {
+  return getRecentConstructorHistory(maxSeasons)
 }

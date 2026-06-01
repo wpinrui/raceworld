@@ -1,5 +1,5 @@
 import { getDb } from './client'
-import type { RaceResult, DriverStanding, ConstructorStanding } from '@/lib/sim/types'
+import type { RaceResult, DriverStanding, ConstructorStanding, ConstructorSeasonRecord } from '@/lib/sim/types'
 
 export interface DbSeason {
   id: number
@@ -107,6 +107,47 @@ export function getResultsForRace(raceId: number): DbRaceResult[] {
   return getDb()
     .prepare('SELECT * FROM race_results WHERE race_id = ? ORDER BY finish_position, dnf DESC')
     .all(raceId) as DbRaceResult[]
+}
+
+export function insertConstructorStandings(
+  seasonId: number,
+  standings: Array<{ teamId: string; finalPosition: number; points: number }>,
+): void {
+  const db = getDb()
+  const insert = db.prepare(
+    'INSERT INTO season_constructor_standings (season_id, team_id, final_position, points) VALUES (?, ?, ?, ?)',
+  )
+  const insertAll = db.transaction(
+    (rows: Array<{ teamId: string; finalPosition: number; points: number }>) => {
+      for (const r of rows) insert.run(seasonId, r.teamId, r.finalPosition, r.points)
+    },
+  )
+  insertAll(standings)
+}
+
+export function getRecentConstructorHistory(maxSeasons: number): ConstructorSeasonRecord[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT s.year AS seasonYear, cs.team_id AS teamId, cs.final_position AS finalPosition, cs.points
+       FROM season_constructor_standings cs
+       JOIN seasons s ON s.id = cs.season_id
+       WHERE s.status = 'archived'
+       ORDER BY s.year DESC
+       LIMIT ?`,
+    )
+    .all(maxSeasons * 11) as Array<{
+    seasonYear: number
+    teamId: string
+    finalPosition: number
+    points: number
+  }>
+
+  return rows.map((r) => ({
+    seasonYear: r.seasonYear,
+    teamId: r.teamId,
+    finalPosition: r.finalPosition,
+    points: r.points,
+  }))
 }
 
 export function getSeasonStandings(seasonId: number): {

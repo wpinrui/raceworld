@@ -5,11 +5,22 @@ import { useRouter } from 'next/navigation'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { ResultCell } from '@/components/standings/ResultCell'
-import { actionGetArchivedSeasons, actionGetSeasonStandings, actionArchiveSeason } from '@/lib/db/actions'
+import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
+import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
+import { ReshufflePanel } from '@/components/standings/ReshufflePanel'
+import { MarketPanel } from '@/components/standings/MarketPanel'
+import {
+  actionGetArchivedSeasons,
+  actionGetSeasonStandings,
+  actionArchiveSeason,
+  actionInsertConstructorStandings,
+  actionGetRecentConstructorHistory,
+} from '@/lib/db/actions'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import type { DbSeason } from '@/lib/db/queries'
 
 type Tab = 'drivers' | 'constructors'
+type EosTab = 'progression' | 'retirements' | 'reshuffle' | 'market'
 
 interface ArchivedView {
   seasonId: number
@@ -22,6 +33,7 @@ export default function StandingsPage() {
   const router = useRouter()
   const season = useSeasonStore()
   const [tab, setTab] = useState<Tab>('drivers')
+  const [eosTab, setEosTab] = useState<EosTab>('progression')
   const [archivedSeasons, setArchivedSeasons] = useState<DbSeason[]>([])
   const [selectedArchive, setSelectedArchive] = useState<ArchivedView | null>(null)
   const [loadingArchive, setLoadingArchive] = useState(false)
@@ -41,10 +53,18 @@ export default function StandingsPage() {
     setLoadingArchive(false)
   }
 
-  function handleArchiveAndNewSeason() {
+  async function handleArchiveAndNewSeason() {
     if (season.dbSeasonId) {
-      actionArchiveSeason(season.dbSeasonId)
+      await actionArchiveSeason(season.dbSeasonId)
+      const constructorFinalPositions = season.constructorStandings.map((cs, idx) => ({
+        teamId: cs.teamId,
+        finalPosition: idx + 1,
+        points: cs.points,
+      }))
+      await actionInsertConstructorStandings(season.dbSeasonId, constructorFinalPositions)
     }
+    const freshHistory = await actionGetRecentConstructorHistory(5)
+    season.loadConstructorHistory(freshHistory)
     season.startNewSeason()
     router.push('/setup')
   }
@@ -57,10 +77,11 @@ export default function StandingsPage() {
   const totalRounds = calendar2026.length
   const completedRounds = season.raceResults.length
 
-  // Displayed data: archived season or current season
   const displayDrivers = selectedArchive ? selectedArchive.driverStandings : season.driverStandings
   const displayConstructors = selectedArchive ? selectedArchive.constructorStandings : season.constructorStandings
   const displayYear = selectedArchive ? selectedArchive.year : season.year
+
+  const summary = season.endOfSeasonSummary
 
   if (!hydrated) return null
 
@@ -68,10 +89,11 @@ export default function StandingsPage() {
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#E8EAED]">
       <div className="max-w-full px-4 py-6">
 
-        {/* End-of-season banner */}
+        {/* End-of-season panel */}
         {isEndOfSeason && !selectedArchive && (
-          <div className="mb-6 rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 p-5">
-            <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="mb-6 rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 overflow-hidden">
+            {/* Champion header */}
+            <div className="p-5 flex items-center justify-between flex-wrap gap-4 border-b border-[#2A3142]">
               <div>
                 <div className="flex items-center gap-2.5 mb-1">
                   <div className="w-1 h-6 rounded-sm bg-[#00D9FF]" />
@@ -87,6 +109,12 @@ export default function StandingsPage() {
                     <span className="tabular-nums">{displayDrivers[0].points} pts</span>
                   </p>
                 )}
+                {season.constructorStandings[0] && (
+                  <p className="text-[#A0A9B8] text-sm ml-3.5">
+                    Constructors:{' '}
+                    <span className="text-[#E8EAED] font-semibold">{season.constructorStandings[0].teamName}</span>
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -99,10 +127,53 @@ export default function StandingsPage() {
                   onClick={handleArchiveAndNewSeason}
                   className="px-5 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors"
                 >
-                  Archive &amp; Start {season.year + 1} →
+                  Start {season.year + 1} Season →
                 </button>
               </div>
             </div>
+
+            {/* Sub-tabs (only if summary is available) */}
+            {summary && (
+              <>
+                <div className="flex border-b border-[#2A3142]">
+                  {(
+                    [
+                      ['progression', 'Driver Stats'],
+                      ['retirements', `Retirements (${summary.retiredDriverIds.length})`],
+                      ['reshuffle', 'Car Reshuffle'],
+                      ['market', `Transfers (${summary.marketMoves.length})`],
+                    ] as [EosTab, string][]
+                  ).map(([t, label]) => (
+                    <button
+                      key={t}
+                      onClick={() => setEosTab(t)}
+                      className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors border-b-2 ${
+                        eosTab === t
+                          ? 'text-[#00D9FF] border-[#00D9FF]'
+                          : 'text-[#A0A9B8] border-transparent hover:text-[#E8EAED]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-5">
+                  {eosTab === 'progression' && (
+                    <ProgressionPanel summary={summary} drivers={season.drivers} />
+                  )}
+                  {eosTab === 'retirements' && (
+                    <RetirementsPanel summary={summary} drivers={season.drivers} />
+                  )}
+                  {eosTab === 'reshuffle' && (
+                    <ReshufflePanel summary={summary} teams={season.teams} />
+                  )}
+                  {eosTab === 'market' && (
+                    <MarketPanel summary={summary} teams={season.teams} />
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -115,7 +186,6 @@ export default function StandingsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Archive season selector */}
             {archivedSeasons.length > 0 && (
               <select
                 value={selectedArchive?.seasonId ?? ''}
@@ -138,7 +208,6 @@ export default function StandingsPage() {
               </select>
             )}
 
-            {/* Tabs */}
             <div className="flex rounded-lg overflow-hidden border border-[#2A3142]">
               {(['drivers', 'constructors'] as Tab[]).map((t) => (
                 <button

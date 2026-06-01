@@ -157,3 +157,66 @@ export interface ConstructorStanding {
   wins: number
   results: (number | null)[][]  // [driverIdx][roundIdx]
 }
+
+// --- M3: Multi-season dynamics types ---
+
+export type FundingTier = 1 | 2 | 3 | 4
+
+export interface TeamDevPlan {
+  teamId: string
+  cycleLength: number          // 3–6 races per upgrade
+  nextUpgradeRound: number
+  fundingTier: FundingTier
+  cumulativePenalty: number
+}
+
+export interface DevUpgradeEvent {
+  teamId: string
+  round: number
+  paceDelta: number
+  failed: boolean
+}
+
+export interface ConstructorSeasonRecord {
+  seasonYear: number
+  teamId: string
+  finalPosition: number
+  points: number
+}
+
+export interface DriverProgressionEvent {
+  driverId: string
+  driverName: string
+  stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness'
+  before: number
+  after: number
+  direction: 'improved' | 'declined' | 'unchanged'
+}
+
+export interface DriverMediaScore { driverId: string; score: number }
+export interface TeamMediaScore   { teamId: string;   score: number }
+
+export interface MarketMove {
+  driverId: string
+  driverName: string
+  fromTeamId: string | null
+  toTeamId: string
+  toTeamName: string
+  contractLength: number
+  contractExpiresAfterSeason: number
+  mediaScore: number
+}
+
+export interface EndOfSeasonSummary {
+  seasonYear: number
+  driverChampion: string
+  constructorChampion: string
+  progressionEvents: DriverProgressionEvent[]
+  retiredDriverIds: string[]
+  carReshuffleOldPaces: Record<string, number>
+  carReshuffleNewPaces: Record<string, number>
+  marketMoves: MarketMove[]
+  driverMediaScores: DriverMediaScore[]
+  teamMediaScores: TeamMediaScore[]
+  upgradeEvents: DevUpgradeEvent[]
+}
