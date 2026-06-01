@@ -28,13 +28,12 @@
       "Bash(gh pr diff:*)",
       "Bash(gh pr list:*)",
       "Bash(gh issue view:*)",
-      "Bash(gh issue list:*)"
-    ],
-    "ask": [
+      "Bash(gh issue list:*)",
       "Bash(git push:*)",
       "Bash(git reset --hard:*)",
       "Bash(git branch -D:*)"
     ],
+    "ask": [],
     "deny": [
       "Bash(git push --force *)",
       "Bash(git push -f *)",
