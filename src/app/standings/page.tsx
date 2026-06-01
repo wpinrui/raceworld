@@ -6,12 +6,19 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
+import { TeammateH2HPanel } from '@/components/standings/TeammateH2HPanel'
 import { actionGetArchivedSeasons, actionGetSeasonStandings } from '@/lib/db/actions'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import type { DbSeason } from '@/lib/db/queries'
 
-type Tab = 'drivers' | 'constructors'
+type Tab = 'drivers' | 'constructors' | 'h2h'
+
+const TABS: [Tab, string][] = [
+  ['drivers', 'Drivers'],
+  ['constructors', 'Constructors'],
+  ['h2h', 'Teammates'],
+]
 
 interface ArchivedView {
   seasonId: number
@@ -116,7 +123,7 @@ export default function StandingsPage() {
             )}
 
             <div className="flex rounded-lg overflow-hidden border border-[#2A3142]">
-              {(['drivers', 'constructors'] as Tab[]).map((t) => (
+              {TABS.map(([t, label]) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -126,7 +133,7 @@ export default function StandingsPage() {
                       : 'text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#2A3142]'
                   }`}
                 >
-                  {t}
+                  {label}
                 </button>
               ))}
             </div>
@@ -156,6 +163,18 @@ export default function StandingsPage() {
             totalRounds={totalRounds}
             completedRounds={completedRounds}
           />
+        )}
+
+        {/* Teammate head-to-head (current season) */}
+        {tab === 'h2h' && (
+          <>
+            {selectedArchive && (
+              <p className="text-sm text-[#FFFFFF] mb-4">
+                Head-to-head reflects the current season ({season.year}).
+              </p>
+            )}
+            <TeammateH2HPanel raceResults={season.raceResults} drivers={season.drivers} teams={season.teams} />
+          </>
         )}
 
       </div>
