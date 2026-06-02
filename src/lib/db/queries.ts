@@ -127,11 +127,16 @@ export function insertConstructorStandings(
   standings: Array<{ teamId: string; finalPosition: number; points: number }>,
 ): void {
   const db = getDb()
+  const clear = db.prepare('DELETE FROM season_constructor_standings WHERE season_id = ?')
   const insert = db.prepare(
     'INSERT INTO season_constructor_standings (season_id, team_id, final_position, points) VALUES (?, ?, ?, ?)',
   )
+  // Idempotent: clear any existing rows for this season first, so re-running the
+  // off-season archive (e.g. after a reload mid-transition) can't double-insert and
+  // inflate a team's season count in computeFundingTiers.
   const insertAll = db.transaction(
     (rows: Array<{ teamId: string; finalPosition: number; points: number }>) => {
+      clear.run(seasonId)
       for (const r of rows) insert.run(seasonId, r.teamId, r.finalPosition, r.points)
     },
   )
@@ -139,16 +144,19 @@ export function insertConstructorStandings(
 }
 
 export function getRecentConstructorHistory(maxSeasons: number): ConstructorSeasonRecord[] {
+  // Limit by the N most recent archived SEASONS, not by row count — the grid can
+  // grow or shrink via god mode, so rows-per-season is not a fixed number.
   const rows = getDb()
     .prepare(
       `SELECT s.year AS seasonYear, cs.team_id AS teamId, cs.final_position AS finalPosition, cs.points
        FROM season_constructor_standings cs
        JOIN seasons s ON s.id = cs.season_id
-       WHERE s.status = 'archived'
-       ORDER BY s.year DESC
-       LIMIT ?`,
+       WHERE s.id IN (
+         SELECT id FROM seasons WHERE status = 'archived' ORDER BY year DESC, id DESC LIMIT ?
+       )
+       ORDER BY s.year DESC`,
     )
-    .all(maxSeasons * 11) as Array<{
+    .all(maxSeasons) as Array<{
     seasonYear: number
     teamId: string
     finalPosition: number
