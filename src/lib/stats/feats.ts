@@ -1,9 +1,10 @@
 // Stats-engine feat / record detector (server-side; reads the archived DB).
 //
 // Pure reductions over the structured race data — no LLM. `getDriverHonours` /
-// `getTeamHonours` feed the world entity pages; `detectSeasonFeats` /
-// `detectRaceFeats` are the headless API the M5 newsroom will call ("any records
-// this weekend?"), which is usually fruitless and that's fine.
+// `getTeamHonours` feed the world entity pages (via Server Actions). `detectSeasonFeats`
+// / `detectRaceFeats` are the headless stats API the M5 newsroom Server Action will
+// import directly server-side ("any records this weekend?") — intentionally present
+// ahead of that consumer; usually fruitless, and that's fine.
 //
 // Everything is computed from ARCHIVED seasons only — the in-progress season folds
 // in once it is archived, matching how career totals already behave.
@@ -132,30 +133,35 @@ export function getDriverHonours(driverId: string): Feat[] {
     }
   }
 
-  // Single-season records (best season + all-time season records held)
-  const myBestWins = tallies.filter((t) => t.driverId === driverId).reduce<DriverSeasonTally | null>(
-    (b, t) => (b == null || t.wins > b.wins ? t : b), null,
-  )
-  if (myBestWins && myBestWins.wins >= 3) {
-    feats.push({
-      id: 'driver-best-season-wins', category: 'season', priority: 70,
-      title: `Career-best season: ${myBestWins.wins} wins`, detail: `${myBestWins.year}`,
-      value: myBestWins.wins, year: myBestWins.year,
-    })
-  }
+  // Single-season records held (all-time). On a tie every holder is awarded the
+  // record (checked against the max value, not just the first row that reached it).
+  let holdsSeasonWinRecord = false
   for (const spec of [
     { metric: 'wins' as const, noun: 'wins' },
     { metric: 'poles' as const, noun: 'poles' },
     { metric: 'points' as const, noun: 'points' },
   ]) {
-    const topSeason = tallies.reduce<DriverSeasonTally | null>(
-      (b, t) => (b == null || t[spec.metric] > b[spec.metric] ? t : b), null,
+    const topValue = tallies.reduce((m, t) => Math.max(m, t[spec.metric]), 0)
+    if (topValue <= 0) continue
+    const mine = tallies.find((t) => t.driverId === driverId && t[spec.metric] === topValue)
+    if (!mine) continue
+    if (spec.metric === 'wins') holdsSeasonWinRecord = true
+    feats.push({
+      id: `driver-season-record-${spec.metric}`, category: 'record', priority: 80, allTime: true,
+      title: `Most ${spec.noun} in a season`, detail: `${topValue} in ${mine.year}`,
+      value: topValue, year: mine.year,
+    })
+  }
+  // Career-best wins season — skip when it would just restate the all-time record.
+  if (!holdsSeasonWinRecord) {
+    const myBestWins = tallies.filter((t) => t.driverId === driverId).reduce<DriverSeasonTally | null>(
+      (b, t) => (b == null || t.wins > b.wins ? t : b), null,
     )
-    if (topSeason && topSeason.driverId === driverId && topSeason[spec.metric] > 0) {
+    if (myBestWins && myBestWins.wins >= 3) {
       feats.push({
-        id: `driver-season-record-${spec.metric}`, category: 'record', priority: 80, allTime: true,
-        title: `Most ${spec.noun} in a season`, detail: `${topSeason[spec.metric]} in ${topSeason.year}`,
-        value: topSeason[spec.metric], year: topSeason.year,
+        id: 'driver-best-season-wins', category: 'season', priority: 70,
+        title: `Career-best season: ${myBestWins.wins} wins`, detail: `${myBestWins.year}`,
+        value: myBestWins.wins, year: myBestWins.year,
       })
     }
   }
@@ -228,21 +234,20 @@ export function getTeamHonours(teamId: string): Feat[] {
     }
   }
 
-  // Single-season team records held
+  // Single-season team records held (all-time; every holder awarded on a tie)
   for (const spec of [
     { metric: 'wins' as const, noun: 'wins' },
     { metric: 'points' as const, noun: 'points' },
   ]) {
-    const topSeason = tallies.reduce<TeamSeasonTally | null>(
-      (b, t) => (b == null || t[spec.metric] > b[spec.metric] ? t : b), null,
-    )
-    if (topSeason && topSeason.teamId === teamId && topSeason[spec.metric] > 0) {
-      feats.push({
-        id: `team-season-record-${spec.metric}`, category: 'record', priority: 80, allTime: true,
-        title: `Most ${spec.noun} in a season`, detail: `${topSeason[spec.metric]} in ${topSeason.year}`,
-        value: topSeason[spec.metric], year: topSeason.year,
-      })
-    }
+    const topValue = tallies.reduce((m, t) => Math.max(m, t[spec.metric]), 0)
+    if (topValue <= 0) continue
+    const mine = tallies.find((t) => t.teamId === teamId && t[spec.metric] === topValue)
+    if (!mine) continue
+    feats.push({
+      id: `team-season-record-${spec.metric}`, category: 'record', priority: 80, allTime: true,
+      title: `Most ${spec.noun} in a season`, detail: `${topValue} in ${mine.year}`,
+      value: topValue, year: mine.year,
+    })
   }
 
   return feats.sort((a, b) => b.priority - a.priority)
@@ -317,7 +322,7 @@ export function detectRaceFeats(seasonId: number, round: number): Feat[] {
   // Constructor 1-2 + front-row lockout + double podium
   if (winner && second && winner.team_id === second.team_id)
     feats.push({ id: `race-${race.id}-one-two`, category: 'constructor', round, priority: 70, title: `${winner.team_name} 1-2 finish` })
-  const frontRow = rows.filter((r) => r.grid_position <= 2)
+  const frontRow = rows.filter((r) => r.grid_position >= 1 && r.grid_position <= 2)
   if (frontRow.length === 2 && frontRow[0].team_id === frontRow[1].team_id)
     feats.push({ id: `race-${race.id}-lockout`, category: 'constructor', round, priority: 55, title: `${frontRow[0].team_name} front-row lockout` })
   if (winner && second && third) {

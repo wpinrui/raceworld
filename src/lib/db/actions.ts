@@ -37,9 +37,7 @@ import type {
   DriverSeasonDetail, DriverSeasonRace, TeamSeasonDetail, TeamSeasonRace,
   RaceClassification, RaceClassificationRow, Stint,
 } from '@/lib/world/types'
-import {
-  getDriverHonours, getTeamHonours, detectSeasonFeats, detectRaceFeats,
-} from '@/lib/stats/feats'
+import { getDriverHonours, getTeamHonours } from '@/lib/stats/feats'
 import type { Feat } from '@/lib/stats/types'
 
 function parseStints(json: string): Stint[] {
@@ -190,15 +188,6 @@ export async function actionGetDriverHonours(driverId: string): Promise<Feat[]> 
 
 export async function actionGetTeamHonours(teamId: string): Promise<Feat[]> {
   return getTeamHonours(teamId)
-}
-
-// Headless newsroom API — ready for M5 (no UI consumer yet).
-export async function actionDetectSeasonFeats(seasonId: number): Promise<Feat[]> {
-  return detectSeasonFeats(seasonId)
-}
-
-export async function actionDetectRaceFeats(seasonId: number, round: number): Promise<Feat[]> {
-  return detectRaceFeats(seasonId, round)
 }
 
 // --- Drill-down detail (archived seasons only; the live season is built client-side) ---
