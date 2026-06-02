@@ -120,12 +120,19 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
   }
   const champions = getAllSeasonChampions()
   const titles = champions.filter((c) => c.driverChampionId === driverId).length
-  const seasons: CareerSeason[] = careerRows.map((r) => ({
-    year: r.seasonYear, teamId: r.teamId, teamName: r.teamName,
-    races: r.races, wins: r.wins, podiums: r.podiums, points: r.points,
-    championshipFinish: getDriverFinishInSeason(r.seasonId, driverId),
-    inProgress: false,
-  }))
+  const seasons: CareerSeason[] = careerRows.map((r) => {
+    // One standings reconstruction per season gives both the WDC position and the
+    // per-round results matrix for this driver.
+    const ds = getSeasonStandings(r.seasonId).driverStandings
+    const idx = ds.findIndex((d) => d.driverId === driverId)
+    return {
+      year: r.seasonYear, teamId: r.teamId, teamName: r.teamName,
+      races: r.races, wins: r.wins, podiums: r.podiums, points: r.points,
+      championshipFinish: idx >= 0 ? idx + 1 : null,
+      results: idx >= 0 ? ds[idx].results : [],
+      inProgress: false,
+    }
+  })
   return {
     driverId, driverName: totals.driverName,
     totals: {

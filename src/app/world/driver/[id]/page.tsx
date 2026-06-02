@@ -12,7 +12,8 @@ import { OverallRing } from '@/components/setup/OverallRing'
 import { StatBar } from '@/components/setup/StatBar'
 import { StatSlider } from '@/components/setup/StatSlider'
 import { STAT_KEYS, STAT_LABELS } from '@/components/setup/stat-utils'
-import { ResultChip } from '@/components/standings/ResultCell'
+import { ResultChip, ResultCell } from '@/components/standings/ResultCell'
+import { calendar2026 } from '@/data/calendar'
 import { TeamLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
 import { ChampPill } from '@/components/world/pills'
@@ -234,31 +235,31 @@ export default function DriverPage() {
                     <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full border-collapse text-sm">
                         <thead>
                           <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                            <th className="text-left py-2 px-4 font-medium">Season</th>
+                            <th className="text-left py-2 px-4 font-medium sticky left-0 bg-[#1E2431]">Year</th>
                             <th className="text-left py-2 px-3 font-medium">Team</th>
-                            <th className="text-right py-2 px-3 font-medium">Races</th>
-                            <th className="text-right py-2 px-3 font-medium">Wins</th>
-                            <th className="text-right py-2 px-3 font-medium">Podiums</th>
-                            <th className="text-right py-2 px-3 font-medium">Points</th>
-                            <th className="text-center py-2 px-4 font-medium">Champ</th>
+                            {Array.from({ length: calendar2026.length }, (_, i) => (
+                              <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px] tabular-nums font-medium">{i + 1}</th>
+                            ))}
+                            <th className="text-center py-2 px-3 font-medium">WDC</th>
+                            <th className="text-right py-2 px-4 font-medium">Points</th>
                           </tr>
                         </thead>
                         <tbody>
                           {career.seasons.map((s) => (
                             <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
-                              <td className="py-2 px-4 tabular-nums">
+                              <td className="py-2 px-4 tabular-nums whitespace-nowrap sticky left-0 bg-[#1E2431]">
                                 <Link href={`/world/driver/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
                                 {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
                               </td>
-                              <td className="py-2 px-3"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
-                              <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.races}</td>
-                              <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.wins}</td>
-                              <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.podiums}</td>
-                              <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.points}</td>
-                              <td className="py-2 px-4"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
+                              <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
+                              {Array.from({ length: calendar2026.length }, (_, i) => (
+                                <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} />
+                              ))}
+                              <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
+                              <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
                             </tr>
                           ))}
                         </tbody>

@@ -94,11 +94,15 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
   const team = store.teams.find((t) => t.id === live.teamId)
   const champPos = store.driverStandings.findIndex((s) => s.driverId === db.driverId)
 
+  // Only the rounds actually run so far — future rounds stay blank, not shown as DNFs.
+  const liveResults = (store.driverStandings.find((s) => s.driverId === db.driverId)?.results ?? [])
+    .slice(0, store.raceResults.length)
   const liveSeason: CareerSeason | null = racing
     ? {
         year: store.year, teamId: live.teamId, teamName: team?.name ?? live.teamId,
         races: agg.races, wins: agg.wins, podiums: agg.podiums, points: agg.points,
         championshipFinish: champPos >= 0 ? champPos + 1 : null,
+        results: liveResults,
         inProgress: true,
       }
     : null
