@@ -4,16 +4,24 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useTeamCareer } from '@/lib/world/hooks'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { calendar2026 } from '@/data/calendar'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
+import { UpgradeOverride } from '@/components/world/UpgradeOverride'
 
 type Tab = 'overview' | 'seasons'
+
+const TOTAL_ROUNDS = calendar2026.length
 
 export default function TeamPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useTeamCareer(id)
+  const devPlan = useSeasonStore((s) => s.devPlans.find((p) => p.teamId === id))
+  const currentRound = useSeasonStore((s) => s.currentRound)
+  const onGrid = useSeasonStore((s) => s.teams.some((t) => t.id === id))
   const [tab, setTab] = useState<Tab>('overview')
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => setHydrated(true), [])
@@ -99,6 +107,11 @@ export default function TeamPage() {
                       </Panel>
                     )}
                   </div>
+
+                  {/* God-mode: inspect and edit the next car upgrade before it lands. */}
+                  {onGrid && devPlan && (
+                    <UpgradeOverride teamId={id} devPlan={devPlan} currentRound={currentRound} totalRounds={TOTAL_ROUNDS} />
+                  )}
                 </div>
               )}
 
