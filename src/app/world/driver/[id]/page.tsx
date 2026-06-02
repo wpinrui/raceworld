@@ -113,21 +113,22 @@ export default function DriverPage() {
               />
 
               {tab === 'overview' && (
-                <div className="space-y-5">
-                  {/* Career totals */}
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                    <StatTile label="Titles" value={career.totals.titles} />
-                    <StatTile label="Wins" value={career.totals.wins} />
-                    <StatTile label="Podiums" value={career.totals.podiums} />
-                    <StatTile label="Poles" value={career.totals.poles} />
-                    <StatTile label="Points" value={career.totals.points} />
-                    <StatTile label="Seasons" value={career.totals.seasons} />
-                  </div>
+                <div className="grid gap-4 lg:grid-cols-12 items-start">
+                  {/* Career totals — compact tile block, not a full row */}
+                  <Panel title="Career" className="lg:col-span-4">
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <StatTile label="Titles" value={career.totals.titles} />
+                      <StatTile label="Wins" value={career.totals.wins} />
+                      <StatTile label="Podiums" value={career.totals.podiums} />
+                      <StatTile label="Poles" value={career.totals.poles} />
+                      <StatTile label="Points" value={career.totals.points} />
+                      <StatTile label="Seasons" value={career.totals.seasons} />
+                    </div>
+                  </Panel>
 
-                  <div className="grid gap-5 lg:grid-cols-3">
-                    {/* Attributes */}
-                    {a && (
-                      <Panel className="lg:col-span-1">
+                  {/* Attributes */}
+                  {a && (
+                      <Panel className="lg:col-span-4">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Attributes</p>
                           {liveDriver && (
@@ -226,30 +227,29 @@ export default function DriverPage() {
                       </Panel>
                     )}
 
-                    {/* Biography */}
-                    <Panel title="Biography" className={a ? 'lg:col-span-2' : 'lg:col-span-3'}>
-                      <p className="text-sm leading-relaxed text-[#FFFFFF]">
-                        {bio ?? 'No biography available for this historical driver.'}
-                      </p>
-                    </Panel>
-                  </div>
+                  {/* Biography */}
+                  <Panel title="Biography" className="lg:col-span-4">
+                    <p className="text-sm leading-relaxed text-[#FFFFFF]">
+                      {bio ?? 'No biography available for this historical driver.'}
+                    </p>
+                  </Panel>
 
-                  {/* Recent form + Confidence (reserved, equal footprint) */}
-                  <div className="grid gap-5 lg:grid-cols-2">
-                    <Panel title={current ? `This Season — ${current.year}` : 'This Season'} flush>
+                  {/* Recent form */}
+                  {a && (
+                    <Panel title="Recent form" flush className="lg:col-span-3">
                       {career.currentResults && career.currentResults.length > 0 ? (
                         <>
-                          <div className="flex items-center gap-8 px-5 py-3 border-b border-[#2A3142]">
+                          <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
                             <div className="text-center">
-                              <p className="text-xl font-bold tabular-nums text-[#FFFFFF]">{current?.championshipFinish != null ? `P${current.championshipFinish}` : '—'}</p>
-                              <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Championship</p>
+                              <p className="text-lg font-bold tabular-nums text-[#FFFFFF]">{current?.championshipFinish != null ? `P${current.championshipFinish}` : '—'}</p>
+                              <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Championship</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-xl font-bold tabular-nums text-[#FFFFFF]">{current?.points ?? 0}</p>
-                              <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Points</p>
+                              <p className="text-lg font-bold tabular-nums text-[#FFFFFF]">{current?.points ?? 0}</p>
+                              <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Points</p>
                             </div>
                           </div>
-                          <div className="px-5 py-4">
+                          <div className="px-4 py-3">
                             <div className="flex flex-wrap gap-1.5">
                               {career.currentResults.map((r) => (
                                 <Tooltip key={r.round} content={`${r.circuitName} · ${r.points} pts`}>
@@ -266,36 +266,39 @@ export default function DriverPage() {
                           </div>
                         </>
                       ) : (
-                        <p className="px-5 py-4 text-sm text-[#FFFFFF]">Not racing this season.</p>
+                        <p className="px-4 py-3 text-sm text-[#FFFFFF]">Not racing this season.</p>
                       )}
                     </Panel>
+                  )}
 
-                    {/* Confidence — planned mechanic; the slot is reserved at full size. */}
-                    <Panel title="Confidence" flush>
-                      <div className="flex items-center gap-8 px-5 py-3 border-b border-[#2A3142]">
+                  {/* Confidence — planned mechanic; the slot is reserved at the same size as the form card. */}
+                  {a && (
+                    <Panel title="Confidence" flush className="lg:col-span-3">
+                      <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
                         <div className="text-center">
-                          <p className="text-xl font-bold tabular-nums text-[#6B7280]">—</p>
-                          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Morale</p>
+                          <p className="text-lg font-bold tabular-nums text-[#6B7280]">—</p>
+                          <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Confidence</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-xl font-bold tabular-nums text-[#6B7280]">—</p>
-                          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Form</p>
+                          <p className="text-lg font-bold tabular-nums text-[#6B7280]">—</p>
+                          <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Morale</p>
                         </div>
                       </div>
-                      <div className="px-5 py-4 flex items-center gap-2 text-sm text-[#FFFFFF]">
+                      <div className="px-4 py-3 flex items-center gap-2 text-sm text-[#FFFFFF]">
                         <Lock size={14} className="text-[#6B7280]" />
-                        Driver confidence is coming in a future update.
+                        Coming in a future update.
                       </div>
                     </Panel>
-                  </div>
+                  )}
 
+                  {/* Recent milestones */}
                   {milestones.length > 0 && (
-                    <Panel title="Recent milestones" flush>
+                    <Panel title="Recent milestones" flush className="lg:col-span-3">
                       <MilestonesTimeline events={milestones.slice(-5).reverse()} />
                     </Panel>
                   )}
 
-                  <HonoursPanel feats={honours} loading={honoursLoading} />
+                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-3" columns={1} />
                 </div>
               )}
 

@@ -1,6 +1,8 @@
 'use client'
 
 import type { MilestoneEvent, MilestoneKind } from '@/lib/world/milestones'
+import { calendar2026 } from '@/data/calendar'
+import { countryName } from '@/data/countries'
 
 const KIND_COLOR: Record<MilestoneKind, string> = {
   title: '#FFD24A',
@@ -9,6 +11,13 @@ const KIND_COLOR: Record<MilestoneKind, string> = {
   start: '#7C8698',
   points: '#27F4D2',
   season: '#A855F7',
+}
+
+// "Round 5 (Spain)" — circuit country resolved from the calendar.
+function roundLabel(round: number): string {
+  const circuit = calendar2026[round - 1]
+  const where = circuit ? countryName(circuit.country) : ''
+  return where ? `Round ${round} (${where})` : `Round ${round}`
 }
 
 export function MilestonesTimeline({ events }: { events: MilestoneEvent[] }) {
@@ -26,7 +35,7 @@ export function MilestonesTimeline({ events }: { events: MilestoneEvent[] }) {
           <div className="pb-3 min-w-0">
             <p className="text-sm font-semibold text-[#FFFFFF]">{e.label}</p>
             <p className="text-xs text-[#FFFFFF] tabular-nums">
-              {e.year}{e.round != null ? ` · Round ${e.round}` : ''}
+              {e.year}{e.round != null ? ` · ${roundLabel(e.round)}` : ''}
             </p>
           </div>
         </li>
