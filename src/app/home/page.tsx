@@ -49,10 +49,10 @@ export default function HomePage() {
 
             <RaceBanner simming={simming} onSimTo={handleSimTo} />
 
-            <div className="grid gap-5 lg:grid-cols-3 lg:items-start">
-              <div className="lg:col-span-2 space-y-5">
-                <PunditPredictions />
+            <div className="grid gap-5 lg:grid-cols-[45fr_55fr] lg:items-start">
+              <div className="space-y-5">
                 <HeadlinesPanel />
+                <PunditPredictions />
               </div>
               <CompactStandings />
             </div>
