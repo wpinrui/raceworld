@@ -17,6 +17,22 @@ function randomCycleLength(rng: () => number): number {
   return Math.floor(rng() * 4) + 3 // 3–6
 }
 
+// Roll the outcome of a single upgrade ahead of time so the player can inspect and
+// god-mode edit it before it lands. The funding-tier penalty is baked in, so the
+// returned paceDelta is the final pace gain (clamped ≥ 0). 5% chance of a total
+// failure (no benefit at all).
+export function rollUpgrade(
+  cycleLength: number,
+  fundingTier: FundingTier,
+  rng: () => number,
+): { paceDelta: number; failed: boolean } {
+  if (rng() < 0.05) return { paceDelta: 0, failed: true }
+  const scale = Math.pow(1.05, cycleLength - 3)
+  const raw = Math.max(0, sampleNormal(BASE_MEDIAN, BASE_SIGMA, rng)) * scale
+  const penalty = TIER_PENALTY_PER_RACE[fundingTier] * cycleLength
+  return { paceDelta: round1(Math.max(0, raw - penalty)), failed: false }
+}
+
 export function computeFundingTiers(
   teams: Team[],
   history: ConstructorSeasonRecord[],
@@ -85,12 +101,16 @@ export function initDevPlans(
   // Counter starts in Australia (round 1); the first upgrade lands cycleLength races later.
   return teams.map((team) => {
     const cycleLength = randomCycleLength(rng)
+    const fundingTier = tiers.get(team.id) ?? 2
+    const pending = rollUpgrade(cycleLength, fundingTier, rng)
     return {
       teamId: team.id,
       cycleLength,
       nextUpgradeRound: cycleLength,
-      fundingTier: tiers.get(team.id) ?? 2,
+      fundingTier,
       cumulativePenalty: 0,
+      pendingPaceDelta: pending.paceDelta,
+      pendingFailed: pending.failed,
     }
   })
 }
@@ -109,18 +129,13 @@ export function applyUpgradeEvents(
   const updatedDevPlans = devPlans.map((plan) => {
     if (round !== plan.nextUpgradeRound) return plan
 
-    let paceDelta = 0
-    let failed = false
-
-    if (rng() < 0.05) {
-      // 5% chance of a total failure — no benefit at all.
-      failed = true
-    } else {
-      const scale = Math.pow(1.05, plan.cycleLength - 3)
-      const raw = Math.max(0, sampleNormal(BASE_MEDIAN, BASE_SIGMA, rng)) * scale
-      const penalty = TIER_PENALTY_PER_RACE[plan.fundingTier] * plan.cycleLength
-      paceDelta = round1(Math.max(0, raw - penalty))
-    }
+    // Deliver the upgrade rolled ahead of time (and possibly god-mode edited).
+    // Saves from before pre-rolling won't have it — roll lazily as a fallback.
+    const prerolled = plan.pendingPaceDelta === undefined && plan.pendingFailed === undefined
+      ? rollUpgrade(plan.cycleLength, plan.fundingTier, rng)
+      : { paceDelta: plan.pendingPaceDelta ?? 0, failed: plan.pendingFailed ?? false }
+    const failed = prerolled.failed
+    const paceDelta = failed ? 0 : prerolled.paceDelta
 
     upgradeEvents.push({ teamId: plan.teamId, round, paceDelta, failed })
 
@@ -130,13 +145,16 @@ export function applyUpgradeEvents(
       teamMap.set(plan.teamId, team)
     }
 
-    // Pick a fresh cycle length for the next upgrade.
+    // Pick a fresh cycle for the next upgrade and pre-roll its outcome.
     const nextCycle = randomCycleLength(rng)
+    const nextPending = rollUpgrade(nextCycle, plan.fundingTier, rng)
     return {
       ...plan,
       cycleLength: nextCycle,
       nextUpgradeRound: plan.nextUpgradeRound + nextCycle,
       cumulativePenalty: plan.cumulativePenalty + TIER_PENALTY_PER_RACE[plan.fundingTier] * plan.cycleLength,
+      pendingPaceDelta: nextPending.paceDelta,
+      pendingFailed: nextPending.failed,
     }
   })
 

@@ -12,10 +12,11 @@ import type {
   ConstructorSeasonRecord,
   EndOfSeasonSummary,
   DriverProgressionEvent,
+  PendingGridChanges,
 } from '@/lib/sim/types'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
-import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
+import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
@@ -126,6 +127,8 @@ interface SeasonStore {
   allUpgradeEvents: DevUpgradeEvent[]
   endOfSeasonSummary: EndOfSeasonSummary | null
   pendingNextSeasonState: { drivers: Driver[]; teams: Team[] } | null
+  // M4 god-mode: team add/remove queued for next season (applied at season end).
+  pendingGridChanges: PendingGridChanges
   // Snapshot of each grid driver's stats at season start, for the net-development summary.
   seasonStartStats: Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
 
@@ -140,6 +143,11 @@ interface SeasonStore {
   releaseDriver: (id: string) => void
   extendContract: (id: string, seasons: number) => void
   assignDriverToTeam: (driverId: string, teamId: string) => void
+  setPendingUpgrade: (teamId: string, patch: { paceDelta?: number; failed?: boolean }) => void
+  queueTeamAddition: (team: Team) => void
+  cancelTeamAddition: (teamId: string) => void
+  queueTeamRemoval: (teamId: string) => void
+  cancelTeamRemoval: (teamId: string) => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
@@ -167,6 +175,7 @@ export const useSeasonStore = create<SeasonStore>()(
       allUpgradeEvents: [],
       endOfSeasonSummary: null,
       pendingNextSeasonState: null,
+      pendingGridChanges: { additions: [], removals: [] },
       seasonStartStats: {},
       driverStandings: [],
       constructorStandings: [],
@@ -271,6 +280,69 @@ export const useSeasonStore = create<SeasonStore>()(
         })
       },
 
+      // God-mode: view/edit a team's pre-rolled pending upgrade before it lands.
+      // The player can override the impact or force/clear a failure; the cycle length
+      // and delivery round stay fixed (the GDD forbids influencing the cycle itself).
+      setPendingUpgrade: (teamId, patch) => {
+        const { devPlans } = get()
+        set({
+          devPlans: devPlans.map((p) => {
+            if (p.teamId !== teamId) return p
+            const failed = patch.failed ?? p.pendingFailed ?? false
+            const rawDelta = patch.paceDelta ?? p.pendingPaceDelta ?? 0
+            const paceDelta = failed ? 0 : Math.max(0, Math.round(rawDelta * 10) / 10)
+            return { ...p, pendingFailed: failed, pendingPaceDelta: paceDelta }
+          }),
+        })
+      },
+
+      // God-mode grid change: queue a brand-new team to join next season. Seats start
+      // empty and are filled by the market; the change applies at the season-end
+      // transition (see endSeason).
+      queueTeamAddition: (team) => {
+        const { pendingGridChanges } = get()
+        if (pendingGridChanges.additions.some((t) => t.id === team.id)) return
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            additions: [...pendingGridChanges.additions, team],
+          },
+        })
+      },
+
+      cancelTeamAddition: (teamId) => {
+        const { pendingGridChanges } = get()
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            additions: pendingGridChanges.additions.filter((t) => t.id !== teamId),
+          },
+        })
+      },
+
+      // God-mode grid change: queue an existing team to leave at season end. Its drivers
+      // re-enter the market. Applied at the season-end transition (see endSeason).
+      queueTeamRemoval: (teamId) => {
+        const { pendingGridChanges } = get()
+        if (pendingGridChanges.removals.includes(teamId)) return
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            removals: [...pendingGridChanges.removals, teamId],
+          },
+        })
+      },
+
+      cancelTeamRemoval: (teamId) => {
+        const { pendingGridChanges } = get()
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            removals: pendingGridChanges.removals.filter((id) => id !== teamId),
+          },
+        })
+      },
+
       recordRaceResult: (results) => {
         const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents } = get()
         const updated = [...raceResults]
@@ -315,6 +387,7 @@ export const useSeasonStore = create<SeasonStore>()(
           driverStandings,
           constructorStandings,
           seasonStartStats,
+          pendingGridChanges,
         } = get()
 
         const totalTeams = teams.length
@@ -350,6 +423,29 @@ export const useSeasonStore = create<SeasonStore>()(
         // 3. Age every driver one year. Reshuffle, market and attrition are
         //    deferred to their own off-season phases (run lazily on entry).
         const agedDrivers = ageDrivers(drivers)
+
+        // 3b. Apply any god-mode grid changes for the coming season (GDD §Grid Changes):
+        //     departing teams leave and their drivers re-enter the market as free agents;
+        //     new teams join at the lowest car pace, with empty seats the market then
+        //     fills during contract negotiations. The current season has already played
+        //     out under the old grid, so the change takes effect from next season.
+        let nextTeams = teams
+        let nextDrivers = agedDrivers
+        const { additions, removals } = pendingGridChanges
+        if (removals.length > 0) {
+          nextTeams = nextTeams.filter((t) => !removals.includes(t.id))
+          nextDrivers = nextDrivers.map((d) =>
+            removals.includes(d.teamId) ? { ...d, teamId: '', seasonsSinceF1Seat: 0 } : d,
+          )
+        }
+        if (additions.length > 0) {
+          const lowestPace = Math.min(75, ...nextTeams.map((t) => t.carPace))
+          const added = additions.map((t, i) => ({
+            ...t,
+            carPace: Math.max(5, lowestPace - 5 * (i + 1)),
+          }))
+          nextTeams = [...nextTeams, ...added]
+        }
 
         // 4. Build the partial summary; later phases fill in their slices.
         const summary: EndOfSeasonSummary = {
@@ -391,7 +487,8 @@ export const useSeasonStore = create<SeasonStore>()(
           phase: 'end-of-season',
           endOfSeasonSummary: summary,
           constructorHistory: updatedHistory,
-          pendingNextSeasonState: { drivers: agedDrivers, teams },
+          pendingNextSeasonState: { drivers: nextDrivers, teams: nextTeams },
+          pendingGridChanges: { additions: [], removals: [] },
         })
       },
 
@@ -540,6 +637,7 @@ export const useSeasonStore = create<SeasonStore>()(
         allUpgradeEvents: state.allUpgradeEvents,
         endOfSeasonSummary: state.endOfSeasonSummary,
         pendingNextSeasonState: state.pendingNextSeasonState,
+        pendingGridChanges: state.pendingGridChanges,
         seasonStartStats: state.seasonStartStats,
       }),
       onRehydrateStorage: () => (state) => {
@@ -547,6 +645,16 @@ export const useSeasonStore = create<SeasonStore>()(
         const { drivers, teams, raceResults } = state
         state.driverStandings = computeDriverStandings(drivers, teams, raceResults)
         state.constructorStandings = computeConstructorStandings(teams, drivers, raceResults)
+        // Saves from before M4: default the grid-change queue and backfill each dev
+        // plan's pre-rolled pending upgrade so the override UI always has a value.
+        if (!state.pendingGridChanges) state.pendingGridChanges = { additions: [], removals: [] }
+        if (state.devPlans) {
+          state.devPlans = state.devPlans.map((p) => {
+            if (p.pendingPaceDelta !== undefined || p.pendingFailed !== undefined) return p
+            const rolled = rollUpgrade(p.cycleLength, p.fundingTier, Math.random)
+            return { ...p, pendingPaceDelta: rolled.paceDelta, pendingFailed: rolled.failed }
+          })
+        }
       },
     },
   ),

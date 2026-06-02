@@ -191,6 +191,13 @@ export interface TeamDevPlan {
   nextUpgradeRound: number
   fundingTier: FundingTier
   cumulativePenalty: number
+  // Pre-rolled outcome of the upgrade due at nextUpgradeRound, so the player can
+  // view and god-mode edit it before it lands. The penalty is already baked in,
+  // so pendingPaceDelta is the final pace gain that will be applied.
+  // Optional: saves serialized before this field existed won't have it (migrated
+  // on rehydrate; applyUpgradeEvents also rolls lazily if still missing).
+  pendingPaceDelta?: number
+  pendingFailed?: boolean       // the upcoming upgrade will deliver nothing (5% base chance)
 }
 
 export interface DevUpgradeEvent {
@@ -198,6 +205,14 @@ export interface DevUpgradeEvent {
   round: number
   paceDelta: number
   failed: boolean
+}
+
+// God-mode grid changes (add/remove a team) queued during a season, applied at the
+// end-of-season transition so they take effect at the start of the following season.
+// Departing teams' drivers re-enter the market; new teams enter at the lowest car pace.
+export interface PendingGridChanges {
+  additions: Team[]      // new teams to add next season (seats start empty, filled by the market)
+  removals: string[]     // teamIds to remove at season end
 }
 
 export interface ConstructorSeasonRecord {
