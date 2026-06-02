@@ -26,6 +26,7 @@ import { CareerStatsTable } from '@/components/world/CareerStatsTable'
 import { RecentFormCard } from '@/components/world/RecentFormCard'
 import { buildDriverBio } from '@/lib/world/bio'
 import { buildMilestones } from '@/lib/world/milestones'
+import { overall } from '@/lib/sim/progression'
 
 type Tab = 'overview' | 'development' | 'results' | 'h2h'
 
@@ -104,7 +105,13 @@ export default function DriverPage() {
               .sort((x, y) => y.v - x.v)
               .map((d) => d.label)
           })()
-          const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength, knownFor) : null
+          // Rank on the grid by overall: top 5 are superstars, next 5 are stars.
+          const overallRank = (() => {
+            if (!a || a.isFreeAgent) return null
+            const grid = allDrivers.filter((d) => d.teamId !== '')
+            return grid.filter((g) => Math.round(overall(g)) > a.overall).length
+          })()
+          const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength, knownFor, overallRank) : null
           const milestones = buildMilestones(career)
 
           return (

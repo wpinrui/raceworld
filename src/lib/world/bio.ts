@@ -68,13 +68,14 @@ function styleSentence(subjCap: string, knownFor: string[]): string {
 }
 
 // Single descriptor noun for the opener, picked by what stands out most.
-function driverNoun(career: DriverCareer, a: DriverAttributes): string {
+// overallRank is the driver's 0-based rank on the grid by overall (null if not on the grid).
+function driverNoun(career: DriverCareer, a: DriverAttributes, overallRank: number | null): string {
   const { titles, seasons } = career.totals
   const leading = career.seasons.find((s) => s.inProgress)?.championshipFinish === 1
   if (titles > 0) return titles === 1 ? 'F1 champion' : `${titles}-time F1 champion`
   if (leading) return 'F1 championship leader'
-  if (a.overall >= 90) return 'superstar'
-  if (a.overall >= 85) return 'star'
+  if (overallRank != null && overallRank < 5) return 'superstar'
+  if (overallRank != null && overallRank < 10) return 'star'
   if (seasons <= 1) return 'rookie'
   if (a.age >= 37) return 'veteran'
   if (a.narrativeModifier >= 6) return 'popular driver'
@@ -134,12 +135,13 @@ export function buildDriverBio(
   currentYear: number,
   teamStrength: TeamStrength = null,
   knownFor: string[] = [],
+  overallRank: number | null = null,
 ): string {
   const p = pronouns(a.gender)
   const subjCap = cap(p.subj)
   const country = countryName(a.nationality) || 'an unknown country'
 
-  const opener = `${career.driverName} is ${ageArticle(a.age)} ${a.age}-year-old ${driverNoun(career, a)} from ${country}.`
+  const opener = `${career.driverName} is ${ageArticle(a.age)} ${a.age}-year-old ${driverNoun(career, a, overallRank)} from ${country}.`
   const record = recordSentence(career, subjCap)
   const style = styleSentence(subjCap, knownFor)
   const age = ageSentence(a, p.subj, p.poss)
