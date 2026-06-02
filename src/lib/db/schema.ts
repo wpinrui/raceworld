@@ -67,6 +67,17 @@ CREATE TABLE IF NOT EXISTS driver_race_form (
   UNIQUE(race_id, driver_id)
 );
 
+-- Per-driver lap times for a race (JSON array of seconds, in lap order). Lets the newsroom
+-- reconstruct position-by-lap and the race narrative. One row per (race, driver).
+CREATE TABLE IF NOT EXISTS race_lap_times (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  race_id INTEGER NOT NULL REFERENCES races(id),
+  driver_id TEXT NOT NULL,
+  driver_name TEXT NOT NULL,
+  lap_times_json TEXT NOT NULL,
+  UNIQUE(race_id, driver_id)
+);
+
 -- LLM-generated newsroom articles (M5). One row per (type, year, round); round is null
 -- for non-race articles. Natural key gives idempotent upsert + dedup. On-demand searches
 -- are NOT stored here.

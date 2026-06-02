@@ -3,7 +3,7 @@ import {
   getAllSeasons, getSeasonIdByYear, getRaceInSeasonByRound, getResultsForRace,
   getSeasonStandings, getDriverTotals, getDriverCareerBySeason, getDriverRacesInSeason,
   getTeamTotals, getTeamCareerBySeason, getTeamRacesInSeason,
-  getAllSeasonChampions, getAllTimeLeaders, getSearchIndex,
+  getAllSeasonChampions, getAllTimeLeaders, getSearchIndex, getRaceLapTimes,
 } from '@/lib/db/queries'
 import { getDriverHonours, getTeamHonours, detectRaceFeats } from '@/lib/stats/feats'
 
@@ -148,15 +148,44 @@ function classificationFor(year: number, round: number) {
   const rows = getResultsForRace(race.id)
   const finisherTimes = rows.filter((r) => !r.dnf && r.total_time_ms != null).map((r) => r.total_time_ms as number)
   const leaderTime = finisherTimes.length ? Math.min(...finisherTimes) : null
+  const parseStints = (json: string): Array<{ compound: string; laps: number }> => {
+    try { const v = JSON.parse(json); return Array.isArray(v) ? v : [] } catch { return [] }
+  }
+
+  // Reconstruct running order at the end of each lap from per-driver lap times: a driver's
+  // cumulative time after lap L decides their position among everyone still running.
+  const lapRows = getRaceLapTimes(race.id)
+  const cumByDriver = new Map<string, number[]>()
+  for (const lr of lapRows) {
+    let s = 0
+    const cum: number[] = []
+    try { for (const t of JSON.parse(lr.lap_times_json) as number[]) { s += t; cum.push(s) } } catch { /* skip */ }
+    cumByDriver.set(lr.driver_id, cum)
+  }
+  const maxLaps = Math.max(0, ...[...cumByDriver.values()].map((c) => c.length))
+  const positionByLap = new Map<string, number[]>()
+  for (let lap = 0; lap < maxLaps; lap++) {
+    const running = [...cumByDriver.entries()].filter(([, c]) => c.length > lap).map(([id, c]) => ({ id, t: c[lap] }))
+    running.sort((a, b) => a.t - b.t)
+    running.forEach((entry, idx) => {
+      if (!positionByLap.has(entry.id)) positionByLap.set(entry.id, [])
+      positionByLap.get(entry.id)!.push(idx + 1)
+    })
+  }
+
   return {
-    year, round, circuit: race.circuit_name,
+    year, round, circuit: race.circuit_name, totalLaps: maxLaps || null,
     results: rows.map((r) => ({
       driver: r.driver_name, team: r.team_name, grid: r.grid_position,
       finish: r.dnf ? null : r.finish_position, dnf: !!r.dnf, points: r.points,
       lapsCompleted: r.laps_completed,
+      // Tyre strategy: ordered stints, each { compound, laps }.
+      stints: parseStints(r.stints_json),
+      // Running position at the end of each lap (index 0 = after lap 1). Ends early on a DNF.
+      positionByLap: positionByLap.get(r.driver_id) ?? [],
       // Gap to the winner in seconds (null for the winner and for DNFs). This is the ONLY
       // source of finishing margins; the model must not invent gaps.
-      // NB: total_time_ms is misnamed — it stores SECONDS, not milliseconds.
+      // NB: total_time_ms is misnamed; it stores SECONDS, not milliseconds.
       gapToWinnerSeconds: !r.dnf && r.total_time_ms != null && leaderTime != null && r.total_time_ms > leaderTime
         ? Math.round((r.total_time_ms - leaderTime) * 1000) / 1000
         : null,

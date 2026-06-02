@@ -49,7 +49,12 @@ export async function simulateUntilRound(targetRound: number, onRace?: (round: n
     const snapshots = useSeasonStore.getState().drivers
       .filter((d) => d.teamId !== '')
       .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }))
-    await actionFlushRaceResult(dbSeasonId, round, circuit.id, circuit.name, results, snapshots)
+    const lapData = finished.drivers.map((ds) => ({
+      driverId: ds.driverId,
+      driverName: grid.find((d) => d.id === ds.driverId)?.name ?? ds.driverId,
+      lapTimes: ds.lapTimes,
+    }))
+    await actionFlushRaceResult(dbSeasonId, round, circuit.id, circuit.name, results, snapshots, lapData)
 
     // Advance (handles end-of-season on the final round) and clear the race engine.
     useSeasonStore.getState().advanceRound()
