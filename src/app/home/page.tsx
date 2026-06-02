@@ -37,7 +37,7 @@ export default function HomePage() {
         {isOffSeason(phase) ? (
           <OffSeasonPanel />
         ) : (
-          <div className="max-w-6xl mx-auto space-y-5">
+          <div className="max-w-7xl mx-auto space-y-5">
             {/* Masthead */}
             <div className="rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 p-5">
               <div className="flex items-center gap-2.5">
