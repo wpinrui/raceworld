@@ -17,7 +17,7 @@ import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
-import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
+import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 
@@ -318,6 +318,7 @@ export const useSeasonStore = create<SeasonStore>()(
           teamMediaScores,
           upgradeEvents: allUpgradeEvents,
           preSeasonTest: null,
+          retentionDelta: computeRetentionDeltas(drivers, teams, raceResults),
         }
 
         // 5. Update constructor history (prepend current season, dedupe, keep ≤55)
@@ -356,6 +357,7 @@ export const useSeasonStore = create<SeasonStore>()(
           teams,
           endOfSeasonSummary.driverMediaScores,
           endOfSeasonSummary.teamMediaScores,
+          endOfSeasonSummary.retentionDelta ?? {},
           year + 1,
           Math.random,
         )

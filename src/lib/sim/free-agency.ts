@@ -1,6 +1,52 @@
-import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest, SeatContestDriver, DroppedDriver } from './types'
+import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest, SeatContestDriver, DroppedDriver, RaceResult } from './types'
 import { sampleNormal } from './rng-utils'
 import { generateRookie } from './driver-generation'
+
+// --- Fit-based retention (tuned in scripts/market-sim.mjs to ~4 changes/season) ---
+// A team OFFERS to re-sign an expiring driver with a probability tied to how he did
+// vs what his car's pace rank predicted (delta): P(offer) = sigmoid((delta+SHIFT)/SCALE).
+// The offer is a strong retention thumb but NOT a lock — he still goes through the
+// market and can leave for a better team that wants him, or be replaced if his team
+// passed on him. A driver who beats his car keeps his seat through the noise of a
+// fluctuating media rank; a clear underperformer is far likelier to be let go.
+const OFFER_SHIFT = -4
+const OFFER_SCALE = 2
+const RETENTION_BONUS = 25 // perceived-value boost a team gives an incumbent it offered
+const STAY_PULL = 12 // a driver's pull to re-sign with his current team
+const sigmoid = (x: number) => 1 / (1 + Math.exp(-x))
+
+// delta = finish vs the car's PACE-RANK expectation, race-weighted. Expected seat
+// finish = 2·carPaceRank − 0.5; perf = 0.3·avgGrid + 0.7·avgRace. Positive = beat the
+// car. Returns a plain record so it can ride along in the persisted season summary.
+export function computeRetentionDeltas(
+  drivers: Driver[],
+  teams: Team[],
+  raceResults: RaceResult[][],
+): Record<string, number> {
+  const paceRank = new Map<string, number>()
+  ;[...teams].sort((a, b) => b.carPace - a.carPace).forEach((t, i) => paceRank.set(t.id, i + 1))
+  const agg = new Map<string, { grid: number; race: number; n: number }>()
+  for (const round of raceResults) {
+    const field = round.length || 20
+    for (const r of round) {
+      if (!agg.has(r.driverId)) agg.set(r.driverId, { grid: 0, race: 0, n: 0 })
+      const a = agg.get(r.driverId)!
+      a.grid += r.gridPosition
+      a.race += r.dnf || r.finishPosition == null ? field : r.finishPosition
+      a.n++
+    }
+  }
+  const out: Record<string, number> = {}
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    const a = agg.get(d.id)
+    if (!a || a.n === 0) continue
+    const expected = 2 * (paceRank.get(d.teamId) ?? teams.length) - 0.5
+    const perf = 0.3 * (a.grid / a.n) + 0.7 * (a.race / a.n)
+    out[d.id] = expected - perf
+  }
+  return out
+}
 
 // Contract length scales with a driver's STANDING among next season's grid
 // (their media percentile, 0 = weakest, 1 = strongest), not an absolute media
@@ -58,6 +104,7 @@ export function runDriverMarket(
   teams: Team[],
   driverMediaScores: DriverMediaScore[],
   teamMediaScores: TeamMediaScore[],
+  retentionDelta: Record<string, number>,
   newYear: number,
   rng: () => number,
 ): { updatedDrivers: Driver[]; marketMoves: MarketMove[]; seatContests: SeatContest[]; droppedDrivers: DroppedDriver[] } {
@@ -85,22 +132,35 @@ export function runDriverMarket(
   }
   const openTeams = teams.filter((t) => (capacity.get(t.id) ?? 0) > 0)
 
+  // Each expiring driver's current team OFFERS to re-sign him with a probability tied
+  // to how he did vs his car (delta). An offer is a strong retention thumb, not a lock.
+  const offered = new Set<string>()
+  for (const fa of freeAgents) {
+    if (fa.teamId === '') continue // pool drivers have no incumbent team
+    if (rng() < sigmoid(((retentionDelta[fa.id] ?? 0) + OFFER_SHIFT) / OFFER_SCALE)) offered.add(fa.id)
+  }
+
   // Preferences are sampled once and then fixed, so the matching is stable.
-  // Team's perceived value of a driver: media + incumbent bonus + noise (§142).
+  // Team's perceived value: an incumbent it offered to gets a retention boost;
+  // everyone else competes on media (+ youth upside, − ring rust).
   const tpKey = (teamId: string, driverId: string) => `${teamId}|${driverId}`
   const teamPerceived = new Map<string, number>()
   for (const t of openTeams) {
     for (const fa of freeAgents) {
-      const incumbent = fa.teamId === t.id ? 5 : 0
+      const youth = Math.max(0, Math.min(4, 23 - fa.age))
       const rust = fa.teamId === '' ? OUT_OF_F1_PENALTY : 0
-      teamPerceived.set(tpKey(t.id, fa.id), driverMedia(fa.id) + incumbent - rust + sampleNormal(0, 10, rng))
+      const base = fa.teamId === t.id && offered.has(fa.id)
+        ? driverMedia(fa.id) + RETENTION_BONUS
+        : driverMedia(fa.id) + youth - rust
+      teamPerceived.set(tpKey(t.id, fa.id), base + sampleNormal(0, 8, rng))
     }
   }
-  // Each free agent's ranking of open-seat teams: team media + noise, desc.
+  // Each free agent ranks open-seat teams by team media + noise, plus a pull to stay
+  // at their current team — so they only leave for a clearly better seat that wants them.
   const prefList = new Map<string, string[]>()
   for (const fa of freeAgents) {
     const ranked = openTeams
-      .map((t) => ({ id: t.id, v: teamMedia(t.id) + sampleNormal(0, 10, rng) }))
+      .map((t) => ({ id: t.id, v: teamMedia(t.id) + (fa.teamId === t.id ? STAY_PULL : 0) + sampleNormal(0, 10, rng) }))
       .sort((a, b) => b.v - a.v)
       .map((x) => x.id)
     prefList.set(fa.id, ranked)

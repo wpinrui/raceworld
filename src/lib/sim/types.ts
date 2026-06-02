@@ -306,4 +306,7 @@ export interface EndOfSeasonSummary {
   teamMediaScores: TeamMediaScore[]
   upgradeEvents: DevUpgradeEvent[]
   preSeasonTest: PreSeasonTest | null
+  // Per-driver finish vs car-pace expectation this season; drives re-sign offers.
+  // Optional: saves serialized before this field existed won't have it (caller defaults to {}).
+  retentionDelta?: Record<string, number>
 }
