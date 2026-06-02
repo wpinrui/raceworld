@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, Circuit } from '@/lib/sim/types'
+import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 
 interface Props {
   drivers: Driver[]
@@ -173,10 +174,10 @@ export function PreQualPanel({
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />
                       <ReactCountryFlag countryCode={d.nationality || 'GB'} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
-                      <span className="text-sm font-medium text-[#FFFFFF]">{d.name}</span>
+                      <DriverLink id={d.id} className="text-sm font-medium text-[#FFFFFF]">{d.name}</DriverLink>
                     </div>
                   </td>
-                  <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.name ?? '—'}</td>
+                  <td className="py-1 px-2 text-sm text-[#FFFFFF]"><TeamLink id={d.teamId} className="text-[#FFFFFF]">{team?.name ?? '—'}</TeamLink></td>
                   <td className="py-1 px-2">
                     <div className="flex items-center gap-1.5">
                       <input
