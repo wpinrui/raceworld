@@ -79,7 +79,16 @@ export default function DriverPage() {
             gender: a?.gender ?? ('male' as const),
             photoUrl: liveDriver?.photoUrl,
           }
-          const bio = a ? buildDriverBio(career, a, seasonYear) : null
+          // Rank the driver's team by car pace to label it front-running / midfield / backmarker.
+          const teamStrength = (() => {
+            if (!a || a.isFreeAgent || teams.length === 0) return null
+            const ranked = [...teams].sort((x, y) => y.carPace - x.carPace)
+            const rank = ranked.findIndex((t) => t.id === a.teamId)
+            if (rank < 0) return null
+            const third = ranked.length / 3
+            return rank < third ? 'front-running' : rank < third * 2 ? 'midfield' : 'backmarker'
+          })()
+          const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength) : null
           const milestones = buildMilestones(career)
 
           return (
