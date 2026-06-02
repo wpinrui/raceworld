@@ -130,8 +130,8 @@ Seat-filling uses **driver-proposing deferred acceptance** (Gale–Shapley with 
 
 Preferences are sampled **once** and then held fixed for the whole process:
 
-- Each free agent ranks every team that has an open seat by perceived attractiveness: `perceived = media_team_score + Normal(0, 10)`.
-- Each team scores every free agent by perceived value: `perceived = media_driver_score + Normal(0, 10)` (plus the incumbent bonus below, minus the ring-rust penalty below).
+- Each free agent ranks every team that has an open seat by perceived attractiveness: `perceived = media_team_score + stay_pull + Normal(0, 10)`, where `stay_pull = 12` is added only for the driver's current team — a pull to re-sign, so a driver only leaves for a clearly better seat.
+- Each team scores every free agent by perceived value: `perceived = media_driver_score + Normal(0, 8)`, plus a **retention bonus** if it offered to re-sign him (below), plus the youth bonus and minus the ring-rust penalty below.
 
 The matching then runs:
 
@@ -143,7 +143,13 @@ Tentative holds become signings once it settles. Any seat still empty (more seat
 
 **Media team score** is derived from constructors championship points over the last 1–3 available seasons, weighted 3:2:1 toward the most recent, normalised to a 0–100 scale.
 
-**Incumbent advantage**: when a team evaluates a driver already on its roster whose contract just expired, that driver's perceived value receives a +5 flat bonus — loyalty friction without a separate mechanic. (Team side only; a driver has no built-in pull to stay.)
+**Re-sign offer (retention)**: at the end of the season a team decides whether to *offer* an expiring driver a new deal, based on how he performed **relative to what his car deserved** — not on his absolute media rank, which is too volatile season-to-season to keep consistent drivers in place. Define
+
+> `delta = (2 × car_pace_rank − 0.5) − (0.3 × avg_grid_pos + 0.7 × avg_race_pos)`
+
+i.e. the seat's expected finish from the car's *pace* ranking (fastest car ≈ P1/P2, etc.) minus the driver's race-weighted average finish. Positive `delta` = he beat his car. The team offers to re-sign with probability `sigmoid((delta − 4) / 2)`: a clear overperformer is almost always offered, a driver who merely meets his car's level is offered less often but still competes, and a clear underperformer is usually let go. An **offer is not a lock** — it adds a +25 retention bonus to that team's perceived value of him, but he still goes through the matching and may leave for a clearly better team that wants him, or be replaced if his team passed. This keeps a consistent performer at his team through the noise of a fluctuating media rank, while a genuine slump opens the door to a replacement.
+
+**Youth bonus**: a young free agent's perceived value gets a small bump (`+max(0, min(4, 23 − age))`, so nothing from ~23 on) — enough that a tantalising prospect can occasionally prise a seat from an incumbent, never enough to threaten a settled mid-career driver.
 
 **Ring rust**: when a team evaluates a free agent who is currently out of F1 (held no seat last season), their perceived value takes a small flat penalty. Teams favour proven drivers, so the grid does not churn wildly between the pool and seated drivers every year — but the penalty is small enough that a standout prospect still forces their way in.
 
