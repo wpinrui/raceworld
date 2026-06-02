@@ -6,8 +6,10 @@ import { calendar2026 } from '@/data/calendar'
 import {
   actionGetDriverCareer, actionGetTeamCareer, actionGetWorldOverview,
   actionGetDriverSeason, actionGetTeamSeason, actionGetRaceClassification,
+  actionGetDriverHonours, actionGetTeamHonours,
 } from '@/lib/db/actions'
-import { mergeDriverCareer, mergeTeamCareer, type LiveStore } from './merge'
+import type { Feat } from '@/lib/stats/types'
+import { mergeDriverCareer, mergeTeamCareer, augmentHonoursWithLiveTitle, liveChampionRow, type LiveStore } from './merge'
 import { buildLiveDriverSeason, buildLiveTeamSeason, buildLiveRaceClassification } from './live-season'
 import type {
   DriverCareer, TeamCareer, WorldOverview,
@@ -19,7 +21,7 @@ function useLiveStore(): LiveStore {
   return {
     year: s.year, drivers: s.drivers, teams: s.teams,
     driverStandings: s.driverStandings, constructorStandings: s.constructorStandings,
-    raceResults: s.raceResults, calendar: calendar2026,
+    raceResults: s.raceResults, calendar: calendar2026, statHistory: s.statHistory,
   }
 }
 
@@ -113,7 +115,26 @@ export function useRaceClassification(year: number, round: number) {
   return { classification: db, loading }
 }
 
+// Career feats/records for an entity, from the archived stats DB, with a live-clinched
+// current-season title folded in so the Honours panel reflects it before archiving.
+export function useEntityHonours(kind: 'driver' | 'team', id: string) {
+  const live = useLiveStore()
+  const [dbFeats, setDbFeats] = useState<Feat[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let on = true
+    setLoading(true)
+    const fetcher = kind === 'driver' ? actionGetDriverHonours : actionGetTeamHonours
+    fetcher(id).then((f) => { if (on) { setDbFeats(f); setLoading(false) } })
+    return () => { on = false }
+  }, [kind, id])
+
+  return { feats: augmentHonoursWithLiveTitle(dbFeats, kind, id, live), loading }
+}
+
 export function useWorldOverview() {
+  const live = useLiveStore()
   const [data, setData] = useState<WorldOverview | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -123,5 +144,11 @@ export function useWorldOverview() {
     return () => { on = false }
   }, [])
 
-  return { data, loading }
+  // Prepend a current-season row to the champions roll once a title is clinched.
+  const row = liveChampionRow(live)
+  const merged = data && row && !data.championsRoll.some((r) => r.year === row.year)
+    ? { ...data, championsRoll: [row, ...data.championsRoll] }
+    : data
+
+  return { data: merged, loading }
 }

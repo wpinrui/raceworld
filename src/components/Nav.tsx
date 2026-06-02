@@ -63,8 +63,8 @@ export default function Nav() {
         })}
       </div>
 
-      {/* Centralized search in the dead space */}
-      <div className="flex-1 flex justify-center px-4">
+      {/* Search fills the dead space between the links and the season indicator */}
+      <div className="flex-1 px-4">
         <WorldSearch />
       </div>
 

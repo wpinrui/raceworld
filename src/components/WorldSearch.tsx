@@ -43,7 +43,7 @@ export default function WorldSearch() {
   }
 
   return (
-    <div ref={boxRef} className="relative w-56" onBlur={(ev) => { if (!boxRef.current?.contains(ev.relatedTarget as Node)) setOpen(false) }}>
+    <div ref={boxRef} className="relative w-full" onBlur={(ev) => { if (!boxRef.current?.contains(ev.relatedTarget as Node)) setOpen(false) }}>
       <div className="flex items-center gap-2 px-2.5 h-7 rounded-md bg-[#2A3142] border border-[#303848] focus-within:border-[#00D9FF]">
         <Search size={13} className="text-[#FFFFFF] shrink-0" />
         <input
@@ -56,7 +56,7 @@ export default function WorldSearch() {
         />
       </div>
       {open && results.length > 0 && (
-        <div className="absolute left-0 top-9 w-72 z-50 rounded-lg bg-[#1E2431] border border-[#2A3142] shadow-xl overflow-hidden py-1">
+        <div className="absolute left-0 right-0 top-9 z-50 rounded-lg bg-[#1E2431] border border-[#2A3142] shadow-xl overflow-hidden py-1">
           {results.map((e) => (
             <button
               key={`${e.kind}:${e.id}`}

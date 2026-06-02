@@ -145,13 +145,21 @@ export function OffSeasonPanel() {
           />
         )}
         {viewPhase === 'contract-negotiations' && (
-          <MarketPanel summary={summary} teams={season.teams} />
+          <MarketPanel
+            summary={summary}
+            teams={[
+              ...season.teams,
+              ...(season.pendingNextSeasonState?.teams ?? []).filter(
+                (pt) => !season.teams.some((t) => t.id === pt.id),
+              ),
+            ]}
+          />
         )}
         {viewPhase === 'driver-retirements' && (
           <RetirementsPanel summary={summary} drivers={season.drivers} />
         )}
         {viewPhase === 'pre-season-testing' && (
-          <TestingPanel summary={summary} teams={season.teams} constructorStandings={season.constructorStandings} />
+          <TestingPanel summary={summary} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
         )}
       </div>
     </div>

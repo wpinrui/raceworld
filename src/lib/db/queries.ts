@@ -51,6 +51,8 @@ export function archiveSeason(seasonId: number): void {
 export function resetDatabase(): void {
   const db = getDb()
   db.transaction(() => {
+    db.prepare('DELETE FROM driver_race_form').run()
+    db.prepare('DELETE FROM driver_race_attributes').run()
     db.prepare('DELETE FROM race_results').run()
     db.prepare('DELETE FROM races').run()
     db.prepare('DELETE FROM season_constructor_standings').run()
@@ -104,6 +106,129 @@ export function insertRaceResults(raceId: number, results: RaceResult[]): void {
   })
   insertMany(results)
   completeRace(raceId)
+}
+
+// Persist each driver's pre-race form for a race (idempotent per race+driver).
+export function insertDriverRaceForm(raceId: number, rows: { driverId: string; form: number }[]): void {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO driver_race_form (race_id, driver_id, form) VALUES (?, ?, ?)
+    ON CONFLICT(race_id, driver_id) DO UPDATE SET form = excluded.form
+  `)
+  const insertMany = db.transaction((rs: { driverId: string; form: number }[]) => {
+    for (const r of rs) stmt.run(raceId, r.driverId, r.form)
+  })
+  insertMany(rows)
+}
+
+export interface DbRecentFormRow {
+  year: number
+  round: number
+  circuitName: string
+  gridPosition: number
+  finishPosition: number | null
+  points: number
+  dnf: number
+  form: number
+}
+
+// The driver's most recent archived races that have a recorded form, newest first.
+export function getDriverRecentForm(driverId: string, limit: number): DbRecentFormRow[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, r.round AS round, r.circuit_name AS circuitName,
+      rr.grid_position AS gridPosition, rr.finish_position AS finishPosition,
+      rr.points AS points, rr.dnf AS dnf, drf.form AS form
+    FROM driver_race_form drf
+    JOIN race_results rr ON rr.race_id = drf.race_id AND rr.driver_id = drf.driver_id
+    JOIN races r ON r.id = drf.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE drf.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year DESC, r.round DESC
+    LIMIT ?
+  `).all(driverId, limit) as DbRecentFormRow[]
+}
+
+export interface DriverAttributeSnapshot {
+  driverId: string
+  pace: number
+  wetWeatherPace: number
+  overtaking: number
+  smoothness: number
+}
+
+// Persist each driver's post-race attributes for the round. Idempotent per
+// (season, round, driver) so re-flushing a round doesn't duplicate rows.
+export function insertDriverRaceAttributes(
+  seasonId: number,
+  round: number,
+  snapshots: DriverAttributeSnapshot[],
+): void {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO driver_race_attributes (season_id, round, driver_id, pace, wet_weather_pace, overtaking, smoothness)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(season_id, round, driver_id) DO UPDATE SET
+      pace = excluded.pace, wet_weather_pace = excluded.wet_weather_pace,
+      overtaking = excluded.overtaking, smoothness = excluded.smoothness
+  `)
+  const insertMany = db.transaction((rows: DriverAttributeSnapshot[]) => {
+    for (const s of rows) stmt.run(seasonId, round, s.driverId, s.pace, s.wetWeatherPace, s.overtaking, s.smoothness)
+  })
+  insertMany(snapshots)
+}
+
+export interface DbRatingsPointRow {
+  year: number
+  round: number
+  pace: number
+  wet_weather_pace: number
+  overtaking: number
+  smoothness: number
+}
+
+// A driver's attribute timeline across all archived seasons, ordered chronologically.
+export function getDriverRatingsHistory(driverId: string): DbRatingsPointRow[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, dra.round AS round,
+      dra.pace AS pace, dra.wet_weather_pace AS wet_weather_pace,
+      dra.overtaking AS overtaking, dra.smoothness AS smoothness
+    FROM driver_race_attributes dra
+    JOIN seasons s ON s.id = dra.season_id
+    WHERE dra.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year, dra.round
+  `).all(driverId) as DbRatingsPointRow[]
+}
+
+export interface DbTeammateRaceRow {
+  year: number
+  round: number
+  teamName: string
+  teammateId: string
+  teammateName: string
+  myGrid: number
+  myFinish: number | null
+  myDnf: number
+  myPoints: number
+  mateGrid: number
+  mateFinish: number | null
+  mateDnf: number
+  matePoints: number
+}
+
+// Every archived race where this driver had a teammate, paired with that teammate's row.
+export function getDriverTeammateRaces(driverId: string): DbTeammateRaceRow[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, r.round AS round, a.team_name AS teamName,
+      b.driver_id AS teammateId, b.driver_name AS teammateName,
+      a.grid_position AS myGrid, a.finish_position AS myFinish, a.dnf AS myDnf, a.points AS myPoints,
+      b.grid_position AS mateGrid, b.finish_position AS mateFinish, b.dnf AS mateDnf, b.points AS matePoints
+    FROM race_results a
+    JOIN race_results b ON b.race_id = a.race_id AND b.team_id = a.team_id AND b.driver_id <> a.driver_id
+    JOIN races r ON r.id = a.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE a.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year, r.round
+  `).all(driverId) as DbTeammateRaceRow[]
 }
 
 export function getArchivedSeasons(): DbSeason[] {
@@ -495,4 +620,73 @@ export function getSearchIndex(): SearchIndexEntry[] {
     ...drivers.map((d) => ({ ...d, kind: 'driver' as const })),
     ...teams.map((t) => ({ ...t, kind: 'team' as const })),
   ]
+}
+
+// --- Stats-engine aggregates (archived seasons only) ---
+// Per (season, driver) and (season, team) tallies for the whole world, plus a
+// driver's ordered race log — the raw material the feat detector reduces over.
+
+export interface DriverSeasonTally {
+  driverId: string; driverName: string; seasonId: number; year: number
+  races: number; wins: number; poles: number; podiums: number; points: number; dnfs: number
+}
+
+export function getAllDriverSeasonTallies(): DriverSeasonTally[] {
+  return getDb().prepare(`
+    SELECT rr.driver_id AS driverId, MAX(rr.driver_name) AS driverName,
+      s.id AS seasonId, s.year AS year,
+      COUNT(*) AS races,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      SUM(rr.dnf) AS dnfs
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived'
+    GROUP BY s.id, rr.driver_id
+    ORDER BY s.year
+  `).all() as DriverSeasonTally[]
+}
+
+export interface TeamSeasonTally {
+  teamId: string; teamName: string; seasonId: number; year: number
+  wins: number; podiums: number; points: number; finalPosition: number | null
+}
+
+export function getAllTeamSeasonTallies(): TeamSeasonTally[] {
+  return getDb().prepare(`
+    SELECT rr.team_id AS teamId, MAX(rr.team_name) AS teamName,
+      s.id AS seasonId, s.year AS year,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      scs.final_position AS finalPosition
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    LEFT JOIN season_constructor_standings scs ON scs.season_id = s.id AND scs.team_id = rr.team_id
+    WHERE s.status = 'archived'
+    GROUP BY s.id, rr.team_id
+    ORDER BY s.year
+  `).all() as TeamSeasonTally[]
+}
+
+// One row per archived race a driver started, in chronological order — used to
+// compute consecutive-race streaks (wins, podiums, points finishes).
+export interface DriverRaceLite {
+  year: number; round: number; gridPosition: number; finishPosition: number | null; dnf: number; points: number
+}
+
+export function getDriverArchivedRaces(driverId: string): DriverRaceLite[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, r.round AS round, rr.grid_position AS gridPosition,
+      rr.finish_position AS finishPosition, rr.dnf AS dnf, rr.points AS points
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE rr.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year, r.round
+  `).all(driverId) as DriverRaceLite[]
 }

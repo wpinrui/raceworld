@@ -3,13 +3,30 @@
 // Shared chrome for the world pages.
 
 export function Panel({
-  title, children, className = '', flush = false,
+  title, children, className = '', flush = false, fill = false,
 }: {
-  title?: string
+  title?: React.ReactNode
   children: React.ReactNode
   className?: string
   flush?: boolean
+  // `fill` makes the panel fill its (height-constrained) grid cell and scroll its own
+  // body internally — used by the driver dashboard so the page itself never scrolls.
+  fill?: boolean
 }) {
+  if (fill) {
+    return (
+      <div className={`rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden h-full flex flex-col min-h-0 ${className}`}>
+        {title && (
+          <p className="shrink-0 text-[10px] uppercase tracking-widest text-[#FFFFFF] px-5 py-3 border-b border-[#2A3142]">
+            {title}
+          </p>
+        )}
+        <div className={`flex-1 min-h-0 overflow-y-auto ${flush ? '' : 'p-5'}`}>
+          {children}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={`rounded-xl bg-[#1E2431] border border-[#2A3142] ${flush ? 'overflow-hidden' : 'p-5'} ${className}`}>
       {title && (
@@ -42,12 +59,12 @@ export function TabBar<T extends string>({
   onChange: (k: T) => void
 }) {
   return (
-    <div className="flex gap-1 border-b border-[#2A3142] overflow-x-auto">
+    <div className="flex gap-1 border-b border-[#2A3142] overflow-x-auto overflow-y-hidden">
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap border-b-2 -mb-px transition-colors text-[#FFFFFF] ${
+          className={`cursor-pointer px-4 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap border-b-2 -mb-px transition-colors text-[#FFFFFF] ${
             active === t.key ? 'border-[#00D9FF]' : 'border-transparent hover:border-[#2A3142]'
           }`}
         >

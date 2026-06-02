@@ -28,15 +28,25 @@ import {
   getRaceInSeasonByRound,
   getResultsForRace,
   getTeamFinalPositionInSeason,
+  insertDriverRaceAttributes,
+  insertDriverRaceForm,
+  getDriverRatingsHistory,
+  getDriverRecentForm,
+  getDriverTeammateRaces,
   type DbSeason,
   type DbRaceResultRow,
+  type DriverAttributeSnapshot,
 } from './queries'
+import { overall } from '@/lib/sim/progression'
+import { aggregateTeammateH2H, type H2HRaceRow } from '@/lib/world/h2h'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import type {
   DriverCareer, TeamCareer, WorldOverview, SearchEntry, CareerSeason, TeamSeason,
   DriverSeasonDetail, DriverSeasonRace, TeamSeasonDetail, TeamSeasonRace,
-  RaceClassification, RaceClassificationRow, Stint,
+  RaceClassification, RaceClassificationRow, Stint, RatingsPoint,
 } from '@/lib/world/types'
+import { getDriverHonours, getTeamHonours } from '@/lib/stats/feats'
+import type { Feat } from '@/lib/stats/types'
 
 function parseStints(json: string): Stint[] {
   try {
@@ -70,9 +80,12 @@ export async function actionFlushRaceResult(
   circuitId: string,
   circuitName: string,
   results: RaceResult[],
+  attributeSnapshots: DriverAttributeSnapshot[] = [],
 ): Promise<void> {
   const raceId = createRace(seasonId, round, circuitId, circuitName)
   insertRaceResults(raceId, results)
+  if (attributeSnapshots.length > 0) insertDriverRaceAttributes(seasonId, round, attributeSnapshots)
+  insertDriverRaceForm(raceId, results.map((r) => ({ driverId: r.driverId, form: r.form })))
 }
 
 export async function actionArchiveSeason(seasonId: number): Promise<void> {
@@ -113,16 +126,41 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     return {
       driverId, driverName: driverId,
       totals: { races: 0, wins: 0, podiums: 0, points: 0, poles: 0, titles: 0, seasons: 0 },
-      seasons: [], attributes: null, currentResults: null,
+      seasons: [], ratingsHistory: [], recentForm: [], teammateH2H: [], attributes: null, currentResults: null,
     }
   }
   const champions = getAllSeasonChampions()
   const titles = champions.filter((c) => c.driverChampionId === driverId).length
-  const seasons: CareerSeason[] = careerRows.map((r) => ({
-    year: r.seasonYear, teamId: r.teamId, teamName: r.teamName,
-    races: r.races, wins: r.wins, podiums: r.podiums, points: r.points,
-    championshipFinish: getDriverFinishInSeason(r.seasonId, driverId),
-    inProgress: false,
+  const seasons: CareerSeason[] = careerRows.map((r) => {
+    // One standings reconstruction per season gives both the WDC position and the
+    // per-round results matrix for this driver.
+    const ds = getSeasonStandings(r.seasonId).driverStandings
+    const idx = ds.findIndex((d) => d.driverId === driverId)
+    return {
+      year: r.seasonYear, teamId: r.teamId, teamName: r.teamName,
+      races: r.races, wins: r.wins, podiums: r.podiums, poles: r.poles, points: r.points,
+      championshipFinish: idx >= 0 ? idx + 1 : null,
+      results: idx >= 0 ? ds[idx].results : [],
+      inProgress: false,
+    }
+  })
+  const ratingsHistory: RatingsPoint[] = getDriverRatingsHistory(driverId).map((r) => ({
+    year: r.year, round: r.round,
+    pace: r.pace, wetWeatherPace: r.wet_weather_pace,
+    overtaking: r.overtaking, smoothness: r.smoothness,
+    overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace })),
+  }))
+  // Most recent archived races with a recorded form, returned oldest -> newest so the
+  // live current season (appended in the merge) continues the chronology.
+  const recentForm = getDriverRecentForm(driverId, 12).reverse().map((r) => ({
+    year: r.year, round: r.round, circuitName: r.circuitName,
+    gridPosition: r.gridPosition, finishPosition: r.dnf ? null : r.finishPosition,
+    points: r.points, form: r.form, dnf: !!r.dnf,
+  }))
+  const h2hRows: H2HRaceRow[] = getDriverTeammateRaces(driverId).map((r) => ({
+    year: r.year, teamName: r.teamName, teammateId: r.teammateId, teammateName: r.teammateName,
+    myGrid: r.myGrid, myFinish: r.myFinish, myDnf: !!r.myDnf, myPoints: r.myPoints,
+    mateGrid: r.mateGrid, mateFinish: r.mateFinish, mateDnf: !!r.mateDnf, matePoints: r.matePoints,
   }))
   return {
     driverId, driverName: totals.driverName,
@@ -130,7 +168,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
       races: totals.races, wins: totals.wins, podiums: totals.podiums,
       points: totals.points, poles: totals.poles, titles, seasons: totals.seasons,
     },
-    seasons, attributes: null, currentResults: null,
+    seasons, ratingsHistory, recentForm, teammateH2H: aggregateTeammateH2H(h2hRows), attributes: null, currentResults: null,
   }
 }
 
@@ -176,6 +214,16 @@ export async function actionGetWorldOverview(): Promise<WorldOverview> {
 
 export async function actionGetSearchIndex(): Promise<SearchEntry[]> {
   return getSearchIndex()
+}
+
+// --- Stats engine: feats & records (archived seasons) ---
+
+export async function actionGetDriverHonours(driverId: string): Promise<Feat[]> {
+  return getDriverHonours(driverId)
+}
+
+export async function actionGetTeamHonours(teamId: string): Promise<Feat[]> {
+  return getTeamHonours(teamId)
 }
 
 // --- Drill-down detail (archived seasons only; the live season is built client-side) ---

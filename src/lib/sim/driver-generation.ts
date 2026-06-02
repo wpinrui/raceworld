@@ -1,4 +1,4 @@
-import type { Driver } from './types'
+import type { Driver, Gender } from './types'
 import { sampleNormal } from './rng-utils'
 import { FAKER_LOCALES, FAKER_LOCALE_CODES } from '@/data/driver-name-pool'
 
@@ -16,19 +16,19 @@ function pickLocaleIndex(): number {
   return Math.floor(Math.random() * FAKER_LOCALES.length)
 }
 
-export function pickName(usedNames: Set<string>): { name: string; nationality: string } {
+export function pickName(usedNames: Set<string>): { name: string; nationality: string; gender: Gender } {
   for (let attempt = 0; attempt < 40; attempt++) {
     const idx = pickLocaleIndex()
     const f = FAKER_LOCALES[idx]
-    const sex = Math.random() < 0.05 ? 'female' : 'male'
-    const name = `${f.person.firstName(sex)} ${f.person.lastName()}`
+    const gender: Gender = Math.random() < 0.05 ? 'female' : 'male'
+    const name = `${f.person.firstName(gender)} ${f.person.lastName()}`
     if (!usedNames.has(name)) {
       usedNames.add(name)
-      return { name, nationality: FAKER_LOCALE_CODES[idx] }
+      return { name, nationality: FAKER_LOCALE_CODES[idx], gender }
     }
   }
   generatedCounter++
-  return { name: `Driver ${generatedCounter}`, nationality: 'GB' }
+  return { name: `Driver ${generatedCounter}`, nationality: 'GB', gender: 'male' }
 }
 
 export function generateFreeAgentPool(
@@ -42,7 +42,7 @@ export function generateFreeAgentPool(
 
   for (let i = 0; i < count; i++) {
     generatedCounter++
-    const { name, nationality } = pickName(usedNames)
+    const { name, nationality, gender } = pickName(usedNames)
 
     const age = 17 + Math.floor(rng() * 5)
     const peakPotential = Math.max(55, Math.min(99, Math.round(sampleNormal(72, 10, rng))))
@@ -57,6 +57,7 @@ export function generateFreeAgentPool(
       name,
       teamId: '',
       nationality,
+      gender,
       pace,
       wetWeatherPace: stat(),
       overtaking: stat(),
@@ -76,11 +77,12 @@ export function generateFreeAgentPool(
 export function generateRookie(teamId: string, newYear: number, rng: () => number): Driver {
   rookieCounter++
   const stat = () => Math.max(55, Math.min(78, Math.round(sampleNormal(68, 5, rng))))
-  const { name, nationality } = pickName(new Set())
+  const { name, nationality, gender } = pickName(new Set())
   return {
     id: `rookie-${teamId}-${newYear}-${rookieCounter}-${idSuffix()}`,
     name,
     nationality,
+    gender,
     teamId,
     pace: stat(),
     wetWeatherPace: stat(),

@@ -1,4 +1,5 @@
 import type { TyreCompound } from '@/lib/sim/types'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 const COMPOUND: Record<TyreCompound, { bg: string; fg: string; letter: string }> = {
   soft: { bg: '#E1342B', fg: '#FFFFFF', letter: 'S' },
@@ -17,15 +18,15 @@ export function StintBar({ stints }: { stints: { compound: TyreCompound; laps: n
       {stints.map((s, i) => {
         const c = COMPOUND[s.compound] ?? { bg: '#6B7280', fg: '#FFFFFF', letter: '?' }
         return (
-          <span
-            key={i}
-            className="flex items-center justify-center text-[10px] font-bold tabular-nums"
-            style={{ backgroundColor: c.bg, color: c.fg, width: `${(s.laps / total) * 100}%` }}
-            title={`${s.compound} · ${s.laps} laps`}
-          >
-            {c.letter}
-            <span className="ml-0.5 opacity-80">{s.laps}</span>
-          </span>
+          <Tooltip key={i} content={`${s.compound} · ${s.laps} laps`}>
+            <span
+              className="flex items-center justify-center text-[10px] font-bold tabular-nums"
+              style={{ backgroundColor: c.bg, color: c.fg, width: `${(s.laps / total) * 100}%` }}
+            >
+              {c.letter}
+              <span className="ml-0.5 opacity-80">{s.laps}</span>
+            </span>
+          </Tooltip>
         )
       })}
     </span>

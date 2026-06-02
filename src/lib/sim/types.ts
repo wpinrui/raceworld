@@ -2,11 +2,14 @@ export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
 export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
 
+export type Gender = 'male' | 'female'
+
 export interface Driver {
   id: string
   name: string
   teamId: string
   nationality: string    // ISO 3166-1 alpha-2
+  gender: Gender         // drives the generated avatar; inferred from the name at generation
   pace: number           // 0-100
   wetWeatherPace: number // 0-100
   overtaking: number     // 0-100
@@ -17,6 +20,7 @@ export interface Driver {
   narrativeModifier: number // -20 to +20
   contractExpiresAfterSeason: number
   seasonsSinceF1Seat?: number // consecutive seasons without an F1 seat; removed from the market at 5
+  photoUrl?: string      // god-mode override; when set, used instead of any real photo or the generated avatar
 }
 
 export interface Team {
@@ -30,7 +34,9 @@ export interface Team {
 export interface Circuit {
   id: string
   name: string
+  code: string           // 3-letter race code, Wikipedia-style (e.g. BHR, SAU, AUS)
   location: string
+  country: string        // ISO 3166-1 alpha-2, for the calendar flag
   laps: number
   flatModifier: number   // seconds added to base laptime for cosmetic realism
 }
@@ -154,6 +160,7 @@ export interface RaceResult {
   gridPosition: number
   finishPosition: number | null  // null = DNF
   points: number
+  form: number                   // pre-race form (0-10), the FM-style match rating
   lapsCompleted: number
   totalTime: number | null
   dnf: boolean
@@ -191,6 +198,13 @@ export interface TeamDevPlan {
   nextUpgradeRound: number
   fundingTier: FundingTier
   cumulativePenalty: number
+  // Pre-rolled outcome of the upgrade due at nextUpgradeRound, so the player can
+  // view and god-mode edit it before it lands. The penalty is already baked in,
+  // so pendingPaceDelta is the final pace gain that will be applied.
+  // Optional: saves serialized before this field existed won't have it (migrated
+  // on rehydrate; applyUpgradeEvents also rolls lazily if still missing).
+  pendingPaceDelta?: number
+  pendingFailed?: boolean       // the upcoming upgrade will deliver nothing (5% base chance)
 }
 
 export interface DevUpgradeEvent {
@@ -198,6 +212,14 @@ export interface DevUpgradeEvent {
   round: number
   paceDelta: number
   failed: boolean
+}
+
+// God-mode grid changes (add/remove a team) queued during a season, applied at the
+// end-of-season transition so they take effect at the start of the following season.
+// Departing teams' drivers re-enter the market; new teams enter at the lowest car pace.
+export interface PendingGridChanges {
+  additions: Team[]      // new teams to add next season (seats start empty, filled by the market)
+  removals: string[]     // teamIds to remove at season end
 }
 
 export interface ConstructorSeasonRecord {

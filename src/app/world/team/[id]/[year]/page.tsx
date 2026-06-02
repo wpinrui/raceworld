@@ -19,7 +19,7 @@ export default function TeamSeasonPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+      <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !detail && <p className="text-sm text-[#FFFFFF]">No data for this season.</p>}
 

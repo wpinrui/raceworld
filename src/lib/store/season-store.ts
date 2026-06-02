@@ -12,10 +12,11 @@ import type {
   ConstructorSeasonRecord,
   EndOfSeasonSummary,
   DriverProgressionEvent,
+  PendingGridChanges,
 } from '@/lib/sim/types'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
-import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
+import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
@@ -27,6 +28,12 @@ const TOTAL_ROUNDS = calendar2026.length
 const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[0]
 
 type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
+
+// One sampled point on a driver's in-progress-season attribute timeline. round 0 = season
+// start; rounds 1..N = post-race. Past seasons live in the DB; this carries only the
+// current (unarchived) season, which the DB career query excludes.
+export type StatPoint = { round: number; pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }
+type StatHistory = Record<string, StatPoint[]>
 
 // Snapshot the four stats of every grid driver, keyed by id.
 function snapshotStats(drivers: Driver[]): StatSnapshot {
@@ -43,33 +50,66 @@ function snapshotStats(drivers: Driver[]): StatSnapshot {
   return snap
 }
 
+// Seed the per-race stat history with a round-0 baseline for every grid driver.
+function seedStatHistory(drivers: Driver[]): StatHistory {
+  const hist: StatHistory = {}
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    hist[d.id] = [{ round: 0, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }]
+  }
+  return hist
+}
+
+// Append a post-race point for each grid driver at the given round.
+function appendStatHistory(prev: StatHistory, drivers: Driver[], round: number): StatHistory {
+  const next: StatHistory = { ...prev }
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    const point: StatPoint = { round, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }
+    const series = (next[d.id] ?? []).filter((p) => p.round !== round)
+    next[d.id] = [...series, point]
+  }
+  return next
+}
+
+// Standings are derived purely from race history, never from CURRENT grid membership,
+// so god-mode mid-season moves (release, reassign — even cut-and-rehire to the same
+// team) stay correct: a driver's points follow the DRIVER, a team's points stay with
+// the TEAM that scored them.
 function computeDriverStandings(
   drivers: Driver[],
   teams: Team[],
   raceResults: RaceResult[][],
 ): DriverStanding[] {
   const map = new Map<string, DriverStanding>()
+  const driverById = new Map(drivers.map((d) => [d.id, d]))
+  const teamName = (teamId: string) =>
+    teams.find((t) => t.id === teamId)?.name ?? (teamId === '' ? 'Free agent' : teamId)
 
-  for (const driver of drivers.filter((d) => d.teamId !== '')) {
-    const team = teams.find((t) => t.id === driver.teamId)
-    map.set(driver.id, {
-      driverId: driver.id,
-      driverName: driver.name,
-      teamId: driver.teamId,
-      teamName: team?.name ?? driver.teamId,
-      points: 0,
-      wins: 0,
-      results: Array(TOTAL_ROUNDS).fill(null),
-    })
+  const ensure = (driverId: string, name: string, teamId: string): DriverStanding => {
+    let s = map.get(driverId)
+    if (!s) {
+      s = {
+        driverId, driverName: name, teamId, teamName: teamName(teamId),
+        points: 0, wins: 0, results: Array(TOTAL_ROUNDS).fill(null),
+      }
+      map.set(driverId, s)
+    }
+    return s
   }
 
+  // Currently-seated drivers always appear (even on 0 points)…
+  for (const d of drivers) if (d.teamId !== '') ensure(d.id, d.name, d.teamId)
+
+  // …plus everyone who scored this season, keyed by driver — including drivers since
+  // released (shown as free agents) or moved teams. Points = all they scored, anywhere.
   for (let round = 0; round < raceResults.length; round++) {
     for (const result of raceResults[round]) {
-      const standing = map.get(result.driverId)
-      if (!standing) continue
-      standing.points += result.points
-      if (result.finishPosition === 1) standing.wins++
-      standing.results[round] = result.dnf ? null : result.finishPosition
+      const live = driverById.get(result.driverId)
+      const s = ensure(result.driverId, live?.name ?? result.driverName, live?.teamId ?? '')
+      s.points += result.points
+      if (result.finishPosition === 1) s.wins++
+      s.results[round] = result.dnf ? null : result.finishPosition
     }
   }
 
@@ -83,14 +123,26 @@ function computeConstructorStandings(
 ): ConstructorStanding[] {
   const map = new Map<string, ConstructorStanding>()
 
+  // Drivers who raced for each team this season, in order of first appearance — so a
+  // mid-season swap keeps every driver's row and attributes points to the team they
+  // scored for, not whoever holds the seat now.
+  const teamDriverOrder = new Map<string, string[]>()
+  for (const round of raceResults) {
+    for (const r of round) {
+      if (!teamDriverOrder.has(r.teamId)) teamDriverOrder.set(r.teamId, [])
+      const order = teamDriverOrder.get(r.teamId)!
+      if (!order.includes(r.driverId)) order.push(r.driverId)
+    }
+  }
+
   for (const team of teams) {
-    const teamDrivers = drivers.filter((d) => d.teamId === team.id)
+    const order = teamDriverOrder.get(team.id) ?? drivers.filter((d) => d.teamId === team.id).map((d) => d.id)
     map.set(team.id, {
       teamId: team.id,
       teamName: team.name,
       points: 0,
       wins: 0,
-      results: teamDrivers.map(() => Array(TOTAL_ROUNDS).fill(null)),
+      results: order.map(() => Array(TOTAL_ROUNDS).fill(null)),
     })
   }
 
@@ -100,11 +152,8 @@ function computeConstructorStandings(
       if (!standing) continue
       standing.points += result.points
       if (result.finishPosition === 1) standing.wins++
-      const teamDrivers = drivers.filter((d) => d.teamId === result.teamId)
-      const driverIdx = teamDrivers.findIndex((d) => d.id === result.driverId)
-      if (driverIdx >= 0) {
-        standing.results[driverIdx][round] = result.dnf ? null : result.finishPosition
-      }
+      const idx = (teamDriverOrder.get(result.teamId) ?? []).indexOf(result.driverId)
+      if (idx >= 0) standing.results[idx][round] = result.dnf ? null : result.finishPosition
     }
   }
 
@@ -126,8 +175,12 @@ interface SeasonStore {
   allUpgradeEvents: DevUpgradeEvent[]
   endOfSeasonSummary: EndOfSeasonSummary | null
   pendingNextSeasonState: { drivers: Driver[]; teams: Team[] } | null
+  // M4 god-mode: team add/remove queued for next season (applied at season end).
+  pendingGridChanges: PendingGridChanges
   // Snapshot of each grid driver's stats at season start, for the net-development summary.
   seasonStartStats: Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
+  // Per-race attribute snapshots for the CURRENT (unarchived) season's progression chart.
+  statHistory: StatHistory
 
   // Computed
   driverStandings: DriverStanding[]
@@ -137,6 +190,14 @@ interface SeasonStore {
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
+  releaseDriver: (id: string) => void
+  extendContract: (id: string, seasons: number) => void
+  assignDriverToTeam: (driverId: string, teamId: string) => void
+  setPendingUpgrade: (teamId: string, patch: { paceDelta?: number; failed?: boolean }) => void
+  queueTeamAddition: (team: Team) => void
+  cancelTeamAddition: (teamId: string) => void
+  queueTeamRemoval: (teamId: string) => void
+  cancelTeamRemoval: (teamId: string) => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
@@ -164,7 +225,9 @@ export const useSeasonStore = create<SeasonStore>()(
       allUpgradeEvents: [],
       endOfSeasonSummary: null,
       pendingNextSeasonState: null,
+      pendingGridChanges: { additions: [], removals: [] },
       seasonStartStats: {},
+      statHistory: {},
       driverStandings: [],
       constructorStandings: [],
 
@@ -194,6 +257,7 @@ export const useSeasonStore = create<SeasonStore>()(
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
           seasonStartStats: snapshotStats(allDrivers),
+          statHistory: seedStatHistory(allDrivers),
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -222,8 +286,119 @@ export const useSeasonStore = create<SeasonStore>()(
         })
       },
 
+      // God-mode: forcibly release a driver from their contract. The seat opens for the
+      // next market window; mid-season the team simply runs one car until it's filled.
+      releaseDriver: (id) => {
+        const { drivers, teams, raceResults, year } = get()
+        const next = drivers.map((d) =>
+          // Only reset the out-of-F1 counter for a driver who actually held a seat.
+          d.id === id
+            ? { ...d, teamId: '', contractExpiresAfterSeason: year - 1, seasonsSinceF1Seat: d.teamId !== '' ? 0 : (d.seasonsSinceF1Seat ?? 0) }
+            : d,
+        )
+        set({
+          drivers: next,
+          driverStandings: computeDriverStandings(next, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, next, raceResults),
+        })
+      },
+
+      // God-mode: extend a driver's contract by N seasons (from the current year if it
+      // had already lapsed).
+      extendContract: (id, seasons) => {
+        const { drivers, year } = get()
+        const next = drivers.map((d) =>
+          d.id === id
+            ? { ...d, contractExpiresAfterSeason: Math.max(d.contractExpiresAfterSeason, year) + seasons }
+            : d,
+        )
+        set({ drivers: next })
+      },
+
+      // God-mode: manually assign an uncontracted driver to a team with an open seat,
+      // bypassing the market. No-op if the team already has two drivers.
+      assignDriverToTeam: (driverId, teamId) => {
+        const { drivers, teams, raceResults, year } = get()
+        if (drivers.filter((d) => d.teamId === teamId).length >= 2) return
+        const next = drivers.map((d) =>
+          d.id === driverId
+            ? { ...d, teamId, contractExpiresAfterSeason: year + 1, seasonsSinceF1Seat: 0 }
+            : d,
+        )
+        set({
+          drivers: next,
+          driverStandings: computeDriverStandings(next, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, next, raceResults),
+        })
+      },
+
+      // God-mode: view/edit a team's pre-rolled pending upgrade before it lands.
+      // The player can override the impact or force/clear a failure; the cycle length
+      // and delivery round stay fixed (the GDD forbids influencing the cycle itself).
+      setPendingUpgrade: (teamId, patch) => {
+        const { devPlans } = get()
+        set({
+          devPlans: devPlans.map((p) => {
+            if (p.teamId !== teamId) return p
+            const failed = patch.failed ?? p.pendingFailed ?? false
+            const rawDelta = patch.paceDelta ?? p.pendingPaceDelta ?? 0
+            // Keep the rolled/edited impact even when failure is forced — delivery already
+            // zeroes a failed upgrade (applyUpgradeEvents), so toggling failure off restores it.
+            const paceDelta = Math.max(0, Math.round(rawDelta * 10) / 10)
+            return { ...p, pendingFailed: failed, pendingPaceDelta: paceDelta }
+          }),
+        })
+      },
+
+      // God-mode grid change: queue a brand-new team to join next season. Seats start
+      // empty and are filled by the market; the change applies at the season-end
+      // transition (see endSeason).
+      queueTeamAddition: (team) => {
+        const { pendingGridChanges } = get()
+        if (pendingGridChanges.additions.some((t) => t.id === team.id)) return
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            additions: [...pendingGridChanges.additions, team],
+          },
+        })
+      },
+
+      cancelTeamAddition: (teamId) => {
+        const { pendingGridChanges } = get()
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            additions: pendingGridChanges.additions.filter((t) => t.id !== teamId),
+          },
+        })
+      },
+
+      // God-mode grid change: queue an existing team to leave at season end. Its drivers
+      // re-enter the market. Applied at the season-end transition (see endSeason).
+      queueTeamRemoval: (teamId) => {
+        const { pendingGridChanges } = get()
+        if (pendingGridChanges.removals.includes(teamId)) return
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            removals: [...pendingGridChanges.removals, teamId],
+          },
+        })
+      },
+
+      cancelTeamRemoval: (teamId) => {
+        const { pendingGridChanges } = get()
+        set({
+          pendingGridChanges: {
+            ...pendingGridChanges,
+            removals: pendingGridChanges.removals.filter((id) => id !== teamId),
+          },
+        })
+      },
+
       recordRaceResult: (results) => {
-        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents } = get()
+        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory } = get()
         const updated = [...raceResults]
         updated[currentRound - 1] = results
 
@@ -241,6 +416,8 @@ export const useSeasonStore = create<SeasonStore>()(
           drivers: updatedDrivers,
           devPlans: updatedDevPlans,
           allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
+          // Capture the post-race attributes for this round's progression chart.
+          statHistory: appendStatHistory(statHistory, updatedDrivers, currentRound),
           driverStandings: computeDriverStandings(updatedDrivers, updatedTeams, updated),
           constructorStandings: computeConstructorStandings(updatedTeams, updatedDrivers, updated),
         })
@@ -266,6 +443,7 @@ export const useSeasonStore = create<SeasonStore>()(
           driverStandings,
           constructorStandings,
           seasonStartStats,
+          pendingGridChanges,
         } = get()
 
         const totalTeams = teams.length
@@ -279,7 +457,7 @@ export const useSeasonStore = create<SeasonStore>()(
         const driverMediaScores = computeDriverMediaScores(
           drivers, teams, raceResults, constructorRankInfo, totalTeams,
         )
-        const teamMediaScores = computeTeamMediaScores(teams, constructorHistory, constructorRankInfo)
+        let teamMediaScores = computeTeamMediaScores(teams, constructorHistory, constructorRankInfo)
 
         // 2. Net development this season = current stats vs the season-start snapshot
         //    (the actual improvement/decline already happened race-by-race).
@@ -301,6 +479,32 @@ export const useSeasonStore = create<SeasonStore>()(
         // 3. Age every driver one year. Reshuffle, market and attrition are
         //    deferred to their own off-season phases (run lazily on entry).
         const agedDrivers = ageDrivers(drivers)
+
+        // 3b. Apply any god-mode grid changes for the coming season (GDD §Grid Changes):
+        //     departing teams leave and their drivers re-enter the market as free agents;
+        //     new teams join at the lowest car pace, with empty seats the market then
+        //     fills during contract negotiations. The current season has already played
+        //     out under the old grid, so the change takes effect from next season.
+        let nextTeams = teams
+        let nextDrivers = agedDrivers
+        const { additions, removals } = pendingGridChanges
+        if (removals.length > 0) {
+          nextTeams = nextTeams.filter((t) => !removals.includes(t.id))
+          nextDrivers = nextDrivers.map((d) =>
+            removals.includes(d.teamId) ? { ...d, teamId: '', seasonsSinceF1Seat: 0 } : d,
+          )
+        }
+        if (additions.length > 0) {
+          const lowestPace = Math.min(75, ...nextTeams.map((t) => t.carPace))
+          const added = additions.map((t, i) => ({
+            ...t,
+            carPace: Math.max(5, lowestPace - 5 * (i + 1)),
+          }))
+          nextTeams = [...nextTeams, ...added]
+          // A brand-new team has no results — it's the LEAST attractive seat on the grid,
+          // not the mid-pack default. Otherwise the market poaches top drivers into it.
+          teamMediaScores = [...teamMediaScores, ...added.map((t) => ({ teamId: t.id, score: 0 }))]
+        }
 
         // 4. Build the partial summary; later phases fill in their slices.
         const summary: EndOfSeasonSummary = {
@@ -342,7 +546,8 @@ export const useSeasonStore = create<SeasonStore>()(
           phase: 'end-of-season',
           endOfSeasonSummary: summary,
           constructorHistory: updatedHistory,
-          pendingNextSeasonState: { drivers: agedDrivers, teams },
+          pendingNextSeasonState: { drivers: nextDrivers, teams: nextTeams },
+          pendingGridChanges: { additions: [], removals: [] },
         })
       },
 
@@ -426,6 +631,8 @@ export const useSeasonStore = create<SeasonStore>()(
             devPlans,
             allUpgradeEvents: [],
             endOfSeasonSummary: null,
+            seasonStartStats: snapshotStats(drivers),
+            statHistory: seedStatHistory(drivers),
             driverStandings: computeDriverStandings(drivers, teams, []),
             constructorStandings: computeConstructorStandings(teams, drivers, []),
           })
@@ -454,6 +661,8 @@ export const useSeasonStore = create<SeasonStore>()(
           allUpgradeEvents: [],
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
+          seasonStartStats: snapshotStats(drivers),
+          statHistory: seedStatHistory(drivers),
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -491,13 +700,25 @@ export const useSeasonStore = create<SeasonStore>()(
         allUpgradeEvents: state.allUpgradeEvents,
         endOfSeasonSummary: state.endOfSeasonSummary,
         pendingNextSeasonState: state.pendingNextSeasonState,
+        pendingGridChanges: state.pendingGridChanges,
         seasonStartStats: state.seasonStartStats,
+        statHistory: state.statHistory,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
         const { drivers, teams, raceResults } = state
         state.driverStandings = computeDriverStandings(drivers, teams, raceResults)
         state.constructorStandings = computeConstructorStandings(teams, drivers, raceResults)
+        // Saves from before M4: default the grid-change queue and backfill each dev
+        // plan's pre-rolled pending upgrade so the override UI always has a value.
+        if (!state.pendingGridChanges) state.pendingGridChanges = { additions: [], removals: [] }
+        if (state.devPlans) {
+          state.devPlans = state.devPlans.map((p) => {
+            if (p.pendingPaceDelta !== undefined && p.pendingFailed !== undefined) return p
+            const rolled = rollUpgrade(p.cycleLength, p.fundingTier, Math.random)
+            return { ...p, pendingPaceDelta: rolled.paceDelta, pendingFailed: rolled.failed }
+          })
+        }
       },
     },
   ),

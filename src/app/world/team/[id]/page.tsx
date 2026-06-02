@@ -3,17 +3,31 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { useTeamCareer } from '@/lib/world/hooks'
+import { useTeamCareer, useEntityHonours } from '@/lib/world/hooks'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { isOffSeason } from '@/lib/sim/types'
+import { HonoursPanel } from '@/components/world/HonoursPanel'
+import { calendar2026 } from '@/data/calendar'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
+import { UpgradeOverride } from '@/components/world/UpgradeOverride'
 
 type Tab = 'overview' | 'seasons'
+
+const TOTAL_ROUNDS = calendar2026.length
 
 export default function TeamPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useTeamCareer(id)
+  const { feats: honours, loading: honoursLoading } = useEntityHonours('team', id)
+  const devPlan = useSeasonStore((s) => s.devPlans.find((p) => p.teamId === id))
+  const currentRound = useSeasonStore((s) => s.currentRound)
+  const onGrid = useSeasonStore((s) => s.teams.some((t) => t.id === id))
+  // Only editable while the season is running: upgrades are delivered during races, and
+  // startNewSeason re-rolls every dev plan from scratch, so off-season edits wouldn't survive.
+  const upgradeEditable = useSeasonStore((s) => !isOffSeason(s.phase))
   const [tab, setTab] = useState<Tab>('overview')
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => setHydrated(true), [])
@@ -21,7 +35,7 @@ export default function TeamPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
+      <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !career && <p className="text-sm text-[#FFFFFF]">Team not found.</p>}
 
@@ -99,6 +113,13 @@ export default function TeamPage() {
                       </Panel>
                     )}
                   </div>
+
+                  <HonoursPanel feats={honours} loading={honoursLoading} />
+
+                  {/* God-mode: inspect and edit the next car upgrade before it lands. */}
+                  {onGrid && devPlan && upgradeEditable && (
+                    <UpgradeOverride teamId={id} devPlan={devPlan} currentRound={currentRound} totalRounds={TOTAL_ROUNDS} />
+                  )}
                 </div>
               )}
 

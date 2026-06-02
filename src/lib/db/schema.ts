@@ -41,4 +41,29 @@ CREATE TABLE IF NOT EXISTS season_constructor_standings (
   points INTEGER NOT NULL DEFAULT 0,
   UNIQUE(season_id, team_id)
 );
+
+-- Post-race snapshot of each driver's four attributes, for the career ratings-progression
+-- chart. One row per (season, round, driver). round is 1-indexed (no pre-season baseline here;
+-- the live store carries round 0 for the in-progress season).
+CREATE TABLE IF NOT EXISTS driver_race_attributes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  season_id INTEGER NOT NULL REFERENCES seasons(id),
+  round INTEGER NOT NULL,
+  driver_id TEXT NOT NULL,
+  pace REAL NOT NULL,
+  wet_weather_pace REAL NOT NULL,
+  overtaking REAL NOT NULL,
+  smoothness REAL NOT NULL,
+  UNIQUE(season_id, round, driver_id)
+);
+
+-- Per-race pre-race form (0-10), for the Recent form card. Keyed by the race row so it
+-- joins back to grid/finish/points for the tooltip.
+CREATE TABLE IF NOT EXISTS driver_race_form (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  race_id INTEGER NOT NULL REFERENCES races(id),
+  driver_id TEXT NOT NULL,
+  form REAL NOT NULL,
+  UNIQUE(race_id, driver_id)
+);
 `

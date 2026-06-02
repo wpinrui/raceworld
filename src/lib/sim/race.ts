@@ -170,8 +170,8 @@ export function simulateLap(
   for (const ds of sortedByPosition) {
     let current = { ...updatedStates.get(ds.driverId)!, currentTyre: { ...updatedStates.get(ds.driverId)!.currentTyre } }
 
-    // 2a. Natural retirement (0.28% per lap)
-    if (!current.retired && Math.random() < 0.0028) {
+    // 2a. Natural retirement (0.2% per lap)
+    if (!current.retired && Math.random() < 0.002) {
       current = {
         ...current,
         retired: true,
