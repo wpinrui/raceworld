@@ -122,6 +122,45 @@ export function getResultsForRace(raceId: number): DbRaceResult[] {
     .all(raceId) as DbRaceResult[]
 }
 
+export function getArchivedSeasonIdByYear(year: number): number | null {
+  const row = getDb()
+    .prepare("SELECT id FROM seasons WHERE year = ? AND status = 'archived' ORDER BY id DESC LIMIT 1")
+    .get(year) as { id: number } | undefined
+  return row?.id ?? null
+}
+
+// A race result row joined to its round/circuit — used for drill-down detail.
+export interface DbRaceResultRow extends DbRaceResult {
+  round: number
+  circuit_id: string
+  circuit_name: string
+}
+
+export function getDriverRacesInSeason(seasonId: number, driverId: string): DbRaceResultRow[] {
+  return getDb().prepare(`
+    SELECT rr.*, r.round AS round, r.circuit_id AS circuit_id, r.circuit_name AS circuit_name
+    FROM race_results rr JOIN races r ON r.id = rr.race_id
+    WHERE r.season_id = ? AND rr.driver_id = ?
+    ORDER BY r.round
+  `).all(seasonId, driverId) as DbRaceResultRow[]
+}
+
+export function getTeamRacesInSeason(seasonId: number, teamId: string): DbRaceResultRow[] {
+  return getDb().prepare(`
+    SELECT rr.*, r.round AS round, r.circuit_id AS circuit_id, r.circuit_name AS circuit_name
+    FROM race_results rr JOIN races r ON r.id = rr.race_id
+    WHERE r.season_id = ? AND rr.team_id = ?
+    ORDER BY r.round, rr.finish_position
+  `).all(seasonId, teamId) as DbRaceResultRow[]
+}
+
+export function getRaceInSeasonByRound(seasonId: number, round: number): DbRace | null {
+  const row = getDb()
+    .prepare('SELECT * FROM races WHERE season_id = ? AND round = ? LIMIT 1')
+    .get(seasonId, round) as DbRace | undefined
+  return row ?? null
+}
+
 export function insertConstructorStandings(
   seasonId: number,
   standings: Array<{ teamId: string; finalPosition: number; points: number }>,
@@ -386,6 +425,13 @@ export function getAllSeasonChampions(): SeasonChampions[] {
 export function getDriverFinishInSeason(seasonId: number, driverId: string): number | null {
   const idx = getSeasonStandings(seasonId).driverStandings.findIndex((d) => d.driverId === driverId)
   return idx >= 0 ? idx + 1 : null
+}
+
+export function getTeamFinalPositionInSeason(seasonId: number, teamId: string): number | null {
+  const row = getDb()
+    .prepare('SELECT final_position AS pos FROM season_constructor_standings WHERE season_id = ? AND team_id = ? LIMIT 1')
+    .get(seasonId, teamId) as { pos: number } | undefined
+  return row?.pos ?? null
 }
 
 export interface LeaderboardEntry { id: string; name: string; value: number }

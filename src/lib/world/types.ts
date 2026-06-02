@@ -1,6 +1,8 @@
 // Client-safe DTOs for the World pages. These must NOT import from db/queries.ts
 // (which pulls in better-sqlite3) so they can be used in client components.
 
+import type { TyreCompound } from '@/lib/sim/types'
+
 export interface CareerSeason {
   year: number
   teamId: string
@@ -88,3 +90,88 @@ export interface WorldOverview {
 }
 
 export interface SearchEntry { id: string; name: string; kind: 'driver' | 'team' }
+
+// --- Drill-down detail (one driver/team in one season, and one full race) ---
+
+export type Stint = { compound: TyreCompound; laps: number }
+
+export interface DriverSeasonRace {
+  round: number
+  circuitId: string
+  circuitName: string
+  gridPosition: number
+  finishPosition: number | null // null = DNF
+  dnf: boolean
+  points: number
+  lapsCompleted: number
+  q1: number | null // qualifying lap times, ms
+  q2: number | null
+  q3: number | null
+  stints: Stint[]
+}
+
+export interface DriverSeasonDetail {
+  driverId: string
+  driverName: string
+  year: number
+  teamId: string
+  teamName: string
+  championshipFinish: number | null
+  inProgress: boolean
+  totals: { races: number; wins: number; podiums: number; points: number; poles: number; dnfs: number }
+  races: DriverSeasonRace[]
+}
+
+export interface TeamSeasonCar {
+  driverId: string
+  driverName: string
+  gridPosition: number
+  finishPosition: number | null
+  dnf: boolean
+  points: number
+}
+
+export interface TeamSeasonRace {
+  round: number
+  circuitId: string
+  circuitName: string
+  cars: TeamSeasonCar[]
+  points: number // team's combined haul this round
+}
+
+export interface TeamSeasonDetail {
+  teamId: string
+  teamName: string
+  year: number
+  finalPosition: number | null
+  inProgress: boolean
+  totals: { races: number; wins: number; podiums: number; points: number }
+  drivers: { driverId: string; driverName: string }[]
+  races: TeamSeasonRace[]
+}
+
+export interface RaceClassificationRow {
+  driverId: string
+  driverName: string
+  teamId: string
+  teamName: string
+  gridPosition: number
+  finishPosition: number | null
+  dnf: boolean
+  points: number
+  lapsCompleted: number
+  totalTime: number | null
+  q1: number | null
+  q2: number | null
+  q3: number | null
+  stints: Stint[]
+}
+
+export interface RaceClassification {
+  year: number
+  round: number
+  circuitId: string
+  circuitName: string
+  inProgress: boolean
+  rows: RaceClassificationRow[] // finishers (by position) then DNFs
+}
