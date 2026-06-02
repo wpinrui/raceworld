@@ -23,28 +23,45 @@ export function computeFundingTiers(
 ): Map<string, FundingTier> {
   const n = teams.length
 
-  // No/partial history: fill missing years assuming the fastest-paced team finished
-  // 1st, second-fastest 2nd, and so on (GDD §Funding tier).
-  const paceOrder = [...teams].sort((a, b) => b.carPace - a.carPace)
-  const assumedPos = new Map<string, number>()
-  paceOrder.forEach((t, i) => assumedPos.set(t.id, i + 1))
+  // Pace order is the final tiebreak: fastest current car ranks first. It also drives
+  // the all-zero-history bootstrap (every team tied on 0 seasons → ranked purely by
+  // pace, i.e. "best-paced team won the last five years" — GDD §Funding tier).
+  const paceRank = new Map<string, number>()
+  ;[...teams]
+    .sort((a, b) => b.carPace - a.carPace)
+    .forEach((t, i) => paceRank.set(t.id, i + 1))
 
-  // Average constructors' championship position over the last 5 seasons.
-  const avgPos = new Map<string, number>()
+  // Count each team's archived seasons (within the recent window) and its average
+  // constructors' finish over only those seasons — no backfill of missing years.
+  const years = new Map<string, number>()
+  const sumPos = new Map<string, number>()
   for (const team of teams) {
-    const recs = history
-      .filter((r) => r.teamId === team.id)
-      .sort((a, b) => b.seasonYear - a.seasonYear)
-      .slice(0, 5)
-    const positions: number[] = []
-    for (let i = 0; i < 5; i++) {
-      positions.push(i < recs.length ? recs[i].finalPosition : (assumedPos.get(team.id) ?? n))
-    }
-    avgPos.set(team.id, positions.reduce((a, b) => a + b, 0) / positions.length)
+    years.set(team.id, 0)
+    sumPos.set(team.id, 0)
   }
+  for (const r of history) {
+    if (!years.has(r.teamId)) continue // team no longer on the grid
+    years.set(r.teamId, years.get(r.teamId)! + 1)
+    sumPos.set(r.teamId, sumPos.get(r.teamId)! + r.finalPosition)
+  }
+  const avgPos = (id: string): number | null =>
+    years.get(id)! > 0 ? sumPos.get(id)! / years.get(id)! : null
 
-  // Rank best→worst. Tier 1 = top 3, Tier 4 = bottom 3, remaining split evenly between T2/T3.
-  const ranked = [...teams].sort((a, b) => avgPos.get(a.id)! - avgPos.get(b.id)!)
+  // Rank best→worst lexicographically:
+  //   1. more seasons of history ranks higher — an incomplete record always sits
+  //      below a fuller one (4 years above 3, and so on);
+  //   2. within equal history length, a better average finish ranks higher;
+  //   3. remaining ties (incl. brand-new teams with no history) fall back to car pace.
+  const ranked = [...teams].sort((a, b) => {
+    const yd = years.get(b.id)! - years.get(a.id)!
+    if (yd !== 0) return yd
+    const pa = avgPos(a.id)
+    const pb = avgPos(b.id)
+    if (pa !== null && pb !== null && pa !== pb) return pa - pb
+    return paceRank.get(a.id)! - paceRank.get(b.id)!
+  })
+
+  // Tier 1 = top 3, Tier 4 = bottom 3, remaining split evenly between T2/T3.
   const middle = Math.max(0, n - 6)
   const t2Count = Math.ceil(middle / 2)
 
