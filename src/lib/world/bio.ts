@@ -70,12 +70,15 @@ function styleSentence(subjCap: string, knownFor: string[]): string {
 // Single descriptor noun for the opener, picked by what stands out most.
 // overallRank is the driver's 0-based rank on the grid by overall (null if not on the grid).
 function driverNoun(career: DriverCareer, a: DriverAttributes, overallRank: number | null): string {
-  const { titles, seasons } = career.totals
-  const leading = career.seasons.find((s) => s.inProgress)?.championshipFinish === 1
+  const { titles, seasons, wins } = career.totals
+  const current = career.seasons.find((s) => s.inProgress)
+  // Leader only counts once a race has actually been run this season.
+  const leading = !!current && current.races > 0 && current.championshipFinish === 1
   if (titles > 0) return titles === 1 ? 'F1 champion' : `${titles}-time F1 champion`
   if (leading) return 'F1 championship leader'
   if (overallRank != null && overallRank < 5) return 'superstar'
   if (overallRank != null && overallRank < 10) return 'star'
+  if (wins > 0) return 'race winner'
   if (seasons <= 1) return 'rookie'
   if (a.age >= 37) return 'veteran'
   if (a.narrativeModifier >= 6) return 'popular driver'
