@@ -32,10 +32,10 @@ function FeatRow({ feat }: { feat: Feat }) {
   )
 }
 
-export function HonoursPanel({ feats, loading, className = '', columns = 2 }: { feats: Feat[]; loading: boolean; className?: string; columns?: 1 | 2 }) {
+export function HonoursPanel({ feats, loading, className = '', columns = 2, fill = false }: { feats: Feat[]; loading: boolean; className?: string; columns?: 1 | 2; fill?: boolean }) {
   if (loading || feats.length === 0) return null
   return (
-    <Panel title="Feats & Records" className={className}>
+    <Panel title="Feats & Records" className={className} fill={fill}>
       <div className={`grid gap-2.5 ${columns === 2 ? 'sm:grid-cols-2' : ''}`}>
         {feats.map((f) => <FeatRow key={f.id} feat={f} />)}
       </div>

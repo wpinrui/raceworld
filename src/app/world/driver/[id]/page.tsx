@@ -62,8 +62,8 @@ export default function DriverPage() {
   const inputClass = 'w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="px-4 py-6 space-y-5">
+    <div className="h-full overflow-hidden bg-[#0F1419] text-[#FFFFFF] flex flex-col">
+      <div className="px-4 py-4 flex flex-col flex-1 min-h-0 gap-4">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !career && <p className="text-sm text-[#FFFFFF]">Driver not found.</p>}
 
@@ -84,7 +84,7 @@ export default function DriverPage() {
           return (
             <>
               {/* Header band — identity on the left, career totals + ratings filling the width */}
-              <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-6 flex-wrap">
+              <div className="shrink-0 rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-6 flex-wrap">
                 <DriverAvatar driver={avatarDriver} teamColor={teamColor} size={88} className="border-2" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
@@ -93,7 +93,7 @@ export default function DriverPage() {
                   </div>
                   {a ? (
                     <p className="text-sm text-[#FFFFFF] mt-1">
-                      Age {a.age} · peak until {a.primeEnd}
+                      Age {a.age}
                       {' · '}
                       {a.isFreeAgent ? <span className="italic">Free Agent</span> : <TeamLink id={a.teamId}>{a.teamName}</TeamLink>}
                       {!a.isFreeAgent && <span> · contract until {a.contractExpiresAfterSeason}</span>}
@@ -103,11 +103,11 @@ export default function DriverPage() {
                   )}
                 </div>
                 <div className="flex-1 flex items-end justify-end gap-x-7 gap-y-3 flex-wrap">
-                  <HeaderStat label="Titles" value={career.totals.titles} tier={2} />
+                  <HeaderStat label="Titles" value={career.totals.titles} tier={3} />
                   <HeaderStat label="Wins" value={career.totals.wins} tier={3} />
                   <HeaderStat label="Podiums" value={career.totals.podiums} tier={3} />
                   <HeaderStat label="Poles" value={career.totals.poles} tier={3} />
-                  <HeaderStat label="Points" value={career.totals.points} tier={2} />
+                  <HeaderStat label="Points" value={career.totals.points} tier={3} />
                   <HeaderStat label="Seasons" value={career.totals.seasons} tier={3} />
                   {a && (
                     <>
@@ -119,22 +119,24 @@ export default function DriverPage() {
                 </div>
               </div>
 
-              <TabBar<Tab>
-                tabs={[
-                  { key: 'overview', label: 'Overview' },
-                  { key: 'development', label: 'Development' },
-                  { key: 'results', label: 'Results' },
-                  { key: 'h2h', label: 'Head-to-Head' },
-                ]}
-                active={tab}
-                onChange={setTab}
-              />
+              <div className="shrink-0">
+                <TabBar<Tab>
+                  tabs={[
+                    { key: 'overview', label: 'Overview' },
+                    { key: 'development', label: 'Development' },
+                    { key: 'results', label: 'Results' },
+                    { key: 'h2h', label: 'Head-to-Head' },
+                  ]}
+                  active={tab}
+                  onChange={setTab}
+                />
+              </div>
 
               {tab === 'overview' && (
-                <div className="grid gap-4 lg:grid-cols-12">
+                <div className="grid gap-4 lg:grid-cols-12 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden lg:grid-rows-3">
                   {/* Attributes */}
                   {a && (
-                      <Panel className="lg:col-span-4">
+                      <Panel fill className="lg:col-span-4">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Attributes</p>
                           {liveDriver && (
@@ -228,6 +230,10 @@ export default function DriverPage() {
                             <StatBar label="Wet" value={a.wetWeatherPace} />
                             <StatBar label="Overtaking" value={a.overtaking} />
                             <StatBar label="Smoothness" value={a.smoothness} />
+                            <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#2A3142] text-xs text-[#FFFFFF]">
+                              <span className="uppercase tracking-widest text-[10px]">Peak age</span>
+                              <span className="font-semibold tabular-nums">{a.primeEnd}</span>
+                            </div>
                           </div>
                         )}
                       </Panel>
@@ -235,7 +241,7 @@ export default function DriverPage() {
 
                   {/* Current season results */}
                   {a && (
-                    <Panel title={current ? `Current season results — ${current.year}` : 'Current season results'} flush className="lg:col-span-4">
+                    <Panel title={current ? `Current season results — ${current.year}` : 'Current season results'} flush fill className="lg:col-span-4">
                       {career.currentResults && career.currentResults.length > 0 ? (
                         <>
                           <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
@@ -272,7 +278,7 @@ export default function DriverPage() {
 
                   {/* Confidence — planned mechanic; the slot is reserved at the same size as the season card. */}
                   {a && (
-                    <Panel title="Confidence" flush className="lg:col-span-4">
+                    <Panel title="Confidence" flush fill className="lg:col-span-4">
                       <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
                         <div className="text-center">
                           <p className="text-lg font-bold tabular-nums text-[#6B7280]">—</p>
@@ -291,7 +297,7 @@ export default function DriverPage() {
                   )}
 
                   {/* Biography */}
-                  <Panel title="Biography" className="lg:col-span-4">
+                  <Panel title="Biography" fill className="lg:col-span-4">
                     <p className="text-sm leading-relaxed text-[#FFFFFF]">
                       {bio ?? 'No biography available for this historical driver.'}
                     </p>
@@ -299,40 +305,40 @@ export default function DriverPage() {
 
                   {/* Recent milestones */}
                   {milestones.length > 0 && (
-                    <Panel title="Recent milestones" flush className="lg:col-span-4">
+                    <Panel title="Recent milestones" flush fill className="lg:col-span-4">
                       <MilestonesTimeline events={milestones.slice(-5).reverse()} />
                     </Panel>
                   )}
 
-                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-4" columns={1} />
+                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-4" columns={1} fill />
 
                   {/* Career stats — per-season basics */}
-                  <Panel title="Career stats" flush className="lg:col-span-12">
+                  <Panel title="Career stats" flush fill className="lg:col-span-12">
                     <CareerStatsTable seasons={career.seasons} driverId={id} />
                   </Panel>
                 </div>
               )}
 
               {tab === 'development' && (
-                <div className="space-y-5">
-                  <Panel title="Ratings progression" flush>
+                <div className="flex-1 min-h-0 grid gap-4 lg:grid-cols-12 lg:grid-rows-1 overflow-y-auto lg:overflow-hidden">
+                  <Panel title="Ratings progression" flush fill className="lg:col-span-8">
                     <RatingsProgressionChart history={career.ratingsHistory} />
                   </Panel>
-                  <Panel title="Career milestones" flush>
+                  <Panel title="Career milestones" flush fill className="lg:col-span-4">
                     <MilestonesTimeline events={[...milestones].reverse()} />
                   </Panel>
                 </div>
               )}
 
               {tab === 'results' && (
-                <div className="space-y-5">
+                <div className="flex-1 min-h-0 grid gap-4 lg:grid-rows-2 overflow-y-auto lg:overflow-hidden">
                   {/* Career stats — basics */}
-                  <Panel title="Career stats" flush>
+                  <Panel title="Career stats" flush fill>
                     <CareerStatsTable seasons={career.seasons} driverId={id} />
                   </Panel>
 
                   {/* Complete results — per-round matrix */}
-                  <Panel title="Complete results" flush>
+                  <Panel title="Complete results" flush fill>
                     {career.seasons.length === 0 ? (
                       <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
                     ) : (
@@ -373,7 +379,7 @@ export default function DriverPage() {
               )}
 
               {tab === 'h2h' && (
-                <Panel title="Teammate head-to-head" flush>
+                <Panel title="Teammate head-to-head" flush fill className="flex-1 min-h-0">
                   <TeammateH2HHistory records={career.teammateH2H} driverName={career.driverName} />
                 </Panel>
               )}

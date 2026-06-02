@@ -3,13 +3,30 @@
 // Shared chrome for the world pages.
 
 export function Panel({
-  title, children, className = '', flush = false,
+  title, children, className = '', flush = false, fill = false,
 }: {
   title?: React.ReactNode
   children: React.ReactNode
   className?: string
   flush?: boolean
+  // `fill` makes the panel fill its (height-constrained) grid cell and scroll its own
+  // body internally — used by the driver dashboard so the page itself never scrolls.
+  fill?: boolean
 }) {
+  if (fill) {
+    return (
+      <div className={`rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden h-full flex flex-col min-h-0 ${className}`}>
+        {title && (
+          <p className="shrink-0 text-[10px] uppercase tracking-widest text-[#FFFFFF] px-5 py-3 border-b border-[#2A3142]">
+            {title}
+          </p>
+        )}
+        <div className={`flex-1 min-h-0 overflow-y-auto ${flush ? '' : 'p-5'}`}>
+          {children}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={`rounded-xl bg-[#1E2431] border border-[#2A3142] ${flush ? 'overflow-hidden' : 'p-5'} ${className}`}>
       {title && (
