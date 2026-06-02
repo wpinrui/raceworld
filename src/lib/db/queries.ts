@@ -51,6 +51,7 @@ export function archiveSeason(seasonId: number): void {
 export function resetDatabase(): void {
   const db = getDb()
   db.transaction(() => {
+    db.prepare('DELETE FROM news_articles').run()
     db.prepare('DELETE FROM driver_race_form').run()
     db.prepare('DELETE FROM driver_race_attributes').run()
     db.prepare('DELETE FROM race_results').run()
@@ -235,6 +236,47 @@ export function getArchivedSeasons(): DbSeason[] {
   return getDb().prepare("SELECT * FROM seasons WHERE status = 'archived' ORDER BY year DESC").all() as DbSeason[]
 }
 
+// --- Newsroom articles (M5) ---
+
+export interface DbNewsArticle {
+  id: number
+  type: string
+  season_id: number | null
+  year: number
+  round: number | null
+  headline: string
+  dek: string | null
+  body: string
+  model: string
+  created_at: string
+}
+
+export function getRaceReview(year: number, round: number): DbNewsArticle | null {
+  const row = getDb()
+    .prepare("SELECT * FROM news_articles WHERE type = 'race-review' AND year = ? AND round = ? LIMIT 1")
+    .get(year, round) as DbNewsArticle | undefined
+  return row ?? null
+}
+
+export function listRaceReviews(): DbNewsArticle[] {
+  return getDb()
+    .prepare("SELECT * FROM news_articles WHERE type = 'race-review' ORDER BY year DESC, round DESC")
+    .all() as DbNewsArticle[]
+}
+
+export function upsertNewsArticle(a: {
+  type: string; seasonId: number | null; year: number; round: number | null
+  headline: string; dek: string | null; body: string; model: string
+}): void {
+  getDb().prepare(`
+    INSERT INTO news_articles (type, season_id, year, round, headline, dek, body, model, created_at)
+    VALUES (@type, @seasonId, @year, @round, @headline, @dek, @body, @model, datetime('now'))
+    ON CONFLICT(type, year, round) DO UPDATE SET
+      season_id = excluded.season_id, headline = excluded.headline, dek = excluded.dek,
+      body = excluded.body, model = excluded.model, created_at = datetime('now')
+  `).run(a)
+}
+
 export function getRacesForSeason(seasonId: number): DbRace[] {
   return getDb()
     .prepare('SELECT * FROM races WHERE season_id = ? ORDER BY round')
@@ -252,6 +294,20 @@ export function getArchivedSeasonIdByYear(year: number): number | null {
     .prepare("SELECT id FROM seasons WHERE year = ? AND status = 'archived' ORDER BY id DESC LIMIT 1")
     .get(year) as { id: number } | undefined
   return row?.id ?? null
+}
+
+// Resolve a season id by year regardless of status (active or archived). Used by the
+// newsroom so the LLM can read the in-progress season's completed races.
+export function getSeasonIdByYear(year: number): number | null {
+  const row = getDb()
+    .prepare('SELECT id FROM seasons WHERE year = ? ORDER BY id DESC LIMIT 1')
+    .get(year) as { id: number } | undefined
+  return row?.id ?? null
+}
+
+export interface DbAllSeasonRow { id: number; year: number; status: string }
+export function getAllSeasons(): DbAllSeasonRow[] {
+  return getDb().prepare('SELECT id, year, status FROM seasons ORDER BY year DESC').all() as DbAllSeasonRow[]
 }
 
 // A race result row joined to its round/circuit — used for drill-down detail.

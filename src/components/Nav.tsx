@@ -29,6 +29,7 @@ export default function Nav() {
     { href: '/setup', label: seasonActive ? 'MARKET' : 'SETUP' },
     { href: '/standings', label: 'STANDINGS' },
     { href: '/world', label: 'WORLD' },
+    { href: '/newsroom', label: 'NEWS' },
     { href: '/race', label: 'RACE' },
   ]
 

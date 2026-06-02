@@ -66,4 +66,21 @@ CREATE TABLE IF NOT EXISTS driver_race_form (
   form REAL NOT NULL,
   UNIQUE(race_id, driver_id)
 );
+
+-- LLM-generated newsroom articles (M5). One row per (type, year, round); round is null
+-- for non-race articles. Natural key gives idempotent upsert + dedup. On-demand searches
+-- are NOT stored here.
+CREATE TABLE IF NOT EXISTS news_articles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  season_id INTEGER,
+  year INTEGER NOT NULL,
+  round INTEGER,
+  headline TEXT NOT NULL,
+  dek TEXT,
+  body TEXT NOT NULL,
+  model TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(type, year, round)
+);
 `
