@@ -230,7 +230,10 @@ export const useSeasonStore = create<SeasonStore>()(
       releaseDriver: (id) => {
         const { drivers, teams, raceResults, year } = get()
         const next = drivers.map((d) =>
-          d.id === id ? { ...d, teamId: '', contractExpiresAfterSeason: year - 1, seasonsSinceF1Seat: 0 } : d,
+          // Only reset the out-of-F1 counter for a driver who actually held a seat.
+          d.id === id
+            ? { ...d, teamId: '', contractExpiresAfterSeason: year - 1, seasonsSinceF1Seat: d.teamId !== '' ? 0 : (d.seasonsSinceF1Seat ?? 0) }
+            : d,
         )
         set({
           drivers: next,
@@ -242,8 +245,7 @@ export const useSeasonStore = create<SeasonStore>()(
       // God-mode: extend a driver's contract by N seasons (from the current year if it
       // had already lapsed).
       extendContract: (id, seasons) => {
-        const { drivers } = get()
-        const { year } = get()
+        const { drivers, year } = get()
         const next = drivers.map((d) =>
           d.id === id
             ? { ...d, contractExpiresAfterSeason: Math.max(d.contractExpiresAfterSeason, year) + seasons }
