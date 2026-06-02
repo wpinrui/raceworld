@@ -61,11 +61,6 @@ export default function DriverPage() {
                     <p className="text-sm text-[#FFFFFF] mt-1 italic">Retired / historical driver</p>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <StatTile label="Titles" value={career.totals.titles} />
-                  <StatTile label="Wins" value={career.totals.wins} />
-                  <StatTile label="Seasons" value={career.totals.seasons} />
-                </div>
               </div>
 
               <TabBar<Tab>

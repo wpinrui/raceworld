@@ -216,7 +216,7 @@ export async function actionGetTeamSeason(teamId: string, year: number): Promise
   let wins = 0, podiums = 0, points = 0
   for (const r of rows) {
     driverNames.set(r.driver_id, r.driver_name)
-    if (r.finish_position === 1) wins++
+    if (!r.dnf && r.finish_position === 1) wins++
     if (!r.dnf && r.finish_position != null && r.finish_position <= 3) podiums++
     points += r.points
     if (!byRound.has(r.round)) {

@@ -40,11 +40,6 @@ export default function TeamPage() {
                       : <span className="italic">Not on the current grid</span>}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <StatTile label="Titles" value={career.honours.constructorTitles} />
-                  <StatTile label="Best" value={career.honours.bestFinish != null ? `P${career.honours.bestFinish}` : '—'} />
-                  <StatTile label="Seasons" value={career.totals.seasons} />
-                </div>
               </div>
 
               <TabBar<Tab>

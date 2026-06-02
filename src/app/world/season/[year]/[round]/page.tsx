@@ -8,7 +8,7 @@ import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { ResultChip } from '@/components/standings/ResultCell'
 import { StintBar } from '@/components/world/StintBar'
 import { Panel } from '@/components/world/ui'
-import { formatLapTime, formatRaceTime } from '@/components/world/format'
+import { formatLapTime, formatRaceTime, formatGap } from '@/components/world/format'
 
 export default function RaceClassificationPage() {
   const { year: yearStr, round: roundStr } = useParams<{ year: string; round: string }>()
@@ -75,7 +75,7 @@ export default function RaceClassificationPage() {
                             : r.finishPosition === 1
                               ? formatRaceTime(r.totalTime)
                               : winnerTime != null && r.totalTime != null
-                                ? `+${formatRaceTime(r.totalTime - winnerTime)}`
+                                ? formatGap(r.totalTime - winnerTime)
                                 : `${r.lapsCompleted} laps`}
                         </td>
                         <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.points || ''}</td>
