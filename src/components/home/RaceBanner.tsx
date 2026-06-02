@@ -64,14 +64,22 @@ export function RaceBanner({ simming, onSimTo }: Props) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [easeTo])
 
-  // Re-centre on the current race whenever the round advances (incl. live during a sim).
+  // ONLY while a sim is running, keep the current race centred so results scroll into
+  // view as the round advances. Outside a sim we leave the scroll alone so manual
+  // scrolling (wheel or scrollbar) isn't fought.
   useEffect(() => {
+    if (!simming) return
     const el = scrollRef.current
     const cur = currentRef.current
     if (!el || !cur) return
     const delta = cur.getBoundingClientRect().left + cur.offsetWidth / 2 - (el.getBoundingClientRect().left + el.clientWidth / 2)
     easeTo(el.scrollLeft + delta)
-  }, [currentRound, easeTo])
+  }, [currentRound, simming, easeTo])
+
+  // When the sim stops, kill any in-flight auto-centre so the scrollbar is free again.
+  useEffect(() => {
+    if (!simming && rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+  }, [simming])
 
   return (
     <Panel title="Calendar" flush>
