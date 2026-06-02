@@ -57,13 +57,14 @@ body {
   font-family: 'Formula1', system-ui, sans-serif;
 }
 
-/* Tailwind v4's reset drops the pointer cursor on buttons — put it back. */
+/* Tailwind v4's reset drops the pointer cursor on buttons — put it back, forcefully
+   so it can't be lost to layer/specificity quirks on any button in the app. */
 button:not(:disabled),
 [role='button']:not([aria-disabled='true']) {
-  cursor: pointer;
+  cursor: pointer !important;
 }
 button:disabled {
-  cursor: not-allowed;
+  cursor: not-allowed !important;
 }
 
 /* Thin custom scrollbar */

@@ -47,7 +47,7 @@ export function TabBar<T extends string>({
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap border-b-2 -mb-px transition-colors text-[#FFFFFF] ${
+          className={`cursor-pointer px-4 py-2.5 text-xs font-semibold uppercase tracking-wide whitespace-nowrap border-b-2 -mb-px transition-colors text-[#FFFFFF] ${
             active === t.key ? 'border-[#00D9FF]' : 'border-transparent hover:border-[#2A3142]'
           }`}
         >
