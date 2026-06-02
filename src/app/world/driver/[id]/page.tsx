@@ -23,6 +23,7 @@ import { RatingsProgressionChart } from '@/components/world/RatingsProgressionCh
 import { MilestonesTimeline } from '@/components/world/MilestonesTimeline'
 import { TeammateH2HHistory } from '@/components/world/TeammateH2HHistory'
 import { CareerStatsTable } from '@/components/world/CareerStatsTable'
+import { RecentFormCard } from '@/components/world/RecentFormCard'
 import { buildDriverBio } from '@/lib/world/bio'
 import { buildMilestones } from '@/lib/world/milestones'
 
@@ -310,12 +311,18 @@ export default function DriverPage() {
                     </Panel>
                   )}
 
-                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-4" columns={1} fill />
+                  {/* Recent form — FM-style form line (pre-race form per round) */}
+                  {a && (
+                    <Panel title="Recent form" flush fill className="lg:col-span-4">
+                      <RecentFormCard results={career.currentResults} />
+                    </Panel>
+                  )}
 
-                  {/* Career stats — per-season basics */}
-                  <Panel title="Career stats" flush fill className="lg:col-span-12">
+                  {/* Career stats — per-season basics (2/3), Feats & Records beside it */}
+                  <Panel title="Career stats" flush fill className="lg:col-span-8">
                     <CareerStatsTable seasons={career.seasons} driverId={id} />
                   </Panel>
+                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-4" columns={1} fill />
                 </div>
               )}
 

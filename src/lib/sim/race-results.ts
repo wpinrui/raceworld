@@ -22,6 +22,7 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
         gridPosition: qr?.gridPosition ?? 0,
         finishPosition: ds.retired ? null : ds.position,
         points: getPoints(ds.retired ? null : ds.position),
+        form: ds.form,
         lapsCompleted: ds.lapTimes.length, totalTime: ds.retired ? null : ds.totalTime,
         dnf: ds.retired, stints,
         q1Time: qr?.q1Time ?? null, q2Time: qr?.q2Time ?? null, q3Time: qr?.q3Time ?? null,

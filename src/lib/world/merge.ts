@@ -86,8 +86,10 @@ function liveDriverResults(driverId: string, raceResults: RaceResult[][], calend
     out.push({
       round: i + 1,
       circuitName: calendar[i]?.name ?? `Round ${i + 1}`,
+      gridPosition: r.gridPosition,
       finishPosition: r.dnf ? null : r.finishPosition,
       points: r.points,
+      form: r.form ?? 5,
       dnf: r.dnf,
     })
   })

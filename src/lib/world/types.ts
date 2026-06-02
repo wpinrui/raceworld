@@ -37,8 +37,10 @@ export interface DriverAttributes {
 export interface DriverCurrentResult {
   round: number
   circuitName: string
+  gridPosition: number
   finishPosition: number | null
   points: number
+  form: number        // pre-race form (0-10)
   dnf: boolean
 }
 

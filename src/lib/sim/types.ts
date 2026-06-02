@@ -160,6 +160,7 @@ export interface RaceResult {
   gridPosition: number
   finishPosition: number | null  // null = DNF
   points: number
+  form: number                   // pre-race form (0-10), the FM-style match rating
   lapsCompleted: number
   totalTime: number | null
   dnf: boolean
