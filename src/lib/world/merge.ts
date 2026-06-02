@@ -4,7 +4,8 @@
 
 import type { Driver, Team, DriverStanding, ConstructorStanding, RaceResult, Circuit } from '@/lib/sim/types'
 import { overall } from '@/lib/sim/progression'
-import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason } from './types'
+import type { Feat } from '@/lib/stats/types'
+import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow } from './types'
 
 export interface LiveStore {
   year: number
@@ -66,7 +67,7 @@ function liveDriverResults(driverId: string, raceResults: RaceResult[][], calend
 const DRIVER_MAX_PER_RACE = 25
 const CONSTRUCTOR_MAX_PER_RACE = 43
 
-function clinchedDriverChampion(store: LiveStore): string | null {
+export function clinchedDriverChampion(store: LiveStore): string | null {
   const ds = store.driverStandings
   if (ds.length === 0 || store.raceResults.length === 0) return null
   const remaining = store.calendar.length - store.raceResults.length
@@ -75,7 +76,7 @@ function clinchedDriverChampion(store: LiveStore): string | null {
   return gap > remaining * DRIVER_MAX_PER_RACE ? ds[0].driverId : null
 }
 
-function clinchedConstructorChampion(store: LiveStore): string | null {
+export function clinchedConstructorChampion(store: LiveStore): string | null {
   const cs = store.constructorStandings
   if (cs.length === 0 || store.raceResults.length === 0) return null
   const remaining = store.calendar.length - store.raceResults.length
@@ -168,5 +169,41 @@ export function mergeTeamCareer(db: TeamCareer, store: LiveStore): TeamCareer {
     teamColor: live.color,
     carPace: live.carPace,
     currentPosition: ci >= 0 ? ci + 1 : null,
+  }
+}
+
+// Fold a live-clinched current-season title into the DB honours feats, so the Honours
+// panel reflects it before the season is archived (matching the career-totals merge).
+export function augmentHonoursWithLiveTitle(feats: Feat[], kind: 'driver' | 'team', id: string, store: LiveStore): Feat[] {
+  const champ = kind === 'driver' ? clinchedDriverChampion(store) : clinchedConstructorChampion(store)
+  if (champ !== id) return feats
+  const featId = kind === 'driver' ? 'driver-titles' : 'team-titles'
+  const label = kind === 'driver' ? 'World Champion' : "Constructors' Champion"
+  const existing = feats.find((f) => f.id === featId)
+  if (existing) {
+    const years = (existing.detail ?? '').split(' · ').map(Number).filter((n) => !Number.isNaN(n))
+    if (years.includes(store.year)) return feats // already counted (e.g. archived)
+    const merged = [...years, store.year].sort((a, b) => a - b)
+    const updated: Feat = { ...existing, value: merged.length, title: `${merged.length}× ${label}`, detail: merged.join(' · ') }
+    return feats.map((f) => (f.id === featId ? updated : f))
+  }
+  return [{ id: featId, category: 'title', priority: 100, title: `1× ${label}`, detail: `${store.year}`, value: 1 }, ...feats]
+}
+
+// A champions-roll row for the current season if a title is already clinched, so /world
+// shows it before archiving. Returns null until at least one title is secured.
+export function liveChampionRow(store: LiveStore): SeasonChampionRow | null {
+  const dChamp = clinchedDriverChampion(store)
+  const cChamp = clinchedConstructorChampion(store)
+  if (!dChamp && !cChamp) return null
+  const ds = store.driverStandings.find((s) => s.driverId === dChamp)
+  const cs = store.constructorStandings.find((s) => s.teamId === cChamp)
+  return {
+    year: store.year,
+    driverChampionId: dChamp,
+    driverChampionName: ds?.driverName ?? null,
+    driverChampionTeamId: ds?.teamId ?? null,
+    constructorChampionId: cChamp,
+    constructorChampionName: cs?.teamName ?? null,
   }
 }
