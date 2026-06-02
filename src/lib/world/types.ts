@@ -78,12 +78,26 @@ export interface TeammateH2H extends H2HRecord {
   seasons: TeammateH2HSeason[] // per-season breakdown, most recent first
 }
 
+// One race on the Recent form line: pre-race form plus the result for the tooltip.
+// Carries year so it can be ordered across season boundaries.
+export interface RecentFormEntry {
+  year: number
+  round: number
+  circuitName: string
+  gridPosition: number
+  finishPosition: number | null
+  points: number
+  form: number
+  dnf: boolean
+}
+
 export interface DriverCareer {
   driverId: string
   driverName: string
   totals: { races: number; wins: number; podiums: number; points: number; poles: number; titles: number; seasons: number }
   seasons: CareerSeason[]
   ratingsHistory: RatingsPoint[]          // per-race attribute development (DB archived + live merged)
+  recentForm: RecentFormEntry[]           // chronological per-race form (DB archived + live merged)
   teammateH2H: TeammateH2H[]              // complete career teammate head-to-head (DB archived + live merged)
   attributes: DriverAttributes | null     // live, from store, if on current grid
   currentResults: DriverCurrentResult[] | null  // live, from store

@@ -56,4 +56,14 @@ CREATE TABLE IF NOT EXISTS driver_race_attributes (
   smoothness REAL NOT NULL,
   UNIQUE(season_id, round, driver_id)
 );
+
+-- Per-race pre-race form (0-10), for the Recent form card. Keyed by the race row so it
+-- joins back to grid/finish/points for the tooltip.
+CREATE TABLE IF NOT EXISTS driver_race_form (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  race_id INTEGER NOT NULL REFERENCES races(id),
+  driver_id TEXT NOT NULL,
+  form REAL NOT NULL,
+  UNIQUE(race_id, driver_id)
+);
 `

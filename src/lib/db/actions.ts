@@ -29,7 +29,9 @@ import {
   getResultsForRace,
   getTeamFinalPositionInSeason,
   insertDriverRaceAttributes,
+  insertDriverRaceForm,
   getDriverRatingsHistory,
+  getDriverRecentForm,
   getDriverTeammateRaces,
   type DbSeason,
   type DbRaceResultRow,
@@ -83,6 +85,7 @@ export async function actionFlushRaceResult(
   const raceId = createRace(seasonId, round, circuitId, circuitName)
   insertRaceResults(raceId, results)
   if (attributeSnapshots.length > 0) insertDriverRaceAttributes(seasonId, round, attributeSnapshots)
+  insertDriverRaceForm(raceId, results.map((r) => ({ driverId: r.driverId, form: r.form })))
 }
 
 export async function actionArchiveSeason(seasonId: number): Promise<void> {
@@ -123,7 +126,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     return {
       driverId, driverName: driverId,
       totals: { races: 0, wins: 0, podiums: 0, points: 0, poles: 0, titles: 0, seasons: 0 },
-      seasons: [], ratingsHistory: [], teammateH2H: [], attributes: null, currentResults: null,
+      seasons: [], ratingsHistory: [], recentForm: [], teammateH2H: [], attributes: null, currentResults: null,
     }
   }
   const champions = getAllSeasonChampions()
@@ -147,6 +150,13 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     overtaking: r.overtaking, smoothness: r.smoothness,
     overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace })),
   }))
+  // Most recent archived races with a recorded form, returned oldest -> newest so the
+  // live current season (appended in the merge) continues the chronology.
+  const recentForm = getDriverRecentForm(driverId, 12).reverse().map((r) => ({
+    year: r.year, round: r.round, circuitName: r.circuitName,
+    gridPosition: r.gridPosition, finishPosition: r.dnf ? null : r.finishPosition,
+    points: r.points, form: r.form, dnf: !!r.dnf,
+  }))
   const h2hRows: H2HRaceRow[] = getDriverTeammateRaces(driverId).map((r) => ({
     year: r.year, teamName: r.teamName, teammateId: r.teammateId, teammateName: r.teammateName,
     myGrid: r.myGrid, myFinish: r.myFinish, myDnf: !!r.myDnf, myPoints: r.myPoints,
@@ -158,7 +168,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
       races: totals.races, wins: totals.wins, podiums: totals.podiums,
       points: totals.points, poles: totals.poles, titles, seasons: totals.seasons,
     },
-    seasons, ratingsHistory, teammateH2H: aggregateTeammateH2H(h2hRows), attributes: null, currentResults: null,
+    seasons, ratingsHistory, recentForm, teammateH2H: aggregateTeammateH2H(h2hRows), attributes: null, currentResults: null,
   }
 }
 

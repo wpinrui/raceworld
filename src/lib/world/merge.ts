@@ -158,6 +158,13 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
     ratingsHistory: racing
       ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory)]
       : db.ratingsHistory,
+    recentForm: racing
+      ? [...db.recentForm, ...liveDriverResults(db.driverId, store.raceResults, store.calendar).map((r) => ({
+          year: store.year, round: r.round, circuitName: r.circuitName,
+          gridPosition: r.gridPosition, finishPosition: r.finishPosition,
+          points: r.points, form: r.form, dnf: r.dnf,
+        }))]
+      : db.recentForm,
     teammateH2H: racing
       ? combineTeammateH2H(db.teammateH2H, liveTeammateH2H(db.driverId, store))
       : db.teammateH2H,

@@ -314,7 +314,7 @@ export default function DriverPage() {
                   {/* Recent form — FM-style form line (pre-race form per round) */}
                   {a && (
                     <Panel title="Recent form" flush fill className="lg:col-span-4">
-                      <RecentFormCard results={career.currentResults} />
+                      <RecentFormCard entries={career.recentForm} />
                     </Panel>
                   )}
 

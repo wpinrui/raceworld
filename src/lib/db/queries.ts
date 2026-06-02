@@ -106,6 +106,46 @@ export function insertRaceResults(raceId: number, results: RaceResult[]): void {
   completeRace(raceId)
 }
 
+// Persist each driver's pre-race form for a race (idempotent per race+driver).
+export function insertDriverRaceForm(raceId: number, rows: { driverId: string; form: number }[]): void {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO driver_race_form (race_id, driver_id, form) VALUES (?, ?, ?)
+    ON CONFLICT(race_id, driver_id) DO UPDATE SET form = excluded.form
+  `)
+  const insertMany = db.transaction((rs: { driverId: string; form: number }[]) => {
+    for (const r of rs) stmt.run(raceId, r.driverId, r.form)
+  })
+  insertMany(rows)
+}
+
+export interface DbRecentFormRow {
+  year: number
+  round: number
+  circuitName: string
+  gridPosition: number
+  finishPosition: number | null
+  points: number
+  dnf: number
+  form: number
+}
+
+// The driver's most recent archived races that have a recorded form, newest first.
+export function getDriverRecentForm(driverId: string, limit: number): DbRecentFormRow[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, r.round AS round, r.circuit_name AS circuitName,
+      rr.grid_position AS gridPosition, rr.finish_position AS finishPosition,
+      rr.points AS points, rr.dnf AS dnf, drf.form AS form
+    FROM driver_race_form drf
+    JOIN race_results rr ON rr.race_id = drf.race_id AND rr.driver_id = drf.driver_id
+    JOIN races r ON r.id = drf.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE drf.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year DESC, r.round DESC
+    LIMIT ?
+  `).all(driverId, limit) as DbRecentFormRow[]
+}
+
 export interface DriverAttributeSnapshot {
   driverId: string
   pace: number

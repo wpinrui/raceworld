@@ -1,7 +1,7 @@
 'use client'
 
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
-import type { DriverCurrentResult } from '@/lib/world/types'
+import type { RecentFormEntry } from '@/lib/world/types'
 import { calendar2026 } from '@/data/calendar'
 
 // Football-Manager-style form line: the pre-race form rating (0-10) over the most recent
@@ -18,6 +18,7 @@ interface Pt {
   x: number
   form: number
   round: number
+  year: number
   code: string
   circuitName: string
   grid: number
@@ -31,7 +32,7 @@ function FormTooltip({ active, payload }: { active?: boolean; payload?: Array<{ 
   const p = payload[0].payload
   return (
     <div className="rounded-lg bg-[#2A3142] border border-[#303848] px-3 py-2 text-xs text-[#FFFFFF] shadow-lg shadow-black/40">
-      <p className="font-semibold mb-1">{p.circuitName}</p>
+      <p className="font-semibold mb-1">{p.year} · {p.circuitName}</p>
       <p>Qualifying: P{p.grid}</p>
       <p>Race: {p.dnf ? 'DNF' : `P${p.finish}`} · {p.points} pts</p>
       <p className="mt-0.5">Form: <span className="font-semibold tabular-nums">{p.form.toFixed(1)}</span></p>
@@ -45,15 +46,16 @@ function renderDot(props: { cx?: number; cy?: number; payload?: Pt }) {
   return <circle key={payload.round} cx={cx} cy={cy} r={5} fill={dotColor(payload.form)} stroke="#1E2431" strokeWidth={2} />
 }
 
-export function RecentFormCard({ results }: { results: DriverCurrentResult[] | null }) {
-  if (!results || results.length === 0) {
-    return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No races yet this season.</p>
+export function RecentFormCard({ entries }: { entries: RecentFormEntry[] }) {
+  if (!entries || entries.length === 0) {
+    return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No race form recorded yet.</p>
   }
-  const recent = results.slice(-RECENT)
+  const recent = entries.slice(-RECENT)
   const data: Pt[] = recent.map((r, i) => ({
     x: i,
     form: r.form,
     round: r.round,
+    year: r.year,
     code: calendar2026[r.round - 1]?.code ?? String(r.round).padStart(2, '0'),
     circuitName: r.circuitName,
     grid: r.gridPosition,
