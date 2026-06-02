@@ -51,7 +51,7 @@ export default function WorldPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <div className="px-4 py-6 space-y-6">
         {/* Masthead */}
         <div className="rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 p-5">
           <div className="flex items-center gap-2.5 mb-1">

@@ -35,7 +35,7 @@ export default function TeamPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
+      <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !career && <p className="text-sm text-[#FFFFFF]">Team not found.</p>}
 
