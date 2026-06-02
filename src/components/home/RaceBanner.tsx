@@ -30,18 +30,29 @@ export function RaceBanner({ simming, onSimTo }: Props) {
   const teams = useSeasonStore((s) => s.teams)
   const teamColor = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
 
-  // Mouse wheel over the calendar scrolls it horizontally instead of the whole page.
+  // Mouse wheel over the calendar scrolls it horizontally instead of the whole page,
+  // easing toward the target so it glides rather than jumping.
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
+    let target = el.scrollLeft
+    let raf = 0
+    const tick = () => {
+      const diff = target - el.scrollLeft
+      if (Math.abs(diff) < 0.5) { el.scrollLeft = target; raf = 0; return }
+      el.scrollLeft += diff * 0.18
+      raf = requestAnimationFrame(tick)
+    }
     const onWheel = (e: WheelEvent) => {
       if (el.scrollWidth <= el.clientWidth) return // nothing to scroll — let the page move
       e.preventDefault()
-      el.scrollLeft += e.deltaY + e.deltaX
+      const max = el.scrollWidth - el.clientWidth
+      target = Math.max(0, Math.min(max, target + e.deltaY + e.deltaX))
+      if (!raf) raf = requestAnimationFrame(tick)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
+    return () => { el.removeEventListener('wheel', onWheel); if (raf) cancelAnimationFrame(raf) }
   }, [])
 
   return (
