@@ -5,8 +5,9 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Pencil, Check } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
-import { useDriverCareer } from '@/lib/world/hooks'
+import { useDriverCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { HonoursPanel } from '@/components/world/HonoursPanel'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { StatBar } from '@/components/setup/StatBar'
 import { StatSlider } from '@/components/setup/StatSlider'
@@ -22,6 +23,7 @@ type Tab = 'overview' | 'seasons'
 export default function DriverPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useDriverCareer(id)
+  const { feats: honours, loading: honoursLoading } = useEntityHonours('driver', id)
   const updateDriver = useSeasonStore((s) => s.updateDriver)
   const liveDriver = useSeasonStore((s) => s.drivers.find((d) => d.id === id))
   const teams = useSeasonStore((s) => s.teams)
@@ -218,6 +220,8 @@ export default function DriverPage() {
                       )}
                     </Panel>
                   </div>
+
+                  <HonoursPanel feats={honours} loading={honoursLoading} />
                 </div>
               )}
 

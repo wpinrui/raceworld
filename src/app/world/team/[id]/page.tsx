@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { useTeamCareer } from '@/lib/world/hooks'
+import { useTeamCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
+import { HonoursPanel } from '@/components/world/HonoursPanel'
 import { calendar2026 } from '@/data/calendar'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
@@ -20,6 +21,7 @@ const TOTAL_ROUNDS = calendar2026.length
 export default function TeamPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useTeamCareer(id)
+  const { feats: honours, loading: honoursLoading } = useEntityHonours('team', id)
   const devPlan = useSeasonStore((s) => s.devPlans.find((p) => p.teamId === id))
   const currentRound = useSeasonStore((s) => s.currentRound)
   const onGrid = useSeasonStore((s) => s.teams.some((t) => t.id === id))
@@ -111,6 +113,8 @@ export default function TeamPage() {
                       </Panel>
                     )}
                   </div>
+
+                  <HonoursPanel feats={honours} loading={honoursLoading} />
 
                   {/* God-mode: inspect and edit the next car upgrade before it lands. */}
                   {onGrid && devPlan && upgradeEditable && (

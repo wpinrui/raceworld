@@ -496,3 +496,72 @@ export function getSearchIndex(): SearchIndexEntry[] {
     ...teams.map((t) => ({ ...t, kind: 'team' as const })),
   ]
 }
+
+// --- Stats-engine aggregates (archived seasons only) ---
+// Per (season, driver) and (season, team) tallies for the whole world, plus a
+// driver's ordered race log — the raw material the feat detector reduces over.
+
+export interface DriverSeasonTally {
+  driverId: string; driverName: string; seasonId: number; year: number
+  races: number; wins: number; poles: number; podiums: number; points: number; dnfs: number
+}
+
+export function getAllDriverSeasonTallies(): DriverSeasonTally[] {
+  return getDb().prepare(`
+    SELECT rr.driver_id AS driverId, MAX(rr.driver_name) AS driverName,
+      s.id AS seasonId, s.year AS year,
+      COUNT(*) AS races,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      SUM(rr.dnf) AS dnfs
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived'
+    GROUP BY s.id, rr.driver_id
+    ORDER BY s.year
+  `).all() as DriverSeasonTally[]
+}
+
+export interface TeamSeasonTally {
+  teamId: string; teamName: string; seasonId: number; year: number
+  wins: number; podiums: number; points: number; finalPosition: number | null
+}
+
+export function getAllTeamSeasonTallies(): TeamSeasonTally[] {
+  return getDb().prepare(`
+    SELECT rr.team_id AS teamId, MAX(rr.team_name) AS teamName,
+      s.id AS seasonId, s.year AS year,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      scs.final_position AS finalPosition
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    LEFT JOIN season_constructor_standings scs ON scs.season_id = s.id AND scs.team_id = rr.team_id
+    WHERE s.status = 'archived'
+    GROUP BY s.id, rr.team_id
+    ORDER BY s.year
+  `).all() as TeamSeasonTally[]
+}
+
+// One row per archived race a driver started, in chronological order — used to
+// compute consecutive-race streaks (wins, podiums, points finishes).
+export interface DriverRaceLite {
+  year: number; round: number; gridPosition: number; finishPosition: number | null; dnf: number; points: number
+}
+
+export function getDriverArchivedRaces(driverId: string): DriverRaceLite[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, r.round AS round, rr.grid_position AS gridPosition,
+      rr.finish_position AS finishPosition, rr.dnf AS dnf, rr.points AS points
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE rr.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year, r.round
+  `).all(driverId) as DriverRaceLite[]
+}
