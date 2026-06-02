@@ -44,33 +44,44 @@ function snapshotStats(drivers: Driver[]): StatSnapshot {
   return snap
 }
 
+// Standings are derived purely from race history, never from CURRENT grid membership,
+// so god-mode mid-season moves (release, reassign — even cut-and-rehire to the same
+// team) stay correct: a driver's points follow the DRIVER, a team's points stay with
+// the TEAM that scored them.
 function computeDriverStandings(
   drivers: Driver[],
   teams: Team[],
   raceResults: RaceResult[][],
 ): DriverStanding[] {
   const map = new Map<string, DriverStanding>()
+  const driverById = new Map(drivers.map((d) => [d.id, d]))
+  const teamName = (teamId: string) =>
+    teams.find((t) => t.id === teamId)?.name ?? (teamId === '' ? 'Free agent' : teamId)
 
-  for (const driver of drivers.filter((d) => d.teamId !== '')) {
-    const team = teams.find((t) => t.id === driver.teamId)
-    map.set(driver.id, {
-      driverId: driver.id,
-      driverName: driver.name,
-      teamId: driver.teamId,
-      teamName: team?.name ?? driver.teamId,
-      points: 0,
-      wins: 0,
-      results: Array(TOTAL_ROUNDS).fill(null),
-    })
+  const ensure = (driverId: string, name: string, teamId: string): DriverStanding => {
+    let s = map.get(driverId)
+    if (!s) {
+      s = {
+        driverId, driverName: name, teamId, teamName: teamName(teamId),
+        points: 0, wins: 0, results: Array(TOTAL_ROUNDS).fill(null),
+      }
+      map.set(driverId, s)
+    }
+    return s
   }
 
+  // Currently-seated drivers always appear (even on 0 points)…
+  for (const d of drivers) if (d.teamId !== '') ensure(d.id, d.name, d.teamId)
+
+  // …plus everyone who scored this season, keyed by driver — including drivers since
+  // released (shown as free agents) or moved teams. Points = all they scored, anywhere.
   for (let round = 0; round < raceResults.length; round++) {
     for (const result of raceResults[round]) {
-      const standing = map.get(result.driverId)
-      if (!standing) continue
-      standing.points += result.points
-      if (result.finishPosition === 1) standing.wins++
-      standing.results[round] = result.dnf ? null : result.finishPosition
+      const live = driverById.get(result.driverId)
+      const s = ensure(result.driverId, live?.name ?? result.driverName, live?.teamId ?? '')
+      s.points += result.points
+      if (result.finishPosition === 1) s.wins++
+      s.results[round] = result.dnf ? null : result.finishPosition
     }
   }
 
@@ -84,14 +95,26 @@ function computeConstructorStandings(
 ): ConstructorStanding[] {
   const map = new Map<string, ConstructorStanding>()
 
+  // Drivers who raced for each team this season, in order of first appearance — so a
+  // mid-season swap keeps every driver's row and attributes points to the team they
+  // scored for, not whoever holds the seat now.
+  const teamDriverOrder = new Map<string, string[]>()
+  for (const round of raceResults) {
+    for (const r of round) {
+      if (!teamDriverOrder.has(r.teamId)) teamDriverOrder.set(r.teamId, [])
+      const order = teamDriverOrder.get(r.teamId)!
+      if (!order.includes(r.driverId)) order.push(r.driverId)
+    }
+  }
+
   for (const team of teams) {
-    const teamDrivers = drivers.filter((d) => d.teamId === team.id)
+    const order = teamDriverOrder.get(team.id) ?? drivers.filter((d) => d.teamId === team.id).map((d) => d.id)
     map.set(team.id, {
       teamId: team.id,
       teamName: team.name,
       points: 0,
       wins: 0,
-      results: teamDrivers.map(() => Array(TOTAL_ROUNDS).fill(null)),
+      results: order.map(() => Array(TOTAL_ROUNDS).fill(null)),
     })
   }
 
@@ -101,11 +124,8 @@ function computeConstructorStandings(
       if (!standing) continue
       standing.points += result.points
       if (result.finishPosition === 1) standing.wins++
-      const teamDrivers = drivers.filter((d) => d.teamId === result.teamId)
-      const driverIdx = teamDrivers.findIndex((d) => d.id === result.driverId)
-      if (driverIdx >= 0) {
-        standing.results[driverIdx][round] = result.dnf ? null : result.finishPosition
-      }
+      const idx = (teamDriverOrder.get(result.teamId) ?? []).indexOf(result.driverId)
+      if (idx >= 0) standing.results[idx][round] = result.dnf ? null : result.finishPosition
     }
   }
 
