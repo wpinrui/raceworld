@@ -56,7 +56,7 @@ export function RatingsProgressionChart({ history }: { history: RatingsPoint[] }
   if (data.length < 2) {
     return (
       <p className="px-5 py-8 text-sm text-[#FFFFFF] text-center">
-        Not enough history yet — race a few rounds and a development line builds here.
+        Not enough history yet.
       </p>
     )
   }

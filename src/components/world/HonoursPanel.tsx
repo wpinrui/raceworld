@@ -40,7 +40,7 @@ export function HonoursPanel({ feats, loading, className = '', columns = 2, fill
     if (!fill) return null
     return (
       <Panel title="Feats & Records" className={className} fill>
-        <p className="text-sm text-[#FFFFFF]">No feats or records yet — they unlock as the career builds.</p>
+        <p className="text-sm text-[#FFFFFF]">No feats or records yet.</p>
       </Panel>
     )
   }

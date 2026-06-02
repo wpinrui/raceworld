@@ -22,7 +22,7 @@ function roundLabel(round: number): string {
 
 export function MilestonesTimeline({ events }: { events: MilestoneEvent[] }) {
   if (events.length === 0) {
-    return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No milestones yet — they unlock as the career unfolds.</p>
+    return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No milestones yet.</p>
   }
   return (
     <ol className="px-5 py-4 space-y-0">

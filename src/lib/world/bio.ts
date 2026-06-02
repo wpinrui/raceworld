@@ -36,7 +36,7 @@ function styleClause(a: DriverAttributes, poss: string): string {
   const best = stats[0]
   const worst = stats[stats.length - 1]
   if (best.v - worst.v < 6) return `A well-rounded driver with no glaring weakness`
-  return `Known for ${best.strong}, ${worst.v < 65 ? `though questions remain over ${worst.weak}` : `with ${worst.weak} the area still to polish`}`
+  return `Known for ${best.strong}, ${worst.v < 65 ? `though questions remain over ${worst.weak}` : `with ${worst.weak} still to sharpen`}`
 }
 
 function standingClause(c: DriverCareer): string {
@@ -49,7 +49,7 @@ function standingClause(c: DriverCareer): string {
     : seasons > 0 ? 'Still searching for a breakthrough result'
     : 'Yet to start a Grand Prix'
   const tally = seasons > 0
-    ? ` — ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'} and ${poles} ${poles === 1 ? 'pole' : 'poles'} from ${seasons} ${seasons === 1 ? 'season' : 'seasons'}, for ${points.toLocaleString()} career points`
+    ? `, with ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'} and ${poles} ${poles === 1 ? 'pole' : 'poles'} from ${seasons} ${seasons === 1 ? 'season' : 'seasons'}, for ${points.toLocaleString()} career points`
     : ''
   return head + tally
 }

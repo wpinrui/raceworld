@@ -40,7 +40,7 @@ function Record({ rec }: { rec: H2HRecord }) {
 export function TeammateH2HHistory({ records, driverName }: { records: TeammateH2H[]; driverName: string }) {
   const [open, setOpen] = useState<Set<string>>(new Set())
   if (records.length === 0) {
-    return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No teammate head-to-head yet — it builds once {driverName} has shared a garage for a race.</p>
+    return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No teammate head-to-head yet.</p>
   }
   const toggle = (id: string) => setOpen((p) => {
     const n = new Set(p)
