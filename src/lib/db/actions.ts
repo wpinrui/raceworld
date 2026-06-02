@@ -28,14 +28,18 @@ import {
   getRaceInSeasonByRound,
   getResultsForRace,
   getTeamFinalPositionInSeason,
+  insertDriverRaceAttributes,
+  getDriverRatingsHistory,
   type DbSeason,
   type DbRaceResultRow,
+  type DriverAttributeSnapshot,
 } from './queries'
+import { overall } from '@/lib/sim/progression'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import type {
   DriverCareer, TeamCareer, WorldOverview, SearchEntry, CareerSeason, TeamSeason,
   DriverSeasonDetail, DriverSeasonRace, TeamSeasonDetail, TeamSeasonRace,
-  RaceClassification, RaceClassificationRow, Stint,
+  RaceClassification, RaceClassificationRow, Stint, RatingsPoint,
 } from '@/lib/world/types'
 import { getDriverHonours, getTeamHonours } from '@/lib/stats/feats'
 import type { Feat } from '@/lib/stats/types'
@@ -72,9 +76,11 @@ export async function actionFlushRaceResult(
   circuitId: string,
   circuitName: string,
   results: RaceResult[],
+  attributeSnapshots: DriverAttributeSnapshot[] = [],
 ): Promise<void> {
   const raceId = createRace(seasonId, round, circuitId, circuitName)
   insertRaceResults(raceId, results)
+  if (attributeSnapshots.length > 0) insertDriverRaceAttributes(seasonId, round, attributeSnapshots)
 }
 
 export async function actionArchiveSeason(seasonId: number): Promise<void> {
@@ -115,7 +121,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     return {
       driverId, driverName: driverId,
       totals: { races: 0, wins: 0, podiums: 0, points: 0, poles: 0, titles: 0, seasons: 0 },
-      seasons: [], attributes: null, currentResults: null,
+      seasons: [], ratingsHistory: [], attributes: null, currentResults: null,
     }
   }
   const champions = getAllSeasonChampions()
@@ -133,13 +139,19 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
       inProgress: false,
     }
   })
+  const ratingsHistory: RatingsPoint[] = getDriverRatingsHistory(driverId).map((r) => ({
+    year: r.year, round: r.round,
+    pace: r.pace, wetWeatherPace: r.wet_weather_pace,
+    overtaking: r.overtaking, smoothness: r.smoothness,
+    overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace })),
+  }))
   return {
     driverId, driverName: totals.driverName,
     totals: {
       races: totals.races, wins: totals.wins, podiums: totals.podiums,
       points: totals.points, poles: totals.poles, titles, seasons: totals.seasons,
     },
-    seasons, attributes: null, currentResults: null,
+    seasons, ratingsHistory, attributes: null, currentResults: null,
   }
 }
 

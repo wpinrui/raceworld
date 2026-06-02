@@ -39,11 +39,24 @@ export interface DriverCurrentResult {
   dnf: boolean
 }
 
+// One sampled point on a driver's attribute-development timeline. round 0 = season-start
+// baseline; rounds 1..N = post-race snapshots. Ordered by (year, round) across the career.
+export interface RatingsPoint {
+  year: number
+  round: number
+  overall: number
+  pace: number
+  wetWeatherPace: number
+  overtaking: number
+  smoothness: number
+}
+
 export interface DriverCareer {
   driverId: string
   driverName: string
   totals: { races: number; wins: number; podiums: number; points: number; poles: number; titles: number; seasons: number }
   seasons: CareerSeason[]
+  ratingsHistory: RatingsPoint[]          // per-race attribute development (DB archived + live merged)
   attributes: DriverAttributes | null     // live, from store, if on current grid
   currentResults: DriverCurrentResult[] | null  // live, from store
 }

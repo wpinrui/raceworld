@@ -45,7 +45,11 @@ export async function simulateUntilRound(targetRound: number, onRace?: (round: n
       dbSeasonId = await actionCreateSeason(season.year)
       useSeasonStore.getState().setDbSeasonId(dbSeasonId)
     }
-    await actionFlushRaceResult(dbSeasonId, round, circuit.id, circuit.name, results)
+    // Post-race attribute snapshots for the ratings-progression chart.
+    const snapshots = useSeasonStore.getState().drivers
+      .filter((d) => d.teamId !== '')
+      .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }))
+    await actionFlushRaceResult(dbSeasonId, round, circuit.id, circuit.name, results, snapshots)
 
     // Advance (handles end-of-season on the final round) and clear the race engine.
     useSeasonStore.getState().advanceRound()

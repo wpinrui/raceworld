@@ -3,9 +3,10 @@
 // live slice is additive — no double counting.
 
 import type { Driver, Team, DriverStanding, ConstructorStanding, RaceResult, Circuit } from '@/lib/sim/types'
+import type { StatPoint } from '@/lib/store/season-store'
 import { overall } from '@/lib/sim/progression'
 import type { Feat } from '@/lib/stats/types'
-import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow } from './types'
+import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow, RatingsPoint } from './types'
 
 export interface LiveStore {
   year: number
@@ -15,6 +16,19 @@ export interface LiveStore {
   constructorStandings: ConstructorStanding[]
   raceResults: RaceResult[][]
   calendar: Circuit[]
+  statHistory: Record<string, StatPoint[]>
+}
+
+// The current (unarchived) season's attribute timeline from the live store.
+function liveRatingsHistory(driverId: string, year: number, statHistory: Record<string, StatPoint[]>): RatingsPoint[] {
+  const series = statHistory[driverId] ?? []
+  return [...series]
+    .sort((a, b) => a.round - b.round)
+    .map((p) => ({
+      year, round: p.round,
+      pace: p.pace, wetWeatherPace: p.wetWeatherPace, overtaking: p.overtaking, smoothness: p.smoothness,
+      overall: Math.round(overall(p)),
+    }))
 }
 
 function driverAttributes(d: Driver, teams: Team[]): DriverAttributes {
@@ -120,6 +134,9 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
       seasons: db.totals.seasons + (racing ? 1 : 0),
     },
     seasons: liveSeason ? [liveSeason, ...db.seasons] : db.seasons,
+    ratingsHistory: racing
+      ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory)]
+      : db.ratingsHistory,
     attributes: driverAttributes(live, store.teams),
     currentResults: racing ? liveDriverResults(db.driverId, store.raceResults, store.calendar) : null,
   }

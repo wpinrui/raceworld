@@ -29,6 +29,12 @@ const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[
 
 type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
 
+// One sampled point on a driver's in-progress-season attribute timeline. round 0 = season
+// start; rounds 1..N = post-race. Past seasons live in the DB; this carries only the
+// current (unarchived) season, which the DB career query excludes.
+export type StatPoint = { round: number; pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }
+type StatHistory = Record<string, StatPoint[]>
+
 // Snapshot the four stats of every grid driver, keyed by id.
 function snapshotStats(drivers: Driver[]): StatSnapshot {
   const snap: StatSnapshot = {}
@@ -42,6 +48,28 @@ function snapshotStats(drivers: Driver[]): StatSnapshot {
     }
   }
   return snap
+}
+
+// Seed the per-race stat history with a round-0 baseline for every grid driver.
+function seedStatHistory(drivers: Driver[]): StatHistory {
+  const hist: StatHistory = {}
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    hist[d.id] = [{ round: 0, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }]
+  }
+  return hist
+}
+
+// Append a post-race point for each grid driver at the given round.
+function appendStatHistory(prev: StatHistory, drivers: Driver[], round: number): StatHistory {
+  const next: StatHistory = { ...prev }
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    const point: StatPoint = { round, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }
+    const series = (next[d.id] ?? []).filter((p) => p.round !== round)
+    next[d.id] = [...series, point]
+  }
+  return next
 }
 
 // Standings are derived purely from race history, never from CURRENT grid membership,
@@ -151,6 +179,8 @@ interface SeasonStore {
   pendingGridChanges: PendingGridChanges
   // Snapshot of each grid driver's stats at season start, for the net-development summary.
   seasonStartStats: Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
+  // Per-race attribute snapshots for the CURRENT (unarchived) season's progression chart.
+  statHistory: StatHistory
 
   // Computed
   driverStandings: DriverStanding[]
@@ -197,6 +227,7 @@ export const useSeasonStore = create<SeasonStore>()(
       pendingNextSeasonState: null,
       pendingGridChanges: { additions: [], removals: [] },
       seasonStartStats: {},
+      statHistory: {},
       driverStandings: [],
       constructorStandings: [],
 
@@ -226,6 +257,7 @@ export const useSeasonStore = create<SeasonStore>()(
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
           seasonStartStats: snapshotStats(allDrivers),
+          statHistory: seedStatHistory(allDrivers),
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -366,7 +398,7 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       recordRaceResult: (results) => {
-        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents } = get()
+        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory } = get()
         const updated = [...raceResults]
         updated[currentRound - 1] = results
 
@@ -384,6 +416,8 @@ export const useSeasonStore = create<SeasonStore>()(
           drivers: updatedDrivers,
           devPlans: updatedDevPlans,
           allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
+          // Capture the post-race attributes for this round's progression chart.
+          statHistory: appendStatHistory(statHistory, updatedDrivers, currentRound),
           driverStandings: computeDriverStandings(updatedDrivers, updatedTeams, updated),
           constructorStandings: computeConstructorStandings(updatedTeams, updatedDrivers, updated),
         })
@@ -664,6 +698,7 @@ export const useSeasonStore = create<SeasonStore>()(
         pendingNextSeasonState: state.pendingNextSeasonState,
         pendingGridChanges: state.pendingGridChanges,
         seasonStartStats: state.seasonStartStats,
+        statHistory: state.statHistory,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

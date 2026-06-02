@@ -165,7 +165,12 @@ export default function RacePage() {
       season.recordRaceResult(results)
       let dbSeasonId = season.dbSeasonId
       if (!dbSeasonId) { dbSeasonId = await actionCreateSeason(season.year); season.setDbSeasonId(dbSeasonId) }
-      await actionFlushRaceResult(dbSeasonId, season.currentRound, currentCircuit.id, currentCircuit.name, results)
+      // Post-race attributes (recordRaceResult has already applied progression) for the
+      // career ratings-progression chart.
+      const snapshots = useSeasonStore.getState().drivers
+        .filter((d) => d.teamId !== '')
+        .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }))
+      await actionFlushRaceResult(dbSeasonId, season.currentRound, currentCircuit.id, currentCircuit.name, results, snapshots)
       if (season.currentRound >= calendar2026.length) {
         season.endSeason(); router.push('/home')
       } else {

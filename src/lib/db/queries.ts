@@ -106,6 +106,57 @@ export function insertRaceResults(raceId: number, results: RaceResult[]): void {
   completeRace(raceId)
 }
 
+export interface DriverAttributeSnapshot {
+  driverId: string
+  pace: number
+  wetWeatherPace: number
+  overtaking: number
+  smoothness: number
+}
+
+// Persist each driver's post-race attributes for the round. Idempotent per
+// (season, round, driver) so re-flushing a round doesn't duplicate rows.
+export function insertDriverRaceAttributes(
+  seasonId: number,
+  round: number,
+  snapshots: DriverAttributeSnapshot[],
+): void {
+  const db = getDb()
+  const stmt = db.prepare(`
+    INSERT INTO driver_race_attributes (season_id, round, driver_id, pace, wet_weather_pace, overtaking, smoothness)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(season_id, round, driver_id) DO UPDATE SET
+      pace = excluded.pace, wet_weather_pace = excluded.wet_weather_pace,
+      overtaking = excluded.overtaking, smoothness = excluded.smoothness
+  `)
+  const insertMany = db.transaction((rows: DriverAttributeSnapshot[]) => {
+    for (const s of rows) stmt.run(seasonId, round, s.driverId, s.pace, s.wetWeatherPace, s.overtaking, s.smoothness)
+  })
+  insertMany(snapshots)
+}
+
+export interface DbRatingsPointRow {
+  year: number
+  round: number
+  pace: number
+  wet_weather_pace: number
+  overtaking: number
+  smoothness: number
+}
+
+// A driver's attribute timeline across all archived seasons, ordered chronologically.
+export function getDriverRatingsHistory(driverId: string): DbRatingsPointRow[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, dra.round AS round,
+      dra.pace AS pace, dra.wet_weather_pace AS wet_weather_pace,
+      dra.overtaking AS overtaking, dra.smoothness AS smoothness
+    FROM driver_race_attributes dra
+    JOIN seasons s ON s.id = dra.season_id
+    WHERE dra.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year, dra.round
+  `).all(driverId) as DbRatingsPointRow[]
+}
+
 export function getArchivedSeasons(): DbSeason[] {
   return getDb().prepare("SELECT * FROM seasons WHERE status = 'archived' ORDER BY year DESC").all() as DbSeason[]
 }

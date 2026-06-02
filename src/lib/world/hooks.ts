@@ -21,7 +21,7 @@ function useLiveStore(): LiveStore {
   return {
     year: s.year, drivers: s.drivers, teams: s.teams,
     driverStandings: s.driverStandings, constructorStandings: s.constructorStandings,
-    raceResults: s.raceResults, calendar: calendar2026,
+    raceResults: s.raceResults, calendar: calendar2026, statHistory: s.statHistory,
   }
 }
 
