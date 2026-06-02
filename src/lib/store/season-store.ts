@@ -423,7 +423,7 @@ export const useSeasonStore = create<SeasonStore>()(
         const driverMediaScores = computeDriverMediaScores(
           drivers, teams, raceResults, constructorRankInfo, totalTeams,
         )
-        const teamMediaScores = computeTeamMediaScores(teams, constructorHistory, constructorRankInfo)
+        let teamMediaScores = computeTeamMediaScores(teams, constructorHistory, constructorRankInfo)
 
         // 2. Net development this season = current stats vs the season-start snapshot
         //    (the actual improvement/decline already happened race-by-race).
@@ -467,6 +467,9 @@ export const useSeasonStore = create<SeasonStore>()(
             carPace: Math.max(5, lowestPace - 5 * (i + 1)),
           }))
           nextTeams = [...nextTeams, ...added]
+          // A brand-new team has no results — it's the LEAST attractive seat on the grid,
+          // not the mid-pack default. Otherwise the market poaches top drivers into it.
+          teamMediaScores = [...teamMediaScores, ...added.map((t) => ({ teamId: t.id, score: 0 }))]
         }
 
         // 4. Build the partial summary; later phases fill in their slices.
