@@ -8,7 +8,6 @@ import ReactCountryFlag from 'react-country-flag'
 import { useDriverCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { HonoursPanel } from '@/components/world/HonoursPanel'
-import { OverallRing } from '@/components/setup/OverallRing'
 import { StatBar } from '@/components/setup/StatBar'
 import { StatSlider } from '@/components/setup/StatSlider'
 import { STAT_KEYS, STAT_LABELS } from '@/components/setup/stat-utils'
@@ -17,16 +16,29 @@ import { calendar2026 } from '@/data/calendar'
 import { TeamLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
 import { ChampPill } from '@/components/world/pills'
-import { Panel, StatTile, TabBar } from '@/components/world/ui'
+import { Panel, TabBar } from '@/components/world/ui'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { DriverAvatar } from '@/components/world/DriverAvatar'
 import { RatingsProgressionChart } from '@/components/world/RatingsProgressionChart'
 import { MilestonesTimeline } from '@/components/world/MilestonesTimeline'
 import { TeammateH2HHistory } from '@/components/world/TeammateH2HHistory'
+import { CareerStatsTable } from '@/components/world/CareerStatsTable'
 import { buildDriverBio } from '@/lib/world/bio'
 import { buildMilestones } from '@/lib/world/milestones'
 
 type Tab = 'overview' | 'development' | 'results' | 'h2h'
+
+// Compact white stat for the header band (replaces the per-page rating ring). `tier`
+// drives visual hierarchy: 1 = headline ratings, 2 = marquee achievements, 3 = volume.
+function HeaderStat({ label, value, tier = 3 }: { label: string; value: number; tier?: 1 | 2 | 3 }) {
+  const size = tier === 1 ? 'text-4xl' : tier === 2 ? 'text-2xl' : 'text-lg'
+  return (
+    <div className="text-center">
+      <p className={`${size} font-bold tabular-nums leading-none text-[#FFFFFF]`}>{value.toLocaleString()}</p>
+      <p className={`${tier === 3 ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-widest text-[#FFFFFF] mt-1`}>{label}</p>
+    </div>
+  )
+}
 
 export default function DriverPage() {
   const { id } = useParams<{ id: string }>()
@@ -71,10 +83,10 @@ export default function DriverPage() {
 
           return (
             <>
-              {/* Header band */}
-              <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-5 flex-wrap">
+              {/* Header band — identity on the left, career totals + ratings filling the width */}
+              <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-6 flex-wrap">
                 <DriverAvatar driver={avatarDriver} teamColor={teamColor} size={88} className="border-2" />
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0">
                   <div className="flex items-center gap-3">
                     <ReactCountryFlag countryCode={(a?.nationality) || 'GB'} svg style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }} />
                     <h1 className="font-display text-2xl tracking-wider uppercase">{career.driverName}</h1>
@@ -90,15 +102,21 @@ export default function DriverPage() {
                     <p className="text-sm text-[#FFFFFF] mt-1 italic">Retired / historical driver</p>
                   )}
                 </div>
-                {a && (
-                  <div className="flex items-center gap-5">
-                    <OverallRing overall={a.overall} />
-                    <div className="text-center">
-                      <p className="text-2xl font-bold tabular-nums text-[#FFFFFF]">{a.peakPotential}</p>
-                      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Potential</p>
-                    </div>
-                  </div>
-                )}
+                <div className="flex-1 flex items-end justify-end gap-x-7 gap-y-3 flex-wrap">
+                  <HeaderStat label="Titles" value={career.totals.titles} tier={2} />
+                  <HeaderStat label="Wins" value={career.totals.wins} tier={3} />
+                  <HeaderStat label="Podiums" value={career.totals.podiums} tier={3} />
+                  <HeaderStat label="Poles" value={career.totals.poles} tier={3} />
+                  <HeaderStat label="Points" value={career.totals.points} tier={2} />
+                  <HeaderStat label="Seasons" value={career.totals.seasons} tier={3} />
+                  {a && (
+                    <>
+                      <span className="w-px h-10 bg-[#2A3142]" />
+                      <HeaderStat label="Overall" value={a.overall} tier={1} />
+                      <HeaderStat label="Potential" value={a.peakPotential} tier={1} />
+                    </>
+                  )}
+                </div>
               </div>
 
               <TabBar<Tab>
@@ -113,19 +131,7 @@ export default function DriverPage() {
               />
 
               {tab === 'overview' && (
-                <div className="grid gap-4 lg:grid-cols-12 items-start">
-                  {/* Career totals — compact tile block, not a full row */}
-                  <Panel title="Career" className="lg:col-span-4">
-                    <div className="grid grid-cols-3 gap-2.5">
-                      <StatTile label="Titles" value={career.totals.titles} />
-                      <StatTile label="Wins" value={career.totals.wins} />
-                      <StatTile label="Podiums" value={career.totals.podiums} />
-                      <StatTile label="Poles" value={career.totals.poles} />
-                      <StatTile label="Points" value={career.totals.points} />
-                      <StatTile label="Seasons" value={career.totals.seasons} />
-                    </div>
-                  </Panel>
-
+                <div className="grid gap-4 lg:grid-cols-12">
                   {/* Attributes */}
                   {a && (
                       <Panel className="lg:col-span-4">
@@ -227,16 +233,9 @@ export default function DriverPage() {
                       </Panel>
                     )}
 
-                  {/* Biography */}
-                  <Panel title="Biography" className="lg:col-span-4">
-                    <p className="text-sm leading-relaxed text-[#FFFFFF]">
-                      {bio ?? 'No biography available for this historical driver.'}
-                    </p>
-                  </Panel>
-
-                  {/* Recent form */}
+                  {/* Current season results */}
                   {a && (
-                    <Panel title="Recent form" flush className="lg:col-span-3">
+                    <Panel title={current ? `Current season results — ${current.year}` : 'Current season results'} flush className="lg:col-span-4">
                       {career.currentResults && career.currentResults.length > 0 ? (
                         <>
                           <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
@@ -271,9 +270,9 @@ export default function DriverPage() {
                     </Panel>
                   )}
 
-                  {/* Confidence — planned mechanic; the slot is reserved at the same size as the form card. */}
+                  {/* Confidence — planned mechanic; the slot is reserved at the same size as the season card. */}
                   {a && (
-                    <Panel title="Confidence" flush className="lg:col-span-3">
+                    <Panel title="Confidence" flush className="lg:col-span-4">
                       <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
                         <div className="text-center">
                           <p className="text-lg font-bold tabular-nums text-[#6B7280]">—</p>
@@ -291,14 +290,26 @@ export default function DriverPage() {
                     </Panel>
                   )}
 
+                  {/* Biography */}
+                  <Panel title="Biography" className="lg:col-span-4">
+                    <p className="text-sm leading-relaxed text-[#FFFFFF]">
+                      {bio ?? 'No biography available for this historical driver.'}
+                    </p>
+                  </Panel>
+
                   {/* Recent milestones */}
                   {milestones.length > 0 && (
-                    <Panel title="Recent milestones" flush className="lg:col-span-3">
+                    <Panel title="Recent milestones" flush className="lg:col-span-4">
                       <MilestonesTimeline events={milestones.slice(-5).reverse()} />
                     </Panel>
                   )}
 
-                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-3" columns={1} />
+                  <HonoursPanel feats={honours} loading={honoursLoading} className="lg:col-span-4" columns={1} />
+
+                  {/* Career stats — per-season basics */}
+                  <Panel title="Career stats" flush className="lg:col-span-12">
+                    <CareerStatsTable seasons={career.seasons} driverId={id} />
+                  </Panel>
                 </div>
               )}
 
@@ -317,43 +328,7 @@ export default function DriverPage() {
                 <div className="space-y-5">
                   {/* Career stats — basics */}
                   <Panel title="Career stats" flush>
-                    {career.seasons.length === 0 ? (
-                      <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse text-sm">
-                          <thead>
-                            <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                              <th className="text-left py-2 px-4 font-medium">Year</th>
-                              <th className="text-left py-2 px-3 font-medium">Team</th>
-                              <th className="text-right py-2 px-3 font-medium">Races</th>
-                              <th className="text-right py-2 px-3 font-medium">Wins</th>
-                              <th className="text-right py-2 px-3 font-medium">Podiums</th>
-                              <th className="text-right py-2 px-3 font-medium">Poles</th>
-                              <th className="text-center py-2 px-3 font-medium">WDC</th>
-                              <th className="text-right py-2 px-4 font-medium">Points</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {career.seasons.map((s) => (
-                              <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
-                                <td className="py-2 px-4 tabular-nums whitespace-nowrap">
-                                  <Link href={`/world/driver/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
-                                  {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
-                                </td>
-                                <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
-                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.races}</td>
-                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.wins}</td>
-                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.podiums}</td>
-                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.poles}</td>
-                                <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
-                                <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                    <CareerStatsTable seasons={career.seasons} driverId={id} />
                   </Panel>
 
                   {/* Complete results — per-round matrix */}
