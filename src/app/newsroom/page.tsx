@@ -5,6 +5,7 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
 import { generateNews, CATEGORY_LABELS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
+import { actionGetNewsSeasonYears, actionGetSeasonNews } from '@/lib/news/actions'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
@@ -25,9 +26,28 @@ export default function NewsroomPage() {
   const [hydrated, setHydrated] = useState(false)
   const [filter, setFilter] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedYear, setSelectedYear] = useState<number>(s.year)
+  const [archivedYears, setArchivedYears] = useState<number[]>([])
+  const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
+  const [loadingArchive, setLoadingArchive] = useState(false)
   useEffect(() => setHydrated(true), [])
 
-  const articles = useMemo(() => {
+  // Discover which past seasons have news to read.
+  useEffect(() => {
+    actionGetNewsSeasonYears().then(setArchivedYears).catch(() => setArchivedYears([]))
+  }, [])
+
+  const liveYear = s.year
+  const isLive = selectedYear === liveYear
+
+  // All selectable years, newest first; the live season always sits at the top.
+  const years = useMemo(() => {
+    const set = new Set<number>([liveYear, ...archivedYears])
+    return [...set].sort((a, b) => b - a)
+  }, [liveYear, archivedYears])
+
+  // Live season: generated client-side from the store (full attributes available).
+  const liveArticles = useMemo(() => {
     const ctx: NewsContext = {
       year: s.year,
       phase: s.phase,
@@ -38,13 +58,28 @@ export default function NewsroomPage() {
       driverStandings: s.driverStandings,
       constructorStandings: s.constructorStandings,
       upgradeEvents: s.allUpgradeEvents,
+      constructorHistory: s.constructorHistory,
       endOfSeason: s.endOfSeasonSummary,
       calendar: calendar2026,
+      live: true,
     }
     return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.driverStandings, s.constructorStandings, s.allUpgradeEvents, s.endOfSeasonSummary])
+  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.driverStandings, s.constructorStandings, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary])
 
-  // Distinct categories present, for the filter chips.
+  // Past season: fetched from the archive DB on demand.
+  useEffect(() => {
+    if (isLive) return
+    let cancelled = false
+    setLoadingArchive(true)
+    actionGetSeasonNews(selectedYear)
+      .then((a) => { if (!cancelled) setArchivedArticles(a) })
+      .catch(() => { if (!cancelled) setArchivedArticles([]) })
+      .finally(() => { if (!cancelled) setLoadingArchive(false) })
+    return () => { cancelled = true }
+  }, [isLive, selectedYear])
+
+  const articles = isLive ? liveArticles : archivedArticles
+
   const categories = useMemo(() => {
     const set = new Set(articles.map((a) => a.category))
     return [...set]
@@ -59,11 +94,37 @@ export default function NewsroomPage() {
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
-        <h1 className="font-display text-2xl tracking-wider uppercase">Newsroom</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="font-display text-2xl tracking-wider uppercase">Newsroom</h1>
+          {years.length > 1 && (
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-[#FFFFFF]">
+              Season
+              <select
+                value={selectedYear}
+                onChange={(e) => { setSelectedYear(Number(e.target.value)); setFilter(null); setSelectedId(null) }}
+                className="bg-[#0F1419] border border-[#2A3142] rounded px-2 py-1 text-sm font-semibold text-[#FFFFFF] focus:border-[#00D9FF] outline-none"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y} className="bg-[#0F1419] text-[#FFFFFF]">
+                    {y}{y === liveYear ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
 
-        {articles.length === 0 ? (
+        {!isLive && loadingArchive ? (
           <Panel title="Newsroom">
-            <p className="text-sm text-[#FFFFFF]">No news yet. Start a season and run a race, and the headlines will appear here.</p>
+            <p className="text-sm text-[#FFFFFF]">Loading the {selectedYear} archive…</p>
+          </Panel>
+        ) : articles.length === 0 ? (
+          <Panel title="Newsroom">
+            <p className="text-sm text-[#FFFFFF]">
+              {isLive
+                ? 'No news yet. Start a season and run a race, and the headlines will appear here.'
+                : `No archived news for ${selectedYear}.`}
+            </p>
           </Panel>
         ) : (
           <>
