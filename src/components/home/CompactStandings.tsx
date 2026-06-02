@@ -16,7 +16,7 @@ export function CompactStandings() {
     <div className="grid gap-5 sm:grid-cols-2">
       <Panel title="Drivers">
         <ol className="space-y-1">
-          {driverStandings.slice(0, 5).map((d, i) => (
+          {driverStandings.map((d, i) => (
             <li key={d.driverId} className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 min-w-0">
                 <span className="w-4 text-right tabular-nums text-[#FFFFFF]">{i + 1}</span>
@@ -32,7 +32,7 @@ export function CompactStandings() {
 
       <Panel title="Constructors">
         <ol className="space-y-1">
-          {constructorStandings.slice(0, 5).map((c, i) => (
+          {constructorStandings.map((c, i) => (
             <li key={c.teamId} className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 min-w-0">
                 <span className="w-4 text-right tabular-nums text-[#FFFFFF]">{i + 1}</span>
