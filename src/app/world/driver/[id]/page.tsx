@@ -191,21 +191,33 @@ export default function DriverPage() {
                     {/* Current season form — horizontal results strip (standings style) */}
                     <Panel title={current ? `This Season — ${current.year}` : 'This Season'} flush className={a ? 'lg:col-span-2' : 'lg:col-span-3'}>
                       {career.currentResults && career.currentResults.length > 0 ? (
-                        <div className="overflow-x-auto px-5 py-4">
-                          <div className="flex gap-1.5">
-                            {career.currentResults.map((r) => (
-                              <Link
-                                key={r.round}
-                                href={`/world/season/${current?.year}/${r.round}`}
-                                title={`${r.circuitName} · ${r.points} pts`}
-                                className="flex shrink-0 flex-col items-center gap-1"
-                              >
-                                <span className="text-[9px] font-bold tabular-nums uppercase tracking-widest text-[#FFFFFF]">{String(r.round).padStart(2, '0')}</span>
-                                <ResultChip position={r.finishPosition} />
-                              </Link>
-                            ))}
+                        <>
+                          <div className="flex items-center gap-8 px-5 py-3 border-b border-[#2A3142]">
+                            <div className="text-center">
+                              <p className="text-xl font-bold tabular-nums text-[#FFFFFF]">{current?.championshipFinish != null ? `P${current.championshipFinish}` : '—'}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Championship</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xl font-bold tabular-nums text-[#FFFFFF]">{current?.points ?? 0}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Points</p>
+                            </div>
                           </div>
-                        </div>
+                          <div className="overflow-x-auto px-5 py-4">
+                            <div className="flex gap-1.5">
+                              {career.currentResults.map((r) => (
+                                <Link
+                                  key={r.round}
+                                  href={`/world/season/${current?.year}/${r.round}`}
+                                  title={`${r.circuitName} · ${r.points} pts`}
+                                  className="flex shrink-0 flex-col items-center gap-1"
+                                >
+                                  <span className="text-[9px] font-bold tabular-nums uppercase tracking-widest text-[#FFFFFF]">{String(r.round).padStart(2, '0')}</span>
+                                  <ResultChip position={r.finishPosition} />
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        </>
                       ) : (
                         <p className="px-5 py-4 text-sm text-[#FFFFFF]">Not racing this season.</p>
                       )}
