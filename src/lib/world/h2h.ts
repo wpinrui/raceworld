@@ -65,18 +65,25 @@ export function aggregateTeammateH2H(rows: H2HRaceRow[]): TeammateH2H[] {
   return out.sort((a, b) => b.races - a.races)
 }
 
-// Merge two aggregated lists (archived + live). Their seasons never overlap in year, so
-// concatenating season lists and summing totals is sufficient.
+// Merge two aggregated lists (archived `a` + live `b`). Seasons are deduplicated by year
+// (the live list wins on any overlap, e.g. a year re-archived after a god-mode reset), and
+// totals are recomputed from the deduped seasons so nothing is double-counted.
 export function combineTeammateH2H(a: TeammateH2H[], b: TeammateH2H[]): TeammateH2H[] {
-  const byId = new Map<string, TeammateH2H>()
+  const byId = new Map<string, { name: string; seasons: Map<number, TeammateH2HSeason> }>()
   for (const list of [a, b]) {
     for (const t of list) {
-      const existing = byId.get(t.teammateId)
-      if (!existing) { byId.set(t.teammateId, { ...t, seasons: [...t.seasons] }); continue }
-      existing.teammateName = t.teammateName || existing.teammateName
-      existing.seasons = [...existing.seasons, ...t.seasons].sort((x, y) => y.year - x.year)
-      addInto(existing, t)
+      let entry = byId.get(t.teammateId)
+      if (!entry) { entry = { name: t.teammateName, seasons: new Map() }; byId.set(t.teammateId, entry) }
+      entry.name = t.teammateName || entry.name
+      for (const s of t.seasons) entry.seasons.set(s.year, s)
     }
   }
-  return [...byId.values()].sort((x, y) => y.races - x.races)
+  const out: TeammateH2H[] = []
+  for (const [teammateId, entry] of byId) {
+    const seasons = [...entry.seasons.values()].sort((x, y) => y.year - x.year)
+    const totals = blank()
+    for (const s of seasons) addInto(totals, s)
+    out.push({ teammateId, teammateName: entry.name, seasons, ...totals })
+  }
+  return out.sort((x, y) => y.races - x.races)
 }

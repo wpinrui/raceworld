@@ -56,16 +56,16 @@ function strengthSuffix(strength: TeamStrength): string {
   return ''
 }
 
-// "his pace, overtaking and his wet-weather pace" — first and last get "his".
-function knownForPhrase(labels: string[]): string {
-  if (labels.length === 1) return `his ${labels[0]}`
-  const head = [`his ${labels[0]}`, ...labels.slice(1, -1)].join(', ')
-  return `${head} and his ${labels[labels.length - 1]}`
+// "his pace, overtaking and his wet-weather pace" — first and last get the possessive.
+function knownForPhrase(labels: string[], poss: string): string {
+  if (labels.length === 1) return `${poss} ${labels[0]}`
+  const head = [`${poss} ${labels[0]}`, ...labels.slice(1, -1)].join(', ')
+  return `${head} and ${poss} ${labels[labels.length - 1]}`
 }
 
-function styleSentence(subjCap: string, knownFor: string[]): string {
+function styleSentence(subjCap: string, knownFor: string[], poss: string): string {
   if (knownFor.length === 0) return ''
-  return `${subjCap} is known for ${knownForPhrase(knownFor)}.`
+  return `${subjCap} is known for ${knownForPhrase(knownFor, poss)}.`
 }
 
 // Single descriptor noun for the opener, picked by what stands out most.
@@ -193,7 +193,7 @@ export function buildDriverBio(
 
   const opener = `${career.driverName} is ${ageArticle(a.age)} ${a.age}-year-old ${driverNoun(career, a, overallRank)} from ${country}.`
   const record = recordSentence(career, subjCap)
-  const style = styleSentence(subjCap, knownFor)
+  const style = styleSentence(subjCap, knownFor, p.poss)
   const age = ageSentence(a, subjCap, p.poss)
   const team = teamSentence(career, a, subjCap, p.subj, teamStrength)
   const contract = a.isFreeAgent

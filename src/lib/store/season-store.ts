@@ -631,6 +631,8 @@ export const useSeasonStore = create<SeasonStore>()(
             devPlans,
             allUpgradeEvents: [],
             endOfSeasonSummary: null,
+            seasonStartStats: snapshotStats(drivers),
+            statHistory: seedStatHistory(drivers),
             driverStandings: computeDriverStandings(drivers, teams, []),
             constructorStandings: computeConstructorStandings(teams, drivers, []),
           })
@@ -659,6 +661,8 @@ export const useSeasonStore = create<SeasonStore>()(
           allUpgradeEvents: [],
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
+          seasonStartStats: snapshotStats(drivers),
+          statHistory: seedStatHistory(drivers),
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })

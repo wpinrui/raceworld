@@ -51,6 +51,8 @@ export function archiveSeason(seasonId: number): void {
 export function resetDatabase(): void {
   const db = getDb()
   db.transaction(() => {
+    db.prepare('DELETE FROM driver_race_form').run()
+    db.prepare('DELETE FROM driver_race_attributes').run()
     db.prepare('DELETE FROM race_results').run()
     db.prepare('DELETE FROM races').run()
     db.prepare('DELETE FROM season_constructor_standings').run()
