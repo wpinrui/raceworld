@@ -24,6 +24,12 @@ export default function DriverPage() {
   const { career, loading } = useDriverCareer(id)
   const updateDriver = useSeasonStore((s) => s.updateDriver)
   const liveDriver = useSeasonStore((s) => s.drivers.find((d) => d.id === id))
+  const teams = useSeasonStore((s) => s.teams)
+  const allDrivers = useSeasonStore((s) => s.drivers)
+  const releaseDriver = useSeasonStore((s) => s.releaseDriver)
+  const extendContract = useSeasonStore((s) => s.extendContract)
+  const assignDriverToTeam = useSeasonStore((s) => s.assignDriverToTeam)
+  const [assignTeam, setAssignTeam] = useState('')
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
   const [hydrated, setHydrated] = useState(false)
@@ -142,6 +148,31 @@ export default function DriverPage() {
                                   {liveDriver.narrativeModifier > 0 ? '+' : ''}{liveDriver.narrativeModifier}
                                 </span>
                               </div>
+                            </div>
+
+                            {/* God-mode contract & seat overrides */}
+                            <div className="pt-3 border-t border-[#2A3142] space-y-2">
+                              <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Contract &amp; seat</p>
+                              {liveDriver.teamId !== '' ? (
+                                <div className="flex gap-2 flex-wrap">
+                                  <button onClick={() => extendContract(id, 1)} className="px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold text-[#FFFFFF] hover:bg-[#303848] transition-colors">Extend +1 season</button>
+                                  <button onClick={() => releaseDriver(id)} className="px-3 py-1.5 rounded-lg bg-[#DC143C]/80 text-xs font-semibold text-[#FFFFFF] hover:bg-[#DC143C] transition-colors">Release from contract</button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2 items-center">
+                                  <select value={assignTeam} onChange={(e) => setAssignTeam(e.target.value)} className={inputClass + ' flex-1'}>
+                                    <option value="">Assign to a team with an open seat…</option>
+                                    {teams.filter((t) => allDrivers.filter((d) => d.teamId === t.id).length < 2).map((t) => (
+                                      <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    disabled={!assignTeam}
+                                    onClick={() => { if (assignTeam) { assignDriverToTeam(id, assignTeam); setAssignTeam('') } }}
+                                    className="px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold text-[#FFFFFF] hover:bg-[#303848] disabled:opacity-40 transition-colors"
+                                  >Sign</button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : a ? (

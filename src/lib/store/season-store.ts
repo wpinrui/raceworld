@@ -137,6 +137,9 @@ interface SeasonStore {
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
+  releaseDriver: (id: string) => void
+  extendContract: (id: string, seasons: number) => void
+  assignDriverToTeam: (driverId: string, teamId: string) => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
@@ -215,6 +218,50 @@ export const useSeasonStore = create<SeasonStore>()(
       updateDriver: (id, patch) => {
         const { drivers, teams, raceResults } = get()
         const next = drivers.map((d) => (d.id === id ? { ...d, ...patch } : d))
+        set({
+          drivers: next,
+          driverStandings: computeDriverStandings(next, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, next, raceResults),
+        })
+      },
+
+      // God-mode: forcibly release a driver from their contract. The seat opens for the
+      // next market window; mid-season the team simply runs one car until it's filled.
+      releaseDriver: (id) => {
+        const { drivers, teams, raceResults, year } = get()
+        const next = drivers.map((d) =>
+          d.id === id ? { ...d, teamId: '', contractExpiresAfterSeason: year - 1, seasonsSinceF1Seat: 0 } : d,
+        )
+        set({
+          drivers: next,
+          driverStandings: computeDriverStandings(next, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, next, raceResults),
+        })
+      },
+
+      // God-mode: extend a driver's contract by N seasons (from the current year if it
+      // had already lapsed).
+      extendContract: (id, seasons) => {
+        const { drivers } = get()
+        const { year } = get()
+        const next = drivers.map((d) =>
+          d.id === id
+            ? { ...d, contractExpiresAfterSeason: Math.max(d.contractExpiresAfterSeason, year) + seasons }
+            : d,
+        )
+        set({ drivers: next })
+      },
+
+      // God-mode: manually assign an uncontracted driver to a team with an open seat,
+      // bypassing the market. No-op if the team already has two drivers.
+      assignDriverToTeam: (driverId, teamId) => {
+        const { drivers, teams, raceResults, year } = get()
+        if (drivers.filter((d) => d.teamId === teamId).length >= 2) return
+        const next = drivers.map((d) =>
+          d.id === driverId
+            ? { ...d, teamId, contractExpiresAfterSeason: year + 1, seasonsSinceF1Seat: 0 }
+            : d,
+        )
         set({
           drivers: next,
           driverStandings: computeDriverStandings(next, teams, raceResults),
