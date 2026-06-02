@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import ReactCountryFlag from 'react-country-flag'
 import { ChevronRight } from 'lucide-react'
@@ -29,9 +30,23 @@ export function RaceBanner({ simming, onSimTo }: Props) {
   const teams = useSeasonStore((s) => s.teams)
   const teamColor = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
 
+  // Mouse wheel over the calendar scrolls it horizontally instead of the whole page.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return // nothing to scroll — let the page move
+      e.preventDefault()
+      el.scrollLeft += e.deltaY + e.deltaX
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   return (
     <Panel title="Calendar" flush>
-      <div className="flex gap-2 overflow-x-auto px-5 py-4">
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto px-5 py-4">
         {calendar2026.map((c, idx) => {
           const round = idx + 1
           const completed = round < currentRound
