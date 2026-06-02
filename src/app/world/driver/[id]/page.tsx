@@ -331,9 +331,11 @@ export default function DriverPage() {
 
                   {/* Biography */}
                   <Panel title="Biography" fill className="lg:col-span-4">
-                    <p className="text-sm leading-relaxed text-[#FFFFFF]">
-                      {bio ?? 'No biography available for this historical driver.'}
-                    </p>
+                    <div className="space-y-2 text-sm leading-relaxed text-[#FFFFFF]">
+                      {(bio ?? 'No biography available for this historical driver.').split('\n\n').map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))}
+                    </div>
                   </Panel>
 
                   {/* Recent milestones (placeholder empty-state keeps the grid cell filled) */}

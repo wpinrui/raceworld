@@ -203,5 +203,12 @@ export function buildDriverBio(
       : `${subjCap} is signed until ${a.contractExpiresAfterSeason}.`
   const famously = famouslySentence(career, subjCap)
 
-  return [opener, record, style, age, team, contract, famously].filter(Boolean).join(' ')
+  // Group into paragraphs: who they are / career record / style + stage / current seat.
+  const paragraphs = [
+    opener,
+    [record, famously].filter(Boolean).join(' '),
+    [style, age].filter(Boolean).join(' '),
+    [team, contract].filter(Boolean).join(' '),
+  ].filter(Boolean)
+  return paragraphs.join('\n\n')
 }
