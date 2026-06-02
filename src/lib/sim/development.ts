@@ -141,7 +141,7 @@ export function applyUpgradeEvents(
 
     const team = teamMap.get(plan.teamId)
     if (team && paceDelta > 0) {
-      team.carPace = round1(Math.min(100, team.carPace + paceDelta))
+      team.carPace = round1(team.carPace + paceDelta)
       teamMap.set(plan.teamId, team)
     }
 
