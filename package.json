@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.2",
     "@faker-js/faker": "^10.4.0",
     "@radix-ui/react-tooltip": "^1.2.8",
     "better-sqlite3": "^12.10.0",
