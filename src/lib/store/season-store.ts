@@ -290,7 +290,9 @@ export const useSeasonStore = create<SeasonStore>()(
             if (p.teamId !== teamId) return p
             const failed = patch.failed ?? p.pendingFailed ?? false
             const rawDelta = patch.paceDelta ?? p.pendingPaceDelta ?? 0
-            const paceDelta = failed ? 0 : Math.max(0, Math.round(rawDelta * 10) / 10)
+            // Keep the rolled/edited impact even when failure is forced — delivery already
+            // zeroes a failed upgrade (applyUpgradeEvents), so toggling failure off restores it.
+            const paceDelta = Math.max(0, Math.round(rawDelta * 10) / 10)
             return { ...p, pendingFailed: failed, pendingPaceDelta: paceDelta }
           }),
         })
@@ -650,7 +652,7 @@ export const useSeasonStore = create<SeasonStore>()(
         if (!state.pendingGridChanges) state.pendingGridChanges = { additions: [], removals: [] }
         if (state.devPlans) {
           state.devPlans = state.devPlans.map((p) => {
-            if (p.pendingPaceDelta !== undefined || p.pendingFailed !== undefined) return p
+            if (p.pendingPaceDelta !== undefined && p.pendingFailed !== undefined) return p
             const rolled = rollUpgrade(p.cycleLength, p.fundingTier, Math.random)
             return { ...p, pendingPaceDelta: rolled.paceDelta, pendingFailed: rolled.failed }
           })

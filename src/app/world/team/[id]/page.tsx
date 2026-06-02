@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useTeamCareer } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { isOffSeason } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
@@ -22,6 +23,9 @@ export default function TeamPage() {
   const devPlan = useSeasonStore((s) => s.devPlans.find((p) => p.teamId === id))
   const currentRound = useSeasonStore((s) => s.currentRound)
   const onGrid = useSeasonStore((s) => s.teams.some((t) => t.id === id))
+  // Only editable while the season is running: upgrades are delivered during races, and
+  // startNewSeason re-rolls every dev plan from scratch, so off-season edits wouldn't survive.
+  const upgradeEditable = useSeasonStore((s) => !isOffSeason(s.phase))
   const [tab, setTab] = useState<Tab>('overview')
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => setHydrated(true), [])
@@ -109,7 +113,7 @@ export default function TeamPage() {
                   </div>
 
                   {/* God-mode: inspect and edit the next car upgrade before it lands. */}
-                  {onGrid && devPlan && (
+                  {onGrid && devPlan && upgradeEditable && (
                     <UpgradeOverride teamId={id} devPlan={devPlan} currentRound={currentRound} totalRounds={TOTAL_ROUNDS} />
                   )}
                 </div>

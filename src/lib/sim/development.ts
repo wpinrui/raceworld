@@ -131,9 +131,9 @@ export function applyUpgradeEvents(
 
     // Deliver the upgrade rolled ahead of time (and possibly god-mode edited).
     // Saves from before pre-rolling won't have it — roll lazily as a fallback.
-    const prerolled = plan.pendingPaceDelta === undefined && plan.pendingFailed === undefined
+    const prerolled = plan.pendingPaceDelta === undefined || plan.pendingFailed === undefined
       ? rollUpgrade(plan.cycleLength, plan.fundingTier, rng)
-      : { paceDelta: plan.pendingPaceDelta ?? 0, failed: plan.pendingFailed ?? false }
+      : { paceDelta: plan.pendingPaceDelta, failed: plan.pendingFailed }
     const failed = prerolled.failed
     const paceDelta = failed ? 0 : prerolled.paceDelta
 
