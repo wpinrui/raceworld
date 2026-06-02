@@ -42,7 +42,7 @@ export function TabBar<T extends string>({
   onChange: (k: T) => void
 }) {
   return (
-    <div className="flex gap-1 border-b border-[#2A3142] overflow-x-auto">
+    <div className="flex gap-1 border-b border-[#2A3142] overflow-x-auto overflow-y-hidden">
       {tabs.map((t) => (
         <button
           key={t.key}
