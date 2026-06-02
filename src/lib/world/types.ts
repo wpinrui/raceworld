@@ -10,6 +10,7 @@ export interface CareerSeason {
   races: number
   wins: number
   podiums: number
+  poles: number
   points: number
   championshipFinish: number | null
   results: (number | null)[] // per-round finish (null = DNF); length = rounds contested

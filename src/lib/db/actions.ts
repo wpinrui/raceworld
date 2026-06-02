@@ -135,7 +135,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     const idx = ds.findIndex((d) => d.driverId === driverId)
     return {
       year: r.seasonYear, teamId: r.teamId, teamName: r.teamName,
-      races: r.races, wins: r.wins, podiums: r.podiums, points: r.points,
+      races: r.races, wins: r.wins, podiums: r.podiums, poles: r.poles, points: r.points,
       championshipFinish: idx >= 0 ? idx + 1 : null,
       results: idx >= 0 ? ds[idx].results : [],
       inProgress: false,

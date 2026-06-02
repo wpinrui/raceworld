@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Pencil, Check } from 'lucide-react'
+import { Pencil, Check, Lock } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import { useDriverCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -19,8 +19,14 @@ import { CountrySelect } from '@/components/CountrySelect'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { DriverAvatar } from '@/components/world/DriverAvatar'
+import { RatingsProgressionChart } from '@/components/world/RatingsProgressionChart'
+import { MilestonesTimeline } from '@/components/world/MilestonesTimeline'
+import { TeammateH2HHistory } from '@/components/world/TeammateH2HHistory'
+import { buildDriverBio } from '@/lib/world/bio'
+import { buildMilestones } from '@/lib/world/milestones'
 
-type Tab = 'overview' | 'seasons'
+type Tab = 'overview' | 'development' | 'results' | 'h2h'
 
 export default function DriverPage() {
   const { id } = useParams<{ id: string }>()
@@ -30,6 +36,7 @@ export default function DriverPage() {
   const liveDriver = useSeasonStore((s) => s.drivers.find((d) => d.id === id))
   const teams = useSeasonStore((s) => s.teams)
   const allDrivers = useSeasonStore((s) => s.drivers)
+  const seasonYear = useSeasonStore((s) => s.year)
   const releaseDriver = useSeasonStore((s) => s.releaseDriver)
   const extendContract = useSeasonStore((s) => s.extendContract)
   const assignDriverToTeam = useSeasonStore((s) => s.assignDriverToTeam)
@@ -51,14 +58,25 @@ export default function DriverPage() {
         {career && (() => {
           const a = career.attributes
           const current = career.seasons.find((s) => s.inProgress)
+          const teamColor = teams.find((t) => t.id === a?.teamId)?.color ?? '#6B7280'
+          const avatarDriver = {
+            id: career.driverId,
+            name: career.driverName,
+            nationality: a?.nationality ?? 'GB',
+            gender: a?.gender ?? ('male' as const),
+            photoUrl: liveDriver?.photoUrl,
+          }
+          const bio = a ? buildDriverBio(career, a, seasonYear) : null
+          const milestones = buildMilestones(career)
+
           return (
             <>
               {/* Header band */}
               <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-5 flex-wrap">
-                {a && <OverallRing overall={a.overall} />}
+                <DriverAvatar driver={avatarDriver} teamColor={teamColor} size={88} className="border-2" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3">
-                    {a && <ReactCountryFlag countryCode={a.nationality || 'GB'} svg style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }} />}
+                    <ReactCountryFlag countryCode={(a?.nationality) || 'GB'} svg style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }} />
                     <h1 className="font-display text-2xl tracking-wider uppercase">{career.driverName}</h1>
                   </div>
                   {a ? (
@@ -72,17 +90,31 @@ export default function DriverPage() {
                     <p className="text-sm text-[#FFFFFF] mt-1 italic">Retired / historical driver</p>
                   )}
                 </div>
+                {a && (
+                  <div className="flex items-center gap-5">
+                    <OverallRing overall={a.overall} />
+                    <div className="text-center">
+                      <p className="text-2xl font-bold tabular-nums text-[#FFFFFF]">{a.peakPotential}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Potential</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <TabBar<Tab>
-                tabs={[{ key: 'overview', label: 'Overview' }, { key: 'seasons', label: 'Seasons & Races' }]}
+                tabs={[
+                  { key: 'overview', label: 'Overview' },
+                  { key: 'development', label: 'Development' },
+                  { key: 'results', label: 'Results' },
+                  { key: 'h2h', label: 'Head-to-Head' },
+                ]}
                 active={tab}
                 onChange={setTab}
               />
 
               {tab === 'overview' && (
                 <div className="space-y-5">
-                  {/* Honours */}
+                  {/* Career totals */}
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                     <StatTile label="Titles" value={career.totals.titles} />
                     <StatTile label="Wins" value={career.totals.wins} />
@@ -137,6 +169,10 @@ export default function DriverPage() {
                                 <input type="number" value={liveDriver.contractExpiresAfterSeason} onChange={(e) => updateDriver(id, { contractExpiresAfterSeason: Number(e.target.value) })} className={inputClass} />
                               </div>
                             </div>
+                            <div>
+                              <label className="text-xs text-[#FFFFFF] block mb-1">Photo URL (override)</label>
+                              <input type="text" placeholder="https://… (blank = generated avatar)" value={liveDriver.photoUrl ?? ''} onChange={(e) => updateDriver(id, { photoUrl: e.target.value || undefined })} className={inputClass} />
+                            </div>
                             <div className="space-y-2.5">
                               {STAT_KEYS.map((k) => (
                                 <StatSlider key={k} label={STAT_LABELS[k]} value={liveDriver[k]} onChange={(v) => updateDriver(id, { [k]: v })} />
@@ -179,19 +215,28 @@ export default function DriverPage() {
                               )}
                             </div>
                           </div>
-                        ) : a ? (
+                        ) : (
                           <div className="space-y-2">
                             <StatBar label="Pace" value={a.pace} />
                             <StatBar label="Wet" value={a.wetWeatherPace} />
                             <StatBar label="Overtaking" value={a.overtaking} />
                             <StatBar label="Smoothness" value={a.smoothness} />
                           </div>
-                        ) : null}
+                        )}
                       </Panel>
                     )}
 
-                    {/* Current season form — horizontal results strip (standings style) */}
-                    <Panel title={current ? `This Season — ${current.year}` : 'This Season'} flush className={a ? 'lg:col-span-2' : 'lg:col-span-3'}>
+                    {/* Biography */}
+                    <Panel title="Biography" className={a ? 'lg:col-span-2' : 'lg:col-span-3'}>
+                      <p className="text-sm leading-relaxed text-[#FFFFFF]">
+                        {bio ?? 'No biography available for this historical driver.'}
+                      </p>
+                    </Panel>
+                  </div>
+
+                  {/* Recent form + Confidence (reserved, equal footprint) */}
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    <Panel title={current ? `This Season — ${current.year}` : 'This Season'} flush>
                       {career.currentResults && career.currentResults.length > 0 ? (
                         <>
                           <div className="flex items-center gap-8 px-5 py-3 border-b border-[#2A3142]">
@@ -224,49 +269,134 @@ export default function DriverPage() {
                         <p className="px-5 py-4 text-sm text-[#FFFFFF]">Not racing this season.</p>
                       )}
                     </Panel>
+
+                    {/* Confidence — planned mechanic; the slot is reserved at full size. */}
+                    <Panel title="Confidence" flush>
+                      <div className="flex items-center gap-8 px-5 py-3 border-b border-[#2A3142]">
+                        <div className="text-center">
+                          <p className="text-xl font-bold tabular-nums text-[#6B7280]">—</p>
+                          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Morale</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xl font-bold tabular-nums text-[#6B7280]">—</p>
+                          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Form</p>
+                        </div>
+                      </div>
+                      <div className="px-5 py-4 flex items-center gap-2 text-sm text-[#FFFFFF]">
+                        <Lock size={14} className="text-[#6B7280]" />
+                        Driver confidence is coming in a future update.
+                      </div>
+                    </Panel>
                   </div>
+
+                  {milestones.length > 0 && (
+                    <Panel title="Recent milestones" flush>
+                      <MilestonesTimeline events={milestones.slice(-5).reverse()} />
+                    </Panel>
+                  )}
 
                   <HonoursPanel feats={honours} loading={honoursLoading} />
                 </div>
               )}
 
-              {tab === 'seasons' && (
-                <Panel title="Career" flush>
-                  {career.seasons.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-sm">
-                        <thead>
-                          <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                            <th className="text-left py-2 px-4 font-medium sticky left-0 bg-[#1E2431]">Year</th>
-                            <th className="text-left py-2 px-3 font-medium">Team</th>
-                            {Array.from({ length: calendar2026.length }, (_, i) => (
-                              <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px] tabular-nums font-medium">{i + 1}</th>
-                            ))}
-                            <th className="text-center py-2 px-3 font-medium">WDC</th>
-                            <th className="text-right py-2 px-4 font-medium">Points</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {career.seasons.map((s) => (
-                            <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
-                              <td className="py-2 px-4 tabular-nums whitespace-nowrap sticky left-0 bg-[#1E2431]">
-                                <Link href={`/world/driver/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
-                                {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
-                              </td>
-                              <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
-                              {Array.from({ length: calendar2026.length }, (_, i) => (
-                                <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} />
-                              ))}
-                              <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
-                              <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
+              {tab === 'development' && (
+                <div className="space-y-5">
+                  <Panel title="Ratings progression" flush>
+                    <RatingsProgressionChart history={career.ratingsHistory} />
+                  </Panel>
+                  <Panel title="Career milestones" flush>
+                    <MilestonesTimeline events={[...milestones].reverse()} />
+                  </Panel>
+                </div>
+              )}
+
+              {tab === 'results' && (
+                <div className="space-y-5">
+                  {/* Career stats — basics */}
+                  <Panel title="Career stats" flush>
+                    {career.seasons.length === 0 ? (
+                      <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
+                          <thead>
+                            <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+                              <th className="text-left py-2 px-4 font-medium">Year</th>
+                              <th className="text-left py-2 px-3 font-medium">Team</th>
+                              <th className="text-right py-2 px-3 font-medium">Races</th>
+                              <th className="text-right py-2 px-3 font-medium">Wins</th>
+                              <th className="text-right py-2 px-3 font-medium">Podiums</th>
+                              <th className="text-right py-2 px-3 font-medium">Poles</th>
+                              <th className="text-center py-2 px-3 font-medium">WDC</th>
+                              <th className="text-right py-2 px-4 font-medium">Points</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                          </thead>
+                          <tbody>
+                            {career.seasons.map((s) => (
+                              <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
+                                <td className="py-2 px-4 tabular-nums whitespace-nowrap">
+                                  <Link href={`/world/driver/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
+                                  {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
+                                </td>
+                                <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.races}</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.wins}</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.podiums}</td>
+                                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.poles}</td>
+                                <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
+                                <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Panel>
+
+                  {/* Complete results — per-round matrix */}
+                  <Panel title="Complete results" flush>
+                    {career.seasons.length === 0 ? (
+                      <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
+                          <thead>
+                            <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+                              <th className="text-left py-2 px-4 font-medium sticky left-0 bg-[#1E2431]">Year</th>
+                              <th className="text-left py-2 px-3 font-medium">Team</th>
+                              {Array.from({ length: calendar2026.length }, (_, i) => (
+                                <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px] tabular-nums font-medium">{calendar2026[i]?.code ?? i + 1}</th>
+                              ))}
+                              <th className="text-center py-2 px-3 font-medium">WDC</th>
+                              <th className="text-right py-2 px-4 font-medium">Points</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {career.seasons.map((s) => (
+                              <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
+                                <td className="py-2 px-4 tabular-nums whitespace-nowrap sticky left-0 bg-[#1E2431]">
+                                  <Link href={`/world/driver/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
+                                  {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
+                                </td>
+                                <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
+                                {Array.from({ length: calendar2026.length }, (_, i) => (
+                                  <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} />
+                                ))}
+                                <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
+                                <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Panel>
+                </div>
+              )}
+
+              {tab === 'h2h' && (
+                <Panel title="Teammate head-to-head" flush>
+                  <TeammateH2HHistory records={career.teammateH2H} driverName={career.driverName} />
                 </Panel>
               )}
             </>

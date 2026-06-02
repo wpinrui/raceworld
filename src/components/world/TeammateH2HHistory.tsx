@@ -42,7 +42,11 @@ export function TeammateH2HHistory({ records, driverName }: { records: TeammateH
   if (records.length === 0) {
     return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No teammate head-to-head yet — it builds once {driverName} has shared a garage for a race.</p>
   }
-  const toggle = (id: string) => setOpen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggle = (id: string) => setOpen((p) => {
+    const n = new Set(p)
+    if (n.has(id)) n.delete(id); else n.add(id)
+    return n
+  })
 
   return (
     <div className="px-5 py-4 space-y-4">
