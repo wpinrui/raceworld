@@ -1,17 +1,15 @@
-export function ResultCell({ position }: { position: number | null | undefined }) {
+export function ResultChip({ position }: { position: number | null | undefined }) {
   // Future round — render nothing
   if (position === undefined) {
-    return <td className="px-0.5 py-0.5"><div className="w-8 h-7" /></td>
+    return <div className="w-8 h-7" />
   }
 
   if (position === null) {
     return (
-      <td className="px-0.5 py-0.5">
-        <div className="w-8 h-7 flex items-center justify-center rounded text-[10px] font-bold"
-          style={{ backgroundColor: '#5C2475', color: '#E8BBFF' }}>
-          DNF
-        </div>
-      </td>
+      <div className="w-8 h-7 flex items-center justify-center rounded text-[10px] font-bold"
+        style={{ backgroundColor: '#5C2475', color: '#E8BBFF' }}>
+        DNF
+      </div>
     )
   }
 
@@ -24,11 +22,17 @@ export function ResultCell({ position }: { position: number | null | undefined }
   else                      { bg = '#1A4A66'; fg = '#A8DEFF' }
 
   return (
+    <div className="w-8 h-7 flex items-center justify-center rounded text-[11px] font-bold"
+      style={{ backgroundColor: bg, color: fg }}>
+      {position}
+    </div>
+  )
+}
+
+export function ResultCell({ position }: { position: number | null | undefined }) {
+  return (
     <td className="px-0.5 py-0.5">
-      <div className="w-8 h-7 flex items-center justify-center rounded text-[11px] font-bold"
-        style={{ backgroundColor: bg, color: fg }}>
-        {position}
-      </div>
+      <ResultChip position={position} />
     </td>
   )
 }

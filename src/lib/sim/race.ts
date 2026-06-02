@@ -15,15 +15,12 @@ import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
+import { sampleNormal } from './rng-utils'
 
 export function rollForms(driverIds: string[]): Record<string, number> {
   const forms: Record<string, number> = {}
   for (const id of driverIds) {
-    const r1 = Math.random()
-    const r2 = Math.random()
-    const r3 = Math.random()
-    const val = 5 + (r1 + r2 + r3 - 1.5) * 3
-    forms[id] = Math.min(10, Math.max(0, val))
+    forms[id] = Math.min(10, Math.max(0, sampleNormal(5, 1.8, Math.random)))
   }
   return forms
 }
@@ -44,8 +41,12 @@ export function initRaceState(
 
   // Sample one set of tyre assumptions per team — both drivers share these
   const teamAssumptions: Record<string, TeamTyreAssumptions> = {}
+  // Track compatibility: one roll per team this race (Normal(5, 1.5), clamped
+  // 0–10). The deviation from 5 adds straight to car pace for both cars.
+  const trackCompat: Record<string, number> = {}
   for (const team of teams) {
     teamAssumptions[team.id] = sampleTeamAssumptions(circuit.laps, strategyNoise)
+    trackCompat[team.id] = Math.max(0, Math.min(10, sampleNormal(5, 1.5, Math.random)))
   }
 
   // Sort by grid position
@@ -104,6 +105,7 @@ export function initRaceState(
     paused: false,
     strategyNoise,
     teamAssumptions,
+    trackCompat,
   }
 }
 
@@ -255,10 +257,13 @@ export function simulateLap(
       carAheadLapTime = lapTimesThisLap.get(carAheadState.driverId) ?? null
     }
 
-    // 2e. Compute lap time
+    // 2e. Compute lap time — track compatibility shifts the car's pace for this
+    // race (compat 5 = neutral; every point above/below adds to car pace).
+    const compat = state.trackCompat?.[team.id] ?? 5
+    const raceTeam = compat === 5 ? team : { ...team, carPace: team.carPace + (compat - 5) }
     const lapResult = computeLapTime({
       driver,
-      team,
+      team: raceTeam,
       tyre: current.currentTyre,
       form: current.form,
       fuelLaps: current.fuelLaps,

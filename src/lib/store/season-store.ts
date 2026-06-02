@@ -7,11 +7,41 @@ import type {
   SeasonPhase,
   DriverStanding,
   ConstructorStanding,
+  TeamDevPlan,
+  DevUpgradeEvent,
+  ConstructorSeasonRecord,
+  EndOfSeasonSummary,
+  DriverProgressionEvent,
 } from '@/lib/sim/types'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
+import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle } from '@/lib/sim/development'
+import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
+import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool } from '@/lib/sim/market'
+import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
+import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 
 const TOTAL_ROUNDS = calendar2026.length
+
+// Pre-season testing always runs at Barcelona/Catalunya.
+const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[0]
+
+type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
+
+// Snapshot the four stats of every grid driver, keyed by id.
+function snapshotStats(drivers: Driver[]): StatSnapshot {
+  const snap: StatSnapshot = {}
+  for (const d of drivers) {
+    if (d.teamId === '') continue
+    snap[d.id] = {
+      pace: d.pace,
+      wetWeatherPace: d.wetWeatherPace,
+      overtaking: d.overtaking,
+      smoothness: d.smoothness,
+    }
+  }
+  return snap
+}
 
 function computeDriverStandings(
   drivers: Driver[],
@@ -20,7 +50,7 @@ function computeDriverStandings(
 ): DriverStanding[] {
   const map = new Map<string, DriverStanding>()
 
-  for (const driver of drivers) {
+  for (const driver of drivers.filter((d) => d.teamId !== '')) {
     const team = teams.find((t) => t.id === driver.teamId)
     map.set(driver.id, {
       driverId: driver.id,
@@ -43,15 +73,7 @@ function computeDriverStandings(
     }
   }
 
-  return [...map.values()].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    // Countback: compare number of each position 1→22. DNF (null) never matches, so it loses to any finish.
-    for (let pos = 1; pos <= 22; pos++) {
-      const diff = b.results.filter((r) => r === pos).length - a.results.filter((r) => r === pos).length
-      if (diff !== 0) return diff
-    }
-    return 0
-  })
+  return sortDriverStandings([...map.values()])
 }
 
 function computeConstructorStandings(
@@ -86,18 +108,7 @@ function computeConstructorStandings(
     }
   }
 
-  return [...map.values()].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    return b.wins - a.wins
-  })
-}
-
-// Reset car paces to initial order (75, 70, 65, ...) with a floor of 5
-function resetCarPaces(teams: Team[]): Team[] {
-  return teams.map((team, idx) => ({
-    ...team,
-    carPace: Math.max(5, 75 - idx * 5),
-  }))
+  return sortConstructorStandings([...map.values()])
 }
 
 interface SeasonStore {
@@ -109,18 +120,33 @@ interface SeasonStore {
   raceResults: RaceResult[][]  // [round-1]
   dbSeasonId: number | null
 
+  // M3 state
+  devPlans: TeamDevPlan[]
+  constructorHistory: ConstructorSeasonRecord[]
+  allUpgradeEvents: DevUpgradeEvent[]
+  endOfSeasonSummary: EndOfSeasonSummary | null
+  pendingNextSeasonState: { drivers: Driver[]; teams: Team[] } | null
+  // Snapshot of each grid driver's stats at season start, for the net-development summary.
+  seasonStartStats: Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
+
   // Computed
   driverStandings: DriverStanding[]
   constructorStandings: ConstructorStanding[]
 
   // Actions
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
+  updateGrid: (drivers: Driver[], teams: Team[]) => void
+  updateDriver: (id: string, patch: Partial<Driver>) => void
   recordRaceResult: (results: RaceResult[]) => void
   advanceRound: () => void
   endSeason: () => void
+  runContractNegotiations: () => void
+  runDriverRetirements: () => void
+  runPreSeasonTesting: () => void
   setDbSeasonId: (id: number) => void
   startNewSeason: () => void
   resetToIdle: () => void
+  loadConstructorHistory: (history: ConstructorSeasonRecord[]) => void
 }
 
 export const useSeasonStore = create<SeasonStore>()(
@@ -133,62 +159,301 @@ export const useSeasonStore = create<SeasonStore>()(
       currentRound: 1,
       raceResults: [],
       dbSeasonId: null,
+      devPlans: [],
+      constructorHistory: [],
+      allUpgradeEvents: [],
+      endOfSeasonSummary: null,
+      pendingNextSeasonState: null,
+      seasonStartStats: {},
       driverStandings: [],
       constructorStandings: [],
 
       initSeason: (drivers, teams, year) => {
+        const { constructorHistory } = get()
+        const fundingTiers = computeFundingTiers(teams, constructorHistory)
+        const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+        // Keep existing free agents from store; generate pool only if none present
+        const existingPool = get().drivers.filter((d) => d.teamId === '')
+        const poolDrivers = existingPool.length > 0
+          ? existingPool
+          : generateFreeAgentPool(25, year, drivers, Math.random)
+        const allDrivers = [
+          ...drivers.filter((d) => d.teamId !== ''),
+          ...poolDrivers,
+        ]
         set({
           phase: 'pre-race',
           year,
-          drivers,
+          drivers: allDrivers,
           teams,
           currentRound: 1,
           raceResults: [],
           dbSeasonId: null,
-          driverStandings: computeDriverStandings(drivers, teams, []),
-          constructorStandings: computeConstructorStandings(teams, drivers, []),
+          devPlans,
+          allUpgradeEvents: [],
+          endOfSeasonSummary: null,
+          pendingNextSeasonState: null,
+          seasonStartStats: snapshotStats(allDrivers),
+          driverStandings: computeDriverStandings(allDrivers, teams, []),
+          constructorStandings: computeConstructorStandings(teams, allDrivers, []),
+        })
+      },
+
+      // Persist in-place edits to the grid (driver market screen) without
+      // resetting the season. Recompute standings so renames / team moves show.
+      updateGrid: (drivers, teams) => {
+        const { raceResults } = get()
+        set({
+          drivers,
+          teams,
+          driverStandings: computeDriverStandings(drivers, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
+        })
+      },
+
+      // God-mode edit of a single driver (e.g. from the world driver page).
+      updateDriver: (id, patch) => {
+        const { drivers, teams, raceResults } = get()
+        const next = drivers.map((d) => (d.id === id ? { ...d, ...patch } : d))
+        set({
+          drivers: next,
+          driverStandings: computeDriverStandings(next, teams, raceResults),
+          constructorStandings: computeConstructorStandings(teams, next, raceResults),
         })
       },
 
       recordRaceResult: (results) => {
-        const { drivers, teams, raceResults, currentRound } = get()
+        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents } = get()
         const updated = [...raceResults]
         updated[currentRound - 1] = results
+
+        // Deliver any car upgrades due this round (funding penalty is baked into the upgrade).
+        const { upgradeEvents, updatedTeams, updatedDevPlans } =
+          applyUpgradeEvents(currentRound, teams, devPlans, Math.random)
+
+        // Driver development applies after each race.
+        const { updatedDrivers } = applyRaceProgression(drivers, Math.random)
+
         set({
           raceResults: updated,
           phase: 'post-race',
-          driverStandings: computeDriverStandings(drivers, teams, updated),
-          constructorStandings: computeConstructorStandings(teams, drivers, updated),
+          teams: updatedTeams,
+          drivers: updatedDrivers,
+          devPlans: updatedDevPlans,
+          allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
+          driverStandings: computeDriverStandings(updatedDrivers, updatedTeams, updated),
+          constructorStandings: computeConstructorStandings(updatedTeams, updatedDrivers, updated),
         })
       },
 
       advanceRound: () => {
-        const { currentRound } = get()
+        const { currentRound, endSeason } = get()
         if (currentRound >= TOTAL_ROUNDS) {
-          set({ phase: 'end-of-season' })
+          endSeason()
         } else {
           set({ currentRound: currentRound + 1, phase: 'pre-race' })
         }
       },
 
-      endSeason: () => set({ phase: 'end-of-season' }),
+      endSeason: () => {
+        const {
+          drivers,
+          teams,
+          raceResults,
+          year,
+          constructorHistory,
+          allUpgradeEvents,
+          driverStandings,
+          constructorStandings,
+          seasonStartStats,
+        } = get()
+
+        const totalTeams = teams.length
+        const constructorRankInfo = constructorStandings.map((cs, idx) => ({
+          teamId: cs.teamId,
+          points: cs.points,
+          finalPosition: idx + 1,
+        }))
+
+        // 1. Media scores
+        const driverMediaScores = computeDriverMediaScores(
+          drivers, teams, raceResults, constructorRankInfo, totalTeams,
+        )
+        const teamMediaScores = computeTeamMediaScores(teams, constructorHistory, constructorRankInfo)
+
+        // 2. Net development this season = current stats vs the season-start snapshot
+        //    (the actual improvement/decline already happened race-by-race).
+        const progressionEvents: DriverProgressionEvent[] = []
+        for (const d of drivers) {
+          const start = seasonStartStats[d.id]
+          if (!start) continue
+          for (const stat of ['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const) {
+            if (Math.abs(d[stat] - start[stat]) >= 0.05) {
+              progressionEvents.push({
+                driverId: d.id, driverName: d.name, stat,
+                before: start[stat], after: d[stat],
+                direction: d[stat] > start[stat] ? 'improved' : 'declined',
+              })
+            }
+          }
+        }
+
+        // 3. Age every driver one year. Reshuffle, market and attrition are
+        //    deferred to their own off-season phases (run lazily on entry).
+        const agedDrivers = ageDrivers(drivers)
+
+        // 4. Build the partial summary; later phases fill in their slices.
+        const summary: EndOfSeasonSummary = {
+          seasonYear: year,
+          driverChampion: driverStandings[0]?.driverId ?? '',
+          constructorChampion: constructorStandings[0]?.teamId ?? '',
+          progressionEvents,
+          retiredDriverIds: [],
+          carReshuffleOldPaces: {},
+          carReshuffleNewPaces: {},
+          marketMoves: [],
+          droppedDrivers: [],
+          seatContests: [],
+          driverMediaScores,
+          teamMediaScores,
+          upgradeEvents: allUpgradeEvents,
+          preSeasonTest: null,
+        }
+
+        // 5. Update constructor history (prepend current season, dedupe, keep ≤55)
+        const newHistoryEntries: ConstructorSeasonRecord[] = constructorRankInfo.map((cs) => ({
+          seasonYear: year,
+          teamId: cs.teamId,
+          finalPosition: cs.finalPosition,
+          points: cs.points,
+        }))
+        const updatedHistory = [
+          ...newHistoryEntries,
+          ...constructorHistory,
+        ]
+          .filter(
+            (r, idx, arr) =>
+              arr.findIndex((x) => x.seasonYear === r.seasonYear && x.teamId === r.teamId) === idx,
+          )
+          .slice(0, 55)
+
+        set({
+          phase: 'end-of-season',
+          endOfSeasonSummary: summary,
+          constructorHistory: updatedHistory,
+          pendingNextSeasonState: { drivers: agedDrivers, teams },
+        })
+      },
+
+      // Phase 2: free agents sign for the coming season.
+      runContractNegotiations: () => {
+        const { pendingNextSeasonState, endOfSeasonSummary, year } = get()
+        if (!pendingNextSeasonState || !endOfSeasonSummary) return
+        const { drivers, teams } = pendingNextSeasonState
+
+        const { updatedDrivers, marketMoves, seatContests, droppedDrivers } = runDriverMarket(
+          drivers,
+          teams,
+          endOfSeasonSummary.driverMediaScores,
+          endOfSeasonSummary.teamMediaScores,
+          year + 1,
+          Math.random,
+        )
+
+        set({
+          phase: 'contract-negotiations',
+          endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests, droppedDrivers },
+          pendingNextSeasonState: { drivers: updatedDrivers, teams },
+        })
+      },
+
+      // Phase 3: drivers without a seat for 5 seasons leave the market.
+      runDriverRetirements: () => {
+        const { pendingNextSeasonState, endOfSeasonSummary } = get()
+        if (!pendingNextSeasonState || !endOfSeasonSummary) return
+        const { drivers, teams } = pendingNextSeasonState
+
+        const { drivers: survivors, retiredDriverIds } = applyMarketAttrition(drivers)
+
+        set({
+          phase: 'driver-retirements',
+          endOfSeasonSummary: { ...endOfSeasonSummary, retiredDriverIds },
+          pendingNextSeasonState: { drivers: survivors, teams },
+        })
+      },
+
+      // Phase 4: car reshuffle for next season, revealed obliquely via a test session.
+      runPreSeasonTesting: () => {
+        const { pendingNextSeasonState, endOfSeasonSummary } = get()
+        if (!pendingNextSeasonState || !endOfSeasonSummary) return
+        const { drivers, teams } = pendingNextSeasonState
+
+        const { updatedTeams: reshuffledTeams, oldPaces, newPaces } =
+          computeCarReshuffle(teams, Math.random)
+        const preSeasonTest = runPreSeasonTest(drivers, reshuffledTeams, TEST_CIRCUIT, Math.random)
+
+        set({
+          phase: 'pre-season-testing',
+          endOfSeasonSummary: {
+            ...endOfSeasonSummary,
+            carReshuffleOldPaces: oldPaces,
+            carReshuffleNewPaces: newPaces,
+            preSeasonTest,
+          },
+          pendingNextSeasonState: { drivers, teams: reshuffledTeams },
+        })
+      },
 
       setDbSeasonId: (id) => set({ dbSeasonId: id }),
 
       startNewSeason: () => {
-        const { drivers, teams, year } = get()
-        const resetTeams = resetCarPaces(teams)
+        const { pendingNextSeasonState, year, constructorHistory } = get()
         const newYear = year + 1
+
+        if (!pendingNextSeasonState) {
+          // Fallback: should not normally occur
+          const { drivers, teams } = get()
+          const fundingTiers = computeFundingTiers(teams, constructorHistory)
+          const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+          set({
+            phase: 'idle',
+            year: newYear,
+            currentRound: 1,
+            raceResults: [],
+            dbSeasonId: null,
+            devPlans,
+            allUpgradeEvents: [],
+            endOfSeasonSummary: null,
+            driverStandings: computeDriverStandings(drivers, teams, []),
+            constructorStandings: computeConstructorStandings(teams, drivers, []),
+          })
+          return
+        }
+
+        const { drivers: pendingDrivers, teams } = pendingNextSeasonState
+        // Ensure at least 8 free agents in the pool; top up if needed
+        const existingPool = pendingDrivers.filter((d) => d.teamId === '')
+        const topUp = existingPool.length < 15
+          ? generateFreeAgentPool(15 - existingPool.length, newYear, pendingDrivers, Math.random)
+          : []
+        const drivers = [...pendingDrivers, ...topUp]
+        const fundingTiers = computeFundingTiers(teams, constructorHistory)
+        const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+
         set({
           phase: 'idle',
           year: newYear,
-          drivers: drivers.map((d) => ({ ...d })),
-          teams: resetTeams,
+          drivers,
+          teams,
           currentRound: 1,
           raceResults: [],
           dbSeasonId: null,
-          driverStandings: computeDriverStandings(drivers, resetTeams, []),
-          constructorStandings: computeConstructorStandings(resetTeams, drivers, []),
+          devPlans,
+          allUpgradeEvents: [],
+          endOfSeasonSummary: null,
+          pendingNextSeasonState: null,
+          driverStandings: computeDriverStandings(drivers, teams, []),
+          constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
       },
 
@@ -199,14 +464,18 @@ export const useSeasonStore = create<SeasonStore>()(
           currentRound: 1,
           raceResults: [],
           dbSeasonId: null,
+          allUpgradeEvents: [],
+          endOfSeasonSummary: null,
+          pendingNextSeasonState: null,
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
       },
+
+      loadConstructorHistory: (history) => set({ constructorHistory: history }),
     }),
     {
       name: 'raceworld-season',
-      // Persist everything except computed fields (they'll be recomputed on hydration)
       partialize: (state) => ({
         phase: state.phase,
         year: state.year,
@@ -215,6 +484,12 @@ export const useSeasonStore = create<SeasonStore>()(
         currentRound: state.currentRound,
         raceResults: state.raceResults,
         dbSeasonId: state.dbSeasonId,
+        devPlans: state.devPlans,
+        constructorHistory: state.constructorHistory,
+        allUpgradeEvents: state.allUpgradeEvents,
+        endOfSeasonSummary: state.endOfSeasonSummary,
+        pendingNextSeasonState: state.pendingNextSeasonState,
+        seasonStartStats: state.seasonStartStats,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

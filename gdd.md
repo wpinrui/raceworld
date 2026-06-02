@@ -36,7 +36,7 @@ Funding tier is tracked by the relative performance of the teams in the past fiv
 Tier 1 teams receive no penalty to their upgrades. Tier 2 teams will receive a 0.1 per race penalty. Tier 3 teams will receive a 0.15 per race penalty. Tier 4 teams will receive a 0.2 per race penalty. For instance, if a tier 3 team has a 4-race development cycle upgrade that randomised to a +3.7, then they will receive a penalty of 0.15\*4 = 0.6 -> their upgrade becomes a +3.1 upgrade. If the upgrade has a smaller value than the penalty or fails, then the result is clamped to 0 (no negative development should occur.)
 
 ## Driver progression curve
-Each driver's age is tracked, along with their peak potential and prime end. The period before a driver reaches their peak is when they will develop at a fast rate (slowing down as they age but continuing to be positive until their potential is reached). At their prime end age, whether or not they have reached their potential, they will start to decline, with the decline accelerating as they age further past their prime end. Different drivers have different potentials and prime end ages. Every season, a new batch of random drivers in the market are generated. These new drivers are generated such that they cannot immediately be the top drivers, but some can have the potential to do so.
+Each driver's age is tracked, along with their peak potential and prime end. The period before a driver reaches their peak is when they will develop at a fast rate (slowing down as they age but continuing to be positive until their potential is reached). At their prime end age, whether or not they have reached their potential, they will start to decline, with the decline accelerating as they age further past their prime end. Different drivers have different potentials and prime end ages. At setup, a pool of free-agent drivers is generated; thereafter, new drivers are generated each season only as needed to fill any seats left vacant after the free-agent market has run. These generated drivers cannot immediately be the top drivers, but some can have the potential to do so.
 
 The progression happens after each race. Generation happens after each season. After each season, drivers who have not been in F1 for five years are removed from the driver market. Drivers who have driven in F1 who are retired will have their history archived.
 
@@ -54,6 +54,7 @@ Wet-weather ability: the driver's pace and the wet weather ability will be summe
 Fuel load: every 1 lap of fuel corresponds to 0.05 seconds.
 Tyre delta: soft tyres have no modifier, medium tyres add 0.7 seconds per lap, hard tyres add 1.5 seconds per lap. Intermediate tyres add 2.5 seconds per lap. Wet tyres add 4 seconds per lap.
 Form modifier: a driver's form can range between 0 and 10. This form lasts the entire race weekend (including qualifying). At 5, there is no bonus or penalty. Every +1 or -1 will add to the pace calculation directly. Form is randomised pre-race as a normal distribution, and the player can view this pre-race and edit the form.
+Track compatibility: each team will have a normally distributed randomised value that affects both drivers equally, since it affects the car pace. It ranges from 0 to 10. At 5, there is no bonus or penalty. Every +1 or -1 will add to the car's pace calculation directly. It is randomised pre-race for both cars in the team. 
 A per circuit modifier will add a flat X seconds to the final time, where X can be positive or negative or zero. This allows laptimes to look different across different circuits. It serves a purely cosmetic function and does not affect any relative times.
 During the race, the gap to car ahead affects the lap time calculation. If the gap to car ahead is between 1s and 2s, the car behind cannot overtake the car in front unless the car behind is more than 2*x seconds faster that lap, where x is the gap before the start of the lap (and is thus clamped to a laptime that causes that car to be 0.5 seconds + some random noise between 0 and 0.5 seconds behind that car). 
 If the gap to the car ahead is between 0 and 1s, and the calculated lap time is faster than the car ahead, then the player's overtaking stat will be used: ((1 - gap in s) + (overtaking stat/2))/2 will be the probability of the overtake happening. If the overtaking happens, the position swaps and no other penalty is applied to either car. If the overtaking fails, then the player's laptime is clamped such that the gap to the car in front remains some noise between 0 and 0.5 seconds.
@@ -131,17 +132,26 @@ A 5-year contract is a special case reserved exclusively for the single highest-
 ## Free agency and seat-filling
 At the end of each season, drivers whose `contract_expires_after_season` matches the completed season, and who are not retiring, enter the free agent pool.
 
-Seat-filling proceeds in order of media driver score (highest first), giving the best available drivers first pick:
+Seat-filling uses **driver-proposing deferred acceptance** (Gale–Shapley with team capacity). This yields a *stable* outcome: there is no free agent and team who would both rather have each other than what they ended up with. Both sides matter — a driver cannot take a seat the team doesn't also want them in.
 
-1. Each free agent samples a perceived attractiveness for every team with an open seat: `perceived = media_team_score + Normal(0, 10)`. They choose the team with the highest sampled score.
-2. The team simultaneously samples a perceived value for each driver expressing interest: `perceived = media_driver_score + Normal(0, 10)`. The team and driver sign if they are each other's top mutual choice.
-3. Signed drivers and filled seats are removed from the pool. Repeat until no seats remain or no free agents are left.
+Preferences are sampled **once** and then held fixed for the whole process:
+
+- Each free agent ranks every team that has an open seat by perceived attractiveness: `perceived = media_team_score + Normal(0, 10)`.
+- Each team scores every free agent by perceived value: `perceived = media_driver_score + Normal(0, 10)` (plus the incumbent bonus below, minus the ring-rust penalty below).
+
+The matching then runs:
+
+1. Each unsigned free agent proposes to the most attractive team on their list that they have not yet approached.
+2. Each team tentatively holds the best proposers up to its number of open seats (by the team's perceived value) and turns the rest away.
+3. A turned-away driver proposes to their next choice; a held driver can later be bumped if a stronger proposer arrives. Repeat until no driver has an untried team left.
+
+Tentative holds become signings once it settles. Any seat still empty (more seats than free agents) is filled by a generated rookie. For each team, the free agents it turned away are recorded against the seats it filled — the raw material for "who beat whom, and why" transfer stories. Proposing in any order produces the same stable result, so processing order does not matter.
 
 **Media team score** is derived from constructors championship points over the last 1–3 available seasons, weighted 3:2:1 toward the most recent, normalised to a 0–100 scale.
 
-**Incumbent advantage**: when a team evaluates a driver already on their roster whose contract just expired, that driver's media score receives a +5 flat bonus — loyalty friction without a separate mechanic.
+**Incumbent advantage**: when a team evaluates a driver already on its roster whose contract just expired, that driver's perceived value receives a +5 flat bonus — loyalty friction without a separate mechanic. (Team side only; a driver has no built-in pull to stay.)
 
-Mid-season vacancy (caused by a god-mode forced retirement) is filled immediately from uncontracted drivers only, using the same matching logic but with only that one seat open.
+**Ring rust**: when a team evaluates a free agent who is currently out of F1 (held no seat last season), their perceived value takes a small flat penalty. Teams favour proven drivers, so the grid does not churn wildly between the pool and seated drivers every year — but the penalty is small enough that a standout prospect still forces their way in.
 
 ## God-mode overrides
 The player can, at any time during the End of season or Pre-season windows:
@@ -153,13 +163,13 @@ The player can, at any time during the End of season or Pre-season windows:
 Teams can only enter or exit the grid via a god-mode action, and only take effect at the start of the **following** season (i.e., the remainder of the current season plus one full additional season plays out under the existing grid before the change takes effect). New teams enter with the lowest-ranked car pace on the grid. Departing teams are removed cleanly at season end; any drivers on their roster re-enter the driver market.
 
 # Driver Retirement
-The only trigger for a driver retiring from F1 is their **media-perceived ability** falling below an acceptable threshold. A driver whose perceived ability is assessed as too low at the end of a season will retire and have their history archived.
+A driver who has not held an F1 seat for five consecutive seasons is removed from the driver market. Drivers who have driven in F1 keep their archived history when removed; generated drivers who never made the grid are discarded.
 
-## Media-perceived ability algorithm
-The media-perceived score is computed at the end of each season and used for retirement assessment, contract length, the Home Screen driver rankings, and pundit predictions. It is a number on a 0–100 scale derived from four inputs.
+# Media-perceived ability
+The media-perceived score is computed at the end of each season and used for contract length, the Home Screen driver rankings, and pundit predictions. It is a number on a 0–100 scale derived from four inputs.
 
 **Component A — Raw results score (weight: 50%)**
-The driver's championship points expressed as a percentile within the current season standings. The last-place driver scores 0, the leader scores 100. This is the dominant signal because it is what the media most visibly tracks.
+The driver's championship points expressed as a percentile **within the current grid** (drivers who actually raced; free agents are excluded so they don't dilute the percentile). The last-place driver scores 0, the leader scores 100. This is the dominant signal because it is what the media most visibly tracks.
 
 **Component B — Teammate H2H score (weight: 30%)**
 Captures how the driver performed against their teammate in the same car. The H2H ratio combines qualifying and race head-to-head:
@@ -167,10 +177,10 @@ Captures how the driver performed against their teammate in the same car. The H2
 - Race H2H: fraction of races where the driver finished ahead of their teammate, among races both drivers finished (0–1)
 - Combined ratio: `h2h_ratio = 0.4 × qual_h2h + 0.6 × race_h2h`
 
-To account for teammate quality, the score is anchored to the **teammate's Component A score** rather than a neutral 50:
-> `B = teammate_A + (h2h_ratio − 0.5) × 40`, clamped to [0, 100]
+The score swings around a **neutral baseline of 50**:
+> `B = clamp( 50 + (h2h_ratio − 0.5) × 40 , 0, 100 )`
 
-Beating a Verstappen-tier teammate lifts you into the 90s; dominating an Ocon-tier teammate barely moves the needle.
+An even split scores 50, dominating a teammate reaches 70, being dominated drops to 30. B is deliberately **not** anchored to the teammate's own results: a bad car suppresses both drivers' points, so anchoring B to the teammate's score would penalise a driver twice for the same bad car. Beating your teammate is worth the same regardless of the car — absolute performance is already captured by Component A.
 
 **Component C — Car-adjusted overperformance (weight: 20%)**
 Measures how much the driver outperformed their expected share of team points, scaled by how hard their car made that task:
@@ -186,11 +196,14 @@ This partially rewards drivers who maximise an uncompetitive car without allowin
 A constant per-driver value in the range [−20, +20], defaulting to 0. Added to the final weighted score after A, B, and C are combined. Represents the media halo (or deficit) a driver carries independent of results — some drivers are perceived as generational talents, others are chronically underrated or overrated by pundits. When pre-populating real-world 2026 drivers, sensible non-zero defaults are applied. Procedurally generated drivers always start at 0. The player can edit this value at any time via god mode.
 
 **Final score**
-> `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier, 0, 100)`
+> `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier + pace_narrative, 0, 100)`
 
-A driver whose `media_score` falls below a threshold (to be tuned during implementation, roughly 25–30) at end of season is assessed as no longer F1-calibre and retires.
+**Free agents (didn't race)** run through the *same* formula, which lands them at a low baseline — `A = 0` (no points), `B = 50` (no teammate), `C = 50` (no constructor) → `0.5×0 + 0.3×50 + 0.2×50 = 25`. With no results to judge, their raw pace is the only signal, so it is converted into a narrative swing:
+> `pace_narrative = clamp( (pace − 68) × 0.8 , −20, +20 )`  (free agents only; 0 for everyone who raced)
 
-## Natural in-race retirements
+So an average-pace free agent sits well below proven grid drivers, while a genuinely fast prospect can climb toward the midfield — but rarely past a proven driver, especially once the market's out-of-F1 ring-rust penalty is applied on top.
+
+# In-race retirements
 Each lap, every active driver has a flat per-lap mechanical retirement probability of **0.28%** (calibrated to a ~58-lap race, targeting an average of 3 retirements per 20-car field). Longer circuits with more laps will naturally produce slightly more retirements; shorter circuits slightly fewer. No other factors influence the mechanical retirement rate. When triggered, the retirement is treated identically to a god-mode forced retirement — the car is out and cannot return.
 
 # Standings Screen — Colour Coding

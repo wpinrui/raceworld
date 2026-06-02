@@ -6,6 +6,7 @@ export interface Driver {
   id: string
   name: string
   teamId: string
+  nationality: string    // ISO 3166-1 alpha-2
   pace: number           // 0-100
   wetWeatherPace: number // 0-100
   overtaking: number     // 0-100
@@ -15,6 +16,7 @@ export interface Driver {
   primeEnd: number       // age at which decline starts
   narrativeModifier: number // -20 to +20
   contractExpiresAfterSeason: number
+  seasonsSinceF1Seat?: number // consecutive seasons without an F1 seat; removed from the market at 5
 }
 
 export interface Team {
@@ -110,6 +112,7 @@ export interface RaceState {
   paused: boolean
   strategyNoise: number                                    // 0–1; tunable
   teamAssumptions: Record<string, TeamTyreAssumptions>     // teamId -> compound -> wear rate/lap
+  trackCompat?: Record<string, number>                     // teamId -> 0–10 (5 neutral); (compat−5) adds to car pace this race
 }
 
 export interface GodModeAction {
@@ -121,7 +124,27 @@ export interface GodModeAction {
 
 // --- Season / standings types ---
 
-export type SeasonPhase = 'idle' | 'pre-race' | 'post-race' | 'end-of-season'
+export type SeasonPhase =
+  | 'idle'
+  | 'pre-race'
+  | 'post-race'
+  | 'end-of-season'
+  | 'contract-negotiations'
+  | 'driver-retirements'
+  | 'pre-season-testing'
+
+// Off-season phases that run sequentially after the final race, each presenting
+// its own slice of info before rolling into the next pre-season.
+export const OFF_SEASON_PHASES: SeasonPhase[] = [
+  'end-of-season',
+  'contract-negotiations',
+  'driver-retirements',
+  'pre-season-testing',
+]
+
+export function isOffSeason(phase: SeasonPhase): boolean {
+  return OFF_SEASON_PHASES.includes(phase)
+}
 
 export interface RaceResult {
   driverId: string
@@ -156,4 +179,131 @@ export interface ConstructorStanding {
   points: number
   wins: number
   results: (number | null)[][]  // [driverIdx][roundIdx]
+}
+
+// --- M3: Multi-season dynamics types ---
+
+export type FundingTier = 1 | 2 | 3 | 4
+
+export interface TeamDevPlan {
+  teamId: string
+  cycleLength: number          // 3–6 races per upgrade
+  nextUpgradeRound: number
+  fundingTier: FundingTier
+  cumulativePenalty: number
+}
+
+export interface DevUpgradeEvent {
+  teamId: string
+  round: number
+  paceDelta: number
+  failed: boolean
+}
+
+export interface ConstructorSeasonRecord {
+  seasonYear: number
+  teamId: string
+  finalPosition: number
+  points: number
+}
+
+export interface DriverProgressionEvent {
+  driverId: string
+  driverName: string
+  stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness'
+  before: number
+  after: number
+  direction: 'improved' | 'declined' | 'unchanged'
+}
+
+export interface DriverMediaScore { driverId: string; score: number }
+export interface TeamMediaScore   { teamId: string;   score: number }
+
+// Full media breakdown for the power-rankings view — the component values that
+// feed `media_score = 0.5·a + 0.3·b + 0.2·c + narrative + paceNarrative`.
+export interface DriverMediaBreakdown {
+  driverId: string
+  a: number              // results percentile (grid only)
+  b: number              // teammate H2H
+  c: number              // car-adjusted overperformance
+  narrative: number      // god-mode narrative modifier
+  paceNarrative: number  // pace-derived swing (free agents only)
+  score: number
+}
+
+export interface MarketMove {
+  driverId: string
+  driverName: string
+  fromTeamId: string | null
+  toTeamId: string
+  toTeamName: string
+  contractLength: number
+  contractExpiresAfterSeason: number
+  mediaScore: number
+  isResignation: boolean   // re-signed with the same team (from === to)
+}
+
+export interface SeatContestDriver {
+  driverId: string
+  driverName: string
+  teamPerceived: number   // the team's perceived value: driver media + incumbent bonus + noise
+  incumbent: boolean      // the driver's expiring contract was with this team
+}
+
+// A driver whose contract expired and who was NOT re-signed anywhere — dropped
+// to the free-agent pool this off-season.
+export interface DroppedDriver {
+  driverId: string
+  driverName: string
+  fromTeamId: string
+  fromTeamName: string
+  mediaScore: number
+}
+
+// A team's seat battle from the deferred-acceptance market — raw material for
+// newsroom transfer stories. `winners` are who the team signed, `rivals` are the
+// free agents it turned away; teamPerceived is the "why".
+export interface SeatContest {
+  teamId: string
+  teamName: string
+  seats: number                    // open seats the team was filling
+  winners: SeatContestDriver[]     // signed, best-perceived first
+  rivals: SeatContestDriver[]      // applied but turned away, best-perceived first
+}
+
+// Fuel load is revealed to the player only as a qualitative band, never the
+// exact number — so a fast lap on a full tank reads as genuinely quick.
+export type FuelBand = 'full' | 'heavy' | 'medium' | 'light'
+
+export interface PreSeasonTestEntry {
+  teamId: string
+  teamName: string
+  driverId: string
+  driverName: string
+  tyre: TyreCompound
+  fuelBand: FuelBand
+  lapTime: number   // simulated representative lap (seconds)
+  carPace: number   // true new-season pace; only surfaced via god-mode reveal
+}
+
+export interface PreSeasonTest {
+  circuitName: string
+  entries: PreSeasonTestEntry[]   // sorted by lapTime ascending
+}
+
+export interface EndOfSeasonSummary {
+  seasonYear: number
+  driverChampion: string
+  constructorChampion: string
+  progressionEvents: DriverProgressionEvent[]
+  retiredDriverIds: string[]
+  carReshuffleOldPaces: Record<string, number>
+  carReshuffleNewPaces: Record<string, number>
+  marketMoves: MarketMove[]
+  droppedDrivers: DroppedDriver[]
+  seatContests: SeatContest[]
+  driverMediaScores: DriverMediaScore[]
+  teamMediaScores: TeamMediaScore[]
+  upgradeEvents: DevUpgradeEvent[]
+  preSeasonTest: PreSeasonTest | null
 }

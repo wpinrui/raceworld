@@ -32,4 +32,12 @@ CREATE TABLE IF NOT EXISTS race_results (
   q2_time_ms REAL,
   q3_time_ms REAL
 );
+
+CREATE TABLE IF NOT EXISTS season_constructor_standings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  season_id INTEGER NOT NULL REFERENCES seasons(id),
+  team_id TEXT NOT NULL,
+  final_position INTEGER NOT NULL,
+  points INTEGER NOT NULL DEFAULT 0
+);
 `

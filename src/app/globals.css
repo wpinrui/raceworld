@@ -10,7 +10,7 @@
 
 :root {
   --background: #0F1419;
-  --foreground: #E8EAED;
+  --foreground: #FFFFFF;
 }
 
 @theme inline {
@@ -25,7 +25,7 @@
   --color-surface-card: #1E2431;
   --color-surface-raised: #2A3142;
   --color-surface-hover: #303848;
-  --color-text-primary: #E8EAED;
+  --color-text-primary: #FFFFFF;
   --color-text-secondary: #FFFFFF;
   --color-text-muted: #FFFFFF;
   --color-text-inverse: #0F1419;
@@ -49,12 +49,21 @@ body {
   height: 100%;
   overflow: hidden;
   background: #0F1419;
-  color: #E8EAED;
+  color: #FFFFFF;
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
 
 .font-f1 {
   font-family: 'Formula1', system-ui, sans-serif;
+}
+
+/* Tailwind v4's reset drops the pointer cursor on buttons — put it back. */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
 }
 
 /* Thin custom scrollbar */
