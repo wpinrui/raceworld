@@ -67,6 +67,12 @@ button:disabled {
   cursor: not-allowed !important;
 }
 
+/* This is a game, not a form — drop the focus outline ring globally. */
+*:focus,
+*:focus-visible {
+  outline: none;
+}
+
 /* Thin custom scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
