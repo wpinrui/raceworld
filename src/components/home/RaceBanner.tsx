@@ -139,7 +139,7 @@ export function RaceBanner({ simming, onSimTo }: Props) {
               <button
                 disabled={simming}
                 onClick={() => onSimTo(round)}
-                className="mt-1 inline-flex items-center justify-center gap-1 rounded bg-[#2A3142] px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[#FFFFFF] transition-colors hover:bg-[#303848] disabled:opacity-40"
+                className="mt-1 inline-flex cursor-pointer items-center justify-center gap-1 rounded bg-[#2A3142] px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[#FFFFFF] transition-colors hover:bg-[#303848] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {simming ? 'Simulating…' : 'Sim to here'}
               </button>

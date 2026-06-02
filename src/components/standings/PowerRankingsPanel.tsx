@@ -37,7 +37,7 @@ function Th({ k, label, right, sortKey, sortDir, onSort }: {
   return (
     <th
       onClick={() => onSort(k)}
-      className={`pb-2 px-3 font-medium select-none whitespace-nowrap ${right ? 'text-right' : 'text-left'} ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#00D9FF]'}`}
+      className={`pb-2 px-3 font-medium select-none whitespace-nowrap cursor-pointer ${right ? 'text-right' : 'text-left'} ${active ? 'text-[#00D9FF]' : 'text-[#FFFFFF] hover:text-[#00D9FF]'}`}
     >
       <span className={`inline-flex items-center gap-0.5 ${right ? 'justify-end w-full' : ''}`}>
         {label}
