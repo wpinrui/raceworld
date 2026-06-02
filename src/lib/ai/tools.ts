@@ -155,9 +155,10 @@ function classificationFor(year: number, round: number) {
       finish: r.dnf ? null : r.finish_position, dnf: !!r.dnf, points: r.points,
       lapsCompleted: r.laps_completed,
       // Gap to the winner in seconds (null for the winner and for DNFs). This is the ONLY
-      // source of finishing margins — the model must not invent gaps.
+      // source of finishing margins; the model must not invent gaps.
+      // NB: total_time_ms is misnamed — it stores SECONDS, not milliseconds.
       gapToWinnerSeconds: !r.dnf && r.total_time_ms != null && leaderTime != null && r.total_time_ms > leaderTime
-        ? Math.round((r.total_time_ms - leaderTime) / 1000 * 1000) / 1000
+        ? Math.round((r.total_time_ms - leaderTime) * 1000) / 1000
         : null,
     })),
   }
