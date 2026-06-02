@@ -213,8 +213,8 @@ export default function SetupPage() {
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-[#FFFFFF]">Car pace</span>
                     <input
-                      type="number" min={0} max={100} value={team.carPace}
-                      onChange={(e) => updateTeam(team.id, { carPace: Math.min(100, Math.max(0, Number(e.target.value))) })}
+                      type="number" min={0} value={team.carPace}
+                      onChange={(e) => updateTeam(team.id, { carPace: Math.max(0, Number(e.target.value)) })}
                       className="w-12 px-1 py-0.5 rounded bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none text-center"
                     />
                   </div>
