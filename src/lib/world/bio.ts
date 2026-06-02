@@ -146,17 +146,17 @@ function famouslySentence(career: DriverCareer, subjCap: string): string {
   return `${base}${tail}.`
 }
 
-function ageSentence(a: DriverAttributes, subj: string, poss: string): string {
+function ageSentence(a: DriverAttributes, subjCap: string, poss: string): string {
   const gap = a.primeEnd - a.age
   const ceiling = a.peakPotential - a.overall
   if (gap > 3) {
     return ceiling > 5
-      ? `At ${a.age} ${subj} is still improving.`
-      : `At ${a.age} ${subj} is already close to ${poss} best level.`
+      ? `${subjCap} is still improving.`
+      : `${subjCap} is already close to ${poss} best level.`
   }
-  if (gap >= -1) return `At ${a.age} ${subj} is in ${poss} prime.`
-  if (gap >= -4) return `At ${a.age} ${subj} is just past ${poss} best.`
-  return `At ${a.age} ${subj} is near the end of ${poss} career.`
+  if (gap >= -1) return `${subjCap} is in ${poss} prime.`
+  if (gap >= -4) return `${subjCap} is just past ${poss} best.`
+  return `${subjCap} is near the end of ${poss} career.`
 }
 
 function teamSentence(career: DriverCareer, a: DriverAttributes, subjCap: string, subj: string, strength: TeamStrength): string {
@@ -194,7 +194,7 @@ export function buildDriverBio(
   const opener = `${career.driverName} is ${ageArticle(a.age)} ${a.age}-year-old ${driverNoun(career, a, overallRank)} from ${country}.`
   const record = recordSentence(career, subjCap)
   const style = styleSentence(subjCap, knownFor)
-  const age = ageSentence(a, p.subj, p.poss)
+  const age = ageSentence(a, subjCap, p.poss)
   const team = teamSentence(career, a, subjCap, p.subj, teamStrength)
   const contract = a.isFreeAgent
     ? ''
