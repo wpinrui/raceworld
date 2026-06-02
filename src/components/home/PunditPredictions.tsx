@@ -48,7 +48,6 @@ function predict(drivers: Driver[], teams: Team[], raceResults: RaceResult[][], 
       return { driver: d, team, recent, base, metric }
     })
     .sort((a, b) => a.metric - b.metric)
-    .slice(0, 8)
     .map((p, i) => ({ driver: p.driver, team: p.team, recent: p.recent, trend: p.base - (i + 1) }))
 }
 
@@ -79,7 +78,8 @@ export function PunditPredictions() {
 
   return (
     <Panel title={`Pundit Predictions · ${nextRace.name}`} flush>
-      <ul>
+      {/* Show ~10; the rest of the grid scrolls. */}
+      <ul className="max-h-[23rem] overflow-y-auto">
         {predictions.map((p, i) => (
           <li key={p.driver.id} className="flex items-center gap-3 border-b border-[#2A3142] px-5 py-2 last:border-b-0">
             <span className="w-6 text-sm font-bold tabular-nums text-[#FFFFFF]">P{i + 1}</span>

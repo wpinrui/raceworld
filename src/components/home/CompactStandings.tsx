@@ -1,9 +1,19 @@
 'use client'
 
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { Panel } from '@/components/world/ui'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+
+function HeaderLink({ tab, children }: { tab: 'drivers' | 'constructors'; children: React.ReactNode }) {
+  return (
+    <Link href={`/standings?tab=${tab}`} className="inline-flex items-center gap-1 hover:text-[#00D9FF] transition-colors">
+      {children}
+      <ChevronRight size={11} />
+    </Link>
+  )
+}
 
 export function CompactStandings() {
   const driverStandings = useSeasonStore((s) => s.driverStandings)
@@ -14,7 +24,7 @@ export function CompactStandings() {
 
   return (
     <div className="grid gap-5 sm:grid-cols-2">
-      <Panel title="Drivers">
+      <Panel title={<HeaderLink tab="drivers">Drivers</HeaderLink>}>
         <ol className="space-y-1">
           {driverStandings.map((d, i) => (
             <li key={d.driverId} className="flex items-center justify-between text-sm">
@@ -27,10 +37,9 @@ export function CompactStandings() {
             </li>
           ))}
         </ol>
-        <Link href="/standings" className="mt-2 inline-block text-xs text-[#FFFFFF] hover:text-[#00D9FF]">full standings →</Link>
       </Panel>
 
-      <Panel title="Constructors">
+      <Panel title={<HeaderLink tab="constructors">Constructors</HeaderLink>}>
         <ol className="space-y-1">
           {constructorStandings.map((c, i) => (
             <li key={c.teamId} className="flex items-center justify-between text-sm">
@@ -43,7 +52,6 @@ export function CompactStandings() {
             </li>
           ))}
         </ol>
-        <Link href="/standings" className="mt-2 inline-block text-xs text-[#FFFFFF] hover:text-[#00D9FF]">full standings →</Link>
       </Panel>
     </div>
   )

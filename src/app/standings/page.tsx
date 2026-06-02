@@ -40,6 +40,9 @@ export default function StandingsPage() {
   useEffect(() => {
     setHydrated(true)
     actionGetArchivedSeasons().then(setArchivedSeasons)
+    // Deep-link support: /standings?tab=constructors etc. (e.g. from the home dashboard).
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'drivers' || t === 'constructors' || t === 'h2h' || t === 'power') setTab(t)
   }, [])
 
   async function loadArchivedSeason(s: DbSeason) {

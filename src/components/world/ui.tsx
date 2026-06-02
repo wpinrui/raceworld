@@ -5,7 +5,7 @@
 export function Panel({
   title, children, className = '', flush = false,
 }: {
-  title?: string
+  title?: React.ReactNode
   children: React.ReactNode
   className?: string
   flush?: boolean
