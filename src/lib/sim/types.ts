@@ -307,5 +307,6 @@ export interface EndOfSeasonSummary {
   upgradeEvents: DevUpgradeEvent[]
   preSeasonTest: PreSeasonTest | null
   // Per-driver finish vs car-pace expectation this season; drives re-sign offers.
-  retentionDelta: Record<string, number>
+  // Optional: saves serialized before this field existed won't have it (caller defaults to {}).
+  retentionDelta?: Record<string, number>
 }
