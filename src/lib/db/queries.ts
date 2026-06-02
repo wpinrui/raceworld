@@ -157,6 +157,38 @@ export function getDriverRatingsHistory(driverId: string): DbRatingsPointRow[] {
   `).all(driverId) as DbRatingsPointRow[]
 }
 
+export interface DbTeammateRaceRow {
+  year: number
+  round: number
+  teamName: string
+  teammateId: string
+  teammateName: string
+  myGrid: number
+  myFinish: number | null
+  myDnf: number
+  myPoints: number
+  mateGrid: number
+  mateFinish: number | null
+  mateDnf: number
+  matePoints: number
+}
+
+// Every archived race where this driver had a teammate, paired with that teammate's row.
+export function getDriverTeammateRaces(driverId: string): DbTeammateRaceRow[] {
+  return getDb().prepare(`
+    SELECT s.year AS year, r.round AS round, a.team_name AS teamName,
+      b.driver_id AS teammateId, b.driver_name AS teammateName,
+      a.grid_position AS myGrid, a.finish_position AS myFinish, a.dnf AS myDnf, a.points AS myPoints,
+      b.grid_position AS mateGrid, b.finish_position AS mateFinish, b.dnf AS mateDnf, b.points AS matePoints
+    FROM race_results a
+    JOIN race_results b ON b.race_id = a.race_id AND b.team_id = a.team_id AND b.driver_id <> a.driver_id
+    JOIN races r ON r.id = a.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE a.driver_id = ? AND s.status = 'archived'
+    ORDER BY s.year, r.round
+  `).all(driverId) as DbTeammateRaceRow[]
+}
+
 export function getArchivedSeasons(): DbSeason[] {
   return getDb().prepare("SELECT * FROM seasons WHERE status = 'archived' ORDER BY year DESC").all() as DbSeason[]
 }

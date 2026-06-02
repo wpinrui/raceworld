@@ -1,7 +1,7 @@
 // Client-safe DTOs for the World pages. These must NOT import from db/queries.ts
 // (which pulls in better-sqlite3) so they can be used in client components.
 
-import type { TyreCompound } from '@/lib/sim/types'
+import type { TyreCompound, Gender } from '@/lib/sim/types'
 
 export interface CareerSeason {
   year: number
@@ -24,7 +24,9 @@ export interface DriverAttributes {
   overall: number
   age: number
   primeEnd: number // age at which the driver's decline begins ("peak age")
+  peakPotential: number
   nationality: string
+  gender: Gender
   teamId: string
   teamName: string
   contractExpiresAfterSeason: number
@@ -51,12 +53,35 @@ export interface RatingsPoint {
   smoothness: number
 }
 
+// Head-to-head record against one teammate over a span of races (career or a single season).
+export interface H2HRecord {
+  races: number
+  qualSelf: number   // times this driver out-qualified the teammate
+  qualMate: number
+  raceSelf: number   // times finished ahead (both classified, no DNF)
+  raceMate: number
+  pointsSelf: number
+  pointsMate: number
+}
+
+export interface TeammateH2HSeason extends H2HRecord {
+  year: number
+  teamName: string
+}
+
+export interface TeammateH2H extends H2HRecord {
+  teammateId: string
+  teammateName: string
+  seasons: TeammateH2HSeason[] // per-season breakdown, most recent first
+}
+
 export interface DriverCareer {
   driverId: string
   driverName: string
   totals: { races: number; wins: number; podiums: number; points: number; poles: number; titles: number; seasons: number }
   seasons: CareerSeason[]
   ratingsHistory: RatingsPoint[]          // per-race attribute development (DB archived + live merged)
+  teammateH2H: TeammateH2H[]              // complete career teammate head-to-head (DB archived + live merged)
   attributes: DriverAttributes | null     // live, from store, if on current grid
   currentResults: DriverCurrentResult[] | null  // live, from store
 }

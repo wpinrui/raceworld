@@ -7,6 +7,7 @@ import type { StatPoint } from '@/lib/store/season-store'
 import { overall } from '@/lib/sim/progression'
 import type { Feat } from '@/lib/stats/types'
 import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow, RatingsPoint } from './types'
+import { aggregateTeammateH2H, combineTeammateH2H, type H2HRaceRow } from './h2h'
 
 export interface LiveStore {
   year: number
@@ -17,6 +18,23 @@ export interface LiveStore {
   raceResults: RaceResult[][]
   calendar: Circuit[]
   statHistory: Record<string, StatPoint[]>
+}
+
+// The current (unarchived) season's teammate head-to-head, built from live race results.
+function liveTeammateH2H(driverId: string, store: LiveStore) {
+  const rows: H2HRaceRow[] = []
+  for (const round of store.raceResults) {
+    const mine = round.find((r) => r.driverId === driverId)
+    if (!mine || mine.teamId === '') continue
+    const mate = round.find((r) => r.teamId === mine.teamId && r.driverId !== driverId)
+    if (!mate) continue
+    rows.push({
+      year: store.year, teamName: mine.teamName, teammateId: mate.driverId, teammateName: mate.driverName,
+      myGrid: mine.gridPosition, myFinish: mine.finishPosition, myDnf: mine.dnf, myPoints: mine.points,
+      mateGrid: mate.gridPosition, mateFinish: mate.finishPosition, mateDnf: mate.dnf, matePoints: mate.points,
+    })
+  }
+  return aggregateTeammateH2H(rows)
 }
 
 // The current (unarchived) season's attribute timeline from the live store.
@@ -36,7 +54,8 @@ function driverAttributes(d: Driver, teams: Team[]): DriverAttributes {
   return {
     pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness,
     overall: Math.round(overall(d)),
-    age: d.age, primeEnd: d.primeEnd, nationality: d.nationality,
+    age: d.age, primeEnd: d.primeEnd, peakPotential: d.peakPotential,
+    nationality: d.nationality, gender: d.gender ?? 'male',
     teamId: d.teamId, teamName: team?.name ?? 'Free Agent',
     contractExpiresAfterSeason: d.contractExpiresAfterSeason,
     isFreeAgent: d.teamId === '',
@@ -137,6 +156,9 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
     ratingsHistory: racing
       ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory)]
       : db.ratingsHistory,
+    teammateH2H: racing
+      ? combineTeammateH2H(db.teammateH2H, liveTeammateH2H(db.driverId, store))
+      : db.teammateH2H,
     attributes: driverAttributes(live, store.teams),
     currentResults: racing ? liveDriverResults(db.driverId, store.raceResults, store.calendar) : null,
   }

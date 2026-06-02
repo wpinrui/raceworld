@@ -30,11 +30,13 @@ import {
   getTeamFinalPositionInSeason,
   insertDriverRaceAttributes,
   getDriverRatingsHistory,
+  getDriverTeammateRaces,
   type DbSeason,
   type DbRaceResultRow,
   type DriverAttributeSnapshot,
 } from './queries'
 import { overall } from '@/lib/sim/progression'
+import { aggregateTeammateH2H, type H2HRaceRow } from '@/lib/world/h2h'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import type {
   DriverCareer, TeamCareer, WorldOverview, SearchEntry, CareerSeason, TeamSeason,
@@ -121,7 +123,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     return {
       driverId, driverName: driverId,
       totals: { races: 0, wins: 0, podiums: 0, points: 0, poles: 0, titles: 0, seasons: 0 },
-      seasons: [], ratingsHistory: [], attributes: null, currentResults: null,
+      seasons: [], ratingsHistory: [], teammateH2H: [], attributes: null, currentResults: null,
     }
   }
   const champions = getAllSeasonChampions()
@@ -145,13 +147,18 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     overtaking: r.overtaking, smoothness: r.smoothness,
     overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace })),
   }))
+  const h2hRows: H2HRaceRow[] = getDriverTeammateRaces(driverId).map((r) => ({
+    year: r.year, teamName: r.teamName, teammateId: r.teammateId, teammateName: r.teammateName,
+    myGrid: r.myGrid, myFinish: r.myFinish, myDnf: !!r.myDnf, myPoints: r.myPoints,
+    mateGrid: r.mateGrid, mateFinish: r.mateFinish, mateDnf: !!r.mateDnf, matePoints: r.matePoints,
+  }))
   return {
     driverId, driverName: totals.driverName,
     totals: {
       races: totals.races, wins: totals.wins, podiums: totals.podiums,
       points: totals.points, poles: totals.poles, titles, seasons: totals.seasons,
     },
-    seasons, ratingsHistory, attributes: null, currentResults: null,
+    seasons, ratingsHistory, teammateH2H: aggregateTeammateH2H(h2hRows), attributes: null, currentResults: null,
   }
 }
 
