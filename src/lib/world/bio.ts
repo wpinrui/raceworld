@@ -1,5 +1,6 @@
 import type { DriverCareer, DriverAttributes } from './types'
 import { countryName } from '@/data/countries'
+import { calendar2026 } from '@/data/calendar'
 
 // Auto-generated driver biography. Plain, factual sentences derived from career totals,
 // attributes and team history, so it always matches the save.
@@ -93,10 +94,56 @@ function ageArticle(age: number): string {
 }
 
 function recordSentence(c: DriverCareer, subjCap: string): string {
-  const { titles, wins, podiums, poles, points, seasons, races } = c.totals
+  const { wins, podiums, poles, points, seasons, races } = c.totals
   if (races === 0) return `${subjCap} has not started a race yet.`
-  const titlePart = titles > 0 ? `${subjCap} has won ${titles} World ${titles === 1 ? 'Championship' : 'Championships'}. ` : ''
-  return `${titlePart}In ${seasons} ${seasons === 1 ? 'season' : 'seasons'} ${subjCap.toLowerCase()} has ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'}, ${poles} ${poles === 1 ? 'pole' : 'poles'} and ${points.toLocaleString()} points.`
+  return `In ${seasons} ${seasons === 1 ? 'season' : 'seasons'} ${subjCap.toLowerCase()} has ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'}, ${poles} ${poles === 1 ? 'pole' : 'poles'} and ${points.toLocaleString()} points.`
+}
+
+// "Australian GP" -> "Australian Grand Prix".
+function grandPrixName(roundIdx: number): string {
+  const name = calendar2026[roundIdx]?.name ?? `Round ${roundIdx + 1}`
+  return name.replace(/\bGP\b/, 'Grand Prix')
+}
+
+// Earliest (year, round) where a season result matches the predicate.
+function firstResult(seasons: DriverCareer['seasons'], pred: (finish: number | null) => boolean): { year: number; round: number } | null {
+  for (const s of [...seasons].sort((a, b) => a.year - b.year)) {
+    for (let i = 0; i < s.results.length; i++) {
+      if (pred(s.results[i])) return { year: s.year, round: i }
+    }
+  }
+  return null
+}
+
+// Closing line stating the driver's best accomplishment. Only for podium-or-better drivers.
+function famouslySentence(career: DriverCareer, subjCap: string): string {
+  const { wins, podiums } = career.totals
+  if (podiums === 0) return ''
+
+  const titleYears = career.seasons
+    .filter((s) => !s.inProgress && s.championshipFinish === 1)
+    .map((s) => s.year)
+    .sort((a, b) => a - b)
+  if (titleYears.length > 1) {
+    return `${subjCap} famously won the F1 World Drivers' Championship ${titleYears.length} times in ${listJoin(titleYears.map(String))}.`
+  }
+  if (titleYears.length === 1) {
+    return `${subjCap} famously won the F1 World Drivers' Championship in ${titleYears[0]}.`
+  }
+
+  if (wins > 0) {
+    const first = firstResult(career.seasons, (r) => r === 1)
+    const base = first ? `${subjCap} famously won the ${first.year} ${grandPrixName(first.round)}` : `${subjCap} is a race winner`
+    const extra = wins - 1
+    const tail = extra <= 0 ? '' : extra === 1 ? ', and has accumulated an additional race win' : `, and has accumulated an additional ${extra} race wins`
+    return `${base}${tail}.`
+  }
+
+  const first = firstResult(career.seasons, (r) => r != null && r <= 3)
+  const base = first ? `${subjCap} famously finished on the podium at the ${first.year} ${grandPrixName(first.round)}` : `${subjCap} has stood on the podium`
+  const extra = podiums - 1
+  const tail = extra <= 0 ? '' : extra === 1 ? ', and has accumulated an additional podium' : `, and has accumulated an additional ${extra} podiums`
+  return `${base}${tail}.`
 }
 
 function ageSentence(a: DriverAttributes, subj: string, poss: string): string {
@@ -154,6 +201,7 @@ export function buildDriverBio(
     : a.contractExpiresAfterSeason <= currentYear
       ? `${cap(p.poss)} contract ends after this season.`
       : `${subjCap} is signed until ${a.contractExpiresAfterSeason}.`
+  const famously = famouslySentence(career, subjCap)
 
-  return [opener, record, style, age, team, contract].filter(Boolean).join(' ')
+  return [opener, record, style, age, team, contract, famously].filter(Boolean).join(' ')
 }
