@@ -117,7 +117,7 @@ export default function NewsroomPage() {
     setSearching(false)
     if (res.ok) setSearchAnswer(res.data.answer)
     else if (res.error === 'NO_API_KEY') setAvailable(false)
-    else setSearchError(res.message ?? 'The desk could not answer that.')
+    else setSearchError(res.message ?? 'Search failed.')
   }
 
   if (!hydrated) return null
@@ -157,7 +157,7 @@ export default function NewsroomPage() {
                   {searching ? 'Searching…' : 'Search'}
                 </button>
               </form>
-              {searching && <p className="mt-3 text-sm text-[#FFFFFF] animate-pulse">The desk is on it…</p>}
+              {searching && <p className="mt-3 text-sm text-[#FFFFFF] animate-pulse">Searching…</p>}
               {searchError && <p className="mt-3 text-sm text-[#DC143C]">{searchError}</p>}
               {searchAnswer && <div className="mt-3"><Paragraphs text={searchAnswer} /></div>}
             </Panel>
