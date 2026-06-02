@@ -103,7 +103,7 @@ export default function TeamPage() {
               )}
 
               {tab === 'seasons' && (
-                <Panel title="History — click a season for the full race-by-race breakdown" flush>
+                <Panel title="History" flush>
                   {career.seasons.length === 0 ? (
                     <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
                   ) : (
