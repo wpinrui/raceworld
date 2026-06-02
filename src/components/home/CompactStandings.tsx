@@ -23,7 +23,7 @@ export function CompactStandings() {
   const teamColor = (id: string) => teams.find((t) => t.id === id)?.color ?? '#6B7280'
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2">
+    <div className="space-y-5">
       <Panel title={<HeaderLink tab="drivers">Drivers</HeaderLink>}>
         <ol className="space-y-1">
           {driverStandings.map((d, i) => (
