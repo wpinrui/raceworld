@@ -109,25 +109,19 @@ Driver market moves (signings between teams) happen during the End of season and
 ## Contracts
 Each driver on an F1 seat holds a contract with a field `contract_expires_after_season`. Contracts are binding — neither the team nor the driver can break them. The only exceptions are god-mode actions (the player can forcibly release a driver or extend a contract).
 
-Contract length is determined at signing time by two factors:
+Contract length is determined at signing time by the driver's **standing among next season's grid**, not an absolute media score. Media scores are compressed (most drivers cluster in a narrow band), so an absolute-threshold scheme hands almost everyone a short deal; ranking instead keeps the spread meaningful and makes the share of 1-year deals stable.
 
-**Base length** — sampled from a weighted distribution based on the driver's media driver score at time of signing:
+**Base length** — from the driver's media-score **percentile** across next season's grid (everyone staying plus everyone signed in this window; the unsigned pool is excluded). The percentile `p` runs 0 (weakest on the grid) to 1 (strongest):
+> `mean_length = 1 + p × 3`  → weakest ≈ 1 year, strongest ≈ 4 years
 
-| Media driver score | Distribution |
-|---|---|
-| 90+ | Weighted toward 4: sample from {3, 4, 4, 4} |
-| 78–90 | Weighted toward 3: sample from {2, 3, 3, 4} |
-| 65–78 | Weighted toward 2: sample from {1, 2, 2, 3} |
-| < 65 | Always 1, with a small chance (≈10%) of 2 |
+The actual length is `round(Normal(mean_length, 0.9))`, clamped to [1, 4]. Sampling from a normal means no length is ever impossible for a given driver — a top driver can occasionally land a short deal and vice versa, just rarely. This puts roughly the bottom third of the grid on ~1-year deals (≈⅓ of all signings) regardless of the absolute media scale.
 
-**Age modifier** — applied after sampling the base:
-- Driver is past their `prime_end` age: cap at 1 year regardless of base (teams will not commit long-term to a driver already in decline).
-- Driver is within 2 seasons of `prime_end`: subtract 1 from base (min 1).
-- Driver is still developing (more than 3 seasons before `prime_end`): no change.
+**Age modifier** — applied to the mean before sampling:
+- Past `prime_end`: length is drawn from `Normal(1.3, 0.6)` clamped to [1, 2] — short rolling deals (mostly 1, sometimes 2); teams won't commit long-term to a driver in decline.
+- Within 2 seasons of `prime_end`: `mean_length −= 0.7`.
+- More than 2 seasons before `prime_end`: no change.
 
-A small noise term of ±1 year applies with ~10% probability to cover outlier situations, clamped to [1, 4].
-
-A 5-year contract is a special case reserved exclusively for the single highest-ranked driver on the grid by media driver score, and only if they are not yet past their `prime_end`. No other driver can receive a 5-year deal. If the top-ranked driver is past their prime, the maximum contract length for anyone that season is 4 years.
+A 5-year contract is reserved for the single highest-ranked free agent by media score, and only if they are not past their `prime_end` (their clamp ceiling is raised to 5). No other driver can exceed 4 years.
 
 ## Free agency and seat-filling
 At the end of each season, drivers whose `contract_expires_after_season` matches the completed season, and who are not retiring, enter the free agent pool.

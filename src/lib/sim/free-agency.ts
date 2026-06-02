@@ -2,36 +2,26 @@ import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatCo
 import { sampleNormal } from './rng-utils'
 import { generateRookie } from './driver-generation'
 
+// Contract length scales with a driver's STANDING among next season's grid
+// (their media percentile, 0 = weakest, 1 = strongest), not an absolute media
+// score — the absolute scale is compressed and uncertain, whereas the bottom
+// third of the grid getting ~1-year deals is robust by construction. Sampled with
+// normal noise so no length is ever impossible for a given driver, just weighted.
 function contractLength(
   driver: Driver,
-  mediaScore: number,
+  percentile: number,
   isBestFreeAgent: boolean,
   rng: () => number,
 ): number {
-  let minLen: number, maxLen: number
-
-  if (mediaScore >= 80) { minLen = 3; maxLen = 4 }
-  else if (mediaScore >= 60) { minLen = 2; maxLen = 3 }
-  else { minLen = 1; maxLen = 2 }
-
+  // Past their prime: short rolling deals — mostly 1 year, occasionally 2.
   if (driver.age > driver.primeEnd) {
-    minLen = 1; maxLen = 1
-  } else if (driver.primeEnd - driver.age <= 2) {
-    maxLen = Math.max(minLen, maxLen - 1)
+    return Math.max(1, Math.min(2, Math.round(sampleNormal(1.3, 0.6, rng))))
   }
 
-  if (rng() < 0.10) {
-    const bump = rng() < 0.5 ? 1 : -1
-    minLen = Math.max(1, minLen + bump)
-    maxLen = Math.max(minLen, maxLen + bump)
-  }
-
-  if (isBestFreeAgent && driver.age <= driver.primeEnd) {
-    maxLen = Math.max(maxLen, 5)
-  }
-
-  const len = Math.floor(rng() * (maxLen - minLen + 1)) + minLen
-  return Math.max(1, Math.min(5, len))
+  let meanLen = 1 + percentile * 3 // weakest ≈ 1yr, strongest ≈ 4yr
+  if (driver.primeEnd - driver.age <= 2) meanLen -= 0.7 // nearing decline: shorter
+  const maxLen = isBestFreeAgent ? 5 : 4
+  return Math.max(1, Math.min(maxLen, Math.round(sampleNormal(meanLen, 0.9, rng))))
 }
 
 const RETIREMENT_SEASONS_OUT = 5
@@ -153,11 +143,21 @@ export function runDriverMarket(
   const seatContests: SeatContest[] = []
   const driverUpdates = new Map<string, Partial<Driver>>()
 
+  // Media percentile across next season's grid (stayers + everyone signed now),
+  // used to scale contract length. Excludes the unsigned pool so a signing's length
+  // reflects standing against the drivers it shares a grid with.
+  const nextGridMedia: number[] = []
+  for (const id of stayingDriverIds) nextGridMedia.push(driverMedia(id))
+  for (const t of openTeams) for (const did of held.get(t.id)!) nextGridMedia.push(driverMedia(did))
+  const sortedGrid = [...nextGridMedia].sort((a, b) => a - b)
+  const gridPercentile = (m: number) =>
+    sortedGrid.length > 1 ? sortedGrid.filter((x) => x < m).length / (sortedGrid.length - 1) : 0.5
+
   for (const t of openTeams) {
     for (const did of held.get(t.id)!) {
       const d = faById.get(did)!
       const score = driverMedia(did)
-      const len = contractLength(d, score, did === bestFreeAgentId, rng)
+      const len = contractLength(d, gridPercentile(score), did === bestFreeAgentId, rng)
       driverUpdates.set(did, { teamId: t.id, contractExpiresAfterSeason: currentYear + len })
       marketMoves.push({
         driverId: did,
