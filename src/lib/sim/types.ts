@@ -2,11 +2,14 @@ export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
 export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
 
+export type Gender = 'male' | 'female'
+
 export interface Driver {
   id: string
   name: string
   teamId: string
   nationality: string    // ISO 3166-1 alpha-2
+  gender: Gender         // drives the generated avatar; inferred from the name at generation
   pace: number           // 0-100
   wetWeatherPace: number // 0-100
   overtaking: number     // 0-100
@@ -17,6 +20,7 @@ export interface Driver {
   narrativeModifier: number // -20 to +20
   contractExpiresAfterSeason: number
   seasonsSinceF1Seat?: number // consecutive seasons without an F1 seat; removed from the market at 5
+  photoUrl?: string      // god-mode override; when set, used instead of any real photo or the generated avatar
 }
 
 export interface Team {

@@ -16,6 +16,7 @@ export function makeDefaultDriver(teamId: string): Driver {
     name: 'New Driver',
     teamId,
     nationality: 'GB',
+    gender: 'male',
     pace: 70,
     wetWeatherPace: 70,
     overtaking: 70,
