@@ -159,7 +159,7 @@ export function OffSeasonPanel() {
           <RetirementsPanel summary={summary} drivers={season.drivers} />
         )}
         {viewPhase === 'pre-season-testing' && (
-          <TestingPanel summary={summary} teams={season.teams} constructorStandings={season.constructorStandings} />
+          <TestingPanel summary={summary} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
         )}
       </div>
     </div>

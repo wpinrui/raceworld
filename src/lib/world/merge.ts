@@ -60,6 +60,30 @@ function liveDriverResults(driverId: string, raceResults: RaceResult[][], calend
   return out
 }
 
+// A title counts the moment it's mathematically secured (or the season has ended),
+// not only once the season is archived. Max points a rival can still take: 25/race for
+// a driver, 25+18=43/race for a constructor (both cars).
+const DRIVER_MAX_PER_RACE = 25
+const CONSTRUCTOR_MAX_PER_RACE = 43
+
+function clinchedDriverChampion(store: LiveStore): string | null {
+  const ds = store.driverStandings
+  if (ds.length === 0 || store.raceResults.length === 0) return null
+  const remaining = store.calendar.length - store.raceResults.length
+  if (remaining <= 0) return ds[0].driverId // season over — the leader is champion
+  const gap = ds[0].points - (ds[1]?.points ?? 0)
+  return gap > remaining * DRIVER_MAX_PER_RACE ? ds[0].driverId : null
+}
+
+function clinchedConstructorChampion(store: LiveStore): string | null {
+  const cs = store.constructorStandings
+  if (cs.length === 0 || store.raceResults.length === 0) return null
+  const remaining = store.calendar.length - store.raceResults.length
+  if (remaining <= 0) return cs[0].teamId
+  const gap = cs[0].points - (cs[1]?.points ?? 0)
+  return gap > remaining * CONSTRUCTOR_MAX_PER_RACE ? cs[0].teamId : null
+}
+
 export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCareer {
   const live = store.drivers.find((d) => d.id === db.driverId)
   if (!live) return db // historical-only driver, no live data
@@ -87,7 +111,7 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
       podiums: db.totals.podiums + agg.podiums,
       points: db.totals.points + agg.points,
       poles: db.totals.poles + agg.poles,
-      titles: db.totals.titles,
+      titles: db.totals.titles + (clinchedDriverChampion(store) === db.driverId ? 1 : 0),
       seasons: db.totals.seasons + (racing ? 1 : 0),
     },
     seasons: liveSeason ? [liveSeason, ...db.seasons] : db.seasons,
@@ -122,10 +146,18 @@ export function mergeTeamCareer(db: TeamCareer, store: LiveStore): TeamCareer {
     inProgress: true,
   }
 
+  const titleClinched = clinchedConstructorChampion(store) === db.teamId
+
   return {
     teamId: db.teamId,
     teamName: live.name,
-    honours: db.honours,
+    honours: titleClinched
+      ? {
+          constructorTitles: db.honours.constructorTitles + 1,
+          titleYears: [store.year, ...db.honours.titleYears],
+          bestFinish: 1,
+        }
+      : db.honours,
     totals: {
       races: db.totals.races + races, wins: db.totals.wins + wins,
       podiums: db.totals.podiums + podiums, points: db.totals.points + points,
