@@ -127,11 +127,16 @@ export function insertConstructorStandings(
   standings: Array<{ teamId: string; finalPosition: number; points: number }>,
 ): void {
   const db = getDb()
+  const clear = db.prepare('DELETE FROM season_constructor_standings WHERE season_id = ?')
   const insert = db.prepare(
     'INSERT INTO season_constructor_standings (season_id, team_id, final_position, points) VALUES (?, ?, ?, ?)',
   )
+  // Idempotent: clear any existing rows for this season first, so re-running the
+  // off-season archive (e.g. after a reload mid-transition) can't double-insert and
+  // inflate a team's season count in computeFundingTiers.
   const insertAll = db.transaction(
     (rows: Array<{ teamId: string; finalPosition: number; points: number }>) => {
+      clear.run(seasonId)
       for (const r of rows) insert.run(seasonId, r.teamId, r.finalPosition, r.points)
     },
   )

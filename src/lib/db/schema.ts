@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS season_constructor_standings (
   season_id INTEGER NOT NULL REFERENCES seasons(id),
   team_id TEXT NOT NULL,
   final_position INTEGER NOT NULL,
-  points INTEGER NOT NULL DEFAULT 0
+  points INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(season_id, team_id)
 );
 `
