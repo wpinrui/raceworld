@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
+import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { OffSeasonPanel } from '@/components/home/OffSeasonPanel'
 import { RaceBanner } from '@/components/home/RaceBanner'
 import { PunditPredictions } from '@/components/home/PunditPredictions'
@@ -15,9 +16,20 @@ export default function HomePage() {
   const year = useSeasonStore((s) => s.year)
   const currentRound = useSeasonStore((s) => s.currentRound)
   const [hydrated, setHydrated] = useState(false)
+  const [simming, setSimming] = useState(false)
 
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
+
+  async function handleSimTo(round: number) {
+    if (simming) return
+    setSimming(true)
+    try {
+      await simulateUntilRound(round)
+    } finally {
+      setSimming(false)
+    }
+  }
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
@@ -35,7 +47,7 @@ export default function HomePage() {
               <p className="text-sm text-[#FFFFFF] ml-3.5 mt-1">{year} Season · Round {currentRound}</p>
             </div>
 
-            <RaceBanner />
+            <RaceBanner simming={simming} onSimTo={handleSimTo} />
 
             <div className="grid gap-5 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-5">

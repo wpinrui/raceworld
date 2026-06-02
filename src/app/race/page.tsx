@@ -7,7 +7,7 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
-import { getPoints } from '@/lib/sim/points'
+import { buildRaceResults } from '@/lib/sim/race-results'
 import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
 import RaceTable from '@/components/race/RaceTable'
 import GodModePanel from '@/components/race/GodModePanel'
@@ -154,26 +154,7 @@ export default function RacePage() {
 
   function computeResults(): RaceResult[] {
     if (!raceState) return []
-    return raceState.drivers.slice().sort((a, b) => a.position - b.position).map((ds) => {
-      const driver = drivers.find((d) => d.id === ds.driverId)
-      const team = driver ? teams.find((t) => t.id === driver.teamId) : undefined
-      const qr = raceState.qualifyingResults.find((q) => q.driverId === ds.driverId)
-      // stintHistory only holds stints CLOSED by a pit stop; append the open stint the
-      // driver was on at the flag or at retirement, so a no-stop DNF still shows a stint.
-      const stints = ds.stintLap > 0
-        ? [...ds.stintHistory, { compound: ds.currentTyre.compound, laps: ds.stintLap }]
-        : ds.stintHistory
-      return {
-        driverId: ds.driverId, driverName: driver?.name ?? ds.driverId,
-        teamId: driver?.teamId ?? '', teamName: team?.name ?? '',
-        gridPosition: qr?.gridPosition ?? 0,
-        finishPosition: ds.retired ? null : ds.position,
-        points: getPoints(ds.retired ? null : ds.position),
-        lapsCompleted: ds.lapTimes.length, totalTime: ds.retired ? null : ds.totalTime,
-        dnf: ds.retired, stints,
-        q1Time: qr?.q1Time ?? null, q2Time: qr?.q2Time ?? null, q3Time: qr?.q3Time ?? null,
-      } satisfies RaceResult
-    })
+    return buildRaceResults(raceState, drivers, teams)
   }
 
   async function handleSaveAndContinue() {

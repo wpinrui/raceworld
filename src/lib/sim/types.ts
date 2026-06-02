@@ -31,6 +31,7 @@ export interface Circuit {
   id: string
   name: string
   location: string
+  country: string        // ISO 3166-1 alpha-2, for the calendar flag
   laps: number
   flatModifier: number   // seconds added to base laptime for cosmetic realism
 }
