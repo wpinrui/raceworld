@@ -170,13 +170,7 @@ export default function RacePage() {
       const snapshots = useSeasonStore.getState().drivers
         .filter((d) => d.teamId !== '')
         .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }))
-      // Per-driver lap times for the newsroom (position-by-lap reconstruction).
-      const lapData = (raceState?.drivers ?? []).map((ds) => ({
-        driverId: ds.driverId,
-        driverName: drivers.find((d) => d.id === ds.driverId)?.name ?? ds.driverId,
-        lapTimes: ds.lapTimes,
-      }))
-      await actionFlushRaceResult(dbSeasonId, season.currentRound, currentCircuit.id, currentCircuit.name, results, snapshots, lapData)
+      await actionFlushRaceResult(dbSeasonId, season.currentRound, currentCircuit.id, currentCircuit.name, results, snapshots)
       if (season.currentRound >= calendar2026.length) {
         season.endSeason(); router.push('/home')
       } else {

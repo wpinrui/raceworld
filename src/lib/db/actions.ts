@@ -30,7 +30,6 @@ import {
   getTeamFinalPositionInSeason,
   insertDriverRaceAttributes,
   insertDriverRaceForm,
-  insertRaceLapTimes,
   getDriverRatingsHistory,
   getDriverRecentForm,
   getDriverTeammateRaces,
@@ -82,13 +81,11 @@ export async function actionFlushRaceResult(
   circuitName: string,
   results: RaceResult[],
   attributeSnapshots: DriverAttributeSnapshot[] = [],
-  lapData: { driverId: string; driverName: string; lapTimes: number[] }[] = [],
 ): Promise<void> {
   const raceId = createRace(seasonId, round, circuitId, circuitName)
   insertRaceResults(raceId, results)
   if (attributeSnapshots.length > 0) insertDriverRaceAttributes(seasonId, round, attributeSnapshots)
   insertDriverRaceForm(raceId, results.map((r) => ({ driverId: r.driverId, form: r.form })))
-  if (lapData.length > 0) insertRaceLapTimes(raceId, lapData)
 }
 
 export async function actionArchiveSeason(seasonId: number): Promise<void> {

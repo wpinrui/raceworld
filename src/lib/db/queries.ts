@@ -51,8 +51,6 @@ export function archiveSeason(seasonId: number): void {
 export function resetDatabase(): void {
   const db = getDb()
   db.transaction(() => {
-    db.prepare('DELETE FROM news_articles').run()
-    db.prepare('DELETE FROM race_lap_times').run()
     db.prepare('DELETE FROM driver_race_form').run()
     db.prepare('DELETE FROM driver_race_attributes').run()
     db.prepare('DELETE FROM race_results').run()
@@ -235,67 +233,6 @@ export function getDriverTeammateRaces(driverId: string): DbTeammateRaceRow[] {
 
 export function getArchivedSeasons(): DbSeason[] {
   return getDb().prepare("SELECT * FROM seasons WHERE status = 'archived' ORDER BY year DESC").all() as DbSeason[]
-}
-
-// --- Newsroom articles (M5) ---
-
-// --- Per-lap times (M5 race narrative) ---
-
-export interface DbLapTimesRow { driver_id: string; driver_name: string; lap_times_json: string }
-
-export function insertRaceLapTimes(raceId: number, rows: { driverId: string; driverName: string; lapTimes: number[] }[]): void {
-  const db = getDb()
-  const stmt = db.prepare(`
-    INSERT INTO race_lap_times (race_id, driver_id, driver_name, lap_times_json) VALUES (?, ?, ?, ?)
-    ON CONFLICT(race_id, driver_id) DO UPDATE SET lap_times_json = excluded.lap_times_json, driver_name = excluded.driver_name
-  `)
-  const many = db.transaction((rs: typeof rows) => {
-    for (const r of rs) stmt.run(raceId, r.driverId, r.driverName, JSON.stringify(r.lapTimes))
-  })
-  many(rows)
-}
-
-export function getRaceLapTimes(raceId: number): DbLapTimesRow[] {
-  return getDb().prepare('SELECT driver_id, driver_name, lap_times_json FROM race_lap_times WHERE race_id = ?').all(raceId) as DbLapTimesRow[]
-}
-
-export interface DbNewsArticle {
-  id: number
-  type: string
-  season_id: number | null
-  year: number
-  round: number | null
-  headline: string
-  dek: string | null
-  body: string
-  model: string
-  created_at: string
-}
-
-export function getRaceReview(year: number, round: number): DbNewsArticle | null {
-  const row = getDb()
-    .prepare("SELECT * FROM news_articles WHERE type = 'race-review' AND year = ? AND round = ? LIMIT 1")
-    .get(year, round) as DbNewsArticle | undefined
-  return row ?? null
-}
-
-export function listRaceReviews(): DbNewsArticle[] {
-  return getDb()
-    .prepare("SELECT * FROM news_articles WHERE type = 'race-review' ORDER BY year DESC, round DESC")
-    .all() as DbNewsArticle[]
-}
-
-export function upsertNewsArticle(a: {
-  type: string; seasonId: number | null; year: number; round: number | null
-  headline: string; dek: string | null; body: string; model: string
-}): void {
-  getDb().prepare(`
-    INSERT INTO news_articles (type, season_id, year, round, headline, dek, body, model, created_at)
-    VALUES (@type, @seasonId, @year, @round, @headline, @dek, @body, @model, datetime('now'))
-    ON CONFLICT(type, year, round) DO UPDATE SET
-      season_id = excluded.season_id, headline = excluded.headline, dek = excluded.dek,
-      body = excluded.body, model = excluded.model, created_at = datetime('now')
-  `).run(a)
 }
 
 export function getRacesForSeason(seasonId: number): DbRace[] {
