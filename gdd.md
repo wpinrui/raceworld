@@ -198,7 +198,7 @@ A constant per-driver value in the range [−20, +20], defaulting to 0. Added to
 The modifier **fades as a driver declines past their `prime_end`**, so a media darling cannot coast on reputation once the results dry up:
 > `narrative_effective = narrative_modifier × clamp(1 − 0.25 × max(0, age − prime_end), 0, 1)`
 
-It applies at full strength up to `prime_end`, then loses a quarter of its value per season past prime, reaching 0 four seasons after prime. (A driver at or before their prime is unaffected.)
+It applies at full strength up to `prime_end`, then loses a quarter of its value per season past prime, reaching 0 four seasons after prime. (A driver at or before their prime is unaffected.) The fade is symmetric: a negative modifier (an underrated/maligned driver) decays toward 0 just like a positive halo — as a driver ages out of relevance, reputation in either direction stops carrying and they are judged on current results.
 
 **Final score**
 > `media_score = clamp(0.35×A + 0.45×B + 0.2×C + narrative_effective + pace_narrative, 0, 100)`
