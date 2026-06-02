@@ -209,7 +209,7 @@ It applies at full strength up to `prime_end`, then loses a quarter of its value
 So an average-pace free agent sits well below proven grid drivers, while a genuinely fast prospect can climb toward the midfield — but rarely past a proven driver, especially once the market's out-of-F1 ring-rust penalty is applied on top.
 
 # In-race retirements
-Each lap, every active driver has a flat per-lap mechanical retirement probability of **0.28%** (calibrated to a ~58-lap race, targeting an average of 3 retirements per 20-car field). Longer circuits with more laps will naturally produce slightly more retirements; shorter circuits slightly fewer. No other factors influence the mechanical retirement rate. When triggered, the retirement is treated identically to a god-mode forced retirement — the car is out and cannot return.
+Each lap, every active driver has a flat per-lap mechanical retirement probability of **0.2%** (≈11% over a ~58-lap race, so roughly 2 retirements per 20-car field, ~2.6 DNFs per driver per season). Longer circuits with more laps will naturally produce slightly more retirements; shorter circuits slightly fewer. No other factors influence the mechanical retirement rate. When triggered, the retirement is treated identically to a god-mode forced retirement — the car is out and cannot return.
 
 # Standings Screen — Colour Coding
 Race result cells in the standings grid are colour-coded as follows, matching the Wikipedia F1 convention:
