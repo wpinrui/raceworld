@@ -188,32 +188,23 @@ export default function DriverPage() {
                       </Panel>
                     )}
 
-                    {/* Current season form */}
+                    {/* Current season form — horizontal results strip (standings style) */}
                     <Panel title={current ? `This Season — ${current.year}` : 'This Season'} flush className={a ? 'lg:col-span-2' : 'lg:col-span-3'}>
                       {career.currentResults && career.currentResults.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                                <th className="text-left py-2 px-4 font-medium">Rd</th>
-                                <th className="text-left py-2 px-3 font-medium">Grand Prix</th>
-                                <th className="text-center py-2 px-3 font-medium">Result</th>
-                                <th className="text-right py-2 px-4 font-medium">Pts</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {career.currentResults.map((r) => (
-                                <tr key={r.round} className="border-b border-[#2A3142]/50">
-                                  <td className="py-1.5 px-4 tabular-nums text-[#FFFFFF]">{r.round}</td>
-                                  <td className="py-1.5 px-3">
-                                    <Link href={`/world/season/${current?.year}/${r.round}`} className="text-[#FFFFFF] hover:text-[#00D9FF]">{r.circuitName}</Link>
-                                  </td>
-                                  <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.finishPosition} /></span></td>
-                                  <td className="py-1.5 px-4 text-right tabular-nums text-[#FFFFFF]">{r.points}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        <div className="overflow-x-auto px-5 py-4">
+                          <div className="flex gap-1.5">
+                            {career.currentResults.map((r) => (
+                              <Link
+                                key={r.round}
+                                href={`/world/season/${current?.year}/${r.round}`}
+                                title={`${r.circuitName} · ${r.points} pts`}
+                                className="flex shrink-0 flex-col items-center gap-1"
+                              >
+                                <span className="text-[9px] font-bold tabular-nums uppercase tracking-widest text-[#FFFFFF]">{String(r.round).padStart(2, '0')}</span>
+                                <ResultChip position={r.finishPosition} />
+                              </Link>
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <p className="px-5 py-4 text-sm text-[#FFFFFF]">Not racing this season.</p>
