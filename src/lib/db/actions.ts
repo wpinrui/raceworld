@@ -22,10 +22,39 @@ import {
   getAllSeasonChampions,
   getAllTimeLeaders,
   getSearchIndex,
+  getArchivedSeasonIdByYear,
+  getDriverRacesInSeason,
+  getTeamRacesInSeason,
+  getRaceInSeasonByRound,
+  getResultsForRace,
+  getTeamFinalPositionInSeason,
   type DbSeason,
+  type DbRaceResultRow,
 } from './queries'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
-import type { DriverCareer, TeamCareer, WorldOverview, SearchEntry, CareerSeason, TeamSeason } from '@/lib/world/types'
+import type {
+  DriverCareer, TeamCareer, WorldOverview, SearchEntry, CareerSeason, TeamSeason,
+  DriverSeasonDetail, DriverSeasonRace, TeamSeasonDetail, TeamSeasonRace,
+  RaceClassification, RaceClassificationRow, Stint,
+} from '@/lib/world/types'
+
+function parseStints(json: string): Stint[] {
+  try {
+    const v = JSON.parse(json)
+    return Array.isArray(v) ? (v as Stint[]) : []
+  } catch {
+    return []
+  }
+}
+
+function toDriverSeasonRace(r: DbRaceResultRow): DriverSeasonRace {
+  return {
+    round: r.round, circuitId: r.circuit_id, circuitName: r.circuit_name,
+    gridPosition: r.grid_position, finishPosition: r.dnf ? null : r.finish_position,
+    dnf: !!r.dnf, points: r.points, lapsCompleted: r.laps_completed,
+    q1: r.q1_time_ms, q2: r.q2_time_ms, q3: r.q3_time_ms, stints: parseStints(r.stints_json),
+  }
+}
 
 export async function actionCreateSeason(year: number): Promise<number> {
   return createSeason(year)
@@ -147,4 +176,82 @@ export async function actionGetWorldOverview(): Promise<WorldOverview> {
 
 export async function actionGetSearchIndex(): Promise<SearchEntry[]> {
   return getSearchIndex()
+}
+
+// --- Drill-down detail (archived seasons only; the live season is built client-side) ---
+
+export async function actionGetDriverSeason(driverId: string, year: number): Promise<DriverSeasonDetail | null> {
+  const seasonId = getArchivedSeasonIdByYear(year)
+  if (seasonId == null) return null
+  const rows = getDriverRacesInSeason(seasonId, driverId)
+  if (rows.length === 0) return null
+  const races = rows.map(toDriverSeasonRace)
+  const totals = races.reduce(
+    (acc, r) => ({
+      races: acc.races + 1,
+      wins: acc.wins + (r.finishPosition === 1 ? 1 : 0),
+      podiums: acc.podiums + (r.finishPosition != null && r.finishPosition <= 3 ? 1 : 0),
+      points: acc.points + r.points,
+      poles: acc.poles + (r.gridPosition === 1 ? 1 : 0),
+      dnfs: acc.dnfs + (r.dnf ? 1 : 0),
+    }),
+    { races: 0, wins: 0, podiums: 0, points: 0, poles: 0, dnfs: 0 },
+  )
+  return {
+    driverId, driverName: rows[0].driver_name, year,
+    teamId: rows[rows.length - 1].team_id, teamName: rows[rows.length - 1].team_name,
+    championshipFinish: getDriverFinishInSeason(seasonId, driverId),
+    inProgress: false, totals, races,
+  }
+}
+
+export async function actionGetTeamSeason(teamId: string, year: number): Promise<TeamSeasonDetail | null> {
+  const seasonId = getArchivedSeasonIdByYear(year)
+  if (seasonId == null) return null
+  const rows = getTeamRacesInSeason(seasonId, teamId)
+  if (rows.length === 0) return null
+
+  const byRound = new Map<number, TeamSeasonRace>()
+  const driverNames = new Map<string, string>()
+  let wins = 0, podiums = 0, points = 0
+  for (const r of rows) {
+    driverNames.set(r.driver_id, r.driver_name)
+    if (!r.dnf && r.finish_position === 1) wins++
+    if (!r.dnf && r.finish_position != null && r.finish_position <= 3) podiums++
+    points += r.points
+    if (!byRound.has(r.round)) {
+      byRound.set(r.round, { round: r.round, circuitId: r.circuit_id, circuitName: r.circuit_name, cars: [], points: 0 })
+    }
+    const entry = byRound.get(r.round)!
+    entry.cars.push({
+      driverId: r.driver_id, driverName: r.driver_name, gridPosition: r.grid_position,
+      finishPosition: r.dnf ? null : r.finish_position, dnf: !!r.dnf, points: r.points,
+    })
+    entry.points += r.points
+  }
+
+  return {
+    teamId, teamName: rows[rows.length - 1].team_name, year,
+    finalPosition: getTeamFinalPositionInSeason(seasonId, teamId),
+    inProgress: false,
+    totals: { races: byRound.size, wins, podiums, points },
+    drivers: [...driverNames].map(([driverId, driverName]) => ({ driverId, driverName })),
+    races: [...byRound.values()].sort((a, b) => a.round - b.round),
+  }
+}
+
+export async function actionGetRaceClassification(year: number, round: number): Promise<RaceClassification | null> {
+  const seasonId = getArchivedSeasonIdByYear(year)
+  if (seasonId == null) return null
+  const race = getRaceInSeasonByRound(seasonId, round)
+  if (!race) return null
+  const rows: RaceClassificationRow[] = getResultsForRace(race.id).map((r) => ({
+    driverId: r.driver_id, driverName: r.driver_name, teamId: r.team_id, teamName: r.team_name,
+    gridPosition: r.grid_position, finishPosition: r.dnf ? null : r.finish_position, dnf: !!r.dnf,
+    points: r.points, lapsCompleted: r.laps_completed, totalTime: r.total_time_ms,
+    q1: r.q1_time_ms, q2: r.q2_time_ms, q3: r.q3_time_ms, stints: parseStints(r.stints_json),
+  }))
+  return {
+    year, round, circuitId: race.circuit_id, circuitName: race.circuit_name, inProgress: false, rows,
+  }
 }
