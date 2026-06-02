@@ -168,11 +168,11 @@ A driver who has not held an F1 seat for five consecutive seasons is removed fro
 # Media-perceived ability
 The media-perceived score is computed at the end of each season and used for contract length, the Home Screen driver rankings, and pundit predictions. It is a number on a 0–100 scale derived from four inputs.
 
-**Component A — Raw results score (weight: 50%)**
-The driver's championship points expressed as a percentile **within the current grid** (drivers who actually raced; free agents are excluded so they don't dilute the percentile). The last-place driver scores 0, the leader scores 100. This is the dominant signal because it is what the media most visibly tracks.
+**Component A — Raw results score (weight: 35%)**
+The driver's championship points expressed as a percentile **within the current grid** (drivers who actually raced; free agents are excluded so they don't dilute the percentile). The last-place driver scores 0, the leader scores 100. This is what the media most visibly tracks, but it is heavily car-dependent — a weak driver in a fast car still banks points — so it is no longer the dominant signal (see Component B).
 
-**Component B — Teammate H2H score (weight: 30%)**
-Captures how the driver performed against their teammate in the same car. The H2H ratio combines qualifying and race head-to-head:
+**Component B — Teammate H2H score (weight: 45%)**
+Captures how the driver performed against their teammate in the same car — the clearest car-independent read on driver skill, and therefore the dominant signal. The H2H ratio combines qualifying and race head-to-head:
 - Qualifying H2H: fraction of qualifying sessions where the driver was faster than their teammate (0–1)
 - Race H2H: fraction of races where the driver finished ahead of their teammate, among races both drivers finished (0–1)
 - Combined ratio: `h2h_ratio = 0.4 × qual_h2h + 0.6 × race_h2h`
@@ -195,10 +195,15 @@ This partially rewards drivers who maximise an uncompetitive car without allowin
 **Narrative modifier (flat additive, god-mode editable)**
 A constant per-driver value in the range [−20, +20], defaulting to 0. Added to the final weighted score after A, B, and C are combined. Represents the media halo (or deficit) a driver carries independent of results — some drivers are perceived as generational talents, others are chronically underrated or overrated by pundits. When pre-populating real-world 2026 drivers, sensible non-zero defaults are applied. Procedurally generated drivers always start at 0. The player can edit this value at any time via god mode.
 
-**Final score**
-> `media_score = clamp(0.5×A + 0.3×B + 0.2×C + narrative_modifier + pace_narrative, 0, 100)`
+The modifier **fades as a driver declines past their `prime_end`**, so a media darling cannot coast on reputation once the results dry up:
+> `narrative_effective = narrative_modifier × clamp(1 − 0.25 × max(0, age − prime_end), 0, 1)`
 
-**Free agents (didn't race)** run through the *same* formula, which lands them at a low baseline — `A = 0` (no points), `B = 50` (no teammate), `C = 50` (no constructor) → `0.5×0 + 0.3×50 + 0.2×50 = 25`. With no results to judge, their raw pace is the only signal, so it is converted into a narrative swing:
+It applies at full strength up to `prime_end`, then loses a quarter of its value per season past prime, reaching 0 four seasons after prime. (A driver at or before their prime is unaffected.)
+
+**Final score**
+> `media_score = clamp(0.35×A + 0.45×B + 0.2×C + narrative_effective + pace_narrative, 0, 100)`
+
+**Free agents (didn't race)** run through the *same* formula, which lands them at a low baseline — `A = 0` (no points), `B = 50` (no teammate), `C = 50` (no constructor) → `0.35×0 + 0.45×50 + 0.2×50 = 32.5`. With no results to judge, their raw pace is the only signal, so it is converted into a narrative swing:
 > `pace_narrative = clamp( (pace − 68) × 0.8 , −20, +20 )`  (free agents only; 0 for everyone who raced)
 
 So an average-pace free agent sits well below proven grid drivers, while a genuinely fast prospect can climb toward the midfield — but rarely past a proven driver, especially once the market's out-of-F1 ring-rust penalty is applied on top.
