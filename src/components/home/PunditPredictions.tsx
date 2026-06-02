@@ -95,7 +95,6 @@ export function PunditPredictions() {
             <span className="hidden items-center gap-0.5 sm:flex">
               {p.recent.map((pos, j) => <FormPill key={j} pos={pos} />)}
             </span>
-            <span className="w-9 text-right text-[10px] uppercase tracking-widest text-[#FFFFFF]">{p.team.shortName}</span>
           </li>
         ))}
       </ul>
