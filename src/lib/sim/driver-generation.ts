@@ -5,6 +5,13 @@ import { FAKER_LOCALES, FAKER_LOCALE_CODES } from '@/data/driver-name-pool'
 let generatedCounter = 0
 let rookieCounter = 0
 
+// Counters reset to 0 whenever the module reloads (server restart, hot reload),
+// so pair them with a random suffix to keep generated IDs unique across process
+// lifetimes. IDs are opaque keys — never parsed — so the format is free to change.
+function idSuffix(): string {
+  return Math.random().toString(36).slice(2, 8)
+}
+
 function pickLocaleIndex(): number {
   return Math.floor(Math.random() * FAKER_LOCALES.length)
 }
@@ -46,7 +53,7 @@ export function generateFreeAgentPool(
     const primeEnd = Math.max(age + 1, Math.round(Math.max(27, Math.min(35, sampleNormal(30, 2, rng)))))
 
     pool.push({
-      id: `gen-${year}-${generatedCounter}`,
+      id: `gen-${year}-${generatedCounter}-${idSuffix()}`,
       name,
       teamId: '',
       nationality,
@@ -71,7 +78,7 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
   const stat = () => Math.max(55, Math.min(78, Math.round(sampleNormal(68, 5, rng))))
   const { name, nationality } = pickName(new Set())
   return {
-    id: `rookie-${teamId}-${newYear}-${rookieCounter}`,
+    id: `rookie-${teamId}-${newYear}-${rookieCounter}-${idSuffix()}`,
     name,
     nationality,
     teamId,
