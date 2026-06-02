@@ -26,6 +26,7 @@ export interface DriverAttributes {
   age: number
   primeEnd: number // age at which the driver's decline begins ("peak age")
   peakPotential: number
+  narrativeModifier: number // -20..+20; popular when high, controversial when low
   nationality: string
   gender: Gender
   teamId: string

@@ -55,24 +55,37 @@ function strengthSuffix(strength: TeamStrength): string {
   return ''
 }
 
-const STAT_LABEL: Record<string, string> = {
-  pace: 'pace',
-  overtaking: 'overtaking',
-  smoothness: 'tyre management',
-  wetWeatherPace: 'wet-weather pace',
+// "his pace, overtaking and his wet-weather pace" — first and last get "his".
+function knownForPhrase(labels: string[]): string {
+  if (labels.length === 1) return `his ${labels[0]}`
+  const head = [`his ${labels[0]}`, ...labels.slice(1, -1)].join(', ')
+  return `${head} and his ${labels[labels.length - 1]}`
 }
 
-function styleSentence(a: DriverAttributes, subjCap: string): string {
-  const stats = [
-    { key: 'pace', v: a.pace },
-    { key: 'overtaking', v: a.overtaking },
-    { key: 'smoothness', v: a.smoothness },
-    { key: 'wetWeatherPace', v: a.wetWeatherPace },
-  ].sort((x, y) => y.v - x.v)
-  const best = stats[0]
-  const worst = stats[stats.length - 1]
-  if (best.v - worst.v < 6) return `${subjCap} is a well-rounded driver.`
-  return `${subjCap} is best at ${STAT_LABEL[best.key]} and weakest at ${STAT_LABEL[worst.key]}.`
+function styleSentence(subjCap: string, knownFor: string[]): string {
+  if (knownFor.length === 0) return ''
+  return `${subjCap} is known for ${knownForPhrase(knownFor)}.`
+}
+
+// Single descriptor noun for the opener, picked by what stands out most.
+function driverNoun(career: DriverCareer, a: DriverAttributes): string {
+  const { titles, seasons } = career.totals
+  const leading = career.seasons.find((s) => s.inProgress)?.championshipFinish === 1
+  if (titles > 0) return titles === 1 ? 'F1 champion' : `${titles}-time F1 champion`
+  if (leading) return 'F1 championship leader'
+  if (a.overall >= 90) return 'superstar'
+  if (a.overall >= 85) return 'star'
+  if (seasons <= 1) return 'rookie'
+  if (a.age >= 37) return 'veteran'
+  if (a.narrativeModifier >= 6) return 'popular driver'
+  if (a.narrativeModifier <= -6) return 'controversial driver'
+  if (seasons >= 5) return 'experienced driver'
+  return 'driver'
+}
+
+// "a" / "an" for the "{age}-year-old" that follows (18, 11, 8, 80-89 take "an").
+function ageArticle(age: number): string {
+  return age === 18 || age === 11 || age === 8 || (age >= 80 && age < 90) ? 'an' : 'a'
 }
 
 function recordSentence(c: DriverCareer, subjCap: string): string {
@@ -100,17 +113,19 @@ function teamSentence(career: DriverCareer, a: DriverAttributes, subjCap: string
   const stints = buildStints(career.seasons)
   const current = stints[stints.length - 1]
   if (!current) return `${subjCap} drives for ${a.teamName}.`
-  const team = `${current.teamName}${strengthSuffix(strength)}`
+  const suffix = strengthSuffix(strength)
+  const teamEnd = `${current.teamName}${suffix}`        // ends a sentence
+  const teamMid = `${current.teamName}${suffix}${suffix ? ',' : ''}` // mid-sentence: close the appositive
 
   if (stints.length >= 2) {
     const prior = listJoin(stints.slice(0, -1).map((s) => `${s.teamName} (${stintRange(s)})`))
     return current.races === 0
-      ? `${subjCap} just joined ${team} and has not raced for them yet. Before that ${subj} drove for ${prior}.`
-      : `${subjCap} drives for ${team}. Before that ${subj} drove for ${prior}.`
+      ? `${subjCap} just joined ${teamMid} and has not raced for them yet. Before that ${subj} drove for ${prior}.`
+      : `${subjCap} drives for ${teamEnd}. Before that ${subj} drove for ${prior}.`
   }
   return current.races === 0
-    ? `${subjCap} just signed for ${team} and has not raced for them yet.`
-    : `${subjCap} drives for ${team}.`
+    ? `${subjCap} just signed for ${teamMid} and has not raced for them yet.`
+    : `${subjCap} drives for ${teamEnd}.`
 }
 
 export function buildDriverBio(
@@ -118,14 +133,15 @@ export function buildDriverBio(
   a: DriverAttributes,
   currentYear: number,
   teamStrength: TeamStrength = null,
+  knownFor: string[] = [],
 ): string {
   const p = pronouns(a.gender)
   const subjCap = cap(p.subj)
   const country = countryName(a.nationality) || 'an unknown country'
 
-  const opener = `${career.driverName} is a ${a.age}-year-old driver from ${country}.`
+  const opener = `${career.driverName} is ${ageArticle(a.age)} ${a.age}-year-old ${driverNoun(career, a)} from ${country}.`
   const record = recordSentence(career, subjCap)
-  const style = styleSentence(a, subjCap)
+  const style = styleSentence(subjCap, knownFor)
   const age = ageSentence(a, p.subj, p.poss)
   const team = teamSentence(career, a, subjCap, p.subj, teamStrength)
   const contract = a.isFreeAgent

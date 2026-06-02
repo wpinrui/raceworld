@@ -88,7 +88,23 @@ export default function DriverPage() {
             const third = ranked.length / 3
             return rank < third ? 'front-running' : rank < third * 2 ? 'midfield' : 'backmarker'
           })()
-          const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength) : null
+          // Stats where this driver ranks top 5 on the current grid — surfaced as
+          // "known for his ..." in the bio.
+          const knownFor = (() => {
+            if (!a || a.isFreeAgent) return [] as string[]
+            const grid = allDrivers.filter((d) => d.teamId !== '')
+            const defs = [
+              { key: 'pace' as const, label: 'pace', v: a.pace },
+              { key: 'overtaking' as const, label: 'overtaking', v: a.overtaking },
+              { key: 'wetWeatherPace' as const, label: 'wet-weather pace', v: a.wetWeatherPace },
+              { key: 'smoothness' as const, label: 'tyre management', v: a.smoothness },
+            ]
+            return defs
+              .filter((d) => grid.filter((g) => g[d.key] > d.v).length < 5)
+              .sort((x, y) => y.v - x.v)
+              .map((d) => d.label)
+          })()
+          const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength, knownFor) : null
           const milestones = buildMilestones(career)
 
           return (

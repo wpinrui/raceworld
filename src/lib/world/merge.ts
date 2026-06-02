@@ -55,6 +55,7 @@ function driverAttributes(d: Driver, teams: Team[]): DriverAttributes {
     pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness,
     overall: Math.round(overall(d)),
     age: d.age, primeEnd: d.primeEnd, peakPotential: d.peakPotential,
+    narrativeModifier: d.narrativeModifier,
     nationality: d.nationality, gender: d.gender ?? 'male',
     teamId: d.teamId, teamName: team?.name ?? 'Free Agent',
     contractExpiresAfterSeason: d.contractExpiresAfterSeason,
