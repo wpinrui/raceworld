@@ -272,7 +272,7 @@ export default function DriverPage() {
                           </div>
                         </>
                       ) : (
-                        <p className="px-4 py-3 text-sm text-[#FFFFFF]">Not racing this season.</p>
+                        <p className="px-4 py-3 text-sm text-[#FFFFFF]">{a.isFreeAgent ? 'Not racing this season.' : 'No races completed yet this season.'}</p>
                       )}
                     </Panel>
                   )}
@@ -304,12 +304,10 @@ export default function DriverPage() {
                     </p>
                   </Panel>
 
-                  {/* Recent milestones */}
-                  {milestones.length > 0 && (
-                    <Panel title="Recent milestones" flush fill className="lg:col-span-4">
-                      <MilestonesTimeline events={milestones.slice(-5).reverse()} />
-                    </Panel>
-                  )}
+                  {/* Recent milestones (placeholder empty-state keeps the grid cell filled) */}
+                  <Panel title="Recent milestones" flush fill className="lg:col-span-4">
+                    <MilestonesTimeline events={milestones.slice(-5).reverse()} />
+                  </Panel>
 
                   {/* Recent form — FM-style form line (pre-race form per round) */}
                   {a && (
