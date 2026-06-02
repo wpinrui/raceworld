@@ -220,13 +220,13 @@ export interface DriverMediaScore { driverId: string; score: number }
 export interface TeamMediaScore   { teamId: string;   score: number }
 
 // Full media breakdown for the power-rankings view — the component values that
-// feed `media_score = 0.5·a + 0.3·b + 0.2·c + narrative + paceNarrative`.
+// feed `media_score = 0.35·a + 0.45·b + 0.2·c + narrative + paceNarrative`.
 export interface DriverMediaBreakdown {
   driverId: string
   a: number              // results percentile (grid only)
   b: number              // teammate H2H
   c: number              // car-adjusted overperformance
-  narrative: number      // god-mode narrative modifier
+  narrative: number      // effective narrative: god-mode modifier after past-prime decay
   paceNarrative: number  // pace-derived swing (free agents only)
   score: number
 }

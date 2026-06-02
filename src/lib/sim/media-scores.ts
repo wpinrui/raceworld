@@ -102,8 +102,14 @@ export function computeDriverMediaBreakdowns(
     // A free agent has no results, so their raw pace is converted into a
     // narrative swing — the only signal we have on an unproven driver.
     const paceNarrative = driver.teamId === '' ? Math.max(-20, Math.min(20, (driver.pace - 68) * 0.8)) : 0
-    const score = Math.max(0, Math.min(100, 0.5 * a + 0.3 * b + 0.2 * c + driver.narrativeModifier + paceNarrative))
-    return { driverId: driver.id, a, b, c, narrative: driver.narrativeModifier, paceNarrative, score }
+    // The narrative halo/deficit fades as a driver declines past their prime, so an
+    // ageing media darling can't coast on reputation once the results dry up.
+    const narrativeDecay = Math.max(0, 1 - 0.25 * Math.max(0, driver.age - driver.primeEnd))
+    const narrative = driver.narrativeModifier * narrativeDecay
+    // Skill in equal machinery (B, teammate H2H) is the dominant signal so a weak
+    // driver can't ride a fast car's raw points (A) to an undeserved reputation.
+    const score = Math.max(0, Math.min(100, 0.35 * a + 0.45 * b + 0.2 * c + narrative + paceNarrative))
+    return { driverId: driver.id, a, b, c, narrative, paceNarrative, score }
   })
 }
 
