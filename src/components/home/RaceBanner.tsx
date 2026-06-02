@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import ReactCountryFlag from 'react-country-flag'
 import { ChevronRight } from 'lucide-react'
@@ -30,30 +30,48 @@ export function RaceBanner({ simming, onSimTo }: Props) {
   const teams = useSeasonStore((s) => s.teams)
   const teamColor = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
 
-  // Mouse wheel over the calendar scrolls it horizontally instead of the whole page,
-  // easing toward the target so it glides rather than jumping.
+  // The calendar scrolls horizontally (mouse wheel) and keeps the current race centred
+  // (so simulated results scroll into view as the round advances). Both ease to a target.
   const scrollRef = useRef<HTMLDivElement>(null)
+  const currentRef = useRef<HTMLAnchorElement>(null)
+  const targetRef = useRef<number | null>(null)
+  const rafRef = useRef(0)
+  const easeTo = useCallback((left: number) => {
+    const el = scrollRef.current
+    if (!el) return
+    targetRef.current = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, left))
+    if (rafRef.current) return
+    const tick = () => {
+      const el2 = scrollRef.current
+      if (!el2 || targetRef.current == null) { rafRef.current = 0; return }
+      const diff = targetRef.current - el2.scrollLeft
+      if (Math.abs(diff) < 0.5) { el2.scrollLeft = targetRef.current; rafRef.current = 0; return }
+      el2.scrollLeft += diff * 0.18
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }, [])
+
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    let target = el.scrollLeft
-    let raf = 0
-    const tick = () => {
-      const diff = target - el.scrollLeft
-      if (Math.abs(diff) < 0.5) { el.scrollLeft = target; raf = 0; return }
-      el.scrollLeft += diff * 0.18
-      raf = requestAnimationFrame(tick)
-    }
     const onWheel = (e: WheelEvent) => {
       if (el.scrollWidth <= el.clientWidth) return // nothing to scroll — let the page move
       e.preventDefault()
-      const max = el.scrollWidth - el.clientWidth
-      target = Math.max(0, Math.min(max, target + e.deltaY + e.deltaX))
-      if (!raf) raf = requestAnimationFrame(tick)
+      easeTo((targetRef.current ?? el.scrollLeft) + e.deltaY + e.deltaX)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => { el.removeEventListener('wheel', onWheel); if (raf) cancelAnimationFrame(raf) }
-  }, [])
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [easeTo])
+
+  // Re-centre on the current race whenever the round advances (incl. live during a sim).
+  useEffect(() => {
+    const el = scrollRef.current
+    const cur = currentRef.current
+    if (!el || !cur) return
+    const delta = cur.getBoundingClientRect().left + cur.offsetWidth / 2 - (el.getBoundingClientRect().left + el.clientWidth / 2)
+    easeTo(el.scrollLeft + delta)
+  }, [currentRound, easeTo])
 
   return (
     <Panel title="Calendar" flush>
@@ -116,6 +134,7 @@ export function RaceBanner({ simming, onSimTo }: Props) {
             return (
               <Link
                 key={round}
+                ref={currentRef}
                 href="/race"
                 className="flex min-w-[160px] flex-col gap-1.5 rounded-lg border border-[#00D9FF] bg-[#00D9FF]/10 px-3 py-2.5 transition-colors hover:bg-[#00D9FF]/20"
               >
