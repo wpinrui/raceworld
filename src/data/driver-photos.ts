@@ -15,7 +15,7 @@ export const DRIVER_PHOTOS: Record<string, string> = {
   'kimi-antonelli': '/drivers/kimi-antonelli.png',
   'fernando-alonso': '/drivers/fernando-alonso.png',
   'lance-stroll': '/drivers/lance-stroll.png',
-  'pierre-gasly': '/drivers/pierre-gasly.png',
+  'pierre-gasly': '/drivers/pierre-gasly.png', // PNG on Commons; others are JPG
   'franco-colapinto': '/drivers/franco-colapinto.png',
   'alexander-albon': '/drivers/alexander-albon.png',
   'carlos-sainz': '/drivers/carlos-sainz.png',
