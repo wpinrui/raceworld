@@ -145,7 +145,7 @@ export default function NewsroomPage() {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Ask anything, e.g. how is the title fight shaping up?"
+                  placeholder="Search the newsroom"
                   className="flex-1 px-3 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
                 />
                 <button
