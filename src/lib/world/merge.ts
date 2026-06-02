@@ -140,6 +140,7 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
         championshipFinish: champPos >= 0 ? champPos + 1 : null,
         results: liveResults,
         inProgress: true,
+        clinched: clinchedDriverChampion(store) === db.driverId,
       }
     : null
 

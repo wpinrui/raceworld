@@ -15,6 +15,7 @@ export interface CareerSeason {
   championshipFinish: number | null
   results: (number | null)[] // per-round finish (null = DNF); length = rounds contested
   inProgress: boolean
+  clinched?: boolean // live season only: title mathematically secured before the finish
 }
 
 export interface DriverAttributes {

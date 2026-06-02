@@ -121,7 +121,7 @@ function famouslySentence(career: DriverCareer, subjCap: string): string {
   if (podiums === 0) return ''
 
   const titleYears = career.seasons
-    .filter((s) => !s.inProgress && s.championshipFinish === 1)
+    .filter((s) => s.championshipFinish === 1 && (!s.inProgress || s.clinched))
     .map((s) => s.year)
     .sort((a, b) => a - b)
   if (titleYears.length > 1) {

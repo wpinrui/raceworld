@@ -67,8 +67,9 @@ export function buildMilestones(career: DriverCareer): MilestoneEvent[] {
       }
     })
 
-    // Only a finished season counts as a title; mid-season P1 is just the current leader.
-    if (s.championshipFinish === 1 && !s.inProgress) {
+    // A title counts once finished or mathematically clinched; mid-season P1 that isn't
+    // yet secured is only the current leader, not a champion.
+    if (s.championshipFinish === 1 && (!s.inProgress || s.clinched)) {
       events.push({ id: `title-${s.year}`, label: 'World Champion', year: s.year, round: null, kind: 'title' })
     }
   }
