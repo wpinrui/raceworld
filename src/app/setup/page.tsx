@@ -7,7 +7,12 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import type { Driver, Team } from '@/lib/sim/types'
+import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
 
 const DRIVERS_PER_TEAM = 2
 
@@ -20,6 +25,9 @@ export default function SetupPage() {
   const [localTeams, setLocalTeams] = useState<Team[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [newTeamShort, setNewTeamShort] = useState('')
+  const [newTeamColor, setNewTeamColor] = useState('#888888')
 
   useEffect(() => {
     setHydrated(true)
@@ -90,6 +98,29 @@ export default function SetupPage() {
 
   function removeDriver(id: string) {
     setLocalDrivers((prev) => prev.filter((d) => d.id !== id))
+  }
+
+  // God-mode grid change: queue a brand-new team to join next season. The team enters
+  // at the lowest car pace with empty seats the market then fills (GDD §Grid Changes).
+  function handleAddTeam() {
+    const name = newTeamName.trim()
+    if (!name) return
+    const existingIds = new Set([
+      ...localTeams.map((t) => t.id),
+      ...seasonStore.pendingGridChanges.additions.map((t) => t.id),
+    ])
+    let id = `${slugify(name) || 'team'}-${Math.random().toString(36).slice(2, 7)}`
+    while (existingIds.has(id)) id = `${slugify(name) || 'team'}-${Math.random().toString(36).slice(2, 7)}`
+    seasonStore.queueTeamAddition({
+      id,
+      name,
+      shortName: (newTeamShort.trim() || name.slice(0, 3)).toUpperCase().slice(0, 4),
+      color: newTeamColor,
+      carPace: 0, // placeholder; set to the lowest grid pace when the change applies
+    })
+    setNewTeamName('')
+    setNewTeamShort('')
+    setNewTeamColor('#888888')
   }
 
   function handleStartSeason() {
@@ -239,6 +270,104 @@ export default function SetupPage() {
             </div>
           </div>
         )}
+
+        {/* God-mode grid changes — deferred to next season (GDD §Grid Changes). Only
+            offered while a season is actually running; the change takes effect at the
+            season-end transition, so it is labelled with next year. */}
+        {isActive && !isOffSeason(seasonStore.phase) && (() => {
+          const pending = seasonStore.pendingGridChanges
+          const removable = localTeams.filter((t) => !pending.removals.includes(t.id))
+          return (
+            <div className="mt-6 rounded-xl bg-[#1E2431] overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
+                <div className="w-1.5 h-8 rounded-full bg-[#DC143C]" />
+                <div className="flex-1">
+                  <div className="font-semibold text-[#FFFFFF]">Grid Changes (God Mode)</div>
+                  <div className="text-xs text-[#FFFFFF]">
+                    Effective {seasonStore.year + 1} — the rest of {seasonStore.year} plays out on the current grid
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {(pending.additions.length > 0 || pending.removals.length > 0) && (
+                  <div className="space-y-1.5">
+                    {pending.additions.map((t) => (
+                      <div key={t.id} className="flex items-center gap-2 text-sm">
+                        <span className="px-2 py-0.5 rounded bg-[#10B981]/20 text-[#10B981] text-[10px] font-bold uppercase tracking-wide">Joins</span>
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                        <span className="text-[#FFFFFF] font-medium">{t.name}</span>
+                        <span className="text-[#FFFFFF]">({t.shortName})</span>
+                        <button onClick={() => seasonStore.cancelTeamAddition(t.id)} className="ml-auto text-xs text-[#FFFFFF] hover:text-[#DC143C] transition-colors">Cancel</button>
+                      </div>
+                    ))}
+                    {pending.removals.map((rid) => {
+                      const t = localTeams.find((x) => x.id === rid)
+                      return (
+                        <div key={rid} className="flex items-center gap-2 text-sm">
+                          <span className="px-2 py-0.5 rounded bg-[#DC143C]/20 text-[#DC143C] text-[10px] font-bold uppercase tracking-wide">Leaves</span>
+                          <span className="text-[#FFFFFF] font-medium">{t?.name ?? rid}</span>
+                          <span className="text-xs text-[#FFFFFF]">drivers re-enter the market</span>
+                          <button onClick={() => seasonStore.cancelTeamRemoval(rid)} className="ml-auto text-xs text-[#FFFFFF] hover:text-[#00D9FF] transition-colors">Cancel</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div>
+                    <label className="text-xs text-[#FFFFFF] block mb-1">New team name</label>
+                    <input
+                      type="text" value={newTeamName} placeholder="e.g. Audi"
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#FFFFFF] block mb-1">Short</label>
+                    <input
+                      type="text" value={newTeamShort} maxLength={4} placeholder="AUD"
+                      onChange={(e) => setNewTeamShort(e.target.value)}
+                      className="w-20 px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#FFFFFF] block mb-1">Colour</label>
+                    <input
+                      type="color" value={newTeamColor}
+                      onChange={(e) => setNewTeamColor(e.target.value)}
+                      className="w-10 h-9 rounded bg-[#0F1419] border border-[#303848] cursor-pointer"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddTeam} disabled={!newTeamName.trim()}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Plus size={13} /> Add team
+                  </button>
+                </div>
+
+                {removable.length > 0 && (
+                  <div>
+                    <label className="text-xs text-[#FFFFFF] block mb-1.5">Remove a team next season</label>
+                    <div className="flex flex-wrap gap-2">
+                      {removable.map((t) => (
+                        <button
+                          key={t.id} onClick={() => seasonStore.queueTeamRemoval(t.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:bg-[#DC143C]/30 text-xs font-semibold transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+                          {t.shortName} ✕
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {!isActive && (
           <div className="mt-8 flex justify-end">
