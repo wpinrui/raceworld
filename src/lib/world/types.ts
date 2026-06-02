@@ -104,7 +104,7 @@ export interface DriverSeasonRace {
   dnf: boolean
   points: number
   lapsCompleted: number
-  q1: number | null // qualifying lap times, ms
+  q1: number | null // qualifying lap times, seconds
   q2: number | null
   q3: number | null
   stints: Stint[]
