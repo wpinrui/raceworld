@@ -40,18 +40,16 @@ function styleClause(a: DriverAttributes, poss: string): string {
 }
 
 function standingClause(c: DriverCareer): string {
-  const { titles, wins, podiums, poles, points, seasons } = c.totals
+  const { titles, wins, podiums, poles, points, seasons, races } = c.totals
+  // No race starts yet: nothing to tally.
+  if (races === 0) return 'Yet to make a Grand Prix start'
   const head = titles >= 4 ? `One of the all-time greats, a ${titles}-time World Champion`
     : titles > 0 ? `A ${titles}-time World Champion`
     : wins >= 10 ? 'A proven race winner yet to land a title'
     : wins > 0 ? 'A race winner still chasing a maiden championship'
     : podiums > 0 ? 'A podium-getter still hunting a first win'
-    : seasons > 0 ? 'Still searching for a breakthrough result'
-    : 'Yet to start a Grand Prix'
-  const tally = seasons > 0
-    ? `, with ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'} and ${poles} ${poles === 1 ? 'pole' : 'poles'} from ${seasons} ${seasons === 1 ? 'season' : 'seasons'}, for ${points.toLocaleString()} career points`
-    : ''
-  return head + tally
+    : 'Still searching for a breakthrough result'
+  return `${head}, with ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'} and ${poles} ${poles === 1 ? 'pole' : 'poles'} from ${seasons} ${seasons === 1 ? 'season' : 'seasons'}, for ${points.toLocaleString()} career points`
 }
 
 function trajectoryClause(a: DriverAttributes, subj: string): string {
