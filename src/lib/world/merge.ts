@@ -21,7 +21,7 @@ function driverAttributes(d: Driver, teams: Team[]): DriverAttributes {
   return {
     pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness,
     overall: Math.round(overall(d)),
-    age: d.age, nationality: d.nationality,
+    age: d.age, primeEnd: d.primeEnd, nationality: d.nationality,
     teamId: d.teamId, teamName: team?.name ?? 'Free Agent',
     contractExpiresAfterSeason: d.contractExpiresAfterSeason,
     isFreeAgent: d.teamId === '',

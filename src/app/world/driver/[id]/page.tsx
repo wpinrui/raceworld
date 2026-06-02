@@ -53,7 +53,8 @@ export default function DriverPage() {
                   </div>
                   {a ? (
                     <p className="text-sm text-[#FFFFFF] mt-1">
-                      Age {a.age} ·{' '}
+                      Age {a.age} · peak until {a.primeEnd}
+                      {' · '}
                       {a.isFreeAgent ? <span className="italic">Free Agent</span> : <TeamLink id={a.teamId}>{a.teamName}</TeamLink>}
                       {!a.isFreeAgent && <span> · contract until {a.contractExpiresAfterSeason}</span>}
                     </p>
@@ -116,6 +117,10 @@ export default function DriverPage() {
                               <div>
                                 <label className="text-xs text-[#FFFFFF] block mb-1">Potential</label>
                                 <input type="number" min={0} max={100} value={liveDriver.peakPotential} onChange={(e) => updateDriver(id, { peakPotential: Number(e.target.value) })} className={inputClass} />
+                              </div>
+                              <div>
+                                <label className="text-xs text-[#FFFFFF] block mb-1">Peak age</label>
+                                <input type="number" min={20} max={45} value={liveDriver.primeEnd} onChange={(e) => updateDriver(id, { primeEnd: Number(e.target.value) })} className={inputClass} />
                               </div>
                               <div>
                                 <label className="text-xs text-[#FFFFFF] block mb-1">Contract until</label>

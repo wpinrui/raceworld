@@ -22,6 +22,7 @@ export interface DriverAttributes {
   smoothness: number
   overall: number
   age: number
+  primeEnd: number // age at which the driver's decline begins ("peak age")
   nationality: string
   teamId: string
   teamName: string
