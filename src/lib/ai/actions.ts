@@ -2,18 +2,21 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { getAnthropic, hasApiKey, NEWSROOM_MODEL, MAX_TOOL_ITERATIONS, MAX_TOKENS } from './client'
-import { NEWSROOM_TOOLS, executeTool } from './tools'
+import { NEWSROOM_TOOLS, executeTool, gatherRaceReviewContext } from './tools'
 import { getRaceReview, listRaceReviews, upsertNewsArticle, getSeasonIdByYear, type DbNewsArticle } from '@/lib/db/queries'
 import type { RaceReview, NewsroomResult, NewsroomSearchResult } from './types'
 
-const RACE_REVIEW_SYSTEM = `You are a motorsport journalist covering an alternate-reality Formula 1 world. This world has its OWN drivers, teams, and history; there is no real-world F1, only the data returned by your tools exists.
+const RACE_REVIEW_SYSTEM = `You are a motorsport journalist covering an alternate-reality Formula 1 world. This world has its OWN drivers, teams, and history; there is no real-world F1.
+
+The user message contains ALL the data for the race: the full classification (finishing order, grid positions, points, DNFs, lapsCompleted, and gapToWinnerSeconds), the detected feats, the championship standings after the round, and the season's earlier races. Write the review using ONLY that data.
 
 Hard rules:
-- Every factual claim (positions, gaps, points, records, championship state) MUST come from a tool result. Never invent drivers, teams, lap times, or records.
-- If a tool returns no data, omit that angle rather than guessing.
-- Write in a concise sports-journalism voice. Body ~150-300 words, plain paragraphs, no markdown headings, no em dashes.
-
-To write a race review, first call get_race_classification and get_race_feats for the given race, and get_season_standings for championship context. Only dig into a driver's career/honours if a feat makes them newsworthy. Then write the report as plain prose.`
+- Every factual claim (positions, gaps, points, DNFs, championship state, who leads) MUST come from the provided data. Never invent drivers, teams, lap times, margins, or records.
+- State a finishing margin ONLY from gapToWinnerSeconds (in seconds). The winner has no gap. If a non-winner's gapToWinnerSeconds is null, they did NOT finish (DNF) — never state a time or "held off by X seconds" for them.
+- Use the standings data for any championship-lead or points claims; do the arithmetic from the numbers given.
+- Write in a concise sports-journalism voice, ~150-300 words, plain paragraphs.
+- Do NOT use markdown, headings, bold, em dashes, or en dashes. Use commas, periods, or parentheses instead.
+- You may call the tools ONLY to fetch a driver's or team's career/honours if a feat makes them especially newsworthy — never for race facts (those are already provided).`
 
 const SEARCH_SYSTEM = `You are the newsroom for an alternate-reality Formula 1 world. This world has its OWN drivers, teams, and history; there is no real-world F1, only the data returned by your tools exists.
 
@@ -40,6 +43,12 @@ const REVIEW_SCHEMA = {
 
 function textOf(resp: Anthropic.Message): string {
   return resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('').trim()
+}
+
+// Belt-and-suspenders: strip em/en dashes from generated copy even if the model ignores
+// the prompt. Collapses surrounding whitespace into a single comma+space.
+function noDashes(s: string): string {
+  return s.replace(/\s*[—–]\s*/g, ', ')
 }
 
 function toReview(a: DbNewsArticle): RaceReview {
@@ -98,13 +107,15 @@ async function structure(anthropic: Anthropic, draft: string): Promise<{ headlin
 async function generateRaceReview(year: number, round: number): Promise<NewsroomResult<RaceReview>> {
   const anthropic = getAnthropic()
   if (!anthropic) return { ok: false, error: 'NO_API_KEY' }
+  const context = gatherRaceReviewContext(year, round)
+  if (!context.thisRace) return { ok: false, error: 'NOT_FOUND' }
   try {
-    const draft = await runConversation(
-      anthropic,
-      RACE_REVIEW_SYSTEM,
-      `Write a race review for round ${round} of the ${year} season.`,
-    )
-    const { headline, dek, body } = await structure(anthropic, draft)
+    const userText = `Write a race review for round ${round} of the ${year} season. Use ONLY this data:\n\n${JSON.stringify(context)}`
+    const draft = await runConversation(anthropic, RACE_REVIEW_SYSTEM, userText)
+    const out = await structure(anthropic, draft)
+    const headline = noDashes(out.headline)
+    const dek = noDashes(out.dek)
+    const body = noDashes(out.body)
     upsertNewsArticle({
       type: 'race-review', seasonId: getSeasonIdByYear(year), year, round,
       headline, dek, body, model: NEWSROOM_MODEL,
@@ -141,7 +152,7 @@ export async function actionSearchNewsroom(query: string): Promise<NewsroomResul
   const trimmed = query.trim()
   if (!trimmed) return { ok: false, error: 'NO_OUTPUT' }
   try {
-    const answer = await runConversation(anthropic, SEARCH_SYSTEM, trimmed)
+    const answer = noDashes(await runConversation(anthropic, SEARCH_SYSTEM, trimmed))
     if (!answer) return { ok: false, error: 'NO_OUTPUT' }
     return { ok: true, data: { answer } }
   } catch (e) {

@@ -122,6 +122,22 @@ export const NEWSROOM_TOOLS: Anthropic.Tool[] = [
   },
 ]
 
+// Everything needed to write a race review, gathered up front so the model never has to
+// guess: full classification (with real gaps), detected feats, championship standings, and
+// the season's earlier races for context.
+export function gatherRaceReviewContext(year: number, round: number) {
+  const seasonId = getSeasonIdByYear(year)
+  const thisRace = classificationFor(year, round)
+  const feats = seasonId == null ? [] : detectRaceFeats(seasonId, round)
+  const standings = seasonId == null ? null : getSeasonStandings(seasonId)
+  const previousRaces = []
+  for (let r = Math.max(1, round - 3); r < round; r++) {
+    const c = classificationFor(year, r)
+    if (c) previousRaces.push(c)
+  }
+  return { thisRace, feats, standingsAfterRound: standings, previousRaces }
+}
+
 type ToolInput = Record<string, unknown>
 
 function classificationFor(year: number, round: number) {
@@ -130,11 +146,19 @@ function classificationFor(year: number, round: number) {
   const race = getRaceInSeasonByRound(seasonId, round)
   if (!race) return null
   const rows = getResultsForRace(race.id)
+  const finisherTimes = rows.filter((r) => !r.dnf && r.total_time_ms != null).map((r) => r.total_time_ms as number)
+  const leaderTime = finisherTimes.length ? Math.min(...finisherTimes) : null
   return {
     year, round, circuit: race.circuit_name,
     results: rows.map((r) => ({
       driver: r.driver_name, team: r.team_name, grid: r.grid_position,
       finish: r.dnf ? null : r.finish_position, dnf: !!r.dnf, points: r.points,
+      lapsCompleted: r.laps_completed,
+      // Gap to the winner in seconds (null for the winner and for DNFs). This is the ONLY
+      // source of finishing margins — the model must not invent gaps.
+      gapToWinnerSeconds: !r.dnf && r.total_time_ms != null && leaderTime != null && r.total_time_ms > leaderTime
+        ? Math.round((r.total_time_ms - leaderTime) / 1000 * 1000) / 1000
+        : null,
     })),
   }
 }
