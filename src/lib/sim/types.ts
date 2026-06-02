@@ -30,6 +30,7 @@ export interface Team {
 export interface Circuit {
   id: string
   name: string
+  code: string           // 3-letter race code, Wikipedia-style (e.g. BHR, SAU, AUS)
   location: string
   country: string        // ISO 3166-1 alpha-2, for the calendar flag
   laps: number

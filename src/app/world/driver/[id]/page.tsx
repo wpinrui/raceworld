@@ -18,6 +18,7 @@ import { TeamLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 type Tab = 'overview' | 'seasons'
 
@@ -43,7 +44,7 @@ export default function DriverPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
+      <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !career && <p className="text-sm text-[#FFFFFF]">Driver not found.</p>}
 
@@ -203,18 +204,18 @@ export default function DriverPage() {
                               <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Points</p>
                             </div>
                           </div>
-                          <div className="overflow-x-auto px-5 py-4">
-                            <div className="flex gap-1.5">
+                          <div className="px-5 py-4">
+                            <div className="flex flex-wrap gap-1.5">
                               {career.currentResults.map((r) => (
-                                <Link
-                                  key={r.round}
-                                  href={`/world/season/${current?.year}/${r.round}`}
-                                  title={`${r.circuitName} · ${r.points} pts`}
-                                  className="flex shrink-0 flex-col items-center gap-1"
-                                >
-                                  <span className="text-[9px] font-bold tabular-nums uppercase tracking-widest text-[#FFFFFF]">{String(r.round).padStart(2, '0')}</span>
-                                  <ResultChip position={r.finishPosition} />
-                                </Link>
+                                <Tooltip key={r.round} content={`${r.circuitName} · ${r.points} pts`}>
+                                  <Link
+                                    href={`/world/season/${current?.year}/${r.round}`}
+                                    className="flex shrink-0 flex-col items-center gap-1"
+                                  >
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#FFFFFF]">{calendar2026[r.round - 1]?.code ?? String(r.round).padStart(2, '0')}</span>
+                                    <ResultChip position={r.finishPosition} />
+                                  </Link>
+                                </Tooltip>
                               ))}
                             </div>
                           </div>
