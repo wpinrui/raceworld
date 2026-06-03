@@ -1312,21 +1312,30 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       const fromPos = fromIdx >= 0 ? ordinal(fromIdx + 1) : ''
       // Frame the move by its real direction in the constructors order (lower index = better).
       const direction = fromIdx >= 0 && toIdx >= 0 ? (toIdx < fromIdx ? 'up' : toIdx > fromIdx ? 'down' : 'level') : 'unknown'
-      const drv = ctx.drivers.find((d) => d.id === m.driverId)
-      const appeal = (drv?.age ?? 25) >= 30 ? 'experience and know-how' : 'youth and upside'
       const seed = `silly-${ctx.year}-${r}-${m.driverId}`
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal }
-      // Classic silly-season colour: invented, unfalsifiable sightings / talks / rival suitors.
-      const sillyTexture = texture(seed, [
-        'A sighting of {driver_last} near the {to} hospitality unit did little to quell the talk.',
-        'The {driver_last} camp is said to have held exploratory talks.',
-        'Word of a quiet meeting at {to} headquarters has only fanned the flames.',
-        '{to} are not thought to be the only admirers.',
-        'An agent was spotted doing the rounds of the paddock motorhomes.',
-        '{driver_last} was studiously non-committal when the subject came up.',
-        'Neither {from} nor {to} would comment on the record.',
-        'A weekend of whispers put the two camps in the same conversations.',
-      ], slots, 60)
+      const drv = ctx.drivers.find((d) => d.id === m.driverId)
+      const veteran = (drv?.age ?? 25) >= 30
+      // Ambiguous, unfalsifiable "qualities" that fit "value {driver}'s {appeal}" — age-aware so
+      // we never claim something the data could contradict.
+      // Each fits "value {driver}'s {appeal}", so no leading article.
+      const qualities = veteran
+        ? ['experience and know-how', 'racecraft and composure', 'steadying influence in the garage', 'big-race temperament', 'sheer mileage', 'marketability', 'professionalism', 'all-round package', 'standing in the paddock', 'reliability between the walls']
+        : ['youth and upside', 'raw potential', 'sky-high ceiling', 'fearlessness', 'long-term promise', 'marketability', 'professionalism', 'all-round package', 'standing in the paddock', 'fresh edge']
+      const appeal = pick(qualities, `${seed}|appeal`)
+      // Status descriptor for "would be adding {status}" — grounded so it can't contradict.
+      const wins = winsUpTo(ctx, m.driverId, r)
+      const status = wins > 0 ? 'a proven race winner' : (dRank >= 0 && dRank < 4 ? 'an upper-echelon talent' : 'a known quantity')
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal, status }
+      // Texture from many independent low-odds sources (each ~10%, several can fire) rather than
+      // one heavy line — sightings, rival suitors, the driver in the pen, a team line, fans, pundits.
+      const sillyTexture = [
+        texture(`${seed}|sight`, ['A sighting of {driver_last} near the {to} hospitality unit did little to quell the talk.', 'The {driver_last} camp is said to have held exploratory talks.', 'Word of a quiet meeting at {to} headquarters has only fanned the flames.', 'An agent was spotted doing the rounds of the paddock motorhomes.'], slots, 10),
+        texture(`${seed}|rival`, ['{to} are not thought to be the only admirers.', 'At least one rival outfit is said to be monitoring the situation.', 'Whispers suggest {to} face competition for the signature.'], slots, 10),
+        texture(`${seed}|pen`, ['Asked directly, {driver_last} batted the question away in the media pen.', '{driver_last} would say only that the focus is on the racing.', '{driver_last} offered nothing but a wry smile when pressed.'], slots, 10),
+        texture(`${seed}|spox`, ['A {to} spokesperson declined to comment.', '{to} dismissed the talk as paddock noise.', '{from} insisted their driver is going nowhere.'], slots, 10),
+        texture(`${seed}|fan`, ['Fans have already started the countdown on social media.', 'The grandstands buzzed with the rumour all weekend.', 'Supporters of both camps are split on the idea.'], slots, 10),
+        texture(`${seed}|pundit`, ['Pundits are divided on whether the move makes sense.', 'Analysts reckon it would suit one party more than the other.', 'The paddock consensus is that it would be a gamble worth taking.'], slots, 10),
+      ].filter(Boolean).join(' ')
       out.push({
         id: seed, category: 'silly_season', round: r, priority: 30,
         headline: fill(pick([
@@ -1356,7 +1365,7 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
               : direction === 'level'
               ? ['It would be a sideways move, {from} ({from_pos}) and {to} ({to_pos}) near-level in the order.', 'There is little between {from} ({from_pos}) and {to} ({to_pos}) in the standings.']
               : [''],
-            ['{to} would gain a known quantity.', 'For {to}, it would be a statement of intent.', 'Each party has something the other wants.']),
+            ['{to} would be adding {status}.', 'For {to}, it would be a statement of intent.', 'Each party has something the other wants.']),
           compose(`${seed}:p3`, slots,
             ['Nothing is signed, and {from} will not give up {driver_last} easily.', 'It remains speculation, but a persistent kind.', 'Whether it comes off is another matter entirely.'],
             ['Silly season has a long way still to run.', 'Expect the story to develop over the coming rounds.', 'The driver market rarely moves in a straight line.']),
