@@ -294,12 +294,12 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       : clinched
       ? [
           'With the win, {leader} cannot now be caught in the championship.',
-          'The result puts the title beyond doubt: {leader} is uncatchable.',
+          'The result puts the title beyond doubt, and {leader} is now uncatchable.',
           '{leader} has effectively wrapped up the championship, {lead_gap} clear with {races_left} to run.',
         ]
       : leadChanged
       ? [
-          'The result swings the championship: {leader} now leads.',
+          'The result swings the championship, and {leader} now leads.',
           'There is a new name on top of the standings in {leader}.',
           '{leader} takes over at the head of the table, {lead_gap} ahead of {second}.',
           'The points lead changes hands, with {leader} now in front of {second}.',
@@ -327,7 +327,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       headline: fill(pick([
         '{winner} wins the {circuit}', '{winner} takes the {circuit}', '{winner} triumphs at the {circuit}',
         '{winner} masters the {circuit}', '{winner} conquers the {circuit}', '{winner} seals {circuit} victory',
-        '{winner} on top at the {circuit}', '{winner} delivers at the {circuit}', '{circuit}: {winner} takes the win',
+        '{winner} on top at the {circuit}', '{winner} delivers at the {circuit}', 'The {circuit} goes to {winner}',
         'Victory for {winner} at the {circuit}', '{winner} reigns at the {circuit}', '{winner_last} wins the {circuit}',
         '{winner} untouchable at the {circuit}', '{winner} the class of the field at the {circuit}',
       ], `${seed}|h`), slots),
@@ -526,8 +526,8 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     out.push({
       id: seed, category: 'technical_upgrade', round: r, priority: 45,
       headline: fill(pick([
-        'Upgrade roundup: the {circuit}', 'Development watch: {circuit}', 'New parts at the {circuit}',
-        'Who brought what to the {circuit}', 'Technical roundup: {circuit}', 'The development race at the {circuit}',
+        'Upgrade roundup from the {circuit}', 'Development watch at the {circuit}', 'New parts at the {circuit}',
+        'Who brought what to the {circuit}', 'Technical roundup from the {circuit}', 'The development race at the {circuit}',
         'Inside the {circuit} upgrade war', 'Fresh bodywork at the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
@@ -694,7 +694,7 @@ function features(ctx: NewsContext): NewsArticle[] {
       out.push({
         id: seed, category: 'feature', round: r, priority: 82,
         headline: fill(pick([
-          'Mid-season report: the {year} story so far', 'Half-distance and the {year} season takes shape',
+          'The {year} story so far', 'Half-distance and the {year} season takes shape',
           'Taking stock at the {year} midpoint', 'The {year} season at half-time',
           'Where the {year} championship stands',
         ], `${seed}|h`), slots),
@@ -734,7 +734,7 @@ function features(ctx: NewsContext): NewsArticle[] {
       out.push({
         id: seed, category: 'feature', round: N, priority: 88,
         headline: fill(pick([
-          'The {year} season in review', '{year}: how the championship was won',
+          'The {year} season in review', 'How the {year} championship was won',
           'Looking back on {year}', 'The story of the {year} season',
           '{champ} and the making of {year}',
         ], `${seed}|h`), slots),
@@ -785,7 +785,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
     }
     const intro = isOpener
       ? compose(`${seed}:intro`, slots,
-          ['The {year} season gets under way at the {circuit}.', 'It all begins at the {circuit}.', 'Round one takes the grid to the {circuit}.', 'The waiting is over: the {circuit} opens {year}.'],
+          ['The {year} season gets under way at the {circuit}.', 'It all begins at the {circuit}.', 'Round one takes the grid to the {circuit}.', 'The waiting is over, and the {circuit} opens {year}.'],
           ['Every team starts level on points; the form book is about to be written.', 'The long-awaited opener will give the first real read on the pecking order.', 'Months of speculation finally meet the stopwatch.'])
       : compose(`${seed}:intro`, slots,
           ['Round {round} takes the championship to the {circuit}.', 'Next up is the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'Attention turns to the {circuit}.'],
@@ -810,8 +810,8 @@ function previews(ctx: NewsContext): NewsArticle[] {
     out.push({
       id: seed, category: 'preview_schedule', round: r, priority: isNext ? 80 : 50,
       headline: fill(pick([
-        'Preview: the {circuit}', '{circuit} up next', 'What to watch at the {circuit}',
-        'Looking ahead to the {circuit}', 'Round {round}: the {circuit}', 'The {circuit} in focus',
+        'A preview of the {circuit}', '{circuit} up next', 'What to watch at the {circuit}',
+        'Looking ahead to the {circuit}', 'Round {round} at the {circuit}', 'The {circuit} in focus',
         'Setting the stage for the {circuit}', 'Eyes on the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
@@ -836,7 +836,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
   const sp = { year: ctx.year, fav: byPace[0]?.name ?? '', fav2: byPace[1]?.name ?? '' }
   out.push({
     id: seed, category: 'preview_schedule', round: 0, priority: 85,
-    headline: fill(pick(['{year} season preview', 'The {year} grid takes shape', 'What to expect in {year}', '{year}: the season ahead', 'The {year} campaign awaits'], `${seed}|h`), sp),
+    headline: fill(pick(['{year} season preview', 'The {year} grid takes shape', 'What to expect in {year}', 'The {year} season ahead', 'The {year} campaign awaits'], `${seed}|h`), sp),
     dek: fill(pick(['Everything to know ahead of the {year} campaign.', 'Setting the scene for {year}.', 'The storylines that will define {year}.'], `${seed}|d`), sp),
     body: paras(
       compose(`${seed}:p1`, sp,
@@ -856,7 +856,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
     const tslots = { team: t.name, year: ctx.year, squad: listJoin(squad) || 'Their driver pairing', tier: tierWord(paceRank(ctx, t.id), ctx.teams.length) }
     out.push({
       id: tseed, category: 'car_launch_livery', round: 0, priority: 30,
-      headline: fill(pick(['{team} reveal their {year} car', '{team} pull the covers off for {year}', '{team} launch their {year} challenger', 'First look: the {year} {team}', '{team} unveil for {year}'], `${tseed}|h`), tslots),
+      headline: fill(pick(['{team} reveal their {year} car', '{team} pull the covers off for {year}', '{team} launch their {year} challenger', 'First look at the {year} {team}', '{team} unveil for {year}'], `${tseed}|h`), tslots),
       dek: fill(pick(['{team} launch their {year} challenger.', '{squad} front the {team} launch.', 'A new look for {team} in {year}.'], `${tseed}|d`), tslots),
       body: paras(
         compose(`${tseed}:p1`, tslots,
@@ -878,7 +878,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
     const rslots = { driver: d.name, driver_last: lastName(d.name), age: d.age, year: ctx.year, team: teamName(ctx, d.teamId) }
     out.push({
       id: rseed, category: 'rookie_debut', round: 0, priority: 25,
-      headline: fill(pick(['Spotlight on {driver}', 'Can {driver} make the step?', '{driver}: one to watch in {year}', 'The rise of {driver}', '{driver} ready for the big stage'], `${rseed}|h`), rslots),
+      headline: fill(pick(['Spotlight on {driver}', 'Can {driver} make the step?', '{driver} is one to watch in {year}', 'The rise of {driver}', '{driver} ready for the big stage'], `${rseed}|h`), rslots),
       dek: fill(pick(['{driver}, {age}, is one to watch in {year}.', 'A big {year} awaits {driver}.', 'Youth gets its chance at {team}.'], `${rseed}|d`), rslots),
       body: paras(
         compose(`${rseed}:p1`, rslots,
@@ -1069,8 +1069,8 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       out.push({
         id: seed, category: 'silly_season', round: r, priority: 30,
         headline: fill(pick([
-          'Rumour: {driver} linked with {to}', '{driver} on {to} radar', 'Could {driver} swap {from} for {to}?',
-          '{to} eyeing a move for {driver}', 'Paddock talk: {driver} to {to}?', 'Speculation grows around {driver}',
+          'Rumour has {driver} linked with {to}', '{driver} on {to} radar', 'Could {driver} swap {from} for {to}?',
+          '{to} eyeing a move for {driver}', 'Is {driver} bound for {to}?', 'Speculation grows around {driver}',
           'Is a {driver} switch to {to} on?', '{driver} the name on everyone lips',
         ], `${seed}|h`), slots),
         dek: fill(pick([
