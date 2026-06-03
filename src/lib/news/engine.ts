@@ -1000,8 +1000,6 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
             ['{leader_last} has {wins} {wins_word} this season.', 'With {wins} {wins_word} banked, {leader_last} has earned the chance.'],
             streak >= 2 ? ['{streak} straight wins have brought the crown within touching distance.', 'A {streak}-race winning run has made it close to a formality.'] : ['']),
           scenarioPara,
-          compose(`${seed}:close`, slots,
-            ['Miss the chance, and the coronation simply waits.', 'If the numbers do not fall right, the title will keep for another week.', 'Either way, it now looks a matter of when, not if.']),
         ),
       })
     }
@@ -1037,8 +1035,6 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
             ['{lead_team} can be crowned {year} Constructors Champions at the {circuit}.', 'The {year} teams title could be {lead_team}\'s by the end of the {circuit}.'],
             ['It would come with {races_left} to spare.', '{lead_team} carry a {cg}-point lead over {rival_team} into the weekend.']),
           fill(pick(reqPool, `${seed}|req`), slots),
-          compose(`${seed}:close`, slots,
-            ['Fall short, and the wait goes on a little longer.', 'If not here, then soon enough.', 'The factory will be watching the maths closely.']),
         ),
       })
     }
@@ -1117,8 +1113,6 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
         compose(`${seed}:stake`, slots,
           ['Up to {max_pts} points remain to be won over {races_left}.', 'With {max_pts} points still on the table, nothing is decided.', 'A single retirement could wipe out the {gap}-point margin.']),
         battleTexture,
-        compose(`${seed}:closer`, slots,
-          ['It is exactly the climax the season deserves.', 'This is what a title race should look like.', 'Every weekend from here is must-watch.', 'The run-in promises to be a thriller.']),
       ),
     })
   }
