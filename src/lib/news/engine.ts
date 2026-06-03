@@ -153,11 +153,22 @@ function podiumBefore(ctx: NewsContext, driverId: string, before: number): boole
   return false
 }
 
+// Plain, slot-safe gap figure ("0.849s" / "13.4s") that reads correctly in every sentence
+// position ("by {margin}", "{margin} clear", "fell {margin} short"). Empty when unknown.
 function marginWord(gap: number | null): string {
-  if (gap == null) return 'a clear margin'
+  if (gap == null) return ''
   if (gap < 1) return `just ${gap.toFixed(3)}s`
-  if (gap < 15) return `${gap.toFixed(1)}s`
-  return `a commanding ${gap.toFixed(1)}s`
+  return `${gap.toFixed(1)}s`
+}
+
+// Invented, unfalsifiable colour. The rule: a texture line may NEVER reference a tracked
+// quantity (position, points, gap, lap, another driver's result). It is either sentiment that
+// matches the known outcome or fully orthogonal to anything we model, so it cannot contradict
+// the standings / driver / classification views. Gated so it stays texture, not boilerplate.
+const TEXTURE_PCT = 66
+function texture(seed: string, pool: string[], slots: Record<string, string | number>): string {
+  if (pool.length === 0 || !chance(`${seed}|tex`, TEXTURE_PCT)) return ''
+  return fill(pick(pool, `${seed}|tex`), slots)
 }
 
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
@@ -275,6 +286,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const startTyre = startingTyre(p1.stints)
     const nextName = r < N ? circuit(ctx, r + 1) : null
     const dnfSolo = dnfs.length === 1 ? dnfs[0] : null
+    const hasMargin = margin !== ''
+    const faller = dnfs[0] ?? null
 
     const circuitName = circuit(ctx, r)
     const seed = `report-${ctx.year}-${r}`
@@ -288,6 +301,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
       next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSolo?.lapsCompleted ?? 0,
+      faller: faller ? lastName(faller.driverName) : '', faller_team: faller?.teamName ?? '',
     }
 
     const leadPara = compose(`${seed}:lead`, slots,
@@ -298,15 +312,22 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner} delivered when it counted at the {circuit}.', 'There was no stopping {winner} at the {circuit}.',
         '{winner} held on to win the {circuit}.', 'A polished afternoon gave {winner} the {circuit}.',
       ],
-      [
-        'The {team} driver came home {margin} clear of {p2}, with {p3} completing the podium.',
-        'A win by {margin} over {p2} sealed it, {p3} third on the rostrum.',
-        '{p2} finished {margin} adrift in second, {p3} rounding out the top three.',
-        'Behind, {p2} took second and {p3} third, beaten by {margin}.',
-        '{margin} covered the win as {p2} and {p3} filled out the podium.',
-        '{p2} chased hard but fell {margin} short, {p3} next up.',
-        'It was {margin} back to {p2}, with {p3} claiming the final podium spot.',
-      ],
+      hasMargin
+        ? [
+            'The {team} driver came home {margin} clear of {p2}, with {p3} completing the podium.',
+            'A win by {margin} over {p2} sealed it, {p3} third on the rostrum.',
+            '{p2} finished {margin} adrift in second, {p3} rounding out the top three.',
+            'Behind, {p2} took second and {p3} third, beaten by {margin}.',
+            '{margin} covered the win as {p2} and {p3} filled out the podium.',
+            '{p2} chased hard but fell {margin} short, {p3} next up.',
+            'It was {margin} back to {p2}, with {p3} claiming the final podium spot.',
+          ]
+        : [
+            '{p2} took second and {p3} completed the podium.',
+            '{p2} followed home in second, with {p3} third.',
+            'Behind, {p2} and {p3} rounded out the top three.',
+            '{p2} was next, with {p3} claiming the final podium spot.',
+          ],
       winnerHome
         ? [
             'The win came on home soil.', 'It was a home victory to savour for {winner_last}.',
@@ -355,7 +376,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const stratPool = strat
       ? [
           'The win was built on {strategy}.', '{winner_last} made {strategy} work.',
-          '{strategy} proved the right call for {winner_last}.',
+          'It was {strategy} that proved the right call for {winner_last}.',
           startTyre ? '{winner_last} started on {start_tyre} and built {strategy} from there.' : 'The {team} pit wall judged {strategy} to perfection.',
         ]
       : ['']
@@ -382,10 +403,28 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
             'Not everyone made the flag, with {dnf_count} {cars} sidelined.',
           ],
           [
-            '{dnf_list} all dropped out.', 'Out went {dnf_list}.',
+            '{dnf_list} dropped out.', 'Out went {dnf_list}.',
             '{dnf_list} did not see the flag.', 'Among them, {dnf_list}.',
             '{dnf_list} were left to rue what might have been.',
           ])
+
+    const texturePool = [
+      '{winner_last} looked spent climbing from the cockpit.',
+      'Over the team radio it sounded like one of the harder afternoons of the year for {winner_last}.',
+      '{winner_last} was treated for dehydration once the cameras had moved on.',
+      'The {team} mechanics were waiting at parc ferme to mob {winner_last}.',
+      'A scruffy pit stop briefly set nerves jangling on the {team} wall.',
+      '{winner_last} kept the visor down through most of the slow-down lap.',
+      'The {team} garage exhaled as one when the flag fell.',
+      '{winner_last} admitted afterwards to barely feeling the closing laps.',
+      'There were tired smiles all round in the {team} engineering room.',
+    ]
+    if (faller) texturePool.push(
+      '{faller} cut a frustrated figure on the long walk back.',
+      'There was little to say in the {faller_team} garage afterwards.',
+      '{faller} sat quietly for a while before facing anyone.',
+    )
+    const texturePara = texture(seed, texturePool, slots)
 
     const champPool = !leader
       ? ['']
@@ -438,12 +477,13 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner} untouchable at the {circuit}', '{winner} the class of the field at the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
-        '{winner} leads home {p2} and {p3}.', '{winner} wins the {circuit} by {margin} from {p2}.',
+        '{winner} leads home {p2} and {p3}.',
+        ...(hasMargin ? ['{winner} wins the {circuit} by {margin} from {p2}.'] : []),
         '{winner} beats {p2} and {p3} to the flag.', '{winner} wins the {circuit} ahead of {p2}.',
         '{winner} controls the {circuit} for {team}.', 'The {team} driver takes the spoils at the {circuit}.',
         '{winner} sees off {p2} to win the {circuit}.', 'Another {circuit} to remember for {winner}.',
       ], `${seed}|d`), slots),
-      body: paras(leadPara, startPara, attritionPara, champPara, closerPara),
+      body: paras(leadPara, startPara, attritionPara, texturePara, champPara, closerPara),
     })
   }
   return out
@@ -491,6 +531,12 @@ function milestones(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:p3`, slots,
             ['{driver_last} will hope this is the first of many.', 'The challenge now is to back it up.', 'Whether it sparks a run remains to be seen.'],
             ['Either way, it is a weekend that will be remembered.', 'It changes the complexion of the season.', 'The grid has been put on notice.']),
+          texture(seed, [
+            '{driver_last} was mobbed in parc ferme.',
+            'The radio message said it all, even if the words did not.',
+            '{driver_last} needed a quiet moment before facing the cameras.',
+            'The {team} garage erupted the instant the flag fell.',
+          ], slots),
         ),
       })
     }
@@ -557,6 +603,11 @@ function milestones(ctx: NewsContext): NewsArticle[] {
             compose(`${seed}:p3`, slots,
               ['Replicating it will be the hard part.', 'Whether it is a one-off or a sign of things to come is the question.', 'For now, it is simply a day to savour.'],
               ['{driver_last} has given everyone something to think about.', 'The midfield just got a little more interesting.', 'It is a timely reward for honest graft.']),
+            texture(seed, [
+              'The {team} mechanics could not quite believe it either.',
+              '{driver_last} wore a grin that said it all on the slow-down lap.',
+              'It was the kind of afternoon a driver remembers for years.',
+            ], slots),
           ),
         })
         break // at most one surprise-podium piece per race
@@ -577,10 +628,13 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     const missed = evs.filter((e) => e.failed).map((e) => teamName(ctx, e.teamId))
     const circuitName = circuit(ctx, r)
     const seed = `tech-${ctx.year}-${r}`
+    // A representative driver from an upgrading team, for the (invented, unfalsifiable) mood line.
+    const repTeamId = (evs.find((e) => !e.failed) ?? evs[0]).teamId
+    const repDriver = ctx.drivers.find((d) => d.teamId === repTeamId)
     const slots: Record<string, string | number> = {
       circuit: circuitName, delivered: listJoin(delivered), missed: listJoin(missed),
       n: evs.length, teams: plural(evs.length, 'team'),
-      teams_list: listJoin(evs.map((e) => teamName(ctx, e.teamId))),
+      up_driver: repDriver ? lastName(repDriver.name) : '',
     }
     const intro = compose(`${seed}:intro`, slots,
       [
@@ -592,8 +646,8 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
         'New bodywork was the talk of the {circuit} paddock.',
       ],
       [
-        '{teams_list} all introduced updates.', 'New packages appeared on the {teams_list} cars.',
-        'In all, {n} {teams} brought changes.', 'It was {teams_list} leading the charge.',
+        '{n} {teams} brought changes in all.', 'In total, {n} {teams} introduced updates.',
+        'It was a busy day for the development departments.',
       ])
     const goodPara = delivered.length
       ? compose(`${seed}:good`, slots,
@@ -635,6 +689,19 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
         'The true picture often takes a race or two to emerge.',
         'Rivals will be watching the timing screens closely.',
       ])
+    const techTexturePool = !repDriver
+      ? []
+      : delivered.length
+        ? [
+            '{up_driver} admitted to being unconvinced at first, but the team stood by the numbers.',
+            'Privately, {up_driver} wanted a little more, even as the wall celebrated the step.',
+            'Word in the paddock was that {up_driver} took some convincing.',
+          ]
+        : [
+            '{up_driver} had warned the parts felt no different, and so it proved.',
+            '{up_driver} was politely unimpressed in the debrief.',
+          ]
+    const techTexture = texture(seed, techTexturePool, slots)
     out.push({
       id: seed, category: 'technical_upgrade', round: r, priority: 45,
       headline: fill(pick([
@@ -646,7 +713,7 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
         '{n} {teams} brought updates to the {circuit}.', 'A look at the new parts at the {circuit}.',
         'The upgrade battle at the {circuit}.', 'Tracking the development war at the {circuit}.',
       ], `${seed}|d`), slots),
-      body: paras(intro, goodPara, badPara, outlook),
+      body: paras(intro, goodPara, badPara, techTexture, outlook),
     })
   }
   return out
@@ -1158,8 +1225,16 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
     }
     // Only established drivers switching teams. Rookie fill-ins are excluded (mediaScore 0);
     // they are generated after the moves are settled and use Math.random() for their names, so
-    // dropping them keeps the reported rumours fully deterministic.
-    const moves = projection.marketMoves.filter((m) => !m.isResignation && m.fromTeamId != null && m.mediaScore > 0)
+    // dropping them keeps the reported rumours fully deterministic. We also drop implausible
+    // links (a driver tied to a team several places worse than their current one) — the media
+    // noise can otherwise pair a frontrunner with a backmarker, which reads as nonsense.
+    const cpos = new Map(cstand.map((c, i) => [c.teamId, i + 1]))
+    const moves = projection.marketMoves.filter((m) => {
+      if (m.isResignation || m.fromTeamId == null || m.mediaScore <= 0) return false
+      const fromP = cpos.get(m.fromTeamId) ?? ctx.teams.length
+      const toP = cpos.get(m.toTeamId) ?? ctx.teams.length
+      return toP - fromP <= 4
+    })
     const window = r === N - 1 ? 'with the season nearly over' : r >= (3 * N) / 4 ? 'as the campaign enters its closing stretch' : 'at the midway point of the season'
 
     if (moves.length === 0) {
@@ -1189,6 +1264,10 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
     for (const m of moves) {
       const fromName = teamName(ctx, m.fromTeamId as string)
       const dpts = dstand.find((s) => s.driverId === m.driverId)?.points ?? 0
+      const dRank = dstand.findIndex((s) => s.driverId === m.driverId)
+      // Only brag about a points haul when it is actually notable (upper half of the grid);
+      // otherwise "a return of 2 points has not gone unnoticed" reads as a joke.
+      const notablePoints = dpts > 0 && dRank >= 0 && dRank < dstand.length / 2
       const toIdx = cstand.findIndex((c) => c.teamId === m.toTeamId)
       const toPos = toIdx >= 0 ? ordinal(toIdx + 1) : ''
       const seed = `silly-${ctx.year}-${r}-${m.driverId}`
@@ -1210,7 +1289,7 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
             ['Sources suggest {to} are weighing up a move {window}.', '{to} are understood to have registered interest {window}.', 'A switch from {from} to {to} is the talk of the rumour mill {window}.']),
           compose(`${seed}:p2`, slots,
             ['On paper, the fit makes a certain sense.', 'The logic behind the link is not hard to see.', 'There is a clear rationale on both sides.'],
-            dpts > 0
+            notablePoints
               ? ['{driver_last} has {driver_points} points to show for the season so far.', 'A return of {driver_points} points this year has not gone unnoticed.']
               : [''],
             toPos
