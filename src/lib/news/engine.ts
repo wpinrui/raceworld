@@ -461,196 +461,219 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
       next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSolo?.lapsCompleted ?? 0,
       faller: faller ? lastName(faller.driverName) : '', faller_team: faller?.teamName ?? '',
+      faller_poss: faller ? poss(lastName(faller.driverName)) : '', winner_poss: poss(lastName(p1.driverName)),
+      ...pronouns(ctx.drivers.find((d) => d.id === p1.driverId)?.gender),
     }
 
     const leadPara = compose(`${seed}:lead`, slots,
       [
-        '{winner} won the {circuit}.', '{winner} took victory at the {circuit}.',
-        'Victory at the {circuit} went to {winner}.', '{winner} took the win at the {circuit}.',
-        'It was {winner} who came out on top at the {circuit}.', 'The {circuit} belonged to {winner}.',
-        '{winner} delivered when it counted at the {circuit}.', 'There was no stopping {winner} at the {circuit}.',
-        '{winner} held on to win the {circuit}.', 'A polished afternoon gave {winner} the {circuit}.',
+        '{winner} won the {circuit}, converting pace into points on a day that belonged to {team}.',
+        '{winner} took victory at the {circuit} in a drive that answered every question put to {them}.',
+        '{winner} claimed the {circuit} with a controlled performance that left {their} rivals without reply.',
+        '{winner} added the {circuit} to {their} record, seeing off the pressure from the pack behind.',
+        '{winner} delivered at the {circuit}, holding the lead through the phases that decide races.',
+        '{winner} was the class of the field at the {circuit}, turning qualifying pace into race-day victory.',
+        '{winner} won the {circuit}, a result that has come to feel familiar this season.',
       ],
       hasMargin
         ? [
-            'The {team} driver came home {margin} clear of {p2}, with {p3} completing the podium.',
-            'A win by {margin} over {p2} sealed it, {p3} third on the rostrum.',
-            '{p2} finished {margin} adrift in second, {p3} rounding out the top three.',
-            'Behind, {p2} took second and {p3} third, beaten by {margin}.',
-            '{margin} covered the win as {p2} and {p3} filled out the podium.',
-            '{p2} chased hard but fell {margin} short, {p3} next up.',
-            'It was {margin} back to {p2}, with {p3} claiming the final podium spot.',
+            '{winner_last} finished {margin} clear of {p2}, with {p3} a further step back in third.',
+            'The gap to {p2} at the flag was {margin}, {p3} rounding out the podium behind.',
+            '{p2} crossed the line {margin} adrift, {p3} completing the top three.',
+            '{winner_last} had {margin} in hand over {p2_last} at the chequered flag, {p3} in third.',
+            'By the finish the cushion over {p2} stood at {margin}, with {p3} third.',
           ]
         : [
-            '{p2} took second and {p3} completed the podium.',
-            '{p2} followed home in second, with {p3} third.',
-            'Behind, {p2} and {p3} rounded out the top three.',
-            '{p2} was next, with {p3} claiming the final podium spot.',
+            '{p2} gave chase throughout but could not find a way through, {p3} taking the final podium spot.',
+            '{p2_last} finished second and {p3} third, neither able to match the pace of the {team} car.',
+            '{p2} and {p3} completed the podium without ever mounting a serious challenge for the lead.',
           ],
       winnerHome
         ? [
-            'The win came on home soil.', 'It was a home victory to savour for {winner_last}.',
-            'Few wins mean more than one in front of your own crowd.',
+            'For {winner_last} it was a win on home soil, a result that will carry extra weight.',
+            'The victory carried the added satisfaction of a home race for {winner_last}.',
+            'Winning in front of a home crowd added real significance to a commanding afternoon.',
           ]
         : [''],
       [
-        'It is worth the full {points} points.', '{winner_last} banks the maximum {points} points.',
-        'The win is worth {points} points.', 'That is {points} points for {winner_last}.',
-        'It is another {points}-point score for {winner_last}.',
+        'The {points} points only tighten {their} grip on the season.',
+        'It is {points} points banked, and the championship picture shifts accordingly.',
+        'The haul of {points} points underlines a season in which consistency has been the edge.',
+        'It puts {points} points on the board, and {winner_last} leaves with more than a trophy to show for it.',
+        'Those {points} points could prove decisive once the final standings are settled.',
       ],
     )
 
     const startPool = fromPole
       ? [
-          'Starting from pole, {winner_last} controlled the race from the front.',
-          '{winner_last} converted pole into a lights-to-flag win.',
-          'From the front of the grid {winner_last} was never seriously headed.',
-          'Pole turned into a win as {winner_last} dictated the pace throughout.',
-          '{winner_last} led every lap that mattered after starting on pole.',
-          'It was a textbook drive from pole for {winner_last}.',
+          '{winner_last} made the most of pole, getting away cleanly and building a gap before the first stops.',
+          '{winner_last} led from the front after taking pole, controlling the tempo and never inviting a challenge.',
+          'Pole was the foundation, and {winner_last} built the race on it lap by lap.',
+          'Starting on pole, {winner_last} covered the early laps precisely and put clear air between {them} and the pack.',
+          '{winner_last} converted pole the efficient way, never relinquishing the lead and managing the gap as required.',
+          'From the front row {winner_last} dictated every phase, using the clean air to extend the lead at will.',
         ]
       : pole
       ? [
-          '{pole_last} had started from pole, but it was {winner_last} who took the flag.',
-          'Pole-sitter {pole_last} could not convert as {winner_last} came through.',
-          '{winner_last} got the better of pole-man {pole_last} when it mattered most.',
-          'The pole, taken by {pole_last}, did not translate into the win.',
-          '{pole_last} led early from pole before {winner_last} found a way by.',
-          '{winner_last} overhauled pole-sitter {pole_last} to take the win.',
+          '{pole_last} took pole but found no answer to {winner_last} once the race was underway.',
+          '{pole_last} led the early laps only for {winner_last} to find a way ahead as the strategy unfolded.',
+          'The front row had {pole_last} on top, yet it was {winner_last} who held the advantage when it mattered.',
+          '{pole_last} set the pace in qualifying, but {winner_last} reversed the order when it counted on Sunday.',
+          '{pole_last} used the grid advantage early, yet {winner_last} had the measure of the race overall.',
+          'Despite {pole_last} starting from pole, {winner_last} found the pace to overturn the deficit during the race.',
         ]
-      : ['{winner_last} judged the race perfectly to take the win.', '{winner_last} timed the run to perfection.']
+      : [
+          '{winner_last} read the race correctly from the off and was in the right place when it opened up.',
+          '{winner_last} threaded through the early laps without incident and into the position the race could be won from.',
+          'The opening lap sorted the order, and {winner_last} emerged ideally placed to control what followed.',
+          '{winner_last} stayed out of trouble at the start and built the drive from there, letting the stops do the rest.',
+        ]
     const moverPool = moverGain >= 4 && mover
       ? [
-          'The drive of the day belonged to {mover}, up from {mover_from} to {mover_to}.',
-          '{mover} made the biggest gains, climbing from {mover_from} to {mover_to}.',
-          'A charge from {mover} lit up the order, {mover_gain} places gained.',
-          '{mover} carved through the field from {mover_from} to {mover_to}.',
-          'Few moved like {mover}, who went from {mover_from} to {mover_to}.',
-          'A standout recovery saw {mover} climb from {mover_from} to {mover_to}.',
+          '{mover} produced the drive of the afternoon, charging from {mover_from} to {mover_to} and gaining {mover_gain} places.',
+          'The standout charge through the pack came from {mover}, who advanced {mover_gain} positions to finish {mover_to}.',
+          '{mover} made up {mover_gain} places, hauling from {mover_from} to {mover_to} by the flag.',
+          'Best-mover honours went to {mover}, who carved from {mover_from} to {mover_to} over the course of the race.',
+          'Nobody gained more ground than {mover}, {mover_gain} places from {mover_from} to {mover_to} in a drive that caught the eye.',
         ]
       : ['']
     const qualiPool = pMargin && pole
-      ? ['{pole_last} had taken pole by {pole_margin} on Saturday.', 'Qualifying had gone the way of {pole_last} by {pole_margin}.', '{pole_last} had edged pole by {pole_margin}.']
+      ? [
+          '{pole_last} had split the field in qualifying, taking pole by {pole_margin}.',
+          'Qualifying had gone to {pole_last} by {pole_margin}, a margin that spoke of real single-lap pace.',
+          '{pole_last} had grabbed pole with a {pole_margin} advantage over the next car.',
+        ]
       : ['']
     const stratPool = strat
       ? [
-          'The win was built on {strategy}.', '{winner_last} made {strategy} work.',
-          'It was {strategy} that proved the right call for {winner_last}.',
-          startTyre ? '{winner_last} started on {start_tyre} and built {strategy} from there.' : 'The {team} pit wall judged {strategy} to perfection.',
+          '{winner_last} executed {strategy}, starting on {start_tyre}, and the timing of the stops proved to be the margin.',
+          'The win was built on {strategy}, with {winner_last} making the pit calls the rivals could not replicate.',
+          '{team} committed to {strategy} from the outset and {winner_last} drove it to perfection.',
+          'Running {strategy} on {start_tyre}, {winner_last} found the rhythm the tyres allowed and never looked back.',
         ]
       : ['']
     const startPara = compose(`${seed}:story`, slots, startPool, qualiPool, moverPool, stratPool)
 
     const attritionPara = dnfs.length === 0
       ? compose(`${seed}:dnf`, slots, [
-          'A clean race saw the full field reach the flag.',
-          'There were no retirements; every car was classified.',
-          'Reliability held across the grid with nobody dropping out.',
-          'For once the race ran without a single retirement.',
-          'Every car that started also finished, a rarity in itself.',
+          'It was a clean race, every car reaching the flag and no safety car to bunch the order, the result settled on pace and strategy alone.',
+          'The field ran to the finish intact, with no retirements and no safety-car period to redistribute the gaps.',
+          'Every car that started the {circuit} crossed the line, the positions decided on merit rather than misfortune.',
+          'There were no retirements to report, and without a safety-car restart to reshuffle things the order was shaped purely by pace.',
+          'A full-field finish meant the points were earned the hard way, without the lottery of a safety car shifting the order late on.',
         ])
       : dnfSolo
       ? compose(`${seed}:dnf`, slots, [
-          '{dnf_solo} was the only retirement, out after {dnf_solo_laps} laps.',
-          'Only {dnf_solo} failed to finish, retiring after {dnf_solo_laps} laps.',
-          'The lone retirement was {dnf_solo}, gone by lap {dnf_solo_laps}.',
+          'The race had a single retirement in {dnf_solo}, who pulled off after {dnf_solo_laps} laps.',
+          '{dnf_solo} was the only car not to finish, lasting {dnf_solo_laps} laps before the day was done.',
+          'Only {dnf_solo} failed to make the flag, the car in after {dnf_solo_laps} laps with the race lost.',
+          'The lone retirement was {dnf_solo}, gone by lap {dnf_solo_laps} in an otherwise clean afternoon.',
         ])
       : compose(`${seed}:dnf`, slots,
           [
-            '{dnf_count} {cars} failed to finish.', 'The race claimed {dnf_count} {cars}.',
-            'Attrition accounted for {dnf_count} {cars}.', 'There were {dnf_count} retirements.',
-            'Not everyone made the flag, with {dnf_count} {cars} sidelined.',
+            '{dnf_count} {cars} did not make the finish, thinning the points-paying places as the race wore on.',
+            'Attrition accounted for {dnf_count} {cars} before the flag, reshaping the order behind the leaders.',
+            'The retirement count reached {dnf_count} {cars}, changing the complexion of the midfield.',
+            '{dnf_count} {cars} fell out of contention, the running order shifting with every one of them.',
           ],
           [
-            '{dnf_list} dropped out.', '{dnf_list} were the cars to retire.',
-            '{dnf_list} did not see the flag.', '{dnf_list} failed to reach the flag.',
-            '{dnf_list} were left to rue what might have been.',
+            '{dnf_list} all failed to see the flag.',
+            'The retirees were {dnf_list}, each losing points they may yet come to need.',
+            '{dnf_list} were among those who did not finish.',
+            'Joining the non-finishers were {dnf_list}.',
           ])
 
     const texturePool = [
-      '{winner_last} looked spent climbing from the cockpit.',
-      'Over the team radio, it sounded like one of the harder afternoons of the year for {winner_last}.',
-      '{winner_last} was treated for dehydration once the cameras had moved on.',
-      'The {team} mechanics were waiting at parc ferme to mob {winner_last}.',
-      'A scruffy pit stop briefly set nerves jangling on the {team} wall.',
-      '{winner_last} kept the visor down through most of the slow-down lap.',
-      'The {team} garage exhaled as one when the flag fell.',
-      '{winner_last} admitted afterwards to barely feeling the closing laps.',
-      'There were tired smiles all round in the {team} engineering room.',
+      'The {team} garage erupted as {winner_last} crossed the line, months of work landing in a single moment.',
+      '{winner_last} pulled off {their} helmet on the slow-down lap to take in the reception from the grandstands.',
+      'The {team} pit wall let the tension of the final laps drain away the instant the flag fell.',
+      '{winner_last} drove the in-lap at a measured pace, in no rush to let the afternoon end.',
+      '{winner_last} stood on the podium with the look of someone who knew the result had been earned, not gifted.',
+      'The {team} mechanics were at the pit-lane wall before the car had stopped, ready for the celebrations.',
+      '{winner_last} held the trophy in both hands and looked out into the crowd before the formalities resumed.',
+      '{winner_last} was treated for dehydration once the cameras had moved on, the cockpit a brutal place in the closing laps.',
+      'Over the team radio it had sounded like one of the harder afternoons of the year for {winner_last}.',
+      'A scruffy pit stop briefly set nerves jangling on the {team} wall before the lead was safe again.',
+      'A brief safety car midway bunched the pack, but {winner_last} judged the restart to perfection.',
+      '{winner_last} kept the visor down through most of the slow-down lap, spent after a hard afternoon.',
+      'There were tired but satisfied faces all through the {team} engineering room.',
     ]
     if (faller) texturePool.push(
-      '{faller} cut a frustrated figure on the long walk back.',
-      'There was little to say in the {faller_team} garage afterwards.',
+      'The body language in the {faller_team} garage told the story of a race that slipped away from {faller}.',
+      '{faller_poss} walk back to the garage said everything about a day that promised points and delivered none.',
       '{faller} sat quietly for a while before facing anyone.',
     )
     const texturePara = texture(seed, texturePool, slots)
-    // Occasional invented winner quote (first-person, so no gender issue; generic, so it cannot
-    // contradict the result).
+    // Occasional invented winner quote (first-person; generic, so it cannot contradict the result).
     const quotePara = texture(`${seed}|q`, [
-      '"The car felt mega all day," said {winner_last} afterwards.',
-      '"Huge effort from the whole team," {winner_last} said.',
-      '"That is right up there with my best weekends," reflected {winner_last}.',
-      '"We executed it just about perfectly," said {winner_last}.',
-      '"I could not have asked for more out there," {winner_last} said.',
-      '"Days like this are why you do it," {winner_last} said.',
+      '"The car was there from the start. We just had to execute the plan and not give anything away," said {winner_last}.',
+      '"I knew the gap was there if I could hold the pace, and the team gave me the right call at the right time," said {winner_last}.',
+      '"There were moments where I had to manage it carefully, but I always felt we had something in reserve," said {winner_last}.',
+      '"It is never easy until it is over, so I kept pushing every single lap," said {winner_last}.',
+      '"Getting through the first few corners cleanly let me build the gap rather than defend," said {winner_last}.',
+      '"These points matter. Every race this season has felt like it counts, and today was no different," said {winner_last}.',
     ], slots, 30)
 
     const champPool = !leader
       ? ['']
       : clinched
       ? [
-          'With the win, {leader} cannot now be caught in the championship.',
-          'The result puts the title beyond doubt, and {leader} is now uncatchable.',
+          'With the win, {leader} can no longer be caught in the championship.',
+          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} in hand and {races_left} left.',
           '{leader} has effectively wrapped up the championship, {lead_gap} clear with {races_left} to run.',
+          'The arithmetic is settled, {leader} now champion with {lead_gap} points in hand and {races_left} remaining.',
         ]
       : leadChanged
       ? [
           'The result swings the championship, and {leader} now leads.',
-          'There is a new name on top of the standings in {leader}.',
+          'There is a new name on top of the standings in {leader}, {lead_gap} clear of {second}.',
           '{leader} takes over at the head of the table, {lead_gap} ahead of {second}.',
-          'The points lead changes hands, with {leader} now in front of {second}.',
+          'The points lead changes hands, {leader} now in front of {second} by {lead_gap}.',
         ]
       : [
           'In the championship, {leader} stays in front, {lead_gap} clear of {second}.',
-          '{leader} retains the points lead on {leader_points}, {lead_gap} up on {second}.',
-          'Atop the standings, {leader} holds firm with a {lead_gap}-point cushion over {second}.',
-          '{leader} extends control of the championship over {second}.',
+          '{leader} holds the points lead on {leader_points}, {lead_gap} up on {second}.',
+          'Atop the standings, {leader} keeps a {lead_gap}-point cushion over {second}.',
+          'No change at the top, {leader} on {leader_points} points with {second} {lead_gap} adrift.',
         ]
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
     const closerPara = compose(`${seed}:closer`, slots,
       [
-        'It is {winner_last}\'s {win_ord} win of the season.',
+        'It was {their} {win_ord} win of the season for {winner_last}, the kind of consistency that decides titles.',
         'That makes it the {win_ord} win of the campaign for {winner_last}.',
-        'The {win_ord} win of the year goes to {winner_last}.',
+        'That is the {win_ord} win of the year for {winner_last}, each one harder to overlook than the last.',
+        'The {win_ord} win of the season for {winner_last} only adds to the weight of the campaign.',
       ],
       nextName
         ? [
-            'Next up is the {next_circuit}.',
-            'Attention turns to the {next_circuit}.',
+            'Attention now turns to the {next_circuit}.',
+            'Next up is the {next_circuit}, where the standings will be tested again.',
             'The {next_circuit} is next on the calendar.',
           ]
         : [
             'That brings the season to its close.',
             'And with that, the campaign is done.',
-            'The season ends here.',
+            'The season ends here, the standings now final.',
           ])
 
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
       headline: fill(pick([
-        '{winner} wins the {circuit}', '{winner} takes the {circuit}', '{winner} triumphs at the {circuit}',
-        '{winner} masters the {circuit}', '{winner} conquers the {circuit}', '{winner} seals {circuit} victory',
-        '{winner} on top at the {circuit}', '{winner} delivers at the {circuit}', 'The {circuit} goes to {winner}',
-        'Victory for {winner} at the {circuit}', '{winner} reigns at the {circuit}', '{winner_last} wins the {circuit}',
-        '{winner} untouchable at the {circuit}', '{winner} the class of the field at the {circuit}',
+        '{winner} wins the {circuit}', '{winner_last} triumphs at the {circuit}', '{winner_last} holds on for {circuit} victory',
+        '{winner_last} dominates from start to finish at the {circuit}', '{team} celebrate as {winner_last} takes {circuit} honours',
+        '{winner_last} converts pace into victory at the {circuit}', '{winner_last} sees off {p2_last} to win the {circuit}',
+        'Victory for {winner_last} at the {circuit}', '{winner_last} moves clear after the {circuit}', '{winner_last} delivers at the {circuit}',
+        '{team} claim the {circuit} through {winner_last}', '{winner} masters the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
-        '{winner} leads home {p2} and {p3}.',
-        ...(hasMargin ? ['{winner} wins the {circuit} by {margin} from {p2}.'] : []),
-        '{winner} beats {p2} and {p3} to the flag.', '{winner} wins the {circuit} ahead of {p2}.',
-        '{winner} controls the {circuit} for {team}.', 'The {team} driver takes the spoils at the {circuit}.',
-        '{winner} sees off {p2} to win the {circuit}.', 'Another {circuit} to remember for {winner}.',
+        '{winner} took victory at the {circuit}, with {p2} and {p3} completing the podium.',
+        ...(hasMargin ? ['{winner} won the {circuit}, finishing {margin} clear of {p2}.'] : []),
+        '{winner_last} delivered a controlled drive to win the {circuit} ahead of {p2} and {p3}.',
+        '{winner} claimed {their} {win_ord} win of the season at the {circuit}.',
+        '{team} top the podium at the {circuit} as {winner_last} holds off {p2_last}.',
+        '{winner_last} wins the {circuit} and tightens {their} grip on the season.',
+        'A composed afternoon from {winner_last} puts {team} on the top step at the {circuit}.',
       ], `${seed}|d`), slots),
       body: paras(leadPara, startPara, attritionPara, texturePara, champPara, quotePara, closerPara),
     })
