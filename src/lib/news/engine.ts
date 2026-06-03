@@ -1526,21 +1526,41 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
   for (const d of youngest) {
     if (d.age > 22) continue
     const rseed = `rookie-${ctx.year}-${d.id}`
-    const rslots = { driver: d.name, driver_last: lastName(d.name), age: d.age, year: ctx.year, team: teamName(ctx, d.teamId) }
+    const rslots = { driver: d.name, driver_last: lastName(d.name), age: d.age, year: ctx.year, team: teamName(ctx, d.teamId), team_poss: poss(teamName(ctx, d.teamId)), driver_poss: poss(lastName(d.name)) }
     out.push({
       id: rseed, category: 'rookie_debut', round: 0, priority: 25,
-      headline: fill(pick(['Spotlight on {driver}', 'Can {driver} make the step?', '{driver} is one to watch in {year}', 'The rise of {driver}', '{driver} ready for the big stage'], `${rseed}|h`), rslots),
-      dek: fill(pick(['{driver}, {age}, is one to watch in {year}.', 'A big {year} awaits {driver}.', 'Youth gets its chance at {team}.'], `${rseed}|d`), rslots),
+      headline: fill(pick(['{driver_last} steps into the fire at {team}', '{driver} is {team_poss} bet on {year}', '{driver_last} ready to test themselves in F1\'s full glare', 'The rookie raising eyebrows at {team}', '{driver_last} arrives in F1 at {age} with something to prove', '{team} back a {age}-year-old to deliver in {year}'], `${rseed}|h`), rslots),
+      dek: fill(pick([
+        'At {age} years old, {driver} lines up on the {year} grid with {team} and faces the sharpest learning curve in motorsport.',
+        '{driver} enters a {year} season that will measure, for the first time, whether junior-category pace translates into a Formula 1 race seat earned on merit.',
+        'The {year} campaign opens with {driver} as one of the most scrutinised faces in the {team} garage, all at the age of {age}.',
+        'Youth meets the fastest machines on the planet as {age}-year-old {driver} takes on a full Formula 1 season with {team}.',
+      ], `${rseed}|d`), rslots),
       body: paras(
-        compose(`${rseed}:p1`, rslots,
-          ['At just {age}, {driver} is among the youngest on the grid.', '{driver}, {age}, steps up with plenty of expectation.', 'Few arrive into {year} with as much to prove as {driver}, {age}.'],
-          ['The seat at {team} is a real opportunity.', '{team} have handed over genuine responsibility.', 'It is a platform any young driver would want.']),
-        compose(`${rseed}:p2`, rslots,
-          ['The learning curve is steep, but the talent is there.', 'A strong rookie campaign would change the conversation quickly.', 'Patience will be needed, but the upside is clear.'],
-          ['Mistakes are part of the apprenticeship.', 'Consistency will matter more than the occasional headline.', 'Out-pacing a teammate is the first real marker.']),
-        compose(`${rseed}:p3`, rslots,
-          ['The paddock will be watching closely.', 'Reputations can be made fast at this level.', 'Expectation is a weight as much as a privilege.'],
-          ['{driver_last} has the chance to make an early impression.', 'A point or two early would settle the nerves.', 'The first season is all about laying foundations.']),
+        fill(pick([
+          'Formula 1 at {age} means overnight exposure to a media circus that follows every debrief, every radio message, and every garage expression for signs of confidence or doubt.',
+          'The jump from junior categories into a full F1 campaign compresses years of learning into a single winter of testing, and {driver_last} now carries that weight every time the pit-lane door opens.',
+          'Racing with {team} in {year}, {driver_last} will face race distances pushing past 300 kilometres, a brutal step beyond the sprint formats that defined much of junior motorsport.',
+          'Every lap in a Formula 1 car generates data streams that engineers dissect in real time, and a driver at {age} must process that feedback loop without the luxury of experience to filter the noise.',
+          'The passionate fanbase that fills grandstands for every round will track {driver_poss} progress lap by lap, turning each qualifying session into a public audition.',
+          'For any driver arriving in F1 for the first time, the sheer volume of weekend commitments, technical meetings, simulator sessions, and sponsor obligations rewires what it means to be a racing driver.',
+        ], `${rseed}|b1`), rslots),
+        fill(pick([
+          'Qualifying in Formula 1 demands a driver extract a perfect lap on the first real attempt, with track evolution and traffic in Q1 punishing anyone who waits too long to find their rhythm.',
+          '{driver_poss} tyre management over a full race distance will be among the first metrics the {team} engineers use to benchmark progress, since degradation compounds every tactical decision the pit wall makes.',
+          'The teammate inside the same {team} garage is the most honest yardstick in the sport, sharing identical machinery and leaving nowhere to hide when the timing sheets are posted.',
+          'Racing wheel-to-wheel with drivers who have hundreds of grands prix between them means {driver_last} must choose precisely when to defend a position and when spending rubber on a battle costs more than the place is worth.',
+          'At {age}, reading the gap to the car ahead while managing brake temperatures and fuel load simultaneously is a cognitive demand that even experienced F1 drivers call the sport\'s most underappreciated skill.',
+          'The strategic calls that define a Formula 1 race, the undercut window, the safety-car overcut, the two-stop gamble, require {driver_last} to absorb and relay tyre-condition information fast enough for the pit wall to act on it.',
+        ], `${rseed}|b2`), rslots),
+        fill(pick([
+          'The realistic measure of a successful debut campaign for {driver_last} is not a championship points tally but the narrowing of the gap to the teammate across qualifying and race pace as the season progresses.',
+          '{team} will judge {year} a foundation worth building on if {driver_last} is consistently extracting what the car offers rather than leaving performance stranded through unfamiliarity with its limits.',
+          'At {age}, {driver_last} carries none of the baggage of a veteran rebuilding a reputation, which means every clean finish and every tenths-of-a-second improvement reads as forward momentum rather than recovery.',
+          'The moments that will define how {year} is remembered for {driver_last} are the recovery drives through traffic, the late-braking moves that stick, and the ability to keep composure when the strategy call does not go to plan.',
+          'Finishing a season with {team} having shown the capacity to learn, adapt, and push the car to its limit week after week would be a concrete return on the faith the team placed in {driver_last} at {age}.',
+          'If {driver_last} can translate raw pace into consistent points finishes before the summer break, the narrative around {team_poss} {year} season will shift from project to contender fast.',
+        ], `${rseed}|b3`), rslots),
       ),
     })
   }
