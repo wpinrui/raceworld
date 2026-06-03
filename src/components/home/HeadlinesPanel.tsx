@@ -110,7 +110,7 @@ export function HeadlinesPanel() {
         {headlines.length === 0 ? (
           <p className="px-5 py-3 text-sm text-[#FFFFFF]">No headlines yet. Run a race and the newsroom will fill up.</p>
         ) : (
-          <ul className="max-h-[28rem] overflow-y-auto">
+          <ul className="max-h-[17.5rem] overflow-y-auto">
             {headlines.map((h) => (
               <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
                 <button
