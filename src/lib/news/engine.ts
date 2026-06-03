@@ -1998,16 +1998,16 @@ function market(ctx: NewsContext): NewsArticle[] {
   }
   for (const rem of eos.gridRemovals ?? []) {
     const seed = `exit-${rem.teamId}-${eos.seasonYear}`
-    const slots = { team: rem.teamName, year: eos.seasonYear, next: eos.seasonYear + 1, final_pos: rem.finalPosition ? ordinal(rem.finalPosition) : '' }
+    const slots = { team: rem.teamName, team_poss: poss(rem.teamName), year: eos.seasonYear, next: eos.seasonYear + 1, final_pos: rem.finalPosition ? ordinal(rem.finalPosition) : '' }
     const posLine = rem.finalPosition
       ? fill(pick([' They bow out {final_pos} in the constructors\' championship.', ' A final campaign ends {final_pos} among the constructors.'], `${seed}|pos`), slots)
       : ''
     out.push({
       id: seed, category: 'team_exit', round: r, priority: 68,
       headline: fill(pick(['{team} to leave Formula 1 after {year}', '{team} confirm grid exit', 'End of the road for {team}', '{team} bow out of Formula 1'], `${seed}|h`), slots),
-      dek: fill(pick(['{team} will depart the grid at the end of {year}.', 'The {year} season is {team}\'s last in Formula 1.', '{team} call time on their Formula 1 entry.'], `${seed}|d`), slots),
+      dek: fill(pick(['{team} will depart the grid at the end of {year}.', 'The {year} season is {team_poss} last in Formula 1.', '{team} call time on their Formula 1 entry.'], `${seed}|d`), slots),
       body: paras(
-        fill(pick(['{team} will leave the Formula 1 grid after the {year} season.', 'It is the end of {team}\'s time in Formula 1, the team set to depart after {year}.'], `${seed}|p1`), slots) + posLine,
+        fill(pick(['{team} will leave the Formula 1 grid after the {year} season.', 'It is the end of {team_poss} time in Formula 1, the team set to depart after {year}.'], `${seed}|p1`), slots) + posLine,
         fill(pick(['The decision draws a line under the team\'s spell in the sport, and their drivers return to the market as free agents.', 'With the seats now vacated, the team\'s drivers re-enter the driver market.'], `${seed}|p2`), slots),
         fill(pick(['A team spokesperson thanked "everyone who made the journey possible."', 'Formula 1 wished the team "the very best for the future."'], `${seed}|q`), slots),
       ),
@@ -2240,15 +2240,39 @@ function analysis(ctx: NewsContext): NewsArticle[] {
           ], `${id}|d`), slots),
           body: paras(
             compose(`${id}:p1`, slots,
-              ['The intra-team battle at {team} is increasingly one-sided.', 'There is a clear number one emerging at {team}.', 'The {team} pairing is no longer evenly matched.'],
-              ['{ahead} ({ap} pts) has pulled clear of {behind} ({bp} pts).', '{ahead} holds a {gap}-point edge over {behind}.', '{ahead} leads {behind} by {gap} points.']),
+              [
+                '{ahead} leads {behind} {ap} to {bp}, a {gap}-point gap that has opened up inside the same garage.',
+                'A {gap}-point margin separates {ahead} from {behind} at {team}, the widest the intra-team gulf has been this season.',
+                '{ahead} and {behind} share a pit wall and an engineering group, yet the scoreboard shows {ahead} on {ap} against {behind_last}\'s {bp}.',
+              ],
+              [
+                'A gap of that magnitude between teammates is not noise; it reflects a consistent edge in race execution and qualifying trim.',
+                'In a points system where a single position swing is worth four points, a {gap}-point chasm represents multiple race weekends of compounded advantage.',
+                'The {gap} points do not merely represent races lost; they represent constructor points that {team} are only half-claiming from their budget.',
+              ]),
             trendPara,
             compose(`${id}:p2`, slots,
-              ['The pressure is mounting on the other side of the garage.', '{behind} badly needs a result to steady things.', 'Questions are starting to follow {behind} around the paddock.'],
-              ['Team dynamics can sour quickly when the gap grows.', 'A turnaround is still possible, but time is a factor.', 'Confidence, once dented, is hard to rebuild.']),
+              [
+                '{behind_last} needs to interrupt the current pattern before the mathematics become truly daunting.',
+                'For {behind_last}, the most damaging consequence is not the points gap itself but the internal leverage it hands to {ahead_last} when engineering resources are allocated.',
+                'A trailing teammate rarely faces pressure from outside the car alone; the data that lands on the engineer\'s desk every Sunday evening tells its own story at {team}.',
+              ],
+              [
+                'Every race weekend {behind_last} fails to close the gap, the burden of expectation compounds.',
+                'At {team} the number has now grown large enough that neutrals have stopped calling it a phase and started calling it a hierarchy.',
+                'The question for {behind_last} is whether the gap gets addressed through performance or rationalised through excuses, and the paddock is watching for which answer emerges.',
+              ]),
             compose(`${id}:p3`, slots,
-              ['For {ahead_last}, it is validation of a strong run.', 'The momentum is firmly with {ahead_last}.', 'Internally, the pecking order looks increasingly settled.'],
-              ['{behind_last} will be desperate to respond.', 'A reset over the coming rounds is the only answer.', 'The second half offers a chance to put it right.']),
+              [
+                'From {ahead_last}\'s perspective the pattern is straightforward: translate car pace into points more efficiently than {behind_last}, round after round.',
+                '{ahead_last} has demonstrated the capacity to extract from this car what is available; the issue is that {behind_last} has not matched that benchmark.',
+                'The internal pecking order at {team} is hardening into something that will be difficult for {behind_last} to overturn without a clear step forward in raw qualifying pace.',
+              ],
+              [
+                '{behind_last} must identify whether the deficit is mechanical setup, tyre management, or racecraft, because the fix differs in each case.',
+                'A single strong weekend can shift the narrative, but {behind_last} needs a string of them to dent a gap this wide.',
+                'Until {behind_last} can outscore {ahead_last} on consecutive weekends, the gap will remain the story inside the {team} garage.',
+              ]),
             texture(`${id}|q`, [
               '"I am not panicking, we keep working," said {behind_last}.',
               '"The results do not reflect the effort," {behind_last} said.',
@@ -2294,10 +2318,22 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             ], `${id}|d`), slots),
             body: paras(
               compose(`${id}:p1`, slots,
-                ['{driver} is enduring a difficult run.', 'The last few rounds have been bleak for {driver}.', 'Form has deserted {driver} at the worst time.'],
-                ['Recent finishes have read {recent_runs}.', 'The last three weekends brought {recent_runs}.', 'A run of {recent_runs} tells the story.']),
+                [
+                  '{driver} has posted {recent_runs} across the last three rounds, a sequence that has dropped the {team} driver well off the scoring pace.',
+                  'The recent returns from {driver} make grim reading: {recent_runs}, with barely a point to show across that stretch.',
+                  'Three rounds, three poor outcomes for {driver}: {recent_runs}. The pattern is consistent in the wrong direction.',
+                ],
+                [
+                  'That run has cost {driver_last} heavily in the standings at a point in the season when gaps take on real championship weight.',
+                  'Points lost during a sequence like that are rarely recovered; the rest of the grid keeps banking finishes while {driver_last} treads water.',
+                  'A driver in {driver_last}\'s position cannot afford a run of {recent_runs} and expect the championship ambitions to remain intact.',
+                ]),
               compose(`${id}:p2`, slots,
-                ['Questions are being asked about the {driver_last} slump.', 'The paddock is starting to wonder where the turnaround comes from.', 'For {team}, it is a problem that needs solving quickly.']),
+                [
+                  'The concerning aspect for {team} is that no single obvious cause has been identified publicly, which makes the reset harder to engineer.',
+                  '{driver_last}\'s average finishing position over this run sits well below the threshold a {team} budget expects from a front-line driver.',
+                  'For {team}, this is a compounding problem: the constructor loses points from one side of the garage at a time when development pace demands full contribution from both cars.',
+                ]),
               slumpTexture,
               texture(`${id}|q`, [
                 '"We stay calm and keep digging," said {driver_last}.',
@@ -2309,7 +2345,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
         })
       } else if (avg <= 5) {
         const id = `surge-${ctx.year}-${r}-${d.id}`
-        const slots = { driver: d.name, driver_last: lastName(d.name), team: teamName(ctx, d.teamId), round: r, recent_runs: listJoin(recent.map(fmtFinish)) }
+        const slots = { driver: d.name, driver_last: lastName(d.name), driver_poss: poss(lastName(d.name)), team: teamName(ctx, d.teamId), round: r, recent_runs: listJoin(recent.map(fmtFinish)) }
         candidates.push({
           subject: d.id, score: surgeScore(avg),
           make: () => ({
@@ -2324,14 +2360,38 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             ], `${id}|d`), slots),
             body: paras(
               compose(`${id}:p1`, slots,
-                ['{driver} is in a rich vein of form.', 'The last few rounds have belonged to {driver}.', 'Few are in better shape right now than {driver}.'],
-                ['Recent finishes have read {recent_runs}.', 'The last three rounds brought {recent_runs}.', 'A sequence of {recent_runs} tells the story.']),
+                [
+                  '{driver} has delivered {recent_runs} across the last three rounds, a sequence that places {driver_last} among the outstanding performers on the current grid.',
+                  'Back-to-back excellence from {driver}: {recent_runs} in three outings, with a points haul that few rivals can match across the same window.',
+                  'The most recent three rounds read {recent_runs} for {driver}, a return that would flatter most drivers on a career-best weekend, let alone as a sustained run.',
+                ],
+                [
+                  'That sequence has lifted {driver_last} meaningfully up the standings and shifted the conversation about where {driver_last} genuinely sits in the championship picture.',
+                  'Three consecutive high finishes compound in the standings in ways that single strong races do not; {driver_last} has effectively banked a championship buffer during this run.',
+                  'The arithmetic of {recent_runs} means {driver_last} has extracted maximum value from machinery that not every driver on the grid is using as effectively.',
+                ]),
               compose(`${id}:p2`, slots,
-                ['Confidence is a powerful thing, and {driver_last} has it in spades.', 'When a driver is hot, the whole team lifts with them.', 'Momentum like this is hard to manufacture and easy to lose.'],
-                ['Rivals will be eager to halt the run.', 'The challenge now is to sustain it.', 'Form this good rarely lasts forever, but while it does it is formidable.']),
+                [
+                  '{driver_last} is at a stage of form where car reads are sharp, tyre decisions are costing less and race management leaves rivals short of opportunity.',
+                  'A driver operating at this level tends to create pressure that compounds: rivals start making the mistakes {driver_last} is currently avoiding.',
+                  'The data underneath the results suggests {driver_last} is not riding fortune; the consistency of execution across different circuits and conditions points to a driver in control of the process.',
+                ],
+                [
+                  'The question every rival strategist is wrestling with is where the vulnerability lies, because on the evidence of {recent_runs} there is no obvious one to exploit.',
+                  'Sustaining a run like this demands that {driver_last} avoids the trap of overdriving; the finishes so far suggest a driver who understands the difference between fast and reckless.',
+                  'The most dangerous form in racing is the kind built on reliability rather than luck, and {driver_last}\'s recent run has that quality.',
+                ]),
               compose(`${id}:p3`, slots,
-                ['It has dragged {team} up the order with it.', 'The standings reflect a driver at the top of their game.', 'The numbers tell the story of a genuine hot streak.'],
-                ['Keeping it going is the only goal now.', 'The bandwagon is rolling.', 'On this evidence, anything looks possible.']),
+                [
+                  '{team} are pulling more points from the constructors\' pot than their car\'s pace tier would ordinarily suggest, and {driver_last}\'s run is the primary reason.',
+                  'The championship standings now reflect a driver that rivals can no longer treat as a secondary threat; {driver_last} has earned the front-of-mind respect that comes with results.',
+                  'At a point in the season when the standings crystallise around the consistent performers, {driver_last} has made a compelling case for inclusion in that group.',
+                ],
+                [
+                  'Whether {driver_last} can extend it beyond three rounds will determine whether this reads as a hot patch or the moment {driver_last} genuinely entered title contention.',
+                  'The next test is a circuit that may not suit {driver_poss} natural strengths, and how {driver_last} adapts will say something about the depth of this form.',
+                  'Opponents have noted the run and will arrive at the next round with specific game plans; {driver_last} will need to show the surge was built on more than circumstance.',
+                ]),
               texture(`${id}|q`, [
                 '"Everything is just clicking right now," said {driver_last}.',
                 '"I feel completely at one with the car," {driver_last} said.',
@@ -2352,7 +2412,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
         const delta = pace - standingPos // positive = punching above car pace
         if (Math.abs(delta) < 2) return
         const id = `traj-${ctx.year}-${r}-${cs.teamId}`
-        const slots = { team: cs.teamName, pos: ordinal(standingPos), tier: tierWord(pace, total), round: r }
+        const slots = { team: cs.teamName, team_poss: poss(cs.teamName), pos: ordinal(standingPos), tier: tierWord(pace, total), round: r }
         const over = delta > 0
         candidates.push({
           subject: cs.teamId, score: trajectoryScore(Math.abs(delta)),
@@ -2369,25 +2429,73 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             body: over
               ? paras(
                   compose(`${id}:p1`, slots,
-                    ['{team} have been one of the stories of the season.', '{team} keep defying their car.', 'Few expected {team} to be where they are.'],
-                    ['They sit {pos} with what is, on paper, a {tier} package.', 'A {tier} car has them running {pos} in the standings.', 'The results outstrip the {tier} machinery beneath them.']),
+                    [
+                      '{team} are {pos} in the constructors\' standings with a car that independent pace data brackets as {tier}, a gap between performance and position that does not close by accident.',
+                      'Park the {team} car alongside the competition on raw lap time and you get a {tier} machine; park their results next to the same competition and you see a {pos}-place team.',
+                      'The {tier} label on {team_poss} machinery sits oddly against a {pos}-place constructors\' position that {tier} cars have no business occupying.',
+                    ],
+                    [
+                      'The delta between their car\'s objective pace tier and their actual championship position is wide enough to constitute a sustainable competitive advantage in its own right.',
+                      'Qualifying well, managing tyres efficiently and converting safety-car windows into net gains adds up, and {team} have done all three more consistently than {tier} teams tend to.',
+                      '{team} have demonstrated over multiple rounds that the gap between {tier} car pace and {pos} place in the standings is bridgeable through clean execution.',
+                    ]),
                   compose(`${id}:p2`, slots,
-                    ['Maximum points from a modest package is a credit to the operation.', 'Execution has been the difference, weekend after weekend.', 'Nothing has been left on the table.'],
-                    ['Whether they can sustain it is the question.', 'Rivals with faster cars have been made to look ordinary.', 'It is a lesson in extracting everything available.']),
+                    [
+                      'The operational margin they have built comes from decisions rather than horsepower: strategy calls that come early, pit stops that are completed cleanly, and pitstop windows that are not given back through traffic.',
+                      'Teams with superior car pace have outpaced {team} on individual lap times this season and still left fewer points on the board, which tells you everything about where the constructors\' championship is actually decided.',
+                      'The structural advantage {team} holds has nothing to do with the wind tunnel; it is built in the timing stand, the pit lane, and in drivers who execute rather than spectate.',
+                    ],
+                    [
+                      'The risk that this creates for {team} is one of expectation management: as development cycles tighten, the teams with better cars will close the gap, and the execution margin may not prove sufficient.',
+                      'Their rivals are not blind to the overperformance; the teams with faster cars will prioritise closing this gap operationally in the second half of the season.',
+                      'Sustaining {pos} into the latter stages of the constructors\' fight requires {team} to keep an error rate near zero while rivals are permitted to catch up on outright pace.',
+                    ]),
                   compose(`${id}:p3`, slots,
-                    ['The whole team can take real pride in the run.', 'Operationally, they have been close to faultless.', 'Belief grows with every weekend like this.'],
-                    ['The target now is to hold position as others develop.', 'Staying ahead of faster cars will get harder.', 'For now, they are punching well above their weight.']),
+                    [
+                      'If {team} hold {pos} into the final rounds, the conversation will shift from overperformance to simply performance, and that is a significant rebranding of what this team represents.',
+                      'The constructors\' position they currently hold controls trackside resources, prize money distributions, and facility investment in ways that compound season over season.',
+                      'Every additional race {team} spend {pos} tightens the financial and reputational case for a development cycle that could eventually make the raw car match the standing.',
+                    ],
+                    [
+                      'The pressure on {team} is now to not merely hold the position but justify it when rivals arrive with mid-season development that narrows the gap on paper.',
+                      'Staying ahead of teams with faster cars is the hardest thing to sustain over a full season; the question is whether {team_poss} operational edge is sufficient to answer that.',
+                      '{team} have earned the right to be where they are on merit, and the only honest test of that is whether they can still say the same at the final round.',
+                    ]),
                 )
               : paras(
                   compose(`${id}:p1`, slots,
-                    ['{team} are leaving points on the table.', '{team} are not getting the most from their car.', 'Something is not clicking at {team}.'],
-                    ['A {tier} car has only delivered {pos} in the standings.', 'They sit {pos} despite genuinely {tier} pace.', 'The position flatters nobody given the {tier} machinery.']),
+                    [
+                      '{team} have the raw material of a {tier} car and only {pos} in the constructors\' standings to show for it, a conversion rate the rest of the paddock will note with interest.',
+                      'By pace metrics, {team} operate a {tier} machine; by the actual results column, they sit {pos}, a position no {tier} car should occupy at this stage of the campaign.',
+                      'The gap between {team_poss} car pace and their constructors\' position is measurable and widening: a {tier} package deserves more than {pos} on current evidence.',
+                    ],
+                    [
+                      'The squandered pace is not a marginal figure; it translates directly into prize-fund distribution, circuit leverage and the development runway that determines where the team sits in twelve months.',
+                      'Formula 1 rewards pace on lap-time sheets and results on the scoreboard; {team} are proving that the two are not the same thing, to their own significant cost.',
+                      'A {tier} car earning {pos} constructors\' points means the engineering, manufacturing and driver budgets are not returning what they should, a problem that compounds with every missed weekend.',
+                    ]),
                   compose(`${id}:p2`, slots,
-                    ['The paddock is questioning where it is going wrong.', 'Operational mistakes have been costly.', 'Too many weekends have unravelled.'],
-                    ['Pressure is building to turn pace into results.', 'The car deserves better than the points say.', 'Execution, not speed, looks the problem.']),
+                    [
+                      'The deficit is operational: pit stop timing, undercut calls, double-stacking decisions, and the management of safety-car periods have collectively cost {team} finishing positions their car\'s pace had already secured.',
+                      'Analysis of their race losses points to a pattern of avoidable error rather than pace deficit; the car arrives at the race able to score better and leaves having not done so.',
+                      '{team_poss} car pace means they enter most race weekends as a higher-points threat than their tally reflects; the conversion failure is a process and decision-making problem, not a technical one.',
+                    ],
+                    [
+                      'The gap between what their car can score and what it is scoring represents a quantifiable management failure that the {team} leadership is now under public pressure to address.',
+                      'Other teams in the {tier} bracket are outscoring {team} on equivalent or worse machinery, which removes the car as a credible explanation for the deficit.',
+                      'Execution under pressure is a learnable skill, but {team} have not yet shown they have learned it at the rate the {pos}-place standing demands.',
+                    ]),
                   compose(`${id}:p3`, slots,
-                    ['Heads will need to stay cool to arrest the slide.', 'The talent in the car is not in doubt.', 'A run of clean weekends would change the narrative fast.'],
-                    ['The second half is a chance to put it right.', 'They cannot afford to keep squandering the speed.', 'Time remains, but patience is wearing thin.']),
+                    [
+                      'The longer {team} sit {pos} with a car capable of better, the harder it becomes to recruit, retain, and motivate the personnel who know exactly what the car should be scoring.',
+                      'A {tier} car trapped {pos} in the standings is a resource allocation problem as much as a sporting one: the prize money differential between {pos} and where the car belongs is not trivial.',
+                      'The cost of squandering {tier} pace is not just the points not scored today; it is the development budget difference next season that those points would have bought.',
+                    ],
+                    [
+                      'What {team} need is not a new car but a new discipline around the decisions that convert fast machinery into actual championship points.',
+                      'A clear operational review, specific accountability for the decisions that cost positions, and a measurable standard for execution are the minimum requirement for closing the gap between where they are and where their car says they should be.',
+                      'The second half of the season is short enough that every remaining race must be treated as a recovery opportunity, which leaves {team} no margin for the kind of operational errors that defined the first.',
+                    ]),
                 ),
           }),
         })
