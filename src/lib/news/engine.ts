@@ -1279,9 +1279,10 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const momTied = pl === ps
     const momLast = pl >= ps ? lastName(s[0].driverName) : lastName(s[1].driverName)
     const momOther = pl >= ps ? lastName(s[1].driverName) : lastName(s[0].driverName)
-    const hhPhrase = h2hL === h2hS ? `level at ${h2hL}-${h2hS}` : `${Math.max(h2hL, h2hS)}-${Math.min(h2hL, h2hS)} in ${h2hL > h2hS ? lastName(s[0].driverName) : lastName(s[1].driverName)}'s favour`
+    const hhPhrase = h2hL === h2hS ? `level at ${h2hL}-${h2hS}` : `${Math.max(h2hL, h2hS)}-${Math.min(h2hL, h2hS)} in ${poss(h2hL > h2hS ? lastName(s[0].driverName) : lastName(s[1].driverName))} favour`
     const slots = {
       leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName),
+      leader_poss: poss(lastName(s[0].driverName)), second_poss: poss(lastName(s[1].driverName)),
       gap, gap_pts: plural(gap, 'point'), remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE,
       lw: s[0].wins, sw: s[1].wins, lw_word: plural(s[0].wins, 'win'),
       hh_phrase: hhPhrase, mom_last: momLast, mom_other: momOther, mom_hi: Math.max(pl, ps), mom_lo: Math.min(pl, ps),
@@ -1312,7 +1313,7 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
           ['The championship is going to the wire.', 'This title race is far from settled.', 'It is advantage {leader}, but only just.'],
           ['Only {gap} {gap_pts} separate {leader} and {second} with {races_left} remaining.', 'The gap stands at {gap} {gap_pts} with {races_left} left to run.', '{gap} {gap_pts} is all that divides the top two.']),
         compose(`${seed}:form`, slots,
-          ['{leader_last} has {lw} {lw_word} this year to {second_last}\'s {sw}.', 'On wins, {leader_last} leads {lw} to {sw}.', 'The win column reads {lw} to {sw} in {leader_last}\'s favour.'],
+          ['{leader_last} has {lw} {lw_word} this year to {second_poss} {sw}.', 'On wins, {leader_last} leads {lw} to {sw}.', 'The win column reads {lw} to {sw} in {leader_poss} favour.'],
           ['Their season head-to-head is {hh_phrase}.', 'In races where both finished, the head-to-head sits {hh_phrase}.'],
           momTied
             ? ['Recent form is dead level, {mom_hi} points apiece over the last four races.']
