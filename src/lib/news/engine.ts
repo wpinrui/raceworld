@@ -351,6 +351,17 @@ function careerOf(ctx: NewsContext, id: string): DriverCareer | null {
   return ctx.careers?.[id] ?? null
 }
 
+// Gendered pronoun slots for a single driver, so copy reads with natural pronouns (he/she, his/her,
+// him/her, ...) instead of contorting to stay neutral. A driver's gender is always known.
+function pronouns(gender: string | undefined): Record<string, string> {
+  const f = gender === 'female'
+  return {
+    they: f ? 'she' : 'he', they_cap: f ? 'She' : 'He',
+    them: f ? 'her' : 'him', their: f ? 'her' : 'his', their_cap: f ? 'Her' : 'His',
+    theirs: f ? 'hers' : 'his', themself: f ? 'herself' : 'himself', theyre: f ? 'she\'s' : 'he\'s',
+  }
+}
+
 // Extend a careers map (DB totals for prior seasons) with one in-progress/just-finished season's
 // results from the live store, so the live newsroom sees a complete, up-to-date career. The base
 // must NOT already include `year` (we always count the current season from the store, never the
@@ -1479,46 +1490,98 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
   const sp = { year: ctx.year, fav: byPace[0]?.name ?? '', fav2: byPace[1]?.name ?? '' }
   out.push({
     id: seed, category: 'preview_schedule', round: 0, priority: 85,
-    headline: fill(pick(['{year} season preview', 'The {year} grid takes shape', 'What to expect in {year}', 'The {year} season ahead', 'The {year} campaign awaits'], `${seed}|h`), sp),
-    dek: fill(pick(['Everything to know ahead of the {year} campaign.', 'Setting the scene for {year}.', 'The storylines that will define {year}.'], `${seed}|d`), sp),
+    headline: fill(pick([
+      'The {year} title picture, before a wheel turns',
+      '{fav} lead the charge into {year}',
+      'Pre-season pace sets up a {year} showdown',
+      '{fav} and {fav2} draw first blood in {year}',
+      'Winter speed tells a story for {year}',
+      'What the pre-season numbers say about {year}',
+    ], `${seed}|h`), sp),
+    dek: fill(pick([
+      '{fav} arrive at the first race as the team to beat, with {fav2} their closest shadow on the timing screens.',
+      'Pre-season testing has handed {fav} a clear pace advantage, putting the rest of the grid on the back foot before a race has been run.',
+      'The {year} grid has sorted itself early, with {fav} at the top and {fav2} the only side close enough to make it a genuine fight.',
+      'Before a points-paying lap is turned, {fav} have already made their intentions plain with the quickest car in the paddock.',
+    ], `${seed}|d`), sp),
     body: paras(
-      compose(`${seed}:p1`, sp,
-        ['A new season is almost here.', 'The {year} campaign is on the horizon.', 'Testing is done and the {year} season beckons.'],
-        ['{fav} and {fav2} look the early benchmarks on raw car pace.', 'Early pace pointers favour {fav} and {fav2}.', '{fav} carry the favourites tag, with {fav2} expected to push hard.']),
-      compose(`${seed}:p2`, sp,
-        ['A long calendar lies ahead, and the order rarely settles early.', 'Car pace is only the starting point.', 'The grid looks closer than it has in some time.'],
-        ['Development and reliability will decide who is standing at the end.', 'The midfield looks tight, and points could be hard-won.', 'Consistency over a long year tends to win out.']),
-      compose(`${seed}:p3`, sp,
-        ['Every team will believe it has made a step over the winter.', 'Optimism is high up and down the paddock.', 'The pressure is on from the very first lap.'],
-        ['Only the racing will separate hope from reality.', 'The stopwatch will soon sort fact from fiction.', 'It will not be long before the picture clears.']),
+      fill(pick([
+        '{fav} carry the fastest raw car pace into {year}, a benchmark the rest of the grid measured themselves against across every session of winter running.',
+        'The gap between {fav} and the chasing pack is not enormous, but it is real, and in a sport where tenths decide championships, it matters enormously.',
+        '{fav2} are the team closest to matching that pre-season pace, making a two-way fight at the front the likeliest opening chapter of {year}.',
+        'What {fav} have shown in testing is not merely a single-lap flier but a consistent race-trim performance that signals a car built to win across a long calendar.',
+        'For {fav2}, the pace deficit to {fav} is narrow enough to suggest that track-specific setups and strategic calls could flip the order on any given weekend.',
+        'Every other team on the grid is now playing catch-up, with {fav} having set the pre-season bar higher than the competition was hoping to see.',
+      ], `${seed}|b1`), sp),
+      fill(pick([
+        'The development war will run in parallel with the championship itself, and whichever side keeps its upgrade curve steepest through the flyaway rounds could shift the balance of power before the summer break.',
+        'Reliability is the silent variable that reshapes title fights, and a car carrying the lap time {fav} have shown inevitably carries the complexity that brings risk alongside speed.',
+        'The midfield is packed tightly enough that a single successful upgrade package could vault a team from sixth in the constructors\' standings to third, making the chasing positions as contested as the front.',
+        'A full-season calendar leaves almost no margin for mechanical failure or operational errors, and the teams that convert pace into points consistently, rather than brilliantly, tend to be the ones lifting trophies.',
+        'The same regulations everyone has had a year to study mean the intellectual gap across the grid is smaller now than at any point since the rules were written.',
+        'The attrition that a long calendar inflicts means the team that manages its car, its tyres and its people across the full distance has historically outscored the team that merely has the quickest machine.',
+      ], `${seed}|b2`), sp),
+      fill(pick([
+        'Pace advantage is a starting position in a championship, not a finishing one, and the history of the sport is built on teams who led pre-season tests and then watched rivals close the gap round by round.',
+        'For {fav2}, the task is narrowing the gap to {fav} fast enough that a title fight is still mathematically alive when the calendar turns to its final third.',
+        'The pressure on every team outside the top two is structural, not motivational, because the resource gap between front-runners and the midfield makes genuine championship bids difficult to sustain across an entire year.',
+        'What will ultimately decide {year} is the rate of in-season development, because a car that leads winter testing rarely crosses the final finish line with exactly the same relative advantage it carried into the opener.',
+        'The team that wins the {year} title will almost certainly be the one that brought both the fastest package and the fewest self-inflicted wounds, and right now {fav} have shown they own at least the first half of that equation.',
+        'A pre-season pace advantage is leverage, not destiny, and the depth of both the {fav} and {fav2} operations means any complacency from the front will be punished by a midfield hungry for an opening.',
+      ], `${seed}|b3`), sp),
     ),
   })
   for (const t of ctx.teams) {
     const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
     const tseed = `launch-${ctx.year}-${t.id}`
     const lastPos = lastSeasonPos(ctx, t.id)
-    const tslots = { team: t.name, year: ctx.year, squad: listJoin(squad) || 'Their driver pairing', tier: tierWord(paceRank(ctx, t.id), ctx.teams.length), last_pos: lastPos ? ordinal(lastPos) : '' }
+    const tslots = { team: t.name, team_poss: poss(t.name), year: ctx.year, squad: listJoin(squad) || 'Their driver pairing', tier: tierWord(paceRank(ctx, t.id), ctx.teams.length), last_pos: lastPos ? ordinal(lastPos) : '' }
     out.push({
       id: tseed, category: 'car_launch_livery', round: 0, priority: 30,
-      headline: fill(pick(['{team} reveal their {year} car', '{team} pull the covers off for {year}', '{team} launch their {year} challenger', 'First look at the {year} {team}', '{team} unveil for {year}'], `${tseed}|h`), tslots),
-      dek: fill(pick(['{team} launch their {year} challenger.', '{squad} front the {team} launch.', 'A new look for {team} in {year}.'], `${tseed}|d`), tslots),
+      headline: fill(pick([
+        '{team} pull the covers off their {year} challenger',
+        '{team_poss} {year} car breaks cover at launch',
+        '{team} reveal the machine built for {year}',
+        '{team_poss} {year} contender steps into the light',
+        '{team} lift the lid on their {year} title bid',
+        '{team_poss} new car makes its {year} debut',
+      ], `${tseed}|h`), tslots),
+      dek: fill(pick([
+        '{team} have launched their {year} challenger, with {squad} tasked with extracting every tenth from a package that arrives rated as a {tier} proposition.',
+        'The covers are off at {team}, where {squad} will campaign a car the paddock rates firmly in the {tier} bracket when the {year} season gets under way.',
+        '{team} have taken the wraps off their {year} contender, handing {squad} a {tier} platform as the team set their sights on a strong championship campaign.',
+        'With {squad} confirmed behind the wheel, {team} have presented the car that will define their {year} season, a machine assessed across the paddock as a {tier} entry.',
+      ], `${tseed}|d`), tslots),
       body: paras(
-        compose(`${tseed}:p1`, tslots,
-          ['{team} have unveiled their {year} car.', 'The covers are off the {year} {team}.', '{team} have presented their {year} challenger.'],
-          ['{squad} lead the charge.', '{squad} carry the team hopes.', 'The driver line-up is led by {squad}.']),
-        compose(`${tseed}:p2`, tslots,
-          lastPos
-            ? ['They finished {last_pos} in last season\'s constructors and want more.', 'After {last_pos} in the constructors last year, the bar is set.', 'Coming off {last_pos} last season, the target is to climb.']
-            : ['As a {tier} outfit, expectations are set accordingly.', 'The team goes in eyeing realistic targets for a {tier} package.', 'Much will depend on how the {tier} car develops over the year.'],
-          ['Reliability out of the box would be a fine start.', 'The early races will set the tone.', 'A solid baseline is the immediate goal.']),
-        compose(`${tseed}:p3`, tslots,
-          ['Behind the scenes, the real work has only just begun.', 'Launch glamour quickly gives way to the grind of a season.', 'The factory will already be chasing the next gains.'],
-          ['Testing will offer the first honest read.', 'The stopwatch will deliver the verdict soon enough.', 'Ambition will meet reality on track shortly.']),
-        texture(`${tseed}|q`, [
-          '"We think it is a genuine step forward," the {team} principal said.',
-          '"The numbers in the wind tunnel are encouraging," said the {team} technical chief.',
-          '"We have left no stone unturned over the winter," the {team} principal said.',
-        ], tslots, 30),
+        fill(pick([
+          '{team} brought the {year} car into the open today, and the reaction inside the garage was telling, with the aerodynamic philosophy shifted visibly from last year, tighter bodywork around the sidepods and a revised floor edge the team believe will prove decisive in high-speed corners.',
+          'Rated as a {tier} car by those who have seen the wind-tunnel correlation data, the {year} challenger sets a clear ceiling and floor for what {squad} can realistically target on race weekends.',
+          'The launch marked the first public look at how {team} have interpreted this season\'s regulatory tweaks, and the solutions on show suggest the design office made bold calls rather than conservative ones.',
+          'For a {tier} outfit, the opening rounds will reveal whether the correlation between simulation and track is tight enough to let {squad} develop in real time rather than firefight fundamental issues.',
+          'The {year} car carries forward the development gains {team} banked in the closing rounds of last season, meaning the baseline on the grid in the opening round is stronger than anything the team ran before the summer break.',
+          'In a {tier} fight where the margin between neighbouring cars can be smaller than a tenth, the quality of the launch specification matters enormously, because a solid aero concept arriving early lets {squad} push the development cycle forward rather than chase a fundamental fix through the flyaways.',
+        ], `${tseed}|b1`), tslots),
+        fill(pick(lastPos
+          ? [
+            'Finishing {last_pos} in the constructors\' table last season left {team} with a precise and uncomfortable reference point, and every design decision on the {year} car has been judged against whether it closes the gap to the teams that finished above them.',
+            '{team_poss} {last_pos} place in last year\'s constructors\' standings is the number the engineers have pinned to the wall, and the {year} car either moves the team up the order or it does not.',
+            'Coming off {last_pos} in the constructors\', {team} needed more than iteration on last year\'s concept, and the launch car suggests the design team heard the brief, with substantive changes to the floor and rear-end packaging.',
+            'The {last_pos} place result last season was the target the engineers were handed when the {year} project began, and {squad} will be determined not to let the resources poured into this car go to waste.',
+          ]
+          : [
+            'Without a prior-season finish to measure against, the {tier} billing is the only public benchmark on the {year} car, and {squad} will be the first to report whether it translates into consistent points-scoring pace.',
+            'For a team writing its {year} chapter without the anchor of a previous constructors\' result, the {tier} classification is both a starting marker and a challenge that {squad} must push the car beyond.',
+            'The absence of a finishing position to measure against sharpens the story around the launch, because {team} must define their own benchmark, and a {tier} car gives {squad} the tools to set one that means something by mid-season.',
+            'A fresh entry with no championship result to anchor the target throws attention onto the car itself, and clearing the {tier} ceiling consistently would be a real statement from a team still building its identity.',
+          ], `${tseed}|b2`), tslots),
+        fill(pick([
+          'Reliability out of the box will be the quiet priority in the opening rounds, because a {tier} car that completes every lap banks more usable data than a quicker machine that keeps retiring, and {squad} need the mileage to compress the development timeline.',
+          'How quickly {team} read and react to the feedback from {squad} will separate a good season from a forgettable one, since upgrade parts arriving by round four on real correlation are worth more than any number of wind-tunnel hours now.',
+          'For {squad}, the handling balance over a full stint will matter as much as one-lap pace, because tyre degradation is where {tier} teams either overperform their grid slot or slide out of the points in the final twenty laps.',
+          'Power-unit reliability across a long run of back-to-back race weekends will test {team_poss} engineering depth as much as anything the aerodynamics offer, and {squad} need clean Sundays to build the points tally that justifies the {year} investment.',
+          '{team_poss} in-season development rate is the one variable the pre-season assessment cannot price in, and a {tier} car that arrives at round eight with a real upgrade can finish the year punching above its launch billing.',
+          'Both drivers arrive with something to prove, and the benchmark between {squad} will sharpen the feedback loop, pushing the team to resolve the ambiguities in the data faster than a single-driver effort ever could.',
+        ], `${tseed}|b3`), tslots),
       ),
     })
   }
@@ -1526,40 +1589,47 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
   for (const d of youngest) {
     if (d.age > 22) continue
     const rseed = `rookie-${ctx.year}-${d.id}`
-    const rslots = { driver: d.name, driver_last: lastName(d.name), age: d.age, year: ctx.year, team: teamName(ctx, d.teamId), team_poss: poss(teamName(ctx, d.teamId)), driver_poss: poss(lastName(d.name)) }
+    const rslots = { driver: d.name, driver_last: lastName(d.name), age: d.age, year: ctx.year, team: teamName(ctx, d.teamId), team_poss: poss(teamName(ctx, d.teamId)), driver_poss: poss(lastName(d.name)), ...pronouns(d.gender) }
     out.push({
       id: rseed, category: 'rookie_debut', round: 0, priority: 25,
-      headline: fill(pick(['{driver_last} steps into the fire at {team}', '{driver} is {team_poss} bet on {year}', '{driver_last} ready to test themselves in F1\'s full glare', 'The rookie raising eyebrows at {team}', '{driver_last} arrives in F1 at {age} with something to prove', '{team} back a {age}-year-old to deliver in {year}'], `${rseed}|h`), rslots),
+      headline: fill(pick([
+        'Young gun {driver_last} steps up for {team} in {year}',
+        '{driver_last} at {age}, the rookie {team} are betting on',
+        'Can {driver_last} deliver for {team} in {their} debut season',
+        '{age}-year-old {driver_last} targets a fast {team} baptism',
+        '{driver_poss} moment is here, and {year} will be the proof',
+        '{driver_last} arrives in F1 at just {age}',
+      ], `${rseed}|h`), rslots),
       dek: fill(pick([
-        'At {age} years old, {driver} lines up on the {year} grid with {team} and faces the sharpest learning curve in motorsport.',
-        '{driver} enters a {year} season that will measure, for the first time, whether junior-category pace translates into a Formula 1 race seat earned on merit.',
-        'The {year} campaign opens with {driver} as one of the most scrutinised faces in the {team} garage, all at the age of {age}.',
-        'Youth meets the fastest machines on the planet as {age}-year-old {driver} takes on a full Formula 1 season with {team}.',
+        'At just {age}, {driver} joins {team} as one of the youngest drivers on the grid, carrying the weight of a junior career\'s worth of expectations into the harshest spotlight in motorsport.',
+        '{driver} is {age} and already on Formula 1\'s starting grid, tasked with matching {team_poss} investment in {them} before the first chequered flag of {year}.',
+        'The step from junior formulae to a full {team} race seat is the largest of {driver_poss} career, and {year} is where the world finds out whether {theyre} ready for it.',
+        'Formula 1 in {year} hands {driver} a seat at {team}, a scrutinising global audience, and no margin for a gentle learning curve.',
       ], `${rseed}|d`), rslots),
       body: paras(
         fill(pick([
-          'Formula 1 at {age} means overnight exposure to a media circus that follows every debrief, every radio message, and every garage expression for signs of confidence or doubt.',
-          'The jump from junior categories into a full F1 campaign compresses years of learning into a single winter of testing, and {driver_last} now carries that weight every time the pit-lane door opens.',
-          'Racing with {team} in {year}, {driver_last} will face race distances pushing past 300 kilometres, a brutal step beyond the sprint formats that defined much of junior motorsport.',
-          'Every lap in a Formula 1 car generates data streams that engineers dissect in real time, and a driver at {age} must process that feedback loop without the luxury of experience to filter the noise.',
-          'The passionate fanbase that fills grandstands for every round will track {driver_poss} progress lap by lap, turning each qualifying session into a public audition.',
-          'For any driver arriving in F1 for the first time, the sheer volume of weekend commitments, technical meetings, simulator sessions, and sponsor obligations rewires what it means to be a racing driver.',
+          'The jump from junior categories to a full Formula 1 season compresses years of technical learning into a winter\'s worth of preparation, and {driver_last} has had to process that acceleration faster than almost any rival on the {year} grid.',
+          'Where the feeder series let {them} find rhythm over a weekend, the freight-train schedule of practice, qualifying and race demands that {driver_last} reads a circuit and extracts the maximum before a single radio call ends.',
+          'Media commitments alone scale up sharply at {team}, with press obligations, sponsor appearances and simulator debriefs eating into the hours factory engineers want spent reviewing data.',
+          'The moment {driver_last} steps under the garage lights in parc fermé, {they} trades the relative shelter of a junior programme for a broadcast audience that dissects every tenth of a second.',
+          '{driver_poss} first Formula 1 winter has meant learning {team_poss} tyre philosophy, aero concept and steering-wheel architecture all at once, a cognitive load that rookies routinely call unlike anything below.',
+          'Now racing for {team}, {driver_last} must acclimatise to being scrutinised not just by engineers but by a paddock that will form its verdict on {them} within the opening three weekends.',
         ], `${rseed}|b1`), rslots),
         fill(pick([
-          'Qualifying in Formula 1 demands a driver extract a perfect lap on the first real attempt, with track evolution and traffic in Q1 punishing anyone who waits too long to find their rhythm.',
-          '{driver_poss} tyre management over a full race distance will be among the first metrics the {team} engineers use to benchmark progress, since degradation compounds every tactical decision the pit wall makes.',
-          'The teammate inside the same {team} garage is the most honest yardstick in the sport, sharing identical machinery and leaving nowhere to hide when the timing sheets are posted.',
-          'Racing wheel-to-wheel with drivers who have hundreds of grands prix between them means {driver_last} must choose precisely when to defend a position and when spending rubber on a battle costs more than the place is worth.',
-          'At {age}, reading the gap to the car ahead while managing brake temperatures and fuel load simultaneously is a cognitive demand that even experienced F1 drivers call the sport\'s most underappreciated skill.',
-          'The strategic calls that define a Formula 1 race, the undercut window, the safety-car overcut, the two-stop gamble, require {driver_last} to absorb and relay tyre-condition information fast enough for the pit wall to act on it.',
+          'Qualifying is the earliest and starkest test, one flying lap with no second invitation, the format that strips away context and prints a raw number beside {driver_poss} name.',
+          '{team_poss} car demands a driver who can manage front-left degradation across a thirty-lap stint, a discipline learned in corners {driver_last} has never driven on compounds {they} has never raced.',
+          '{their_cap} teammate stands as the most immediate and inescapable benchmark, sharing the same machinery and the same strategist\'s call-sheet, leaving the data nowhere to hide.',
+          'Street circuits arrive without the buffer of long free-practice familiarity, replacing it with a wall on the exit of every barrier-lined chicane and a single shot at the lap.',
+          'Racecraft in traffic is where Formula 1 separates the graduate from the arrival, the braking-reference shift, the understeer in dirty air, the half-second window to commit to a move or abort it, all coming faster than in any category below.',
+          'Tyre warm-up on a cool out-lap, safety-car restarts and the call to pit or stay out are decisions {driver_last} rehearsed in the simulator but now executes under the full points cost of getting them wrong.',
         ], `${rseed}|b2`), rslots),
         fill(pick([
-          'The realistic measure of a successful debut campaign for {driver_last} is not a championship points tally but the narrowing of the gap to the teammate across qualifying and race pace as the season progresses.',
-          '{team} will judge {year} a foundation worth building on if {driver_last} is consistently extracting what the car offers rather than leaving performance stranded through unfamiliarity with its limits.',
-          'At {age}, {driver_last} carries none of the baggage of a veteran rebuilding a reputation, which means every clean finish and every tenths-of-a-second improvement reads as forward momentum rather than recovery.',
-          'The moments that will define how {year} is remembered for {driver_last} are the recovery drives through traffic, the late-braking moves that stick, and the ability to keep composure when the strategy call does not go to plan.',
-          'Finishing a season with {team} having shown the capacity to learn, adapt, and push the car to its limit week after week would be a concrete return on the faith the team placed in {driver_last} at {age}.',
-          'If {driver_last} can translate raw pace into consistent points finishes before the summer break, the narrative around {team_poss} {year} season will shift from project to contender fast.',
+          'The measure {team} will apply to {driver_last} by midsummer is not a championship position but the gap to {their} teammate in qualifying trim, the number that reveals whether {they} has genuinely understood the car.',
+          'A strong result before the European summer break would shift the internal conversation from potential to proof, and {driver_last} will feel that deadline in every debrief from the opening race.',
+          '{year} will be judged a success for {them} if {they} out-qualifies {their} teammate on merit and manages tyre life in a points-scoring position deep into a long second stint.',
+          'Pressure from the junior pipeline is structural and permanent, because {team_poss} academy produced {driver_last} and will produce the next candidate, making {their} seat conditional on performance rather than promise.',
+          'Sponsor visibility, simulator feedback and raw lap counts will all be weighed as {year} unfolds to justify or question {team_poss} decision to hand {them} a front-line seat so early.',
+          'The final verdict on {driver_poss} rookie season comes down to whether {they} closes the gap to {their} teammate across the year or lets that gap define the conversation heading into contract talks.',
         ], `${rseed}|b3`), rslots),
       ),
     })
