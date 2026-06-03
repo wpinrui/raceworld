@@ -649,7 +649,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       '"It is never easy until it is over, so I kept pushing every single lap," said {winner_last}.',
       '"Getting through the first few corners cleanly let me build the gap rather than defend," said {winner_last}.',
       '"These points matter. Every race this season has felt like it counts, and today was no different," said {winner_last}.',
-    ], slots, 30)
+    ], slots, 72)
 
     const champPool = !leader
       ? ['']
@@ -993,7 +993,10 @@ function milestones(ctx: NewsContext): NewsArticle[] {
 
     // General career milestones for every runner this round: starts / points / podiums / poles, the
     // first ever or each step (issue #19). One article per driver — the most significant crossing —
-    // skipping anyone already given a win milestone above.
+    // skipping anyone already given a win milestone above. Capped per round and ordered by
+    // significance: a brand-new world (season one, no career history) makes round one everyone's
+    // first-everything, and the cap keeps the standout few rather than flooding the feed with 20.
+    const generalCands: { res: RaceResult; cat: 'podiums' | 'poles' | 'points' | 'starts'; value: number; rank: number }[] = []
     for (const res of (ctx.raceResults[r - 1] ?? [])) {
       if (mileDrivers.has(res.driverId)) continue
       const before = careerTotalsThroughRound(ctx, res.driverId, r - 1)
@@ -1005,8 +1008,15 @@ function milestones(ctx: NewsContext): NewsArticle[] {
         if (v != null) { chosen = { cat, value: v }; break }
       }
       if (!chosen) continue
-      mileDrivers.add(res.driverId)
-      out.push(careerMilestoneArticle(ctx, res, r, chosen.cat, chosen.value))
+      // Significance: podiums > poles > points > starts, with a higher step (e.g. 250 points) edging
+      // out a first, since a long-server's 250th reads bigger than yet another debut in a fresh field.
+      const base = chosen.cat === 'podiums' ? 400 : chosen.cat === 'poles' ? 300 : chosen.cat === 'points' ? 200 : 100
+      generalCands.push({ res, cat: chosen.cat, value: chosen.value, rank: base + chosen.value })
+    }
+    generalCands.sort((a, b) => b.rank - a.rank)
+    for (const c of generalCands.slice(0, 4)) {
+      mileDrivers.add(c.res.driverId)
+      out.push(careerMilestoneArticle(ctx, c.res, r, c.cat, c.value))
     }
 
     // Team 1-2 — only the FIRST of the season for that team (a dominant team locks out the top
@@ -1290,7 +1300,7 @@ function championship(ctx: NewsContext): NewsArticle[] {
           '"I have dreamed of this for a long time, and standing here with {wins} {wins_word} it is hard to believe it is real," said {driver_last}.',
           '"Every race we gave everything, and I never looked at the standings until today," said {driver_last}.',
           '"The team built something extraordinary, and I just had to be brave enough to use it," said {driver_last}.',
-        ], slots, 55),
+        ], slots, 78),
       ),
     })
     break
@@ -1341,7 +1351,7 @@ function championship(ctx: NewsContext): NewsArticle[] {
         texture(`${seed}|tex`, [
           'Inside the {team} factory staff gathered around monitors in the canteen and the engineering bays, the building erupting floor by floor as the news spread.',
           'The pit crew heard the confirmation on the radio and the pit lane became a crush of mechanics, the wall moving as one before the cars had even completed their in-laps.',
-          'The principal walked the length of the {team} garage shaking every hand in reach, stopping longest at the data engineers who had chased the margins all year.',
+          'The team principal walked the length of the {team} garage shaking every hand in reach, stopping longest at the data engineers who had chased the margins all year.',
           'In parc ferme both {team} cars sat side by side without strategy telling them where to be, the engineers clustered between them with the trophy somewhere in the middle.',
         ], slots, 66),
       ),
@@ -1616,8 +1626,8 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
       hh_phrase: hhPhrase, mom_last: momLast, mom_other: momOther, mom_hi: Math.max(pl, ps), mom_lo: Math.min(pl, ps),
     }
     const battleTexture = [
-      texture(`${seed}|ql`, ['"We just take it race by race," said {leader_last}.', '"Nothing is won yet," {leader_last} said.'], slots, 22),
-      texture(`${seed}|qs`, ['"I have nothing to lose from here," said {second_last}.', '"All the pressure is on them," {second_last} said.'], slots, 22),
+      texture(`${seed}|ql`, ['"We just take it race by race," said {leader_last}.', '"Nothing is won yet," {leader_last} said.'], slots, 62),
+      texture(`${seed}|qs`, ['"I have nothing to lose from here," said {second_last}.', '"All the pressure is on them," {second_last} said.'], slots, 62),
       texture(`${seed}|pundit`, ['Pundits are split on who holds the edge.', 'Most of the paddock make {leader_last} a narrow favourite.'], slots, 18),
       texture(`${seed}|fans`, ['Fans are bracing for a grandstand finish.', 'Neutrals have rarely had it so good.'], slots, 16),
       texture(`${seed}|orders`, ['Talk of team orders is already swirling in both garages.'], slots, 12),
@@ -1999,57 +2009,70 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
       ], `${seed}|b3`), sp),
     ),
   })
-  for (const t of ctx.teams) {
-    const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
-    const tseed = `launch-${ctx.year}-${t.id}`
-    const lastPos = lastSeasonPos(ctx, t.id)
-    const tslots = { team: t.name, team_poss: poss(t.name), year: ctx.year, squad: listJoin(squad) || 'Their driver pairing', tier: tierWord(paceRank(ctx, t.id), ctx.teams.length), last_pos: lastPos ? ordinal(lastPos) : '' }
+  // One consolidated launch piece covering every team's new car, fastest to slowest, each with the
+  // paddock's tier read as a performance hint — rather than a separate, near-identical article per team.
+  {
+    const lseed = `launch-${ctx.year}`
+    const byPaceTeams = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
+    const total = ctx.teams.length
+    const lslots: Record<string, string | number> = {
+      year: ctx.year, fav: byPaceTeams[0]?.name ?? '', fav2: byPaceTeams[1]?.name ?? '',
+      tail: byPaceTeams[byPaceTeams.length - 1]?.name ?? '', n_teams: total,
+    }
+    const teamLines = byPaceTeams.map((t) => {
+      const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
+      const lastPos = lastSeasonPos(ctx, t.id)
+      const ts = {
+        team: t.name, team_poss: poss(t.name), squad: listJoin(squad) || 'an unchanged line-up',
+        tier: tierWord(paceRank(ctx, t.id), total), last_pos: lastPos ? ordinal(lastPos) : '', year: ctx.year,
+      }
+      const tseed = `${lseed}|${t.id}`
+      const base = fill(pick([
+        '{team} arrive rated as a {tier} proposition, {squad} charged with making the most of it.',
+        'For {team}, the new car lands in the {tier} bracket, {squad} the pairing trusted to deliver.',
+        '{team} unveil a {tier} machine, {squad} tasked with extracting every tenth.',
+        'The {team} car is pitched as a {tier} entry this year, with {squad} behind the wheel.',
+        '{team} pull the covers off a {tier} contender for {squad} to campaign.',
+      ], `${tseed}|line`), ts)
+      const ref = lastPos
+        ? fill(pick([
+            ' It follows a {last_pos}-place finish in last year\'s constructors, the number the engineers have pinned to the wall.',
+            ' Coming off {last_pos} in the constructors, the brief for this car was not a subtle one.',
+          ], `${tseed}|ref`), ts)
+        : fill(pick([
+            ' With no prior finish to measure against, the tier billing is the only public benchmark on it.',
+            ' A fresh entry with its own benchmark still to set.',
+          ], `${tseed}|ref`), ts)
+      return base + ref
+    })
     out.push({
-      id: tseed, category: 'car_launch_livery', round: 0, priority: 30,
+      id: lseed, category: 'car_launch_livery', round: 0, priority: 32,
       headline: fill(pick([
-        '{team} pull the covers off their {year} challenger',
-        '{team_poss} {year} car breaks cover at launch',
-        '{team} reveal the machine built for {year}',
-        '{team_poss} {year} contender steps into the light',
-        '{team} lift the lid on their {year} title bid',
-        '{team_poss} new car makes its {year} debut',
-      ], `${tseed}|h`), tslots),
+        'The {year} cars break cover',
+        'Every {year} challenger is revealed',
+        'The {year} grid pulls the covers off',
+        'Launch season arrives for {year}',
+        'The {year} field shows its hand',
+      ], `${lseed}|h`), lslots),
       dek: fill(pick([
-        '{team} have launched their {year} challenger, with {squad} tasked with extracting every tenth from a package that arrives rated as a {tier} proposition.',
-        'The covers are off at {team}, where {squad} will campaign a car the paddock rates firmly in the {tier} bracket when the {year} season gets under way.',
-        '{team} have taken the wraps off their {year} contender, handing {squad} a {tier} platform as the team set their sights on a strong championship campaign.',
-        'With {squad} confirmed behind the wheel, {team} have presented the car that will define their {year} season, a machine assessed across the paddock as a {tier} entry.',
-      ], `${tseed}|d`), tslots),
+        'Every team has revealed its {year} challenger. Here is how the new grid shapes up, fastest to slowest.',
+        'All {n_teams} cars are out in the open, and {fav} set the early benchmark.',
+        'The {year} grid is unwrapped, {fav} fastest of the lot and {tail} with ground to make up.',
+      ], `${lseed}|d`), lslots),
       body: paras(
         fill(pick([
-          '{team} brought the {year} car into the open today, and the reaction inside the garage was telling, with the aerodynamic philosophy shifted visibly from last year, tighter bodywork around the sidepods and a revised floor edge the team believe will prove decisive in high-speed corners.',
-          'Rated as a {tier} car by those who have seen the wind-tunnel correlation data, the {year} challenger sets a clear ceiling and floor for what {squad} can realistically target on race weekends.',
-          'The launch marked the first public look at how {team} have interpreted this season\'s regulatory tweaks, and the solutions on show suggest the design office made bold calls rather than conservative ones.',
-          'For a {tier} outfit, the opening rounds will reveal whether the correlation between simulation and track is tight enough to let {squad} develop in real time rather than firefight fundamental issues.',
-          'The {year} car carries forward the development gains {team} banked in the closing rounds of last season, meaning the baseline on the grid in the opening round is stronger than anything the team ran before the summer break.',
-          'In a {tier} fight where the margin between neighbouring cars can be smaller than a tenth, the quality of the launch specification matters enormously, because a solid aero concept arriving early lets {squad} push the development cycle forward rather than chase a fundamental fix through the flyaways.',
-        ], `${tseed}|b1`), tslots),
-        fill(pick(lastPos
-          ? [
-            'Finishing {last_pos} in the constructors\' table last season left {team} with a precise and uncomfortable reference point, and every design decision on the {year} car has been judged against whether it closes the gap to the teams that finished above them.',
-            '{team_poss} {last_pos} place in last year\'s constructors\' standings is the number the engineers have pinned to the wall, and the {year} car either moves the team up the order or it does not.',
-            'Coming off {last_pos} in the constructors\', {team} needed more than iteration on last year\'s concept, and the launch car suggests the design team heard the brief, with substantive changes to the floor and rear-end packaging.',
-            'The {last_pos} place result last season was the target the engineers were handed when the {year} project began, and {squad} will be determined not to let the resources poured into this car go to waste.',
-          ]
-          : [
-            'Without a prior-season finish to measure against, the {tier} billing is the only public benchmark on the {year} car, and {squad} will be the first to report whether it translates into consistent points-scoring pace.',
-            'For a team writing its {year} chapter without the anchor of a previous constructors\' result, the {tier} classification is both a starting marker and a challenge that {squad} must push the car beyond.',
-            'The absence of a finishing position to measure against sharpens the story around the launch, because {team} must define their own benchmark, and a {tier} car gives {squad} the tools to set one that means something by mid-season.',
-            'A fresh entry with no championship result to anchor the target throws attention onto the car itself, and clearing the {tier} ceiling consistently would be a real statement from a team still building its identity.',
-          ], `${tseed}|b2`), tslots),
+          'Launch season is done, and the {year} grid has shown its hand. {fav} carry the fastest raw pace into the season, with {fav2} the closest to them on the early read.',
+          'With every car now revealed, the {year} pecking order has an early shape: {fav} at the head of it, {fav2} their nearest challenger.',
+        ], `${lseed}|intro`), lslots),
+        ...teamLines,
         fill(pick([
-          'Reliability out of the box will be the quiet priority in the opening rounds, because a {tier} car that completes every lap banks more usable data than a quicker machine that keeps retiring, and {squad} need the mileage to compress the development timeline.',
-          'How quickly {team} read and react to the feedback from {squad} will separate a good season from a forgettable one, since upgrade parts arriving by round four on real correlation are worth more than any number of wind-tunnel hours now.',
-          'For {squad}, the handling balance over a full stint will matter as much as one-lap pace, because tyre degradation is where {tier} teams either overperform their grid slot or slide out of the points in the final twenty laps.',
-          'Power-unit reliability across a long run of back-to-back race weekends will test {team_poss} engineering depth as much as anything the aerodynamics offer, and {squad} need clean Sundays to build the points tally that justifies the {year} investment.',
-          '{team_poss} in-season development rate is the one variable the pre-season assessment cannot price in, and a {tier} car that lands a real mid-season upgrade can finish the year punching above its launch billing.',
-          'Both drivers arrive with something to prove, and the benchmark between {squad} will sharpen the feedback loop, pushing the team to resolve the ambiguities in the data faster than a single-driver effort ever could.',
-        ], `${tseed}|b3`), tslots),
+          'Pre-season tiers are a starting position, not a finishing one, and the development race will redraw this order long before the flag falls on {year}.',
+          'How these cars are rated today and how they finish {year} are rarely the same thing, and the upgrade war starts the moment the lights go out.',
+        ], `${lseed}|close`), lslots),
+        texture(`${lseed}|q`, [
+          '"Every team thinks they have made a step over the winter, that is the nature of this sport," one senior engineer noted.',
+          '"The timing screens in testing tell you something, but never everything," a paddock veteran cautioned.',
+        ], lslots, 80),
       ),
     })
   }
@@ -2151,7 +2174,7 @@ function market(ctx: NewsContext): NewsArticle[] {
             '"Getting this seat means everything to me, and I am ready for the challenge ahead," said {driver_last}.',
             '"I know the work this demands, and I will not take a single lap for granted," said {driver_last}.',
             '"This is the opportunity I have worked towards since karting, and I mean to make the most of it," said {driver_last}.',
-          ], slots, 35),
+          ], slots, 72),
         ),
       })
       continue
@@ -2180,7 +2203,7 @@ function market(ctx: NewsContext): NewsArticle[] {
             '"I feel at home here, and I believe we have unfinished business together," said {driver_last}.',
             '"The trust the team has shown me lets me focus entirely on performance," said {driver_last}.',
             '"We have built something real, and I want to see where we can take it," said {driver_last}.',
-          ], slots, 30),
+          ], slots, 72),
         ),
       })
     } else {
@@ -2218,7 +2241,7 @@ function market(ctx: NewsContext): NewsArticle[] {
             '"There is real potential here, and this is exactly the challenge I was looking for," said {driver_last}.',
             '"I leave with respect for everyone at my old team, but this opportunity was too compelling to pass up," said {driver_last}.',
             'The {team} principal called it "a signing that speaks to our ambition."',
-          ], slots, 35),
+          ], slots, 72),
         ),
       })
     }
@@ -2427,13 +2450,17 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       continue
     }
 
+    // One consolidated silly-season roundup per window, a paragraph per rumour, ordered by how
+    // newsworthy the move is — rather than a separate article per move (which buried a round under
+    // half a dozen near-identical pieces).
     const dstand = driverStandingsAfter(ctx, r)
-    for (const m of moves) {
+    const ordered = [...moves].sort((a, b) => b.mediaScore - a.mediaScore)
+    const seed = `silly-${ctx.year}-${r}`
+    const moveParas = ordered.map((m) => {
       const fromName = teamName(ctx, m.fromTeamId as string)
       const dpts = dstand.find((s) => s.driverId === m.driverId)?.points ?? 0
       const dRank = dstand.findIndex((s) => s.driverId === m.driverId)
-      // Only brag about a points haul when it is actually notable (upper half of the grid);
-      // otherwise "a return of 2 points has not gone unnoticed" reads as a joke.
+      // Only brag about a points haul when it is actually notable (upper half of the grid).
       const notablePoints = dpts > 0 && dRank >= 0 && dRank < dstand.length / 2
       const toIdx = cstand.findIndex((c) => c.teamId === m.toTeamId)
       const toPos = toIdx >= 0 ? ordinal(toIdx + 1) : ''
@@ -2441,69 +2468,65 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       const fromPos = fromIdx >= 0 ? ordinal(fromIdx + 1) : ''
       // Frame the move by its real direction in the constructors order (lower index = better).
       const direction = fromIdx >= 0 && toIdx >= 0 ? (toIdx < fromIdx ? 'up' : toIdx > fromIdx ? 'down' : 'level') : 'unknown'
-      const seed = `silly-${ctx.year}-${r}-${m.driverId}`
+      const mseed = `${seed}-${m.driverId}`
       const drv = ctx.drivers.find((d) => d.id === m.driverId)
       const veteran = (drv?.age ?? 25) >= 30
       const outOfContract = !!drv && drv.contractExpiresAfterSeason <= ctx.year
-      // Ambiguous, unfalsifiable "qualities" that fit "value {driver}'s {appeal}" — age-aware so
-      // we never claim something the data could contradict.
-      // Each fits "value {driver}'s {appeal}", so no leading article.
+      // Ambiguous, unfalsifiable "qualities" that fit "value {driver}'s {appeal}" — age-aware so we
+      // never claim something the data could contradict. No leading article.
       const qualities = veteran
         ? ['experience and know-how', 'racecraft and composure', 'steadying influence in the garage', 'big-race temperament', 'sheer mileage', 'marketability', 'professionalism', 'all-round package', 'standing in the paddock', 'reliability between the walls']
         : ['youth and upside', 'raw potential', 'sky-high ceiling', 'fearlessness', 'long-term promise', 'marketability', 'professionalism', 'all-round package', 'standing in the paddock', 'fresh edge']
-      const appeal = pick(qualities, `${seed}|appeal`)
-      // Status descriptor for "would be adding {status}" — grounded so it can't contradict.
+      const appeal = pick(qualities, `${mseed}|appeal`)
       const wins = winsUpTo(ctx, m.driverId, r)
       const status = wins > 0 ? 'a proven race winner' : (dRank >= 0 && dRank < 4 ? 'an upper-echelon talent' : 'a known quantity')
       const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, to_poss: poss(m.toTeamName), from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal, status }
-      // Texture from many independent low-odds sources (each ~10%, several can fire) rather than
-      // one heavy line — sightings, rival suitors, the driver in the pen, a team line, fans, pundits.
-      const sillyTexture = [
-        texture(`${seed}|sight`, ['A sighting of {driver_last} near the {to} hospitality unit did little to quell the talk.', 'The {driver_last} camp is said to have held exploratory talks.', 'Word of a quiet meeting at {to} headquarters has only fanned the flames.', 'An agent was spotted doing the rounds of the paddock motorhomes.'], slots, 10),
-        texture(`${seed}|rival`, ['{to} are not thought to be the only admirers.', 'At least one rival outfit is said to be monitoring the situation.', 'Whispers suggest {to} face competition for the signature.'], slots, 10),
-        texture(`${seed}|pen`, ['Asked directly, {driver_last} batted the question away in the media pen.', '"My focus is on the racing here," {driver_last} said when asked.', '"I am happy where I am," said {driver_last}, with a smile that gave little away.', '{driver_last} offered nothing but a wry smile when pressed.'], slots, 10),
-        texture(`${seed}|spox`, ['A {to} spokesperson declined to comment.', '{to} dismissed the talk as paddock noise.', '{from} insisted their driver is going nowhere.'], slots, 10),
-        texture(`${seed}|fan`, ['Fans have already started the countdown on social media.', 'The grandstands buzzed with the rumour all weekend.', 'Supporters of both camps are split on the idea.'], slots, 10),
-        texture(`${seed}|pundit`, ['Pundits are divided on whether the move makes sense.', 'Analysts reckon it would suit one party more than the other.', 'The paddock consensus is that it would be a gamble worth taking.'], slots, 10),
-      ].filter(Boolean).join(' ')
-      out.push({
-        id: seed, category: 'silly_season', round: r, priority: 30,
-        headline: fill(pick([
-          'Rumour has {driver} linked with {to}', '{driver} on {to_poss} radar', 'Could {driver} swap {from} for {to}?',
-          '{to} eyeing a move for {driver}', 'Is {driver} bound for {to}?', 'Speculation grows around {driver}',
-          'Is a {driver} switch to {to} on?', '{driver} the name on everyone\'s lips',
-        ], `${seed}|h`), slots),
-        dek: fill(pick([
-          '{driver} is being linked with a switch to {to}.', 'Talk of a {driver} move is gathering pace.',
-          '{to} are said to admire {driver}.', 'The rumour mill turns to {driver}.',
-        ], `${seed}|d`), slots),
-        body: paras(
-          compose(`${seed}:p1`, slots,
-            ['The paddock is buzzing with talk of {driver}.', '{driver} has become a name to watch in the market.', 'Speculation is building around the future of {driver}.'],
-            ['Sources suggest {to} are weighing up a move {window}.', '{to} are understood to have registered interest {window}.', 'A switch from {from} to {to} is the talk of the rumour mill {window}.']),
-          sillyTexture,
-          compose(`${seed}:p2`, slots,
-            ['{to} are said to value {driver_last}\'s {appeal}.', 'What draws {to} is {driver_last}\'s {appeal}.', 'On paper, the fit makes a certain sense.', 'The logic behind the link is not hard to see.'],
-            notablePoints
-              ? ['{driver_last} has {driver_points} points to show for the season so far.', 'A return of {driver_points} points this year has not gone unnoticed.']
-              : [''],
-            // Grounded direction of the move, using both teams' real standings.
-            direction === 'up'
-              ? ['It would be a step up, from {from} in {from_pos} to {to} in {to_pos}.', 'On the table is a move up the order, {from_pos} to {to_pos}.']
-              : direction === 'down'
-              ? ['Curiously, it would mean a step down, from {from} in {from_pos} to {to} in {to_pos}.', 'It would be a slide from {from_pos} to {to_pos}, which raises eyebrows.']
-              : direction === 'level'
-              ? ['It would be a sideways move, {from} ({from_pos}) and {to} ({to_pos}) near-level in the order.', 'There is little between {from} ({from_pos}) and {to} ({to_pos}) in the standings.']
-              : [''],
-            ['{to} would be adding {status}.', 'For {to}, it would be a statement of intent.', 'Each party has something the other wants.']),
-          compose(`${seed}:p3`, slots,
-            ['Nothing is signed, and {from} would still have to release {driver_last}.', 'For now it is talk, and {from} hold the cards.', 'Any deal hinges on {from} being willing to let {driver_last} go.'],
-            outOfContract
-              ? ['Crucially, {driver_last}\'s deal is up at the end of the year, which only adds fuel.', 'Out of contract at season\'s end, {driver_last} is free to listen to offers.']
-              : ['But {driver_last} is tied to {from} beyond this season, complicating any switch.', 'With time still left on the contract, {from} are under no pressure to sell.']),
-        ),
-      })
-    }
+      // One grounded paragraph per rumour: the link, its real direction, the points (if notable),
+      // the appeal/status, and the contract situation.
+      const para = compose(`${mseed}:line`, slots,
+        ['{driver} is linked with {to}.', '{to} are said to admire {driver}.', 'Talk of a {driver} move to {to} is doing the rounds.', 'A {driver} switch from {from} to {to} is being whispered.'],
+        direction === 'up'
+          ? ['It would be a step up, {from} in {from_pos} to {to} in {to_pos}.', 'On the table is a move up the order, {from_pos} to {to_pos}.']
+          : direction === 'down'
+          ? ['Curiously, it would mean a step down, {from} in {from_pos} to {to} in {to_pos}.', 'It would be a slide from {from_pos} to {to_pos}, which raises eyebrows.']
+          : direction === 'level'
+          ? ['It would be a sideways move, {from} ({from_pos}) and {to} ({to_pos}) near-level.', 'There is little between {from} ({from_pos}) and {to} ({to_pos}) in the order.']
+          : [''],
+        notablePoints
+          ? ['{driver_last} has {driver_points} points to show for the year.', 'A return of {driver_points} points has not gone unnoticed.']
+          : [''],
+        ['{to} would value {driver_last}\'s {appeal}.', 'For {to}, it would add {status}.', 'The fit makes a certain sense on paper.'],
+        outOfContract
+          ? ['Crucially, {driver_last}\'s deal is up at season\'s end, which only adds fuel.', 'Out of contract soon, {driver_last} is free to listen to offers.']
+          : ['But {driver_last} is tied to {from} beyond this season.', '{from} are under no pressure to sell.'])
+      // A media-pen quote per rumour, fired often (the newsroom wants more voices, not fewer).
+      const q = texture(`${mseed}|pen`, ['Asked directly, {driver_last} batted it away in the media pen.', '"My focus is on the racing here," {driver_last} said when pressed.', '"I am happy where I am," said {driver_last}, giving little away.', '"You know I cannot talk about that," {driver_last} said with a grin.'], slots, 45)
+      return q ? `${para} ${q}` : para
+    })
+    const top = ordered[0]
+    const rslots = { window, round: r, n: ordered.length, moves_word: plural(ordered.length, 'move'), top: top.driverName, top_last: lastName(top.driverName) }
+    out.push({
+      id: seed, category: 'silly_season', round: r, priority: 30,
+      headline: fill(pick([
+        'The driver market {window}', 'Silly season stirs into life {window}', 'The seats in play {window}',
+        'Who is going where {window}', 'The rumours doing the paddock rounds {window}',
+      ], `${seed}|h`), rslots),
+      dek: fill(pick([
+        '{n} {moves_word} are lighting up the paddock {window}.', 'From {top_last} down, here are the rumours worth tracking {window}.',
+        'The rumour mill is busy {window}, with {n} {moves_word} in the air.',
+      ], `${seed}|d`), rslots),
+      body: paras(
+        fill(pick([
+          'The paddock rumour mill is running hot {window}, with {n} {moves_word} worth taking seriously.',
+          'There is plenty to chew on in the driver market {window}, and {top} leads the talk.',
+        ], `${seed}|intro`), rslots),
+        ...moveParas,
+        fill(pick([
+          'Nothing is signed, of course, and a single result can reopen a seat thought closed.',
+          'For now it is all talk, but silly season has a way of turning whispers into contracts.',
+        ], `${seed}|close`), rslots),
+      ),
+    })
   }
   return out
 }
@@ -2624,7 +2647,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
               '"I am not panicking, we keep working," said {behind_last}.',
               '"The results do not reflect the effort," {behind_last} said.',
               '"My side of the garage will come good," said {behind_last}.',
-            ], slots, 30),
+            ], slots, 62),
           ),
         }),
       })
@@ -2686,7 +2709,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
                 '"We stay calm and keep digging," said {driver_last}.',
                 '"It will turn, I have no doubt," {driver_last} said.',
                 '"You do not forget how to drive overnight," said {driver_last}.',
-              ], slots, 30),
+              ], slots, 62),
             ),
           }),
         })
@@ -2743,7 +2766,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
                 '"Everything is just clicking right now," said {driver_last}.',
                 '"I feel completely at one with the car," {driver_last} said.',
                 '"Long may it continue," said {driver_last} with a grin.',
-              ], slots, 30),
+              ], slots, 62),
             ),
           }),
         })
@@ -2918,7 +2941,9 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
       ...pronouns(fa.gender),
     }
     const marketLine = toTeam
-      ? fill(pick(['There is a real chance {driver_last} is back on the grid with {to} for {next}.', 'A {to} seat for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
+      ? experienced
+        ? fill(pick(['There is a real chance {driver_last} is back on the grid with {to} for {next}.', 'A {to} seat for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
+        : fill(pick(['There is a real chance {driver_last} makes {their} F1 debut with {to} for {next}.', 'A {to} seat for {next} could hand {driver_last} a first F1 drive.', 'A maiden F1 seat with {to} for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
       : experienced
       ? fill(pick(['For now the seats look full, and a return may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
       : fill(pick(['For now the seats look full, and a debut may have to wait.', 'As things stand, a first F1 seat looks some way off.'], `${seed}|mkt`), slots)
