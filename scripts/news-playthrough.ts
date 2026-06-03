@@ -1,0 +1,210 @@
+// Organic news playthrough (headless CLI).
+//
+// Drives a full season (or several) of the real game engine in memory — generating the grid,
+// simulating every race, advancing through the off-season market — with NO database, then runs
+// the news engine over the resulting state and dumps every generated article to a markdown file
+// for analysis.
+//
+// Faithfulness: news is captured in two passes per season — once at pre-season (round 0, for
+// launches/previews/rookie watch) and once after the off-season market (rounds 1..N plus the
+// transfer/retirement stories). The off-season phases stage their changes into
+// `pendingNextSeasonState`, so the live drivers/teams the engine reads stay the season's data —
+// no post-market reshuffle corrupts the in-season analysis.
+//
+// Usage:
+//   npm run news:play -- [--seasons N] [--year YYYY] [--seed STRING] [--out FILE]
+//   tsx scripts/news-playthrough.ts --seasons 3 --seed demo --out news.md
+
+import { writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import type { NewsArticle, NewsContext } from '@/lib/news/engine'
+
+// ---- args -------------------------------------------------------------------
+const argv = process.argv.slice(2)
+function opt(name: string, def: string): string {
+  const i = argv.indexOf(`--${name}`)
+  return i >= 0 && argv[i + 1] != null ? argv[i + 1] : def
+}
+const SEASONS = Math.max(1, parseInt(opt('seasons', '1'), 10) || 1)
+const START_YEAR = parseInt(opt('year', '2026'), 10) || 2026
+const SEED = opt('seed', '')
+const OUT = opt('out', 'news-playthrough.md')
+
+// Silence zustand's persist "storage unavailable" warning — expected and harmless under Node,
+// where we run entirely in memory.
+const realWarn = console.warn.bind(console)
+console.warn = (...a: unknown[]) => { if (typeof a[0] === 'string' && a[0].includes('persist middleware')) return; realWarn(...a) }
+
+// ---- localStorage shim so zustand's persist middleware is an in-memory no-op under Node ----
+const mem = new Map<string, string>()
+;(globalThis as unknown as { localStorage: Storage }).localStorage = {
+  getItem: (k: string) => (mem.has(k) ? mem.get(k)! : null),
+  setItem: (k: string, v: string) => { mem.set(k, String(v)) },
+  removeItem: (k: string) => { mem.delete(k) },
+  clear: () => { mem.clear() },
+  key: (i: number) => Array.from(mem.keys())[i] ?? null,
+  get length() { return mem.size },
+} as unknown as Storage
+
+interface Captured { art: NewsArticle; year: number }
+
+function roundLabel(round: number, n: number): string {
+  if (round <= 0) return 'Pre-season'
+  if (round > n) return 'Off-season'
+  return `Round ${round}`
+}
+
+async function main() {
+  // Dynamic imports so the localStorage shim above is installed before the stores are created.
+  const { useSeasonStore } = await import('@/lib/store/season-store')
+  const { useRaceStore } = await import('@/lib/store/race-store')
+  const { calendar2026 } = await import('@/data/calendar')
+  const { drivers2026, teams2026 } = await import('@/data/2026-grid')
+  const { buildRaceResults } = await import('@/lib/sim/race-results')
+  const { isOffSeason } = await import('@/lib/sim/types')
+  const { generateNews, CATEGORY_LABELS } = await import('@/lib/news/engine')
+  const { mulberry32 } = await import('@/lib/news/util')
+
+  // Optional reproducibility: seed the global RNG the whole sim + generators draw from.
+  if (SEED) { const rng = mulberry32(SEED); Math.random = () => rng() }
+
+  const N = calendar2026.length
+  const season = () => useSeasonStore.getState()
+
+  const buildCtx = (): NewsContext => {
+    const s = season()
+    return {
+      year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
+      drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
+      upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
+      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true,
+    }
+  }
+
+  const seen = new Map<string, Captured>()
+  const capture = (year: number) => {
+    for (const a of generateNews(buildCtx())) if (!seen.has(a.id)) seen.set(a.id, { art: a, year })
+  }
+
+  const summaries: { year: number; champion: string; wcc: string; races: number }[] = []
+
+  for (let si = 0; si < SEASONS; si++) {
+    if (si === 0) {
+      season().initSeason(drivers2026, teams2026, START_YEAR)
+    } else {
+      // Roll the previous season over into the next one.
+      season().runPreSeasonTesting()
+      season().startNewSeason()
+      useSeasonStore.setState({ phase: 'pre-race' })
+    }
+    const year = season().year
+    process.stderr.write(`Simulating ${year} (${N} races)...\n`)
+
+    capture(year) // pre-season slate (round 0): launches, season preview, rookie watch
+
+    // Race the whole season headlessly. advanceRound() triggers endSeason() on the final round.
+    let seasonGuard = 0
+    while (seasonGuard++ < N + 2) {
+      const s = season()
+      if (s.phase === 'idle' || isOffSeason(s.phase)) break
+      const round = s.currentRound
+      const circuit = calendar2026[round - 1]
+      if (!circuit) break
+      const grid = s.drivers.filter((d) => d.teamId !== '')
+
+      const race = useRaceStore.getState()
+      race.loadFromSeason(grid, s.teams, circuit.id)
+      race.initSession() // qualifying -> pre-race
+      const rs = useRaceStore.getState().raceState
+      if (!rs) break
+      useRaceStore.setState({ raceState: { ...rs, phase: 'racing' } })
+      let lapGuard = 0
+      while (useRaceStore.getState().raceState?.phase === 'racing' && lapGuard++ < 5000) {
+        useRaceStore.getState().tickLap()
+      }
+      const finished = useRaceStore.getState().raceState
+      if (!finished) break
+
+      const results = buildRaceResults(finished, grid, s.teams)
+      season().recordRaceResult(results) // applies progression + upgrades, writes the round
+      // Capture now, while endOfSeason is still null, so the producers gated on an in-progress
+      // season (analysis, title fight, silly season, mid-season feature) are included for this
+      // round with the correct live drivers/teams.
+      capture(year)
+      season().advanceRound() // triggers endSeason() on the final round
+      useRaceStore.getState().resetSession()
+    }
+
+    // Off-season market so transfer / retirement / signing news exists. These stage into
+    // pendingNextSeasonState and only fill endOfSeasonSummary slices — the live season data the
+    // engine reads is untouched.
+    season().runContractNegotiations()
+    season().runDriverRetirements()
+
+    capture(year) // off-season market (round N+1)
+
+    const eos = season().endOfSeasonSummary
+    const champion = season().drivers.find((d) => d.id === eos?.driverChampion)?.name
+      ?? season().driverStandings[0]?.driverName ?? '(unknown)'
+    const wcc = season().teams.find((t) => t.id === eos?.constructorChampion)?.name
+      ?? season().constructorStandings[0]?.teamName ?? '(unknown)'
+    summaries.push({ year, champion, wcc, races: season().raceResults.length })
+    process.stderr.write(`  ${year}: WDC ${champion}, WCC ${wcc}\n`)
+  }
+
+  // ---- assemble markdown ----------------------------------------------------
+  const all = [...seen.values()].sort((x, y) =>
+    (y.year - x.year) || (y.art.round - x.art.round) || (y.art.priority - x.art.priority) || x.art.id.localeCompare(y.art.id))
+
+  const byLabel = new Map<string, number>()
+  for (const { art } of all) {
+    const label = CATEGORY_LABELS[art.category] ?? art.category
+    byLabel.set(label, (byLabel.get(label) ?? 0) + 1)
+  }
+
+  const lines: string[] = []
+  const lastYear = START_YEAR + SEASONS - 1
+  lines.push(`# News playthrough — ${START_YEAR}${SEASONS > 1 ? `–${lastYear}` : ''}`)
+  lines.push('')
+  lines.push(`Headless organic simulation. Seasons: ${SEASONS}. Seed: ${SEED || '(random)'}. Articles: ${all.length}.`)
+  lines.push('')
+  lines.push('## Summary')
+  lines.push('')
+  for (const s of summaries) lines.push(`- **${s.year}** (${s.races} races) — WDC ${s.champion}, WCC ${s.wcc}`)
+  lines.push('')
+  lines.push('### Articles by category')
+  lines.push('')
+  for (const [label, count] of [...byLabel.entries()].sort((a, b) => b[1] - a[1])) {
+    lines.push(`- ${label}: ${count}`)
+  }
+  lines.push('')
+
+  let currentYear: number | null = null
+  for (const { art, year } of all) {
+    if (year !== currentYear) {
+      currentYear = year
+      lines.push('')
+      lines.push(`## ${year}`)
+      lines.push('')
+    }
+    lines.push(`### ${art.headline}`)
+    lines.push('')
+    lines.push(`*${CATEGORY_LABELS[art.category] ?? art.category} · ${roundLabel(art.round, N)}*`)
+    lines.push('')
+    lines.push(`_${art.dek}_`)
+    lines.push('')
+    lines.push(art.body)
+    lines.push('')
+    lines.push('---')
+    lines.push('')
+  }
+
+  const outPath = resolve(process.cwd(), OUT)
+  writeFileSync(outPath, lines.join('\n'), 'utf8')
+  process.stderr.write(`\nWrote ${all.length} articles to ${outPath}\n`)
+  for (const [label, count] of [...byLabel.entries()].sort((a, b) => b[1] - a[1])) {
+    process.stderr.write(`  ${label.padEnd(14)} ${count}\n`)
+  }
+}
+
+main().catch((e) => { console.error(e); process.exit(1) })
