@@ -7,11 +7,6 @@ import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
 import { generateNews, CATEGORY_LABELS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
 
-// Off-track / market stories get the red accent; on-track stories get cyan.
-const RED_CATEGORIES = new Set([
-  'championship_state', 'silly_season', 'driver_signing', 'driver_exit', 'career_retirement',
-])
-
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
   if (round > calLen) return 'Off-season'
@@ -73,9 +68,10 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
   )
 }
 
-// The home headlines ARE the newsroom feed — same engine, top stories only — so the
-// front page and the newsroom never disagree. Clicking a line opens it in a modal; the
-// panel title jumps straight to the news tab.
+// The home headlines ARE the newsroom feed — same engine — so the front page and the
+// newsroom never disagree. We show every story for the current round (the latest race, or
+// the pre-season slate before any race) and let the panel scroll. Clicking a line opens it
+// in a modal; the panel title jumps straight to the news tab.
 export function HeadlinesPanel() {
   const year = useSeasonStore((s) => s.year)
   const phase = useSeasonStore((s) => s.phase)
@@ -95,7 +91,11 @@ export function HeadlinesPanel() {
       driverStandings, constructorStandings, upgradeEvents: allUpgradeEvents,
       constructorHistory, endOfSeason: endOfSeasonSummary, calendar: calendar2026, live: true,
     }
-    return generateNews(ctx).slice(0, 6)
+    const feed = generateNews(ctx)
+    // Current round: the latest completed race, or the pre-season slate (round 0) before
+    // any race has run. Show everything for that round and let the panel overflow.
+    const targetRound = raceResults.length > 0 ? raceResults.length : 0
+    return feed.filter((a) => a.round === targetRound)
   }, [year, phase, raceResults, drivers, teams, driverStandings, constructorStandings, allUpgradeEvents, constructorHistory, endOfSeasonSummary])
 
   const open = headlines.find((h) => h.id === openId) ?? null
@@ -112,22 +112,16 @@ export function HeadlinesPanel() {
         {headlines.length === 0 ? (
           <p className="px-5 py-3 text-sm text-[#FFFFFF]">No headlines yet. Run a race and the newsroom will fill up.</p>
         ) : (
-          <ul>
+          <ul className="max-h-[28rem] overflow-y-auto">
             {headlines.map((h) => (
               <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
                 <button
                   onClick={() => setOpenId(h.id)}
-                  className="w-full text-left flex items-start gap-3 px-5 py-2.5 hover:bg-[#0F1419]/50 transition-colors cursor-pointer"
+                  className="w-full text-left px-5 py-2.5 hover:bg-[#0F1419]/50 transition-colors cursor-pointer"
                 >
-                  <span
-                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: RED_CATEGORIES.has(h.category) ? '#DC143C' : '#00D9FF' }}
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
-                    <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
-                      {CATEGORY_LABELS[h.category] ?? h.category} · {roundLabel(h.round, calendar2026.length)}
-                    </span>
+                  <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
+                  <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
+                    {CATEGORY_LABELS[h.category] ?? h.category}
                   </span>
                 </button>
               </li>
