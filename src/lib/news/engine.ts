@@ -442,6 +442,16 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       '{faller} sat quietly for a while before facing anyone.',
     )
     const texturePara = texture(seed, texturePool, slots)
+    // Occasional invented winner quote (first-person, so no gender issue; generic, so it cannot
+    // contradict the result).
+    const quotePara = texture(`${seed}|q`, [
+      '"The car felt mega all day," said {winner_last} afterwards.',
+      '"Huge effort from the whole team," {winner_last} said.',
+      '"That is right up there with my best weekends," reflected {winner_last}.',
+      '"We executed it just about perfectly," said {winner_last}.',
+      '"I could not have asked for more out there," {winner_last} said.',
+      '"Days like this are why you do it," {winner_last} said.',
+    ], slots, 30)
 
     const champPool = !leader
       ? ['']
@@ -500,7 +510,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner} controls the {circuit} for {team}.', 'The {team} driver takes the spoils at the {circuit}.',
         '{winner} sees off {p2} to win the {circuit}.', 'Another {circuit} to remember for {winner}.',
       ], `${seed}|d`), slots),
-      body: paras(leadPara, startPara, attritionPara, texturePara, champPara, closerPara),
+      body: paras(leadPara, startPara, attritionPara, texturePara, champPara, quotePara, closerPara),
     })
   }
   return out
@@ -554,6 +564,12 @@ function milestones(ctx: NewsContext): NewsArticle[] {
             '{driver_last} needed a quiet moment before facing the cameras.',
             'The {team} garage erupted the instant the flag fell.',
           ], slots),
+          texture(`${seed}|q`, [
+            '"I have waited a long time for this," said {driver_last}.',
+            '"This one means everything," {driver_last} said.',
+            '"To finally get it done feels unreal," said {driver_last}.',
+            '"That is for the whole team," {driver_last} said.',
+          ], slots, 35),
         ),
       })
     }
@@ -792,6 +808,12 @@ function championship(ctx: NewsContext): NewsArticle[] {
         compose(`${seed}:p3`, slots,
           ['For {driver_last}, it is the reward for a season of relentless application.', 'The hard yards of a long year have paid off.', 'It caps a season few could live with.'],
           ['Attention will soon turn to whether the feat can be repeated.', 'The target only grows from here.', 'Rivals must now find a way to respond.']),
+        texture(`${seed}|q`, [
+          '"This is everything I have worked for," said {driver_last}.',
+          '"I am lost for words, honestly," {driver_last} said.',
+          '"To do this with {team} is the dream," said {driver_last}.',
+          '"Every single person back at the factory earned this," {driver_last} said.',
+        ], slots, 55),
       ),
     })
     break
@@ -1086,6 +1108,11 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
         compose(`${tseed}:p3`, tslots,
           ['Behind the scenes, the real work has only just begun.', 'Launch glamour quickly gives way to the grind of a season.', 'The factory will already be chasing the next gains.'],
           ['Testing will offer the first honest read.', 'The stopwatch will deliver the verdict soon enough.', 'Ambition will meet reality on track shortly.']),
+        texture(`${tseed}|q`, [
+          '"We think it is a genuine step forward," the {team} principal said.',
+          '"The numbers in the wind tunnel are encouraging," said the {team} technical chief.',
+          '"We have left no stone unturned over the winter," the {team} principal said.',
+        ], tslots, 30),
       ),
     })
   }
@@ -1159,6 +1186,11 @@ function market(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:p3`, slots,
             ['{driver_last} can now plan for the long term.', 'The focus shifts squarely to performance.', 'With the future settled, all that matters is results.'],
             ['It removes one question mark from the off-season.', 'One seat, at least, is no longer in play.', 'The market has one fewer domino to fall.']),
+          texture(`${seed}|q`, [
+            '"I am exactly where I want to be," said {driver_last}.',
+            '"There was never any real doubt," {driver_last} said.',
+            '"We have unfinished business together," said {driver_last}.',
+          ], slots, 30),
         ),
       })
     } else {
@@ -1185,6 +1217,12 @@ function market(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:p3`, slots,
             ['{driver_last} now faces the task of adapting quickly.', 'Pre-season will be about building chemistry with {team}.', 'The pressure to deliver follows any big move.'],
             ['It is one of the headline transfers of the off-season.', 'The grid for {next} suddenly looks different.', 'The deal is {term}.']),
+          texture(`${seed}|q`, [
+            '"I could not be more excited to join {team}," said {driver_last}.',
+            '"It is a new challenge and I am ready for it," {driver_last} said.',
+            '"When {team} came calling, it was an easy decision," said {driver_last}.',
+            'The {team} principal called it "a signing that speaks to our ambition."',
+          ], slots, 35),
         ),
       })
     }
@@ -1331,7 +1369,7 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       const sillyTexture = [
         texture(`${seed}|sight`, ['A sighting of {driver_last} near the {to} hospitality unit did little to quell the talk.', 'The {driver_last} camp is said to have held exploratory talks.', 'Word of a quiet meeting at {to} headquarters has only fanned the flames.', 'An agent was spotted doing the rounds of the paddock motorhomes.'], slots, 10),
         texture(`${seed}|rival`, ['{to} are not thought to be the only admirers.', 'At least one rival outfit is said to be monitoring the situation.', 'Whispers suggest {to} face competition for the signature.'], slots, 10),
-        texture(`${seed}|pen`, ['Asked directly, {driver_last} batted the question away in the media pen.', '{driver_last} would say only that the focus is on the racing.', '{driver_last} offered nothing but a wry smile when pressed.'], slots, 10),
+        texture(`${seed}|pen`, ['Asked directly, {driver_last} batted the question away in the media pen.', '"My focus is on the racing here," {driver_last} said when asked.', '"I am happy where I am," said {driver_last}, with a smile that gave little away.', '{driver_last} offered nothing but a wry smile when pressed.'], slots, 10),
         texture(`${seed}|spox`, ['A {to} spokesperson declined to comment.', '{to} dismissed the talk as paddock noise.', '{from} insisted their driver is going nowhere.'], slots, 10),
         texture(`${seed}|fan`, ['Fans have already started the countdown on social media.', 'The grandstands buzzed with the rumour all weekend.', 'Supporters of both camps are split on the idea.'], slots, 10),
         texture(`${seed}|pundit`, ['Pundits are divided on whether the move makes sense.', 'Analysts reckon it would suit one party more than the other.', 'The paddock consensus is that it would be a gamble worth taking.'], slots, 10),
@@ -1454,6 +1492,11 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             compose(`${id}:p3`, slots,
               ['For {ahead_last}, it is validation of a strong run.', 'The momentum is firmly with {ahead_last}.', 'Internally, the pecking order looks increasingly settled.'],
               ['{behind_last} will be desperate to respond.', 'A reset over the coming rounds is the only answer.', 'The second half offers a chance to put it right.']),
+            texture(`${id}|q`, [
+              '"I am not panicking, we keep working," said {behind_last}.',
+              '"The results do not reflect the effort," {behind_last} said.',
+              '"My side of the garage will come good," said {behind_last}.',
+            ], slots, 30),
           ),
         }),
       })
@@ -1489,6 +1532,11 @@ function analysis(ctx: NewsContext): NewsArticle[] {
               compose(`${id}:p3`, slots,
                 ['{team} will be working hard to find the root cause.', 'Whether it is the car or the driver is the question being asked.', 'Often these runs end as suddenly as they begin.'],
                 ['One clean weekend can change everything.', 'The talent does not vanish overnight.', 'A reset is needed, and quickly.']),
+              texture(`${id}|q`, [
+                '"We stay calm and keep digging," said {driver_last}.',
+                '"It will turn, I have no doubt," {driver_last} said.',
+                '"You do not forget how to drive overnight," said {driver_last}.',
+              ], slots, 30),
             ),
           }),
         })
@@ -1517,6 +1565,11 @@ function analysis(ctx: NewsContext): NewsArticle[] {
               compose(`${id}:p3`, slots,
                 ['It has dragged {team} up the order with it.', 'The standings reflect a driver at the top of their game.', 'The numbers tell the story of a genuine hot streak.'],
                 ['Keeping it going is the only goal now.', 'The bandwagon is rolling.', 'On this evidence, anything looks possible.']),
+              texture(`${id}|q`, [
+                '"Everything is just clicking right now," said {driver_last}.',
+                '"I feel completely at one with the car," {driver_last} said.',
+                '"Long may it continue," said {driver_last} with a grin.',
+              ], slots, 30),
             ),
           }),
         })
