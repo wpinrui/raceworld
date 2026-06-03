@@ -1436,8 +1436,12 @@ function previews(ctx: NewsContext): NewsArticle[] {
             ['{leader} leads on {leader_points}, {gap_desc}{lead_gap} {gap_pts} clear of {second}.', '{leader} arrives {gap_desc}{lead_gap} {gap_pts} ahead of {second}.', 'It is {leader} who tops the table, {gap_desc}{lead_gap} {gap_pts} up on {second}.']),
           talkingPoint,
           compose(`${seed}:stake`, slots,
-            ['{second_last} will be looking to chip away over the {remaining} {rounds_word} that remain.', 'For {second_last}, the clock is ticking, with {remaining} {rounds_word} left.', 'The chase has {remaining} {rounds_word} left to run.'],
-            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to the name so far.'] : ['']),
+            leadGap === 0
+              ? ['{second_last} is level on points with {leader_last} at the top.']
+              : remaining <= 5
+              ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
+              : ['{second_last} sits {lead_gap} {gap_pts} back and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit.', '{second_last} has ground to make up on {leader_last}.'],
+            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to their name so far.'] : ['']),
           compose(`${seed}:wcc`, slots,
             cbefore[1]
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
@@ -1463,10 +1467,12 @@ function previews(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-// TRIGGER: pre-season (no rounds completed). A season preview, one launch per team, and a
-// rookie spotlight for the youngest debutants. Live-only (needs car pace + roster).
+// TRIGGER: a season preview, one launch per team, and a rookie spotlight for the youngest
+// debutants. These are round-0 stories that PERSIST all season (the newsroom is a feed, not a
+// snapshot of the current round) — they sort to the bottom once racing starts, but never vanish.
+// Live-only (needs car pace + roster).
 function preSeason(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.live || ctx.completedRounds > 0 || ctx.teams.length === 0) return []
+  if (!ctx.live || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
   const byPace = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
   const seed = `season-preview-${ctx.year}`
@@ -1534,7 +1540,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
           ['Mistakes are part of the apprenticeship.', 'Consistency will matter more than the occasional headline.', 'Out-pacing a teammate is the first real marker.']),
         compose(`${rseed}:p3`, rslots,
           ['The paddock will be watching closely.', 'Reputations can be made fast at this level.', 'Expectation is a weight as much as a privilege.'],
-          ['{driver_last} has the chance to announce himself.', 'A point or two early would settle the nerves.', 'The first season is all about laying foundations.']),
+          ['{driver_last} has the chance to make an early impression.', 'A point or two early would settle the nerves.', 'The first season is all about laying foundations.']),
       ),
     })
   }
