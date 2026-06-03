@@ -17,7 +17,8 @@
 
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { NewsArticle, NewsContext } from '@/lib/news/engine'
+import type { NewsArticle, NewsContext, DriverCareer } from '@/lib/news/engine'
+import type { RaceResult } from '@/lib/sim/types'
 
 // ---- args -------------------------------------------------------------------
 const argv = process.argv.slice(2)
@@ -71,13 +72,41 @@ async function main() {
   const N = calendar2026.length
   const season = () => useSeasonStore.getState()
 
+  // Cross-season F1 career totals, accumulated as the run progresses (no DB here, so we tally
+  // straight from the race results). Mirrors what the DB career queries give the live/archived
+  // paths. Passed into every NewsContext so career-driven producers (retirement, driver-to-watch)
+  // see real numbers — never a guess from age.
+  const careers: Record<string, DriverCareer> = {}
+  const seasonsSeen: Record<string, Set<number>> = {}
+  const tally = (year: number, results: RaceResult[]) => {
+    for (const res of results) {
+      const id = res.driverId
+      let c = careers[id]
+      if (!c) {
+        c = careers[id] = { driverId: id, starts: 0, wins: 0, podiums: 0, poles: 0, points: 0, seasons: 0, titles: 0, titleYears: [], debutYear: null, bestFinish: null }
+        seasonsSeen[id] = new Set()
+      }
+      // Count by finishing position (matching the DB career query the world pages use), so the
+      // CLI, archived and live paths all agree on a driver's record.
+      const fp = res.finishPosition
+      c.starts++
+      c.points += res.points
+      if (res.gridPosition === 1) c.poles++
+      if (fp != null && fp === 1) c.wins++
+      if (fp != null && fp <= 3) c.podiums++
+      if (fp != null && (c.bestFinish == null || fp < c.bestFinish)) c.bestFinish = fp
+      if (c.debutYear == null) c.debutYear = year
+      if (!seasonsSeen[id].has(year)) { seasonsSeen[id].add(year); c.seasons = seasonsSeen[id].size }
+    }
+  }
+
   const buildCtx = (): NewsContext => {
     const s = season()
     return {
       year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
       upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
-      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true,
+      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers,
     }
   }
 
@@ -127,6 +156,7 @@ async function main() {
 
       const results = buildRaceResults(finished, grid, s.teams)
       season().recordRaceResult(results) // applies progression + upgrades, writes the round
+      tally(year, results) // accumulate career totals through this round (before we capture)
       // Capture now, while endOfSeason is still null, so the producers gated on an in-progress
       // season (analysis, title fight, silly season, mid-season feature) are included for this
       // round with the correct live drivers/teams.
@@ -134,6 +164,11 @@ async function main() {
       season().advanceRound() // triggers endSeason() on the final round
       useRaceStore.getState().resetSession()
     }
+
+    // Credit the season's drivers' champion before the off-season capture, so a retirement
+    // obituary for a title winner reflects the crown they just won.
+    const champId = season().endOfSeasonSummary?.driverChampion
+    if (champId && careers[champId]) { careers[champId].titles++; careers[champId].titleYears.push(year) }
 
     // Off-season market so transfer / retirement / signing news exists. These stage into
     // pendingNextSeasonState and only fill endOfSeasonSummary slices — the live season data the

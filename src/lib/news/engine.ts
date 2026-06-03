@@ -42,6 +42,27 @@ export interface NewsContext {
   live: boolean                    // true = the active season from the store (full attributes available);
                                    // false = an archived season rebuilt from the DB (results only — the
                                    // attribute-dependent producers, e.g. trajectory/silly-season, stand down)
+  careers?: Record<string, DriverCareer>  // F1 career totals per driver, as of this season. Optional —
+                                          // producers that lean on it (retirement, driver-to-watch) degrade
+                                          // gracefully when it is absent. starts === 0 (or no entry) means
+                                          // the driver has never raced in F1; never infer that from age.
+}
+
+// Cross-season F1 career totals for one driver, accumulated up to (and including) the context's
+// season. The only reliable way to tell a never-raced prospect (starts === 0) from an experienced
+// free agent (starts > 0).
+export interface DriverCareer {
+  driverId: string
+  starts: number
+  wins: number
+  podiums: number
+  poles: number
+  points: number
+  seasons: number
+  titles: number
+  titleYears: number[]
+  debutYear: number | null
+  bestFinish: number | null   // best single-race finish position ever (1 = a win)
 }
 
 export interface NewsArticle {
@@ -323,6 +344,11 @@ function teammateTrend(ctx: NewsContext, aheadId: string, behindId: string, roun
 function lastSeasonPos(ctx: NewsContext, teamId: string): number | null {
   const recs = ctx.constructorHistory.filter((h) => h.teamId === teamId).sort((a, b) => b.seasonYear - a.seasonYear)
   return recs[0]?.finalPosition ?? null
+}
+
+// F1 career totals for a driver, if the caller supplied them. starts > 0 ⇔ has raced in F1.
+function careerOf(ctx: NewsContext, id: string): DriverCareer | null {
+  return ctx.careers?.[id] ?? null
 }
 
 // --- Producers ---------------------------------------------------------------
@@ -1590,21 +1616,75 @@ function market(ctx: NewsContext): NewsArticle[] {
     const d = ctx.drivers.find((x) => x.id === id)
     const name = d?.name ?? id
     const seed = `retire-${id}-${eos.seasonYear}`
-    const slots = { driver: name, driver_last: lastName(name), year: eos.seasonYear }
+    const c = careerOf(ctx, id)
+    // Final-season sign-off, straight from the standings — no career data needed.
+    const standings = driverStandingsAfter(ctx, ctx.completedRounds)
+    const idx = standings.findIndex((s) => s.driverId === id)
+    const finalPos = idx >= 0 ? idx + 1 : null
+    const finalPts = idx >= 0 ? standings[idx].points : 0
+    const titlePhrase = c && c.titles > 0
+      ? (c.titles === 1
+          ? `a World Champion${c.titleYears[0] ? ` in ${c.titleYears[0]}` : ''}`
+          : `a ${c.titles}-time World Champion${c.titleYears.length ? ` (${listJoin(c.titleYears.map(String))})` : ''}`)
+      : ''
+    const statBits: string[] = []
+    if (c) {
+      if (c.wins > 0) statBits.push(`${c.wins} ${plural(c.wins, 'win')}`)
+      if (c.podiums > 0) statBits.push(`${c.podiums} ${plural(c.podiums, 'podium')}`)
+      if (c.poles > 0) statBits.push(`${c.poles} ${plural(c.poles, 'pole position')}`)
+    }
+    const slots: Record<string, string | number> = {
+      driver: name, driver_last: lastName(name), year: eos.seasonYear,
+      debut: c?.debutYear ?? '', seasons: c?.seasons ?? 0, seasons_word: plural(c?.seasons ?? 0, 'season'),
+      starts: c?.starts ?? 0, starts_word: plural(c?.starts ?? 0, 'start'),
+      title_phrase: titlePhrase, stat_line: statBits.length ? listJoin(statBits) : '',
+      best: c?.bestFinish ? ordinal(c.bestFinish) : '',
+      final_pos: finalPos ? ordinal(finalPos) : '', final_pts: finalPts, final_pts_word: plural(finalPts, 'point'),
+    }
+    // Tenure (only when the debut season is known).
+    const tenure = c?.debutYear
+      ? fill(pick([' A career that began in {debut} closes after {seasons} {seasons_word}.', ' First racing in F1 in {debut}, {driver_last} bows out after {seasons} {seasons_word}.'], `${seed}|ten`), slots)
+      : ''
+    // The numbers — the heart of the piece. Honest when the career was winless.
+    let numbersPara = ''
+    if (c && c.starts > 0) {
+      const lead = titlePhrase ? fill(pick(['{driver_last} leaves the sport {title_phrase}.', 'The record books will remember {driver_last} as {title_phrase}.'], `${seed}|tl`), slots) : ''
+      const body = statBits.length
+        ? fill(pick(['Across {starts} {starts_word}, {driver_last} took {stat_line}.', 'The tally from {starts} {starts_word}: {stat_line}.'], `${seed}|st`), slots)
+        : fill(pick(['Across {starts} {starts_word}, a best finish of {best} stood as the high point.', '{starts} {starts_word} brought no podium, a best result of {best}.'], `${seed}|st`), slots)
+      numbersPara = [lead, body].filter(Boolean).join(' ')
+    }
+    const seasonPara = finalPos
+      ? fill(pick(['{driver_last} signs off {final_pos} in the {year} standings, with {final_pts} {final_pts_word}.', 'A final campaign ends {final_pos}, {final_pts} {final_pts_word} the return.'], `${seed}|fin`), slots)
+      : ''
+    // Tributes are earned, not handed out. A title winner or prolific winner gets the "great of
+    // the sport" line; a solid racer gets a modest nod; a journeyman gets neither (the honest
+    // numbers above already speak for themselves — no need to inflate a winless career).
+    const illustrious = !!(c && (c.titles > 0 || c.wins >= 10))
+    const solid = !!(c && (c.wins >= 1 || c.podiums >= 3))
+    const tributePool = illustrious
+      ? ['Formula 1 paid tribute to "a true great of the sport."', 'One paddock figure called {driver_last} "simply one of a kind."']
+      : solid
+      ? ['Rivals were quick to call {driver_last} "a tough, fair racer."', 'One former teammate called {driver_last} "seriously underrated."']
+      : null
+    const quotePara = [
+      fill(pick(['"This is it," {driver_last} said. "After {year}, it is time for something new."', '"The time is right," said {driver_last}. "I leave with no regrets."'], `${seed}|q1`), slots),
+      tributePool && chance(`${seed}|q2`, 60) ? fill(pick(tributePool, `${seed}|q2t`), slots) : '',
+    ].filter(Boolean).join(' ')
+    const dekOpts = c?.seasons
+      ? ['{driver_last} will retire from Formula 1 at the end of {year}.', 'After {seasons} {seasons_word}, {driver_last} bows out.', '{driver} brings the curtain down after {year}.']
+      : ['{driver_last} will retire from Formula 1 at the end of {year}.', '{driver} brings the curtain down after {year}.']
     out.push({
       id: seed, category: 'career_retirement', round: r, priority: 65,
-      headline: fill(pick(['{driver} retires from the sport', '{driver} calls time on a career', '{driver} announces retirement', 'Curtain falls for {driver}', '{driver} steps away for good'], `${seed}|h`), slots),
-      dek: fill(pick(['{driver} brings the curtain down after {year}.', 'A career ends in {year}.', '{driver} steps away from the grid.'], `${seed}|d`), slots),
+      headline: fill(pick(titlePhrase
+        ? ['{driver} to retire a champion', '{driver} calls time on a title-winning career', 'Curtain falls for champion {driver}', '{driver} steps away after {year}']
+        : ['{driver} announces retirement', '{driver} calls time on a Formula 1 career', 'Curtain falls for {driver}', '{driver} to step away after {year}'], `${seed}|h`), slots),
+      dek: fill(pick(dekOpts, `${seed}|d`), slots),
       body: paras(
-        compose(`${seed}:p1`, slots,
-          ['{driver} has announced retirement at the end of {year}.', 'The {year} season was the last for {driver}.', '{driver} is calling time on a racing career.'],
-          ['It closes the book on a familiar name.', 'The grid loses a known quantity.', 'An era, of sorts, comes to an end.']),
-        compose(`${seed}:p2`, slots,
-          ['The seat now opens up for the next generation.', 'A new face will inherit the cockpit.', 'Attention turns to who replaces them.'],
-          ['Such departures are part of the sport rhythm.', 'The grid is forever renewing itself.', 'One chapter closes as another waits to begin.']),
-        compose(`${seed}:p3`, slots,
-          ['{driver_last} departs with the respect of the paddock.', 'The memories will outlast the results.', 'Few walk away on their own terms.'],
-          ['The sport moves on, but not without a nod of thanks.', 'It is the end of a long road.', 'A fond farewell from all corners of the paddock.']),
+        fill(pick(['{driver} will retire from Formula 1 at the end of {year}.', '{driver} has announced that {year} is to be a final season in Formula 1.'], `${seed}|p1`), slots) + tenure,
+        numbersPara,
+        seasonPara,
+        quotePara,
       ),
     })
   }
@@ -2010,6 +2090,88 @@ function analysis(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
+// TRIGGER (live only): roughly one every four races — a spotlight on a driver off the grid.
+// career.starts is the truth of it: 0 means a never-raced prospect (pure narrative on name/age/
+// potential — nothing to contradict); > 0 means an experienced free agent, where we cite the real
+// career record. Either way it closes on the actual market projection (seeded ±10 media error) for
+// whether a return looks likely.
+function driverToWatch(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.endOfSeason) return []
+  const freeAgents = ctx.drivers.filter((d) => d.teamId === '')
+  if (freeAgents.length === 0 || ctx.teams.length === 0) return []
+  const out: NewsArticle[] = []
+  for (let r = 4; r <= ctx.completedRounds; r += 4) {
+    const fa = pick(freeAgents, `watch-${ctx.year}-${r}`)
+    const seed = `watch-${ctx.year}-${r}-${fa.id}`
+    const c = careerOf(ctx, fa.id)
+    const experienced = (c?.starts ?? 0) > 0
+
+    // Market projection: would this free agent pick up a seat for next season?
+    const resultsSoFar = ctx.raceResults.slice(0, r)
+    const cstand = constructorStandingsAfter(ctx, r)
+    const rankInfo = cstand.map((cs, i) => ({ teamId: cs.teamId, points: cs.points, finalPosition: i + 1 }))
+    for (const t of ctx.teams) if (!rankInfo.find((x) => x.teamId === t.id)) rankInfo.push({ teamId: t.id, points: 0, finalPosition: rankInfo.length + 1 })
+    const rng = mulberry32(seed)
+    const base = computeDriverMediaScores(ctx.drivers, ctx.teams, resultsSoFar, rankInfo, ctx.teams.length)
+    const noised = base.map((s) => ({ driverId: s.driverId, score: clamp(s.score + (rng() * 20 - 10), 0, 100) }))
+    const teamScores = computeTeamMediaScores(ctx.teams, ctx.constructorHistory, rankInfo)
+    const retention = computeRetentionDeltas(ctx.drivers, ctx.teams, resultsSoFar)
+    let toTeam = ''
+    try {
+      const proj = runDriverMarket(ctx.drivers, ctx.teams, noised, teamScores, retention, ctx.year + 1, rng)
+      const mv = proj.marketMoves.find((m) => m.driverId === fa.id && m.toTeamId && !m.isResignation)
+      if (mv) toTeam = mv.toTeamName
+    } catch { /* projection failed → treat as no opening */ }
+
+    // Experienced-career honours, only what is real.
+    const honourBits: string[] = []
+    if (c) {
+      if (c.titles > 0) honourBits.push(c.titles === 1 ? `a former World Champion` : `a ${c.titles}-time World Champion`)
+      if (c.wins > 0) honourBits.push(`${c.wins} ${plural(c.wins, 'win')}`)
+      else if (c.podiums > 0) honourBits.push(`${c.podiums} ${plural(c.podiums, 'podium')}`)
+    }
+    const slots: Record<string, string | number> = {
+      driver: fa.name, driver_last: lastName(fa.name), age: fa.age, next: ctx.year + 1, to: toTeam,
+      starts: c?.starts ?? 0, starts_word: plural(c?.starts ?? 0, 'start'),
+      honours: honourBits.length ? listJoin(honourBits) : '',
+      pot: fa.peakPotential >= 88 ? 'one of the hottest properties in the junior ranks' : fa.peakPotential >= 80 ? 'a genuine prospect' : 'an intriguing talent',
+    }
+    const marketLine = toTeam
+      ? fill(pick(['Run the silly-season maths and a {to} seat for {next} looks a genuine possibility.', 'The market projects {driver_last} could even land at {to} for {next}.'], `${seed}|mkt`), slots)
+      : fill(pick(['For now, the projection shows no opening, and a seat may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
+
+    if (experienced) {
+      const recordLine = honourBits.length
+        ? fill(pick(['Across {starts} {starts_word}, {driver_last} brings {honours} to the table.', 'A record of {starts} {starts_word} and {honours} is not one to overlook.'], `${seed}|rec`), slots)
+        : fill(pick(['{starts} {starts_word} of experience count for something, even without the silverware.', 'No podiums in {starts} {starts_word}, but a known quantity all the same.'], `${seed}|rec`), slots)
+      out.push({
+        id: seed, category: 'driver_to_watch', round: r, priority: 33,
+        headline: fill(pick(['Where next for {driver}?', '{driver} eyes a way back', 'A familiar name on the market in {driver}', 'Could {driver} return to the grid?'], `${seed}|h`), slots),
+        dek: fill(pick(['{driver} is between seats and weighing the options.', 'Out of a drive for now, {driver_last} is not done yet.', 'A familiar face is on the market.'], `${seed}|d`), slots),
+        body: paras(
+          fill(pick(['{driver}, {age}, finds themselves without a seat, a familiar face still chasing a way back.', 'At {age}, {driver} is on the market, and not short of suitors.'], `${seed}|p1`), slots),
+          recordLine,
+          fill(pick(['"I am not done in this sport," {driver_last} said.', '"Do not write me off," said {driver_last}. "I will be back."'], `${seed}|q`), slots),
+          marketLine,
+        ),
+      })
+    } else {
+      out.push({
+        id: seed, category: 'driver_to_watch', round: r, priority: 33,
+        headline: fill(pick(['Keep an eye on {driver}', '{driver}, one for the future', 'A prospect worth watching in {driver}', 'Why {driver} is turning heads'], `${seed}|h`), slots),
+        dek: fill(pick(['{driver}, {age}, has yet to race in F1 but is generating buzz.', 'Meet {driver}, tipped for big things.', 'A name to file away in {driver}.'], `${seed}|d`), slots),
+        body: paras(
+          fill(pick(['{driver}, just {age}, has yet to make a Grand Prix start, but is rated {pot}.', 'At {age}, {driver} has never raced in F1, and is regarded as {pot}.'], `${seed}|p1`), slots),
+          fill(pick(['Those who have watched the junior ranks talk up the raw speed and racecraft.', 'The reputation is built on the categories below, where the results have caught the eye.'], `${seed}|p2`), slots),
+          fill(pick(['"There is something special there," one paddock figure said.', '"Keep that name in mind," said a junior-series insider.'], `${seed}|q`), slots),
+          marketLine,
+        ),
+      })
+    }
+  }
+  return out
+}
+
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...preSeason(ctx),
@@ -2024,6 +2186,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...sillySeason(ctx),
     ...previews(ctx),
     ...market(ctx),
+    ...driverToWatch(ctx),
   ]
   // de-dupe by id, then newest round first, higher priority first
   const seen = new Set<string>()
@@ -2038,7 +2201,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   championship_state: 'Championship', feature: 'Feature', preview_schedule: 'Preview',
   car_launch_livery: 'Launch', rookie_debut: 'Rookie', driver_signing: 'Transfer',
   driver_exit: 'Transfer', career_retirement: 'Retirement', silly_season: 'Silly season',
-  analysis_opinion: 'Analysis',
+  analysis_opinion: 'Analysis', driver_to_watch: 'Driver watch',
 }
 
 // The complete, ordered filter taxonomy. The page renders one chip per entry (always, so
@@ -2057,4 +2220,5 @@ export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
   { label: 'Retirement', categories: ['career_retirement'] },
   { label: 'Silly season', categories: ['silly_season'] },
   { label: 'Analysis', categories: ['analysis_opinion'] },
+  { label: 'Driver watch', categories: ['driver_to_watch'] },
 ]

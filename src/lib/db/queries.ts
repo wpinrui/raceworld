@@ -457,6 +457,33 @@ export function getDriverTotals(driverId: string): DbDriverTotals | null {
   return r ? { ...r, driverId, driverName: r.name } : null
 }
 
+// Per-driver F1 career aggregates across every archived season up to and including `year`. Powers
+// the newsroom's career-driven producers (retirement obituaries, driver-to-watch). Titles are
+// layered on separately by the caller from getAllSeasonChampions (drivers' champion is tie-break
+// reconstructed, not stored as a flag).
+export interface DbDriverCareerAgg {
+  driverId: string; starts: number; wins: number; podiums: number; poles: number
+  points: number; seasons: number; debutYear: number | null; bestFinish: number | null
+}
+export function getDriverCareersUpToYear(year: number): DbDriverCareerAgg[] {
+  return getDb().prepare(`
+    SELECT rr.driver_id AS driverId,
+      COUNT(*) AS starts,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
+      SUM(rr.points) AS points,
+      COUNT(DISTINCT s.id) AS seasons,
+      MIN(s.year) AS debutYear,
+      MIN(rr.finish_position) AS bestFinish
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived' AND s.year <= ?
+    GROUP BY rr.driver_id
+  `).all(year) as DbDriverCareerAgg[]
+}
+
 export interface DbTeamCareerRow {
   seasonYear: number; seasonId: number; teamName: string
   races: number; wins: number; podiums: number; points: number
