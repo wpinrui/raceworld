@@ -697,43 +697,100 @@ function milestones(ctx: NewsContext): NewsArticle[] {
     if (!wonBefore(ctx, p1.driverId, r)) {
       const seed = `mile-win-${ctx.year}-${p1.driverId}-${r}`
       const homeWin = isHomeRace(ctx, p1.driverId, r)
-      const slots = { driver: p1.driverName, driver_last: lastName(p1.driverName), team: p1.teamName, circuit: circuitName, year: ctx.year }
+      // Real, derivable context from the full data: started on pole? prior runner-up finishes
+      // this season? a maiden CAREER win (no wins in any prior season)?
+      const raceRes = ctx.raceResults[r - 1] ?? []
+      const poleSitter = raceRes.find((x) => x.gridPosition === 1)
+      const fromPole = !!poleSitter && poleSitter.driverId === p1.driverId
+      let priorSeconds = 0, priorBestPos = 99
+      for (let k = 1; k < r; k++) {
+        const res = (ctx.raceResults[k - 1] ?? []).find((x) => x.driverId === p1.driverId)
+        if (!res || res.dnf || res.finishPosition == null) continue
+        if (res.finishPosition === 2) priorSeconds++
+        if (res.finishPosition < priorBestPos) priorBestPos = res.finishPosition
+      }
+      const careerA = careerOf(ctx, p1.driverId)
+      let seasonWins = 0
+      for (let k = 1; k <= ctx.completedRounds; k++) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1 && !x.dnf); if (w && w.driverId === p1.driverId) seasonWins++ }
+      const maiden = !!careerA && (careerA.wins - seasonWins) <= 0
+      const slots = {
+        driver: p1.driverName, driver_last: lastName(p1.driverName), driver_poss: poss(lastName(p1.driverName)),
+        team: p1.teamName, team_poss: poss(p1.teamName), circuit: circuitName, year: ctx.year,
+        prior_seconds: priorSeconds, seconds_times: plural(priorSeconds, 'time'), seconds_noun: plural(priorSeconds, 'second place'),
+        prior_best: priorBestPos < 99 ? ordinal(priorBestPos) : '',
+        ...pronouns(ctx.drivers.find((d) => d.id === p1.driverId)?.gender),
+      }
       out.push({
         id: seed, category: 'milestone', round: r, priority: 70,
         headline: fill(pick([
-          'First win of the season for {driver}', '{driver} breaks through at the {circuit}',
-          '{driver} opens the {year} account', '{driver} wins for the first time this year',
-          'A maiden {year} victory for {driver}', '{driver} gets off the mark at the {circuit}',
+          '{driver_last} ends the wait at the {circuit}',
+          '{driver_last} finally gets off the mark in {year}',
+          '{team} taste victory as {driver_last} wins the {circuit}',
+          'A first win of {year} for {driver_last} at the {circuit}',
+          '{driver_last} breaks through at the {circuit}',
+          '{driver_last} opens {team_poss} {year} account at the {circuit}',
         ], `${seed}|h`), slots),
         dek: fill(pick([
-          '{driver} claims a first win of the {year} campaign.',
-          'The {circuit} delivers {driver} a first victory of the year.',
-          '{driver} finally tops the podium in {year}.',
+          '{driver} claimed {their} first win of {year} at the {circuit}, ending a run that had threatened to define the campaign.',
+          'After a {year} that had offered plenty and delivered little in results, {driver} finally stood on the top step at the {circuit}.',
+          '{driver} crossed the line first at the {circuit} to give {team} the win they had been building toward all season.',
         ], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['{driver} has won for the first time this season.', 'The wait for a {year} win is over for {driver}.', '{driver} stood on the top step for the first time this year.'],
-            ['It came at the {circuit}, and it was thoroughly deserved.', 'The {circuit} provided the breakthrough.', 'A strong weekend at the {circuit} delivered the goods.'],
-            homeWin
-              ? ['Sweeter still, it came on home soil.', 'And the breakthrough came in front of a home crowd.']
-              : ['']),
-          compose(`${seed}:p2`, slots,
-            ['For {team}, it is a significant moment in the campaign.', 'The result lifts {team} and their driver alike.', 'It is a result {team} have been building towards.'],
-            ['Momentum can be a powerful thing once the first win arrives.', 'A first victory often unlocks more.', 'Confidence will flow from a day like this.']),
-          compose(`${seed}:p3`, slots,
-            ['{driver_last} will hope this is the first of many.', 'The challenge now is to back it up.', 'Whether it sparks a run remains to be seen.'],
-            ['Either way, it is a weekend that will be remembered.', 'It changes the complexion of the season.', 'The grid has been put on notice.']),
+          fill(pick([
+            '{driver} took the chequered flag at the {circuit} to register {their} first win of {year}, a result that felt both earned and overdue in {team_poss} camp.',
+            'The victory at the {circuit} was the moment {driver_last} needed, a clean afternoon that ended with {them} on the top step for the first time this season.',
+            '{team_poss} strategists called it right at the {circuit}, and {driver_last} delivered the execution, turning a strong afternoon into a first win of {year}.',
+            'The scenes at the {circuit} as {driver_last} crossed the line told the story of a team that had waited a long time for this in {year}.',
+          ], `${seed}|b1`), slots),
+          fromPole
+            ? fill(pick([
+                '{driver_last} converted pole into the win at the {circuit}, the cleanest possible way to break the duck in {year}.',
+                'Starting from the front and finishing there, {driver_last} turned pole into the full haul with a controlled lights-to-flag drive.',
+                '{driver_last} put the lap in on Saturday and protected it on Sunday, leading throughout to make a first {year} win look straightforward.',
+              ], `${seed}|pole`), slots)
+            : '',
+          priorSeconds >= 1
+            ? fill(pick([
+                'Having finished runner-up {prior_seconds} {seconds_times} earlier in {year}, {driver_last} finally made the extra place count at the {circuit}.',
+                'After {prior_seconds} {seconds_noun} and a best of {prior_best} this season, {driver_last} converted at last at the {circuit}.',
+                'The near-misses had stacked up, {prior_seconds} {seconds_noun} the painful backdrop to a win that was always in the data.',
+              ], `${seed}|nm`), slots)
+            : '',
+          careerA
+            ? (maiden
+                ? fill(pick([
+                    'The {circuit} will sit permanently in {driver_poss} story, the place {they} became a Formula 1 race winner for the first time.',
+                    'A maiden F1 victory is a threshold crossed only once, and {driver_last} crossed it at the {circuit} in {year}.',
+                    '{driver_poss} first Formula 1 win is a moment the sport records for good, and the {circuit} is the answer {they} will give every time.',
+                  ], `${seed}|mr`), slots)
+                : fill(pick([
+                    '{driver_last} knows what winning feels like, but a return to the top step after the lean spell of {year} was its own kind of relief.',
+                    'Past winners do not forget how, and {driver_last} proved it at the {circuit}, rediscovering the top step in {year}.',
+                    'For a driver with wins behind {them}, this first of {year} carried relief as much as celebration.',
+                  ], `${seed}|mr`), slots))
+            : '',
+          fill(pick([
+            'For {team}, a first win of the season shifts the internal calculus, from the technical direction of the second half of {year} to the belief on the factory floor.',
+            'In the constructors, the win lands at the right time for {team}, giving {driver_last} a platform to build points through the rounds ahead.',
+            'The psychological value of a first win is hard to quantify and impossible to ignore, and {driver_last} goes into the next weekend at a different altitude.',
+            '{driver_poss} first win of {year} puts {them} back inside the championship conversation, and the teams ahead will have noted the name on the trophy.',
+          ], `${seed}|b2`), slots),
+          homeWin
+            ? fill(pick([
+                '{driver_poss} first win of the season came on home soil, charging the moment for {them} and a crowd that cheered every metre.',
+                'To break through in front of a home crowd is as good as it gets, and {driver_last} knew it the instant {they} crossed the line.',
+              ], `${seed}|home`), slots)
+            : '',
           texture(seed, [
-            '{driver_last} was mobbed in parc ferme.',
-            'The radio message said it all, even if the words did not.',
-            '{driver_last} needed a quiet moment before facing the cameras.',
-            'The {team} garage erupted the instant the flag fell.',
+            'The radio when the flag fell told the story, a roar from the {team} wall and {driver_poss} voice cracking before the words came.',
+            '{driver_last} was mobbed in parc ferme, mechanics spilling past the barriers before the car had fully stopped.',
+            'Inside the {team} garage the restraint that had held through harder rounds vanished the instant the screens showed P1 confirmed.',
+            'On the slow-down lap {driver_last} held the celebration back just long enough to say something brief on the radio.',
           ], slots),
           texture(`${seed}|q`, [
-            '"I have waited a long time for this," said {driver_last}.',
-            '"This one means everything," {driver_last} said.',
-            '"To finally get it done feels unreal," said {driver_last}.',
-            '"That is for the whole team," {driver_last} said.',
+            '"This one means everything to me and to everyone at {team} who worked so hard for it," said {driver_last}.',
+            '"We knew the pace was there, we just needed a clean race to show it, and the {circuit} gave us that," said {driver_last}.',
+            '"I have had some hard weekends this year, and to win here makes all of it worth it," said {driver_last}.',
           ], slots, 35),
         ),
       })
@@ -743,30 +800,38 @@ function milestones(ctx: NewsContext): NewsArticle[] {
     // two most weekends; firing every time is repetitive).
     if (p1 && p2 && p1.teamId === p2.teamId && !teamOneTwoBefore(ctx, p1.teamId, r)) {
       const seed = `mile-12-${ctx.year}-${p1.teamId}-${r}`
-      const slots = { team: p1.teamName, d1: p1.driverName, d2: p2.driverName, circuit: circuitName, year: ctx.year }
+      const slots = { team: p1.teamName, team_poss: poss(p1.teamName), d1: p1.driverName, d1_last: lastName(p1.driverName), d2: p2.driverName, d2_last: lastName(p2.driverName), circuit: circuitName, year: ctx.year }
       out.push({
         id: seed, category: 'milestone', round: r, priority: 60,
         headline: fill(pick([
-          '{team} lock out the top two at the {circuit}', 'A {team} one-two at the {circuit}',
-          '{team} dominate the {circuit}', '{d1} and {d2} give {team} a one-two',
-          'Perfect day for {team} at the {circuit}',
+          '{team} complete a one-two at the {circuit}',
+          '{d1_last} leads {d2_last} home as {team} claim a first {year} one-two',
+          'Maximum haul for {team} as {d1_last} and {d2_last} go one-two at the {circuit}',
+          '{team} dominate the {circuit} with a first one-two of {year}',
+          '{d1_last} and {d2_last} deliver {team_poss} perfect afternoon at the {circuit}',
         ], `${seed}|h`), slots),
         dek: fill(pick([
-          '{team} take both top steps at the {circuit}.',
-          '{d1} leads home {d2} for a {team} one-two.',
-          'A maximum-haul afternoon for {team}.',
+          '{team} swept to a first one-two of {year} at the {circuit}, {d1} ahead of {d2} for the maximum constructors\' haul.',
+          'First and second for {team} at the {circuit}, {d1_last} and {d2_last} taking every point on offer.',
+          '{team} collected the maximum return from a single race at the {circuit}, {d1_last} first and {d2_last} second.',
         ], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['{team} could hardly have scripted it better at the {circuit}.', 'It was a near-perfect afternoon for {team}.', '{team} dominated proceedings at the {circuit}.'],
-            ['{d1} led home teammate {d2} for a one-two.', '{d1} and {d2} filled the top two places.', 'Both cars came home at the front, {d1} ahead of {d2}.']),
-          compose(`${seed}:p2`, slots,
-            ['It is their first one-two of the season.', 'It marks a first one-two of the campaign for {team}.', 'A maiden one-two of the year for the team.'],
-            ['A one-two is the maximum a team can take from a race.', 'It is the kind of result that defines a season.', 'Days like this do not come along often.'],
-            ['The points swing is enormous in the constructors race.', 'The constructors standings take a serious jolt.', 'Rivals will have watched on with concern.']),
-          compose(`${seed}:p3`, slots,
-            ['Both sides of the garage delivered when it mattered.', 'The whole operation can take a bow.', 'It is a statement of intent from {team}.'],
-            ['The challenge now is to make it a habit.', 'Sustaining this will be the next test.', 'For now, {team} can simply enjoy it.']),
+          fill(pick([
+            '{d1} crossed the line first at the {circuit}, {d2} following home to give {team} a first one-two of their {year} campaign.',
+            'Both {team} cars were at the front when it counted at the {circuit}, {d1_last} winning with {d2_last} right behind in second.',
+            'A one-two is the maximum constructors\' haul a team can take from any race, and {team} claimed it in full at the {circuit}.',
+            '{team} had {d1_last} first and {d2_last} second at the flag, a clean sweep that left nothing on the table.',
+            'There is nothing more a team can ask for than both cars on the top two steps, and {team} delivered exactly that at the {circuit}.',
+            'Two {team} cars streaming across the line one after the other at the {circuit} was the clearest signal of where they stand right now.',
+          ], `${seed}|b1`), slots),
+          fill(pick([
+            'For {team_poss} constructors\' ambitions, a one-two is as good as a weekend gets, and no rival left the {circuit} with a comparable haul.',
+            'Every point matters in the constructors\' fight, and {team} made sure not one was wasted at the {circuit}.',
+            'Having both drivers at the front forces a conversation no rival wants, that {team} are not just quick but consistent across both cars.',
+            'The result strengthens {team_poss} position in a way a single win cannot, two cars scoring heavily shifting the picture.',
+            'A team that can run both cars at the front without interference holds a structural advantage, and {team} showed it fully at the {circuit}.',
+            'The significance of a first one-two of {year} runs beyond the weekend, setting an expectation in the garage and a warning to every rival.',
+          ], `${seed}|b2`), slots),
         ),
       })
     }
@@ -778,33 +843,41 @@ function milestones(ctx: NewsContext): NewsArticle[] {
         if (paceRank(ctx, d.teamId) <= 3) continue
         if (podiumBefore(ctx, d.driverId, r)) continue
         const seed = `mile-pod-${ctx.year}-${d.driverId}-${r}`
-        const slots = { driver: d.driverName, driver_last: lastName(d.driverName), team: d.teamName, circuit: circuitName, pos: ordinal(d.finishPosition ?? 0), year: ctx.year }
+        const slots = { driver: d.driverName, driver_last: lastName(d.driverName), driver_poss: poss(lastName(d.driverName)), team: d.teamName, team_poss: poss(d.teamName), circuit: circuitName, pos: ordinal(d.finishPosition ?? 0), year: ctx.year, ...pronouns(ctx.drivers.find((dd) => dd.id === d.driverId)?.gender) }
         out.push({
           id: seed, category: 'milestone', round: r, priority: 55,
           headline: fill(pick([
-            'Surprise podium for {driver} at the {circuit}', '{driver} crashes the podium party',
-            '{team} steal a podium at the {circuit}', '{driver} defies the odds at the {circuit}',
-            'An unlikely rostrum for {driver}',
+            '{driver_last} stuns the paddock with {pos} at the {circuit}',
+            'Against the odds, {driver_last} lands a first podium of {year} at the {circuit}',
+            '{team} gatecrash the podium at the {circuit} with {driver_last} {pos}',
+            'A shock {pos} for {driver_last} hands {team} a first podium of {year}',
+            '{driver_last} delivers {team_poss} first podium of the season at the {circuit}',
           ], `${seed}|h`), slots),
           dek: fill(pick([
-            '{driver} grabs a first podium of the season for {team}.',
-            'A {pos}-place finish puts {driver} on the rostrum.',
-            'Few saw {driver} on the podium coming.',
+            '{driver} climbed to {pos} at the {circuit}, an extraordinary result for a {team} car that had no business on the podium.',
+            'Nobody predicted it, but {driver_last} and {team} left the {circuit} with {pos} and a first podium of {year}.',
+            'A {pos} for {driver_last} at the {circuit} is the story of the weekend, a flawless day taken when the chance came.',
           ], `${seed}|d`), slots),
           body: paras(
-            compose(`${seed}:p1`, slots,
-              ['{driver} produced a podium few expected at the {circuit}.', 'Against the odds, {driver} reached the rostrum.', 'It was a standout result for {driver} at the {circuit}.'],
-              ['It is a first podium of the season for the {team} driver.', 'The {team} car is not usually a podium contender.', 'On paper, {team} had no business being up there.']),
-            compose(`${seed}:p2`, slots,
-              ['Opportunity met execution on a day that broke their way.', 'When the chance came, {driver_last} took it.', 'A clean, opportunistic drive made the difference.'],
-              ['Results like this can lift a whole team.', 'The garage will be walking on air.', 'Moments like this are why they go racing.']),
-            compose(`${seed}:p3`, slots,
-              ['Replicating it will be the hard part.', 'Whether it is a one-off or a sign of things to come is the question.', 'For now, it is simply a day to savour.'],
-              ['{driver_last} has given everyone something to think about.', 'The midfield just got a little more interesting.', 'It is a timely reward for honest graft.']),
+            fill(pick([
+              '{driver} finished {pos} at the {circuit} for a first podium of {year}, a result that stopped the paddock in its tracks.',
+              'The {team} car does not trade at the front, which makes {driver_poss} {pos} at the {circuit} all the more remarkable.',
+              '{driver_last} stayed disciplined on a chaotic afternoon and came away with {pos}, a first podium of the {year} season for {team}.',
+              'Nothing in the form guide pointed to a {team} car on the podium at the {circuit}, yet there was {driver_last} in {pos} at the flag.',
+              'It is the kind of result smaller teams dream about and rarely land, {driver_poss} {pos} the first podium of {year} for {team}.',
+            ], `${seed}|b1`), slots),
+            fill(pick([
+              'A well-timed stop gave {driver_last} the track position to make it stick, and {they} managed it home with composure.',
+              'A safety car reshuffled the order, and when it settled {driver_last} was in a position to fight, and did not waste it.',
+              '{they_cap} had a faster car in the mirrors late on and held it off with tyre management {team_poss} rivals will respect.',
+              'The podium did not fall into {driver_poss} lap, {they} held the place in traffic and looked after the tyres when others could not.',
+              'For {team}, a podium is a points return that can reshape a season, and {pos} at the {circuit} is a result no one will dismiss.',
+            ], `${seed}|b2`), slots),
             texture(seed, [
-              'The {team} mechanics could not quite believe it either.',
-              '{driver_last} wore a grin that said it all on the slow-down lap.',
-              'It was the kind of afternoon a driver remembers for years.',
+              'The {team} mechanics watched the screens with the wide-eyed look of people who had done the maths and still could not quite believe it.',
+              '{driver_last} kept {their} voice level on the radio, but the replies from the wall grew louder with every lap that ticked away.',
+              'In parc ferme {driver_last} stepped out and stood still for a moment, as if waiting for someone to say it was not real.',
+              'The engineers who had plotted a conservative points race were the ones jumping off the pit wall at the flag.',
             ], slots),
           ),
         })
@@ -846,89 +919,94 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
       rep_team: teamName(ctx, repTeamId), rep_team_poss: poss(teamName(ctx, repTeamId)), rep_pos: repPos,
       part: pick(UPGRADE_PARTS, `${seed}|part`), area: pick(UPGRADE_AREAS, `${seed}|area`),
     }
-    const intro = compose(`${seed}:intro`, slots,
-      [
-        'The {circuit} brought a fresh wave of development to the grid.',
-        'Several teams arrived at the {circuit} carrying new parts.',
-        'The technical battle stepped up a gear at the {circuit}.',
-        'Upgrade season rolled on at the {circuit}.',
-        'The development war was front and centre at the {circuit}.',
-        'New bodywork was the talk of the {circuit} paddock.',
-      ],
-      evs.length >= 2
-        ? ['{n} teams brought changes in all.', 'In total, {n} teams introduced updates.', 'It was a busy day for the development departments.']
-        : ['Just one team rolled out new parts.', 'A solitary update this time, but a notable one.', 'Only one team brought changes this weekend.'])
-    const goodPara = delivered.length
-      ? compose(`${seed}:good`, slots, [
-          '{delivered} appear to have found genuine lap time.',
-          'The early read is positive for {delivered}.',
-          '{delivered} look to have taken a real step forward.',
-          'There were encouraging signs from {delivered}.',
-        ])
-      : ''
-    const badPara = missed.length
-      ? compose(`${seed}:bad`, slots, [
-          '{missed} were left disappointed, with little to show for the effort.',
-          'For {missed}, the new parts failed to deliver the expected gain.',
-          '{missed} head back to the drawing board after a flat update.',
-          'Not every gamble paid off, with {missed} finding no real step.',
-        ])
-      : ''
-    // The specific (invented, unfalsifiable) component — different part/area/team each round.
-    const partPara = compose(`${seed}:part`, slots, repDelivered
+    const intro = fill(pick(evs.length >= 2
       ? [
-          'The headline change is a new {part}, aimed at {area}.',
-          'At the heart of the {rep_team} update sits a reworked {part}, targeting {area}.',
-          '{rep_team} brought a new {part}, chasing gains in {area}.',
-          'The {rep_team} {part} is the eye-catcher, said to address {area}.',
+          'The {circuit} served as the latest proving ground for the development race, with {n} {teams} arriving with significant new components.',
+          'Car upgrades were a major subplot at the {circuit}, as {n} {teams} introduced fresh parts in search of a step forward.',
+          'Development was high on the agenda at the {circuit}, where {n} {teams} brought new parts hoping to find time over their rivals.',
+          'Factory work arrived at the track this weekend, with {n} {teams} running new components for the first time at the {circuit}.',
         ]
       : [
-          '{rep_team_poss} reworked {part} did not bring the {area} they were chasing.',
-          'The new {part} {rep_team} fitted added little in {area}.',
-          'For {rep_team}, the revised {part} left {area} no better than before.',
-        ])
+          'Only one team came to the {circuit} carrying new parts, making their update the story of the garage.',
+          'The {circuit} was not a heavy upgrade weekend, with just one team rolling out meaningful new components.',
+          'Development was quiet at the {circuit}, with a single team breaking from the crowd to introduce fresh parts.',
+        ], `${seed}:intro`), slots)
+    const goodPara = delivered.length
+      ? fill(pick([
+          '{delivered} extracted real performance from the new parts, and it showed in the pace through the weekend.',
+          'For {delivered}, the gamble paid off, the upgrades translating into a genuine step in competitiveness.',
+          '{delivered} left the {circuit} with data that confirmed what the simulations had promised.',
+          'The new components on the {delivered} car performed as intended, a tangible improvement in race trim.',
+          '{delivered} came away confident the development direction is sound after a positive showing with the new parts.',
+        ], `${seed}:good`), slots)
+      : ''
+    const badPara = missed.length
+      ? fill(pick([
+          '{missed} found nothing from the new parts across the weekend, a frustrating return on the factory investment.',
+          'The upgrades on the {missed} car failed to translate, leaving the engineers with more questions than answers.',
+          '{missed} will be disappointed, the new components producing no step and the weekend exposing the gap.',
+          'A difficult verdict for {missed}, whose new parts delivered no meaningful improvement on the timing screens.',
+          '{missed} head back to the factory to work out what went wrong after the package failed to fire at the {circuit}.',
+        ], `${seed}:bad`), slots)
+      : ''
+    // The specific (invented, unfalsifiable) component — different part/area/team each round.
+    const partPara = fill(pick(repDelivered
+      ? [
+          'The headline change is a revised {part} targeting {area}, and {rep_team} found what they were looking for.',
+          '{rep_team} introduced a new {part} with {area} as the primary objective, and the data backed up the concept.',
+          'A redesigned {part} was the centrepiece of {rep_team_poss} package, the team chasing improvements in {area} and getting them.',
+          'The new {part} on the {rep_team} car was built around gains in {area}, and it delivered on that brief.',
+        ]
+      : [
+          '{rep_team_poss} new {part} did not bring the {area} gains they were targeting, and the weekend numbers made that clear.',
+          'The revised {part} on the {rep_team} car was meant to unlock {area}, but that improvement did not materialise.',
+          '{rep_team_poss} {part} update promised gains in {area}, yet the track told a different story.',
+          'Despite the focus on {area} in the new {part}, {rep_team} found no reward at the {circuit}.',
+        ], `${seed}:part`), slots)
     // Grounded close: the representative team's actual constructor position, not platitude.
     const outlook = repPos
-      ? compose(`${seed}:outlook`, slots,
-          delivered.length
-            ? [
-                '{rep_team} sit {rep_pos} in the constructors, and will want the gains to stick.',
-                'For {rep_team}, {rep_pos} in the standings, the timing could hardly be better.',
-                '{rep_team} go again from {rep_pos}, hoping the step holds across the rounds ahead.',
-              ]
-            : [
-                '{rep_team}, {rep_pos} in the constructors, are still searching for the breakthrough.',
-                'For {rep_team}, stuck {rep_pos}, the wait for a genuine step goes on.',
-                '{rep_team} remain {rep_pos}, with the gap to close unchanged.',
-              ])
-      : compose(`${seed}:outlook`, slots,
-          ['The development race rolls straight on.', 'Back at the factory, the next parts are already on the bench.'])
+      ? fill(pick(delivered.length
+          ? [
+              '{rep_team} sit {rep_pos} in the constructors and will want these gains to hold as the calendar moves on.',
+              'Sitting {rep_pos} in the standings, {rep_team} have given themselves fresh ammunition for the next phase of the season.',
+              '{rep_team} occupy {rep_pos} in the constructors and now have a confirmed step to build from.',
+              '{rep_team} are {rep_pos} in the constructors, and a working upgrade puts them in a stronger position to push higher.',
+            ]
+          : [
+              '{rep_team} remain {rep_pos} in the constructors and are still searching for the breakthrough the results need.',
+              'Stuck {rep_pos} in the standings, {rep_team} head back to the factory to regroup after a fruitless upgrade weekend.',
+              '{rep_team} are {rep_pos} in the constructors and cannot afford many more weekends where new parts fail to deliver.',
+              'The pressure on {rep_team} only grows, {rep_pos} in the constructors with parts that did not work.',
+            ], `${seed}:outlook`), slots)
+      : ''
     // Driver mood is just one flavour of many, so keep it rare (a couple of times a season).
     const techTexturePool = !repDriver
       ? []
       : delivered.length
         ? [
-            '{up_driver} sounded genuinely buoyed by the new parts.',
-            'The mood in the {rep_team} debrief was quietly upbeat.',
-            '{up_driver} admitted to being unconvinced at first, but the team stood by the numbers.',
-            'Privately, {up_driver} wanted a little more, even as the wall celebrated the step.',
+            '{up_driver} was upbeat afterwards, noting the car felt more responsive with the new parts.',
+            'The {rep_team} garage had a lighter mood, {up_driver} reporting a more planted feel through the high-speed sections.',
+            '{up_driver} said the update opened up options that had not been there in recent races.',
+            'There was a real lift around {rep_team}, {up_driver} offering positive words on how the car took the changes.',
           ]
         : [
-            '{up_driver} had warned the parts felt no different, and so it proved.',
-            '{up_driver} was politely unimpressed in the debrief.',
-            'The {rep_team} engineers cut frustrated figures on the pit wall.',
+            'The mood inside {rep_team} was subdued, {up_driver} giving measured answers that told their own story.',
+            '{up_driver} chose words carefully afterwards, but the {rep_team} body language said enough about a wasted step.',
+            'There was little to celebrate for {rep_team}, {up_driver} admitting the parts had not done what was hoped.',
           ]
     const techTexture = texture(seed, techTexturePool, slots, 18)
     out.push({
       id: seed, category: 'technical_upgrade', round: r, priority: 45,
       headline: fill(pick([
-        'Upgrade roundup from the {circuit}', 'Development watch at the {circuit}', 'New parts at the {circuit}',
-        'Who brought what to the {circuit}', 'Technical roundup from the {circuit}', 'The development race at the {circuit}',
-        'Inside the {circuit} upgrade war', 'Fresh bodywork at the {circuit}',
+        'Upgrade roundup from the {circuit}', '{n} {teams} brought new parts to the {circuit}', 'Development verdicts from the {circuit}',
+        'Who won and lost the upgrade battle at the {circuit}', '{rep_team} headline a {circuit} development push',
+        'The winners and losers of parts day at the {circuit}', 'Upgrades assessed at the {circuit}', 'Fresh bodywork at the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
-        '{n} {teams} brought updates to the {circuit}.', 'A look at the new parts at the {circuit}.',
-        'The upgrade battle at the {circuit}.', 'Tracking the development war at the {circuit}.',
+        '{n} {teams} arrived at the {circuit} with new parts, and not all of them left happy.',
+        'The {circuit} doubled as a development checkpoint, with {n} {teams} running fresh components.',
+        'Upgrade season hit the {circuit} hard, and the lap-time data has started to separate the gains from the gambles.',
+        'A busy weekend in the garages as {n} {teams} chased performance with new parts at the {circuit}.',
       ], `${seed}|d`), slots),
       body: paras(intro, goodPara, badPara, partPara, techTexture, outlook),
     })
