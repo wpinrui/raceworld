@@ -923,3 +923,19 @@ export const CATEGORY_LABELS: Record<string, string> = {
   driver_signing: 'Transfer', driver_exit: 'Transfer', career_retirement: 'Retirement',
   silly_season: 'Silly season', analysis_opinion: 'Analysis',
 }
+
+// The complete, ordered filter taxonomy. The page renders one chip per entry (always, so
+// the legend is stable), disabling those with no article in the selected season. A chip can
+// cover several categories (e.g. both transfer sides share one "Transfer" chip).
+export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
+  { label: 'Race report', categories: ['race_report'] },
+  { label: 'Technical', categories: ['technical_upgrade'] },
+  { label: 'Championship', categories: ['championship_state'] },
+  { label: 'Preview', categories: ['preview_schedule'] },
+  { label: 'Launch', categories: ['car_launch_livery'] },
+  { label: 'Rookie', categories: ['rookie_debut'] },
+  { label: 'Transfer', categories: ['driver_signing', 'driver_exit'] },
+  { label: 'Retirement', categories: ['career_retirement'] },
+  { label: 'Silly season', categories: ['silly_season'] },
+  { label: 'Analysis', categories: ['analysis_opinion'] },
+]

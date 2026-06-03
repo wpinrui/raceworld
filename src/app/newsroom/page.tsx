@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, CATEGORY_LABELS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
 import { actionGetNewsSeasonYears, actionGetSeasonNews } from '@/lib/news/actions'
 
 function roundLabel(round: number, calLen: number): string {
@@ -80,12 +80,12 @@ export default function NewsroomPage() {
 
   const articles = isLive ? liveArticles : archivedArticles
 
-  const categories = useMemo(() => {
-    const set = new Set(articles.map((a) => a.category))
-    return [...set]
-  }, [articles])
+  // Which categories actually have an article in this season (drives which chips are enabled).
+  const present = useMemo(() => new Set(articles.map((a) => a.category)), [articles])
 
-  const shown = filter ? articles.filter((a) => a.category === filter) : articles
+  // `filter` holds a chip label (or null for All). Resolve it to the categories it covers.
+  const activeGroup = filter ? NEWS_FILTERS.find((f) => f.label === filter) : null
+  const shown = activeGroup ? articles.filter((a) => activeGroup.categories.includes(a.category)) : articles
   const effectiveId = selectedId && shown.some((a) => a.id === selectedId) ? selectedId : (shown[0]?.id ?? null)
   const selected: NewsArticle | null = shown.find((a) => a.id === effectiveId) ?? null
 
@@ -128,7 +128,7 @@ export default function NewsroomPage() {
           </Panel>
         ) : (
           <>
-            {/* Category filter */}
+            {/* Category filter — full taxonomy always shown; empty categories are disabled. */}
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setFilter(null)}
@@ -136,15 +136,26 @@ export default function NewsroomPage() {
               >
                 All
               </button>
-              {categories.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setFilter(c)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${filter === c ? 'border-[#00D9FF] text-[#00D9FF]' : 'border-[#2A3142] text-[#FFFFFF] hover:border-[#303848]'}`}
-                >
-                  {CATEGORY_LABELS[c] ?? c}
-                </button>
-              ))}
+              {NEWS_FILTERS.map((f) => {
+                const enabled = f.categories.some((c) => present.has(c))
+                const active = filter === f.label
+                return (
+                  <button
+                    key={f.label}
+                    onClick={() => enabled && setFilter(f.label)}
+                    disabled={!enabled}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                      active
+                        ? 'border-[#00D9FF] text-[#00D9FF]'
+                        : enabled
+                          ? 'border-[#2A3142] text-[#FFFFFF] hover:border-[#303848]'
+                          : 'border-[#1B2230] text-[#6B7280] cursor-not-allowed'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
             </div>
 
             <div className="grid gap-5 lg:grid-cols-3">
