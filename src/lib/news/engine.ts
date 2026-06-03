@@ -348,7 +348,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'From the front of the grid {winner_last} was never seriously headed.',
           'Pole turned into a win as {winner_last} dictated the pace throughout.',
           '{winner_last} led every lap that mattered after starting on pole.',
-          'It was a copybook drive from pole for {winner_last}.',
+          'It was a textbook drive from pole for {winner_last}.',
         ]
       : pole
       ? [
