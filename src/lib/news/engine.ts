@@ -450,10 +450,21 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
 
     const circuitName = circuit(ctx, r)
     const seed = `report-${ctx.year}-${r}`
-    // Invented, unfalsifiable retirement causes (the sim tracks only the DNF flag, not the reason),
-    // assigned deterministically per driver so the colour is stable.
-    const RETIRE_REASONS = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake trouble', 'a puncture', 'a suspension failure', 'an overheating engine', 'damage from early contact', 'a spin into the gravel', 'an electrical gremlin']
-    const dnfReasoned = listJoin(dnfs.map((x) => `${lastName(x.driverName)} with ${pick(RETIRE_REASONS, `${seed}|why-${x.driverId}`)}`))
+    // Invented, unfalsifiable retirement causes (the sim tracks only the DNF flag, not the reason).
+    // All genuinely race-ending; assigned deterministically per driver and de-duplicated within a
+    // race so the same failure does not appear two or three times in one report.
+    const RETIRE_REASONS = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake failure', 'a suspension failure', 'an engine that let go', 'an oil leak', 'terminal floor damage', 'damage from a first-lap clash', 'a high-speed spin into the barriers', 'an electrical failure', 'a wheel-nut problem at a stop']
+    const usedReasons = new Set<string>()
+    const reasonFor = (driverId: string): string => {
+      const seeded = pick(RETIRE_REASONS, `${seed}|why-${driverId}`)
+      const chosen = usedReasons.has(seeded)
+        ? (RETIRE_REASONS.filter((rr) => !usedReasons.has(rr))[0] ?? seeded)
+        : seeded
+      usedReasons.add(chosen)
+      return chosen
+    }
+    const dnfReasoned = listJoin(dnfs.map((x) => `${lastName(x.driverName)} with ${reasonFor(x.driverId)}`))
+    const dnfSoloLaps = dnfSolo?.lapsCompleted ?? 0
     const poleRunnerUp = results.find((x) => x.gridPosition === 2)
     const slots: Record<string, string | number> = {
       winner: p1.driverName, winner_last: lastName(p1.driverName), team: p1.teamName,
@@ -462,12 +473,13 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       pole_runner_up: poleRunnerUp ? lastName(poleRunnerUp.driverName) : '',
       mover: mover?.driverName ?? '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
-      lead_gap: leadGap, leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
+      lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
       dnf_solo_reason: dnfSolo ? pick(RETIRE_REASONS, `${seed}|why-${dnfSolo.driverId}`) : '',
       win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
-      next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSolo?.lapsCompleted ?? 0,
+      next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSoloLaps,
+      dnf_solo_phrase: dnfSoloLaps === 0 ? 'before completing a lap' : dnfSoloLaps === 1 ? 'after a single lap' : `after ${dnfSoloLaps} laps`,
       faller: faller ? lastName(faller.driverName) : '', faller_team: faller?.teamName ?? '',
       faller_poss: faller ? poss(lastName(faller.driverName)) : '', winner_poss: poss(lastName(p1.driverName)),
       ...pronouns(ctx.drivers.find((d) => d.id === p1.driverId)?.gender),
@@ -477,11 +489,17 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       [
         '{winner} won the {circuit}, converting pace into points on a day that belonged to {team}.',
         '{winner} took victory at the {circuit} in a drive that answered every question put to {them}.',
-        '{winner} claimed the {circuit} with a controlled performance that left {their} rivals without reply.',
+        '{winner} claimed the {circuit} with a controlled performance that the chasing pack could not match.',
         '{winner} added the {circuit} to {their} record, seeing off the pressure from the pack behind.',
         '{winner} delivered at the {circuit}, holding the lead through the phases that decide races.',
         '{winner} was the class of the field at the {circuit}, turning qualifying pace into race-day victory.',
         '{winner} won the {circuit}, a result that has come to feel familiar this season.',
+        '{winner} controlled the {circuit} from the front, untroubled once {they} had the lead.',
+        'It was {winner_last} who mastered the {circuit}, in command whenever it mattered.',
+        '{winner} made the {circuit} look straightforward, the win built on clean and relentless pace.',
+        'A commanding drive carried {winner} to victory at the {circuit} for {team}.',
+        'There was a composed inevitability to {winner_poss} win at the {circuit}.',
+        '{winner} saw off the field at the {circuit}, never letting the race slip from {their} grasp.',
       ],
       hasMargin
         ? [
@@ -536,12 +554,12 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'The opening lap sorted the order, and {winner_last} emerged ideally placed to control what followed.',
           '{winner_last} stayed out of trouble at the start and built the drive from there, letting the stops do the rest.',
         ]
-    const moverPool = moverGain >= 4 && mover
+    const moverPool = moverGain >= 4 && mover && (mover.finishPosition ?? 99) <= 10
       ? [
-          '{mover} produced the drive of the afternoon, charging from {mover_from} to {mover_to} and gaining {mover_gain} places.',
-          'The standout charge through the pack came from {mover}, who advanced {mover_gain} positions to finish {mover_to}.',
-          '{mover} made up {mover_gain} places, hauling from {mover_from} to {mover_to} by the flag.',
-          'Best-mover honours went to {mover}, who carved from {mover_from} to {mover_to} over the course of the race.',
+          '{mover} produced the drive of the afternoon, charging from {mover_from} into the points in {mover_to}.',
+          'The standout recovery came from {mover}, who advanced {mover_gain} places to finish {mover_to}.',
+          '{mover} made up {mover_gain} places, climbing from {mover_from} to a points finish in {mover_to}.',
+          'Best-mover honours went to {mover}, who climbed from {mover_from} to {mover_to} over the course of the race.',
           'Nobody gained more ground than {mover}, {mover_gain} places from {mover_from} to {mover_to} in a drive that caught the eye.',
         ]
       : ['']
@@ -572,10 +590,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ])
       : dnfSolo
       ? compose(`${seed}:dnf`, slots, [
-          '{dnf_solo} was the only retirement, out after {dnf_solo_laps} laps with {dnf_solo_reason}.',
-          'The lone retirement was {dnf_solo}, {dnf_solo_reason} ending the day after {dnf_solo_laps} laps.',
+          '{dnf_solo} was the only retirement, out {dnf_solo_phrase} with {dnf_solo_reason}.',
+          'The lone retirement was {dnf_solo}, {dnf_solo_reason} ending the day {dnf_solo_phrase}.',
           'Only {dnf_solo} failed to make the flag, {dnf_solo_reason} the cause.',
-          '{dnf_solo} did not finish, {dnf_solo_reason} forcing retirement after {dnf_solo_laps} laps.',
+          '{dnf_solo} did not finish, {dnf_solo_reason} forcing retirement {dnf_solo_phrase}.',
         ])
       : compose(`${seed}:dnf`, slots,
           [
@@ -627,22 +645,22 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       : clinched
       ? [
           'With the win, {leader} can no longer be caught in the championship.',
-          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} in hand and {races_left} left.',
-          '{leader} has effectively wrapped up the championship, {lead_gap} clear with {races_left} to run.',
-          'The arithmetic is settled, {leader} now champion with {lead_gap} points in hand and {races_left} remaining.',
+          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
+          '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
+          'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
         ]
       : leadChanged
       ? [
           'The result swings the championship, and {leader} now leads.',
-          'There is a new name on top of the standings in {leader}, {lead_gap} clear of {second}.',
-          '{leader} takes over at the head of the table, {lead_gap} ahead of {second}.',
-          'The points lead changes hands, {leader} now in front of {second} by {lead_gap}.',
+          'There is a new name on top of the standings in {leader}, {lead_gap} {lead_gap_pts} clear of {second}.',
+          '{leader} takes over at the head of the table, {lead_gap} {lead_gap_pts} ahead of {second}.',
+          'The points lead changes hands, {leader} now in front of {second} by {lead_gap} {lead_gap_pts}.',
         ]
       : [
-          'In the championship, {leader} stays in front, {lead_gap} clear of {second}.',
-          '{leader} holds the points lead on {leader_points}, {lead_gap} up on {second}.',
+          'In the championship, {leader} stays in front, {lead_gap} {lead_gap_pts} clear of {second}.',
+          '{leader} holds the points lead on {leader_points}, {lead_gap} {lead_gap_pts} up on {second}.',
           'Atop the standings, {leader} keeps a {lead_gap}-point cushion over {second}.',
-          'No change at the top, {leader} on {leader_points} points with {second} {lead_gap} adrift.',
+          'No change at the top, {leader} on {leader_points} points with {second} {lead_gap} {lead_gap_pts} adrift.',
         ]
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
@@ -761,7 +779,7 @@ function milestones(ctx: NewsContext): NewsArticle[] {
           fill(pick([
             'For {team}, a first win of the season shifts the internal calculus, from the technical direction of the second half of {year} to the belief on the factory floor.',
             'In the constructors, the win lands at the right time for {team}, giving {driver_last} a platform to build points through the rounds ahead.',
-            'The psychological value of a first win is hard to quantify and impossible to ignore, and {driver_last} goes into the next weekend at a different altitude.',
+            'A first win tends to change how a driver is raced, and rivals will treat {driver_last} with a little more caution from here.',
             '{driver_poss} first win of {year} puts {them} back inside the championship conversation, and the teams ahead will have noted the name on the trophy.',
           ], `${seed}|b2`), slots),
           homeWin
@@ -923,9 +941,9 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     const goodPara = delivered.length
       ? fill(pick([
           '{delivered} extracted real performance from the new parts, and it showed in the pace through the weekend.',
-          'For {delivered}, the gamble paid off, the upgrades translating into a genuine step in competitiveness.',
+          'For {delivered}, the new parts delivered, with a clear step up in competitiveness.',
           '{delivered} left the {circuit} with data that confirmed what the simulations had promised.',
-          'The new components on the {delivered} car performed as intended, a tangible improvement in race trim.',
+          'The new components on the {delivered} car performed as intended and brought a tangible gain in race trim.',
           '{delivered} came away confident the development direction is sound after a positive showing with the new parts.',
         ], `${seed}:good`), slots)
       : ''
@@ -933,7 +951,7 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
       ? fill(pick([
           '{missed} found nothing from the new parts across the weekend, a frustrating return on the factory investment.',
           'The upgrades on the {missed} car failed to translate, leaving the engineers with more questions than answers.',
-          '{missed} will be disappointed, the new components producing no step and the weekend exposing the gap.',
+          '{missed} will be disappointed, with the new components producing no step and the weekend exposing the gap.',
           'A difficult verdict for {missed}, whose new parts delivered no meaningful improvement on the timing screens.',
           '{missed} head back to the factory to work out what went wrong after the package failed to fire at the {circuit}.',
         ], `${seed}:bad`), slots)
@@ -941,9 +959,9 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     // The specific (invented, unfalsifiable) component — different part/area/team each round.
     const partPara = fill(pick(repDelivered
       ? [
-          'The headline change is a revised {part} targeting {area}, and {rep_team} found what they were looking for.',
+          '{rep_team} brought the eye-catching change, a revised {part} aimed at {area}, and it delivered.',
           '{rep_team} introduced a new {part} with {area} as the primary objective, and the data backed up the concept.',
-          'A redesigned {part} was the centrepiece of {rep_team_poss} package, the team chasing improvements in {area} and getting them.',
+          'A redesigned {part} was the centrepiece of {rep_team_poss} package, with the team targeting {area} and finding the gains.',
           'The new {part} on the {rep_team} car was built around gains in {area}, and it delivered on that brief.',
         ]
       : [
@@ -956,16 +974,16 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     const outlook = repPos
       ? fill(pick(delivered.length
           ? [
-              '{rep_team} sit {rep_pos} in the constructors and will want these gains to hold as the calendar moves on.',
+              '{rep_team} sit {rep_pos} in the constructors\' championship and will want these gains to hold as the calendar moves on.',
               'Sitting {rep_pos} in the standings, {rep_team} have given themselves fresh ammunition for the next phase of the season.',
-              '{rep_team} occupy {rep_pos} in the constructors and now have a confirmed step to build from.',
-              '{rep_team} are {rep_pos} in the constructors, and a working upgrade puts them in a stronger position to push higher.',
+              '{rep_team} occupy {rep_pos} in the constructors\' championship and now have a confirmed step to build from.',
+              '{rep_team} are {rep_pos} in the constructors\' standings, and a working upgrade puts them in a stronger position to push higher.',
             ]
           : [
-              '{rep_team} remain {rep_pos} in the constructors and are still searching for the breakthrough the results need.',
+              '{rep_team} remain {rep_pos} in the constructors\' championship and are still searching for the breakthrough the results need.',
               'Stuck {rep_pos} in the standings, {rep_team} head back to the factory to regroup after a fruitless upgrade weekend.',
-              '{rep_team} are {rep_pos} in the constructors and cannot afford many more weekends where new parts fail to deliver.',
-              'The pressure on {rep_team} only grows, {rep_pos} in the constructors with parts that did not work.',
+              '{rep_team} are {rep_pos} in the constructors\' championship and cannot afford many more weekends where new parts fail to deliver.',
+              'The pressure on {rep_team} only grows, {rep_pos} in the constructors\' standings with parts that did not work.',
             ], `${seed}:outlook`), slots)
       : ''
     // Driver mood is just one flavour of many, so keep it rare (a couple of times a season).
@@ -1603,7 +1621,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:wcc`, slots,
             cbefore[1]
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
-              : ['{top_team} head the constructors standings.']),
+              : ['{top_team} head the constructors\' championship.']),
           trackTexture,
         )
     out.push({
@@ -2445,8 +2463,8 @@ function analysis(ctx: NewsContext): NewsArticle[] {
               : ['{team} underdelivering on their potential', 'Has {team} hit a ceiling?', '{team} leaving points on the table', 'Underwhelming {team} fall short', 'Where are the points, {team}?'],
               `${id}|h`), slots),
             dek: fill(pick(over
-              ? ['{team} sit {pos} despite a {tier} car.', '{team} are outscoring their machinery.', 'A {tier} car, a flattering position for {team}.']
-              : ['{team} sit only {pos} with a {tier} car.', '{team} are not making their pace count.', 'A {tier} car, a disappointing return for {team}.'],
+              ? ['{team} sit {pos} despite a {tier} car.', '{team} are outscoring their machinery.', '{team} are running {pos}, well above where a {tier} car belongs.']
+              : ['{team} sit only {pos} with a {tier} car.', '{team} are not making their pace count.', 'A {tier} car has returned only {pos} for {team}, well short of what it should.'],
               `${id}|d`), slots),
             body: over
               ? paras(
@@ -2590,12 +2608,13 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
       starts: c?.starts ?? 0, starts_word: plural(c?.starts ?? 0, 'start'),
       honours: honourBits.length ? listJoin(honourBits) : '',
       pot: fa.peakPotential >= 88 ? 'one of the hottest properties in the junior ranks' : fa.peakPotential >= 80 ? 'a genuine prospect' : 'an intriguing talent',
+      ...pronouns(fa.gender),
     }
     const marketLine = toTeam
-      ? fill(pick(['Run the silly-season maths and a {to} seat for {next} looks a genuine possibility.', 'The market projects {driver_last} could even land at {to} for {next}.'], `${seed}|mkt`), slots)
+      ? fill(pick(['There is a real chance {driver_last} is back on the grid with {to} for {next}.', 'A {to} seat for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
       : experienced
-      ? fill(pick(['For now, the projection shows no opening, and a seat may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
-      : fill(pick(['For now, the projection shows no opening, and a debut may have to wait.', 'As things stand, a first F1 seat looks some way off.'], `${seed}|mkt`), slots)
+      ? fill(pick(['For now the seats look full, and a return may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
+      : fill(pick(['For now the seats look full, and a debut may have to wait.', 'As things stand, a first F1 seat looks some way off.'], `${seed}|mkt`), slots)
 
     if (experienced) {
       const recordLine = honourBits.length
@@ -2606,7 +2625,7 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
         headline: fill(pick(['Where next for {driver}?', '{driver} eyes a way back', 'A familiar name on the market in {driver}', 'Could {driver} return to the grid?'], `${seed}|h`), slots),
         dek: fill(pick(['{driver} is between seats and weighing the options.', 'Out of a drive for now, {driver_last} is not done yet.', 'A familiar face is on the market.'], `${seed}|d`), slots),
         body: paras(
-          fill(pick(['{driver}, {age}, finds themselves without a seat, a familiar face still chasing a way back.', 'At {age}, {driver} is on the market, and not short of suitors.'], `${seed}|p1`), slots),
+          fill(pick(['{driver}, {age}, finds {themself} without a seat, a familiar face still chasing a way back.', 'At {age}, {driver} is on the market, and not short of suitors.'], `${seed}|p1`), slots),
           recordLine,
           fill(pick(['"I am not done in this sport," {driver_last} said.', '"Do not write me off," said {driver_last}. "I will be back."'], `${seed}|q`), slots),
           marketLine,
@@ -2619,8 +2638,8 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
         dek: fill(pick(['{driver}, {age}, has yet to race in F1 but is generating buzz.', 'Meet {driver}, tipped for big things.', 'A name to file away in {driver}.'], `${seed}|d`), slots),
         body: paras(
           fill(pick(['{driver}, just {age}, has yet to make a Grand Prix start, but is rated {pot}.', 'At {age}, {driver} has never raced in F1, and is regarded as {pot}.'], `${seed}|p1`), slots),
-          fill(pick(['Those who have watched the junior ranks talk up the raw speed and racecraft.', 'A reputation built in the junior single-seater categories, where the results have caught the eye.'], `${seed}|p2`), slots),
-          fill(pick(['"There is something special there," one paddock figure said.', '"Keep that name in mind," said a junior-series insider.'], `${seed}|q`), slots),
+          fill(pick(['Those who have watched the junior ranks talk up {their} raw speed and racecraft.', 'A reputation built in the junior single-seater categories, where the results have caught the eye.'], `${seed}|p2`), slots),
+          fill(pick(['"There is something special there," one paddock figure said.', '"Keep {driver_last} in mind, you will be hearing that name," said a junior-series insider.'], `${seed}|q`), slots),
           marketLine,
         ),
       })
