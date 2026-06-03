@@ -249,6 +249,40 @@ function fmtFinish(pos: number): string {
   return pos >= 30 ? 'a retirement' : ordinal(pos)
 }
 
+// Points a driver scored across the last `x` completed rounds (ending at `round`).
+function pointsInWindow(ctx: NewsContext, driverId: string, round: number, x: number): number {
+  let p = 0
+  for (let rr = Math.max(1, round - x + 1); rr <= round; rr++) {
+    const row = (ctx.raceResults[rr - 1] ?? []).find((z) => z.driverId === driverId)
+    if (row) p += row.points
+  }
+  return p
+}
+
+// For a teammate gap, pick the recent window (3..6 races) that tells the starkest story, and
+// say whether the trailing driver is clawing back or falling further behind. Returns null if
+// there aren't enough rounds. `trend` is 'fightback' | 'widening' | 'steady'.
+function teammateTrend(ctx: NewsContext, aheadId: string, behindId: string, round: number):
+  { x: number; ra: number; rb: number; trend: 'fightback' | 'widening' | 'steady' } | null {
+  if (round < 3) return null
+  let best: { x: number; ra: number; rb: number } | null = null
+  let bestScore = -1
+  for (const x of [3, 4, 5, 6]) {
+    if (x > round) break
+    const ra = pointsInWindow(ctx, aheadId, round, x)
+    const rb = pointsInWindow(ctx, behindId, round, x)
+    // Prefer a window where the trailing driver is ahead recently (fightback, the more telling
+    // angle); otherwise the one with the starkest PER-RACE margin, so a concentrated recent
+    // stretch beats a longer window that merely accumulates a bigger raw number.
+    const score = (rb - ra >= 4 ? 1000 : 0) + Math.abs(ra - rb) / x
+    if (score > bestScore) { bestScore = score; best = { x, ra, rb } }
+  }
+  if (!best) return null
+  const diff = best.rb - best.ra
+  const trend = diff >= 4 ? 'fightback' : (best.ra - best.rb >= 4 ? 'widening' : 'steady')
+  return { x: best.x, ra: best.ra, rb: best.rb, trend }
+}
+
 // A team's finishing position last season, from the constructor history (null in year one).
 function lastSeasonPos(ctx: NewsContext, teamId: string): number | null {
   const recs = ctx.constructorHistory.filter((h) => h.teamId === teamId).sort((a, b) => b.seasonYear - a.seasonYear)
@@ -1468,7 +1502,16 @@ function analysis(ctx: NewsContext): NewsArticle[] {
       const gap = a.points - b.points
       if (gap < 25) continue
       const id = `tm-${ctx.year}-${r}-${teamId}`
-      const slots = { team: a.teamName, ahead: a.driverName, ahead_last: lastName(a.driverName), behind: b.driverName, behind_last: lastName(b.driverName), ap: a.points, bp: b.points, gap, round: r }
+      const tr = teammateTrend(ctx, a.driverId, b.driverId, r)
+      const slots = { team: a.teamName, ahead: a.driverName, ahead_last: lastName(a.driverName), behind: b.driverName, behind_last: lastName(b.driverName), ap: a.points, bp: b.points, gap, round: r, win_x: tr?.x ?? 0, ra: tr?.ra ?? 0, rb: tr?.rb ?? 0 }
+      // Grounded recent-form line: the most telling window, and which way the gap is moving.
+      const trendPara = tr ? fill(pick(
+        tr.trend === 'fightback'
+          ? ['There are signs of a fightback, with {behind_last} outscoring {ahead_last} {rb} to {ra} over the last {win_x} races.', 'Recent form offers {behind_last} hope, the trailing driver beating {ahead_last} {rb} to {ra} across the last {win_x} races.']
+          : tr.trend === 'widening'
+          ? ['And it is only widening, with {ahead_last} outscoring {behind_last} {ra} to {rb} over the last {win_x} races.', 'The recent trend is grim for {behind_last}, beaten {rb} to {ra} on points over the last {win_x} races.']
+          : ['Of late the pair have been more evenly matched, {ra} against {rb} over the last {win_x} races.', 'Recent form has been closer, {ahead_last} on {ra} to {behind_last}\'s {rb} across the last {win_x} races.'],
+        `${id}|trend`), slots) : ''
       candidates.push({
         subject: teamId, score: teammateScore(gap),
         make: () => ({
@@ -1486,6 +1529,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             compose(`${id}:p1`, slots,
               ['The intra-team battle at {team} is increasingly one-sided.', 'There is a clear number one emerging at {team}.', 'The {team} pairing is no longer evenly matched.'],
               ['{ahead} ({ap} pts) has pulled clear of {behind} ({bp} pts).', '{ahead} holds a {gap}-point edge over {behind}.', '{ahead} leads {behind} by {gap} points.']),
+            trendPara,
             compose(`${id}:p2`, slots,
               ['The pressure is mounting on the other side of the garage.', '{behind} badly needs a result to steady things.', 'Questions are starting to follow {behind} around the paddock.'],
               ['Team dynamics can sour quickly when the gap grows.', 'A turnaround is still possible, but time is a factor.', 'Confidence, once dented, is hard to rebuild.']),
