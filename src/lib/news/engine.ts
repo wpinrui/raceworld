@@ -959,25 +959,46 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
     const ds = driverStandingsAfter(ctx, r - 1)
     if (ds.length >= 2 && drvCanClinch(r)) {
       const L = ds[0]
+      const S = ds[1]
+      const G = L.points - S.points
+      // Points swing the leader needs over the nearest rival to clinch (negative = can even
+      // lose ground and still clinch). This covers EVERY result combination, not just a win.
+      const clinchMargin = rem * 25 - G + 1
+      // Worst finish that still clinches if the rival scores nothing (lowest points >= margin).
+      let worstPos = 1
+      for (let p = 10; p >= 1; p--) { if (F1[p - 1] >= clinchMargin) { worstPos = p; break } }
+      // Win-scenario conditions for any rival who could otherwise survive the leader winning. We
+      // only list a rival once the requirement is real (3rd or lower); "no higher than 2nd" is
+      // vacuous, since a rival cannot beat a winning leader anyway.
       const conds: string[] = []
       for (const j of ds.slice(1)) {
         if (j.points + (rem + 1) * 25 < L.points) continue // out of mathematical contention
         const A = (L.points + 25) - j.points - rem * 25
-        if (A > 25) continue // even winning, this rival cannot prevent the clinch
+        if (A > 18) continue // even at 2nd this rival cannot deny a winning leader
         const pos = clinchPos(A)
-        conds.push(pos >= 11 ? `${lastName(j.driverName)} must finish outside the points` : `${lastName(j.driverName)} must finish no higher than ${ordinal(pos)}`)
+        conds.push(pos >= 11 ? `${lastName(j.driverName)} finishes outside the points` : `${lastName(j.driverName)} finishes no higher than ${ordinal(pos)}`)
       }
       let streak = 0
       for (let k = r - 1; k >= 1; k--) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1); if (w && w.driverId === L.driverId) streak++; else break }
       const seed = `scenario-${ctx.year}-${r}`
       const slots: Record<string, string | number> = {
-        leader: L.driverName, leader_last: lastName(L.driverName), circuit: circuit(ctx, r), year: ctx.year,
+        leader: L.driverName, leader_last: lastName(L.driverName), s_last: lastName(S.driverName),
+        circuit: circuit(ctx, r), next_circuit: circuit(ctx, r + 1), year: ctx.year,
         rem, races_left: racesLeft, wins: L.wins, wins_word: plural(L.wins, 'win'), streak,
         conds: conds.length ? listJoin(conds) : '',
+        clinch_margin: clinchMargin, margin_pts: plural(Math.abs(clinchMargin), 'point'),
+        worst_pos: ordinal(worstPos), surv: 1 - clinchMargin, surv_pts: plural(1 - clinchMargin, 'point'),
       }
-      const scenarioPara = conds.length
-        ? compose(`${seed}:s`, slots, ['First, {leader_last} must win the {circuit}.', '{leader_last} needs to win the {circuit} to begin with.'], ['Then {conds}.', 'On top of that, {conds}.'])
-        : compose(`${seed}:s`, slots, ['{leader_last} simply needs to win the {circuit}.', 'Win the {circuit}, and it is done.'], ['Do that and the title is sealed whatever the chasing pack does.', 'No other result on the day would matter.'])
+      // The win scenario.
+      const winText = conds.length
+        ? fill(pick(['Win the {circuit}, and {leader_last} is champion provided {conds}.', 'Victory at the {circuit} crowns {leader_last}, as long as {conds}.'], `${seed}|win`), slots)
+        : fill(pick(['Win the {circuit}, and the title is {leader_last}\'s whatever the others do.', 'A win at the {circuit} settles it outright.'], `${seed}|win`), slots)
+      // The full swing (covers finishing other than first) and the flip side into the next race.
+      const swingText = clinchMargin <= 0
+        ? fill(pick(['Such is the lead that {leader_last} is champion at the {circuit} unless {s_last} outscores them by {surv} {surv_pts}.', '{leader_last} clinches barring {s_last} outscoring them by {surv} {surv_pts}.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Only that keeps the fight alive into the {next_circuit}.', 'Anything short of that and it is done.'], `${seed}|sw2`), slots)
+        : clinchMargin <= 18
+        ? fill(pick(['{leader_last} need not even win: outscoring {s_last} by {clinch_margin} {margin_pts} is enough, so even {worst_pos} would do should {s_last} draw a blank.', 'A win is not essential, with {leader_last} clinching by outscoring {s_last} by {clinch_margin} {margin_pts}; even {worst_pos} settles it if {s_last} fails to score.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Anything less, and the title race goes on to the {next_circuit}.', 'Short of that swing, the championship heads to the {next_circuit}.'], `${seed}|sw2`), slots)
+        : fill(pick(['Only a win will do, and even then {leader_last} must outscore {s_last} by {clinch_margin} {margin_pts} to settle it.', 'Nothing short of victory can clinch it here, with {leader_last} needing to outscore {s_last} by {clinch_margin} {margin_pts}.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Fail to manage it, and the title goes to the {next_circuit}.', 'If not, the championship rolls on to the {next_circuit}.'], `${seed}|sw2`), slots)
       out.push({
         id: seed, category: 'championship_state', round: r, priority: 86,
         headline: fill(pick([
@@ -999,7 +1020,8 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:form`, slots,
             ['{leader_last} has {wins} {wins_word} this season.', 'With {wins} {wins_word} banked, {leader_last} has earned the chance.'],
             streak >= 2 ? ['{streak} straight wins have brought the crown within touching distance.', 'A {streak}-race winning run has made it close to a formality.'] : ['']),
-          scenarioPara,
+          winText,
+          swingText,
         ),
       })
     }
