@@ -1308,8 +1308,25 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       const notablePoints = dpts > 0 && dRank >= 0 && dRank < dstand.length / 2
       const toIdx = cstand.findIndex((c) => c.teamId === m.toTeamId)
       const toPos = toIdx >= 0 ? ordinal(toIdx + 1) : ''
+      const fromIdx = cstand.findIndex((c) => c.teamId === m.fromTeamId)
+      const fromPos = fromIdx >= 0 ? ordinal(fromIdx + 1) : ''
+      // Frame the move by its real direction in the constructors order (lower index = better).
+      const direction = fromIdx >= 0 && toIdx >= 0 ? (toIdx < fromIdx ? 'up' : toIdx > fromIdx ? 'down' : 'level') : 'unknown'
+      const drv = ctx.drivers.find((d) => d.id === m.driverId)
+      const appeal = (drv?.age ?? 25) >= 30 ? 'experience and know-how' : 'youth and upside'
       const seed = `silly-${ctx.year}-${r}-${m.driverId}`
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r, driver_points: dpts, to_pos: toPos }
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal }
+      // Classic silly-season colour: invented, unfalsifiable sightings / talks / rival suitors.
+      const sillyTexture = texture(seed, [
+        'A sighting of {driver_last} near the {to} hospitality unit did little to quell the talk.',
+        'The {driver_last} camp is said to have held exploratory talks.',
+        'Word of a quiet meeting at {to} headquarters has only fanned the flames.',
+        '{to} are not thought to be the only admirers.',
+        'An agent was spotted doing the rounds of the paddock motorhomes.',
+        '{driver_last} was studiously non-committal when the subject came up.',
+        'Neither {from} nor {to} would comment on the record.',
+        'A weekend of whispers put the two camps in the same conversations.',
+      ], slots, 60)
       out.push({
         id: seed, category: 'silly_season', round: r, priority: 30,
         headline: fill(pick([
@@ -1325,15 +1342,21 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:p1`, slots,
             ['The paddock is buzzing with talk of {driver}.', '{driver} has become a name to watch in the market.', 'Speculation is building around the future of {driver}.'],
             ['Sources suggest {to} are weighing up a move {window}.', '{to} are understood to have registered interest {window}.', 'A switch from {from} to {to} is the talk of the rumour mill {window}.']),
+          sillyTexture,
           compose(`${seed}:p2`, slots,
-            ['On paper, the fit makes a certain sense.', 'The logic behind the link is not hard to see.', 'There is a clear rationale on both sides.'],
+            ['{to} are said to value {driver_last}\'s {appeal}.', 'What draws {to} is {driver_last}\'s {appeal}.', 'On paper, the fit makes a certain sense.', 'The logic behind the link is not hard to see.'],
             notablePoints
               ? ['{driver_last} has {driver_points} points to show for the season so far.', 'A return of {driver_points} points this year has not gone unnoticed.']
               : [''],
-            toPos
-              ? ['{to}, {to_pos} in the constructors, are hunting an upgrade.', 'For {to}, sitting {to_pos}, it would be a statement of intent.']
+            // Grounded direction of the move, using both teams' real standings.
+            direction === 'up'
+              ? ['It would be a step up, from {from} in {from_pos} to {to} in {to_pos}.', 'On the table is a move up the order, {from_pos} to {to_pos}.']
+              : direction === 'down'
+              ? ['Curiously, it would mean a step down, from {from} in {from_pos} to {to} in {to_pos}.', 'It would be a slide from {from_pos} to {to_pos}, which raises eyebrows.']
+              : direction === 'level'
+              ? ['It would be a sideways move, {from} ({from_pos}) and {to} ({to_pos}) near-level in the order.', 'There is little between {from} ({from_pos}) and {to} ({to_pos}) in the standings.']
               : [''],
-            ['{to} would gain a known quantity.', 'For {driver_last}, it could mean a step up.', 'Each party has something the other wants.']),
+            ['{to} would gain a known quantity.', 'For {to}, it would be a statement of intent.', 'Each party has something the other wants.']),
           compose(`${seed}:p3`, slots,
             ['Nothing is signed, and {from} will not give up {driver_last} easily.', 'It remains speculation, but a persistent kind.', 'Whether it comes off is another matter entirely.'],
             ['Silly season has a long way still to run.', 'Expect the story to develop over the coming rounds.', 'The driver market rarely moves in a straight line.']),
