@@ -331,4 +331,9 @@ export interface EndOfSeasonSummary {
   // Per-driver finish vs car-pace expectation this season; drives re-sign offers.
   // Optional: saves serialized before this field existed won't have it (caller defaults to {}).
   retentionDelta?: Record<string, number>
+  // God-mode grid changes taking effect NEXT season, captured here so the newsroom can announce
+  // a new team's arrival and bid a departing team farewell at the close of its final season.
+  // Optional for backward-compatible saves. finalPosition is the leaver's last championship place.
+  gridAdditions?: { teamId: string; teamName: string }[]
+  gridRemovals?: { teamId: string; teamName: string; finalPosition: number | null }[]
 }

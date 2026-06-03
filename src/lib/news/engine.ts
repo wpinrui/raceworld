@@ -1723,6 +1723,44 @@ function market(ctx: NewsContext): NewsArticle[] {
       ),
     })
   }
+  // God-mode grid changes taking effect next season: a new team's arrival, and a departing team's
+  // farewell — both announced at the close of the current season. Names only; the rest is plausible,
+  // unfalsifiable colour (we model none of the backers/bases/staff).
+  const nextCount = ctx.teams.length - (eos.gridRemovals?.length ?? 0) + (eos.gridAdditions?.length ?? 0)
+  for (const add of eos.gridAdditions ?? []) {
+    const seed = `entry-${add.teamId}-${eos.seasonYear}`
+    const slots = { team: add.teamName, next: eos.seasonYear + 1, count: nextCount }
+    out.push({
+      id: seed, category: 'team_entry', round: r, priority: 70,
+      headline: fill(pick(['{team} confirmed as F1\'s newest team', '{team} get the green light for {next}', '{team} to join the Formula 1 grid', 'Welcome to Formula 1, {team}'], `${seed}|h`), slots),
+      dek: fill(pick(['{team} have been approved to join the grid for {next}.', 'A new name joins Formula 1 in {next}.', 'The grid grows to {count} teams in {next}.'], `${seed}|d`), slots),
+      body: paras(
+        fill(pick(['{team} have been granted entry to Formula 1 from {next}, the sport has confirmed.', 'It is official: {team} will line up on the Formula 1 grid in {next}.'], `${seed}|p1`), slots)
+          + ' ' + fill(pick(['The {next} grid will number {count} teams.', 'Their arrival takes the grid to {count} teams.'], `${seed}|p1b`), slots),
+        fill(pick(['Formula 1 welcomed the entry, calling it "an exciting step for the sport and its fans."', 'Formula 1 called the news "a strong signal of the championship\'s momentum."'], `${seed}|q1`), slots)
+          + ' ' + fill(pick(['The FIA hailed "a milestone for the championship."', 'The governing body spoke of "fresh energy" entering the paddock.'], `${seed}|q2`), slots),
+        fill(pick(['The team principal said the squad "cannot wait to go racing."', 'The team principal spoke of "belief in the mission" through a long application process.'], `${seed}|q3`), slots)
+          + ' ' + fill(pick(['Bases, a growing headcount and a power-unit programme are all taking shape ahead of the opener.', 'Facilities, staff and technical partnerships have been falling into place for months.'], `${seed}|p3`), slots),
+      ),
+    })
+  }
+  for (const rem of eos.gridRemovals ?? []) {
+    const seed = `exit-${rem.teamId}-${eos.seasonYear}`
+    const slots = { team: rem.teamName, year: eos.seasonYear, next: eos.seasonYear + 1, final_pos: rem.finalPosition ? ordinal(rem.finalPosition) : '' }
+    const posLine = rem.finalPosition
+      ? fill(pick([' They bow out {final_pos} in the constructors\' championship.', ' A final campaign ends {final_pos} among the constructors.'], `${seed}|pos`), slots)
+      : ''
+    out.push({
+      id: seed, category: 'team_exit', round: r, priority: 68,
+      headline: fill(pick(['{team} to leave Formula 1 after {year}', '{team} confirm grid exit', 'End of the road for {team}', '{team} bow out of Formula 1'], `${seed}|h`), slots),
+      dek: fill(pick(['{team} will depart the grid at the end of {year}.', 'The {year} season is {team}\'s last in Formula 1.', '{team} call time on their Formula 1 entry.'], `${seed}|d`), slots),
+      body: paras(
+        fill(pick(['{team} will leave the Formula 1 grid after the {year} season.', 'It is the end of {team}\'s time in Formula 1, the team set to depart after {year}.'], `${seed}|p1`), slots) + posLine,
+        fill(pick(['The decision draws a line under the team\'s spell in the sport, and their drivers return to the market as free agents.', 'With the seats now vacated, the team\'s drivers re-enter the driver market.'], `${seed}|p2`), slots),
+        fill(pick(['A team spokesperson thanked "everyone who made the journey possible."', 'Formula 1 wished the team "the very best for the future."'], `${seed}|q`), slots),
+      ),
+    })
+  }
   return out
 }
 
@@ -2207,6 +2245,72 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
+// TRIGGER: a mid-season driver change at a team (god-mode), detected straight from the race
+// results — a seat's occupant changes partway through the year. Reports the axed driver's form to
+// that point (grounded, so the "why" never overclaims) and introduces the replacement, using the
+// career record to tell a returning hand from a debutant.
+function midSeasonSwaps(ctx: NewsContext): NewsArticle[] {
+  const N = ctx.completedRounds
+  if (N < 2) return []
+  // Per team, each driver's first/last round and stats to date.
+  type Stint = { first: number; last: number; starts: number; points: number; best: number | null; name: string }
+  const byTeam = new Map<string, Map<string, Stint>>()
+  for (let round = 1; round <= N; round++) {
+    for (const res of ctx.raceResults[round - 1] ?? []) {
+      if (!res.teamId) continue
+      let team = byTeam.get(res.teamId)
+      if (!team) { team = new Map(); byTeam.set(res.teamId, team) }
+      let d = team.get(res.driverId)
+      if (!d) { d = { first: round, last: round, starts: 0, points: 0, best: null, name: res.driverName }; team.set(res.driverId, d) }
+      d.last = round; d.starts++; d.points += res.points
+      const fp = res.finishPosition
+      if (fp != null && (d.best == null || fp < d.best)) d.best = fp
+    }
+  }
+  const out: NewsArticle[] = []
+  for (const [teamId, drivers] of byTeam) {
+    for (const [repId, rep] of drivers) {
+      if (rep.first <= 1) continue // a regular, not a mid-season arrival
+      const k = rep.first
+      // Whose seat did they take? A driver whose last round was exactly the one before.
+      let axed: Stint | null = null
+      for (const [aid, a] of drivers) {
+        if (aid !== repId && a.last === k - 1 && a.first <= k - 1) { axed = a; break }
+      }
+      if (!axed) continue
+      const seed = `swap-${teamId}-${repId}-${k}`
+      const cr = careerOf(ctx, repId)
+      const repExperienced = !!(cr && (cr.wins > 0 || cr.podiums > 0 || cr.starts > rep.starts))
+      const slots: Record<string, string | number> = {
+        team: teamName(ctx, teamId), axed: axed.name, axed_last: lastName(axed.name),
+        rep: rep.name, rep_last: lastName(rep.name), round: k,
+        a_starts: axed.starts, a_starts_word: plural(axed.starts, 'round'),
+        a_pts: axed.points, a_pts_word: plural(axed.points, 'point'),
+        a_best: axed.best ? ordinal(axed.best) : '', cr_starts: cr?.starts ?? 0, cr_starts_word: plural(cr?.starts ?? 0, 'start'),
+      }
+      // The "why" is grounded in the axed driver's actual form to that point — never inflated.
+      const whyLine = axed.points === 0
+        ? fill(pick(['{a_starts} {a_starts_word} brought no points, and {team} have opted for a change.', 'A pointless run over {a_starts} {a_starts_word} has cost {axed_last} the seat.'], `${seed}|why`), slots)
+        : fill(pick(['{axed_last} leaves the seat with {a_pts} {a_pts_word} and a best finish of {a_best} from {a_starts} {a_starts_word}.', 'Over {a_starts} {a_starts_word}, {axed_last} managed {a_pts} {a_pts_word}, best finish {a_best}.'], `${seed}|why`), slots)
+      const repLine = repExperienced
+        ? fill(pick(['In comes {rep}, who brings {cr_starts} {cr_starts_word} of experience.', '{rep} steps in, no stranger to the grid with {cr_starts} {cr_starts_word} to their name.'], `${seed}|rep`), slots)
+        : fill(pick(['In comes {rep}, handed a Grand Prix debut.', '{rep} steps up for a first taste of Formula 1.'], `${seed}|rep`), slots)
+      out.push({
+        id: seed, category: 'mid_season_swap', round: k, priority: 52,
+        headline: fill(pick(['{team} replace {axed_last} with {rep_last}', '{axed_last} axed by {team} mid-season', '{rep_last} called up as {team} drop {axed_last}', 'Mid-season change at {team}'], `${seed}|h`), slots),
+        dek: fill(pick(['{team} swap {axed_last} for {rep_last} from round {round}.', 'A mid-season driver change at {team}.', '{rep_last} replaces {axed_last} at {team}.'], `${seed}|d`), slots),
+        body: paras(
+          fill(pick(['{team} have made a mid-season change, replacing {axed} with {rep} from round {round}.', '{team} have pulled the trigger mid-season, drafting in {rep} in place of {axed}.'], `${seed}|p1`), slots),
+          whyLine,
+          repLine,
+          fill(pick(['"It is a difficult call, but the right one for the team," a {team} spokesperson said.', '"I am grateful for the chance and ready to deliver," said {rep_last}.'], `${seed}|q`), slots),
+        ),
+      })
+    }
+  }
+  return out
+}
+
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...preSeason(ctx),
@@ -2222,6 +2326,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...previews(ctx),
     ...market(ctx),
     ...driverToWatch(ctx),
+    ...midSeasonSwaps(ctx),
   ]
   // de-dupe by id, then newest round first, higher priority first
   const seen = new Set<string>()
@@ -2237,6 +2342,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   car_launch_livery: 'Launch', rookie_debut: 'Rookie', driver_signing: 'Transfer',
   driver_exit: 'Transfer', career_retirement: 'Retirement', silly_season: 'Silly season',
   analysis_opinion: 'Analysis', driver_to_watch: 'Driver watch',
+  team_entry: 'New team', team_exit: 'Team exit', mid_season_swap: 'Driver change',
 }
 
 // The complete, ordered filter taxonomy. The page renders one chip per entry (always, so
@@ -2256,4 +2362,6 @@ export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
   { label: 'Silly season', categories: ['silly_season'] },
   { label: 'Analysis', categories: ['analysis_opinion'] },
   { label: 'Driver watch', categories: ['driver_to_watch'] },
+  { label: 'Grid change', categories: ['team_entry', 'team_exit'] },
+  { label: 'Driver change', categories: ['mid_season_swap'] },
 ]

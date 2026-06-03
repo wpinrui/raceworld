@@ -523,6 +523,13 @@ export const useSeasonStore = create<SeasonStore>()(
           upgradeEvents: allUpgradeEvents,
           preSeasonTest: null,
           retentionDelta: computeRetentionDeltas(drivers, teams, raceResults),
+          // God-mode grid changes applied above, recorded for the newsroom (arrival + farewell).
+          gridAdditions: additions.map((t) => ({ teamId: t.id, teamName: t.name })),
+          gridRemovals: removals.map((id) => ({
+            teamId: id,
+            teamName: teams.find((t) => t.id === id)?.name ?? id,
+            finalPosition: constructorRankInfo.find((c) => c.teamId === id)?.finalPosition ?? null,
+          })),
         }
 
         // 5. Update constructor history (prepend current season, dedupe, keep ≤55)
