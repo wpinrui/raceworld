@@ -8,26 +8,30 @@ picks its template variant from a seeded hash of its id, so the feed is stable a
 ## Variety without an LLM
 
 Bodies are assembled by `compose()` (in `util.ts`) from **independent fragment pools** —
-opener × detail × closer. A paragraph built from four pools of ~5 fragments is 5⁴ = 625
-distinct paragraphs from a couple dozen authored strings. Each pool seeds its pick off the
-article id, so the same article always reads the same way, but article-to-article the prose
-varies. Headlines and deks pick from ~6–12 variants each. Net effect: the feed reads written,
-not stamped, across a 24-race season.
+opener × detail × closer. A paragraph built from two pools of ~8 fragments is 64 distinct
+paragraphs; a body of four or five such paragraphs runs into the thousands of combinations
+from a couple hundred authored strings. Each pool seeds its pick off the article id, so the
+same article always reads the same way, but article-to-article the prose varies. Headlines and
+deks pick from ~8–14 variants each. **Every article is built to reach at least five
+sentences** (`paras()` joins composed paragraphs and drops any that collapsed to empty). Net
+effect: the feed reads written, not stamped, across a 24-race season.
 
 ## Cadence (not every category every race)
 
 | Category | Producer | Cadence / trigger |
 |---|---|---|
 | `race_report` | raceReports | **Every race.** One consolidated report: winner + podium + margin, the start (pole / drive of the day), attrition (DNFs), and the title picture. Result, incident, retirement and championship all live *inside* this piece. |
+| `milestone` | milestones | **Per race, on a genuine first.** First win of the season for a driver, a surprise podium (a non-top-pace car reaching the rostrum, first of its year — live only), or a team 1-2. Naturally rare. |
 | `technical_upgrade` | technicalRoundup | **Per race, only if someone upgraded.** One roundup grouping every team's package that round (delivered vs misfired). |
 | `championship_state` | championship | The clinch moments only — driver + constructor titles, emitted at the round they were mathematically secured. |
 | `championship_state` | titleFight | Final third of the calendar, gap ≤ a catchable margin, gated — the run-in gets coverage round by round. |
+| `feature` | features | A long state-of-the-season read at half-distance, and a season review once the final round is in. Grounded in the standings to date. |
 | `preview_schedule` | previews | A run-up piece for **every round** (off the standings as they stood beforehand), plus the upcoming round while live. |
 | `preview_schedule` | preSeason | Pre-season season preview (live only). |
 | `car_launch_livery` / `rookie_debut` | preSeason | Pre-season launches per team + youngest-driver spotlights (live only). |
 | `driver_signing` / `driver_exit` / `career_retirement` | market | End-of-season `marketMoves` / `droppedDrivers` / `retiredDriverIds`. |
 | `silly_season` | sillySeason | **Three windows only** — mid-season, three-quarter distance, penultimate round. See below. |
-| `analysis_opinion` | analysis | **At most one per round.** Every angle (teammate imbalance, form slump, team over/under-performance) is scored for newsworthiness; subjects featured in the last few rounds take a small penalty; the single best candidate runs if it clears a bar. Trajectory angles are live-only (need car pace). |
+| `analysis_opinion` | analysis | **At most one per round.** Every angle (teammate imbalance, form slump, form surge / hot streak, team over/under-performance) is scored for newsworthiness; subjects featured in the last few rounds take a small penalty; the single best candidate runs if it clears a bar. Trajectory angles are live-only (need car pace). |
 
 ## Silly season is a real projection
 
