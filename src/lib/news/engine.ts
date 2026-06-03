@@ -410,7 +410,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           ],
           [
             '{dnf_list} dropped out.', 'Out went {dnf_list}.',
-            '{dnf_list} did not see the flag.', 'Among them, {dnf_list}.',
+            '{dnf_list} did not see the flag.', 'They were {dnf_list}.',
             '{dnf_list} were left to rue what might have been.',
           ])
 
@@ -637,7 +637,8 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     // A representative upgrading team: its real constructor position grounds the closing line,
     // and one of its drivers carries the (invented, unfalsifiable) mood line.
     const repTeamId = (evs.find((e) => !e.failed) ?? evs[0]).teamId
-    const repDriver = ctx.drivers.find((d) => d.teamId === repTeamId)
+    const repTeamDrivers = ctx.drivers.filter((d) => d.teamId === repTeamId)
+    const repDriver = repTeamDrivers.length ? pick(repTeamDrivers, `${seed}|updrv`) : undefined
     const cstandTech = constructorStandingsAfter(ctx, r)
     const repPosIdx = cstandTech.findIndex((c) => c.teamId === repTeamId)
     const repPos = repPosIdx >= 0 ? ordinal(repPosIdx + 1) : ''
@@ -656,10 +657,9 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
         'The development war was front and centre at the {circuit}.',
         'New bodywork was the talk of the {circuit} paddock.',
       ],
-      [
-        '{n} {teams} brought changes in all.', 'In total, {n} {teams} introduced updates.',
-        'It was a busy day for the development departments.',
-      ])
+      evs.length >= 2
+        ? ['{n} teams brought changes in all.', 'In total, {n} teams introduced updates.', 'It was a busy day for the development departments.']
+        : ['Just one team rolled out new parts.', 'A solitary update this time, but a notable one.', 'Only one team brought changes this weekend.'])
     const goodPara = delivered.length
       ? compose(`${seed}:good`, slots,
           [
@@ -748,26 +748,27 @@ function championship(ctx: NewsContext): NewsArticle[] {
     const clinched = remaining <= 0 || (s.length >= 2 && gap > remaining * DRIVER_MAX_PER_RACE)
     if (!clinched) continue
     const champ = s[0]
+    const earlyClinch = remaining > 0 // secured with rounds to spare, vs decided at the finale
+    const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const seed = `title-${ctx.year}`
-    const slots = { driver: champ.driverName, driver_last: lastName(champ.driverName), team: champ.teamName, year: ctx.year, gap, round: r, wins: champ.wins, wins_word: plural(champ.wins, 'win') }
+    const slots = { driver: champ.driverName, driver_last: lastName(champ.driverName), team: champ.teamName, year: ctx.year, gap, round: r, wins: champ.wins, wins_word: plural(champ.wins, 'win'), races_left: racesLeft }
     out.push({
       id: seed, category: 'championship_state', round: r, priority: 100,
-      headline: fill(pick([
-        '{driver} crowned {year} World Champion', '{driver} seals the {year} title',
-        '{driver} is the {year} World Champion', 'Title to {driver} in {year}',
-        '{driver_last} is champion of the world', '{driver} conquers {year}',
-      ], `${seed}|h`), slots),
-      dek: fill(pick([
-        '{driver} cannot be caught and is the {year} World Drivers Champion.',
-        '{driver} wraps up the {year} crown for {team}.',
-        'The {year} championship is settled in {driver}\'s favour.',
-      ], `${seed}|d`), slots),
+      headline: fill(pick(earlyClinch
+        ? ['{driver} crowned {year} World Champion', '{driver} seals the {year} title', '{driver} is the {year} World Champion', '{driver_last} is champion of the world', '{driver} conquers {year}']
+        : ['{driver} takes the {year} title in the finale', '{driver} crowned champion in a season-long fight', '{driver} is the {year} World Champion', '{driver_last} wins the title at the last', '{driver} holds on to be crowned {year} champion'],
+        `${seed}|h`), slots),
+      dek: fill(pick(earlyClinch
+        ? ['{driver} cannot be caught and is the {year} World Drivers Champion.', '{driver} wraps up the {year} crown for {team} with {races_left} to spare.', 'The {year} championship is settled early in {driver}\'s favour.']
+        : ['{driver} takes the {year} World Drivers Championship in the season finale.', '{driver} is crowned {year} champion after going the distance.', 'The {year} title is decided at the last, and it is {driver}\'s.'],
+        `${seed}|d`), slots),
       body: paras(
         compose(`${seed}:p1`, slots,
           ['{driver} is the {year} World Drivers Champion.', '{driver} has won the {year} World Championship.', 'The {year} title belongs to {driver}.'],
           ['The crown is sealed for {team}.', 'It is a landmark season for {team}.', 'A long campaign ends in glory for {team}.']),
-        compose(`${seed}:p2`, slots,
-          ['With {wins} {wins_word} on the board, the championship was secured at round {round}.', 'The title was mathematically locked up at round {round}.', '{driver} did enough at round {round} to put the championship beyond reach.'],
+        compose(`${seed}:p2`, slots, earlyClinch
+          ? ['With {wins} {wins_word} on the board, the title was secured with {races_left} still to run.', 'The championship was mathematically locked up at round {round}, with {races_left} to spare.', '{driver} put the title beyond reach with {races_left} remaining.']
+          : ['It went all the way to the final round, and {driver} got the job done.', 'The title went to the wire, settled only at the last race.', '{driver} held the advantage when it mattered, sealing it in the finale.'],
           ['The consistency told over a gruelling season.', 'Reliability and results combined to decisive effect.', 'It was a campaign of few weaknesses.']),
         compose(`${seed}:p3`, slots,
           ['For {driver_last}, it is the reward for a season of relentless application.', 'The hard yards of a long year have paid off.', 'It caps a season few could live with.'],
@@ -785,26 +786,27 @@ function championship(ctx: NewsContext): NewsArticle[] {
     const remaining = N - r
     const clinched = remaining <= 0 || (s.length >= 2 && gap > remaining * CONSTRUCTOR_MAX_PER_RACE)
     if (!clinched) continue
+    const earlyClinch = remaining > 0
+    const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const seed = `wcc-${ctx.year}`
-    const slots = { team: s[0].teamName, year: ctx.year, gap, round: r }
+    const slots = { team: s[0].teamName, year: ctx.year, gap, round: r, races_left: racesLeft }
     out.push({
       id: seed, category: 'championship_state', round: r, priority: 95,
-      headline: fill(pick([
-        '{team} clinch the Constructors title', '{team} are {year} Constructors Champions',
-        '{team} seal the Constructors Championship', 'Constructors crown to {team}',
-        '{team} rule the {year} Constructors', '{team} take the team title',
-      ], `${seed}|h`), slots),
-      dek: fill(pick([
-        '{team} have sealed the {year} Constructors Championship.',
-        '{team} cannot be caught in the Constructors standings.',
-        'The Constructors title is {team} for {year}.',
-      ], `${seed}|d`), slots),
+      headline: fill(pick(earlyClinch
+        ? ['{team} clinch the Constructors title', '{team} are {year} Constructors Champions', '{team} seal the Constructors Championship', '{team} rule the {year} Constructors', '{team} take the team title']
+        : ['{team} take the Constructors title in the finale', '{team} are {year} Constructors Champions', '{team} win the Constructors at the last', '{team} hold on for the team title'],
+        `${seed}|h`), slots),
+      dek: fill(pick(earlyClinch
+        ? ['{team} have sealed the {year} Constructors Championship with {races_left} to spare.', '{team} cannot be caught in the Constructors standings.', 'The Constructors title is {team}\'s for {year}.']
+        : ['{team} take the {year} Constructors Championship in the season finale.', 'The Constructors title is decided at the last, and it is {team}\'s.', '{team} are crowned {year} Constructors Champions after going the distance.'],
+        `${seed}|d`), slots),
       body: paras(
         compose(`${seed}:p1`, slots,
           ['{team} are the {year} Constructors Champions.', '{team} have won the {year} Constructors Championship.', 'The Constructors crown goes to {team} in {year}.'],
           ['It caps a dominant team effort.', 'Both garages can celebrate.', 'The whole factory shares in this one.']),
-        compose(`${seed}:p2`, slots,
-          ['The title was secured at round {round} with a {gap}-point cushion.', 'A lead of {gap} points put the title beyond doubt at round {round}.'],
+        compose(`${seed}:p2`, slots, earlyClinch
+          ? ['The title was secured at round {round} with a {gap}-point cushion, {races_left} still to run.', 'A lead of {gap} points put the title beyond doubt with {races_left} to spare.']
+          : ['It came down to the final round, settled by a {gap}-point margin.', 'The team title went the distance before {team} closed it out.'],
           ['Two cars scoring heavily, race after race, made the difference.', 'Strength in depth was the foundation.', 'Consistency from both drivers told.']),
         compose(`${seed}:p3`, slots,
           ['It is the reward for sustained excellence across the season.', 'Months of work at the factory have paid off.', 'The result reflects a team firing on all cylinders.'],
@@ -996,7 +998,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
             ['{leader} leads on {leader_points}, {lead_gap} clear of {second}.', '{leader} arrives {lead_gap} ahead of {second}.', 'It is {leader} who tops the table, {lead_gap} up on {second}.']),
           compose(`${seed}:stake`, slots,
             ['{second_last} needs to start eating into that {lead_gap}-point gap.', 'For {second_last}, {lead_gap} points is the deficit to chew through.', '{remaining} {rounds_word} remain to overturn the {lead_gap}-point gap.'],
-            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', 'Behind that gap sit {leader_wins} {wins_word} from {leader_last}.'] : ['']),
+            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to the name so far.'] : ['']),
           compose(`${seed}:wcc`, slots,
             cbefore[0] ? ['In the constructors, {top_team} lead the way.', '{top_team} head the teams standings.'] : ['{remaining} {rounds_word} still lie ahead.']),
           texture(seed, ['{leader_last} arrived in the paddock looking unhurried.', 'There was a businesslike mood in the {circuit} paddock.', 'The title picture was on every microphone in the build-up.'], slots),
@@ -1345,12 +1347,17 @@ function analysis(ctx: NewsContext): NewsArticle[] {
   if (ctx.endOfSeason) return []
   const total = ctx.teams.length
   const THRESHOLD = 30
+  const CAP = 2          // at most this many analysis pieces about any one subject per season
+  const MATERIAL = 15    // a repeat only fires if the subject's score grew at least this much
   const featuredAt = new Map<string, number>()
+  const featuredScore = new Map<string, number>()
+  const featuredCount = new Map<string, number>()
+  // Wider, steeper penalty than before, so a runaway story does not resurface every few rounds.
   const recencyPenalty = (subject: string, r: number): number => {
     const last = featuredAt.get(subject)
     if (last == null) return 0
     const gap = r - last
-    return gap <= 0 || gap >= 4 ? 0 : (4 - gap) * 8
+    return gap <= 0 || gap >= 6 ? 0 : (6 - gap) * 6
   }
 
   const out: NewsArticle[] = []
@@ -1516,13 +1523,23 @@ function analysis(ctx: NewsContext): NewsArticle[] {
       })
     }
 
-    if (candidates.length === 0) continue
-    const best = candidates
+    // A subject already covered may only resurface if it is below the season cap AND its score
+    // has grown materially since last time — otherwise it is "the same story again".
+    const eligible = candidates.filter((c) => {
+      const count = featuredCount.get(c.subject) ?? 0
+      if (count === 0) return true
+      if (count >= CAP) return false
+      return c.score - (featuredScore.get(c.subject) ?? 0) >= MATERIAL
+    })
+    if (eligible.length === 0) continue
+    const best = eligible
       .map((c) => ({ c, adj: c.score - recencyPenalty(c.subject, r) }))
       .sort((x, y) => y.adj - x.adj || x.c.subject.localeCompare(y.c.subject))[0]
     if (best.adj < THRESHOLD) continue
     out.push(best.c.make())
     featuredAt.set(best.c.subject, r)
+    featuredScore.set(best.c.subject, best.c.score)
+    featuredCount.set(best.c.subject, (featuredCount.get(best.c.subject) ?? 0) + 1)
   }
   return out
 }
