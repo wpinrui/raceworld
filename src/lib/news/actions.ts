@@ -8,7 +8,7 @@
 
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
-  getSeasonStandings, type DbRaceResult,
+  type DbRaceResult,
 } from '@/lib/db/queries'
 import { generateNews, type NewsContext, type NewsArticle } from './engine'
 import type { Driver, Team, RaceResult, Circuit } from '@/lib/sim/types'
@@ -74,8 +74,6 @@ export async function actionGetSeasonNews(year: number): Promise<NewsArticle[]> 
     id: race.circuit_id, name: race.circuit_name, code: '', location: '', country: '', laps: 0, flatModifier: 0,
   }))
 
-  const { driverStandings, constructorStandings } = getSeasonStandings(seasonId)
-
   const ctx: NewsContext = {
     year,
     phase: 'idle',
@@ -83,8 +81,6 @@ export async function actionGetSeasonNews(year: number): Promise<NewsArticle[]> 
     drivers: [...driverMap.values()],
     teams: [...teamMap.values()],
     raceResults,
-    driverStandings,
-    constructorStandings,
     upgradeEvents: [],
     constructorHistory: [],
     endOfSeason: null,

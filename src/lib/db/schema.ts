@@ -66,5 +66,4 @@ CREATE TABLE IF NOT EXISTS driver_race_form (
   form REAL NOT NULL,
   UNIQUE(race_id, driver_id)
 );
-
 `

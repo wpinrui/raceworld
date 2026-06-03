@@ -254,20 +254,6 @@ export function getArchivedSeasonIdByYear(year: number): number | null {
   return row?.id ?? null
 }
 
-// Resolve a season id by year regardless of status (active or archived). Used by the
-// newsroom so the LLM can read the in-progress season's completed races.
-export function getSeasonIdByYear(year: number): number | null {
-  const row = getDb()
-    .prepare('SELECT id FROM seasons WHERE year = ? ORDER BY id DESC LIMIT 1')
-    .get(year) as { id: number } | undefined
-  return row?.id ?? null
-}
-
-export interface DbAllSeasonRow { id: number; year: number; status: string }
-export function getAllSeasons(): DbAllSeasonRow[] {
-  return getDb().prepare('SELECT id, year, status FROM seasons ORDER BY year DESC').all() as DbAllSeasonRow[]
-}
-
 // A race result row joined to its round/circuit — used for drill-down detail.
 export interface DbRaceResultRow extends DbRaceResult {
   round: number

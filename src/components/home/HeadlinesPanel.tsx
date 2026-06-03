@@ -78,8 +78,6 @@ export function HeadlinesPanel() {
   const raceResults = useSeasonStore((s) => s.raceResults)
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
-  const driverStandings = useSeasonStore((s) => s.driverStandings)
-  const constructorStandings = useSeasonStore((s) => s.constructorStandings)
   const allUpgradeEvents = useSeasonStore((s) => s.allUpgradeEvents)
   const constructorHistory = useSeasonStore((s) => s.constructorHistory)
   const endOfSeasonSummary = useSeasonStore((s) => s.endOfSeasonSummary)
@@ -88,13 +86,13 @@ export function HeadlinesPanel() {
   const headlines = useMemo(() => {
     const ctx: NewsContext = {
       year, phase, completedRounds: raceResults.length, drivers, teams, raceResults,
-      driverStandings, constructorStandings, upgradeEvents: allUpgradeEvents,
+      upgradeEvents: allUpgradeEvents,
       constructorHistory, endOfSeason: endOfSeasonSummary, calendar: calendar2026, live: true,
     }
     // The feed is already newest-first (round desc, then priority); show the most recent 20
     // and let the panel scroll.
     return generateNews(ctx).slice(0, 20)
-  }, [year, phase, raceResults, drivers, teams, driverStandings, constructorStandings, allUpgradeEvents, constructorHistory, endOfSeasonSummary])
+  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary])
 
   const open = headlines.find((h) => h.id === openId) ?? null
 

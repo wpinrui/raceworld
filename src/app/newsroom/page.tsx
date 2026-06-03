@@ -62,8 +62,6 @@ export default function NewsroomPage() {
       drivers: s.drivers,
       teams: s.teams,
       raceResults: s.raceResults,
-      driverStandings: s.driverStandings,
-      constructorStandings: s.constructorStandings,
       upgradeEvents: s.allUpgradeEvents,
       constructorHistory: s.constructorHistory,
       endOfSeason: s.endOfSeasonSummary,
@@ -71,7 +69,7 @@ export default function NewsroomPage() {
       live: true,
     }
     return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.driverStandings, s.constructorStandings, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary])
+  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary])
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {

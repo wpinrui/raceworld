@@ -21,7 +21,7 @@
 //  - analysis_opinion : at most one per round, the most newsworthy angle, with a recency bias.
 
 import type {
-  Driver, Team, RaceResult, DriverStanding, ConstructorStanding, DevUpgradeEvent,
+  Driver, Team, RaceResult, DevUpgradeEvent,
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
@@ -35,8 +35,6 @@ export interface NewsContext {
   drivers: Driver[]                // full roster incl. free agents (teamId === '')
   teams: Team[]
   raceResults: RaceResult[][]      // [round-1]
-  driverStandings: DriverStanding[]
-  constructorStandings: ConstructorStanding[]
   upgradeEvents: DevUpgradeEvent[]
   constructorHistory: ConstructorSeasonRecord[]   // prior-season records (for silly-season team media)
   endOfSeason: EndOfSeasonSummary | null
@@ -568,7 +566,7 @@ function championship(ctx: NewsContext): NewsArticle[] {
       dek: fill(pick([
         '{driver} cannot be caught and is the {year} World Drivers Champion.',
         '{driver} wraps up the {year} crown for {team}.',
-        'The {year} championship is settled in {driver} favour.',
+        'The {year} championship is settled in {driver}\'s favour.',
       ], `${seed}|d`), slots),
       body: paras(
         compose(`${seed}:p1`, slots,
@@ -721,8 +719,9 @@ function features(ctx: NewsContext): NewsArticle[] {
     }
   }
 
-  // Season review (final round complete)
-  if (!ctx.endOfSeason && ctx.completedRounds >= N && N >= 1) {
+  // Season review (final round complete). Not gated on endOfSeason, so the capstone read
+  // survives once the off-season market runs and stays in the feed.
+  if (ctx.completedRounds >= N && N >= 1) {
     const ds = driverStandingsAfter(ctx, N)
     const cs = constructorStandingsAfter(ctx, N)
     if (ds.length >= 1 && cs.length >= 1) {
@@ -1036,6 +1035,9 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
     } catch {
       continue
     }
+    // Only established drivers switching teams. Rookie fill-ins are excluded (mediaScore 0);
+    // they are generated after the moves are settled and use Math.random() for their names, so
+    // dropping them keeps the reported rumours fully deterministic.
     const moves = projection.marketMoves.filter((m) => !m.isResignation && m.fromTeamId != null && m.mediaScore > 0)
     const window = r === N - 1 ? 'with the season nearly over' : r >= (3 * N) / 4 ? 'as the campaign enters its closing stretch' : 'at the midway point of the season'
 
@@ -1069,9 +1071,9 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       out.push({
         id: seed, category: 'silly_season', round: r, priority: 30,
         headline: fill(pick([
-          'Rumour has {driver} linked with {to}', '{driver} on {to} radar', 'Could {driver} swap {from} for {to}?',
+          'Rumour has {driver} linked with {to}', '{driver} on {to}\'s radar', 'Could {driver} swap {from} for {to}?',
           '{to} eyeing a move for {driver}', 'Is {driver} bound for {to}?', 'Speculation grows around {driver}',
-          'Is a {driver} switch to {to} on?', '{driver} the name on everyone lips',
+          'Is a {driver} switch to {to} on?', '{driver} the name on everyone\'s lips',
         ], `${seed}|h`), slots),
         dek: fill(pick([
           '{driver} is being linked with a switch to {to}.', 'Talk of a {driver} move is gathering pace.',
