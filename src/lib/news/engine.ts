@@ -281,7 +281,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const slots: Record<string, string | number> = {
       winner: p1.driverName, winner_last: lastName(p1.driverName), team: p1.teamName,
       p2: p2?.driverName ?? '', p2_last: p2 ? lastName(p2.driverName) : '', p3: p3?.driverName ?? '',
-      circuit: circuitName, margin, points: p1.points, pole: pole?.driverName ?? '',
+      circuit: circuitName, margin, points: p1.points, pole: pole?.driverName ?? '', pole_last: pole ? lastName(pole.driverName) : '',
       mover: mover?.driverName ?? '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
       lead_gap: leadGap, leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
@@ -322,23 +322,23 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
 
     const startPool = fromPole
       ? [
-          'Starting from pole, {winner} controlled the race from the front.',
-          '{winner} converted pole into a lights-to-flag win.',
-          'From the front of the grid {winner} was never seriously headed.',
-          'Pole turned into a win as {winner} dictated the pace throughout.',
-          '{winner} led every lap that mattered after starting on pole.',
-          'It was a copybook drive from pole for {winner}.',
+          'Starting from pole, {winner_last} controlled the race from the front.',
+          '{winner_last} converted pole into a lights-to-flag win.',
+          'From the front of the grid {winner_last} was never seriously headed.',
+          'Pole turned into a win as {winner_last} dictated the pace throughout.',
+          '{winner_last} led every lap that mattered after starting on pole.',
+          'It was a copybook drive from pole for {winner_last}.',
         ]
       : pole
       ? [
-          '{pole} had started from pole, but it was {winner} who took the flag.',
-          'Pole-sitter {pole} could not convert as {winner} came through.',
-          '{winner} got the better of pole-man {pole} when it mattered most.',
-          'The pole, taken by {pole}, did not translate into the win.',
-          '{pole} led early from pole before {winner} found a way by.',
-          '{winner} overhauled pole-sitter {pole} to take the win.',
+          '{pole_last} had started from pole, but it was {winner_last} who took the flag.',
+          'Pole-sitter {pole_last} could not convert as {winner_last} came through.',
+          '{winner_last} got the better of pole-man {pole_last} when it mattered most.',
+          'The pole, taken by {pole_last}, did not translate into the win.',
+          '{pole_last} led early from pole before {winner_last} found a way by.',
+          '{winner_last} overhauled pole-sitter {pole_last} to take the win.',
         ]
-      : ['{winner} judged the race perfectly to take the win.', '{winner} timed the run to perfection.']
+      : ['{winner_last} judged the race perfectly to take the win.', '{winner_last} timed the run to perfection.']
     const moverPool = moverGain >= 4 && mover
       ? [
           'The drive of the day belonged to {mover}, up from {mover_from} to {mover_to}.',
@@ -350,7 +350,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ]
       : ['']
     const qualiPool = pMargin && pole
-      ? ['{pole} had taken pole by {pole_margin}.', 'Qualifying had gone the way of {pole} by {pole_margin}.', 'The pole margin had been {pole_margin}.']
+      ? ['{pole_last} had taken pole by {pole_margin}.', 'Qualifying had gone the way of {pole_last} by {pole_margin}.', 'The pole margin had been {pole_margin}.']
       : ['']
     const stratPool = strat
       ? [
