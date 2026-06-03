@@ -27,7 +27,7 @@ not stamped, across a 24-race season.
 | `car_launch_livery` / `rookie_debut` | preSeason | Pre-season launches per team + youngest-driver spotlights (live only). |
 | `driver_signing` / `driver_exit` / `career_retirement` | market | End-of-season `marketMoves` / `droppedDrivers` / `retiredDriverIds`. |
 | `silly_season` | sillySeason | **Three windows only** — mid-season, three-quarter distance, penultimate round. See below. |
-| `analysis_opinion` | teammateBattles / formSlumps / teamTrajectory | Sprinkled across **all rounds** via a seeded `chance()` gate (so a category tab isn't stuck on the latest round). Trajectory is live-only (needs car pace). |
+| `analysis_opinion` | analysis | **At most one per round.** Every angle (teammate imbalance, form slump, team over/under-performance) is scored for newsworthiness; subjects featured in the last few rounds take a small penalty; the single best candidate runs if it clears a bar. Trajectory angles are live-only (need car pace). |
 
 ## Silly season is a real projection
 

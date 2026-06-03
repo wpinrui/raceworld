@@ -761,12 +761,41 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-// TRIGGER (opinion, gated, per round): a driver being clearly out-scored by their teammate.
-function teammateBattles(ctx: NewsContext): NewsArticle[] {
+interface AnalysisCandidate {
+  subject: string          // recency key (driverId or teamId)
+  score: number            // base newsworthiness (0-100ish, comparable across angles)
+  make: () => NewsArticle
+}
+
+// Each angle's newsworthiness on a shared scale, so the most striking story wins regardless
+// of type: a runaway teammate gap, a deep slump, or a team wildly off its car-pace tier.
+const teammateScore = (gap: number) => clamp(gap * 2, 0, 100)        // 25-pt gap -> 50, 50 -> 100
+const slumpScore = (avg: number) => clamp((avg - 10) * 6, 0, 100)   // avg 12 -> 12, 18 -> 48, 25 -> 90
+const trajectoryScore = (absDelta: number) => clamp(absDelta * 18, 0, 100) // 2 -> 36, 5 -> 90
+
+// TRIGGER (opinion): AT MOST ONE analysis piece per round. Every angle (teammate imbalance,
+// form slump, team over/under-performance) is scored for newsworthiness; subjects featured in
+// the last few rounds take a small penalty so the column doesn't fixate on one story; the
+// single best candidate runs, but only if it clears a minimum bar. Rounds are walked in order
+// so the recency bias actually reflects what has already been published.
+function analysis(ctx: NewsContext): NewsArticle[] {
   if (ctx.endOfSeason) return []
+  const total = ctx.teams.length
+  const THRESHOLD = 30
+  const featuredAt = new Map<string, number>()
+  const recencyPenalty = (subject: string, r: number): number => {
+    const last = featuredAt.get(subject)
+    if (last == null) return 0
+    const gap = r - last
+    return gap <= 0 || gap >= 4 ? 0 : (4 - gap) * 8   // featured last round -> 24, then 16, 8, 0
+  }
+
   const out: NewsArticle[] = []
   for (let r = 3; r <= ctx.completedRounds; r++) {
+    const candidates: AnalysisCandidate[] = []
     const stand = driverStandingsAfter(ctx, r)
+
+    // Teammate imbalance
     const byTeam = new Map<string, SimpleStanding[]>()
     for (const s of stand) {
       if (s.teamId === '') continue
@@ -777,120 +806,118 @@ function teammateBattles(ctx: NewsContext): NewsArticle[] {
     for (const [teamId, pair] of byTeam) {
       if (pair.length < 2) continue
       const [a, b] = [...pair].sort((x, y) => y.points - x.points)
+      const gap = a.points - b.points
+      if (gap < 25) continue
       const id = `tm-${ctx.year}-${r}-${teamId}`
-      if (a.points - b.points < 25 || !chance(id, 28)) continue
-      const slots = { team: a.teamName, ahead: a.driverName, behind: b.driverName, ap: a.points, bp: b.points, gap: a.points - b.points, round: r }
-      out.push({
-        id, category: 'analysis_opinion', round: r, priority: 35,
-        headline: fill(pick([
-          '{ahead} has the upper hand at {team}', '{behind} struggling in the {team} fight',
-          'The {team} garage is becoming one-sided', '{ahead} pulling clear of {behind}',
-        ], `${id}|h`), slots),
-        dek: fill(pick([
-          '{ahead} leads {behind} {ap} to {bp} at {team}.',
-          'A {gap}-point gap inside the {team} garage.',
-          '{behind} has work to do against {ahead}.',
-        ], `${id}|d`), slots),
-        body: [
-          compose(`${id}:p1`, slots,
-            ['The intra-team battle at {team} is increasingly one-sided.', 'There is a clear number one emerging at {team}.', 'The {team} pairing is no longer evenly matched.'],
-            ['{ahead} ({ap} pts) has pulled clear of {behind} ({bp} pts).', '{ahead} holds a {gap}-point edge over {behind}.', '{ahead} leads {behind} by {gap} points.']),
-          compose(`${id}:p2`, slots,
-            ['The pressure is mounting on the other side of the garage.', '{behind} badly needs a result to steady things.', 'Questions are starting to follow {behind} around the paddock.'],
-            ['Team dynamics can sour quickly when the gap grows.', 'A turnaround is still possible, but time is a factor.', '']),
-        ].filter(Boolean).join('\n\n'),
+      const slots = { team: a.teamName, ahead: a.driverName, behind: b.driverName, ap: a.points, bp: b.points, gap, round: r }
+      candidates.push({
+        subject: teamId, score: teammateScore(gap),
+        make: () => ({
+          id, category: 'analysis_opinion', round: r, priority: 35,
+          headline: fill(pick([
+            '{ahead} has the upper hand at {team}', '{behind} struggling in the {team} fight',
+            'The {team} garage is becoming one-sided', '{ahead} pulling clear of {behind}',
+          ], `${id}|h`), slots),
+          dek: fill(pick([
+            '{ahead} leads {behind} {ap} to {bp} at {team}.',
+            'A {gap}-point gap inside the {team} garage.',
+            '{behind} has work to do against {ahead}.',
+          ], `${id}|d`), slots),
+          body: [
+            compose(`${id}:p1`, slots,
+              ['The intra-team battle at {team} is increasingly one-sided.', 'There is a clear number one emerging at {team}.', 'The {team} pairing is no longer evenly matched.'],
+              ['{ahead} ({ap} pts) has pulled clear of {behind} ({bp} pts).', '{ahead} holds a {gap}-point edge over {behind}.', '{ahead} leads {behind} by {gap} points.']),
+            compose(`${id}:p2`, slots,
+              ['The pressure is mounting on the other side of the garage.', '{behind} badly needs a result to steady things.', 'Questions are starting to follow {behind} around the paddock.'],
+              ['Team dynamics can sour quickly when the gap grows.', 'A turnaround is still possible, but time is a factor.', '']),
+          ].filter(Boolean).join('\n\n'),
+        }),
       })
     }
-  }
-  return out
-}
 
-// TRIGGER (opinion, gated, per round): a driver on a poor recent run (last-3 avg outside top 12).
-function formSlumps(ctx: NewsContext): NewsArticle[] {
-  if (ctx.endOfSeason) return []
-  const out: NewsArticle[] = []
-  for (let r = 3; r <= ctx.completedRounds; r++) {
+    // Form slump
     for (const d of ctx.drivers.filter((x) => x.teamId !== '')) {
       const recent = recentFinishesUpTo(ctx, d.id, r, 3)
       if (recent.length < 3) continue
       const avg = recent.reduce((s, x) => s + x, 0) / recent.length
+      if (avg < 12) continue
       const id = `slump-${ctx.year}-${r}-${d.id}`
-      if (avg < 12 || !chance(id, 22)) continue
       const slots = { driver: d.name, driver_last: lastName(d.name), team: teamName(ctx, d.teamId), round: r }
-      out.push({
-        id, category: 'analysis_opinion', round: r, priority: 30,
-        headline: fill(pick([
-          'Pressure builds on {driver}', '{driver} searching for answers', 'A worrying run for {driver}',
-          'What has gone wrong for {driver}?', '{driver} stuck in a rut',
-        ], `${id}|h`), slots),
-        dek: fill(pick([
-          '{driver} has slipped down the order in recent rounds.',
-          'Points have dried up for {driver}.',
-          'A difficult spell for the {team} driver.',
-        ], `${id}|d`), slots),
-        body: [
-          compose(`${id}:p1`, slots,
-            ['{driver} is enduring a difficult run.', 'The last few rounds have been bleak for {driver}.', 'Form has deserted {driver} at the worst time.'],
-            ['Recent finishes have been well outside the points for {team}.', 'A string of weekends has gone unrewarded for {team}.', 'The results simply have not come.']),
-          compose(`${id}:p2`, slots,
-            ['Questions are being asked about the {driver_last} slump.', 'The paddock is starting to wonder where the turnaround comes from.', 'Confidence can be fragile when the points stop.'],
-            ['A strong weekend would settle plenty of nerves.', 'There is time to recover, but not endless time.', '']),
-        ].filter(Boolean).join('\n\n'),
+      candidates.push({
+        subject: d.id, score: slumpScore(avg),
+        make: () => ({
+          id, category: 'analysis_opinion', round: r, priority: 30,
+          headline: fill(pick([
+            'Pressure builds on {driver}', '{driver} searching for answers', 'A worrying run for {driver}',
+            'What has gone wrong for {driver}?', '{driver} stuck in a rut',
+          ], `${id}|h`), slots),
+          dek: fill(pick([
+            '{driver} has slipped down the order in recent rounds.',
+            'Points have dried up for {driver}.',
+            'A difficult spell for the {team} driver.',
+          ], `${id}|d`), slots),
+          body: [
+            compose(`${id}:p1`, slots,
+              ['{driver} is enduring a difficult run.', 'The last few rounds have been bleak for {driver}.', 'Form has deserted {driver} at the worst time.'],
+              ['Recent finishes have been well outside the points for {team}.', 'A string of weekends has gone unrewarded for {team}.', 'The results simply have not come.']),
+            compose(`${id}:p2`, slots,
+              ['Questions are being asked about the {driver_last} slump.', 'The paddock is starting to wonder where the turnaround comes from.', 'Confidence can be fragile when the points stop.'],
+              ['A strong weekend would settle plenty of nerves.', 'There is time to recover, but not endless time.', '']),
+          ].filter(Boolean).join('\n\n'),
+        }),
       })
     }
-  }
-  return out
-}
 
-// TRIGGER (opinion, gated, per round, live only): a team over/under-performing its car-pace
-// tier in the standings (needs real car pace, so archived contexts skip it).
-function teamTrajectory(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.live || ctx.endOfSeason) return []
-  const total = ctx.teams.length
-  const out: NewsArticle[] = []
-  for (let r = 3; r <= ctx.completedRounds; r++) {
-    const cstand = constructorStandingsAfter(ctx, r)
-    cstand.forEach((cs, idx) => {
-      const standingPos = idx + 1
-      const pace = paceRank(ctx, cs.teamId)
-      const id = `traj-${ctx.year}-${r}-${cs.teamId}`
-      const delta = pace - standingPos // positive = punching above car pace
-      if (Math.abs(delta) < 2 || !chance(id, 22)) return
-      const slots = { team: cs.teamName, pos: ordinal(standingPos), tier: tierWord(pace, total), round: r }
-      if (delta > 0) {
-        out.push({
-          id, category: 'analysis_opinion', round: r, priority: 28,
-          headline: fill(pick([
-            '{team} are punching above their weight', 'Overachieving {team} defy the form book',
-            'How are {team} doing it?', '{team} the overperformers of the season',
-          ], `${id}|h`), slots),
-          dek: fill(pick(['{team} sit {pos} despite a {tier} car.', '{team} are outscoring their machinery.', 'A {tier} car, a flattering position for {team}.'], `${id}|d`), slots),
-          body: [
-            compose(`${id}:p1`, slots,
-              ['{team} have been one of the stories of the season.', '{team} keep defying their car.', 'Few expected {team} to be where they are.'],
-              ['They sit {pos} with what is, on paper, a {tier} package.', 'A {tier} car has them running {pos} in the standings.', 'The results outstrip the {tier} machinery beneath them.']),
-            compose(`${id}:p2`, slots,
-              ['Maximum points from a modest package is a credit to the operation.', 'Execution has been the difference, weekend after weekend.', 'Whether they can sustain it is the question.']),
-          ].filter(Boolean).join('\n\n'),
+    // Team trajectory vs car pace (live only — needs real car pace)
+    if (ctx.live) {
+      const cstand = constructorStandingsAfter(ctx, r)
+      cstand.forEach((cs, idx) => {
+        const standingPos = idx + 1
+        const pace = paceRank(ctx, cs.teamId)
+        const delta = pace - standingPos // positive = punching above car pace
+        if (Math.abs(delta) < 2) return
+        const id = `traj-${ctx.year}-${r}-${cs.teamId}`
+        const slots = { team: cs.teamName, pos: ordinal(standingPos), tier: tierWord(pace, total), round: r }
+        const over = delta > 0
+        candidates.push({
+          subject: cs.teamId, score: trajectoryScore(Math.abs(delta)),
+          make: () => ({
+            id, category: 'analysis_opinion', round: r, priority: 28,
+            headline: fill(pick(over
+              ? ['{team} are punching above their weight', 'Overachieving {team} defy the form book', 'How are {team} doing it?', '{team} the overperformers of the season']
+              : ['{team} underdelivering on their potential', 'Has {team} hit a ceiling?', '{team} leaving points on the table', 'Underwhelming {team} fall short'],
+              `${id}|h`), slots),
+            dek: fill(pick(over
+              ? ['{team} sit {pos} despite a {tier} car.', '{team} are outscoring their machinery.', 'A {tier} car, a flattering position for {team}.']
+              : ['{team} sit only {pos} with a {tier} car.', '{team} are not making their pace count.', 'A {tier} car, a disappointing return for {team}.'],
+              `${id}|d`), slots),
+            body: over
+              ? [
+                  compose(`${id}:p1`, slots,
+                    ['{team} have been one of the stories of the season.', '{team} keep defying their car.', 'Few expected {team} to be where they are.'],
+                    ['They sit {pos} with what is, on paper, a {tier} package.', 'A {tier} car has them running {pos} in the standings.', 'The results outstrip the {tier} machinery beneath them.']),
+                  compose(`${id}:p2`, slots,
+                    ['Maximum points from a modest package is a credit to the operation.', 'Execution has been the difference, weekend after weekend.', 'Whether they can sustain it is the question.']),
+                ].filter(Boolean).join('\n\n')
+              : [
+                  compose(`${id}:p1`, slots,
+                    ['{team} are leaving points on the table.', '{team} are not getting the most from their car.', 'Something is not clicking at {team}.'],
+                    ['A {tier} car has only delivered {pos} in the standings.', 'They sit {pos} despite genuinely {tier} pace.', 'The position flatters nobody given the {tier} machinery.']),
+                  compose(`${id}:p2`, slots,
+                    ['The paddock is questioning where it is going wrong.', 'Operational mistakes have been costly.', 'Pressure is building to turn pace into results.']),
+                ].filter(Boolean).join('\n\n'),
+          }),
         })
-      } else {
-        out.push({
-          id, category: 'analysis_opinion', round: r, priority: 28,
-          headline: fill(pick([
-            '{team} underdelivering on their potential', 'Has {team} hit a ceiling?',
-            '{team} leaving points on the table', 'Underwhelming {team} fall short',
-          ], `${id}|h`), slots),
-          dek: fill(pick(['{team} sit only {pos} with a {tier} car.', '{team} are not making their pace count.', 'A {tier} car, a disappointing return for {team}.'], `${id}|d`), slots),
-          body: [
-            compose(`${id}:p1`, slots,
-              ['{team} are leaving points on the table.', '{team} are not getting the most from their car.', 'Something is not clicking at {team}.'],
-              ['A {tier} car has only delivered {pos} in the standings.', 'They sit {pos} despite genuinely {tier} pace.', 'The position flatters nobody given the {tier} machinery.']),
-            compose(`${id}:p2`, slots,
-              ['The paddock is questioning where it is going wrong.', 'Operational mistakes have been costly.', 'Pressure is building to turn pace into results.']),
-          ].filter(Boolean).join('\n\n'),
-        })
-      }
-    })
+      })
+    }
+
+    if (candidates.length === 0) continue
+    const best = candidates
+      .map((c) => ({ c, adj: c.score - recencyPenalty(c.subject, r) }))
+      .sort((x, y) => y.adj - x.adj || x.c.subject.localeCompare(y.c.subject))[0]
+    if (best.adj < THRESHOLD) continue
+    out.push(best.c.make())
+    featuredAt.set(best.c.subject, r)
   }
   return out
 }
@@ -902,9 +929,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...technicalRoundup(ctx),
     ...championship(ctx),
     ...titleFight(ctx),
-    ...teammateBattles(ctx),
-    ...formSlumps(ctx),
-    ...teamTrajectory(ctx),
+    ...analysis(ctx),
     ...sillySeason(ctx),
     ...previews(ctx),
     ...market(ctx),
