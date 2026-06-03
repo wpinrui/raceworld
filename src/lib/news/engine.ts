@@ -166,10 +166,21 @@ function marginWord(gap: number | null): string {
 // matches the known outcome or fully orthogonal to anything we model, so it cannot contradict
 // the standings / driver / classification views. Gated so it stays texture, not boilerplate.
 const TEXTURE_PCT = 66
-function texture(seed: string, pool: string[], slots: Record<string, string | number>): string {
-  if (pool.length === 0 || !chance(`${seed}|tex`, TEXTURE_PCT)) return ''
+function texture(seed: string, pool: string[], slots: Record<string, string | number>, pct: number = TEXTURE_PCT): string {
+  if (pool.length === 0 || !chance(`${seed}|tex`, pct)) return ''
   return fill(pick(pool, `${seed}|tex`), slots)
 }
+
+// Upgrades are fully abstracted in the data (we only know a team upgraded and whether it
+// worked), so naming the actual component and what it targets is pure unfalsifiable colour.
+const UPGRADE_PARTS = [
+  'front wing', 'floor', 'rear wing', 'diffuser', 'sidepod package', 'engine cover',
+  'suspension package', 'brake-duct package', 'beam wing', 'front-wing endplate',
+]
+const UPGRADE_AREAS = [
+  'low-speed balance', 'high-speed stability', 'tyre wear', 'straight-line speed',
+  'overall downforce', 'cooling', 'rear-end grip', 'front-end bite', 'kerb-riding',
+]
 
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
 // metadata, nationality) or a count derived from results, so it can never contradict the game.
@@ -642,11 +653,13 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     const cstandTech = constructorStandingsAfter(ctx, r)
     const repPosIdx = cstandTech.findIndex((c) => c.teamId === repTeamId)
     const repPos = repPosIdx >= 0 ? ordinal(repPosIdx + 1) : ''
+    const repDelivered = delivered.length > 0 // rep is a delivered team if any delivered, else a misfire
     const slots: Record<string, string | number> = {
       circuit: circuitName, delivered: listJoin(delivered), missed: listJoin(missed),
       n: evs.length, teams: plural(evs.length, 'team'),
       up_driver: repDriver ? lastName(repDriver.name) : '',
       rep_team: teamName(ctx, repTeamId), rep_pos: repPos,
+      part: pick(UPGRADE_PARTS, `${seed}|part`), area: pick(UPGRADE_AREAS, `${seed}|area`),
     }
     const intro = compose(`${seed}:intro`, slots,
       [
@@ -661,31 +674,34 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
         ? ['{n} teams brought changes in all.', 'In total, {n} teams introduced updates.', 'It was a busy day for the development departments.']
         : ['Just one team rolled out new parts.', 'A solitary update this time, but a notable one.', 'Only one team brought changes this weekend.'])
     const goodPara = delivered.length
-      ? compose(`${seed}:good`, slots,
-          [
-            '{delivered} appear to have found genuine lap time.',
-            'The early read is positive for {delivered}.',
-            '{delivered} look to have taken a real step forward.',
-            'There were encouraging signs from {delivered}.',
-          ],
-          [
-            'It is a timely boost to the campaign.', 'The investment looks to have paid off.',
-            'The numbers back up the optimism.', 'Confidence in the development direction grows.',
-          ])
+      ? compose(`${seed}:good`, slots, [
+          '{delivered} appear to have found genuine lap time.',
+          'The early read is positive for {delivered}.',
+          '{delivered} look to have taken a real step forward.',
+          'There were encouraging signs from {delivered}.',
+        ])
       : ''
     const badPara = missed.length
-      ? compose(`${seed}:bad`, slots,
-          [
-            '{missed} were left disappointed, with little to show for the effort.',
-            'For {missed}, the new parts failed to deliver the expected gain.',
-            '{missed} head back to the drawing board after a flat update.',
-            'Not every gamble paid off, with {missed} finding no real step.',
-          ],
-          [
-            'Development is rarely a straight line.', 'Back at the factory, the data will be pored over.',
-            'It is a setback, but not a fatal one.', 'The correlation work begins again.',
-          ])
+      ? compose(`${seed}:bad`, slots, [
+          '{missed} were left disappointed, with little to show for the effort.',
+          'For {missed}, the new parts failed to deliver the expected gain.',
+          '{missed} head back to the drawing board after a flat update.',
+          'Not every gamble paid off, with {missed} finding no real step.',
+        ])
       : ''
+    // The specific (invented, unfalsifiable) component — different part/area/team each round.
+    const partPara = compose(`${seed}:part`, slots, repDelivered
+      ? [
+          'The headline change is a new {part}, aimed at {area}.',
+          'At the heart of the {rep_team} update sits a reworked {part}, targeting {area}.',
+          '{rep_team} brought a new {part}, chasing gains in {area}.',
+          'The {rep_team} {part} is the eye-catcher, said to address {area}.',
+        ]
+      : [
+          '{rep_team}\'s reworked {part} did not bring the {area} they were chasing.',
+          'The new {part} {rep_team} fitted added little in {area}.',
+          'For {rep_team}, the revised {part} left {area} no better than before.',
+        ])
     // Grounded close: the representative team's actual constructor position, not platitude.
     const outlook = repPos
       ? compose(`${seed}:outlook`, slots,
@@ -702,19 +718,22 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
               ])
       : compose(`${seed}:outlook`, slots,
           ['The development race rolls straight on.', 'Back at the factory, the next parts are already on the bench.'])
+    // Driver mood is just one flavour of many, so keep it rare (a couple of times a season).
     const techTexturePool = !repDriver
       ? []
       : delivered.length
         ? [
+            '{up_driver} sounded genuinely buoyed by the new parts.',
+            'The mood in the {rep_team} debrief was quietly upbeat.',
             '{up_driver} admitted to being unconvinced at first, but the team stood by the numbers.',
             'Privately, {up_driver} wanted a little more, even as the wall celebrated the step.',
-            'Word in the paddock was that {up_driver} took some convincing.',
           ]
         : [
             '{up_driver} had warned the parts felt no different, and so it proved.',
             '{up_driver} was politely unimpressed in the debrief.',
+            'The {rep_team} engineers cut frustrated figures on the pit wall.',
           ]
-    const techTexture = texture(seed, techTexturePool, slots)
+    const techTexture = texture(seed, techTexturePool, slots, 18)
     out.push({
       id: seed, category: 'technical_upgrade', round: r, priority: 45,
       headline: fill(pick([
@@ -726,7 +745,7 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
         '{n} {teams} brought updates to the {circuit}.', 'A look at the new parts at the {circuit}.',
         'The upgrade battle at the {circuit}.', 'Tracking the development war at the {circuit}.',
       ], `${seed}|d`), slots),
-      body: paras(intro, goodPara, badPara, techTexture, outlook),
+      body: paras(intro, goodPara, badPara, partPara, techTexture, outlook),
     })
   }
   return out
