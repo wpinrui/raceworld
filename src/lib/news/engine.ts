@@ -160,6 +160,73 @@ function marginWord(gap: number | null): string {
   return `a commanding ${gap.toFixed(1)}s`
 }
 
+// --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
+// metadata, nationality) or a count derived from results, so it can never contradict the game.
+
+// A driver racing in their own country (driver nationality === circuit country, both ISO-2).
+function isHomeRace(ctx: NewsContext, driverId: string, round: number): boolean {
+  const c = ctx.calendar[round - 1]
+  const nat = ctx.drivers.find((d) => d.id === driverId)?.nationality ?? ''
+  return !!c && !!nat && c.country === nat
+}
+
+// Wins a driver has up to and including `round`, this season.
+function winsUpTo(ctx: NewsContext, driverId: string, round: number): number {
+  let n = 0
+  for (let r = 1; r <= round && r <= ctx.raceResults.length; r++) {
+    if ((ctx.raceResults[r - 1] ?? []).some((x) => x.driverId === driverId && x.finishPosition === 1)) n++
+  }
+  return n
+}
+
+// Whether this team has already had a 1-2 earlier this season (before `round`).
+function teamOneTwoBefore(ctx: NewsContext, teamId: string, round: number): boolean {
+  for (let r = 1; r < round; r++) {
+    const top2 = sortedResults(ctx.raceResults[r - 1] ?? []).filter((x) => !x.dnf && x.finishPosition != null).slice(0, 2)
+    if (top2.length === 2 && top2[0].teamId === teamId && top2[1].teamId === teamId) return true
+  }
+  return false
+}
+
+function bestQuali(r: RaceResult): number | null {
+  return r.q3Time ?? r.q2Time ?? r.q1Time
+}
+
+// Pole margin (P1 vs P2 on the grid) as a string, or null when unknown / implausible.
+function poleMargin(results: RaceResult[]): string | null {
+  const p1 = results.find((x) => x.gridPosition === 1)
+  const p2 = results.find((x) => x.gridPosition === 2)
+  if (!p1 || !p2) return null
+  const a = bestQuali(p1), b = bestQuali(p2)
+  if (a == null || b == null) return null
+  const d = b - a
+  if (d <= 0 || d > 5) return null
+  return `${d.toFixed(3)}s`
+}
+
+const TYRE_PLURAL: Record<string, string> = {
+  soft: 'softs', medium: 'mediums', hard: 'hards', intermediate: 'intermediates', wet: 'wets',
+}
+function strategyPhrase(stints: RaceResult['stints']): string | null {
+  if (!stints || stints.length === 0) return null
+  const stops = stints.length - 1
+  if (stops <= 0) return 'a no-stop run'
+  if (stops === 1) return 'a one-stop strategy'
+  if (stops === 2) return 'a two-stop strategy'
+  if (stops === 3) return 'a three-stop strategy'
+  return `a ${stops}-stop strategy`
+}
+function startingTyre(stints: RaceResult['stints']): string | null {
+  const c = stints?.[0]?.compound
+  return c ? (TYRE_PLURAL[c] ?? c) : null
+}
+
+// A team's finishing position last season, from the constructor history (null in year one).
+function lastSeasonPos(ctx: NewsContext, teamId: string): number | null {
+  const recs = ctx.constructorHistory.filter((h) => h.teamId === teamId).sort((a, b) => b.seasonYear - a.seasonYear)
+  return recs[0]?.finalPosition ?? null
+}
+
 // --- Producers ---------------------------------------------------------------
 
 // TRIGGER: every completed round. ONE consolidated report per race — winner + podium +
@@ -200,6 +267,15 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * DRIVER_MAX_PER_RACE
 
+    // Safe, specific colour.
+    const winnerHome = isHomeRace(ctx, p1.driverId, r)
+    const winnerWins = winsUpTo(ctx, p1.driverId, r)
+    const pMargin = poleMargin(results)
+    const strat = strategyPhrase(p1.stints)
+    const startTyre = startingTyre(p1.stints)
+    const nextName = r < N ? circuit(ctx, r + 1) : null
+    const dnfSolo = dnfs.length === 1 ? dnfs[0] : null
+
     const circuitName = circuit(ctx, r)
     const seed = `report-${ctx.year}-${r}`
     const slots: Record<string, string | number> = {
@@ -210,6 +286,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
       lead_gap: leadGap, leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
+      win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
+      next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSolo?.lapsCompleted ?? 0,
     }
 
     const leadPara = compose(`${seed}:lead`, slots,
@@ -218,7 +296,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         'Victory at the {circuit} went to {winner}.', '{winner} is the winner of the {circuit}.',
         'It was {winner} who came out on top at the {circuit}.', 'The {circuit} belonged to {winner}.',
         '{winner} delivered when it counted at the {circuit}.', 'There was no stopping {winner} at the {circuit}.',
-        '{winner} held his nerve to win the {circuit}.', 'A polished afternoon gave {winner} the {circuit}.',
+        '{winner} held on to win the {circuit}.', 'A polished afternoon gave {winner} the {circuit}.',
       ],
       [
         'The {team} driver came home {margin} clear of {p2}, with {p3} completing the podium.',
@@ -229,6 +307,12 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{p2} chased hard but fell {margin} short, {p3} next up.',
         'It was {margin} back to {p2}, with {p3} claiming the final podium spot.',
       ],
+      winnerHome
+        ? [
+            'The win came on home soil.', 'It was a home victory to savour for {winner_last}.',
+            'Few wins mean more than one in front of your own crowd.',
+          ]
+        : [''],
       [
         'It is worth {points} points for {team}.', 'The result banks {points} points.',
         'Another {points}-point haul for {team}.', '{team} leave with {points} hard-earned points.',
@@ -265,7 +349,17 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'A standout recovery saw {mover} climb from {mover_from} to {mover_to}.',
         ]
       : ['']
-    const startPara = compose(`${seed}:story`, slots, startPool, moverPool)
+    const qualiPool = pMargin && pole
+      ? ['{pole} had taken pole by {pole_margin}.', 'Qualifying had gone the way of {pole} by {pole_margin}.', 'The pole margin had been {pole_margin}.']
+      : ['']
+    const stratPool = strat
+      ? [
+          'The win was built on {strategy}.', '{winner_last} made {strategy} work.',
+          '{strategy} proved the right call for {winner_last}.',
+          startTyre ? '{winner_last} started on {start_tyre} and built {strategy} from there.' : 'The {team} pit wall judged {strategy} to perfection.',
+        ]
+      : ['']
+    const startPara = compose(`${seed}:story`, slots, startPool, qualiPool, moverPool, stratPool)
 
     const attritionPara = dnfs.length === 0
       ? compose(`${seed}:dnf`, slots, [
@@ -274,6 +368,12 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'Reliability held across the grid with nobody dropping out.',
           'For once the race ran without a single retirement.',
           'Every car that started also finished, a rarity in itself.',
+        ])
+      : dnfSolo
+      ? compose(`${seed}:dnf`, slots, [
+          '{dnf_solo} was the only retirement, out after {dnf_solo_laps} laps.',
+          'Only {dnf_solo} failed to finish, retiring after {dnf_solo_laps} laps.',
+          'The lone retirement was {dnf_solo}, gone by lap {dnf_solo_laps}.',
         ])
       : compose(`${seed}:dnf`, slots,
           [
@@ -312,13 +412,21 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
 
     const closerPara = compose(`${seed}:closer`, slots,
       [
-        'The paddock now packs up and turns its attention to the next round.',
-        'Focus shifts immediately to what comes next.',
-        'There is little time to dwell before the next race.',
-        'The championship caravan rolls on.',
-        'All eyes turn to the next stop on the calendar.',
-        'It is on to the next one, with plenty still to play for.',
-      ])
+        'It is {winner_last}\'s {win_ord} win of the season.',
+        'That makes it {win_ord} win of the campaign for {winner_last}.',
+        'The {win_ord} win of the year goes to {winner_last}.',
+      ],
+      nextName
+        ? [
+            'Next up is the {next_circuit}.',
+            'Attention turns to the {next_circuit}.',
+            'The {next_circuit} is next on the calendar.',
+          ]
+        : [
+            'That brings the season to its close.',
+            'And with that, the campaign is done.',
+            'The season ends here.',
+          ])
 
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
@@ -330,8 +438,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner} untouchable at the {circuit}', '{winner} the class of the field at the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
-        '{winner} leads home {p2} and {p3}.', '{margin} the margin as {winner} wins from {p2}.',
-        '{winner} beats {p2} and {p3} to the flag.', 'A {margin} win for {winner} at the {circuit}.',
+        '{winner} leads home {p2} and {p3}.', '{winner} wins the {circuit} by {margin} from {p2}.',
+        '{winner} beats {p2} and {p3} to the flag.', '{winner} wins the {circuit} ahead of {p2}.',
         '{winner} controls the {circuit} for {team}.', 'The {team} driver takes the spoils at the {circuit}.',
         '{winner} sees off {p2} to win the {circuit}.', 'Another {circuit} to remember for {winner}.',
       ], `${seed}|d`), slots),
@@ -356,35 +464,40 @@ function milestones(ctx: NewsContext): NewsArticle[] {
     // First win of the season for this driver.
     if (!wonBefore(ctx, p1.driverId, r)) {
       const seed = `mile-win-${ctx.year}-${p1.driverId}-${r}`
+      const homeWin = isHomeRace(ctx, p1.driverId, r)
       const slots = { driver: p1.driverName, driver_last: lastName(p1.driverName), team: p1.teamName, circuit: circuitName, year: ctx.year }
       out.push({
         id: seed, category: 'milestone', round: r, priority: 70,
         headline: fill(pick([
           'First win of the season for {driver}', '{driver} breaks through at the {circuit}',
-          '{driver} opens his {year} account', '{driver} wins for the first time this year',
+          '{driver} opens the {year} account', '{driver} wins for the first time this year',
           'A maiden {year} victory for {driver}', '{driver} gets off the mark at the {circuit}',
         ], `${seed}|h`), slots),
         dek: fill(pick([
           '{driver} claims a first win of the {year} campaign.',
-          'The {circuit} delivers {driver} his first victory of the year.',
+          'The {circuit} delivers {driver} a first victory of the year.',
           '{driver} finally tops the podium in {year}.',
         ], `${seed}|d`), slots),
         body: paras(
           compose(`${seed}:p1`, slots,
             ['{driver} has won for the first time this season.', 'The wait for a {year} win is over for {driver}.', '{driver} stood on the top step for the first time this year.'],
-            ['It came at the {circuit}, and it was thoroughly deserved.', 'The {circuit} provided the breakthrough.', 'A strong weekend at the {circuit} delivered the goods.']),
+            ['It came at the {circuit}, and it was thoroughly deserved.', 'The {circuit} provided the breakthrough.', 'A strong weekend at the {circuit} delivered the goods.'],
+            homeWin
+              ? ['Sweeter still, it came on home soil.', 'And the breakthrough came in front of a home crowd.']
+              : ['']),
           compose(`${seed}:p2`, slots,
             ['For {team}, it is a significant moment in the campaign.', 'The result lifts {team} and their driver alike.', 'It is a result {team} have been building towards.'],
             ['Momentum can be a powerful thing once the first win arrives.', 'A first victory often unlocks more.', 'Confidence will flow from a day like this.']),
           compose(`${seed}:p3`, slots,
             ['{driver_last} will hope this is the first of many.', 'The challenge now is to back it up.', 'Whether it sparks a run remains to be seen.'],
-            ['Either way, it is a weekend that will be remembered.', 'It changes the complexion of his season.', 'The grid has been put on notice.']),
+            ['Either way, it is a weekend that will be remembered.', 'It changes the complexion of the season.', 'The grid has been put on notice.']),
         ),
       })
     }
 
-    // Team 1-2.
-    if (p1 && p2 && p1.teamId === p2.teamId) {
+    // Team 1-2 — only the FIRST of the season for that team (a dominant team locks out the top
+    // two most weekends; firing every time is repetitive).
+    if (p1 && p2 && p1.teamId === p2.teamId && !teamOneTwoBefore(ctx, p1.teamId, r)) {
       const seed = `mile-12-${ctx.year}-${p1.teamId}-${r}`
       const slots = { team: p1.teamName, d1: p1.driverName, d2: p2.driverName, circuit: circuitName, year: ctx.year }
       out.push({
@@ -404,7 +517,8 @@ function milestones(ctx: NewsContext): NewsArticle[] {
             ['{team} could hardly have scripted it better at the {circuit}.', 'It was a near-perfect afternoon for {team}.', '{team} dominated proceedings at the {circuit}.'],
             ['{d1} led home teammate {d2} for a one-two.', '{d1} and {d2} filled the top two places.', 'Both cars came home at the front, {d1} ahead of {d2}.']),
           compose(`${seed}:p2`, slots,
-            ['Days like this do not come along often.', 'A one-two is the maximum a team can take from a race.', 'It is the kind of result that defines a season.'],
+            ['It is their first one-two of the season.', 'It marks a first one-two of the campaign for {team}.', 'A maiden one-two of the year for the team.'],
+            ['A one-two is the maximum a team can take from a race.', 'It is the kind of result that defines a season.', 'Days like this do not come along often.'],
             ['The points swing is enormous in the constructors race.', 'The constructors standings take a serious jolt.', 'Rivals will have watched on with concern.']),
           compose(`${seed}:p3`, slots,
             ['Both sides of the garage delivered when it mattered.', 'The whole operation can take a bow.', 'It is a statement of intent from {team}.'],
@@ -573,11 +687,11 @@ function championship(ctx: NewsContext): NewsArticle[] {
           ['{driver} is the {year} World Drivers Champion.', '{driver} has won the {year} World Championship.', 'The {year} title belongs to {driver}.'],
           ['The crown is sealed for {team}.', 'It is a landmark season for {team}.', 'A long campaign ends in glory for {team}.']),
         compose(`${seed}:p2`, slots,
-          ['With {wins} {wins_word} to his name, the championship was secured at round {round}.', 'The title was mathematically locked up at round {round}.', '{driver} did enough at round {round} to put the championship beyond reach.'],
+          ['With {wins} {wins_word} on the board, the championship was secured at round {round}.', 'The title was mathematically locked up at round {round}.', '{driver} did enough at round {round} to put the championship beyond reach.'],
           ['The consistency told over a gruelling season.', 'Reliability and results combined to decisive effect.', 'It was a campaign of few weaknesses.']),
         compose(`${seed}:p3`, slots,
-          ['For {driver_last}, it is the reward for a season of relentless application.', 'The hard yards of a long year have paid off.', 'It caps a season that few could live with.'],
-          ['Attention will soon turn to whether he can do it again.', 'The target on his back only grows from here.', 'Rivals must now find a way to respond.']),
+          ['For {driver_last}, it is the reward for a season of relentless application.', 'The hard yards of a long year have paid off.', 'It caps a season few could live with.'],
+          ['Attention will soon turn to whether the feat can be repeated.', 'The target only grows from here.', 'Rivals must now find a way to respond.']),
       ),
     })
     break
@@ -852,7 +966,8 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
   for (const t of ctx.teams) {
     const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
     const tseed = `launch-${ctx.year}-${t.id}`
-    const tslots = { team: t.name, year: ctx.year, squad: listJoin(squad) || 'Their driver pairing', tier: tierWord(paceRank(ctx, t.id), ctx.teams.length) }
+    const lastPos = lastSeasonPos(ctx, t.id)
+    const tslots = { team: t.name, year: ctx.year, squad: listJoin(squad) || 'Their driver pairing', tier: tierWord(paceRank(ctx, t.id), ctx.teams.length), last_pos: lastPos ? ordinal(lastPos) : '' }
     out.push({
       id: tseed, category: 'car_launch_livery', round: 0, priority: 30,
       headline: fill(pick(['{team} reveal their {year} car', '{team} pull the covers off for {year}', '{team} launch their {year} challenger', 'First look at the {year} {team}', '{team} unveil for {year}'], `${tseed}|h`), tslots),
@@ -862,7 +977,9 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
           ['{team} have unveiled their {year} car.', 'The covers are off the {year} {team}.', '{team} have presented their {year} challenger.'],
           ['{squad} lead the charge.', '{squad} carry the team hopes.', 'The driver line-up is led by {squad}.']),
         compose(`${tseed}:p2`, tslots,
-          ['As a {tier} outfit, expectations are set accordingly.', 'The team goes in eyeing realistic targets for a {tier} package.', 'Much will depend on how the {tier} car develops over the year.'],
+          lastPos
+            ? ['They finished {last_pos} in last season\'s constructors and want more.', 'After {last_pos} in the constructors last year, the bar is set.', 'Coming off {last_pos} last season, the target is to climb.']
+            : ['As a {tier} outfit, expectations are set accordingly.', 'The team goes in eyeing realistic targets for a {tier} package.', 'Much will depend on how the {tier} car develops over the year.'],
           ['Reliability out of the box would be a fine start.', 'The early races will set the tone.', 'A solid baseline is the immediate goal.']),
         compose(`${tseed}:p3`, tslots,
           ['Behind the scenes, the real work has only just begun.', 'Launch glamour quickly gives way to the grind of a season.', 'The factory will already be chasing the next gains.'],
@@ -917,7 +1034,7 @@ function market(ctx: NewsContext): NewsArticle[] {
             ['The step up to a full season is a steep one.', 'Expectations will be tempered, at least early on.', 'There will be lessons to absorb quickly.'],
             ['But the opportunity is the kind every young driver craves.', 'Get it right and a career takes off.', 'The upside, if it clicks, is considerable.']),
           compose(`${seed}:p3`, slots,
-            ['{driver_last} now has the winter to prepare.', 'All eyes will be on how he handles the leap.', 'The paddock will watch the adaptation with interest.'],
+            ['{driver_last} now has the winter to prepare.', 'All eyes will be on how the leap is handled.', 'The paddock will watch the adaptation with interest.'],
             ['It is one of the stories to follow into {next}.', 'A promising chapter begins.', 'The pressure is on from day one.']),
         ),
       })
@@ -944,7 +1061,11 @@ function market(ctx: NewsContext): NewsArticle[] {
       })
     } else {
       const seed = `move-${m.driverId}-${eos.seasonYear}`
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, next: eos.seasonYear + 1, until: m.contractExpiresAfterSeason }
+      const next = eos.seasonYear + 1
+      const term = m.contractLength === 1
+        ? `a one-year deal for ${next}`
+        : `a ${m.contractLength}-year deal through ${m.contractExpiresAfterSeason}`
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, next, until: m.contractExpiresAfterSeason, term }
       out.push({
         id: seed, category: 'driver_signing', round: r, priority: 75,
         headline: fill(pick(['{driver} signs for {team}', '{team} land {driver}', '{driver} joins {team}', '{team} swoop for {driver}', '{driver} on the move to {team}'], `${seed}|h`), slots),
@@ -952,7 +1073,7 @@ function market(ctx: NewsContext): NewsArticle[] {
         body: paras(
           compose(`${seed}:p1`, slots,
             ['{driver} has agreed a move to {team}.', '{team} have signed {driver}.', '{driver} is on the way to {team}.'],
-            ['The deal starts in {next} and runs through {until}.', 'The contract runs through {until}.', 'It takes effect from {next}.']),
+            ['It is {term}.', '{driver_last} has signed {term}.', 'The agreement is {term}.']),
           compose(`${seed}:p2`, slots,
             ['It is a notable shake-up in the driver market.', 'The move reshapes the grid for {next}.', 'Expect knock-on effects up and down the paddock.'],
             ['A fresh environment can rejuvenate a career.', 'New machinery brings new expectations.', 'The fit, on paper, looks a strong one.']),
@@ -976,10 +1097,10 @@ function market(ctx: NewsContext): NewsArticle[] {
           ['The {next} grid will have to find room, if it can.', 'A return for {next} is far from guaranteed.', 'The market is short on vacancies.']),
         compose(`${seed}:p2`, slots,
           ['It is a harsh end to the chapter.', 'The market is unforgiving at this level.', 'Few second chances come along once a seat is lost.'],
-          ['Form and timing both went against him.', 'The numbers, ultimately, did the talking.', 'Decisions like this are rarely sentimental.']),
+          ['Form and timing both went the wrong way.', 'The numbers, ultimately, did the talking.', 'Decisions like this are rarely sentimental.']),
         compose(`${seed}:p3`, slots,
           ['{driver_last} will hope a door opens elsewhere.', 'A reserve role may be the route back.', 'Reinvention is the only option now.'],
-          ['Careers have recovered from worse.', 'The phone will need to ring soon.', 'Time, as ever, is not on his side.']),
+          ['Careers have recovered from worse.', 'The phone will need to ring soon.', 'Time, as ever, is short.']),
       ),
     })
   }
@@ -1064,10 +1185,14 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       continue
     }
 
+    const dstand = driverStandingsAfter(ctx, r)
     for (const m of moves) {
       const fromName = teamName(ctx, m.fromTeamId as string)
+      const dpts = dstand.find((s) => s.driverId === m.driverId)?.points ?? 0
+      const toIdx = cstand.findIndex((c) => c.teamId === m.toTeamId)
+      const toPos = toIdx >= 0 ? ordinal(toIdx + 1) : ''
       const seed = `silly-${ctx.year}-${r}-${m.driverId}`
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r }
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r, driver_points: dpts, to_pos: toPos }
       out.push({
         id: seed, category: 'silly_season', round: r, priority: 30,
         headline: fill(pick([
@@ -1085,6 +1210,12 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
             ['Sources suggest {to} are weighing up a move {window}.', '{to} are understood to have registered interest {window}.', 'A switch from {from} to {to} is the talk of the rumour mill {window}.']),
           compose(`${seed}:p2`, slots,
             ['On paper, the fit makes a certain sense.', 'The logic behind the link is not hard to see.', 'There is a clear rationale on both sides.'],
+            dpts > 0
+              ? ['{driver_last} has {driver_points} points to show for the season so far.', 'A return of {driver_points} points this year has not gone unnoticed.']
+              : [''],
+            toPos
+              ? ['{to}, {to_pos} in the constructors, are hunting an upgrade.', 'For {to}, sitting {to_pos}, it would be a statement of intent.']
+              : [''],
             ['{to} would gain a known quantity.', 'For {driver_last}, it could mean a step up.', 'Each party has something the other wants.']),
           compose(`${seed}:p3`, slots,
             ['Nothing is signed, and {from} will not give up {driver_last} easily.', 'It remains speculation, but a persistent kind.', 'Whether it comes off is another matter entirely.'],
@@ -1216,7 +1347,7 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             id, category: 'analysis_opinion', round: r, priority: 32,
             headline: fill(pick([
               '{driver} is on a roll', 'Red-hot {driver} hits form', 'The {driver} surge continues',
-              '{driver} can do no wrong', 'Everything clicking for {driver}', '{driver} in the form of his life',
+              '{driver} can do no wrong', 'Everything clicking for {driver}', '{driver} in unstoppable form',
             ], `${id}|h`), slots),
             dek: fill(pick([
               '{driver} has strung together a run of strong results.', 'Points are flowing for {driver}.',
@@ -1225,12 +1356,12 @@ function analysis(ctx: NewsContext): NewsArticle[] {
             body: paras(
               compose(`${id}:p1`, slots,
                 ['{driver} is in a rich vein of form.', 'The last few rounds have belonged to {driver}.', 'Few are in better shape right now than {driver}.'],
-                ['Recent finishes have been right at the sharp end for {team}.', 'Result after result has gone his way.', 'The points are stacking up nicely for {team}.']),
+                ['Recent finishes have been right at the sharp end for {team}.', 'Result after result has gone the right way.', 'The points are stacking up nicely for {team}.']),
               compose(`${id}:p2`, slots,
-                ['Confidence is a powerful thing, and {driver_last} has it in spades.', 'When a driver is hot, the whole team lifts with him.', 'Momentum like this is hard to manufacture and easy to lose.'],
+                ['Confidence is a powerful thing, and {driver_last} has it in spades.', 'When a driver is hot, the whole team lifts with them.', 'Momentum like this is hard to manufacture and easy to lose.'],
                 ['Rivals will be eager to halt the run.', 'The challenge now is to sustain it.', 'Form this good rarely lasts forever, but while it does it is formidable.']),
               compose(`${id}:p3`, slots,
-                ['It has dragged {team} up the order with it.', 'The standings reflect a driver at the top of his game.', 'The numbers tell the story of a genuine hot streak.'],
+                ['It has dragged {team} up the order with it.', 'The standings reflect a driver at the top of their game.', 'The numbers tell the story of a genuine hot streak.'],
                 ['Keeping it going is the only goal now.', 'The bandwagon is rolling.', 'On this evidence, anything looks possible.']),
             ),
           }),
