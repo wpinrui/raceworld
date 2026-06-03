@@ -91,11 +91,9 @@ export function HeadlinesPanel() {
       driverStandings, constructorStandings, upgradeEvents: allUpgradeEvents,
       constructorHistory, endOfSeason: endOfSeasonSummary, calendar: calendar2026, live: true,
     }
-    const feed = generateNews(ctx)
-    // Current round: the latest completed race, or the pre-season slate (round 0) before
-    // any race has run. Show everything for that round and let the panel overflow.
-    const targetRound = raceResults.length > 0 ? raceResults.length : 0
-    return feed.filter((a) => a.round === targetRound)
+    // The feed is already newest-first (round desc, then priority); show the most recent 20
+    // and let the panel scroll.
+    return generateNews(ctx).slice(0, 20)
   }, [year, phase, raceResults, drivers, teams, driverStandings, constructorStandings, allUpgradeEvents, constructorHistory, endOfSeasonSummary])
 
   const open = headlines.find((h) => h.id === openId) ?? null
@@ -121,7 +119,7 @@ export function HeadlinesPanel() {
                 >
                   <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
                   <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
-                    {CATEGORY_LABELS[h.category] ?? h.category}
+                    {CATEGORY_LABELS[h.category] ?? h.category} · {roundLabel(h.round, calendar2026.length)}
                   </span>
                 </button>
               </li>
