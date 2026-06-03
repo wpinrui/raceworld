@@ -548,6 +548,16 @@ export function getDistinctTeamIds(): { teamId: string; teamName: string }[] {
   ).all() as { teamId: string; teamName: string }[]
 }
 
+// Teams that competed in a given season. Used by the newsroom to detect grid changes between
+// adjacent seasons (a team gone the next year departed; a team new the next year joined).
+export function getSeasonTeamIds(seasonId: number): { teamId: string; teamName: string }[] {
+  return getDb().prepare(`
+    SELECT rr.team_id AS teamId, MAX(rr.team_name) AS teamName
+    FROM race_results rr JOIN races r ON r.id = rr.race_id
+    WHERE r.season_id = ? GROUP BY rr.team_id
+  `).all(seasonId) as { teamId: string; teamName: string }[]
+}
+
 export interface SeasonChampions {
   seasonId: number; year: number
   driverChampionId: string | null; driverChampionName: string | null; driverChampionTeamId: string | null
