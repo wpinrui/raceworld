@@ -450,14 +450,22 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
 
     const circuitName = circuit(ctx, r)
     const seed = `report-${ctx.year}-${r}`
+    // Invented, unfalsifiable retirement causes (the sim tracks only the DNF flag, not the reason),
+    // assigned deterministically per driver so the colour is stable.
+    const RETIRE_REASONS = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake trouble', 'a puncture', 'a suspension failure', 'an overheating engine', 'damage from early contact', 'a spin into the gravel', 'an electrical gremlin']
+    const dnfReasoned = listJoin(dnfs.map((x) => `${lastName(x.driverName)} with ${pick(RETIRE_REASONS, `${seed}|why-${x.driverId}`)}`))
+    const poleRunnerUp = results.find((x) => x.gridPosition === 2)
     const slots: Record<string, string | number> = {
       winner: p1.driverName, winner_last: lastName(p1.driverName), team: p1.teamName,
       p2: p2?.driverName ?? '', p2_last: p2 ? lastName(p2.driverName) : '', p3: p3?.driverName ?? '',
       circuit: circuitName, margin, points: p1.points, pole: pole?.driverName ?? '', pole_last: pole ? lastName(pole.driverName) : '',
+      pole_runner_up: poleRunnerUp ? lastName(poleRunnerUp.driverName) : '',
       mover: mover?.driverName ?? '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
       lead_gap: leadGap, leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
+      dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
+      dnf_solo_reason: dnfSolo ? pick(RETIRE_REASONS, `${seed}|why-${dnfSolo.driverId}`) : '',
       win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
       next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSolo?.lapsCompleted ?? 0,
       faller: faller ? lastName(faller.driverName) : '', faller_team: faller?.teamName ?? '',
@@ -500,7 +508,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         'It is {points} points banked, and the championship picture shifts accordingly.',
         'The haul of {points} points underlines a season in which consistency has been the edge.',
         'It puts {points} points on the board, and {winner_last} leaves with more than a trophy to show for it.',
-        'Those {points} points could prove decisive once the final standings are settled.',
+        'The full {points} points keep {winner_last} ahead of the development curve in the title race.',
       ],
     )
 
@@ -541,7 +549,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       ? [
           '{pole_last} had split the field in qualifying, taking pole by {pole_margin}.',
           'Qualifying had gone to {pole_last} by {pole_margin}, a margin that spoke of real single-lap pace.',
-          '{pole_last} had grabbed pole with a {pole_margin} advantage over the next car.',
+          '{pole_last} had grabbed pole by {pole_margin} from {pole_runner_up}.',
         ]
       : ['']
     const stratPool = strat
@@ -564,10 +572,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ])
       : dnfSolo
       ? compose(`${seed}:dnf`, slots, [
-          'The race had a single retirement in {dnf_solo}, who pulled off after {dnf_solo_laps} laps.',
-          '{dnf_solo} was the only car not to finish, lasting {dnf_solo_laps} laps before the day was done.',
-          'Only {dnf_solo} failed to make the flag, the car in after {dnf_solo_laps} laps with the race lost.',
-          'The lone retirement was {dnf_solo}, gone by lap {dnf_solo_laps} in an otherwise clean afternoon.',
+          '{dnf_solo} was the only retirement, out after {dnf_solo_laps} laps with {dnf_solo_reason}.',
+          'The lone retirement was {dnf_solo}, {dnf_solo_reason} ending the day after {dnf_solo_laps} laps.',
+          'Only {dnf_solo} failed to make the flag, {dnf_solo_reason} the cause.',
+          '{dnf_solo} did not finish, {dnf_solo_reason} forcing retirement after {dnf_solo_laps} laps.',
         ])
       : compose(`${seed}:dnf`, slots,
           [
@@ -577,10 +585,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
             '{dnf_count} {cars} fell out of contention, the running order shifting with every one of them.',
           ],
           [
-            '{dnf_list} all failed to see the flag.',
-            'The retirees were {dnf_list}, each losing points they may yet come to need.',
-            '{dnf_list} were among those who did not finish.',
-            'Joining the non-finishers were {dnf_list}.',
+            'It was {dnf_reasoned}.',
+            'The retirements read {dnf_reasoned}.',
+            '{dnf_list} {dnf_word} failed to see the flag.',
+            'Out of the running were {dnf_reasoned}.',
           ])
 
     const texturePool = [
@@ -845,20 +853,20 @@ function milestones(ctx: NewsContext): NewsArticle[] {
               'The {team} car does not trade at the front, which makes {driver_poss} {pos} at the {circuit} all the more remarkable.',
               '{driver_last} stayed disciplined on a chaotic afternoon and came away with {pos}, a first podium of the {year} season for {team}.',
               'Nothing in the form guide pointed to a {team} car on the podium at the {circuit}, yet there was {driver_last} in {pos} at the flag.',
-              'It is the kind of result smaller teams dream about and rarely land, {driver_poss} {pos} the first podium of {year} for {team}.',
+              '{driver_last} turned {pos} into the first podium of {year} for {team}, a car few fancied to be anywhere near the rostrum.',
             ], `${seed}|b1`), slots),
             fill(pick([
               'A well-timed stop gave {driver_last} the track position to make it stick, and {they} managed it home with composure.',
               'A safety car reshuffled the order, and when it settled {driver_last} was in a position to fight, and did not waste it.',
               '{they_cap} had a faster car in the mirrors late on and held it off with tyre management {team_poss} rivals will respect.',
-              'The podium did not fall into {driver_poss} lap, {they} held the place in traffic and looked after the tyres when others could not.',
+              'The podium did not fall into {driver_poss} lap; {they} held the place in traffic and looked after the tyres when others could not.',
               'For {team}, a podium is a points return that can reshape a season, and {pos} at the {circuit} is a result no one will dismiss.',
             ], `${seed}|b2`), slots),
             texture(seed, [
               'The {team} mechanics watched the screens with the wide-eyed look of people who had done the maths and still could not quite believe it.',
               '{driver_last} kept {their} voice level on the radio, but the replies from the wall grew louder with every lap that ticked away.',
               'In parc ferme {driver_last} stepped out and stood still for a moment, as if waiting for someone to say it was not real.',
-              'The engineers who had plotted a conservative points race were the ones jumping off the pit wall at the flag.',
+              'A {team} crew that had come in hoping for solid points found themselves celebrating a podium at the flag.',
             ], slots),
           ),
         })
@@ -1491,7 +1499,7 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
   if (streak >= 2) pool = ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
   else if (maiden) pool = ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
   else if (horror) pool = ['{horror_who} endured a rare off-day last time out, {horror_what} at the {prev_circuit}, and badly needs a response.', 'All eyes are on {horror_who} after {horror_what} last time, a dent in the title bid.']
-  else if (gain >= 6 && mover) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to}, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to {mover_to}.']
+  else if (gain >= 6 && mover && (mover.finishPosition ?? 99) <= 10) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to} and into the points, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to a points finish in {mover_to}.']
   else if (firstPts) pool = ['{first_pts} finally opened the account at the {prev_circuit} last time, and will look to build on it.', 'A first points finish for {first_pts} last time out was a long time coming.']
   else if (faller) pool = ['{faller} retired at the {prev_circuit} last time and will be desperate for a bounce-back.', 'A bounce-back is the order of the day for {faller} after retiring last time.']
   else if (upg) pool = ['Whether {upg_team_poss} recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team_poss} new parts make a difference.']
@@ -1533,8 +1541,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const rookieNote = !isOpener ? ''
       : rookieNames.length === 0 ? ''
       : rookieNames.length === 1 ? `${rookieNames[0]} makes a Grand Prix debut.`
-      : rookieNames.length <= 3 ? `${listJoin(rookieNames)} all start their first Grand Prix.`
-      : `${rookieNames.length} rookies line up for their maiden Grand Prix.`
+      : `${listJoin(rookieNames)} all start their first Grand Prix.`
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
@@ -1542,9 +1549,11 @@ function previews(ctx: NewsContext): NewsArticle[] {
     // offer. Gated so it is not slapped on every preview; a bare number is often plenty.
     const availLeft = remaining * DRIVER_MAX_PER_RACE
     const ratio = leadGap > 0 && availLeft > 0 ? leadGap / availLeft : 0
+    // "slender/narrow/wafer-thin" is reserved for a genuinely small absolute gap (a couple of
+    // results), not just a small ratio early in a long season where 10+ points is still real.
     const band = ratio >= 0.6 ? ['a commanding ', 'an almost insurmountable ', 'an imposing ']
       : ratio >= 0.28 ? ['a healthy ', 'a comfortable ', 'a substantial ']
-      : leadGap > 0 && ratio <= 0.12 ? ['a slender ', 'a narrow ', 'a wafer-thin ']
+      : leadGap > 0 && leadGap <= 6 ? ['a slender ', 'a narrow ', 'a wafer-thin ']
       : ['']
     const gapDesc = band[0] && chance(`${seed}|gd`, 45) ? pick(band, `${seed}|gd`) : ''
     const slots: Record<string, string | number> = {
@@ -1557,6 +1566,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
       remaining, rounds_word: plural(remaining, 'round'), n_teams: ctx.teams.length,
       trait: trait ?? '', trait_cap: trait ? trait.charAt(0).toUpperCase() + trait.slice(1) : '',
       fav_team: favC?.teamName ?? '', fav_team_poss: favC ? poss(favC.teamName) : '', fav_driver: favDrv?.name ?? '',
+      ...pronouns(ctx.drivers.find((d) => d.id === leader?.driverId)?.gender),
     }
     const trackTexture = trait && favC && favDrv && r >= 3
       ? texture(`${seed}|track`,
@@ -1575,21 +1585,21 @@ function previews(ctx: NewsContext): NewsArticle[] {
             ['All {n_teams} teams start level on zero.', 'Every driver opens the {year} campaign on nothing.', 'The form book is blank over the {remaining} {rounds_word} ahead.']),
           rookieNote,
           compose(`${seed}:stake`, slots,
-            ['Reliability over a full race distance is the first real question.', 'A clean getaway will be worth its weight in points.', 'The opening laps will give the first honest read on the order.']),
-          texture(seed, ['The paddock buzzed with first-race nerves.', 'Months of speculation finally meet the stopwatch.', 'There was a charged, expectant mood up and down the grid.'], slots),
+            ['Reliability over a full race distance is the first real question.', 'The opening laps will give the first honest read on the order.', 'Whether winter pace translates to race day is the question everyone wants answered.']),
+          texture(seed, ['The paddock buzzed with first-race nerves.', 'There was a charged, expectant mood up and down the grid.', 'The garages had the taut quiet of a grid that had run out of time to prepare.'], slots),
         )
       : paras(
           compose(`${seed}:intro`, slots,
-            ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'Attention turns to the {circuit}.'],
-            ['{leader} leads on {leader_points}, {gap_desc}{lead_gap} {gap_pts} clear of {second}.', '{leader} arrives {gap_desc}{lead_gap} {gap_pts} ahead of {second}.', 'It is {leader} who tops the table, {gap_desc}{lead_gap} {gap_pts} up on {second}.']),
+            ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'The {circuit} is next, round {round} of the season.'],
+            ['{leader} leads on {leader_points} points, {gap_desc}{lead_gap} {gap_pts} clear of {second}.', '{leader} arrives {gap_desc}{lead_gap} {gap_pts} ahead of {second}.', 'It is {leader} who tops the table, {gap_desc}{lead_gap} {gap_pts} up on {second}.']),
           talkingPoint,
           compose(`${seed}:stake`, slots,
             leadGap === 0
               ? ['{second_last} is level on points with {leader_last} at the top.']
               : remaining <= 5
               ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
-              : ['{second_last} sits {lead_gap} {gap_pts} back and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit.', '{second_last} has ground to make up on {leader_last}.'],
-            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to their name so far.'] : ['']),
+              : ['{second_last} sits {lead_gap} {gap_pts} behind {leader_last} and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit to {leader_last}.', '{second_last} has ground to make up on {leader_last}.'],
+            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to {their} name so far.'] : ['']),
           compose(`${seed}:wcc`, slots,
             cbefore[1]
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
@@ -1664,7 +1674,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
         'The pressure on every team outside the top two is structural, not motivational, because the resource gap between front-runners and the midfield makes genuine championship bids difficult to sustain across an entire year.',
         'What will ultimately decide {year} is the rate of in-season development, because a car that leads winter testing rarely crosses the final finish line with exactly the same relative advantage it carried into the opener.',
         'The team that wins the {year} title will almost certainly be the one that brought both the fastest package and the fewest self-inflicted wounds, and right now {fav} have shown they own at least the first half of that equation.',
-        'A pre-season pace advantage is leverage, not destiny, and the depth of both the {fav} and {fav2} operations means any complacency from the front will be punished by a midfield hungry for an opening.',
+        'A pre-season pace lead is a head start, not a guarantee, and {fav2} are close enough to make {fav} pay for any slip.',
       ], `${seed}|b3`), sp),
     ),
   })
@@ -1716,11 +1726,22 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
           'How quickly {team} read and react to the feedback from {squad} will separate a good season from a forgettable one, since upgrade parts arriving by round four on real correlation are worth more than any number of wind-tunnel hours now.',
           'For {squad}, the handling balance over a full stint will matter as much as one-lap pace, because tyre degradation is where {tier} teams either overperform their grid slot or slide out of the points in the final twenty laps.',
           'Power-unit reliability across a long run of back-to-back race weekends will test {team_poss} engineering depth as much as anything the aerodynamics offer, and {squad} need clean Sundays to build the points tally that justifies the {year} investment.',
-          '{team_poss} in-season development rate is the one variable the pre-season assessment cannot price in, and a {tier} car that arrives at round eight with a real upgrade can finish the year punching above its launch billing.',
+          '{team_poss} in-season development rate is the one variable the pre-season assessment cannot price in, and a {tier} car that lands a real mid-season upgrade can finish the year punching above its launch billing.',
           'Both drivers arrive with something to prove, and the benchmark between {squad} will sharpen the feedback loop, pushing the team to resolve the ambiguities in the data faster than a single-driver effort ever could.',
         ], `${tseed}|b3`), tslots),
       ),
     })
+  }
+  // Rookie spotlights (up to two a season) must not read verbatim like one another. Track the
+  // variants used per pool so the second article always draws from the ones the first did not.
+  const usedRk: Record<string, Set<string>> = {}
+  const pickRk = (pool: string[], seed: string): string => {
+    const key = seed.slice(seed.lastIndexOf('|'))
+    const used = usedRk[key] ?? (usedRk[key] = new Set<string>())
+    const avail = pool.filter((s) => !used.has(s))
+    const chosen = pick(avail.length ? avail : pool, seed)
+    used.add(chosen)
+    return chosen
   }
   const youngest = ctx.drivers.filter((d) => d.teamId !== '').sort((a, b) => a.age - b.age).slice(0, 2)
   for (const d of youngest) {
@@ -1729,7 +1750,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
     const rslots = { driver: d.name, driver_last: lastName(d.name), age: d.age, year: ctx.year, team: teamName(ctx, d.teamId), team_poss: poss(teamName(ctx, d.teamId)), driver_poss: poss(lastName(d.name)), ...pronouns(d.gender) }
     out.push({
       id: rseed, category: 'rookie_debut', round: 0, priority: 25,
-      headline: fill(pick([
+      headline: fill(pickRk([
         'Young gun {driver_last} steps up for {team} in {year}',
         '{driver_last} at {age}, the rookie {team} are betting on',
         'Can {driver_last} deliver for {team} in {their} debut season',
@@ -1737,14 +1758,14 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
         '{driver_poss} moment is here, and {year} will be the proof',
         '{driver_last} arrives in F1 at just {age}',
       ], `${rseed}|h`), rslots),
-      dek: fill(pick([
+      dek: fill(pickRk([
         'At just {age}, {driver} joins {team} as one of the youngest drivers on the grid, carrying the weight of a junior career\'s worth of expectations into the harshest spotlight in motorsport.',
         '{driver} is {age} and already on Formula 1\'s starting grid, tasked with matching {team_poss} investment in {them} before the first chequered flag of {year}.',
         'The step from junior formulae to a full {team} race seat is the largest of {driver_poss} career, and {year} is where the world finds out whether {theyre} ready for it.',
         'Formula 1 in {year} hands {driver} a seat at {team}, a scrutinising global audience, and no margin for a gentle learning curve.',
       ], `${rseed}|d`), rslots),
       body: paras(
-        fill(pick([
+        fill(pickRk([
           'The jump from junior categories to a full Formula 1 season compresses years of technical learning into a winter\'s worth of preparation, and {driver_last} has had to process that acceleration faster than almost any rival on the {year} grid.',
           'Where the feeder series let {them} find rhythm over a weekend, the freight-train schedule of practice, qualifying and race demands that {driver_last} reads a circuit and extracts the maximum before a single radio call ends.',
           'Media commitments alone scale up sharply at {team}, with press obligations, sponsor appearances and simulator debriefs eating into the hours factory engineers want spent reviewing data.',
@@ -1752,7 +1773,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
           '{driver_poss} first Formula 1 winter has meant learning {team_poss} tyre philosophy, aero concept and steering-wheel architecture all at once, a cognitive load that rookies routinely call unlike anything below.',
           'Now racing for {team}, {driver_last} must acclimatise to being scrutinised not just by engineers but by a paddock that will form its verdict on {them} within the opening three weekends.',
         ], `${rseed}|b1`), rslots),
-        fill(pick([
+        fill(pickRk([
           'Qualifying is the earliest and starkest test, one flying lap with no second invitation, the format that strips away context and prints a raw number beside {driver_poss} name.',
           '{team_poss} car demands a driver who can manage front-left degradation across a thirty-lap stint, a discipline learned in corners {driver_last} has never driven on compounds {they} has never raced.',
           '{their_cap} teammate stands as the most immediate and inescapable benchmark, sharing the same machinery and the same strategist\'s call-sheet, leaving the data nowhere to hide.',
@@ -1760,7 +1781,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
           'Racecraft in traffic is where Formula 1 separates the graduate from the arrival, the braking-reference shift, the understeer in dirty air, the half-second window to commit to a move or abort it, all coming faster than in any category below.',
           'Tyre warm-up on a cool out-lap, safety-car restarts and the call to pit or stay out are decisions {driver_last} rehearsed in the simulator but now executes under the full points cost of getting them wrong.',
         ], `${rseed}|b2`), rslots),
-        fill(pick([
+        fill(pickRk([
           'The measure {team} will apply to {driver_last} by midsummer is not a championship position but the gap to {their} teammate in qualifying trim, the number that reveals whether {they} has genuinely understood the car.',
           'A strong result before the European summer break would shift the internal conversation from potential to proof, and {driver_last} will feel that deadline in every debrief from the opening race.',
           '{year} will be judged a success for {them} if {they} out-qualifies {their} teammate on merit and manages tyre life in a points-scoring position deep into a long second stint.',
