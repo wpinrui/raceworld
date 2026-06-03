@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
-import { actionGetNewsSeasonYears, actionGetSeasonNews } from '@/lib/news/actions'
+import { generateNews, foldLiveSeason, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer } from '@/lib/news/engine'
+import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers } from '@/lib/news/actions'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
@@ -30,6 +30,9 @@ export default function NewsroomPage() {
   const [archivedYears, setArchivedYears] = useState<number[]>([])
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
   const [loadingArchive, setLoadingArchive] = useState(false)
+  // Prior-season F1 career totals from the archive DB (the current season is folded in from the
+  // store), so the live newsroom's retirement obituaries and driver-to-watch see real records.
+  const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
   useEffect(() => {
     setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
@@ -43,6 +46,13 @@ export default function NewsroomPage() {
   useEffect(() => {
     actionGetNewsSeasonYears().then(setArchivedYears).catch(() => setArchivedYears([]))
   }, [])
+
+  // Archived career totals for every prior season (strictly before the live year — the current
+  // season is always counted from the store, never the DB, so it stays correct whenever it lands
+  // in the archive).
+  useEffect(() => {
+    actionGetDriverCareers(s.year - 1).then(setCareerBase).catch(() => setCareerBase({}))
+  }, [s.year])
 
   const liveYear = s.year
   const isLive = selectedYear === liveYear
@@ -67,9 +77,10 @@ export default function NewsroomPage() {
       endOfSeason: s.endOfSeasonSummary,
       calendar: calendar2026,
       live: true,
+      careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
     }
     return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary])
+  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase])
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {

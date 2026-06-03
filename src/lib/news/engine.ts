@@ -351,6 +351,41 @@ function careerOf(ctx: NewsContext, id: string): DriverCareer | null {
   return ctx.careers?.[id] ?? null
 }
 
+// Extend a careers map (DB totals for prior seasons) with one in-progress/just-finished season's
+// results from the live store, so the live newsroom sees a complete, up-to-date career. The base
+// must NOT already include `year` (we always count the current season from the store, never the
+// DB, to stay correct regardless of when the season is archived). Pass `championId` once the
+// season has ended to credit the title the archive does not record until it is archived.
+export function foldLiveSeason(
+  base: Record<string, DriverCareer>,
+  year: number,
+  raceResults: { driverId: string; finishPosition: number | null; gridPosition: number; points: number }[][],
+  championId?: string | null,
+): Record<string, DriverCareer> {
+  const out: Record<string, DriverCareer> = {}
+  for (const [k, v] of Object.entries(base)) out[k] = { ...v, titleYears: [...v.titleYears] }
+  const seenThisSeason = new Set<string>()
+  for (const round of raceResults) for (const res of round) {
+    const id = res.driverId
+    let c = out[id]
+    if (!c) c = out[id] = { driverId: id, starts: 0, wins: 0, podiums: 0, poles: 0, points: 0, seasons: 0, titles: 0, titleYears: [], debutYear: null, bestFinish: null }
+    const fp = res.finishPosition
+    c.starts++
+    c.points += res.points
+    if (res.gridPosition === 1) c.poles++
+    if (fp != null && fp === 1) c.wins++
+    if (fp != null && fp <= 3) c.podiums++
+    if (fp != null && (c.bestFinish == null || fp < c.bestFinish)) c.bestFinish = fp
+    if (c.debutYear == null || year < c.debutYear) c.debutYear = year
+    if (!seenThisSeason.has(id)) { seenThisSeason.add(id); c.seasons++ }
+  }
+  if (championId && out[championId] && !out[championId].titleYears.includes(year)) {
+    out[championId].titles++
+    out[championId].titleYears = [...out[championId].titleYears, year].sort((a, b) => a - b)
+  }
+  return out
+}
+
 // --- Producers ---------------------------------------------------------------
 
 // TRIGGER: every completed round. ONE consolidated report per race — winner + podium +
