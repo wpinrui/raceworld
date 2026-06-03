@@ -2217,7 +2217,9 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
     }
     const marketLine = toTeam
       ? fill(pick(['Run the silly-season maths and a {to} seat for {next} looks a genuine possibility.', 'The market projects {driver_last} could even land at {to} for {next}.'], `${seed}|mkt`), slots)
-      : fill(pick(['For now, the projection shows no opening, and a seat may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
+      : experienced
+      ? fill(pick(['For now, the projection shows no opening, and a seat may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
+      : fill(pick(['For now, the projection shows no opening, and a debut may have to wait.', 'As things stand, a first F1 seat looks some way off.'], `${seed}|mkt`), slots)
 
     if (experienced) {
       const recordLine = honourBits.length
@@ -2241,7 +2243,7 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
         dek: fill(pick(['{driver}, {age}, has yet to race in F1 but is generating buzz.', 'Meet {driver}, tipped for big things.', 'A name to file away in {driver}.'], `${seed}|d`), slots),
         body: paras(
           fill(pick(['{driver}, just {age}, has yet to make a Grand Prix start, but is rated {pot}.', 'At {age}, {driver} has never raced in F1, and is regarded as {pot}.'], `${seed}|p1`), slots),
-          fill(pick(['Those who have watched the junior ranks talk up the raw speed and racecraft.', 'The reputation is built on the categories below, where the results have caught the eye.'], `${seed}|p2`), slots),
+          fill(pick(['Those who have watched the junior ranks talk up the raw speed and racecraft.', 'A reputation built in the junior single-seater categories, where the results have caught the eye.'], `${seed}|p2`), slots),
           fill(pick(['"There is something special there," one paddock figure said.', '"Keep that name in mind," said a junior-series insider.'], `${seed}|q`), slots),
           marketLine,
         ),
