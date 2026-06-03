@@ -941,7 +941,34 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const seed = `fight-${ctx.year}-${r}`
     if (!chance(seed, 60)) continue
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
-    const slots = { leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName), gap, remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE }
+    // Grounded battle context: season head-to-head (races both finished) and recent momentum.
+    let h2hL = 0, h2hS = 0
+    for (let k = 1; k <= r; k++) {
+      const rr = ctx.raceResults[k - 1] ?? []
+      const a = rr.find((x) => x.driverId === s[0].driverId)
+      const b = rr.find((x) => x.driverId === s[1].driverId)
+      if (a && b && !a.dnf && !b.dnf && a.finishPosition != null && b.finishPosition != null) { if (a.finishPosition < b.finishPosition) h2hL++; else h2hS++ }
+    }
+    const pl = pointsInWindow(ctx, s[0].driverId, r, 4)
+    const ps = pointsInWindow(ctx, s[1].driverId, r, 4)
+    const momTied = pl === ps
+    const momLast = pl >= ps ? lastName(s[0].driverName) : lastName(s[1].driverName)
+    const momOther = pl >= ps ? lastName(s[1].driverName) : lastName(s[0].driverName)
+    const hhPhrase = h2hL === h2hS ? `level at ${h2hL}-${h2hS}` : `${Math.max(h2hL, h2hS)}-${Math.min(h2hL, h2hS)} in ${h2hL > h2hS ? lastName(s[0].driverName) : lastName(s[1].driverName)}'s favour`
+    const slots = {
+      leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName),
+      gap, remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE,
+      lw: s[0].wins, sw: s[1].wins, lw_word: plural(s[0].wins, 'win'),
+      hh_phrase: hhPhrase, mom_last: momLast, mom_other: momOther, mom_hi: Math.max(pl, ps), mom_lo: Math.min(pl, ps),
+    }
+    const battleTexture = [
+      texture(`${seed}|ql`, ['"We just take it race by race," said {leader_last}.', '"Nothing is won yet," {leader_last} said.'], slots, 22),
+      texture(`${seed}|qs`, ['"I have nothing to lose from here," said {second_last}.', '"All the pressure is on them," {second_last} said.'], slots, 22),
+      texture(`${seed}|pundit`, ['Pundits are split on who holds the edge.', 'Most of the paddock make {leader_last} a narrow favourite.'], slots, 18),
+      texture(`${seed}|fans`, ['Fans are bracing for a grandstand finish.', 'Neutrals have rarely had it so good.'], slots, 16),
+      texture(`${seed}|orders`, ['Talk of team orders is already swirling in both garages.'], slots, 12),
+      texture(`${seed}|pressure`, ['The pressure now sits squarely on {leader_last}\'s shoulders.', 'It is {second_last} who races with the freedom of the chaser.'], slots, 16),
+    ].filter(Boolean).join(' ')
     out.push({
       id: seed, category: 'championship_state', round: r, priority: 75,
       headline: fill(pick([
@@ -959,12 +986,17 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
         compose(`${seed}:p1`, slots,
           ['The championship is going to the wire.', 'This title race is far from settled.', 'It is advantage {leader}, but only just.'],
           ['Only {gap} points separate {leader} and {second} with {races_left} remaining.', 'The gap stands at {gap} points with {races_left} left to run.', '{gap} points is all that divides the top two.']),
-        compose(`${seed}:p2`, slots,
-          ['Up to {max_pts} points remain to be won over {races_left}.', 'With {max_pts} points still on the table, nothing is decided.', 'A single retirement could wipe out the {gap}-point margin.'],
-          ['Expect the pressure to tell over the closing rounds.', 'The momentum could turn on any weekend.', 'Small margins will decide a big prize.']),
-        compose(`${seed}:p3`, slots,
-          ['{leader_last} has the cushion, but {second_last} has the momentum to chase.', 'Both know the next few weeks define their season.', 'Nerves will be tested as much as pace.'],
-          ['It is exactly the climax the season deserves.', 'Neutrals could not ask for more.', 'The run-in promises to be a thriller.']),
+        compose(`${seed}:form`, slots,
+          ['{leader_last} has {lw} {lw_word} this year to {second_last}\'s {sw}.', 'On wins, {leader_last} leads {lw} to {sw}.', 'The win column reads {lw} to {sw} in {leader_last}\'s favour.'],
+          ['Their season head-to-head is {hh_phrase}.', 'In races where both finished, the head-to-head sits {hh_phrase}.'],
+          momTied
+            ? ['Recent form is dead level, {mom_hi} points apiece over the last four races.']
+            : ['Momentum may sit with {mom_last}, who has outscored {mom_other} {mom_hi} to {mom_lo} over the last four races.', 'Recent form favours {mom_last}, {mom_hi} points to {mom_lo} across the last four rounds.']),
+        compose(`${seed}:stake`, slots,
+          ['Up to {max_pts} points remain to be won over {races_left}.', 'With {max_pts} points still on the table, nothing is decided.', 'A single retirement could wipe out the {gap}-point margin.']),
+        battleTexture,
+        compose(`${seed}:closer`, slots,
+          ['It is exactly the climax the season deserves.', 'This is what a title race should look like.', 'Every weekend from here is must-watch.', 'The run-in promises to be a thriller.']),
       ),
     })
   }
@@ -1063,6 +1095,63 @@ function features(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
+// A grounded "last time out" talking point for a preview of round r, pulled from round r-1.
+// Surfaces the single most newsworthy angle from across the grid (one, never a pile-up):
+// win streaks, maiden wins, a title contender's horror show, a standout drive, a first-points
+// breakthrough, a notable retirement, or a fresh upgrade.
+function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string {
+  const prev = r - 1
+  if (prev < 1 || prev > ctx.raceResults.length) return ''
+  const results = ctx.raceResults[prev - 1] ?? []
+  if (results.length === 0) return ''
+  const sorted = sortedResults(results)
+  const standings = driverStandingsAfter(ctx, prev)   // going into round r
+  const before = driverStandingsAfter(ctx, prev - 1)  // before the last race
+  const ptsBefore = (id: string) => before.find((s) => s.driverId === id)?.points ?? 0
+  const prevCircuit = circuit(ctx, prev)
+  const winner = results.find((x) => x.finishPosition === 1)
+
+  let streak = 0
+  if (winner) for (let k = prev; k >= 1; k--) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1); if (w && w.driverId === winner.driverId) streak++; else break }
+  const maiden = !!winner && prev >= 2 && !wonBefore(ctx, winner.driverId, prev)
+
+  let horror: { who: string; what: string } | null = null
+  for (const s of standings.slice(0, 2)) { const res = results.find((x) => x.driverId === s.driverId); if (res && (res.dnf || (res.finishPosition ?? 0) >= 8)) { horror = { who: lastName(s.driverName), what: res.dnf ? 'a retirement' : ordinal(res.finishPosition ?? 0) }; break } }
+
+  let mover: RaceResult | null = null; let gain = 0
+  for (const x of sorted) { if (x.dnf || x.finishPosition == null) continue; const g = x.gridPosition - x.finishPosition; if (g > gain) { gain = g; mover = x } }
+
+  // A genuine first-points drought-breaker, not everyone's opener (hence prev >= 4).
+  let firstPts: RaceResult | null = null
+  if (prev >= 4) for (const x of results) { if (x.points > 0 && ptsBefore(x.driverId) === 0) { firstPts = x; break } }
+
+  let faller: RaceResult | null = null
+  for (const x of results) { if (!x.dnf) continue; const rank = standings.findIndex((s) => s.driverId === x.driverId); if (rank >= 0 && rank < 8) { faller = x; break } }
+
+  const upg = ctx.upgradeEvents.find((e) => !e.failed && (e.round === prev || e.round === r))
+
+  const slots: Record<string, string | number> = {
+    prev_circuit: prevCircuit, streak,
+    w: winner ? lastName(winner.driverName) : '',
+    horror_who: horror?.who ?? '', horror_what: horror?.what ?? '',
+    mover: mover ? lastName(mover.driverName) : '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
+    first_pts: firstPts ? lastName(firstPts.driverName) : '',
+    faller: faller ? lastName(faller.driverName) : '',
+    upg_team: upg ? teamName(ctx, upg.teamId) : '',
+  }
+
+  let pool: string[]
+  if (streak >= 2) pool = ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
+  else if (maiden) pool = ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
+  else if (horror) pool = ['{horror_who} endured a rare off-day last time out, {horror_what} at the {prev_circuit}, and badly needs a response.', 'All eyes are on {horror_who} after {horror_what} last time, a dent in the title bid.']
+  else if (gain >= 6 && mover) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to}, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to {mover_to}.']
+  else if (firstPts) pool = ['{first_pts} finally opened the account at the {prev_circuit} last time, and will look to build on it.', 'A first points finish for {first_pts} last time out was a long time coming.']
+  else if (faller) pool = ['{faller} retired at the {prev_circuit} last time and will be desperate for a bounce-back.', 'A bounce-back is the order of the day for {faller} after retiring last time.']
+  else if (upg) pool = ['Whether {upg_team}\'s recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team}\'s new parts make a difference.']
+  else return ''
+  return fill(pick(pool, `${seed}|tp`), slots)
+}
+
 // TRIGGER: a preview for every round of the calendar (run-up coverage across the whole
 // season), plus the upcoming one while the season is live. Frames each round off the
 // standings as they stood beforehand.
@@ -1077,11 +1166,12 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const second = before[1]
     const isOpener = r === 1
     const isNext = !ctx.endOfSeason && r === ctx.completedRounds + 1
-    const remaining = N - r + 1 // rounds from r to N inclusive
+    const remaining = N - r + 1
     const seed = `preview-${ctx.year}-${r}`
     const circuitName = circuit(ctx, r)
-    // Track-specific preview colour: a real circuit trait, linked to a top team and that team's
-    // chosen driver's actual recent form (on/off song).
+
+    // Track-specific colour: a real circuit trait, tied to a top team and that team's chosen
+    // driver's actual recent form.
     const trait = CIRCUIT_TRAITS[ctx.calendar[r - 1]?.id ?? '']
     const favC = cbefore.length ? pick(cbefore.slice(0, 3), `${seed}|favc`) : null
     const favDrivers = favC ? ctx.drivers.filter((d) => d.teamId === favC.teamId) : []
@@ -1089,31 +1179,44 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const favRecent = favDrv ? recentFinishesUpTo(ctx, favDrv.id, r - 1, 3) : []
     const favAvg = favRecent.length ? favRecent.reduce((s, x) => s + x, 0) / favRecent.length : 99
     const favForm = favAvg <= 6 ? 'on' : favAvg >= 12 ? 'off' : 'mid'
+
+    // Grid talking point from last time out, and (opener only) the rookie debut note.
+    const talkingPoint = previewTalkingPoint(ctx, r, seed)
+    const rookieNames = ctx.drivers.filter((d) => d.teamId !== '' && d.age <= 21).map((d) => d.name)
+    const rookieNote = !isOpener ? ''
+      : rookieNames.length === 0 ? ''
+      : rookieNames.length === 1 ? `${rookieNames[0]} makes a Grand Prix debut.`
+      : rookieNames.length <= 3 ? `${listJoin(rookieNames)} all start their first Grand Prix.`
+      : `${rookieNames.length} rookies line up for their maiden Grand Prix.`
+
+    const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const slots: Record<string, string | number> = {
       circuit: circuitName, round: r, year: ctx.year,
       leader: leader?.driverName ?? '', leader_last: leader ? lastName(leader.driverName) : '',
       second: second?.driverName ?? '', second_last: second ? lastName(second.driverName) : '',
       lead_gap: leader ? leader.points - (second?.points ?? 0) : 0,
       leader_points: leader?.points ?? 0, leader_wins: leader?.wins ?? 0, wins_word: plural(leader?.wins ?? 0, 'win'),
-      top_team: cbefore[0]?.teamName ?? '', remaining, rounds_word: plural(remaining, 'round'), n_teams: ctx.teams.length,
+      top_team: cbefore[0]?.teamName ?? '', wcc_second: cbefore[1]?.teamName ?? '', wcc_gap: wccGap,
+      remaining, rounds_word: plural(remaining, 'round'), n_teams: ctx.teams.length,
       trait: trait ?? '', trait_cap: trait ? trait.charAt(0).toUpperCase() + trait.slice(1) : '',
       fav_team: favC?.teamName ?? '', fav_driver: favDrv?.name ?? '',
     }
-    // Only meaningful once there is form to read (mid-season onward) and the trait is known.
     const trackTexture = trait && favC && favDrv && r >= 3
       ? texture(`${seed}|track`,
           favForm === 'on'
-            ? ['{trait_cap} should suit {fav_team}, and with {fav_driver} in fine form, they will fancy their chances.', 'Expect {trait} to play into {fav_team}\'s hands, especially with {fav_driver} on song.', '{trait_cap} could favour {fav_team}, and {fav_driver} arrives in the form to exploit it.', '{fav_team} should relish {trait}, with {fav_driver} flying at just the right time.']
+            ? ['{trait_cap} should suit {fav_team}, and their {fav_driver} is in fine form to exploit it.', 'Expect {trait} to play into {fav_team}\'s hands, with {fav_driver} on song.', '{trait_cap} could favour {fav_team}, whose {fav_driver} arrives in the form to make it count.', '{fav_team} should relish {trait}, their {fav_driver} flying at just the right time.']
             : favForm === 'off'
-            ? ['{trait_cap} might favour {fav_team}, but {fav_driver} has been off the boil, and that is a real talking point this weekend.', '{trait_cap} should suit {fav_team}, yet questions hang over {fav_driver} after a rough run.', 'On paper {trait} should play to {fav_team}\'s strengths, though {fav_driver} will need to rediscover some form first.', '{fav_team} ought to like {trait}, but {fav_driver} arrives under a cloud after a flat spell.']
-            : ['{trait_cap} could favour {fav_team}, with {fav_driver} one to watch.', 'Conditions around {trait} may suit {fav_team} and {fav_driver}.', '{trait_cap} should put {fav_team} and {fav_driver} in the conversation.'],
+            ? ['{trait_cap} might favour {fav_team}, but their {fav_driver} has been off the boil, a real talking point this weekend.', '{trait_cap} should suit {fav_team}, yet questions hang over their {fav_driver} after a rough run.', 'On paper {trait} should play to {fav_team}\'s strengths, though their {fav_driver} must rediscover some form first.', '{fav_team} ought to like {trait}, but their {fav_driver} arrives under a cloud after a flat spell.']
+            : ['{trait_cap} could favour {fav_team}, with their {fav_driver} one to watch.', 'Conditions around {trait} may suit {fav_team} and their {fav_driver}.', '{trait_cap} should put {fav_team} and their {fav_driver} in the conversation.'],
           slots, 45)
       : ''
+
     const body = isOpener
       ? paras(
           compose(`${seed}:intro`, slots,
             ['The {year} season gets under way at the {circuit}.', 'It all begins at the {circuit}.', 'Round one takes the grid to the {circuit}.'],
             ['All {n_teams} teams start level on zero.', 'Every driver opens the {year} campaign on nothing.', 'The form book is blank over the {remaining} {rounds_word} ahead.']),
+          rookieNote,
           compose(`${seed}:stake`, slots,
             ['Reliability over a full race distance is the first real question.', 'A clean getaway will be worth its weight in points.', 'The opening laps will give the first honest read on the order.']),
           texture(seed, ['The paddock buzzed with first-race nerves.', 'Months of speculation finally meet the stopwatch.', 'There was a charged, expectant mood up and down the grid.'], slots),
@@ -1121,14 +1224,16 @@ function previews(ctx: NewsContext): NewsArticle[] {
       : paras(
           compose(`${seed}:intro`, slots,
             ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'Attention turns to the {circuit}.'],
-            ['{leader} leads on {leader_points}, {lead_gap} clear of {second}.', '{leader} arrives {lead_gap} ahead of {second}.', 'It is {leader} who tops the table, {lead_gap} up on {second}.']),
+            ['{leader} leads on {leader_points}, {lead_gap} points clear of {second}.', '{leader} arrives {lead_gap} points ahead of {second}.', 'It is {leader} who tops the table, {lead_gap} points up on {second}.']),
+          talkingPoint,
           compose(`${seed}:stake`, slots,
-            ['{second_last} needs to start eating into that {lead_gap}-point gap.', 'For {second_last}, {lead_gap} points is the deficit to chew through.', '{remaining} {rounds_word} remain to overturn the {lead_gap}-point gap.'],
+            ['{second_last} will be looking to chip away over the {remaining} {rounds_word} that remain.', 'For {second_last}, the clock is ticking, with {remaining} {rounds_word} left.', 'The chase has {remaining} {rounds_word} left to run.'],
             (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to the name so far.'] : ['']),
           compose(`${seed}:wcc`, slots,
-            cbefore[0] ? ['In the constructors, {top_team} lead the way.', '{top_team} head the teams standings.'] : ['{remaining} {rounds_word} still lie ahead.']),
+            cbefore[1]
+              ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} points.', '{top_team} head the teams standings, {wcc_gap} points clear of {wcc_second}.']
+              : ['{top_team} head the constructors standings.']),
           trackTexture,
-          texture(seed, ['{leader_last} arrived in the paddock looking unhurried.', 'There was a businesslike mood in the {circuit} paddock.', 'The title picture was on every microphone in the build-up.'], slots),
         )
     out.push({
       id: seed, category: 'preview_schedule', round: r, priority: isNext ? 80 : 50,
@@ -1138,10 +1243,10 @@ function previews(ctx: NewsContext): NewsArticle[] {
         'Setting the stage for the {circuit}', 'Eyes on the {circuit}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
-        'The grid heads to the {circuit} for round {round}.',
         'Everything to watch ahead of the {circuit}.',
         'Setting the scene for the {circuit}.',
         'The talking points ahead of the {circuit}.',
+        'The build-up to the {circuit}.',
       ], `${seed}|d`), slots),
       body,
     })
@@ -1605,7 +1710,20 @@ function analysis(ctx: NewsContext): NewsArticle[] {
       const avg = recent.reduce((s, x) => s + x, 0) / recent.length
       if (avg >= 12) {
         const id = `slump-${ctx.year}-${r}-${d.id}`
+        const veteran = (d.age ?? 25) >= 32
         const slots = { driver: d.name, driver_last: lastName(d.name), team: teamName(ctx, d.teamId), round: r, recent_runs: listJoin(recent.map(fmtFinish)) }
+        // Many independent low-odds texture sources (several may fire) instead of generic filler.
+        const slumpTexture = [
+          texture(`${id}|upg`, ['{team} are understood to be fast-tracking upgrades to arrest the slide.', 'The hope at {team} is that new parts can turn it around.'], slots, 16),
+          texture(`${id}|chassis`, ['There is talk of a chassis change to rule out hidden damage.', 'A back-to-basics inspection of the car is reportedly under way.'], slots, 16),
+          texture(`${id}|psych`, ['Word is {driver_last} has been leaning on a sports psychologist.'], slots, 12),
+          texture(`${id}|luck`, ['Analysts put much of the run down to plain bad luck.', 'Some pundits insist the pace is still there and the results flatter to deceive.'], slots, 18),
+          texture(`${id}|tweet`, ['A cryptic post from {driver_last} only added to the intrigue.'], slots, 12),
+          texture(`${id}|spox`, ['A {team} spokesperson insisted there is no cause for concern.', 'The team line is that it is a blip and nothing more.'], slots, 14),
+          texture(`${id}|rivals`, ['Even rivals have offered private sympathy for the run.'], slots, 10),
+          texture(`${id}|age`, veteran ? ['Some in the paddock wonder aloud whether the years are catching up.'] : [], slots, 14),
+          texture(`${id}|mood`, ['{driver_last} cut a frustrated figure in the paddock.', '{driver_last} kept the post-race media duties brief.'], slots, 14),
+        ].filter(Boolean).join(' ')
         candidates.push({
           subject: d.id, score: slumpScore(avg),
           make: () => ({
@@ -1623,11 +1741,8 @@ function analysis(ctx: NewsContext): NewsArticle[] {
                 ['{driver} is enduring a difficult run.', 'The last few rounds have been bleak for {driver}.', 'Form has deserted {driver} at the worst time.'],
                 ['Recent finishes have read {recent_runs}.', 'The last three weekends brought {recent_runs}.', 'A run of {recent_runs} tells the story.']),
               compose(`${id}:p2`, slots,
-                ['Questions are being asked about the {driver_last} slump.', 'The paddock is starting to wonder where the turnaround comes from.', 'Confidence can be fragile when the points stop.'],
-                ['A strong weekend would settle plenty of nerves.', 'There is time to recover, but not endless time.', 'The underlying pace will need to resurface fast.']),
-              compose(`${id}:p3`, slots,
-                ['{team} will be working hard to find the root cause.', 'Whether it is the car or the driver is the question being asked.', 'Often these runs end as suddenly as they begin.'],
-                ['One clean weekend can change everything.', 'The talent does not vanish overnight.', 'A reset is needed, and quickly.']),
+                ['Questions are being asked about the {driver_last} slump.', 'The paddock is starting to wonder where the turnaround comes from.', 'For {team}, it is a problem that needs solving quickly.']),
+              slumpTexture,
               texture(`${id}|q`, [
                 '"We stay calm and keep digging," said {driver_last}.',
                 '"It will turn, I have no doubt," {driver_last} said.',
