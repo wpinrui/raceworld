@@ -934,6 +934,118 @@ function championship(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
+// TRIGGER: going into a round, a title (drivers and/or constructors) can be mathematically
+// clinched there. Lays out exactly what must happen, RaceFans-style. The two championships are
+// checked INDEPENDENTLY — they can fall at completely different races, and each gets its own
+// piece. This sim awards no fastest-lap point and runs no sprints, so a win is a flat 25 and
+// the constructors maximum is 43 (25+18), making the maths exact.
+function titleScenario(ctx: NewsContext): NewsArticle[] {
+  const N = ctx.calendar.length
+  const out: NewsArticle[] = []
+  const upTo = ctx.endOfSeason ? ctx.completedRounds : Math.min(ctx.completedRounds + 1, N)
+  const F1 = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
+  // Best (lowest-number) finish a rival may take while the leader still clinches (points < A).
+  const clinchPos = (A: number) => { for (let p = 1; p <= 10; p++) if (F1[p - 1] < A) return p; return 11 }
+  // Can each title be clinched at round rr (and is it not already won)?
+  const drvCanClinch = (rr: number) => { const d = driverStandingsAfter(ctx, rr - 1); if (d.length < 2) return false; const a = (d[0].points - d[1].points) + 25 - (N - rr) * 25; return a > 0 && a <= 50 }
+  const wccCanClinch = (rr: number) => { const c = constructorStandingsAfter(ctx, rr - 1); if (c.length < 2) return false; const a = (c[0].points - c[1].points) + CONSTRUCTOR_MAX_PER_RACE - (N - rr) * CONSTRUCTOR_MAX_PER_RACE; return a > 0 && a <= 2 * CONSTRUCTOR_MAX_PER_RACE }
+
+  for (let r = 2; r <= upTo; r++) {
+    const rem = N - r // races AFTER round r
+    if (rem < 1) continue // round r is the finale; that is its own kind of decider
+    const racesLeft = `${rem} ${plural(rem, 'race')}`
+
+    // --- Drivers ---
+    const ds = driverStandingsAfter(ctx, r - 1)
+    if (ds.length >= 2 && drvCanClinch(r)) {
+      const L = ds[0]
+      const conds: string[] = []
+      for (const j of ds.slice(1)) {
+        if (j.points + (rem + 1) * 25 < L.points) continue // out of mathematical contention
+        const A = (L.points + 25) - j.points - rem * 25
+        if (A > 25) continue // even winning, this rival cannot prevent the clinch
+        const pos = clinchPos(A)
+        conds.push(pos >= 11 ? `${lastName(j.driverName)} must finish outside the points` : `${lastName(j.driverName)} must finish no higher than ${ordinal(pos)}`)
+      }
+      let streak = 0
+      for (let k = r - 1; k >= 1; k--) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1); if (w && w.driverId === L.driverId) streak++; else break }
+      const seed = `scenario-${ctx.year}-${r}`
+      const slots: Record<string, string | number> = {
+        leader: L.driverName, leader_last: lastName(L.driverName), circuit: circuit(ctx, r), year: ctx.year,
+        rem, races_left: racesLeft, wins: L.wins, wins_word: plural(L.wins, 'win'), streak,
+        conds: conds.length ? listJoin(conds) : '',
+      }
+      const scenarioPara = conds.length
+        ? compose(`${seed}:s`, slots, ['First, {leader_last} must win the {circuit}.', '{leader_last} needs to win the {circuit} to begin with.'], ['Then {conds}.', 'On top of that, {conds}.'])
+        : compose(`${seed}:s`, slots, ['{leader_last} simply needs to win the {circuit}.', 'Win the {circuit}, and it is done.'], ['Do that and the title is sealed whatever the chasing pack does.', 'No other result on the day would matter.'])
+      out.push({
+        id: seed, category: 'championship_state', round: r, priority: 86,
+        headline: fill(pick([
+          'How {leader_last} can be crowned champion at the {circuit}',
+          'What {leader_last} needs to seal the title at the {circuit}',
+          '{leader} can wrap up the drivers title at the {circuit}',
+          'Drivers crown within reach for {leader} at the {circuit}',
+          '{leader_last} eyes the title at the {circuit}',
+        ], `${seed}|h`), slots),
+        dek: fill(pick([
+          '{leader} can seal the {year} drivers title at the {circuit}, with {races_left} to spare.',
+          'The permutations for {leader_last} to be champion at the {circuit}.',
+          '{leader} has a shot at the {year} crown at the {circuit}.',
+        ], `${seed}|d`), slots),
+        body: paras(
+          compose(`${seed}:p1`, slots,
+            ['{leader} can be crowned {year} World Champion at the {circuit}.', 'The {year} drivers title could be {leader_last}\'s by the end of the {circuit}.', '{leader_last} has the chance to wrap it up at the {circuit}.'],
+            ['It would come with {races_left} to spare.', 'A title sealed with {races_left} still to run would be some statement.']),
+          compose(`${seed}:form`, slots,
+            ['{leader_last} has {wins} {wins_word} this season.', 'With {wins} {wins_word} banked, {leader_last} has earned the chance.'],
+            streak >= 2 ? ['{streak} straight wins have brought the crown within touching distance.', 'A {streak}-race winning run has made it close to a formality.'] : ['']),
+          scenarioPara,
+          compose(`${seed}:close`, slots,
+            ['Miss the chance, and the coronation simply waits.', 'If the numbers do not fall right, the title will keep for another week.', 'Either way, it now looks a matter of when, not if.']),
+        ),
+      })
+    }
+
+    // --- Constructors (entirely separate timing) ---
+    const cs = constructorStandingsAfter(ctx, r - 1)
+    if (cs.length >= 2 && wccCanClinch(r)) {
+      const CG = cs[0].points - cs[1].points
+      const diffNeeded = rem * CONSTRUCTOR_MAX_PER_RACE - CG // net points lead-team must gain on rival
+      const reqPool = diffNeeded >= 0
+        ? [`{lead_team} must outscore {rival_team} by at least ${diffNeeded + 1} points at the {circuit}.`, `A net gain of ${diffNeeded + 1} points over {rival_team} would seal it for {lead_team}.`]
+        : [`{lead_team} hold such a lead that only {rival_team} outscoring them by more than ${-diffNeeded} points would keep the title open.`, `Short of {rival_team} outscoring {lead_team} by more than ${-diffNeeded} points, the title is theirs.`]
+      const seed = `wcc-scenario-${ctx.year}-${r}`
+      const slots: Record<string, string | number> = {
+        lead_team: cs[0].teamName, rival_team: cs[1].teamName, cg: CG, circuit: circuit(ctx, r), year: ctx.year,
+        rem, races_left: racesLeft,
+      }
+      out.push({
+        id: seed, category: 'championship_state', round: r, priority: 84,
+        headline: fill(pick([
+          'How {lead_team} can clinch the constructors title at the {circuit}',
+          'What {lead_team} need to seal the constructors crown at the {circuit}',
+          '{lead_team} can wrap up the constructors title at the {circuit}',
+          'Constructors crown within reach for {lead_team} at the {circuit}',
+        ], `${seed}|h`), slots),
+        dek: fill(pick([
+          '{lead_team} can seal the {year} constructors title at the {circuit}, with {races_left} to spare.',
+          'The constructors permutations for {lead_team} at the {circuit}.',
+          '{lead_team} have a shot at the {year} teams crown at the {circuit}.',
+        ], `${seed}|d`), slots),
+        body: paras(
+          compose(`${seed}:p1`, slots,
+            ['{lead_team} can be crowned {year} Constructors Champions at the {circuit}.', 'The {year} teams title could be {lead_team}\'s by the end of the {circuit}.'],
+            ['It would come with {races_left} to spare.', '{lead_team} carry a {cg}-point lead over {rival_team} into the weekend.']),
+          fill(pick(reqPool, `${seed}|req`), slots),
+          compose(`${seed}:close`, slots,
+            ['Fall short, and the wait goes on a little longer.', 'If not here, then soon enough.', 'The factory will be watching the maths closely.']),
+        ),
+      })
+    }
+  }
+  return out
+}
+
 // TRIGGER (gated): a tight title fight in the final third of the calendar. Emitted for the
 // late rounds where the gap is small and nobody has clinched, so the run-in gets coverage.
 function titleFight(ctx: NewsContext): NewsArticle[] {
@@ -1889,6 +2001,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...milestones(ctx),
     ...technicalRoundup(ctx),
     ...championship(ctx),
+    ...titleScenario(ctx),
     ...titleFight(ctx),
     ...features(ctx),
     ...analysis(ctx),
