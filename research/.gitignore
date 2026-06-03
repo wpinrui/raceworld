@@ -1,0 +1,8 @@
+# Generated research artefacts (scraped third-party headlines + derived reports) — keep the
+# scripts in git, not the output.
+the-race-headlines.md
+histogram.md
+uncategorised-sample.md
+research/
+__pycache__/
+*.pyc
