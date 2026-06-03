@@ -628,13 +628,18 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     const missed = evs.filter((e) => e.failed).map((e) => teamName(ctx, e.teamId))
     const circuitName = circuit(ctx, r)
     const seed = `tech-${ctx.year}-${r}`
-    // A representative driver from an upgrading team, for the (invented, unfalsifiable) mood line.
+    // A representative upgrading team: its real constructor position grounds the closing line,
+    // and one of its drivers carries the (invented, unfalsifiable) mood line.
     const repTeamId = (evs.find((e) => !e.failed) ?? evs[0]).teamId
     const repDriver = ctx.drivers.find((d) => d.teamId === repTeamId)
+    const cstandTech = constructorStandingsAfter(ctx, r)
+    const repPosIdx = cstandTech.findIndex((c) => c.teamId === repTeamId)
+    const repPos = repPosIdx >= 0 ? ordinal(repPosIdx + 1) : ''
     const slots: Record<string, string | number> = {
       circuit: circuitName, delivered: listJoin(delivered), missed: listJoin(missed),
       n: evs.length, teams: plural(evs.length, 'team'),
       up_driver: repDriver ? lastName(repDriver.name) : '',
+      rep_team: teamName(ctx, repTeamId), rep_pos: repPos,
     }
     const intro = compose(`${seed}:intro`, slots,
       [
@@ -675,20 +680,22 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
             'It is a setback, but not a fatal one.', 'The correlation work begins again.',
           ])
       : ''
-    const outlook = compose(`${seed}:outlook`, slots,
-      [
-        'The upgrade race will only intensify from here.',
-        'Every team knows standing still is going backwards.',
-        'The development war shows no sign of cooling.',
-        'Resources are finite, and the choices only get harder.',
-        'The pecking order can shift quickly when the parts land.',
-      ],
-      [
-        'The next few rounds will reveal who got their sums right.',
-        'Time will tell whether the gains hold up across circuits.',
-        'The true picture often takes a race or two to emerge.',
-        'Rivals will be watching the timing screens closely.',
-      ])
+    // Grounded close: the representative team's actual constructor position, not platitude.
+    const outlook = repPos
+      ? compose(`${seed}:outlook`, slots,
+          delivered.length
+            ? [
+                '{rep_team} sit {rep_pos} in the constructors, and will want the gains to stick.',
+                'For {rep_team}, {rep_pos} in the standings, the timing could hardly be better.',
+                '{rep_team} go again from {rep_pos}, hoping the step holds across the rounds ahead.',
+              ]
+            : [
+                '{rep_team}, {rep_pos} in the constructors, are still searching for the breakthrough.',
+                'For {rep_team}, stuck {rep_pos}, the wait for a genuine step goes on.',
+                '{rep_team} remain {rep_pos}, with the gap to close unchanged.',
+              ])
+      : compose(`${seed}:outlook`, slots,
+          ['The development race rolls straight on.', 'Back at the factory, the next parts are already on the bench.'])
     const techTexturePool = !repDriver
       ? []
       : delivered.length
