@@ -638,25 +638,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ]
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
-    const closerPara = compose(`${seed}:closer`, slots,
-      [
-        'It was {their} {win_ord} win of the season for {winner_last}, the kind of consistency that decides titles.',
-        'That makes it the {win_ord} win of the campaign for {winner_last}.',
-        'That is the {win_ord} win of the year for {winner_last}, each one harder to overlook than the last.',
-        'The {win_ord} win of the season for {winner_last} only adds to the weight of the campaign.',
-      ],
-      nextName
-        ? [
-            'Attention now turns to the {next_circuit}.',
-            'Next up is the {next_circuit}, where the standings will be tested again.',
-            'The {next_circuit} is next on the calendar.',
-          ]
-        : [
-            'That brings the season to its close.',
-            'And with that, the campaign is done.',
-            'The season ends here, the standings now final.',
-          ])
-
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
       headline: fill(pick([
@@ -675,7 +656,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner_last} wins the {circuit} and tightens {their} grip on the season.',
         'A composed afternoon from {winner_last} puts {team} on the top step at the {circuit}.',
       ], `${seed}|d`), slots),
-      body: paras(leadPara, startPara, attritionPara, texturePara, champPara, quotePara, closerPara),
+      body: paras(leadPara, startPara, attritionPara, texturePara, champPara, quotePara),
     })
   }
   return out
@@ -1361,34 +1342,46 @@ function features(ctx: NewsContext): NewsArticle[] {
       const seed = `feature-mid-${ctx.year}`
       const gap = ds[0].points - ds[1].points
       const slots = {
-        year: ctx.year, leader: ds[0].driverName, leader_last: lastName(ds[0].driverName), second: ds[1].driverName,
+        year: ctx.year, leader: ds[0].driverName, leader_last: lastName(ds[0].driverName), leader_poss: poss(lastName(ds[0].driverName)), second: ds[1].driverName,
         gap, gap_pts: plural(gap, 'point'), top_team: cs[0].teamName, third: ds[2]?.driverName ?? ds[1].driverName, round: r,
+        ...pronouns(ctx.drivers.find((d) => d.id === ds[0].driverId)?.gender),
       }
       out.push({
         id: seed, category: 'feature', round: r, priority: 82,
         headline: fill(pick([
-          'The {year} story so far', 'Half-distance and the {year} season takes shape',
-          'Taking stock at the {year} midpoint', 'The {year} season at half-time',
-          'Where the {year} championship stands',
+          '{leader_last} holds the upper hand at half-distance',
+          '{leader_last} leads {second} by {gap} {gap_pts} with the hard miles still to come',
+          'Halfway through {year}, {leader_last} is on top but far from clear',
+          'Why {leader_poss} lead over {second} is comfortable but not conclusive',
+          '{leader_last} leads and {top_team} rule as {year} reaches its midpoint',
         ], `${seed}|h`), slots),
         dek: fill(pick([
-          '{leader} leads, but the {year} season has plenty left to give.',
-          'A look at the form, the surprises and the questions at half-distance.',
-          'The {year} title race and the battles behind it, assessed.',
+          '{leader} carries a {gap}-point advantage into the second half of {year}, but the development race and the circuits ahead mean nothing is decided.',
+          'At round {round}, {leader_last} has converted pace into points more consistently than anyone, yet {second} and {third} stay close enough to make the next stretch defining.',
+          '{top_team} sit atop the constructors table and {leader} heads the drivers standings, but the midseason upgrade cycle could scramble both pictures.',
         ], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['We have reached the midpoint of the {year} season.', 'Half the {year} calendar is done.', 'With the season at half-distance, the picture is forming.'],
-            ['{leader} sits on top of the drivers standings.', 'It is {leader} who leads the way.', 'At the front, {leader} has set the pace.']),
-          compose(`${seed}:p2`, slots,
-            ['The lead over {second} stands at {gap} {gap_pts}.', '{leader} holds a {gap}-point advantage over {second}.', 'A margin of {gap} {gap_pts} separates {leader} and {second}.'],
-            ['It is close enough that nothing is settled.', 'There is daylight, but no comfort just yet.', 'The chasers remain firmly in touch.']),
-          compose(`${seed}:p3`, slots,
-            ['In the constructors race, {top_team} have set the standard.', '{top_team} lead the way among the teams.', 'It is {top_team} who top the constructors table.'],
-            ['{third} has been among the names to watch behind the leaders.', 'The battle for the minor places has been fierce.', 'Several drivers are still in the mix behind the top two.']),
-          compose(`${seed}:p4`, slots,
-            ['The second half will test depth, development and nerve.', 'How the contenders manage the run-in will define the year.', 'Upgrades and reliability could yet reshape everything.'],
-            ['On this evidence, the run-in promises plenty.', 'There is a season still to be won and lost.', '{leader_last} knows the job is only half done.']),
+          fill(pick([
+            '{leader} arrives at the midpoint having turned {their} car\'s strengths into points with a ruthlessness that has opened a {gap}-point gap over {second}.',
+            'The {gap}-point margin between {leader} and {second} at round {round} is meaningful but not decisive, one retirement for the leader and one win for the challenger enough to reshuffle the maths overnight.',
+            '{leader_poss} consistency has been {their} sharpest weapon, and where {second} has seen points dented by small errors and mechanical trouble, {leader_last} has banked them whenever the car was capable.',
+            '{second} has not been slow, the {gap}-point gap reflecting the fine margins at the front of the field more than any collapse in form.',
+            'At the midpoint of {year}, the championship reads as a {leader_last} advantage rather than a {leader_last} runaway, and the distinction matters for everything that follows.',
+          ], `${seed}|b1`), slots),
+          fill(pick([
+            '{top_team} lead the constructors on the strength of both cars scoring heavily, a depth single-car operations cannot match when reliability is even.',
+            'Behind {leader} and {second}, {third} has emerged as the most credible threat to the established order, pairing raw pace with the point-gathering focus that makes an outside challenger dangerous.',
+            'The constructors battle is not just about the quickest car on a Saturday, but about which team can field two consistent, trouble-free entries across very different circuits.',
+            '{third} has shown the gap to the leading pair is not fixed, and any weekend {leader} or {second} drops points opens a window.',
+            '{top_team} hold the constructors advantage for now, but the teams behind are narrowing the gap on upgrades.',
+          ], `${seed}|b2`), slots),
+          fill(pick([
+            'Development pace from here decides the title as much as driver craft, the team that extracts the most from upgrades carrying momentum into the run-in.',
+            'Reliability will matter as much as raw speed, a {gap}-point buffer capable of vanishing in two rounds of mechanical bad luck.',
+            'The circuits to come will test aerodynamic versatility, tyre management over long stints, and the ability to change set-up direction quickly.',
+            'Consistency under pressure is the real test of the second half, the driver who loses least when conditions are difficult usually the one lifting the trophy.',
+            '{leader_poss} rivals will study {their} weaker circuits, knowing a gap of {gap} {gap_pts} is surmountable while the maths still allow it.',
+          ], `${seed}|b3`), slots),
         ),
       })
     }
@@ -1402,34 +1395,45 @@ function features(ctx: NewsContext): NewsArticle[] {
     if (ds.length >= 1 && cs.length >= 1) {
       const seed = `feature-review-${ctx.year}`
       const slots = {
-        year: ctx.year, champ: ds[0].driverName, champ_last: lastName(ds[0].driverName),
+        year: ctx.year, champ: ds[0].driverName, champ_last: lastName(ds[0].driverName), champ_poss: poss(lastName(ds[0].driverName)),
         runner: ds[1]?.driverName ?? ds[0].driverName, top_team: cs[0].teamName, wins: ds[0].wins, wins_word: plural(ds[0].wins, 'win'),
+        ...pronouns(ctx.drivers.find((d) => d.id === ds[0].driverId)?.gender),
       }
       out.push({
         id: seed, category: 'feature', round: N, priority: 88,
         headline: fill(pick([
-          'The {year} season in review', 'How the {year} championship was won',
-          'Looking back on {year}', 'The story of the {year} season',
-          '{champ} and the making of {year}',
+          '{champ_last} delivers in {year} with {wins} {wins_word} and the title',
+          'How {champ_last} turned car pace into a {year} title',
+          '{top_team} and {champ_last} rule {year} as {runner} falls just short',
+          '{wins} {wins_word} and a world title, {champ_poss} {year} reviewed',
+          'The {year} championship belongs to {champ_last}, with {top_team} taking the constructors',
         ], `${seed}|h`), slots),
         dek: fill(pick([
-          '{champ} took the {year} crown after a long campaign.',
-          'A full accounting of the {year} season, start to finish.',
-          'The defining moments of {year}, revisited.',
+          '{champ} finishes {year} as world champion with {wins} {wins_word}, a lead that held when the pressure rose, and the constructors title alongside it for {top_team}.',
+          '{runner} pushed hardest and came closest, but {champ_poss} knack for harvesting points even when victory was off the table proved the decisive gap.',
+          '{top_team} dominate the constructors in {year}, built on the same dual consistency that made {champ_last} so hard to overhaul.',
         ], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['The {year} season is complete.', 'Another championship year is in the books.', 'The {year} campaign has run its course.'],
-            ['{champ} ends it as champion.', 'It is {champ} who stands tallest.', '{champ} claimed the crown.']),
-          compose(`${seed}:p2`, slots,
-            ['{champ} finished the year with {wins} {wins_word}.', 'A season of {wins} {wins_word} carried {champ} home.', 'It took {wins} {wins_word} for {champ} to get the job done.'],
-            ['{runner} pushed hardest in pursuit.', '{runner} was the closest challenger.', 'The chief threat came from {runner}.']),
-          compose(`${seed}:p3`, slots,
-            ['{top_team} were the standout constructor.', 'Among the teams, {top_team} set the benchmark.', 'It was {top_team} who led the constructors.'],
-            ['Their two-car strength proved decisive.', 'Consistency across the field told.', 'They simply scored more than anyone.']),
-          compose(`${seed}:p4`, slots,
-            ['Attention now turns to the off-season and the market.', 'The focus shifts to next year already.', 'Now the rebuilding and the rumours begin.'],
-            ['{champ_last} will start as the man to beat.', 'The challengers must regroup and come again.', 'The story resets, and the chase begins anew.']),
+          fill(pick([
+            '{champ} finishes {year} as world champion on the back of {wins} {wins_word}, a tally that understates how completely {they} controlled the title from the early rounds.',
+            '{runner} was the closest challenger and gave the championship its best stretches, yet when the pressure asked {champ_last} to respond, {they} did, at exactly the moments that mattered.',
+            'The {wins} {wins_word} {champ} took were not one purple patch, coming at different circuits and in different conditions, the mark of a complete championship effort.',
+            'What separated {champ} from {runner} was the accumulation of points in the finishes that fell short of victory, second and third banked when the win was not on, building the cushion that decided it.',
+            '{runner} can look back on a season where the pace was rarely in question, the final margin flattering neither the closeness of the fight nor the effort behind it.',
+          ], `${seed}|b1`), slots),
+          fill(pick([
+            '{top_team} leave {year} as constructors champions, earned through the dual consistency of two cars scoring in every condition the season served up.',
+            'The constructors crown reflects an organisational quality easy to understate, {top_team} arriving each weekend having understood the last and adjusted accordingly.',
+            'The season\'s defining shape was set early, {top_team} and {champ_last} building leads their rivals could trim but never overturn.',
+            'Where the teams chasing {top_team} found speed on their best circuits, they could not match the breadth of scoring that made the champions so hard to catch.',
+            '{year} had its twists and its moments of vulnerability at the front, but its defining arc was one of controlled authority from {top_team} and {champ_last}.',
+          ], `${seed}|b2`), slots),
+          fill(pick([
+            '{champ_last} enters the off-season as the benchmark every rival builds their winter around, a position that brings expectation as much as prestige.',
+            'For {runner} and that team, the winter begins knowing the gap to {champ_last} is not structural, the pace there on the right circuits and the job now to widen that list.',
+            '{top_team} carry the specific burden of the defending champion, every strength catalogued and every weakness filed by rivals over the months ahead.',
+            'The reset begins now, new tyres and revised development paths, and a grid that has spent a year learning exactly how far it must close on {champ_last}.',
+          ], `${seed}|b3`), slots),
         ),
       })
     }
