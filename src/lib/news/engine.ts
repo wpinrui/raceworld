@@ -1782,46 +1782,57 @@ function market(ctx: NewsContext): NewsArticle[] {
   for (const m of eos.marketMoves ?? []) {
     if (m.fromTeamId == null && !m.isResignation && m.mediaScore === 0) {
       const seed = `rookie-sign-${m.driverId}-${eos.seasonYear}`
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, next: eos.seasonYear + 1 }
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), driver_poss: poss(lastName(m.driverName)), team: m.toTeamName, team_poss: poss(m.toTeamName), next: eos.seasonYear + 1, ...pronouns(ctx.drivers.find((d) => d.id === m.driverId)?.gender) }
       out.push({
         id: seed, category: 'driver_signing', round: r, priority: 40,
-        headline: fill(pick(['{team} hand {driver} a debut', '{driver} promoted to {team}', '{team} bet on rookie {driver}', '{driver} gets the call from {team}'], `${seed}|h`), slots),
-        dek: fill(pick(['{driver} steps up to {team} for {next}.', 'A maiden seat for {driver}.', '{team} go with youth for {next}.'], `${seed}|d`), slots),
+        headline: fill(pick(['{team} hand {driver} a seat for {next}', '{team} hand {driver} a Formula 1 debut', '{driver} lands a maiden F1 drive with {team}', '{team} back youth as {driver} earns a {next} call-up'], `${seed}|h`), slots),
+        dek: fill(pick(['{team} have handed {driver} {their} first Formula 1 race seat ahead of {next}.', '{driver} will make {their} Formula 1 debut with {team} after the squad backed {them} for a full-time {next} drive.', '{team} have placed their faith in {driver}, confirming {them} as a race driver for {next}.'], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['{team} have handed a debut to {driver} for {next}.', '{driver} earns a first seat with {team} from {next}.', '{team} have promoted {driver} to a race seat.'],
-            ['It is a vote of confidence in youth.', 'The team backs raw potential over experience.', 'A bold call that says plenty about their plans.']),
-          compose(`${seed}:p2`, slots,
-            ['The step up to a full season is a steep one.', 'Expectations will be tempered, at least early on.', 'There will be lessons to absorb quickly.'],
-            ['But the opportunity is the kind every young driver craves.', 'Get it right and a career takes off.', 'The upside, if it clicks, is considerable.']),
-          compose(`${seed}:p3`, slots,
-            ['{driver_last} now has the winter to prepare.', 'All eyes will be on how the leap is handled.', 'The paddock will watch the adaptation with interest.'],
-            ['It is one of the stories to follow into {next}.', 'A promising chapter begins.', 'The pressure is on from day one.']),
+          fill(pick([
+            '{team} have confirmed {driver} as a race driver for {next}, ending months of speculation over the seat.',
+            '{driver} has been handed {their} first Formula 1 race seat by {team}, the appointment confirmed ahead of {next}.',
+            '{team} have promoted {driver} to a full race seat for {next}, bringing {them} onto the grid for the first time.',
+            'The {next} season will see {driver} make {their} Formula 1 debut, with {team} announcing the signing.',
+          ], `${seed}|b1`), slots),
+          fill(pick([
+            'The step into Formula 1 demands rapid adaptation to faster machinery, heavier tyre degradation and the unceasing pressure of a full race calendar.',
+            '{team} will expect {driver} to absorb the demands of a championship season while learning circuits that carry no prior Formula 1 experience.',
+            'Moving up from the junior categories brings a new level of aerodynamic complexity, pit-stop strategy and media obligation.',
+            '{driver_poss} ability to process information at speed and deliver consistent lap times across a stint will be the measure of {their} opening season.',
+          ], `${seed}|b2`), slots),
+          texture(`${seed}|q`, [
+            '"Getting this seat means everything to me, and I am ready for the challenge ahead," said {driver_last}.',
+            '"I know the work this demands, and I will not take a single lap for granted," said {driver_last}.',
+            '"This is the opportunity I have worked towards since karting, and I mean to make the most of it," said {driver_last}.',
+          ], slots, 35),
         ),
       })
       continue
     }
     if (m.isResignation) {
       const seed = `resign-${m.driverId}-${eos.seasonYear}`
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, until: m.contractExpiresAfterSeason }
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), driver_poss: poss(lastName(m.driverName)), team: m.toTeamName, team_poss: poss(m.toTeamName), next: eos.seasonYear + 1, until: m.contractExpiresAfterSeason, ...pronouns(ctx.drivers.find((d) => d.id === m.driverId)?.gender) }
       out.push({
         id: seed, category: 'driver_signing', round: r, priority: 60,
-        headline: fill(pick(['{driver} stays at {team}', '{team} keep {driver}', '{driver} re-signs with {team}', '{team} tie down {driver}', '{driver} commits to {team}'], `${seed}|h`), slots),
-        dek: fill(pick(['{driver} has re-signed with {team}.', 'Continuity at {team}.', '{driver} commits to {team} through {until}.'], `${seed}|d`), slots),
+        headline: fill(pick(['{driver} stays at {team} through {until}', '{team} lock in {driver} until {until}', '{driver} commits {their} future to {team}', '{team} secure {driver_poss} signature through {until}', '{driver} re-signs with {team} ahead of {next}'], `${seed}|h`), slots),
+        dek: fill(pick(['{driver} has extended {their} stay at {team}, signing a new contract that runs through {until}.', '{team} have tied {driver} to a fresh deal through {until}, removing the uncertainty around {their} future.', '{driver} will remain at {team} through {until} after the two sides agreed a new deal.'], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['{driver} will remain at {team}.', '{team} have kept hold of {driver}.', '{driver} has put pen to paper with {team} again.'],
-            ['The new deal runs until {until}.', 'The contract extends through {until}.', 'Both sides commit through {until}.']),
-          compose(`${seed}:p2`, slots,
-            ['It is continuity both parties wanted.', 'Stability looks the priority for the team.', 'A settled line-up is no small advantage.'],
-            ['Familiarity with the team is worth real performance.', 'The working relationship has clearly borne fruit.', 'There is value in not starting over.']),
-          compose(`${seed}:p3`, slots,
-            ['{driver_last} can now plan for the long term.', 'The focus shifts squarely to performance.', 'With the future settled, all that matters is results.'],
-            ['It removes one question mark from the off-season.', 'One seat, at least, is no longer in play.', 'The market has one fewer domino to fall.']),
+          fill(pick([
+            '{driver} has re-signed with {team}, extending a partnership that will now run through {until}.',
+            '{team} have confirmed {driver} will stay under a new contract that extends through {until}.',
+            'The {team} line-up is settled into the future after {driver} signed a deal covering {next} and beyond, through {until}.',
+            '{driver} and {team} have agreed a contract extension that keeps {them} at the squad through {until}.',
+          ], `${seed}|b1`), slots),
+          fill(pick([
+            'A stable pairing lets {team} pour their engineering resources into car development rather than bedding in a new driver.',
+            'Continuity gives {team} a platform to carry hard-won setup knowledge straight from one season into the next.',
+            'For {driver}, staying put means {they} can keep building on the working relationships and car understanding already in place.',
+            'The renewal takes {driver} out of the market and lets {team_poss} programme run on an unbroken line into {next}.',
+          ], `${seed}|b2`), slots),
           texture(`${seed}|q`, [
-            '"I am exactly where I want to be," said {driver_last}.',
-            '"There was never any real doubt," {driver_last} said.',
-            '"We have unfinished business together," said {driver_last}.',
+            '"I feel at home here, and I believe we have unfinished business together," said {driver_last}.',
+            '"The trust the team has shown me lets me focus entirely on performance," said {driver_last}.',
+            '"We have built something real, and I want to see where we can take it," said {driver_last}.',
           ], slots, 30),
         ),
       })
@@ -1832,27 +1843,33 @@ function market(ctx: NewsContext): NewsArticle[] {
         ? `a one-year deal for ${next}`
         : `a ${m.contractLength}-year deal through ${m.contractExpiresAfterSeason}`
       const from = m.fromTeamId ? teamName(ctx, m.fromTeamId) : ''
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, next, until: m.contractExpiresAfterSeason, term, from }
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), driver_poss: poss(lastName(m.driverName)), team: m.toTeamName, team_poss: poss(m.toTeamName), next, until: m.contractExpiresAfterSeason, term, from, ...pronouns(ctx.drivers.find((d) => d.id === m.driverId)?.gender) }
       out.push({
         id: seed, category: 'driver_signing', round: r, priority: 75,
-        headline: fill(pick(['{driver} signs for {team}', '{team} land {driver}', '{driver} joins {team}', '{team} swoop for {driver}', '{driver} on the move to {team}'], `${seed}|h`), slots),
-        dek: fill(pick(['{driver} switches to {team} for {next}.', 'A new chapter for {driver} at {team}.', '{team} make their move for {driver}.'], `${seed}|d`), slots),
+        headline: fill(pick(['{driver} joins {team} on {term}', '{team} land {driver} in an off-season move', '{driver} makes the switch to {team} for {next}', '{team} snap up {driver} ahead of {next}', '{driver} set for a fresh start at {team}'], `${seed}|h`), slots),
+        dek: fill(pick(['{driver} will race for {team} from {next} after the two sides agreed {term}.', '{team} have signed {driver} on {term} in one of the biggest moves of the off-season.', '{driver} is moving to {team}, the switch confirmed on {term}.'], `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['{driver} has agreed a move to {team}.', '{team} have signed {driver}.', '{driver} is on the way to {team}.'],
-            ['It is {term}.', '{driver_last} has signed {term}.', 'The agreement is {term}.']),
-          compose(`${seed}:p2`, slots,
-            ['It is a notable shake-up in the driver market.', 'The move reshapes the grid for {next}.', 'Expect knock-on effects up and down the paddock.'],
-            from
-              ? ['It ends {driver_last}\'s time at {from}.', 'A seat at {from} now opens up.', 'It leaves a vacancy at {from} for the market to fill.']
-              : ['It marks a return to a full-time race seat for {driver_last}.', 'It is a route back onto the grid for {driver_last}.']),
-          compose(`${seed}:p3`, slots,
-            ['{driver_last} now faces the task of adapting quickly.', 'Pre-season will be about building chemistry with {team}.', 'The pressure to deliver follows any big move.'],
-            ['It is one of the headline transfers of the off-season.', 'The grid for {next} suddenly looks different.', 'The deal is {term}.']),
+          fill(pick([
+            '{driver} has agreed {term} with {team}, one of the headline moves ahead of {next}.',
+            '{team} have secured {driver_poss} signature on {term}, bringing real experience into the fold for {next}.',
+            'The arrival of {driver} at {team} on {term} reshapes the grid picture heading into {next}.',
+            '{driver} joins {team} on {term}, a move that gives {them} a new platform to work from.',
+          ], `${seed}|b1`), slots),
+          from
+            ? fill(pick([
+                '{driver_poss} exit closes {their} time at {from}, leaving behind a vacancy the team must now fill before the season begins.',
+                'The move ends a significant chapter for {driver_last} at {from}, and the seat {they} vacate is among the most discussed on the grid.',
+                '{from} must now go to market for a replacement after {driver_poss} departure.',
+              ], `${seed}|b2`), slots)
+            : fill(pick([
+                'The deal marks a return to full-time Formula 1 for {driver_last} after a period away from the grid.',
+                '{driver_last} re-joins the grid through {team}, bringing experience forged during time outside a race seat.',
+                'The signing gives {driver_last} a route back to race weekends, {team} judging the hunger makes {them} the right fit.',
+              ], `${seed}|b2`), slots),
           texture(`${seed}|q`, [
-            '"I could not be more excited to join {team}," said {driver_last}.',
-            '"It is a new challenge and I am ready for it," {driver_last} said.',
-            '"When {team} came calling, it was an easy decision," said {driver_last}.',
+            '"The moment I understood what {team} were building, I knew I wanted to be part of it," said {driver_last}.',
+            '"There is real potential here, and this is exactly the challenge I was looking for," said {driver_last}.',
+            '"I leave with respect for everyone at my old team, but this opportunity was too compelling to pass up," said {driver_last}.',
             'The {team} principal called it "a signing that speaks to our ambition."',
           ], slots, 35),
         ),
@@ -1861,21 +1878,24 @@ function market(ctx: NewsContext): NewsArticle[] {
   }
   for (const d of eos.droppedDrivers ?? []) {
     const seed = `drop-${d.driverId}-${eos.seasonYear}`
-    const slots = { driver: d.driverName, driver_last: lastName(d.driverName), team: d.fromTeamName, next: eos.seasonYear + 1 }
+    const slots = { driver: d.driverName, driver_last: lastName(d.driverName), driver_poss: poss(lastName(d.driverName)), team: d.fromTeamName, team_poss: poss(d.fromTeamName), next: eos.seasonYear + 1, ...pronouns(ctx.drivers.find((x) => x.id === d.driverId)?.gender) }
     out.push({
       id: seed, category: 'driver_exit', round: r, priority: 55,
-      headline: fill(pick(['{driver} dropped by {team}', '{driver} loses {team} seat', '{team} part ways with {driver}', 'No {next} seat for {driver}', '{driver} left without a drive'], `${seed}|h`), slots),
-      dek: fill(pick(['{driver} is out at {team} for {next}.', '{driver} faces an uncertain future.', 'The end of the road at {team} for {driver}.'], `${seed}|d`), slots),
+      headline: fill(pick(['{team} drop {driver} ahead of {next}', '{driver} loses {their} {team} seat for {next}', '{team} move on from {driver} for {next}', '{driver} out as {team} overhaul the {next} line-up', '{driver} confirmed out at {team} for {next}'], `${seed}|h`), slots),
+      dek: fill(pick(['{team} will not retain {driver} for {next}, leaving {them} without a race seat.', '{driver_poss} time at {team} is over, the team confirming {they} will not feature in the {next} line-up.', '{driver} faces an uncertain future after {team} confirmed {their} departure ahead of {next}.'], `${seed}|d`), slots),
       body: paras(
-        compose(`${seed}:p1`, slots,
-          ['{driver} has been let go by {team}.', '{team} will not retain {driver}.', '{driver} is without a seat after {team} moved on.'],
-          ['The {next} grid will have to find room, if it can.', 'A return for {next} is far from guaranteed.', 'The market is short on vacancies.']),
-        compose(`${seed}:p2`, slots,
-          ['It is a harsh end to the chapter.', 'The market is unforgiving at this level.', 'Few second chances come along once a seat is lost.'],
-          ['Form and timing both went the wrong way.', 'The numbers, ultimately, did the talking.', 'Decisions like this are rarely sentimental.']),
-        compose(`${seed}:p3`, slots,
-          ['{driver_last} will hope a door opens elsewhere.', 'A reserve role may be the route back.', 'Reinvention is the only option now.'],
-          ['Careers have recovered from worse.', 'The phone will need to ring soon.', 'Time, as ever, is short.']),
+        fill(pick([
+          '{team} have told {driver} {they} will not be part of the squad for {next}, ending {their} tenure at the team.',
+          '{driver} has lost {their} race seat at {team} for {next}, the team confirming the split in a brief statement.',
+          'The {next} grid will not include {driver} in a {team} car after the team confirmed the decision to part ways.',
+          '{driver_poss} seat at {team} has gone for {next}, making {them} one of the most prominent free agents on the market.',
+        ], `${seed}|b1`), slots),
+        fill(pick([
+          'Formula 1 runs without sentiment, and the call shows how fast the ground can shift for a driver whatever the past contribution.',
+          '{driver_last} now enters a market where the race seats available are far fewer than the drivers chasing one.',
+          'The timing leaves {driver} a narrowing window to find an alternative before teams close out their {next} rosters.',
+          'Whether a way back opens depends on circumstances largely outside {driver_poss} control, though {their} record will still draw interest.',
+        ], `${seed}|b2`), slots),
       ),
     })
   }
