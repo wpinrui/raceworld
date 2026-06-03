@@ -313,7 +313,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const leadPara = compose(`${seed}:lead`, slots,
       [
         '{winner} won the {circuit}.', '{winner} took victory at the {circuit}.',
-        'Victory at the {circuit} went to {winner}.', '{winner} is the winner of the {circuit}.',
+        'Victory at the {circuit} went to {winner}.', '{winner} took the win at the {circuit}.',
         'It was {winner} who came out on top at the {circuit}.', 'The {circuit} belonged to {winner}.',
         '{winner} delivered when it counted at the {circuit}.', 'There was no stopping {winner} at the {circuit}.',
         '{winner} held on to win the {circuit}.', 'A polished afternoon gave {winner} the {circuit}.',
@@ -341,9 +341,9 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           ]
         : [''],
       [
-        'It is worth {points} points for {team}.', 'The result banks {points} points.',
-        'Another {points}-point haul for {team}.', '{team} leave with {points} hard-earned points.',
-        'That is {points} points in the bag for {team}.',
+        'It is worth the full {points} points.', '{winner_last} banks the maximum {points} points.',
+        'The win is worth {points} points.', 'That is {points} points for {winner_last}.',
+        'It is another {points}-point score for {winner_last}.',
       ],
     )
 
@@ -377,7 +377,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ]
       : ['']
     const qualiPool = pMargin && pole
-      ? ['{pole_last} had taken pole by {pole_margin}.', 'Qualifying had gone the way of {pole_last} by {pole_margin}.', 'The pole margin had been {pole_margin}.']
+      ? ['{pole_last} had taken pole by {pole_margin} on Saturday.', 'Qualifying had gone the way of {pole_last} by {pole_margin}.', '{pole_last} had edged pole by {pole_margin}.']
       : ['']
     const stratPool = strat
       ? [
@@ -409,14 +409,14 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
             'Not everyone made the flag, with {dnf_count} {cars} sidelined.',
           ],
           [
-            '{dnf_list} dropped out.', 'Out went {dnf_list}.',
-            '{dnf_list} did not see the flag.', 'They were {dnf_list}.',
+            '{dnf_list} dropped out.', '{dnf_list} were the cars to retire.',
+            '{dnf_list} did not see the flag.', '{dnf_list} failed to reach the flag.',
             '{dnf_list} were left to rue what might have been.',
           ])
 
     const texturePool = [
       '{winner_last} looked spent climbing from the cockpit.',
-      'Over the team radio it sounded like one of the harder afternoons of the year for {winner_last}.',
+      'Over the team radio, it sounded like one of the harder afternoons of the year for {winner_last}.',
       '{winner_last} was treated for dehydration once the cameras had moved on.',
       'The {team} mechanics were waiting at parc ferme to mob {winner_last}.',
       'A scruffy pit stop briefly set nerves jangling on the {team} wall.',
@@ -458,7 +458,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const closerPara = compose(`${seed}:closer`, slots,
       [
         'It is {winner_last}\'s {win_ord} win of the season.',
-        'That makes it {win_ord} win of the campaign for {winner_last}.',
+        'That makes it the {win_ord} win of the campaign for {winner_last}.',
         'The {win_ord} win of the year goes to {winner_last}.',
       ],
       nextName
