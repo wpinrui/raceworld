@@ -67,7 +67,37 @@ function teamName(ctx: NewsContext, id: string): string {
 }
 
 function circuit(ctx: NewsContext, round: number): string {
-  return ctx.calendar[round - 1]?.name ?? `Round ${round}`
+  const name = ctx.calendar[round - 1]?.name
+  return name ? name.replace(/\bGP\b/, 'Grand Prix') : `Round ${round}`
+}
+
+// Real-world track characteristics, keyed by circuit id. Unfalsifiable against the game (we
+// model no track type), so safe to use as preview colour. One entry per 2026 circuit.
+const CIRCUIT_TRAITS: Record<string, string> = {
+  australia: 'the flowing rhythm of Albert Park',
+  china: 'the long, energy-sapping corners of Shanghai',
+  japan: 'the fast esses of Suzuka',
+  bahrain: 'the abrasive Bahrain surface',
+  'saudi-arabia': 'the high-speed walls of Jeddah',
+  miami: 'the Miami heat',
+  imola: 'the narrow, old-school Imola',
+  monaco: 'the tight streets of Monaco',
+  spain: 'the aero-hungry corners of Barcelona',
+  canada: 'the stop-start rhythm of Montreal',
+  austria: 'the short, punchy Red Bull Ring',
+  britain: 'the high-speed sweeps of Silverstone',
+  belgium: 'the long lap and fickle weather of Spa',
+  hungary: 'the twisty, sweltering Hungaroring',
+  netherlands: 'the banking of Zandvoort',
+  italy: 'the low-downforce blast of Monza',
+  azerbaijan: 'the long straight and unforgiving walls of Baku',
+  singapore: 'the heat and humidity of Singapore',
+  usa: 'the bumps and elevation of Austin',
+  mexico: 'the thin air of Mexico City',
+  brazil: 'the altitude and changeable skies of Interlagos',
+  'las-vegas': 'the cold desert night of Las Vegas',
+  qatar: 'the relentless high-speed corners of Lusail',
+  'abu-dhabi': 'the smooth Yas Marina tarmac',
 }
 
 // Finishers first (by position), DNFs last.
@@ -1050,6 +1080,15 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const remaining = N - r + 1 // rounds from r to N inclusive
     const seed = `preview-${ctx.year}-${r}`
     const circuitName = circuit(ctx, r)
+    // Track-specific preview colour: a real circuit trait, linked to a top team and that team's
+    // chosen driver's actual recent form (on/off song).
+    const trait = CIRCUIT_TRAITS[ctx.calendar[r - 1]?.id ?? '']
+    const favC = cbefore.length ? pick(cbefore.slice(0, 3), `${seed}|favc`) : null
+    const favDrivers = favC ? ctx.drivers.filter((d) => d.teamId === favC.teamId) : []
+    const favDrv = favDrivers.length ? pick(favDrivers, `${seed}|favd`) : null
+    const favRecent = favDrv ? recentFinishesUpTo(ctx, favDrv.id, r - 1, 3) : []
+    const favAvg = favRecent.length ? favRecent.reduce((s, x) => s + x, 0) / favRecent.length : 99
+    const favForm = favAvg <= 6 ? 'on' : favAvg >= 12 ? 'off' : 'mid'
     const slots: Record<string, string | number> = {
       circuit: circuitName, round: r, year: ctx.year,
       leader: leader?.driverName ?? '', leader_last: leader ? lastName(leader.driverName) : '',
@@ -1057,7 +1096,19 @@ function previews(ctx: NewsContext): NewsArticle[] {
       lead_gap: leader ? leader.points - (second?.points ?? 0) : 0,
       leader_points: leader?.points ?? 0, leader_wins: leader?.wins ?? 0, wins_word: plural(leader?.wins ?? 0, 'win'),
       top_team: cbefore[0]?.teamName ?? '', remaining, rounds_word: plural(remaining, 'round'), n_teams: ctx.teams.length,
+      trait: trait ?? '', trait_cap: trait ? trait.charAt(0).toUpperCase() + trait.slice(1) : '',
+      fav_team: favC?.teamName ?? '', fav_driver: favDrv?.name ?? '',
     }
+    // Only meaningful once there is form to read (mid-season onward) and the trait is known.
+    const trackTexture = trait && favC && favDrv && r >= 3
+      ? texture(`${seed}|track`,
+          favForm === 'on'
+            ? ['{trait_cap} should suit {fav_team}, and with {fav_driver} in fine form, they will fancy their chances.', 'Expect {trait} to play into {fav_team}\'s hands, especially with {fav_driver} on song.', '{trait_cap} could favour {fav_team}, and {fav_driver} arrives in the form to exploit it.', '{fav_team} should relish {trait}, with {fav_driver} flying at just the right time.']
+            : favForm === 'off'
+            ? ['{trait_cap} might favour {fav_team}, but {fav_driver} has been off the boil, and that is a real talking point this weekend.', '{trait_cap} should suit {fav_team}, yet questions hang over {fav_driver} after a rough run.', 'On paper {trait} should play to {fav_team}\'s strengths, though {fav_driver} will need to rediscover some form first.', '{fav_team} ought to like {trait}, but {fav_driver} arrives under a cloud after a flat spell.']
+            : ['{trait_cap} could favour {fav_team}, with {fav_driver} one to watch.', 'Conditions around {trait} may suit {fav_team} and {fav_driver}.', '{trait_cap} should put {fav_team} and {fav_driver} in the conversation.'],
+          slots, 45)
+      : ''
     const body = isOpener
       ? paras(
           compose(`${seed}:intro`, slots,
@@ -1076,6 +1127,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
             (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to the name so far.'] : ['']),
           compose(`${seed}:wcc`, slots,
             cbefore[0] ? ['In the constructors, {top_team} lead the way.', '{top_team} head the teams standings.'] : ['{remaining} {rounds_word} still lie ahead.']),
+          trackTexture,
           texture(seed, ['{leader_last} arrived in the paddock looking unhurried.', 'There was a businesslike mood in the {circuit} paddock.', 'The title picture was on every microphone in the build-up.'], slots),
         )
     out.push({
