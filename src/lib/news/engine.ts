@@ -66,6 +66,12 @@ function teamName(ctx: NewsContext, id: string): string {
   return ctx.teams.find((t) => t.id === id)?.name ?? id
 }
 
+// Possessive form. Names ending in s (Mercedes, Williams, Haas, Racing Bulls) take a bare
+// apostrophe; everything else takes 's.
+function poss(name: string): string {
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`
+}
+
 function circuit(ctx: NewsContext, round: number): string {
   const name = ctx.calendar[round - 1]?.name
   return name ? name.replace(/\bGP\b/, 'Grand Prix') : `Round ${round}`
@@ -738,7 +744,7 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
       circuit: circuitName, delivered: listJoin(delivered), missed: listJoin(missed),
       n: evs.length, teams: plural(evs.length, 'team'),
       up_driver: repDriver ? lastName(repDriver.name) : '',
-      rep_team: teamName(ctx, repTeamId), rep_pos: repPos,
+      rep_team: teamName(ctx, repTeamId), rep_team_poss: poss(teamName(ctx, repTeamId)), rep_pos: repPos,
       part: pick(UPGRADE_PARTS, `${seed}|part`), area: pick(UPGRADE_AREAS, `${seed}|area`),
     }
     const intro = compose(`${seed}:intro`, slots,
@@ -778,7 +784,7 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
           'The {rep_team} {part} is the eye-catcher, said to address {area}.',
         ]
       : [
-          '{rep_team}\'s reworked {part} did not bring the {area} they were chasing.',
+          '{rep_team_poss} reworked {part} did not bring the {area} they were chasing.',
           'The new {part} {rep_team} fitted added little in {area}.',
           'For {rep_team}, the revised {part} left {area} no better than before.',
         ])
@@ -894,7 +900,7 @@ function championship(ctx: NewsContext): NewsArticle[] {
     const earlyClinch = remaining > 0
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const seed = `wcc-${ctx.year}`
-    const slots = { team: s[0].teamName, year: ctx.year, gap, round: r, races_left: racesLeft }
+    const slots = { team: s[0].teamName, team_poss: poss(s[0].teamName), year: ctx.year, gap, round: r, races_left: racesLeft }
     out.push({
       id: seed, category: 'championship_state', round: r, priority: 95,
       headline: fill(pick(earlyClinch
@@ -902,8 +908,8 @@ function championship(ctx: NewsContext): NewsArticle[] {
         : ['{team} take the Constructors title in the finale', '{team} are {year} Constructors Champions', '{team} win the Constructors at the last', '{team} hold on for the team title'],
         `${seed}|h`), slots),
       dek: fill(pick(earlyClinch
-        ? ['{team} have sealed the {year} Constructors Championship with {races_left} to spare.', '{team} cannot be caught in the Constructors standings.', 'The Constructors title is {team}\'s for {year}.']
-        : ['{team} take the {year} Constructors Championship in the season finale.', 'The Constructors title is decided at the last, and it is {team}\'s.', '{team} are crowned {year} Constructors Champions after going the distance.'],
+        ? ['{team} have sealed the {year} Constructors Championship with {races_left} to spare.', '{team} cannot be caught in the Constructors standings.', 'The Constructors title is {team_poss} for {year}.']
+        : ['{team} take the {year} Constructors Championship in the season finale.', 'The Constructors title is decided at the last, and it is {team_poss}.', '{team} are crowned {year} Constructors Champions after going the distance.'],
         `${seed}|d`), slots),
       body: paras(
         compose(`${seed}:p1`, slots,
@@ -1137,7 +1143,7 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
     mover: mover ? lastName(mover.driverName) : '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
     first_pts: firstPts ? lastName(firstPts.driverName) : '',
     faller: faller ? lastName(faller.driverName) : '',
-    upg_team: upg ? teamName(ctx, upg.teamId) : '',
+    upg_team: upg ? teamName(ctx, upg.teamId) : '', upg_team_poss: upg ? poss(teamName(ctx, upg.teamId)) : '',
   }
 
   let pool: string[]
@@ -1147,7 +1153,7 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
   else if (gain >= 6 && mover) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to}, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to {mover_to}.']
   else if (firstPts) pool = ['{first_pts} finally opened the account at the {prev_circuit} last time, and will look to build on it.', 'A first points finish for {first_pts} last time out was a long time coming.']
   else if (faller) pool = ['{faller} retired at the {prev_circuit} last time and will be desperate for a bounce-back.', 'A bounce-back is the order of the day for {faller} after retiring last time.']
-  else if (upg) pool = ['Whether {upg_team}\'s recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team}\'s new parts make a difference.']
+  else if (upg) pool = ['Whether {upg_team_poss} recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team_poss} new parts make a difference.']
   else return ''
   return fill(pick(pool, `${seed}|tp`), slots)
 }
@@ -1199,15 +1205,15 @@ function previews(ctx: NewsContext): NewsArticle[] {
       top_team: cbefore[0]?.teamName ?? '', wcc_second: cbefore[1]?.teamName ?? '', wcc_gap: wccGap,
       remaining, rounds_word: plural(remaining, 'round'), n_teams: ctx.teams.length,
       trait: trait ?? '', trait_cap: trait ? trait.charAt(0).toUpperCase() + trait.slice(1) : '',
-      fav_team: favC?.teamName ?? '', fav_driver: favDrv?.name ?? '',
+      fav_team: favC?.teamName ?? '', fav_team_poss: favC ? poss(favC.teamName) : '', fav_driver: favDrv?.name ?? '',
     }
     const trackTexture = trait && favC && favDrv && r >= 3
       ? texture(`${seed}|track`,
           favForm === 'on'
-            ? ['{trait_cap} should suit {fav_team}, and their {fav_driver} is in fine form to exploit it.', 'Expect {trait} to play into {fav_team}\'s hands, with {fav_driver} on song.', '{trait_cap} could favour {fav_team}, whose {fav_driver} arrives in the form to make it count.', '{fav_team} should relish {trait}, their {fav_driver} flying at just the right time.']
+            ? ['{trait_cap} should suit {fav_team}, whose driver {fav_driver} is in fine form to exploit it.', 'Expect {trait} to play into {fav_team_poss} hands, with {fav_driver} on song.', '{trait_cap} could favour {fav_team}, and {fav_team_poss} {fav_driver} arrives in the form to make it count.', '{fav_team} should relish {trait}, with {fav_driver} flying at just the right time.']
             : favForm === 'off'
-            ? ['{trait_cap} might favour {fav_team}, but their {fav_driver} has been off the boil, a real talking point this weekend.', '{trait_cap} should suit {fav_team}, yet questions hang over their {fav_driver} after a rough run.', 'On paper {trait} should play to {fav_team}\'s strengths, though their {fav_driver} must rediscover some form first.', '{fav_team} ought to like {trait}, but their {fav_driver} arrives under a cloud after a flat spell.']
-            : ['{trait_cap} could favour {fav_team}, with their {fav_driver} one to watch.', 'Conditions around {trait} may suit {fav_team} and their {fav_driver}.', '{trait_cap} should put {fav_team} and their {fav_driver} in the conversation.'],
+            ? ['{trait_cap} might favour {fav_team}, but {fav_team_poss} {fav_driver} has been off the boil, a real talking point this weekend.', '{trait_cap} should suit {fav_team}, yet questions hang over {fav_team_poss} {fav_driver} after a rough run.', 'On paper {trait} should play to {fav_team_poss} strengths, though {fav_driver} must rediscover some form first.', '{fav_team} ought to like {trait}, but {fav_team_poss} {fav_driver} arrives under a cloud after a flat spell.']
+            : ['{trait_cap} could favour {fav_team}, with {fav_driver} one to watch.', 'Conditions around {trait} may suit {fav_team} and {fav_driver}.', '{trait_cap} should put {fav_team} and {fav_driver} in the conversation.'],
           slots, 45)
       : ''
 
@@ -1554,7 +1560,7 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       // Status descriptor for "would be adding {status}" — grounded so it can't contradict.
       const wins = winsUpTo(ctx, m.driverId, r)
       const status = wins > 0 ? 'a proven race winner' : (dRank >= 0 && dRank < 4 ? 'an upper-echelon talent' : 'a known quantity')
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal, status }
+      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, to_poss: poss(m.toTeamName), from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal, status }
       // Texture from many independent low-odds sources (each ~10%, several can fire) rather than
       // one heavy line — sightings, rival suitors, the driver in the pen, a team line, fans, pundits.
       const sillyTexture = [
@@ -1568,7 +1574,7 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       out.push({
         id: seed, category: 'silly_season', round: r, priority: 30,
         headline: fill(pick([
-          'Rumour has {driver} linked with {to}', '{driver} on {to}\'s radar', 'Could {driver} swap {from} for {to}?',
+          'Rumour has {driver} linked with {to}', '{driver} on {to_poss} radar', 'Could {driver} swap {from} for {to}?',
           '{to} eyeing a move for {driver}', 'Is {driver} bound for {to}?', 'Speculation grows around {driver}',
           'Is a {driver} switch to {to} on?', '{driver} the name on everyone\'s lips',
         ], `${seed}|h`), slots),
