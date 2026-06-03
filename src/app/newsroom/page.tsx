@@ -30,7 +30,14 @@ export default function NewsroomPage() {
   const [archivedYears, setArchivedYears] = useState<number[]>([])
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
   const [loadingArchive, setLoadingArchive] = useState(false)
-  useEffect(() => setHydrated(true), [])
+  useEffect(() => {
+    setHydrated(true)
+    // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
+    if (typeof window !== 'undefined' && window.location.hash.length > 1) {
+      const id = decodeURIComponent(window.location.hash.slice(1))
+      if (id) { setSelectedId(id); setFilter(null) }
+    }
+  }, [])
 
   // Discover which past seasons have news to read.
   useEffect(() => {

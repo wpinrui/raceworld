@@ -1,184 +1,142 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { DriverLink, TeamLink } from '@/components/world/EntityLink'
-import type { RaceResult } from '@/lib/sim/types'
+import { generateNews, CATEGORY_LABELS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
 
-// A headline is a sequence of plain text and linked-entity spans, so names stay
-// clickable while the surrounding copy reads as one terse broadcast line.
-type Token =
-  | { text: string }
-  | { kind: 'driver'; id: string; name: string }
-  | { kind: 'team'; id: string; name: string }
+// Off-track / market stories get the red accent; on-track stories get cyan.
+const RED_CATEGORIES = new Set([
+  'championship_state', 'silly_season', 'driver_signing', 'driver_exit', 'career_retirement',
+])
 
-interface Headline {
-  key: string
-  accent: 'cyan' | 'red'
-  tokens: Token[]
+function roundLabel(round: number, calLen: number): string {
+  if (round <= 0) return 'Pre-season'
+  if (round > calLen) return 'Off-season'
+  return `Round ${round}`
 }
 
-const t = (text: string): Token => ({ text })
-const driver = (id: string, name: string): Token => ({ kind: 'driver', id, name })
-const team = (id: string, name: string): Token => ({ kind: 'team', id, name })
-
-// Most recent round (1-indexed) that has results, plus the results themselves.
-function lastCompletedRound(raceResults: RaceResult[][]): { round: number; results: RaceResult[] } | null {
-  for (let i = raceResults.length - 1; i >= 0; i--) {
-    if (raceResults[i] && raceResults[i].length > 0) return { round: i + 1, results: raceResults[i] }
-  }
-  return null
-}
-
-export function HeadlinesPanel() {
-  const raceResults = useSeasonStore((s) => s.raceResults)
-  const driverStandings = useSeasonStore((s) => s.driverStandings)
-  const constructorStandings = useSeasonStore((s) => s.constructorStandings)
-  const year = useSeasonStore((s) => s.year)
-
-  const headlines: Headline[] = []
-  const last = lastCompletedRound(raceResults)
-
-  if (!last) {
-    // Early season — no race run yet. Lead with a season-opener preview.
-    const opener = calendar2026[0]
-    headlines.push({
-      key: 'opener',
-      accent: 'cyan',
-      tokens: [t(`Lights out for the ${year} season — ${opener.name} opens at ${opener.location}`)],
-    })
-    const fav = driverStandings[0]
-    if (fav) {
-      headlines.push({
-        key: 'fav',
-        accent: 'cyan',
-        tokens: [t('All eyes on '), driver(fav.driverId, fav.driverName), t(' as the grid lines up')],
-      })
-    }
-    const favTeam = constructorStandings[0]
-    if (favTeam) {
-      headlines.push({
-        key: 'fav-team',
-        accent: 'red',
-        tokens: [team(favTeam.teamId, favTeam.teamName), t(' head the constructors order into round 1')],
-      })
-    }
-  } else {
-    const race = calendar2026[last.round - 1]
-    const winner = last.results.find((r) => r.finishPosition === 1)
-
-    // 1. Last race winner.
-    if (winner && race) {
-      headlines.push({
-        key: 'winner',
-        accent: 'cyan',
-        tokens: [driver(winner.driverId, winner.driverName), t(` wins the ${race.name}`)],
-      })
-    }
-
-    // 2. Championship leader.
-    const p1 = driverStandings[0]
-    if (p1) {
-      headlines.push({
-        key: 'leader',
-        accent: 'cyan',
-        tokens: [driver(p1.driverId, p1.driverName), t(` leads the championship on ${p1.points} pts`)],
-      })
-    }
-
-    // 3. Title gap, P1 vs P2.
-    const p2 = driverStandings[1]
-    if (p1 && p2) {
-      const gap = p1.points - p2.points
-      headlines.push({
-        key: 'gap',
-        accent: 'red',
-        tokens:
-          gap === 0
-            ? [driver(p1.driverId, p1.driverName), t(' level with '), driver(p2.driverId, p2.driverName), t(' at the top')]
-            : [
-                driver(p1.driverId, p1.driverName),
-                t(` ${gap} pts clear of `),
-                driver(p2.driverId, p2.driverName),
-              ],
-      })
-    }
-
-    // 4. Constructors' leader.
-    const c1 = constructorStandings[0]
-    if (c1) {
-      headlines.push({
-        key: 'constructor',
-        accent: 'red',
-        tokens: [team(c1.teamId, c1.teamName), t(` top the constructors on ${c1.points} pts`)],
-      })
-    }
-
-    // 5. Standout — biggest grid-to-flag climber in the last race, else the
-    //    season's win leader.
-    const climbers = last.results
-      .filter((r) => !r.dnf && r.finishPosition !== null)
-      .map((r) => ({ r, climb: r.gridPosition - (r.finishPosition ?? r.gridPosition) }))
-      .sort((a, b) => b.climb - a.climb)
-    const best = climbers[0]
-    if (best && best.climb >= 2 && race) {
-      headlines.push({
-        key: 'climber',
-        accent: 'cyan',
-        tokens: [
-          driver(best.r.driverId, best.r.driverName),
-          t(` climbs ${best.climb} places at ${race.location}`),
-        ],
-      })
-    } else {
-      const winLeader = [...driverStandings].sort((a, b) => b.wins - a.wins)[0]
-      if (winLeader && winLeader.wins > 0) {
-        headlines.push({
-          key: 'winleader',
-          accent: 'cyan',
-          tokens: [
-            driver(winLeader.driverId, winLeader.driverName),
-            t(` leads the way with ${winLeader.wins} ${winLeader.wins === 1 ? 'win' : 'wins'} so far`),
-          ],
-        })
-      }
-    }
-  }
-
-  // Keep the panel tight: 4–6 lines.
-  const shown = headlines.slice(0, 6)
+// Modal reader for a single headline. Shows the full article and links through to the
+// newsroom (deep-linked via the URL hash, so the news tab opens on this exact story).
+function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   return (
-    <Panel title="Headlines" flush>
-      <ul>
-        {shown.map((h) => (
-          <li
-            key={h.key}
-            className="flex items-start gap-3 px-5 py-2.5 border-b border-[#2A3142] last:border-b-0"
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[#2A3142]">
+          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">
+            {CATEGORY_LABELS[article.category] ?? article.category} · {roundLabel(article.round, calendar2026.length)}
+          </p>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-[#FFFFFF] hover:text-[#00D9FF] transition-colors text-lg leading-none cursor-pointer"
           >
-            <span
-              className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: h.accent === 'cyan' ? '#00D9FF' : '#DC143C' }}
-            />
-            <p className="text-sm leading-snug text-[#FFFFFF]">
-              {h.tokens.map((tok, i) =>
-                'text' in tok ? (
-                  <span key={i}>{tok.text}</span>
-                ) : tok.kind === 'driver' ? (
-                  <DriverLink key={i} id={tok.id} className="font-semibold text-[#FFFFFF]">
-                    {tok.name}
-                  </DriverLink>
-                ) : (
-                  <TeamLink key={i} id={tok.id} className="font-semibold text-[#FFFFFF]">
-                    {tok.name}
-                  </TeamLink>
-                ),
-              )}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-3">
+          <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]">{article.headline}</h2>
+          <p className="text-sm italic text-[#FFFFFF]">{article.dek}</p>
+          <div className="space-y-3 text-sm leading-relaxed text-[#FFFFFF]">
+            {article.body.split(/\n\n+/).map((p, i) => <p key={i}>{p.trim()}</p>)}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-[#2A3142]">
+          <Link
+            href={`/newsroom#${encodeURIComponent(article.id)}`}
+            className="text-xs font-semibold uppercase tracking-widest text-[#00D9FF] hover:text-[#009CB8] transition-colors"
+          >
+            Read in the newsroom →
+          </Link>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-[#2A3142] hover:bg-[#303848] text-[#FFFFFF] text-xs font-bold tracking-widest uppercase rounded transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// The home headlines ARE the newsroom feed — same engine, top stories only — so the
+// front page and the newsroom never disagree. Clicking a line opens it in a modal; the
+// panel title jumps straight to the news tab.
+export function HeadlinesPanel() {
+  const year = useSeasonStore((s) => s.year)
+  const phase = useSeasonStore((s) => s.phase)
+  const raceResults = useSeasonStore((s) => s.raceResults)
+  const drivers = useSeasonStore((s) => s.drivers)
+  const teams = useSeasonStore((s) => s.teams)
+  const driverStandings = useSeasonStore((s) => s.driverStandings)
+  const constructorStandings = useSeasonStore((s) => s.constructorStandings)
+  const allUpgradeEvents = useSeasonStore((s) => s.allUpgradeEvents)
+  const constructorHistory = useSeasonStore((s) => s.constructorHistory)
+  const endOfSeasonSummary = useSeasonStore((s) => s.endOfSeasonSummary)
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  const headlines = useMemo(() => {
+    const ctx: NewsContext = {
+      year, phase, completedRounds: raceResults.length, drivers, teams, raceResults,
+      driverStandings, constructorStandings, upgradeEvents: allUpgradeEvents,
+      constructorHistory, endOfSeason: endOfSeasonSummary, calendar: calendar2026, live: true,
+    }
+    return generateNews(ctx).slice(0, 6)
+  }, [year, phase, raceResults, drivers, teams, driverStandings, constructorStandings, allUpgradeEvents, constructorHistory, endOfSeasonSummary])
+
+  const open = headlines.find((h) => h.id === openId) ?? null
+
+  const title = (
+    <Link href="/newsroom" className="hover:text-[#00D9FF] transition-colors inline-flex items-center gap-1">
+      Headlines <span aria-hidden>→</span>
+    </Link>
+  )
+
+  return (
+    <>
+      <Panel title={title} flush>
+        {headlines.length === 0 ? (
+          <p className="px-5 py-3 text-sm text-[#FFFFFF]">No headlines yet. Run a race and the newsroom will fill up.</p>
+        ) : (
+          <ul>
+            {headlines.map((h) => (
+              <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
+                <button
+                  onClick={() => setOpenId(h.id)}
+                  className="w-full text-left flex items-start gap-3 px-5 py-2.5 hover:bg-[#0F1419]/50 transition-colors cursor-pointer"
+                >
+                  <span
+                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: RED_CATEGORIES.has(h.category) ? '#DC143C' : '#00D9FF' }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
+                    <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
+                      {CATEGORY_LABELS[h.category] ?? h.category} · {roundLabel(h.round, calendar2026.length)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      {open && <ArticleModal article={open} onClose={() => setOpenId(null)} />}
+    </>
   )
 }
