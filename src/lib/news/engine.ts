@@ -733,7 +733,11 @@ function technicalRoundup(ctx: NewsContext): NewsArticle[] {
     const seed = `tech-${ctx.year}-${r}`
     // A representative upgrading team: its real constructor position grounds the closing line,
     // and one of its drivers carries the (invented, unfalsifiable) mood line.
-    const repTeamId = (evs.find((e) => !e.failed) ?? evs[0]).teamId
+    // The representative team is the BIGGEST delivered upgrade this round (largest pace gain),
+    // so "the eye-catcher" genuinely is the most significant package; fall back to the biggest
+    // of the misfires if none delivered.
+    const repPool = evs.filter((e) => !e.failed).length ? evs.filter((e) => !e.failed) : evs
+    const repTeamId = [...repPool].sort((a, b) => b.paceDelta - a.paceDelta)[0].teamId
     const repTeamDrivers = ctx.drivers.filter((d) => d.teamId === repTeamId)
     const repDriver = repTeamDrivers.length ? pick(repTeamDrivers, `${seed}|updrv`) : undefined
     const cstandTech = constructorStandingsAfter(ctx, r)
@@ -963,7 +967,7 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const hhPhrase = h2hL === h2hS ? `level at ${h2hL}-${h2hS}` : `${Math.max(h2hL, h2hS)}-${Math.min(h2hL, h2hS)} in ${h2hL > h2hS ? lastName(s[0].driverName) : lastName(s[1].driverName)}'s favour`
     const slots = {
       leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName),
-      gap, remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE,
+      gap, gap_pts: plural(gap, 'point'), remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE,
       lw: s[0].wins, sw: s[1].wins, lw_word: plural(s[0].wins, 'win'),
       hh_phrase: hhPhrase, mom_last: momLast, mom_other: momOther, mom_hi: Math.max(pl, ps), mom_lo: Math.min(pl, ps),
     }
@@ -979,19 +983,19 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
       id: seed, category: 'championship_state', round: r, priority: 75,
       headline: fill(pick([
         'Title fight goes down to the wire', '{leader} and {second} locked in a duel',
-        'Just {gap} points in it at the top', 'The championship is alive',
+        'Just {gap} {gap_pts} in it at the top', 'The championship is alive',
         '{leader} holds off {second} in the title race', 'Advantage {leader}, but only just',
-        '{gap} points to settle a championship',
+        '{gap} {gap_pts} to settle a championship',
       ], `${seed}|h`), slots),
       dek: fill(pick([
-        'Only {gap} points split the top two with {races_left} to go.',
+        'Only {gap} {gap_pts} split the top two with {races_left} to go.',
         '{leader} leads {second} by {gap} as the season nears its climax.',
-        'The run-in is set up for a fight, {gap} points the margin.',
+        'The run-in is set up for a fight, {gap} {gap_pts} the margin.',
       ], `${seed}|d`), slots),
       body: paras(
         compose(`${seed}:p1`, slots,
           ['The championship is going to the wire.', 'This title race is far from settled.', 'It is advantage {leader}, but only just.'],
-          ['Only {gap} points separate {leader} and {second} with {races_left} remaining.', 'The gap stands at {gap} points with {races_left} left to run.', '{gap} points is all that divides the top two.']),
+          ['Only {gap} {gap_pts} separate {leader} and {second} with {races_left} remaining.', 'The gap stands at {gap} {gap_pts} with {races_left} left to run.', '{gap} {gap_pts} is all that divides the top two.']),
         compose(`${seed}:form`, slots,
           ['{leader_last} has {lw} {lw_word} this year to {second_last}\'s {sw}.', 'On wins, {leader_last} leads {lw} to {sw}.', 'The win column reads {lw} to {sw} in {leader_last}\'s favour.'],
           ['Their season head-to-head is {hh_phrase}.', 'In races where both finished, the head-to-head sits {hh_phrase}.'],
@@ -1026,7 +1030,7 @@ function features(ctx: NewsContext): NewsArticle[] {
       const gap = ds[0].points - ds[1].points
       const slots = {
         year: ctx.year, leader: ds[0].driverName, leader_last: lastName(ds[0].driverName), second: ds[1].driverName,
-        gap, top_team: cs[0].teamName, third: ds[2]?.driverName ?? ds[1].driverName, round: r,
+        gap, gap_pts: plural(gap, 'point'), top_team: cs[0].teamName, third: ds[2]?.driverName ?? ds[1].driverName, round: r,
       }
       out.push({
         id: seed, category: 'feature', round: r, priority: 82,
@@ -1045,7 +1049,7 @@ function features(ctx: NewsContext): NewsArticle[] {
             ['We have reached the midpoint of the {year} season.', 'Half the {year} calendar is done.', 'With the season at half-distance, the picture is forming.'],
             ['{leader} sits on top of the drivers standings.', 'It is {leader} who leads the way.', 'At the front, {leader} has set the pace.']),
           compose(`${seed}:p2`, slots,
-            ['The lead over {second} stands at {gap} points.', '{leader} holds a {gap}-point advantage over {second}.', 'A margin of {gap} points separates {leader} and {second}.'],
+            ['The lead over {second} stands at {gap} {gap_pts}.', '{leader} holds a {gap}-point advantage over {second}.', 'A margin of {gap} {gap_pts} separates {leader} and {second}.'],
             ['It is close enough that nothing is settled.', 'There is daylight, but no comfort just yet.', 'The chasers remain firmly in touch.']),
           compose(`${seed}:p3`, slots,
             ['In the constructors race, {top_team} have set the standard.', '{top_team} lead the way among the teams.', 'It is {top_team} who top the constructors table.'],
@@ -1196,13 +1200,23 @@ function previews(ctx: NewsContext): NewsArticle[] {
       : `${rookieNames.length} rookies line up for their maiden Grand Prix.`
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
+    const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
+    // Occasional qualitative descriptor for the gap, by how it compares to the points still on
+    // offer. Gated so it is not slapped on every preview; a bare number is often plenty.
+    const availLeft = remaining * DRIVER_MAX_PER_RACE
+    const ratio = leadGap > 0 && availLeft > 0 ? leadGap / availLeft : 0
+    const band = ratio >= 0.6 ? ['a commanding ', 'an almost insurmountable ', 'an imposing ']
+      : ratio >= 0.28 ? ['a healthy ', 'a comfortable ', 'a substantial ']
+      : leadGap > 0 && ratio <= 0.12 ? ['a slender ', 'a narrow ', 'a wafer-thin ']
+      : ['']
+    const gapDesc = band[0] && chance(`${seed}|gd`, 45) ? pick(band, `${seed}|gd`) : ''
     const slots: Record<string, string | number> = {
       circuit: circuitName, round: r, year: ctx.year,
       leader: leader?.driverName ?? '', leader_last: leader ? lastName(leader.driverName) : '',
       second: second?.driverName ?? '', second_last: second ? lastName(second.driverName) : '',
-      lead_gap: leader ? leader.points - (second?.points ?? 0) : 0,
+      lead_gap: leadGap, gap_desc: gapDesc, gap_pts: plural(leadGap, 'point'),
       leader_points: leader?.points ?? 0, leader_wins: leader?.wins ?? 0, wins_word: plural(leader?.wins ?? 0, 'win'),
-      top_team: cbefore[0]?.teamName ?? '', wcc_second: cbefore[1]?.teamName ?? '', wcc_gap: wccGap,
+      top_team: cbefore[0]?.teamName ?? '', wcc_second: cbefore[1]?.teamName ?? '', wcc_gap: wccGap, wcc_pts: plural(wccGap, 'point'),
       remaining, rounds_word: plural(remaining, 'round'), n_teams: ctx.teams.length,
       trait: trait ?? '', trait_cap: trait ? trait.charAt(0).toUpperCase() + trait.slice(1) : '',
       fav_team: favC?.teamName ?? '', fav_team_poss: favC ? poss(favC.teamName) : '', fav_driver: favDrv?.name ?? '',
@@ -1230,14 +1244,14 @@ function previews(ctx: NewsContext): NewsArticle[] {
       : paras(
           compose(`${seed}:intro`, slots,
             ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'Attention turns to the {circuit}.'],
-            ['{leader} leads on {leader_points}, {lead_gap} points clear of {second}.', '{leader} arrives {lead_gap} points ahead of {second}.', 'It is {leader} who tops the table, {lead_gap} points up on {second}.']),
+            ['{leader} leads on {leader_points}, {gap_desc}{lead_gap} {gap_pts} clear of {second}.', '{leader} arrives {gap_desc}{lead_gap} {gap_pts} ahead of {second}.', 'It is {leader} who tops the table, {gap_desc}{lead_gap} {gap_pts} up on {second}.']),
           talkingPoint,
           compose(`${seed}:stake`, slots,
             ['{second_last} will be looking to chip away over the {remaining} {rounds_word} that remain.', 'For {second_last}, the clock is ticking, with {remaining} {rounds_word} left.', 'The chase has {remaining} {rounds_word} left to run.'],
             (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to the name so far.'] : ['']),
           compose(`${seed}:wcc`, slots,
             cbefore[1]
-              ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} points.', '{top_team} head the teams standings, {wcc_gap} points clear of {wcc_second}.']
+              ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
               : ['{top_team} head the constructors standings.']),
           trackTexture,
         )
@@ -1550,6 +1564,7 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       const seed = `silly-${ctx.year}-${r}-${m.driverId}`
       const drv = ctx.drivers.find((d) => d.id === m.driverId)
       const veteran = (drv?.age ?? 25) >= 30
+      const outOfContract = !!drv && drv.contractExpiresAfterSeason <= ctx.year
       // Ambiguous, unfalsifiable "qualities" that fit "value {driver}'s {appeal}" — age-aware so
       // we never claim something the data could contradict.
       // Each fits "value {driver}'s {appeal}", so no leading article.
@@ -1602,8 +1617,10 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
               : [''],
             ['{to} would be adding {status}.', 'For {to}, it would be a statement of intent.', 'Each party has something the other wants.']),
           compose(`${seed}:p3`, slots,
-            ['Nothing is signed, and {from} will not give up {driver_last} easily.', 'It remains speculation, but a persistent kind.', 'Whether it comes off is another matter entirely.'],
-            ['Silly season has a long way still to run.', 'Expect the story to develop over the coming rounds.', 'The driver market rarely moves in a straight line.']),
+            ['Nothing is signed, and {from} would still have to release {driver_last}.', 'For now it is talk, and {from} hold the cards.', 'Any deal hinges on {from} being willing to let {driver_last} go.'],
+            outOfContract
+              ? ['Crucially, {driver_last}\'s deal is up at the end of the year, which only adds fuel.', 'Out of contract at season\'s end, {driver_last} is free to listen to offers.']
+              : ['But {driver_last} is tied to {from} beyond this season, complicating any switch.', 'With time still left on the contract, {from} are under no pressure to sell.']),
         ),
       })
     }
