@@ -42,6 +42,43 @@ function HeaderStat({ label, value, tier = 3 }: { label: string; value: number; 
   )
 }
 
+// Photo URL override with a live preview, so a link the browser cannot load as an image
+// (hotlink-protected pages, search-result URLs, non-direct links) is obvious here rather than
+// silently falling back to the generated avatar on the page.
+function PhotoField({ value, onChange, inputClass }: { value: string | undefined; onChange: (v: string | undefined) => void; inputClass: string }) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <div>
+      <label className="text-xs text-[#FFFFFF] block mb-1">Photo URL (override)</label>
+      <input
+        type="text"
+        placeholder="https://… direct image link (blank = generated avatar)"
+        value={value ?? ''}
+        onChange={(e) => { setFailed(false); onChange(e.target.value || undefined) }}
+        className={inputClass}
+      />
+      {value ? (
+        <div className="mt-2 flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={value}
+            alt="preview"
+            width={44}
+            height={44}
+            onError={() => setFailed(true)}
+            onLoad={() => setFailed(false)}
+            className="rounded-lg object-cover bg-[#2A3142] border border-[#303848]"
+            style={{ width: 44, height: 44 }}
+          />
+          <span className={`text-xs ${failed ? 'text-[#DC143C]' : 'text-[#10B981]'}`}>
+            {failed ? 'Could not load. Use a direct image link (ending in .jpg or .png).' : 'Image loaded.'}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export default function DriverPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useDriverCareer(id)
@@ -211,10 +248,7 @@ export default function DriverPage() {
                                 <input type="number" value={liveDriver.contractExpiresAfterSeason} onChange={(e) => updateDriver(id, { contractExpiresAfterSeason: Number(e.target.value) })} className={inputClass} />
                               </div>
                             </div>
-                            <div>
-                              <label className="text-xs text-[#FFFFFF] block mb-1">Photo URL (override)</label>
-                              <input type="text" placeholder="https://… (blank = generated avatar)" value={liveDriver.photoUrl ?? ''} onChange={(e) => updateDriver(id, { photoUrl: e.target.value || undefined })} className={inputClass} />
-                            </div>
+                            <PhotoField value={liveDriver.photoUrl} onChange={(v) => updateDriver(id, { photoUrl: v })} inputClass={inputClass} />
                             <div className="space-y-2.5">
                               {STAT_KEYS.map((k) => (
                                 <StatSlider key={k} label={STAT_LABELS[k]} value={liveDriver[k]} onChange={(v) => updateDriver(id, { [k]: v })} />

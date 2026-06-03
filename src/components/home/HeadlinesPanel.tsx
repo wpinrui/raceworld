@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, CATEGORY_LABELS, type NewsContext, type NewsArticle } from '@/lib/news/engine'
+import { generateNews, foldLiveSeason, CATEGORY_LABELS, type NewsContext, type NewsArticle, type DriverCareer } from '@/lib/news/engine'
+import { actionGetDriverCareers } from '@/lib/news/actions'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
@@ -82,17 +83,23 @@ export function HeadlinesPanel() {
   const constructorHistory = useSeasonStore((s) => s.constructorHistory)
   const endOfSeasonSummary = useSeasonStore((s) => s.endOfSeasonSummary)
   const [openId, setOpenId] = useState<string | null>(null)
+  // Prior-season career totals from the archive; the current season is folded in from the store.
+  const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
+  useEffect(() => {
+    actionGetDriverCareers(year - 1).then(setCareerBase).catch(() => setCareerBase({}))
+  }, [year])
 
   const headlines = useMemo(() => {
     const ctx: NewsContext = {
       year, phase, completedRounds: raceResults.length, drivers, teams, raceResults,
       upgradeEvents: allUpgradeEvents,
       constructorHistory, endOfSeason: endOfSeasonSummary, calendar: calendar2026, live: true,
+      careers: foldLiveSeason(careerBase, year, raceResults, endOfSeasonSummary?.driverChampion),
     }
     // The feed is already newest-first (round desc, then priority); show the most recent 20
     // and let the panel scroll.
     return generateNews(ctx).slice(0, 20)
-  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary])
+  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, careerBase])
 
   const open = headlines.find((h) => h.id === openId) ?? null
 

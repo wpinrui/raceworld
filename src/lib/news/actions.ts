@@ -8,10 +8,64 @@
 
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
+  getDriverCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
   type DbRaceResult,
 } from '@/lib/db/queries'
-import { generateNews, type NewsContext, type NewsArticle } from './engine'
-import type { Driver, Team, RaceResult, Circuit } from '@/lib/sim/types'
+import { generateNews, type NewsContext, type NewsArticle, type DriverCareer } from './engine'
+import type { Driver, Team, RaceResult, Circuit, EndOfSeasonSummary } from '@/lib/sim/types'
+
+// Reconstruct the grid changes around an archived season by diffing its team roster against the
+// NEXT season's: a team gone next year departed (farewell on this season), a team new next year
+// joined (announced here, for next year). Returned as a minimal end-of-season summary so the same
+// market() producer emits the announcements — null when nothing changed (or no next season yet).
+function gridChangeSummary(year: number, thisTeams: Map<string, string>): EndOfSeasonSummary | null {
+  const nextId = getArchivedSeasonIdByYear(year + 1)
+  if (nextId == null) return null
+  const seasonId = getArchivedSeasonIdByYear(year)
+  const nextTeams = new Map(getSeasonTeamIds(nextId).map((t) => [t.teamId, t.teamName]))
+  const gridAdditions: { teamId: string; teamName: string }[] = []
+  const gridRemovals: { teamId: string; teamName: string; finalPosition: number | null }[] = []
+  for (const [id, name] of nextTeams) if (!thisTeams.has(id)) gridAdditions.push({ teamId: id, teamName: name })
+  for (const [id, name] of thisTeams) if (!nextTeams.has(id)) {
+    gridRemovals.push({ teamId: id, teamName: name, finalPosition: seasonId != null ? getTeamFinalPositionInSeason(seasonId, id) : null })
+  }
+  if (gridAdditions.length === 0 && gridRemovals.length === 0) return null
+  return {
+    seasonYear: year, driverChampion: '', constructorChampion: '',
+    progressionEvents: [], retiredDriverIds: [], carReshuffleOldPaces: {}, carReshuffleNewPaces: {},
+    marketMoves: [], droppedDrivers: [], seatContests: [], driverMediaScores: [], teamMediaScores: [],
+    upgradeEvents: [], preSeasonTest: null, gridAdditions, gridRemovals,
+  }
+}
+
+// Per-driver F1 career totals from the archive, up to and including `throughYear`. Titles are
+// layered on from the champions list (drivers' champion is tie-break reconstructed, not a stored
+// flag). Shared by the archived-season news and the live newsroom's career fetch.
+function buildCareers(throughYear: number): Record<string, DriverCareer> {
+  const titleYears = new Map<string, number[]>()
+  for (const c of getAllSeasonChampions()) {
+    if (c.driverChampionId && c.year <= throughYear) {
+      const arr = titleYears.get(c.driverChampionId) ?? []
+      arr.push(c.year); titleYears.set(c.driverChampionId, arr)
+    }
+  }
+  const out: Record<string, DriverCareer> = {}
+  for (const a of getDriverCareersUpToYear(throughYear)) {
+    const years = (titleYears.get(a.driverId) ?? []).sort((x, y) => x - y)
+    out[a.driverId] = {
+      driverId: a.driverId, starts: a.starts, wins: a.wins, podiums: a.podiums, poles: a.poles,
+      points: a.points, seasons: a.seasons, titles: years.length, titleYears: years,
+      debutYear: a.debutYear, bestFinish: a.bestFinish,
+    }
+  }
+  return out
+}
+
+// Career totals for the live newsroom (client-side). Returns every driver's archived F1 record up
+// to `throughYear`, which the live store's drivers/free agents are keyed against.
+export async function actionGetDriverCareers(throughYear: number): Promise<Record<string, DriverCareer>> {
+  return buildCareers(throughYear)
+}
 
 function toRaceResult(r: DbRaceResult): RaceResult {
   let stints: RaceResult['stints'] = []
@@ -83,9 +137,12 @@ export async function actionGetSeasonNews(year: number): Promise<NewsArticle[]> 
     raceResults,
     upgradeEvents: [],
     constructorHistory: [],
-    endOfSeason: null,
+    // Synthesized purely to carry grid changes (arrivals/farewells) reconstructed from the DB;
+    // its market arrays are empty, so market() emits only the team_entry/team_exit announcements.
+    endOfSeason: gridChangeSummary(year, new Map([...teamMap].map(([id, t]) => [id, t.name]))),
     calendar,
     live: false,
+    careers: buildCareers(year),
   }
   return generateNews(ctx)
 }

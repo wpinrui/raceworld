@@ -42,3 +42,7 @@ next-env.d.ts
 raceworld.db
 raceworld.db-shm
 raceworld.db-wal
+
+# generated news-playthrough output (organic analysis dumps)
+/news-playthrough*.md
+/news*.md
