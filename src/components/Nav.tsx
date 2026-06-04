@@ -229,6 +229,7 @@ export default function Nav() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== ' ' && e.code !== 'Space') return
+      if (e.repeat) return // one action per press; holding Space must not re-fire (e.g. double-init a season)
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
       const action = ctaActionRef.current
