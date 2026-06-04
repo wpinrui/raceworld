@@ -63,7 +63,7 @@ export default function Nav() {
   const nextRaceDate = nextRaceRound <= total ? toISODate(raceDate(year, calendar2026[nextRaceRound - 1])) : null
   const atRaceday = !!nextRaceDate && currentDate >= nextRaceDate
   const circuit = calendar2026[currentRound - 1]
-  const dateLabel = currentDate ? formatDate(fromISODate(currentDate), { weekday: true, year: true }) : ''
+  const dateLabel = currentDate ? formatDate(fromISODate(currentDate), { year: true }) : ''
 
   // Hyperlink matcher for the interrupt modal (live roster; circuits limited to rounds run).
   const newsIndex = useMemo(() => buildNewsIndex({
@@ -243,7 +243,7 @@ export default function Nav() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setNewsStop(null)}>
           <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
-              <span className="text-xs uppercase tracking-widest text-[#FFFFFF]">{formatDate(fromISODate(newsStop.date), { weekday: true, year: true })}</span>
+              <span className="text-xs uppercase tracking-widest text-[#FFFFFF]">{formatDate(fromISODate(newsStop.date), { year: true })}</span>
               <span className="text-[10px] uppercase tracking-widest text-[#00D9FF]">{newsStop.articles.length} {newsStop.articles.length === 1 ? 'story' : 'stories'}</span>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">

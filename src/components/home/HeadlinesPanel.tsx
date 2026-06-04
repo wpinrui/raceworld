@@ -16,9 +16,10 @@ function roundLabel(round: number, calLen: number): string {
   return `Round ${round}`
 }
 
-// Article byline: the drop date if present, else the round bucket.
+// Article byline: drop date (no weekday) plus the round bucket, e.g. "8 Mar 2026 · Round 1".
 function whenLabel(a: NewsArticle, calLen: number): string {
-  return a.date ? formatDate(fromISODate(a.date), { weekday: true, year: true }) : roundLabel(a.round, calLen)
+  const round = roundLabel(a.round, calLen)
+  return a.date ? `${formatDate(fromISODate(a.date), { year: true })} · ${round}` : round
 }
 
 // Modal reader for a single headline. Shows the full article and links through to the
