@@ -7,6 +7,7 @@ import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
 import { generateNews, foldLiveSeason, CATEGORY_LABELS, type NewsContext, type NewsArticle, type DriverCareer } from '@/lib/news/engine'
 import { actionGetDriverCareers } from '@/lib/news/actions'
+import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex } from '@/components/news/LinkedText'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
@@ -16,7 +17,7 @@ function roundLabel(round: number, calLen: number): string {
 
 // Modal reader for a single headline. Shows the full article and links through to the
 // newsroom (deep-linked via the URL hash, so the news tab opens on this exact story).
-function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () => void }) {
+function ArticleModal({ article, index, onClose }: { article: NewsArticle; index: NewsIndex | null; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -43,11 +44,9 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-3">
-          <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]">{article.headline}</h2>
-          <p className="text-sm italic text-[#FFFFFF]">{article.dek}</p>
-          <div className="space-y-3 text-sm leading-relaxed text-[#FFFFFF]">
-            {article.body.split(/\n\n+/).map((p, i) => <p key={i}>{p.trim()}</p>)}
-          </div>
+          <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={article.headline} index={index} /></h2>
+          <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={article.dek} index={index} /></p>
+          <LinkedParagraphs text={article.body} index={index} />
         </div>
 
         <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-[#2A3142]">
@@ -101,6 +100,14 @@ export function HeadlinesPanel() {
     return generateNews(ctx).slice(0, 20)
   }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, careerBase])
 
+  // Name-to-world-page matcher for hyperlinking the open article (home feed is always the live season).
+  const newsIndex = useMemo(() => buildNewsIndex({
+    drivers: drivers.map((d) => ({ id: d.id, name: d.name })),
+    teams: teams.map((t) => ({ id: t.id, name: t.name })),
+    circuits: calendar2026.slice(0, raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    year,
+  }), [drivers, teams, raceResults.length, year])
+
   const open = headlines.find((h) => h.id === openId) ?? null
 
   const title = (
@@ -133,7 +140,7 @@ export function HeadlinesPanel() {
         )}
       </Panel>
 
-      {open && <ArticleModal article={open} onClose={() => setOpenId(null)} />}
+      {open && <ArticleModal article={open} index={newsIndex} onClose={() => setOpenId(null)} />}
     </>
   )
 }

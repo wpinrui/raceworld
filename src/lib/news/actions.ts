@@ -104,12 +104,22 @@ export async function actionGetNewsSeasonYears(): Promise<number[]> {
   return getArchivedSeasons().map((s) => s.year).sort((a, b) => b - a)
 }
 
-export async function actionGetSeasonNews(year: number): Promise<NewsArticle[]> {
+// Archived-season news plus the roster needed to hyperlink names in the article text (drivers and
+// teams by id, circuits by round). The live newsroom builds the same roster from the store instead.
+interface SeasonNews {
+  articles: NewsArticle[]
+  drivers: { id: string; name: string }[]
+  teams: { id: string; name: string }[]
+  circuits: { name: string; round: number }[]
+}
+const EMPTY_SEASON_NEWS: SeasonNews = { articles: [], drivers: [], teams: [], circuits: [] }
+
+export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
   const seasonId = getArchivedSeasonIdByYear(year)
-  if (seasonId == null) return []
+  if (seasonId == null) return EMPTY_SEASON_NEWS
 
   const races = [...getRacesForSeason(seasonId)].sort((a, b) => a.round - b.round)
-  if (races.length === 0) return []
+  if (races.length === 0) return EMPTY_SEASON_NEWS
 
   const raceResults: RaceResult[][] = races.map((race) => getResultsForRace(race.id).map(toRaceResult))
 
@@ -144,5 +154,10 @@ export async function actionGetSeasonNews(year: number): Promise<NewsArticle[]> 
     live: false,
     careers: buildCareers(year),
   }
-  return generateNews(ctx)
+  return {
+    articles: generateNews(ctx),
+    drivers: [...driverMap.values()].map((d) => ({ id: d.id, name: d.name })),
+    teams: [...teamMap.values()].map((t) => ({ id: t.id, name: t.name })),
+    circuits: races.map((race) => ({ name: race.circuit_name.replace(/\bGP\b/, 'Grand Prix'), round: race.round })),
+  }
 }
