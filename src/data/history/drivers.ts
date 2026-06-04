@@ -148,8 +148,8 @@ export const historicalDrivers: HistoricalDriver[] = [
   { id: 'jack-doohan', name: "Jack Doohan", nationality: 'AU', gender: 'male', marketEntryYear: 2023, ageAtEntry: 20, pace: 71, wetWeatherPace: 71, overtaking: 71, smoothness: 71, peakPotential: 75, primeEnd: 30, narrativeModifier: 0 },
   { id: 'oliver-bearman', name: "Oliver Bearman", nationality: 'GB', gender: 'male', marketEntryYear: 2023, ageAtEntry: 18, pace: 76, wetWeatherPace: 75, overtaking: 75, smoothness: 77, peakPotential: 87, primeEnd: 31, narrativeModifier: 2 },
   { id: 'franco-colapinto', name: "Franco Colapinto", nationality: 'AR', gender: 'male', marketEntryYear: 2023, ageAtEntry: 20, pace: 73, wetWeatherPace: 73, overtaking: 73, smoothness: 73, peakPotential: 80, primeEnd: 31, narrativeModifier: 2 },
-  { id: 'gabriel-bortoleto', name: "Gabriel Bortoleto", nationality: 'BR', gender: 'male', marketEntryYear: 2024, ageAtEntry: 20 },
-  { id: 'kimi-antonelli', name: "Kimi Antonelli", nationality: 'IT', gender: 'male', marketEntryYear: 2024, ageAtEntry: 18 },
-  { id: 'isack-hadjar', name: "Isack Hadjar", nationality: 'FR', gender: 'male', marketEntryYear: 2024, ageAtEntry: 20 },
-  { id: 'arvid-lindblad', name: "Arvid Lindblad", nationality: 'GB', gender: 'male', marketEntryYear: 2025, ageAtEntry: 18 },
+  { id: 'gabriel-bortoleto', name: "Gabriel Bortoleto", nationality: 'BR', gender: 'male', marketEntryYear: 2024, ageAtEntry: 20, pace: 75, wetWeatherPace: 75, overtaking: 75, smoothness: 75, peakPotential: 85, primeEnd: 32, narrativeModifier: 3 },
+  { id: 'kimi-antonelli', name: "Kimi Antonelli", nationality: 'IT', gender: 'male', marketEntryYear: 2024, ageAtEntry: 18, pace: 78, wetWeatherPace: 78, overtaking: 78, smoothness: 78, peakPotential: 91, primeEnd: 33, narrativeModifier: 5 },
+  { id: 'isack-hadjar', name: "Isack Hadjar", nationality: 'FR', gender: 'male', marketEntryYear: 2024, ageAtEntry: 20, pace: 75, wetWeatherPace: 75, overtaking: 75, smoothness: 75, peakPotential: 87, primeEnd: 31, narrativeModifier: 2 },
+  { id: 'arvid-lindblad', name: "Arvid Lindblad", nationality: 'GB', gender: 'male', marketEntryYear: 2025, ageAtEntry: 18, pace: 73, wetWeatherPace: 73, overtaking: 73, smoothness: 73, peakPotential: 85, primeEnd: 32, narrativeModifier: 2 },
 ]
