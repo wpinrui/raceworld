@@ -410,7 +410,7 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { id: 'miltonkeynes', name: "Red Bull", shortName: 'RBR', nationality: 'AT', color: '#121F45' },
       { id: 'williams', name: "Williams", shortName: 'WIL', nationality: 'GB', color: '#1A3C8E' },
       { id: 'faenza', name: "Toro Rosso", shortName: 'STR', nationality: 'IT', color: '#0E2A6B' },
-      { id: 'silverstone', name: "MF1", shortName: 'MF1', nationality: 'RU', color: '#E2001A' },
+      { id: 'silverstone', name: "Midland", shortName: 'MF1', nationality: 'RU', color: '#E2001A' },
       { id: 'superaguri', name: "Super Aguri", shortName: 'SAF', nationality: 'JP', color: '#BC002D' },
     ],
     lineup: [
@@ -1113,9 +1113,9 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { id: 'silverstone', name: "Aston Martin", shortName: 'AMR', nationality: 'GB', color: '#006F62' },
       { id: 'enstone', name: "Alpine", shortName: 'ALP', nationality: 'FR', color: '#0078C1' },
       { id: 'haas', name: "Haas", shortName: 'HAA', nationality: 'US', color: '#B6BABD' },
-      { id: 'faenza', name: "RB", shortName: 'RB', nationality: 'IT', color: '#1634CB' },
+      { id: 'faenza', name: "Racing Bulls", shortName: 'RB', nationality: 'IT', color: '#1634CB' },
       { id: 'williams', name: "Williams", shortName: 'WIL', nationality: 'GB', color: '#1A3C8E' },
-      { id: 'hinwil', name: "Kick Sauber", shortName: 'SAU', nationality: 'CH', color: '#00E701' },
+      { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#00E701' },
     ],
     lineup: [
       { driverId: 'lando-norris', teamId: 'mclaren' },
@@ -1151,7 +1151,7 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { id: 'faenza', name: "Racing Bulls", shortName: 'RB', nationality: 'IT', color: '#1634CB' },
       { id: 'silverstone', name: "Aston Martin", shortName: 'AMR', nationality: 'GB', color: '#006F62' },
       { id: 'haas', name: "Haas", shortName: 'HAA', nationality: 'US', color: '#B6BABD' },
-      { id: 'hinwil', name: "Kick Sauber", shortName: 'SAU', nationality: 'CH', color: '#00E701' },
+      { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#00E701' },
       { id: 'enstone', name: "Alpine", shortName: 'ALP', nationality: 'FR', color: '#0078C1' },
     ],
     lineup: [

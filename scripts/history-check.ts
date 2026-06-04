@@ -52,12 +52,12 @@ check('composeSeason(1996) builds the grid', !!s1996 && s1996.teams.length === 1
 check('1996 seats Schumacher at Ferrari', !!s1996 && s1996.drivers.some((d) => d.id === 'michael-schumacher' && d.teamId === 'ferrari'))
 const s2007 = composeSeason(2007)
 check('2007 seats Hamilton at McLaren', !!s2007 && s2007.drivers.some((d) => d.id === 'lewis-hamilton' && d.teamId === 'mclaren'))
-// 2005 -> 2006 real-world transition: Super Aguri joins, Jordan rebrands to MF1.
+// 2005 -> 2006 real-world transition: Super Aguri joins, Jordan rebrands to Midland.
 const s2005 = composeSeason(2005)
 const tr = s2005 ? realWorldTransition(2005, s2005.teams) : null
 check('realWorldTransition(2005) has data', !!tr && tr.hasData)
 check('  Super Aguri joins for 2006', !!tr && tr.teamJoins.some((t) => t.id === 'superaguri'))
-check('  Jordan rebrands to MF1', !!tr && tr.teamRebrands.some((r) => r.id === 'silverstone' && r.to.name.includes('MF1')))
+check('  Jordan rebrands to Midland', !!tr && tr.teamRebrands.some((r) => r.id === 'silverstone' && r.to.name === 'Midland'))
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)
 process.exit(failures === 0 ? 0 : 1)

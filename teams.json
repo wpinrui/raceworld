@@ -1309,7 +1309,7 @@
     },
     {
       "id": "silverstone",
-      "name": "MF1",
+      "name": "Midland",
       "shortName": "MF1",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -3446,7 +3446,7 @@
     },
     {
       "id": "faenza",
-      "name": "RB",
+      "name": "Racing Bulls",
       "shortName": "RB",
       "nationality": "Italy",
       "color": "#1634CB",
@@ -3468,7 +3468,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Kick Sauber",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#00E701",
@@ -3569,7 +3569,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Kick Sauber",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#00E701",
