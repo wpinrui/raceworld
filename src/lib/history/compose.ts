@@ -39,6 +39,15 @@ const DEFAULTS = { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70,
 const peakOf = (h: HistoricalDriver) => h.peakPotential ?? DEFAULTS.peakPotential
 const primeEndOf = (h: HistoricalDriver) => h.primeEnd ?? DEFAULTS.primeEnd
 
+// A seated driver's initial contract length (1-3 years), spread by a stable hash of the id so a
+// composed grid's seats DON'T all expire in the same year (which would dump the whole field onto the
+// market at once). Deterministic, so the same start year always composes the same grid.
+function initialContractYears(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return 1 + (h % 3)
+}
+
 // Project a driver's ratings + age from market entry forward to `targetYear`.
 export function projectToYear(h: HistoricalDriver, targetYear: number): { stats: Stats; age: number } {
   let stats: Stats = {
@@ -60,8 +69,9 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
     age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
-    // Seated drivers carry a short contract so the market doesn't churn the whole grid after year 1.
-    contractExpiresAfterSeason: seated ? year + 1 : year - 1,
+    // Seated drivers carry a staggered 1-3 year contract so the market doesn't churn the whole grid in
+    // a single off-season; free agents are already out of contract (year - 1).
+    contractExpiresAfterSeason: seated ? year + initialContractYears(h.id) : year - 1,
     seasonsSinceF1Seat: 0,
     debutYear: h.marketEntryYear, // real debut, so the newsroom never calls an established driver a rookie
   }

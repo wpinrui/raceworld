@@ -157,6 +157,7 @@ async function main() {
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
       upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
       endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers, teamCareers, records: buildRecords(),
+      contractWatch: s.seasonContractWatch, renewals: s.seasonRenewals, draft: s.seasonDraft,
     }
   }
 

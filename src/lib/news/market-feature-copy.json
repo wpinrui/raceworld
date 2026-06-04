@@ -1,0 +1,192 @@
+{
+  "watch": {
+    "title": [
+      "{n} drivers out of contract for {year}",
+      "{n} seats on the table as {year} renewal talks begin",
+      "The {year} market opens with {n} unsigned names",
+      "{n} drivers entering the {year} renewal window",
+      "Who stays and who moves as {year} puts {n} contracts up for grabs"
+    ],
+    "dek": [
+      "With {n} driver contracts expiring at the close of {year}, the paddock is already trading names.",
+      "The renewal window is open and {n} seats are unresolved heading into the {year} stretch run.",
+      "{n} out-of-contract drivers will determine the shape of the {year} grid.",
+      "From frontrunners to tail-enders, {n} deals define the {year} market."
+    ],
+    "intro": [
+      "Round 15 of {year} opens the renewal window with {n} drivers still unsigned, a figure large enough to redraw significant sections of the grid.",
+      "The {year} renewal window is formally open and {n} out-of-contract drivers are now free to negotiate with rival teams.",
+      "With {n} contracts expiring at season's end, the {year} field faces a reshuffle that will be settled over the next few weeks.",
+      "Formula racing's contract calendar has arrived at its most consequential moment, with {n} drivers in {year} holding deals that expire at season's end."
+    ],
+    "could_do_better": [
+      "For {names}, the results are being held back by the machinery, and a move to a stronger team looks well overdue.",
+      "As for {names}, the pace has been there all season, and bigger teams would be foolish not to come calling.",
+      "For {names}, the car has been the ceiling all year, and a step up to better machinery looks thoroughly merited.",
+      "As for {names}, outperforming that car week after week is the kind of form that does not go unnoticed for long.",
+      "For {names}, the driving has been well ahead of where the car can put them, and the market should reflect that."
+    ],
+    "right_place": [
+      "For {names}, fans and pundits alike expect them to stay put for {next}.",
+      "As for {names}, the fit between driver and team looks natural, and few would argue against them seeing out {next} right where they are.",
+      "For {names}, the current seat suits them well, and a renewal heading into {next} would surprise nobody in the paddock.",
+      "As for {names}, the results reflect the machinery and the machinery reflects the driver, which makes staying put for {next} the obvious call.",
+      "For {names}, everything about the pairing makes sense, and the expectation going into {next} is that it continues."
+    ],
+    "lucky": [
+      "As for {names}, a move up the grid seems unlikely, and staying put would suit them well.",
+      "For {names}, the car has been doing most of the talking this season, and holding onto that seat into {next} would be a fine result.",
+      "As for {names}, the machinery has been flattering the numbers, and a move up looks a stretch given what the data actually shows.",
+      "For {names}, a strong car has papered over some cracks, and staying put for {next} is probably the best outcome available.",
+      "As for {names}, the points flatter more than the raw pace, and few expect the market to come knocking with anything better."
+    ],
+    "quote_could_do_better": [
+      "Give me a car that can fight and I will show you what I can actually do.",
+      "I am tired of driving around in the midfield when I know I belong at the front.",
+      "The results hide how much I am having to drag this car to where it finishes.",
+      "I need machinery that matches my ambition, and right now it does not.",
+      "People judge you by the car, and mine is not doing me any favours right now.",
+      "I have never worked harder for fewer points and I think I deserve better than this.",
+      "One season in a proper car and the conversations about my talent would change completely."
+    ],
+    "quote_right_place": [
+      "I am settled here, the car suits me, and we are only getting started.",
+      "This team understands how I drive, and that chemistry is not easy to find.",
+      "Everything fits right now, the car, the people, the direction, and I am not in a hurry to change any of it.",
+      "We have built something real here and walking away from that would be a mistake.",
+      "The car does what I ask of it and that trust takes time to build at any team.",
+      "I feel at home in this car and that is rarer than people realise.",
+      "The fit between me and this team is the best I have had in my career."
+    ],
+    "quote_lucky": [
+      "People underrate how hard I work for these results, and I have earned every point.",
+      "The car is quick, yes, but you still have to put it in the right place every single lap.",
+      "Nobody drives a fast car slowly and expects these results, the work goes in every weekend.",
+      "I would rather be in a good car than a bad one, and I make no apology for that.",
+      "A fast car helps, but it does not steer itself, and the details still fall to me.",
+      "Strong machinery gives you the opportunity, it does not convert the opportunity, I do that.",
+      "The car is competitive and so am I, and I do not think one cancels the other out."
+    ]
+  },
+  "renewals": {
+    "title": [
+      "{n} drivers re-sign as the {year} renewal window closes",
+      "Window shut with {n} confirmed deals and the rest heading to market",
+      "{n} renewals done as the {year} mid-season deadline passes",
+      "The {year} renewal round-up with {n} re-signed and the field still unsettled",
+      "Pen to paper as {n} out-of-contract drivers lock in their seats for {year}"
+    ],
+    "dek": [
+      "The renewal window has shut with {n} drivers re-signed and {m} heading to the end-of-season market.",
+      "{n} out-of-contract drivers found agreement before the Round 18 deadline, leaving {m} to negotiate without a clock in their favour.",
+      "The {year} mid-season window produced {n} confirmations and left {m} names still unresolved.",
+      "With {n} re-signings confirmed and {m} outstanding, the {year} driver market enters its most unpredictable phase."
+    ],
+    "intro": [
+      "The {year} renewal window closed before Round 18 with {n} extensions confirmed and {m} drivers heading to the open market.",
+      "Formula racing's mid-season deadline passed with {n} deals done and {m} drivers entering the end-of-season market under considerably less leverage.",
+      "When the window shut ahead of Round 18 of {year}, {n} drivers had secured their futures and {m} had not, a split that immediately changes the negotiating dynamics for those still unsigned.",
+      "The {year} renewal window produced {n} confirmed extensions before its formal close, leaving {m} drivers to contest the end-of-season market where teams historically hold the stronger hand."
+    ],
+    "renewed": [
+      "{names} agreed fresh terms and stayed put.",
+      "{names} signed a new contract before the window closed.",
+      "{names} committed to their current team for another season ahead of the deadline.",
+      "{names} secured a fresh deal in the renewal window.",
+      "{names} put pen to paper and locked in their seat for the year ahead."
+    ],
+    "expiring": [
+      "{names} reached the deadline without a new deal and entered the open market.",
+      "{names} left talks with their current team without an agreement.",
+      "{names} headed into the end-of-season market without a contract in place.",
+      "No deal was confirmed for {names}, leaving the door open to rival suitors.",
+      "{names} went through the window without signing a contract and joined the open market."
+    ],
+    "quote_renewed": [
+      "Staying was the easy call, this is exactly where I want to be.",
+      "We have unfinished business here and I could not imagine pursuing it anywhere else.",
+      "This team gave me everything I needed to grow and I am not done repaying that.",
+      "I signed before we even really started talking to anyone else, it was that straightforward.",
+      "There is a real project being built here and I want to be part of where it ends up.",
+      "The people, the direction, the car, everything told me to stay and so I stayed.",
+      "Re-signing was not a difficult conversation, we both wanted the same thing."
+    ],
+    "quote_expiring": [
+      "I know my worth, and I am going to find the right seat for the next chapter.",
+      "My future is open and honestly that is an exciting position to be in right now.",
+      "There are options and I am taking the time to evaluate them properly, not rushing anything.",
+      "Going on the market means people have to come to me and I welcome that conversation.",
+      "I have delivered in this sport and the right team will know what they are getting.",
+      "Free agency is not a threat, it is an opportunity, and I intend to use it well.",
+      "The market opens up things that a contract renewal never could, and I am genuinely interested."
+    ]
+  },
+  "offseason": {
+    "title": [
+      "How the {next} grid took shape over the {year} off-season",
+      "Every move that rebuilt the grid from {year} to {next}",
+      "Silly season settled as the {next} driver market closes",
+      "All the signings, departures and surprises of the {year} off-season",
+      "From {year}'s final race to {next}'s first test, the complete transfer record"
+    ],
+    "dek": [
+      "Every signing, every departure, and every surprise from a {year} off-season that reshaped the grid for {next}.",
+      "The {year} silly season ran long and moved fast, and this is every piece of it in order.",
+      "From the headline move to the last unsigned name, a full record of how the {next} driver market closed.",
+      "The dust has settled on {year}'s off-season market, and this is who moved, who stayed, and who was left behind."
+    ],
+    "marquee": [
+      "{driver}, {fa}, leaves {from_pos} {from} for {to_pos} {to} on a {years}-year deal.",
+      "{driver} signs with {to} on a {years}-year contract, ending {driver}'s time at {from} where the team finished {from_pos} and joining {to} who finished {to_pos} as {fa}.",
+      "The headline move of the window is {driver} from {from_pos} {from} to {to_pos} {to}, a {years}-year deal that was the most discussed negotiation of the {year} off-season.",
+      "{driver}, {fa}, brings a {years}-year commitment to {to_pos} {to} after departing {from_pos} {from} in the move that immediately reconfigured the market below it.",
+      "A {years}-year deal takes {driver} from {from_pos} {from} to {to_pos} {to}, the signing that defined the {year} off-season."
+    ],
+    "moves": [
+      "{names} switched teams for the new season.",
+      "{names} signed with a new team as the window closed.",
+      "{names} also changed teams before the market shut.",
+      "{names} joined a new outfit ahead of the campaign.",
+      "{names} moved on and secured a fresh berth for the season ahead."
+    ],
+    "upsets": [
+      "{names} produced one of the biggest surprises of the window.",
+      "Few saw the signing of {names} coming.",
+      "{names} landed a seat that almost nobody had predicted.",
+      "The window saved one of its biggest shocks for {names}.",
+      "{names} signed a deal that wrong-footed even the best-connected paddock observers."
+    ],
+    "rookies": [
+      "{names} earned a first full-time race seat.",
+      "{names} graduated to a full race seat after impressing in the junior categories.",
+      "{names} stepped up to a full-time drive for the campaign ahead.",
+      "{names} secured a debut season after claiming their first grid spot.",
+      "{names} signed a full-time contract and joined the grid for the year ahead."
+    ],
+    "dropped": [
+      "{names} lost out on a seat for the new season.",
+      "{names} departed without a contract for the year ahead.",
+      "No team confirmed a seat for {names} before the market closed.",
+      "{names} missed out on a drive after failing to agree terms with any team.",
+      "{names} left the window without a contract and faced an uncertain year."
+    ],
+    "quote_signed": [
+      "This is the move I have wanted for a long time, and I cannot wait to get going.",
+      "Everything I have worked toward points to this moment, and the timing feels right.",
+      "New team, new chapter, and I am walking in with nothing to prove and everything to give.",
+      "The people I spoke to made it clear they believe in me and that belief is mutual.",
+      "I have been watching this team from the outside and now I get to help build it from the inside.",
+      "Landing this seat took a lot of work and I intend to make every lap count from day one.",
+      "This is where I wanted to be and I am not going to waste a single test session getting comfortable."
+    ],
+    "quote_dropped": [
+      "I gave everything I had, and I am not finished with this sport, not by a long way.",
+      "Losing a seat hurts, but it does not define what I am capable of and I know that.",
+      "The door has closed here and that is sport, but I will find the right door and walk through it.",
+      "I am proud of what I delivered in that car and the results speak for anyone willing to look honestly.",
+      "This is a setback, not an ending, and I will be back on a grid because I belong here.",
+      "Plenty of drivers have come back stronger after a year like this and I intend to be one of them.",
+      "The sport owes me nothing and I owe it everything, so I will keep showing up until I get my chance."
+    ]
+  }
+}

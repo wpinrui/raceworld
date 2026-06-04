@@ -9,7 +9,7 @@ import { DriverLink } from '@/components/world/EntityLink'
 import { positionPalette } from '@/components/world/pills'
 import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
 import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
-import { MarketPanel } from '@/components/standings/MarketPanel'
+import { SigningDayBoard } from '@/components/home/SigningDayBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
 import type { Driver, Team, RaceResult } from '@/lib/sim/types'
 
@@ -72,7 +72,7 @@ let lastAutoOpenedPhase: string | null = null
 
 const STAGE_LABEL: Record<string, string> = {
   'end-of-season': 'Season Review',
-  'contract-negotiations': 'Contract Moves',
+  'contract-negotiations': 'Signing Day',
   'driver-retirements': 'Retirements',
   'pre-season-testing': 'Testing',
 }
@@ -100,10 +100,6 @@ function OffSeasonReview() {
 
   const progressIdx = OFF_SEASON_PHASES.indexOf(season.phase)
   const reached = OFF_SEASON_PHASES.filter((_, i) => i <= progressIdx)
-  const marketTeams = [
-    ...season.teams,
-    ...(season.pendingNextSeasonState?.teams ?? []).filter((pt) => !season.teams.some((t) => t.id === pt.id)),
-  ]
 
   return (
     <Panel title={`Season ${season.year} · Off-Season`} flush fill>
@@ -125,16 +121,16 @@ function OffSeasonReview() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(null)}>
-          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className={`bg-[#1E2431] border border-[#2A3142] rounded-xl w-full flex flex-col shadow-xl ${open === 'contract-negotiations' ? 'max-w-5xl h-[85vh]' : 'max-w-3xl max-h-[85vh]'}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
               <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{STAGE_LABEL[open]}</h2>
               <button onClick={() => setOpen(null)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className={`flex-1 min-h-0 p-5 ${open === 'contract-negotiations' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
               {open === 'end-of-season' && (
                 <SeasonReviewPanel summary={summary} drivers={season.drivers} teams={season.teams} driverStandings={season.driverStandings} constructorStandings={season.constructorStandings} />
               )}
-              {open === 'contract-negotiations' && <MarketPanel summary={summary} teams={marketTeams} />}
+              {open === 'contract-negotiations' && <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />}
               {open === 'driver-retirements' && <RetirementsPanel summary={summary} drivers={season.drivers} />}
               {open === 'pre-season-testing' && (
                 <TestingPanel summary={summary} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
