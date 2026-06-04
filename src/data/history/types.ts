@@ -13,14 +13,15 @@ export interface HistoricalDriver {
   gender: 'male' | 'female'
   marketEntryYear: number    // the year they first enter the driver market (typically debut year - 1)
   ageAtEntry: number         // age in marketEntryYear
-  primeEnd: number           // peak age; decline begins after this
-  // Ratings as of market entry (0-100). Suggested separately; fill last.
-  pace: number
-  wetWeatherPace: number
-  overtaking: number
-  smoothness: number
-  peakPotential: number      // overall ceiling reached before prime ends
-  narrativeModifier: number  // -20..+20 media halo/deficit at entry
+  // Ratings as of market entry (0-100), suggested separately and signed off; optional so bios can be
+  // encoded first. The composer applies a neutral placeholder for any field still missing.
+  primeEnd?: number          // peak age; decline begins after this
+  pace?: number
+  wetWeatherPace?: number
+  overtaking?: number
+  smoothness?: number
+  peakPotential?: number     // overall ceiling reached before prime ends
+  narrativeModifier?: number // -20..+20 media halo/deficit at entry
 }
 
 // A constructor's identity in a given season. Rebrands (Jordan -> Midland -> Spyker -> Force India ->

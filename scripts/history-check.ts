@@ -1,10 +1,11 @@
 // Sanity check for the historical-world infra (run: npx tsx scripts/history-check.ts).
-// The real dataset is still empty (filled later), so this exercises the pure projection curve and
-// confirms the data-driven helpers handle an empty timeline gracefully.
+// Exercises the pure projection curve, the driver dataset, and graceful handling of the (still
+// empty) per-year grids.
 
 import { overall } from '../src/lib/sim/progression'
-import { projectToYear, composeSeason, historyYears, lastDriverEntryYear } from '../src/lib/history/compose'
+import { projectToYear, composeSeason, historyYears, lastDriverEntryYear, rookiesForYear } from '../src/lib/history/compose'
 import { realWorldTransition } from '../src/lib/history/transitions'
+import { historicalDrivers } from '../src/data/history/drivers'
 import type { HistoricalDriver } from '../src/data/history/types'
 
 let failures = 0
@@ -23,7 +24,7 @@ const entry = projectToYear(young, 2006)
 const later = projectToYear(young, 2010)
 check('young driver develops toward potential', overall(later.stats) > overall(entry.stats),
   `${overall(entry.stats).toFixed(1)} -> ${overall(later.stats).toFixed(1)}`)
-check('development does not exceed potential', overall(later.stats) <= young.peakPotential + 0.5,
+check('development does not exceed potential', overall(later.stats) <= (young.peakPotential ?? 0) + 0.5,
   `overall ${overall(later.stats).toFixed(1)} vs cap ${young.peakPotential}`)
 check('age advances with the years', later.age === entry.age + 4, `age ${later.age}`)
 
@@ -38,11 +39,16 @@ const oldLater = projectToYear(old, 2004)
 check('past-prime veteran declines', overall(oldLater.stats) < overall(oldEntry.stats),
   `${overall(oldEntry.stats).toFixed(1)} -> ${overall(oldLater.stats).toFixed(1)}`)
 
-// Empty timeline: helpers must not crash and must report no data.
-check('composeSeason returns null with no data', composeSeason(2005) === null)
-check('realWorldTransition reports no data', realWorldTransition(2005, []).hasData === false)
-check('historyYears empty with no data', historyYears().length === 0)
-check('lastDriverEntryYear is 0 with no drivers', lastDriverEntryYear() === 0)
+// Driver dataset (148 encoded; ratings to follow).
+check('driver dataset populated', historicalDrivers.length === 148, `${historicalDrivers.length} drivers`)
+check('Hamilton enters the market in 2006', historicalDrivers.find((d) => d.id === 'lewis-hamilton')?.marketEntryYear === 2006)
+check('rookiesForYear(2006) includes Hamilton', rookiesForYear(2006).some((d) => d.id === 'lewis-hamilton'))
+check('lastDriverEntryYear reflects the dataset', lastDriverEntryYear() >= 2025, `${lastDriverEntryYear()}`)
+
+// Per-year grids are still empty (provided later): season helpers must not crash.
+check('composeSeason returns null with no grid', composeSeason(2005) === null)
+check('realWorldTransition reports no grid data', realWorldTransition(2005, []).hasData === false)
+check('historyYears empty until grids added', historyYears().length === 0)
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)
 process.exit(failures === 0 ? 0 : 1)

@@ -32,12 +32,21 @@ function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: nu
   return next
 }
 
+// Neutral placeholders for any rating not yet signed off, so bios can be encoded before the ratings
+// pass. A driver with no ratings projects as a generic midfielder.
+const DEFAULTS = { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70, peakPotential: 78, primeEnd: 31, narrativeModifier: 0 }
+const peakOf = (h: HistoricalDriver) => h.peakPotential ?? DEFAULTS.peakPotential
+const primeEndOf = (h: HistoricalDriver) => h.primeEnd ?? DEFAULTS.primeEnd
+
 // Project a driver's ratings + age from market entry forward to `targetYear`.
 export function projectToYear(h: HistoricalDriver, targetYear: number): { stats: Stats; age: number } {
-  let stats: Stats = { pace: h.pace, wetWeatherPace: h.wetWeatherPace, overtaking: h.overtaking, smoothness: h.smoothness }
+  let stats: Stats = {
+    pace: h.pace ?? DEFAULTS.pace, wetWeatherPace: h.wetWeatherPace ?? DEFAULTS.wetWeatherPace,
+    overtaking: h.overtaking ?? DEFAULTS.overtaking, smoothness: h.smoothness ?? DEFAULTS.smoothness,
+  }
   let age = h.ageAtEntry
   for (let y = h.marketEntryYear; y < targetYear; y++) {
-    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRace(stats, age, h.peakPotential, h.primeEnd)
+    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRace(stats, age, peakOf(h), primeEndOf(h))
     age += 1
   }
   return { stats, age }
@@ -49,7 +58,7 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
   return {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
-    age, peakPotential: h.peakPotential, primeEnd: h.primeEnd, narrativeModifier: h.narrativeModifier,
+    age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
     // Seated drivers carry a short contract so the market doesn't churn the whole grid after year 1.
     contractExpiresAfterSeason: seated ? year + 1 : year - 1,
     seasonsSinceF1Seat: 0,
