@@ -15,8 +15,9 @@ export function overall(d: Pick<Driver, 'pace' | 'smoothness' | 'overtaking' | '
 
 // Driver development applies AFTER EACH RACE (GDD §Driver progression curve).
 // Pre-prime: improve toward potential at a rate that fills the remaining gap over
-// (20 × years-till-prime) races. That per-race value is the lower quartile of a normal
+// (15 × years-till-prime) races. That per-race value is the lower quartile of a normal
 // curve whose median is 1.5× larger. Post-prime: decline, accelerating with age.
+// (15, down from 20: a slightly steeper approach so young drivers reach their peak sooner.)
 export function applyRaceProgression(
   drivers: Driver[],
   rng: () => number,
@@ -34,7 +35,7 @@ export function applyRaceProgression(
       if (ov >= driver.peakPotential) return driver
 
       const yearsTillPrime = Math.max(0.001, driver.primeEnd - driver.age)
-      const racesToPotential = Math.max(1, 20 * yearsTillPrime)
+      const racesToPotential = Math.max(1, 15 * yearsTillPrime)
       const gap = driver.peakPotential - ov
 
       const q1 = gap / racesToPotential       // lower quartile
