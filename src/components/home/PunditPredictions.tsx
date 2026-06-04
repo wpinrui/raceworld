@@ -65,6 +65,11 @@ function FormPill({ pos }: { pos: number | null }) {
   return <span className="inline-flex h-4 min-w-4 items-center justify-center rounded px-1 text-[9px] font-bold tabular-nums" style={{ backgroundColor: bg, color: fg }}>{pos}</span>
 }
 
+// Module-scoped so it survives unmount/remount: which off-season phase we've already auto-opened.
+// This makes the recap pop exactly once when you Continue into a stage, not every time you return to
+// Home (e.g. Home → Standings → Home). It only re-fires when the phase actually changes (next Continue).
+let lastAutoOpenedPhase: string | null = null
+
 const STAGE_LABEL: Record<string, string> = {
   'end-of-season': 'Season Review',
   'contract-negotiations': 'Contract Moves',
@@ -79,10 +84,14 @@ function OffSeasonReview() {
   const summary = season.endOfSeasonSummary
   const [open, setOpen] = useState<string | null>(null)
 
-  // Auto-open the recap for whatever off-season stage you've just advanced into (Continue runs the
-  // next stage, then its modal pops). Closing it leaves it closed until the next stage.
+  // Auto-open the recap for whatever off-season stage you've just advanced into — once per phase, so
+  // returning to Home (after Standings, etc.) doesn't reopen it. The next Continue changes the phase
+  // and re-arms it.
   useEffect(() => {
-    if (OFF_SEASON_PHASES.includes(season.phase)) setOpen(season.phase)
+    if (OFF_SEASON_PHASES.includes(season.phase) && lastAutoOpenedPhase !== season.phase) {
+      lastAutoOpenedPhase = season.phase
+      setOpen(season.phase)
+    }
   }, [season.phase])
 
   if (!summary) {

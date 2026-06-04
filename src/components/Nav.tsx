@@ -101,21 +101,29 @@ export default function Nav() {
     setNewsStop(null)
     setBusy(true)
     try {
-      if (isOffSeason(useSeasonStore.getState().phase)) { await advanceOffSeason(); return }
-      const settings = useSettingsStore.getState()
-      while (true) {
-        const s = useSeasonStore.getState()
-        const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase))
-        const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
-        if (stop.reason === 'news') { s.setCurrentDate(stop.date); setNewsStop({ date: stop.date, articles: stop.articles }); break }
-        if (stop.reason === 'race') {
-          if (settings.interruptOnRaceday) { s.setCurrentDate(stop.date); break }
-          await simulateUntilRound(stop.round + 1)
-          if (isOffSeason(useSeasonStore.getState().phase)) break
-          continue
+      if (isOffSeason(useSeasonStore.getState().phase)) {
+        await advanceOffSeason()
+      } else {
+        const settings = useSettingsStore.getState()
+        while (true) {
+          const s = useSeasonStore.getState()
+          const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase))
+          const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
+          if (stop.reason === 'news') { s.setCurrentDate(stop.date); setNewsStop({ date: stop.date, articles: stop.articles }); break }
+          if (stop.reason === 'race') {
+            if (settings.interruptOnRaceday) { s.setCurrentDate(stop.date); break }
+            const before = useSeasonStore.getState().raceResults.length
+            await simulateUntilRound(stop.round + 1)
+            // If the headless sim didn't actually record a round, bail rather than spin forever.
+            if (useSeasonStore.getState().raceResults.length === before) break
+            if (isOffSeason(useSeasonStore.getState().phase)) break
+            continue
+          }
+          break // season-end
         }
-        break // season-end
       }
+      // The off-season recap modals live on Home; jump there so they're visible after Continue.
+      if (isOffSeason(useSeasonStore.getState().phase)) router.push('/home')
     } finally {
       setBusy(false)
     }
