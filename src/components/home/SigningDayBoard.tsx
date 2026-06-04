@@ -118,9 +118,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
         {/* Contenders for the seat about to be filled (hidden once every seat is settled) */}
         {onClock && (
           <div className="flex flex-col min-h-0">
-            <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
-              In the frame · <span className="text-[#00D9FF]">{onClock.teamName}</span>
-            </p>
+            <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">Free agents</p>
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
               {onClock.odds.map((o, i) => (
                 <div key={o.driverId} className="flex items-center gap-2.5 px-3 py-1.5">
