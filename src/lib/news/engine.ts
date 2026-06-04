@@ -3387,8 +3387,8 @@ function agreeArticle(a: NewsArticle): NewsArticle {
   return { ...a, headline: agree1(a.headline), dek: agree1(a.dek), body: agree1(a.body) }
 }
 
-// Round-15 survey of the expiring contracts, grading each from the driver's side: outdriving the seat
-// ("could do better"), well-matched ("right place"), or flattered by the car ("lucky").
+// Round-15 survey of the expiring contracts, graded from the driver's side. Chunked: ONE sentence per
+// verdict names the whole group (with their teams), instead of a paragraph per driver.
 function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   const watch = ctx.contractWatch
   if (!ctx.live || !watch || watch.length === 0) return []
@@ -3396,29 +3396,32 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   const year = ctx.year
   const seed = `contract-watch-${year}`
   const hslots = { n: watch.length, year }
-  const lineFor = (w: ContractWatch, key: 'could_do_better' | 'right_place' | 'lucky') =>
-    fill(pick(c[key], `${seed}-${w.driverId}`), { driver: w.driverName, driver_last: lastName(w.driverName), team: w.teamName, team_poss: poss(w.teamName), year, next: year + 1 })
-  const section = (key: 'could_do_better' | 'right_place' | 'lucky', leadKey: 'group_could_do_better' | 'group_right_place' | 'group_lucky') => {
-    const list = watch.filter((w) => w.verdict === key)
+  type Verdict = 'could_do_better' | 'right_place' | 'lucky'
+  // Most newsworthy first: the biggest over- and under-placements lead; well-matched cases sit nearest 0.
+  const newsworthiness = (key: Verdict) => (a: ContractWatch, b: ContractWatch) =>
+    key === 'could_do_better' ? b.diff - a.diff : key === 'lucky' ? a.diff - b.diff : Math.abs(a.diff) - Math.abs(b.diff)
+  const chunk = (key: Verdict) => {
+    const list = watch.filter((w) => w.verdict === key).sort(newsworthiness(key))
     if (list.length === 0) return ''
-    return paras(fill(pick(c[leadKey], `${seed}|${key}`), hslots), ...list.map((w) => lineFor(w, key)))
+    const names = listJoin(list.map((w) => `${w.driverName} (${w.teamName})`))
+    return fill(pick(c[key], `${seed}|${key}`), { ...hslots, names })
   }
   const body = paras(
     fill(pick(c.intro, `${seed}|intro`), hslots),
-    section('could_do_better', 'group_could_do_better'),
-    section('right_place', 'group_right_place'),
-    section('lucky', 'group_lucky'),
-    fill(pick(c.close, `${seed}|close`), hslots),
+    chunk('could_do_better'),
+    chunk('right_place'),
+    chunk('lucky'),
   )
   return [agreeArticle({
     id: seed, category: 'silly_season', round: WATCH_PIN_ROUND, priority: 34,
-    headline: fill(pick(c.headline, `${seed}|h`), hslots),
+    headline: fill(pick(c.title, `${seed}|h`), hslots),
     dek: fill(pick(c.dek, `${seed}|d`), hslots),
     body,
   })]
 }
 
-// Round-18 round-up once the renewal window has closed: who re-signed, and who is heading to the market.
+// Round-18 round-up once the renewal window closes. Chunked: one sentence lists the re-signings (team +
+// length), one lists who is heading to the market.
 function renewalsFeature(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || ctx.endOfSeason || ctx.completedRounds < RENEWAL_PIN_ROUND) return []
   const renewals = ctx.renewals ?? []
@@ -3426,29 +3429,26 @@ function renewalsFeature(ctx: NewsContext): NewsArticle[] {
   if (renewals.length === 0 && stillExpiring.length === 0) return []
   const c = marketFeatureCopy.renewals
   const year = ctx.year
-  const seed = `renewals-roundup-${year}`
   const next = year + 1
+  const seed = `renewals-roundup-${year}`
   const hslots = { n: renewals.length, m: stillExpiring.length, year, next }
-  const renewedLines = renewals.map((r) =>
-    fill(pick(c.renewed, `${seed}-${r.driverId}`), { driver: r.driverName, driver_last: lastName(r.driverName), team: r.teamName, years: r.years, until: year + r.years, year, next }))
-  const expiringLines = stillExpiring.map((d) =>
-    fill(pick(c.expiring, `${seed}-exp-${d.id}`), { driver: d.name, driver_last: lastName(d.name), team: teamName(ctx, d.teamId), year, next }))
+  const renewedNames = listJoin(renewals.map((r) => `${r.driverName} (${r.teamName}, ${r.years}yr)`))
+  const expiringNames = listJoin(stillExpiring.map((d) => `${d.name} (${teamName(ctx, d.teamId)})`))
   const body = paras(
     fill(pick(c.intro, `${seed}|intro`), hslots),
-    ...renewedLines,
-    expiringLines.length ? fill(pick(c.expiring_lead, `${seed}|exlead`), hslots) : '',
-    ...expiringLines,
-    fill(pick(c.close, `${seed}|close`), hslots),
+    renewals.length ? fill(pick(c.renewed, `${seed}|renewed`), { ...hslots, names: renewedNames }) : '',
+    stillExpiring.length ? fill(pick(c.expiring, `${seed}|expiring`), { ...hslots, names: expiringNames }) : '',
   )
   return [agreeArticle({
     id: seed, category: 'silly_season', round: RENEWAL_PIN_ROUND, priority: 36,
-    headline: fill(pick(c.headline, `${seed}|h`), hslots),
+    headline: fill(pick(c.title, `${seed}|h`), hslots),
     dek: fill(pick(c.dek, `${seed}|d`), hslots),
     body,
   })]
 }
 
-// End-of-season retrospective on the whole market: the marquee move, the upsets, the rookies, the cuts.
+// End-of-season retrospective. The marquee move gets a fact-dense sentence (who left whom, where each
+// team finished, the term); everything else is chunked into one sentence per category.
 function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
   const eos = ctx.endOfSeason
   if (!eos) return []
@@ -3461,30 +3461,50 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
   const year = eos.seasonYear
   const next = year + 1
   const seed = `offseason-moves-${year}`
-  const hslots = { year, next, k: dropped.length }
+  const hslots = { year, next }
+
+  // Final constructors order, so each move can be framed by where the teams actually finished.
+  const cstand = constructorStandingsAfter(ctx, ctx.calendar.length)
+  const posOf = new Map(cstand.map((cs, i) => [cs.teamId, i + 1]))
+  const champTeam = cstand[0]?.teamId
+  const teamPos = (id: string | null | undefined): string => {
+    if (!id) return ''
+    if (id === champTeam) return 'the champions'
+    const p = posOf.get(id)
+    return p ? `${ordinal(p)}-placed` : ''
+  }
+  const faRankOf = new Map(draft.map((p) => [p.driverId, p.faRank]))
+  const faPhrase = (id: string): string => {
+    const r = faRankOf.get(id)
+    return r === 1 ? 'the most sought-after free agent of the window'
+      : r && r <= 3 ? 'one of the most coveted free agents'
+      : r ? `the ${ordinal(r)}-rated free agent` : 'a free agent'
+  }
+  const fromName = (m: { fromTeamId: string | null }) => (m.fromTeamId ? teamName(ctx, m.fromTeamId) : 'free agency')
 
   const marquee = [...realMoves].sort((a, b) => b.mediaScore - a.mediaScore)[0]
   const marqueePara = marquee
-    ? fill(pick(c.headline_move, `${seed}|hm`), { driver: marquee.driverName, driver_last: lastName(marquee.driverName), team: marquee.toTeamName, prev: marquee.fromTeamId ? teamName(ctx, marquee.fromTeamId) : 'free agency', years: marquee.contractLength, year, next })
+    ? fill(pick(c.marquee, `${seed}|hm`), {
+        driver: marquee.driverName, driver_last: lastName(marquee.driverName),
+        from: fromName(marquee), from_pos: teamPos(marquee.fromTeamId),
+        to: marquee.toTeamName, to_pos: teamPos(marquee.toTeamId),
+        years: marquee.contractLength, fa: faPhrase(marquee.driverId), year, next,
+      })
     : ''
-  const upsetLines = draft.filter((p) => p.flavour === 'upset').slice(0, 3)
-    .map((p) => fill(pick(c.upset_line, `${seed}-up-${p.driverId}`), { driver: p.driverName, driver_last: lastName(p.driverName), team: p.teamName, pct: Math.round(p.pickPct), year, next }))
-  const rookieLines = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore === 0).slice(0, 3)
-    .map((m) => fill(pick(c.rookie_line, `${seed}-rk-${m.driverId}`), { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, year, next }))
-  const droppedLines = dropped.map((d) => fill(pick(c.dropped_line, `${seed}-dr-${d.driverId}`), { driver: d.driverName, driver_last: lastName(d.driverName), team: d.fromTeamName, year, next }))
+  const otherMoves = realMoves.filter((m) => m.driverId !== marquee?.driverId)
+  const upsets = draft.filter((p) => p.flavour === 'upset')
+  const rookies = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore === 0)
 
   const body = paras(
-    fill(pick(c.intro, `${seed}|intro`), hslots),
     marqueePara,
-    ...upsetLines,
-    ...rookieLines,
-    droppedLines.length ? fill(pick(c.dropped_lead, `${seed}|drlead`), hslots) : '',
-    ...droppedLines,
-    fill(pick(c.close, `${seed}|close`), hslots),
+    otherMoves.length ? fill(pick(c.moves, `${seed}|moves`), { ...hslots, names: listJoin(otherMoves.map((m) => `${m.driverName} (${fromName(m)} to ${m.toTeamName})`)) }) : '',
+    upsets.length ? fill(pick(c.upsets, `${seed}|upsets`), { ...hslots, names: listJoin(upsets.map((p) => `${p.driverName} (${p.teamName})`)) }) : '',
+    rookies.length ? fill(pick(c.rookies, `${seed}|rookies`), { ...hslots, names: listJoin(rookies.map((m) => `${m.driverName} (${m.toTeamName})`)) }) : '',
+    dropped.length ? fill(pick(c.dropped, `${seed}|dropped`), { ...hslots, names: listJoin(dropped.map((d) => `${d.driverName} (${d.fromTeamName})`)) }) : '',
   )
   return [agreeArticle({
     id: seed, category: 'silly_season', round: ctx.calendar.length + 1, priority: 85,
-    headline: fill(pick(c.headline, `${seed}|h`), hslots),
+    headline: fill(pick(c.title, `${seed}|h`), hslots),
     dek: fill(pick(c.dek, `${seed}|d`), hslots),
     body,
   })]

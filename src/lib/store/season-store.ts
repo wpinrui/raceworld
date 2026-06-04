@@ -240,6 +240,8 @@ interface SeasonStore {
   seasonRenewals: RenewalResult[]
   // Round-15 verdicts on the expiring contracts, for the contract-watch feature.
   seasonContractWatch: ContractWatch[]
+  // How many Signing Day signings the player has revealed, persisted so revisiting shows the same state.
+  signingDayRevealed: number
 
   // Computed
   driverStandings: DriverStanding[]
@@ -273,6 +275,7 @@ interface SeasonStore {
   runDriverRetirements: () => void
   runPreSeasonTesting: () => void
   setDbSeasonId: (id: number) => void
+  setSigningDayRevealed: (n: number) => void
   startNewSeason: () => void
   resetToIdle: () => void
   loadConstructorHistory: (history: ConstructorSeasonRecord[]) => void
@@ -303,6 +306,7 @@ export const useSeasonStore = create<SeasonStore>()(
       seasonDraft: [],
       seasonRenewals: [],
       seasonContractWatch: [],
+      signingDayRevealed: 0,
       driverStandings: [],
       constructorStandings: [],
 
@@ -341,6 +345,7 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonDraft: [],
           seasonRenewals: [],
           seasonContractWatch: [],
+          signingDayRevealed: 0,
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -797,6 +802,7 @@ export const useSeasonStore = create<SeasonStore>()(
           endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests: [], droppedDrivers },
           pendingNextSeasonState: { drivers: updatedDrivers, teams },
           seasonDraft: picks,
+          signingDayRevealed: 0,
         })
       },
 
@@ -838,6 +844,7 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       setDbSeasonId: (id) => set({ dbSeasonId: id }),
+      setSigningDayRevealed: (n) => set({ signingDayRevealed: n }),
 
       startNewSeason: () => {
         const { pendingNextSeasonState, year, constructorHistory } = get()
@@ -864,6 +871,7 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonDraft: [],
           seasonRenewals: [],
           seasonContractWatch: [],
+          signingDayRevealed: 0,
             driverStandings: computeDriverStandings(drivers, teams, []),
             constructorStandings: computeConstructorStandings(teams, drivers, []),
           })
@@ -904,6 +912,7 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonDraft: [],
           seasonRenewals: [],
           seasonContractWatch: [],
+          signingDayRevealed: 0,
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -927,6 +936,7 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonDraft: [],
           seasonRenewals: [],
           seasonContractWatch: [],
+          signingDayRevealed: 0,
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -959,6 +969,7 @@ export const useSeasonStore = create<SeasonStore>()(
         seasonDraft: state.seasonDraft,
         seasonRenewals: state.seasonRenewals,
         seasonContractWatch: state.seasonContractWatch,
+        signingDayRevealed: state.signingDayRevealed,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

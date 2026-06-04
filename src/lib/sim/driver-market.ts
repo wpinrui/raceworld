@@ -128,7 +128,7 @@ export function assessExpiringContracts(opts: {
 export type DraftFlavour = 'statement' | 'upset' | 'rookie' | 'veteran_short' | 'chalk'
 
 export interface DraftSeat { teamId: string; teamName: string; teamColor: string }
-export interface DraftOdds { driverId: string; driverName: string; pct: number }
+export interface DraftOdds { driverId: string; driverName: string; pct: number; rank: number } // rank = free-agent ranking (1 = best)
 export interface DraftPick {
   teamId: string
   teamName: string
@@ -136,6 +136,7 @@ export interface DraftPick {
   driverId: string
   driverName: string
   prevTeamName: string // where they came from ('' = free agent / pool)
+  faRank: number       // the driver's free-agent ranking (1 = best available)
   seatRank: number     // 0 = most desirable open seat
   pickPct: number      // marginal % for THIS seat (the headline odd)
   realizedProb: number // whole-process survival probability (drives contract length)
@@ -183,6 +184,7 @@ export function runDraft(opts: {
 }): DraftPick[] {
   const { seats, pool, teams, currentYear, rng } = opts
   const teamName = new Map(teams.map((t) => [t.id, t.name]))
+  const poolRank = new Map(pool.map((d, i) => [d.id, i + 1])) // free-agent ranking (1 = best), fixed for the window
   const remaining = [...pool]
   const survival = new Map<string, number>(remaining.map((d) => [d.id, 1]))
   const picks: DraftPick[] = []
@@ -199,12 +201,13 @@ export function runDraft(opts: {
     const pickPct = probs[idx] * 100
     const realizedProb = (survival.get(driver.id) ?? 1) * probs[idx]
     const years = draftYears(realizedProb, rng)
-    const odds: DraftOdds[] = remaining.slice(0, 10).map((d, i) => ({ driverId: d.id, driverName: d.name, pct: Math.round(probs[i] * 1000) / 10 }))
+    const odds: DraftOdds[] = remaining.slice(0, 10).map((d, i) => ({ driverId: d.id, driverName: d.name, pct: Math.round(probs[i] * 1000) / 10, rank: poolRank.get(d.id) ?? i + 1 }))
 
     picks.push({
       teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
       driverId: driver.id, driverName: driver.name,
       prevTeamName: driver.teamId !== '' ? (teamName.get(driver.teamId) ?? '') : '',
+      faRank: poolRank.get(driver.id) ?? seatRank + 1,
       seatRank, pickPct: Math.round(pickPct * 10) / 10, realizedProb, years,
       flavour: flavourOf(driver, seatRank, pickPct, years, currentYear),
       odds,

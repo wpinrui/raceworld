@@ -121,12 +121,12 @@ function OffSeasonReview() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(null)}>
-          <div className={`bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-h-[85vh] flex flex-col shadow-xl ${open === 'contract-negotiations' ? 'max-w-5xl' : 'max-w-3xl'}`} onClick={(e) => e.stopPropagation()}>
+          <div className={`bg-[#1E2431] border border-[#2A3142] rounded-xl w-full flex flex-col shadow-xl ${open === 'contract-negotiations' ? 'max-w-5xl h-[85vh]' : 'max-w-3xl max-h-[85vh]'}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
               <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{STAGE_LABEL[open]}</h2>
               <button onClick={() => setOpen(null)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className={`flex-1 min-h-0 p-5 ${open === 'contract-negotiations' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
               {open === 'end-of-season' && (
                 <SeasonReviewPanel summary={summary} drivers={season.drivers} teams={season.teams} driverStandings={season.driverStandings} constructorStandings={season.constructorStandings} />
               )}
