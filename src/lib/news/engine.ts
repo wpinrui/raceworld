@@ -1534,6 +1534,7 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const hhPhrase = h2hL === h2hS ? `level at ${h2hL}-${h2hS}` : `${Math.max(h2hL, h2hS)}-${Math.min(h2hL, h2hS)} in ${poss(h2hL > h2hS ? lastName(s[0].driverName) : lastName(s[1].driverName))} favour`
     // Wins are framed by whoever actually has MORE of them — the points leader need not lead on wins.
     const winsTied = s[0].wins === s[1].wins
+    const noWins = s[0].wins === 0 && s[1].wins === 0 // both winless: drop the wins line entirely
     const winsLeaderName = s[0].wins >= s[1].wins ? s[0].driverName : s[1].driverName
     const slots = {
       leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName),
@@ -1568,9 +1569,11 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
           ['The championship is going to the wire.', 'This title race is far from settled.', 'It is advantage {leader}, but only just.'],
           ['Only {gap} {gap_pts} separate {leader} and {second} with {races_left} remaining.', 'The gap from {leader_last} to {second_last} stands at {gap} {gap_pts} with {races_left} left to run.', '{gap} {gap_pts} is all that divides {leader_last} and {second_last}.']),
         compose(`${seed}:form`, slots,
-          winsTied
-            ? ['Both drivers share {w_hi} wins apiece on the season.', 'The pair are level in the win column, {w_hi} each.', 'Wins are split evenly at {w_hi} apiece.']
-            : ['On wins, {w_leader_last} leads {w_hi} to {w_lo} this season.', 'The wins tally favours {w_leader_last}, {w_hi} to {w_lo}.', 'Race wins sit {w_hi} to {w_lo} in {w_leader_poss} favour.'],
+          noWins
+            ? ['']
+            : winsTied
+              ? ['Both drivers share {w_hi} wins apiece on the season.', 'The pair are level in the win column, {w_hi} each.', 'Wins are split evenly at {w_hi} apiece.']
+              : ['On wins, {w_leader_last} leads {w_hi} to {w_lo} this season.', 'The wins tally favours {w_leader_last}, {w_hi} to {w_lo}.', 'Race wins sit {w_hi} to {w_lo} in {w_leader_poss} favour.'],
           ['Their season head-to-head is {hh_phrase}.', 'In races where both finished, the head-to-head sits {hh_phrase}.'],
           momTied
             ? ['Recent form is dead level, {mom_hi} points apiece over the last four races.']
@@ -1791,8 +1794,12 @@ function previews(ctx: NewsContext): NewsArticle[] {
     // season). No age guessing: Button at 21 with 24 starts is not a rookie.
     const isDebutant = (d: Driver) =>
       d.debutYear != null ? d.debutYear === ctx.year : (careerTotalsThroughRound(ctx, d.id, r - 1)?.starts ?? 0) === 0
+    const seatedCount = ctx.drivers.filter((d) => d.teamId !== '').length
     const rookieNames = ctx.drivers.filter((d) => d.teamId !== '' && isDebutant(d)).map((d) => d.name)
-    const rookieNote = !isOpener ? ''
+    // A fresh-world mass debut (e.g. a generated season one, where the whole grid has no prior starts)
+    // is not individually newsworthy — suppress the note rather than list the entire field.
+    const massDebutOpener = rookieNames.length > seatedCount / 2
+    const rookieNote = !isOpener || massDebutOpener ? ''
       : rookieNames.length === 0 ? ''
       : rookieNames.length === 1 ? `${rookieNames[0]} makes a Grand Prix debut.`
       : `${listJoin(rookieNames)} all start their first Grand Prix.`
