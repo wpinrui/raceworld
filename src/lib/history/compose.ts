@@ -62,6 +62,7 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
     // Seated drivers carry a short contract so the market doesn't churn the whole grid after year 1.
     contractExpiresAfterSeason: seated ? year + 1 : year - 1,
     seasonsSinceF1Seat: 0,
+    debutYear: h.marketEntryYear, // real debut, so the newsroom never calls an established driver a rookie
   }
 }
 

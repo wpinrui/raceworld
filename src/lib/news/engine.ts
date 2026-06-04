@@ -875,8 +875,15 @@ function milestones(ctx: NewsContext): NewsArticle[] {
     // Mass-debut guard: in a brand-new world (season one, no career history) the whole grid debuts
     // in the very first race, which is not individually newsworthy. Suppress ONLY those first-race
     // milestones; every other first (first win, first points...) still stands.
+    // A driver whose real-world debut predates this season (historical mode) is racing in-game for the
+    // first time but is NOT a rookie — never report or count them as a debut.
+    const preExistingDriver = (driverId: string) => {
+      const dy = ctx.drivers.find((d) => d.id === driverId)?.debutYear
+      return dy != null && dy < ctx.year
+    }
     let debutants = 0
     for (const res of raceRes) {
+      if (preExistingDriver(res.driverId)) continue
       const b = careerTotalsThroughRound(ctx, res.driverId, r - 1)
       const a = careerTotalsThroughRound(ctx, res.driverId, r)
       if (b && a && milestoneCrossed('starts', b.starts, a.starts) === 1) debutants++
@@ -897,6 +904,7 @@ function milestones(ctx: NewsContext): NewsArticle[] {
         const v = milestoneCrossed(cat, before[cat], after[cat])
         if (v == null) continue
         if (cat === 'starts' && v === 1 && massDebut) continue // inaugural mass debut: not news
+        if (cat === 'starts' && v === 1 && preExistingDriver(res.driverId)) continue // raced before the game's reach
         events.push({ kind: 'career', res, cat, value: v, sig: milestoneSig(cat, v) })
         if (cat === 'wins') winDrivers.add(res.driverId)
         if (cat === 'podiums') podiumMile.add(res.driverId)
@@ -1524,11 +1532,14 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const momLast = pl >= ps ? lastName(s[0].driverName) : lastName(s[1].driverName)
     const momOther = pl >= ps ? lastName(s[1].driverName) : lastName(s[0].driverName)
     const hhPhrase = h2hL === h2hS ? `level at ${h2hL}-${h2hS}` : `${Math.max(h2hL, h2hS)}-${Math.min(h2hL, h2hS)} in ${poss(h2hL > h2hS ? lastName(s[0].driverName) : lastName(s[1].driverName))} favour`
+    // Wins are framed by whoever actually has MORE of them — the points leader need not lead on wins.
+    const winsTied = s[0].wins === s[1].wins
+    const winsLeaderName = s[0].wins >= s[1].wins ? s[0].driverName : s[1].driverName
     const slots = {
       leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName),
       leader_poss: poss(lastName(s[0].driverName)), second_poss: poss(lastName(s[1].driverName)),
       gap, gap_pts: plural(gap, 'point'), remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE,
-      lw: s[0].wins, sw: s[1].wins, lw_word: plural(s[0].wins, 'win'),
+      w_leader_last: lastName(winsLeaderName), w_leader_poss: poss(lastName(winsLeaderName)), w_hi: Math.max(s[0].wins, s[1].wins), w_lo: Math.min(s[0].wins, s[1].wins),
       hh_phrase: hhPhrase, mom_last: momLast, mom_other: momOther, mom_hi: Math.max(pl, ps), mom_lo: Math.min(pl, ps),
     }
     const battleTexture = [
@@ -1557,7 +1568,9 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
           ['The championship is going to the wire.', 'This title race is far from settled.', 'It is advantage {leader}, but only just.'],
           ['Only {gap} {gap_pts} separate {leader} and {second} with {races_left} remaining.', 'The gap from {leader_last} to {second_last} stands at {gap} {gap_pts} with {races_left} left to run.', '{gap} {gap_pts} is all that divides {leader_last} and {second_last}.']),
         compose(`${seed}:form`, slots,
-          ['{leader_last} has {lw} {lw_word} this year to {second_poss} {sw}.', 'On wins, {leader_last} leads {lw} to {sw}.', 'The win column reads {lw} to {sw} in {leader_poss} favour.'],
+          winsTied
+            ? ['Both drivers share {w_hi} wins apiece on the season.', 'The pair are level in the win column, {w_hi} each.', 'Wins are split evenly at {w_hi} apiece.']
+            : ['On wins, {w_leader_last} leads {w_hi} to {w_lo} this season.', 'The wins tally favours {w_leader_last}, {w_hi} to {w_lo}.', 'Race wins sit {w_hi} to {w_lo} in {w_leader_poss} favour.'],
           ['Their season head-to-head is {hh_phrase}.', 'In races where both finished, the head-to-head sits {hh_phrase}.'],
           momTied
             ? ['Recent form is dead level, {mom_hi} points apiece over the last four races.']
@@ -1774,7 +1787,11 @@ function previews(ctx: NewsContext): NewsArticle[] {
 
     // Grid talking point from last time out, and (opener only) the rookie debut note.
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
-    const rookieNames = ctx.drivers.filter((d) => d.teamId !== '' && d.age <= 21).map((d) => d.name)
+    // A debutant is a driver with NO prior F1 starts (in historical mode, only in their real debut
+    // season). No age guessing: Button at 21 with 24 starts is not a rookie.
+    const isDebutant = (d: Driver) =>
+      d.debutYear != null ? d.debutYear === ctx.year : (careerTotalsThroughRound(ctx, d.id, r - 1)?.starts ?? 0) === 0
+    const rookieNames = ctx.drivers.filter((d) => d.teamId !== '' && isDebutant(d)).map((d) => d.name)
     const rookieNote = !isOpener ? ''
       : rookieNames.length === 0 ? ''
       : rookieNames.length === 1 ? `${rookieNames[0]} makes a Grand Prix debut.`
@@ -2127,10 +2144,10 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
     used.add(chosen)
     return chosen
   }
-  // Genuine debutants only: young AND no prior F1 starts. A 20-year-old with a season behind them
-  // is not a rookie, so the "rookie/debut" framing would be wrong.
+  // Genuine debutants only: no prior F1 starts AND (historical mode) actually entering this season, so
+  // a pre-existing driver seated at a mid-history start year is never spotlighted as a rookie.
   const youngest = ctx.drivers
-    .filter((d) => d.teamId !== '' && d.age <= 22 && (careerOf(ctx, d.id)?.starts ?? 0) === 0)
+    .filter((d) => d.teamId !== '' && (careerOf(ctx, d.id)?.starts ?? 0) === 0 && (d.debutYear == null ? d.age <= 22 : d.debutYear === ctx.year))
     .sort((a, b) => a.age - b.age)
     .slice(0, 2)
   for (const d of youngest) {
