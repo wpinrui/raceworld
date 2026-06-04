@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 
 // Generic all-time stats table: a name search box + click-to-sort on every column. The same component
 // renders the drivers and constructors tables, driven by a column config. `num` columns sort
@@ -18,8 +19,8 @@ function Arrow({ dir }: { dir: 'asc' | 'desc' }) {
 }
 
 export function AllTimeStatsTable<T extends { id: string; name: string }>({
-  rows, columns, kind,
-}: { rows: T[]; columns: AllTimeColumn<T>[]; kind: 'driver' | 'team' }) {
+  rows, columns, kind, flagOf,
+}: { rows: T[]; columns: AllTimeColumn<T>[]; kind: 'driver' | 'team'; flagOf?: (id: string) => string }) {
   const numericKeys = useMemo(
     () => new Set(columns.filter((c) => c.type === 'num' || c.type === 'year').map((c) => c.key)),
     [columns],
@@ -65,7 +66,7 @@ export function AllTimeStatsTable<T extends { id: string; name: string }>({
                 <th
                   key={String(c.key)}
                   onClick={() => onSort(c.key)}
-                  className={`py-2 px-3 font-medium cursor-pointer select-none hover:text-[#00D9FF] ${c.type === 'num' || c.type === 'year' ? 'text-right' : 'text-left'} ${i === 0 ? 'sticky left-0 bg-[#1E2431]' : ''}`}
+                  className={`py-2 px-3 font-medium cursor-pointer select-none hover:text-[#00D9FF] sticky top-0 bg-[#1E2431] ${c.type === 'num' || c.type === 'year' ? 'text-right' : 'text-left'} ${i === 0 ? 'left-0 z-20' : 'z-10'}`}
                 >
                   {c.label}{sortKey === c.key && <Arrow dir={dir} />}
                 </th>
@@ -84,9 +85,14 @@ export function AllTimeStatsTable<T extends { id: string; name: string }>({
                       className={`py-1.5 px-3 ${c.type === 'num' || c.type === 'year' ? 'text-right tabular-nums' : ''} ${i === 0 ? 'sticky left-0 bg-[#1E2431] font-medium' : 'text-[#FFFFFF]'}`}
                     >
                       {isName
-                        ? (kind === 'driver'
-                            ? <DriverLink id={r.id} className="text-[#FFFFFF]">{String(v)}</DriverLink>
-                            : <TeamLink id={r.id} className="text-[#FFFFFF]">{String(v)}</TeamLink>)
+                        ? (
+                          <span className="flex items-center gap-2">
+                            <NationalityFlag code={flagOf?.(r.id)} />
+                            {kind === 'driver'
+                              ? <DriverLink id={r.id} className="text-[#FFFFFF]">{String(v)}</DriverLink>
+                              : <TeamLink id={r.id} className="text-[#FFFFFF]">{String(v)}</TeamLink>}
+                          </span>
+                        )
                         : c.type === 'num'
                           ? Number(v).toLocaleString()
                           : String(v)}

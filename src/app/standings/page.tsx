@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Trophy } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
+import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
 import { TeammateH2HPanel } from '@/components/standings/TeammateH2HPanel'
@@ -67,7 +68,23 @@ export default function StandingsPage() {
   const [loadingArchive, setLoadingArchive] = useState(false)
   const [allTimeDrivers, setAllTimeDrivers] = useState<AllTimeDriverStat[]>([])
   const [allTimeTeams, setAllTimeTeams] = useState<AllTimeTeamStat[]>([])
+  const [allTimeOpen, setAllTimeOpen] = useState<'drivers' | 'teams'>('drivers')
   const [hydrated, setHydrated] = useState(false)
+
+  // Nationality by id for the all-time flags — archived rows carry no nationality, so resolve from the
+  // 2026 grid (canonical roster) plus the live store; anything unknown falls back to rest-of-world.
+  const driverNation = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const d of drivers2026) m.set(d.id, d.nationality)
+    for (const d of season.drivers) if (d.nationality) m.set(d.id, d.nationality)
+    return m
+  }, [season.drivers])
+  const teamNation = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const t of teams2026) m.set(t.id, t.nationality)
+    for (const t of season.teams) if (t.nationality) m.set(t.id, t.nationality)
+    return m
+  }, [season.teams])
 
   useEffect(() => {
     setHydrated(true)
@@ -101,8 +118,8 @@ export default function StandingsPage() {
   if (!hydrated) return null
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
-      <div className="max-w-full px-4 py-6">
+    <div className="h-full flex flex-col overflow-hidden bg-[#0F1419] text-[#FFFFFF]">
+      <div className="shrink-0 max-w-full px-4 pt-6">
 
         {/* Champion trophies (year end only) */}
         {showChampions && (champDriver || champConstructor) && (
@@ -182,6 +199,11 @@ export default function StandingsPage() {
         {loadingArchive && (
           <p className="text-[#FFFFFF] text-sm animate-pulse mb-4">Loading archived season...</p>
         )}
+      </div>
+
+      {/* Content area — fixed app layout: it scrolls, the page never does. The All-Time tab fits the
+          viewport via an accordion whose open table scrolls internally. */}
+      <div className={`flex-1 min-h-0 max-w-full px-4 ${tab === 'alltime' ? 'pb-4 flex flex-col' : 'pb-6 overflow-y-auto'}`}>
 
         {/* Driver standings */}
         {tab === 'drivers' && (
@@ -234,30 +256,38 @@ export default function StandingsPage() {
           </>
         )}
 
-        {/* All-time historical stats (archived seasons only) — searchable + sortable */}
+        {/* All-time historical stats (archived seasons only) — accordion that fits the viewport;
+            the open table scrolls internally so the page never scrolls. */}
         {tab === 'alltime' && (
-          <div className="space-y-8">
-            <p className="text-xs text-[#FFFFFF]">All-time totals across archived seasons. The current season folds in once it is archived.</p>
-            <div>
-              <h2 className="font-display text-base tracking-wide uppercase mb-2 text-[#FFFFFF]">Drivers</h2>
-              {allTimeDrivers.length === 0 ? (
-                <p className="text-sm text-[#FFFFFF]">No archived seasons yet.</p>
-              ) : (
-                <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
-                  <AllTimeStatsTable rows={allTimeDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" />
-                </div>
-              )}
-            </div>
-            <div>
-              <h2 className="font-display text-base tracking-wide uppercase mb-2 text-[#FFFFFF]">Constructors</h2>
-              {allTimeTeams.length === 0 ? (
-                <p className="text-sm text-[#FFFFFF]">No archived seasons yet.</p>
-              ) : (
-                <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
-                  <AllTimeStatsTable rows={allTimeTeams} columns={TEAM_ALLTIME_COLS} kind="team" />
-                </div>
-              )}
-            </div>
+          <div className="flex flex-col flex-1 min-h-0 gap-2">
+            <button
+              onClick={() => setAllTimeOpen('drivers')}
+              className="shrink-0 flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#1E2431] border border-[#2A3142] text-left hover:border-[#303848] transition-colors"
+            >
+              <span className="font-display text-sm tracking-wide uppercase text-[#FFFFFF]">Drivers</span>
+              <span className="text-[#00D9FF] text-xs">{allTimeOpen === 'drivers' ? '▲' : '▼'}</span>
+            </button>
+            {allTimeOpen === 'drivers' && (
+              <div className="flex-1 min-h-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
+                {allTimeDrivers.length === 0
+                  ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+                  : <AllTimeStatsTable rows={allTimeDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} />}
+              </div>
+            )}
+            <button
+              onClick={() => setAllTimeOpen('teams')}
+              className="shrink-0 flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#1E2431] border border-[#2A3142] text-left hover:border-[#303848] transition-colors"
+            >
+              <span className="font-display text-sm tracking-wide uppercase text-[#FFFFFF]">Constructors</span>
+              <span className="text-[#00D9FF] text-xs">{allTimeOpen === 'teams' ? '▲' : '▼'}</span>
+            </button>
+            {allTimeOpen === 'teams' && (
+              <div className="flex-1 min-h-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
+                {allTimeTeams.length === 0
+                  ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+                  : <AllTimeStatsTable rows={allTimeTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} />}
+              </div>
+            )}
           </div>
         )}
 

@@ -143,7 +143,7 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
     for (const r of round) {
       if (!driverMap.has(r.driverId)) driverMap.set(r.driverId, stubDriver(r.driverId, r.driverName, r.teamId))
       if (!teamMap.has(r.teamId)) {
-        teamMap.set(r.teamId, { id: r.teamId, name: r.teamName, shortName: r.teamName, color: '#888888', carPace: 0 })
+        teamMap.set(r.teamId, { id: r.teamId, name: r.teamName, shortName: r.teamName, nationality: '', color: '#888888', carPace: 0 })
       }
     }
   }
