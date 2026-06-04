@@ -149,7 +149,7 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
   }
 
   const calendar: Circuit[] = races.map((race) => ({
-    id: race.circuit_id, name: race.circuit_name, code: '', location: '', country: '', laps: 0, flatModifier: 0,
+    id: race.circuit_id, name: race.circuit_name, code: '', location: '', country: '', laps: 0, flatModifier: 0, sundayOfYear: 0,
   }))
 
   const ctx: NewsContext = {

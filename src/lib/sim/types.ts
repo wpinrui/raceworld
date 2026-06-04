@@ -40,6 +40,8 @@ export interface Circuit {
   country: string        // ISO 3166-1 alpha-2, for the calendar flag
   laps: number
   flatModifier: number   // seconds added to base laptime for cosmetic realism
+  sundayOfYear: number   // race day = the Nth Sunday of the season year (1-based), so the
+                         // calendar self-resolves to a real date for any future year
 }
 
 export interface TyreState {
