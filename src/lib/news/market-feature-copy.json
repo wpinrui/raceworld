@@ -20,25 +20,25 @@
       "Formula racing's contract calendar has arrived at its most consequential moment, with {n} drivers in {year} holding deals that expire at season's end."
     ],
     "could_do_better": [
-      "{names} have each outscored their machinery this season and the wider market has noticed.",
-      "The clearest case for a step up belongs to {names}, who have all delivered results above what their car's raw pace justified.",
-      "Lap-time modelling consistently places {names} ahead of where their respective car speeds should put them.",
-      "{names} have turned underequipped campaigns into calling cards, and better-resourced teams are paying attention.",
-      "The data puts {names} in the same bracket, all operating above the ceiling their machinery should impose."
+      "A better seat looks overdue for {names}.",
+      "The car is the limiting factor for {names}, not the driving.",
+      "A step up is well earned by {names}.",
+      "Better machinery is the only thing missing for {names}.",
+      "The pace is there for {names}, the car is not."
     ],
     "right_place": [
-      "{names} look fairly matched to their current teams, with results that correlate broadly with the machinery.",
-      "The right-place verdict applies to {names}, all of whom sit in seats that reflect where their level currently sits.",
-      "{names} are settled in outfits that suit the current stage of their careers, with no glaring evidence that either party is being shortchanged.",
-      "Performance and equipment are well aligned for {names}, and an extension would represent continuity rather than compromise.",
-      "{names} each occupy seats that fit their output, and the case for renewal at each team is uncomplicated."
+      "The current seat looks a fair fit for {names}.",
+      "Driver and machinery are well matched for {names}.",
+      "Output matches the car for {names}.",
+      "An even balance of driver and seat holds for {names}.",
+      "The seat reflects the level of {names}."
     ],
     "lucky": [
-      "{names} have benefitted from cars strong enough to flatter results that a more rigorous analysis would not credit entirely to the driver.",
-      "Strip out the chassis advantage and the individual contributions from {names} look considerably more modest than their points tallies imply.",
-      "The paddock's candid reading is that {names} are being driven by their cars as much as driving them.",
-      "Retention looks shakier than the standings suggest for {names}, where the car is doing more of the heavy lifting than the teams would prefer to admit.",
-      "{names} enter the renewal window with more vulnerability than their results alone would imply, given how much of their points owe to strong machinery."
+      "The car is doing the heavy lifting for {names}.",
+      "Strong machinery is flattering {names}.",
+      "The points owe more to the car than to {names}.",
+      "A quick car is doing the talking for {names}.",
+      "The seat is overdelivering for {names}."
     ]
   },
   "renewals": {
@@ -62,18 +62,18 @@
       "The {year} renewal window produced {n} confirmed extensions before its formal close, leaving {m} drivers to contest the end-of-season market where teams historically hold the stronger hand."
     ],
     "renewed": [
-      "{names} all confirmed extensions before the window closed, each locking in another season with the team they currently drive for.",
-      "The signed group from this window is {names}, a set of renewals that spans multi-year commitments and short-term holdovers in roughly equal measure.",
-      "{names} put pen to paper before the Round 18 deadline, resolving what had in some cases been extended and occasionally tense negotiations.",
-      "Extensions for {names} were confirmed within the window, providing stability across a section of the grid that had been publicly uncertain.",
-      "{names} are all confirmed for the season ahead, with deals ranging in length but each representing a clear vote of confidence from the team in question."
+      "Fresh deals for {names}.",
+      "Staying put for the season ahead, {names}.",
+      "Extensions confirmed for {names}.",
+      "Locked in before the deadline, {names}.",
+      "Another season secured for {names}."
     ],
     "expiring": [
-      "{names} did not reach agreement before the deadline and now enter the end-of-season market as unsigned drivers at their current teams.",
-      "The unsigned group heading to the open market is {names}, each free to field formal approaches from rival teams.",
-      "{names} could not find common ground with their current outfits before the window closed, leaving their futures publicly unresolved.",
-      "Talks stalled or failed entirely for {names}, all of whom now negotiate in full public view with rival teams able to make formal approaches.",
-      "{names} head into the off-season market without a deal in place, a position that historically favours teams over drivers once the formal window has shut."
+      "The open market now awaits {names}.",
+      "No new deal yet for {names}.",
+      "Heading to the open market without a deal, {names}.",
+      "Still unsigned past the deadline, {names}.",
+      "Talks stalled for {names}."
     ]
   },
   "offseason": {
@@ -98,32 +98,32 @@
       "A {years}-year deal takes {driver} from {from_pos} {from} to {to_pos} {to}, the signing that defined the {year} off-season."
     ],
     "moves": [
-      "Other notable switches include {names}, each landing in seats that represent a clear change of direction.",
-      "The secondary moves of the window are {names}, a group whose transfers collectively redrew a significant portion of the {next} grid.",
-      "Beyond the headline deal, {names} all completed moves that will meaningfully alter their trajectories for the season ahead.",
-      "Further transfers worth noting are {names}, with each switch carrying its own logic of ambition, budget, or circumstance.",
-      "{names} all changed addresses before the market closed, rounding out a window of unusually high movement across the grid."
+      "Other moves of note involve {names}.",
+      "Also changing teams, {names}.",
+      "Further switches of note involve {names}.",
+      "Elsewhere on the grid, new seats for {names}.",
+      "Rounding out the window, moves for {names}."
     ],
     "upsets": [
-      "{names} are the signings that caught the market off-guard, arriving at points in the window when most insiders had written off the possibility entirely.",
-      "The surprise category belongs to {names}, deals that required a specific and unlikely alignment of circumstances to become real.",
-      "Nobody in the paddock was expecting {names}, and each announcement landed with the force that only a genuine surprise can manage.",
-      "{names} rank as the shocks of the window, signings that prompted the most disbelieving responses from those who had been watching the paddock closely.",
-      "The deals almost everyone said could not happen are {names}, which makes them the ones the off-season will be remembered for."
+      "The shocks of the window came from {names}.",
+      "Few saw the seats for {names} coming.",
+      "The biggest surprises of the window involve {names}.",
+      "Nobody had the deals for {names} on the cards.",
+      "Against the odds, new seats for {names}."
     ],
     "rookies": [
-      "{names} make their full-time grid debuts for the season ahead, each graduating from junior programmes that delivered the statistics required to make the step credible.",
-      "The new names on the entry list are {names}, first-year race drivers whose junior records include enough results to make their promotions defensible.",
-      "{names} arrive as the rookies of the {next} field, drivers whose feeder-series results pointed toward this outcome for the better part of a year.",
-      "The grid gains {names} as full-time race drivers, promotions that each team has publicly connected to junior-series performance rather than calendar timing.",
-      "{names} are the bets on the future, first-year drivers whose records in the feeder series made the step up arguable even for those who felt it came a season early."
+      "New to the grid for next year, {names}.",
+      "Stepping up to a race seat, {names}.",
+      "Making full-time debuts next season, {names}.",
+      "Graduating to the grid, {names}.",
+      "First race seats go to {names}."
     ],
     "dropped": [
-      "{names} lost their seats entirely in this off-season, each concluding a stint at their respective team without a confirmed replacement deal.",
-      "The market's harsher side claimed {names}, drivers released by their teams in a window that produced enough movement at the top to compress options further down.",
-      "{names} depart the grid for the {next} season, released by their teams after campaigns that did not meet the targets set at the start of the relationship.",
-      "{names} are all without a race seat for the season ahead, the group for whom this off-season ended without a deal rather than with one.",
-      "Released and, at time of writing, unplaced, {names} each face a very different off-season from the drivers who secured moves earlier in the window."
+      "Out of a drive for next year, {names}.",
+      "No seat next season for {names}.",
+      "Released by their teams, {names}.",
+      "Off the grid for the season ahead, {names}.",
+      "Still without a drive, {names}."
     ]
   }
 }
