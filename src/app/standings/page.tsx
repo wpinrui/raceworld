@@ -14,6 +14,9 @@ import { actionGetArchivedSeasons, actionGetSeasonStandings, actionGetAllTimeDri
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import type { DbSeason, AllTimeDriverStat, AllTimeTeamStat } from '@/lib/db/queries'
+import { foldLiveDriverStats, foldLiveTeamStats } from '@/lib/world/alltime'
+import { historicalDrivers } from '@/data/history/drivers'
+import { historicalGrids } from '@/data/history/grids'
 
 type Tab = 'drivers' | 'constructors' | 'h2h' | 'power' | 'alltime'
 
@@ -74,19 +77,36 @@ export default function StandingsPage() {
   const [hydrated, setHydrated] = useState(false)
 
   // Nationality by id for the all-time flags — archived rows carry no nationality, so resolve from the
-  // 2026 grid (canonical roster) plus the live store; anything unknown falls back to rest-of-world.
+  // historical dataset (covers teams/drivers that have since dropped off the grid) and the 2026 grid,
+  // with the live store last (most current). Anything unknown falls back to rest-of-world.
   const driverNation = useMemo(() => {
     const m = new Map<string, string>()
+    for (const d of historicalDrivers) m.set(d.id, d.nationality)
     for (const d of drivers2026) m.set(d.id, d.nationality)
     for (const d of season.drivers) if (d.nationality) m.set(d.id, d.nationality)
     return m
   }, [season.drivers])
   const teamNation = useMemo(() => {
     const m = new Map<string, string>()
+    for (const g of historicalGrids) for (const t of g.teams) m.set(t.id, t.nationality)
     for (const t of teams2026) m.set(t.id, t.nationality)
     for (const t of season.teams) if (t.nationality) m.set(t.id, t.nationality)
     return m
   }, [season.teams])
+
+  // Fold the in-progress season's tallies into the archived all-time rows so the tables count it too.
+  const liveForAllTime = useMemo(() => {
+    const championId = season.endOfSeasonSummary?.driverChampion || null
+    return {
+      year: season.year,
+      raceResults: season.raceResults,
+      driverChampionId: championId,
+      constructorChampionId: season.endOfSeasonSummary?.constructorChampion || null,
+      driverChampionTeamId: championId ? (season.drivers.find((d) => d.id === championId)?.teamId ?? null) : null,
+    }
+  }, [season.year, season.raceResults, season.drivers, season.endOfSeasonSummary])
+  const foldedDrivers = useMemo(() => foldLiveDriverStats(allTimeDrivers, liveForAllTime), [allTimeDrivers, liveForAllTime])
+  const foldedTeams = useMemo(() => foldLiveTeamStats(allTimeTeams, liveForAllTime), [allTimeTeams, liveForAllTime])
 
   useEffect(() => {
     setHydrated(true)
@@ -258,16 +278,16 @@ export default function StandingsPage() {
           </>
         )}
 
-        {/* All-time historical stats (archived seasons only). Two independent collapsible cards — the
-            title IS the card header; expand either, both, or neither. Open cards share the viewport and
-            scroll internally, so the page itself never scrolls. */}
+        {/* All-time historical stats (archived seasons + the in-progress season, folded in). Two
+            independent collapsible cards — the title IS the card header; expand either, both, or neither.
+            Open cards share the viewport and scroll internally, so the page itself never scrolls. */}
         {tab === 'alltime' && (
           <div className="flex flex-col flex-1 min-h-0 gap-2">
             {([
-              { label: 'Drivers', open: openDrivers, toggle: () => setOpenDrivers((v) => !v), empty: allTimeDrivers.length === 0,
-                table: <AllTimeStatsTable rows={allTimeDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} /> },
-              { label: 'Constructors', open: openTeams, toggle: () => setOpenTeams((v) => !v), empty: allTimeTeams.length === 0,
-                table: <AllTimeStatsTable rows={allTimeTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} /> },
+              { label: 'Drivers', open: openDrivers, toggle: () => setOpenDrivers((v) => !v), empty: foldedDrivers.length === 0,
+                table: <AllTimeStatsTable rows={foldedDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} /> },
+              { label: 'Constructors', open: openTeams, toggle: () => setOpenTeams((v) => !v), empty: foldedTeams.length === 0,
+                table: <AllTimeStatsTable rows={foldedTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} /> },
             ] as const).map((s) => (
               <div
                 key={s.label}
@@ -283,7 +303,7 @@ export default function StandingsPage() {
                 {s.open && (
                   <div className="flex-1 min-h-0 border-t border-[#2A3142]">
                     {s.empty
-                      ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+                      ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No all-time data yet. Run a race, or finish a season, and it will appear here.</p>
                       : s.table}
                   </div>
                 )}
