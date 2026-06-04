@@ -193,3 +193,30 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
 export async function actionSaveSeasonNews(seasonId: number, articlesJson: string): Promise<void> {
   saveSeasonNews(seasonId, articlesJson)
 }
+
+export interface AllSeasonNews {
+  articles: (NewsArticle & { year: number })[]
+  drivers: { id: string; name: string }[]
+  teams: { id: string; name: string }[]
+}
+
+// Every archived season's news in one shot, each article tagged with its year, for the newsroom's
+// cross-season ("all seasons") search/filter. Live-season articles are folded in client-side. The
+// returned roster is the union of drivers/teams across the archive, for hyperlinking article text.
+export async function actionGetAllSeasonNews(): Promise<AllSeasonNews> {
+  const years = getArchivedSeasons().map((s) => s.year).sort((a, b) => b - a)
+  const articles: (NewsArticle & { year: number })[] = []
+  const driverMap = new Map<string, string>()
+  const teamMap = new Map<string, string>()
+  for (const year of years) {
+    const res = await actionGetSeasonNews(year)
+    for (const a of res.articles) articles.push({ ...a, year })
+    for (const d of res.drivers) driverMap.set(d.id, d.name)
+    for (const t of res.teams) teamMap.set(t.id, t.name)
+  }
+  return {
+    articles,
+    drivers: [...driverMap].map(([id, name]) => ({ id, name })),
+    teams: [...teamMap].map(([id, name]) => ({ id, name })),
+  }
+}
