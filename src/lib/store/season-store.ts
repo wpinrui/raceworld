@@ -781,6 +781,7 @@ export const useSeasonStore = create<SeasonStore>()(
           raceResults: [],
           dbSeasonId: null,
           allUpgradeEvents: [],
+          realWorldChangesResolved: false,
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
           driverStandings: computeDriverStandings(drivers, teams, []),

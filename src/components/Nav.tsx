@@ -126,6 +126,7 @@ export default function Nav() {
       if (isOffSeason(useSeasonStore.getState().phase)) {
         // Gate: don't advance the off-season while a real-world season's grid changes are unresolved.
         // Surface them instead — the player must Apply (with any overrides) before progressing.
+        // Recomputed from fresh getState() (not the `pendingRW` memo) to avoid acting on stale state.
         const st = useSeasonStore.getState()
         if (pendingRealWorldChanges({ realWorldMode: st.realWorldMode, phase: st.phase, resolved: st.realWorldChangesResolved, year: st.year, teams: st.pendingNextSeasonState?.teams })) {
           setRwDismissed(false) // un-dismiss so the gate reappears
