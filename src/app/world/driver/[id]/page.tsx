@@ -94,6 +94,9 @@ export default function DriverPage() {
   const assignDriverToTeam = useSeasonStore((s) => s.assignDriverToTeam)
   const [assignTeam, setAssignTeam] = useState('')
   const [tab, setTab] = useState<Tab>('overview')
+  // Results tab accordion: which sections are expanded (an open section fills + scrolls internally).
+  const [openCareerStats, setOpenCareerStats] = useState(true)
+  const [openResults, setOpenResults] = useState(true)
   const [editing, setEditing] = useState(false)
   // Form tab: which season's full-season form to show. Defaults to the driver's most recent season;
   // useDriverSeason transparently builds the live season from the store and fetches archived ones.
@@ -439,18 +442,17 @@ export default function DriverPage() {
               )}
 
               {tab === 'results' && (
-                <div className="flex-1 min-h-0 grid gap-4 lg:grid-rows-2 overflow-y-auto lg:overflow-hidden">
-                  {/* Career stats — basics */}
-                  <Panel title="Career stats" flush fill>
-                    <CareerStatsTable seasons={career.seasons} driverId={id} />
-                  </Panel>
-
-                  {/* Complete results — per-round matrix */}
-                  <Panel title="Complete results" flush fill>
-                    {career.seasons.length === 0 ? (
-                      <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
-                    ) : (
-                      <div className="overflow-x-auto">
+                <div className="flex flex-col flex-1 min-h-0 gap-2">
+                  {([
+                    {
+                      label: 'Career stats', open: openCareerStats, toggle: () => setOpenCareerStats((v) => !v),
+                      content: <CareerStatsTable seasons={career.seasons} driverId={id} />,
+                    },
+                    {
+                      label: 'Complete results', open: openResults, toggle: () => setOpenResults((v) => !v),
+                      content: career.seasons.length === 0 ? (
+                        <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
+                      ) : (
                         <table className="w-full border-collapse text-sm">
                           <thead>
                             <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
@@ -480,9 +482,23 @@ export default function DriverPage() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
-                    )}
-                  </Panel>
+                      ),
+                    },
+                  ] as const).map((s) => (
+                    <div
+                      key={s.label}
+                      className={`rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden flex flex-col ${s.open ? 'flex-1 min-h-0' : 'shrink-0'}`}
+                    >
+                      <button
+                        onClick={s.toggle}
+                        className="shrink-0 flex items-center justify-between px-4 py-2.5 text-left hover:bg-[#0F1419]/40 transition-colors"
+                      >
+                        <span className="font-display text-sm tracking-wide uppercase text-[#FFFFFF]">{s.label}</span>
+                        <span className="text-[#00D9FF] text-xs">{s.open ? '▲' : '▼'}</span>
+                      </button>
+                      {s.open && <div className="flex-1 min-h-0 border-t border-[#2A3142] overflow-auto">{s.content}</div>}
+                    </div>
+                  ))}
                 </div>
               )}
 
