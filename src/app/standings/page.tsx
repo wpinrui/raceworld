@@ -68,7 +68,8 @@ export default function StandingsPage() {
   const [loadingArchive, setLoadingArchive] = useState(false)
   const [allTimeDrivers, setAllTimeDrivers] = useState<AllTimeDriverStat[]>([])
   const [allTimeTeams, setAllTimeTeams] = useState<AllTimeTeamStat[]>([])
-  const [allTimeOpen, setAllTimeOpen] = useState<'drivers' | 'teams'>('drivers')
+  const [openDrivers, setOpenDrivers] = useState(true)
+  const [openTeams, setOpenTeams] = useState(true)
   const [hydrated, setHydrated] = useState(false)
 
   // Nationality by id for the all-time flags — archived rows carry no nationality, so resolve from the
@@ -256,38 +257,37 @@ export default function StandingsPage() {
           </>
         )}
 
-        {/* All-time historical stats (archived seasons only) — accordion that fits the viewport;
-            the open table scrolls internally so the page never scrolls. */}
+        {/* All-time historical stats (archived seasons only). Two independent collapsible cards — the
+            title IS the card header; expand either, both, or neither. Open cards share the viewport and
+            scroll internally, so the page itself never scrolls. */}
         {tab === 'alltime' && (
           <div className="flex flex-col flex-1 min-h-0 gap-2">
-            <button
-              onClick={() => setAllTimeOpen('drivers')}
-              className="shrink-0 flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#1E2431] border border-[#2A3142] text-left hover:border-[#303848] transition-colors"
-            >
-              <span className="font-display text-sm tracking-wide uppercase text-[#FFFFFF]">Drivers</span>
-              <span className="text-[#00D9FF] text-xs">{allTimeOpen === 'drivers' ? '▲' : '▼'}</span>
-            </button>
-            {allTimeOpen === 'drivers' && (
-              <div className="flex-1 min-h-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
-                {allTimeDrivers.length === 0
-                  ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
-                  : <AllTimeStatsTable rows={allTimeDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} />}
+            {([
+              { label: 'Drivers', open: openDrivers, toggle: () => setOpenDrivers((v) => !v), empty: allTimeDrivers.length === 0,
+                table: <AllTimeStatsTable rows={allTimeDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} /> },
+              { label: 'Constructors', open: openTeams, toggle: () => setOpenTeams((v) => !v), empty: allTimeTeams.length === 0,
+                table: <AllTimeStatsTable rows={allTimeTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} /> },
+            ] as const).map((s) => (
+              <div
+                key={s.label}
+                className={`rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden flex flex-col ${s.open ? 'flex-1 min-h-0' : 'shrink-0'}`}
+              >
+                <button
+                  onClick={s.toggle}
+                  className="shrink-0 flex items-center justify-between px-4 py-2.5 text-left hover:bg-[#0F1419]/40 transition-colors"
+                >
+                  <span className="font-display text-sm tracking-wide uppercase text-[#FFFFFF]">{s.label}</span>
+                  <span className="text-[#00D9FF] text-xs">{s.open ? '▲' : '▼'}</span>
+                </button>
+                {s.open && (
+                  <div className="flex-1 min-h-0 border-t border-[#2A3142]">
+                    {s.empty
+                      ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+                      : s.table}
+                  </div>
+                )}
               </div>
-            )}
-            <button
-              onClick={() => setAllTimeOpen('teams')}
-              className="shrink-0 flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#1E2431] border border-[#2A3142] text-left hover:border-[#303848] transition-colors"
-            >
-              <span className="font-display text-sm tracking-wide uppercase text-[#FFFFFF]">Constructors</span>
-              <span className="text-[#00D9FF] text-xs">{allTimeOpen === 'teams' ? '▲' : '▼'}</span>
-            </button>
-            {allTimeOpen === 'teams' && (
-              <div className="flex-1 min-h-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
-                {allTimeTeams.length === 0
-                  ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
-                  : <AllTimeStatsTable rows={allTimeTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} />}
-              </div>
-            )}
+            ))}
           </div>
         )}
 
