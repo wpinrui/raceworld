@@ -17,6 +17,7 @@ import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { advanceOffSeason, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
+import { useSetupCta } from '@/lib/store/setup-cta'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 import WorldSearch from '@/components/WorldSearch'
 
@@ -38,6 +39,7 @@ export default function Nav() {
   const raceResults = useSeasonStore((s) => s.raceResults)
   const racePhase = useRaceStore((s) => s.raceState?.phase)
   const interruptOnRaceday = useSettingsStore((s) => s.interruptOnRaceday)
+  const setupCta = useSetupCta((s) => s.cta)
 
   const [hydrated, setHydrated] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -51,6 +53,10 @@ export default function Nav() {
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
 
   useEffect(() => setHydrated(true), [])
+  // Pre-season (no season started yet): Setup is the only reachable page.
+  useEffect(() => {
+    if (hydrated && phase === 'idle' && pathname !== '/setup') router.replace('/setup')
+  }, [hydrated, phase, pathname, router])
   useEffect(() => {
     actionGetDriverCareers(year - 1).then(setCareerBase).catch(() => setCareerBase({}))
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
@@ -154,7 +160,12 @@ export default function Nav() {
       if (racePhase === 'racing') return null
       return <button onClick={handleSimQualifying} className={PRIMARY_CTA}>Simulate Qualifying<ChevronRight size={14} /></button>
     }
-    if (!seasonActive) return null
+    if (!seasonActive) {
+      // Pre-season: the Setup page registers its "Start Season" action here.
+      return setupCta
+        ? <button onClick={setupCta.start} disabled={!setupCta.ready} className={PRIMARY_CTA}>Start Season {setupCta.year}<ChevronRight size={14} /></button>
+        : null
+    }
     if (offSeason) {
       return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA} title={`Next: ${nextOffSeasonStageLabel(phase)}`}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
     }
@@ -169,13 +180,16 @@ export default function Nav() {
     return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
   })()
 
-  const links = [
-    { href: '/home', label: 'HOME' },
-    { href: '/setup', label: seasonActive ? 'MARKET' : 'SETUP' },
-    { href: '/standings', label: 'STANDINGS' },
-    { href: '/world', label: 'WORLD' },
-    { href: '/newsroom', label: 'NEWS' },
-  ]
+  // Before a season exists, Setup is the only page; once running, the full nav appears.
+  const links = seasonActive
+    ? [
+        { href: '/home', label: 'HOME' },
+        { href: '/setup', label: 'MARKET' },
+        { href: '/standings', label: 'STANDINGS' },
+        { href: '/world', label: 'WORLD' },
+        { href: '/newsroom', label: 'NEWS' },
+      ]
+    : [{ href: '/setup', label: 'SETUP' }]
 
   return (
     <nav className="flex-none flex items-center gap-6 px-6 h-12 bg-[#1E2431] border-b border-[#2A3142]">
@@ -212,12 +226,12 @@ export default function Nav() {
             })}
           </div>
 
-          <div className="flex-1 px-4"><WorldSearch /></div>
+          {seasonActive ? <div className="flex-1 px-4"><WorldSearch /></div> : <div className="flex-1" />}
 
           <div className="flex items-center gap-3 text-xs tabular-nums text-[#FFFFFF]">
-            {hydrated && (seasonActive
-              ? <span>{dateLabel} · {offSeason ? 'Off-season' : `Round ${String(currentRound).padStart(2, '0')}/${String(total).padStart(2, '0')}`}{circuit && !offSeason && <span> · {circuit.name}</span>}</span>
-              : <span>No active season</span>)}
+            {hydrated && seasonActive && (
+              <span>{dateLabel} · {offSeason ? 'Off-season' : `Round ${String(currentRound).padStart(2, '0')}/${String(total).padStart(2, '0')}`}{circuit && !offSeason && <span> · {circuit.name}</span>}</span>
+            )}
           </div>
         </>
       )}

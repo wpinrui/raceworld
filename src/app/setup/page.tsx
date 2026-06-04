@@ -11,6 +11,7 @@ import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
 import { TeamLink } from '@/components/world/EntityLink'
 import { composeSeason, historyYears } from '@/lib/history/compose'
+import { useSetupCta } from '@/lib/store/setup-cta'
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -145,6 +146,15 @@ export default function SetupPage() {
     router.push('/race')
   }
 
+  // Surface "Start Season" up in the nav top bar (the only CTA before a season exists). The staged
+  // grid lives in this page's local state, so we register the action here for the nav to invoke.
+  const setSetupCta = useSetupCta((s) => s.setCta)
+  useEffect(() => {
+    if (isActive) { setSetupCta(null); return }
+    setSetupCta({ ready: localDrivers.length > 0, year: startYear, start: handleStartSeason })
+    return () => setSetupCta(null)
+  }, [isActive, localDrivers, localTeams, startYear, realWorld]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!hydrated) return null
 
   const freeAgents = localDrivers.filter((d) => d.teamId === '')
@@ -212,15 +222,10 @@ export default function SetupPage() {
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
               <Download size={13} /> Export JSON
             </button>
-            {isActive ? (
+            {isActive && (
               <button onClick={() => router.push('/race')}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors">
                 Back to Race <ChevronRight size={14} />
-              </button>
-            ) : (
-              <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                Start Season {startYear} <ChevronRight size={14} />
               </button>
             )}
           </div>
