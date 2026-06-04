@@ -15,7 +15,6 @@ interface Props {
   onStrategyNoiseChange: (v: number) => void
   onFormChange: (id: string, v: number) => void
   onBegin: () => void
-  onAutoSim: () => void
 }
 
 type SortKey = 'driver' | 'team' | 'form' | 'car' | 'pace' | 'wet' | 'ovt' | 'smt'
@@ -89,7 +88,7 @@ function Th({ col, children, right, activeSortKey, sortDir, onSort }: ThProps) {
 
 export function PreQualPanel({
   drivers, teams, forms, strategyNoise, currentCircuit,
-  onStrategyNoiseChange, onFormChange, onBegin, onAutoSim,
+  onStrategyNoiseChange, onFormChange, onBegin,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('car')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -135,13 +134,6 @@ export function PreQualPanel({
           className="px-6 py-2.5 bg-[#00D9FF] hover:bg-[#009CB8] text-[#0F1419] text-sm font-black tracking-widest uppercase rounded transition-colors shrink-0"
         >
           Begin Race Weekend
-        </button>
-
-        <button
-          onClick={onAutoSim}
-          className="px-4 py-2.5 bg-[#2A3142] hover:bg-[#303848] text-[#FFFFFF] text-xs font-bold tracking-widest uppercase rounded transition-colors shrink-0 cursor-pointer"
-        >
-          Sim Rest of Season
         </button>
       </div>
 

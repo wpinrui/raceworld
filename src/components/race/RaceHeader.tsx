@@ -8,14 +8,10 @@ interface Props {
   raceState: RaceState | null
   lapProgress: number
   currentCircuit: Circuit | undefined
-  autoSimming: boolean
-  onStopAutoSim: () => void
-  onRestartWeekend: () => void
 }
 
 export function RaceHeader({
   phase, raceState, lapProgress, currentCircuit,
-  autoSimming, onStopAutoSim, onRestartWeekend,
 }: Props) {
   return (
     <div className="shrink-0 flex items-center justify-between px-6 py-2 bg-[#1E2431] border-b border-[#2A3142]">
@@ -44,20 +40,9 @@ export function RaceHeader({
       </div>
 
       <div className="flex items-center gap-4">
-        {autoSimming && (
-          <button
-            onClick={onStopAutoSim}
-            className="text-xs text-[#DC143C] hover:text-[#ff4466] tracking-wider uppercase transition-colors cursor-pointer animate-pulse"
-          >
-            Stop Auto-Sim
-          </button>
+        {phase === 'finished' && (
+          <span className="text-xs text-[#FFFFFF] tracking-wider uppercase">Hit End Race (top right) to continue</span>
         )}
-        <button
-          onClick={onRestartWeekend}
-          className="text-xs text-[#FFFFFF] hover:text-[#DC143C] tracking-wider uppercase transition-colors cursor-pointer"
-        >
-          Restart Weekend
-        </button>
       </div>
     </div>
   )

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, foldLiveSeason, foldLiveSeasonTeams, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 
@@ -61,24 +62,10 @@ export default function NewsroomPage() {
   }, [liveYear, archivedYears])
 
   // Live season: generated client-side from the store (full attributes available).
-  const liveArticles = useMemo(() => {
-    const ctx: NewsContext = {
-      year: s.year,
-      phase: s.phase,
-      completedRounds: s.raceResults.length,
-      drivers: s.drivers,
-      teams: s.teams,
-      raceResults: s.raceResults,
-      upgradeEvents: s.allUpgradeEvents,
-      constructorHistory: s.constructorHistory,
-      endOfSeason: s.endOfSeasonSummary,
-      calendar: calendar2026,
-      live: true,
-      careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
-      teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
-    }
-    return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase])
+  const liveArticles = useMemo(
+    () => generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase)),
+    [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {

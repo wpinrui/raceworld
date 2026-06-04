@@ -200,6 +200,7 @@ interface SeasonStore {
   // Actions
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
+  setCurrentDate: (date: string) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
   releaseDriver: (id: string) => void
@@ -288,6 +289,9 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
         })
       },
+
+      // Advance / set the game clock (the FM-style "Continue" loop drives this).
+      setCurrentDate: (date) => set({ currentDate: date }),
 
       // God-mode edit of a single driver (e.g. from the world driver page).
       updateDriver: (id, patch) => {
