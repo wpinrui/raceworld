@@ -36,7 +36,7 @@ const DRIVER_ALLTIME_COLS: AllTimeColumn<AllTimeDriverStat>[] = [
   { key: 'podiums', label: 'Podiums', type: 'num' },
   { key: 'points', label: 'Points', type: 'num' },
   { key: 'retirements', label: 'DNFs', type: 'num' },
-  { key: 'championships', label: 'Titles', type: 'num' },
+  { key: 'wdc', label: 'WDC', type: 'num' },
 ]
 
 const TEAM_ALLTIME_COLS: AllTimeColumn<AllTimeTeamStat>[] = [
@@ -50,7 +50,8 @@ const TEAM_ALLTIME_COLS: AllTimeColumn<AllTimeTeamStat>[] = [
   { key: 'podiums', label: 'Podiums', type: 'num' },
   { key: 'points', label: 'Points', type: 'num' },
   { key: 'retirements', label: 'DNFs', type: 'num' },
-  { key: 'championships', label: 'Titles', type: 'num' },
+  { key: 'wdc', label: 'WDC', type: 'num' },
+  { key: 'wcc', label: 'WCC', type: 'num' },
 ]
 
 interface ArchivedView {

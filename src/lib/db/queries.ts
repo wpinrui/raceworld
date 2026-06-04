@@ -613,7 +613,7 @@ export function getAllSeasonChampions(): SeasonChampions[] {
 // live season folds in once archived, matching every other historical query here. ---
 export interface AllTimeDriverStat {
   id: string; name: string; seasons: number; races: number; firstYear: number; lastYear: number
-  wins: number; poles: number; podiums: number; points: number; retirements: number; championships: number
+  wins: number; poles: number; podiums: number; points: number; retirements: number; wdc: number
 }
 export function getAllTimeDriverStats(): AllTimeDriverStat[] {
   const rows = getDb().prepare(`
@@ -631,15 +631,15 @@ export function getAllTimeDriverStats(): AllTimeDriverStat[] {
     JOIN seasons s ON s.id = r.season_id
     WHERE s.status = 'archived'
     GROUP BY rr.driver_id
-  `).all() as Omit<AllTimeDriverStat, 'championships'>[]
+  `).all() as Omit<AllTimeDriverStat, 'wdc'>[]
   const titles = new Map<string, number>()
   for (const c of getAllSeasonChampions()) if (c.driverChampionId) titles.set(c.driverChampionId, (titles.get(c.driverChampionId) ?? 0) + 1)
-  return rows.map((r) => ({ ...r, championships: titles.get(r.id) ?? 0 }))
+  return rows.map((r) => ({ ...r, wdc: titles.get(r.id) ?? 0 }))
 }
 
 export interface AllTimeTeamStat {
   id: string; name: string; seasons: number; races: number; firstYear: number; lastYear: number
-  wins: number; poles: number; podiums: number; points: number; retirements: number; championships: number
+  wins: number; poles: number; podiums: number; points: number; retirements: number; wdc: number; wcc: number
 }
 export function getAllTimeTeamStats(): AllTimeTeamStat[] {
   const rows = getDb().prepare(`
@@ -657,10 +657,15 @@ export function getAllTimeTeamStats(): AllTimeTeamStat[] {
     JOIN seasons s ON s.id = r.season_id
     WHERE s.status = 'archived'
     GROUP BY rr.team_id
-  `).all() as Omit<AllTimeTeamStat, 'championships'>[]
-  const titles = new Map<string, number>()
-  for (const c of getAllSeasonChampions()) if (c.constructorChampionId) titles.set(c.constructorChampionId, (titles.get(c.constructorChampionId) ?? 0) + 1)
-  return rows.map((r) => ({ ...r, championships: titles.get(r.id) ?? 0 }))
+  `).all() as Omit<AllTimeTeamStat, 'wdc' | 'wcc'>[]
+  // WCC = the team's own constructors' titles; WDC = drivers' titles won by a driver racing for the team.
+  const wcc = new Map<string, number>()
+  const wdc = new Map<string, number>()
+  for (const c of getAllSeasonChampions()) {
+    if (c.constructorChampionId) wcc.set(c.constructorChampionId, (wcc.get(c.constructorChampionId) ?? 0) + 1)
+    if (c.driverChampionTeamId) wdc.set(c.driverChampionTeamId, (wdc.get(c.driverChampionTeamId) ?? 0) + 1)
+  }
+  return rows.map((r) => ({ ...r, wdc: wdc.get(r.id) ?? 0, wcc: wcc.get(r.id) ?? 0 }))
 }
 
 export function getDriverFinishInSeason(seasonId: number, driverId: string): number | null {
