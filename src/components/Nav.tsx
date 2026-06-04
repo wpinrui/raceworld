@@ -18,7 +18,9 @@ import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { advanceOffSeason, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { useSetupCta } from '@/lib/store/setup-cta'
+import { pendingRealWorldChanges } from '@/lib/history/transitions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
+import { RealWorldChangesModal } from '@/components/home/RealWorldChangesModal'
 import WorldSearch from '@/components/WorldSearch'
 
 const PRIMARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-50 transition-colors'
@@ -40,6 +42,9 @@ export default function Nav() {
   const racePhase = useRaceStore((s) => s.raceState?.phase)
   const interruptOnRaceday = useSettingsStore((s) => s.interruptOnRaceday)
   const setupCta = useSetupCta((s) => s.cta)
+  const realWorldMode = useSeasonStore((s) => s.realWorldMode)
+  const realWorldChangesResolved = useSeasonStore((s) => s.realWorldChangesResolved)
+  const pendingNextSeasonState = useSeasonStore((s) => s.pendingNextSeasonState)
 
   const [hydrated, setHydrated] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -47,6 +52,10 @@ export default function Nav() {
   const [busy, setBusy] = useState(false)
   const [simming, setSimming] = useState(false)
   const [newsStop, setNewsStop] = useState<{ date: string; articles: NewsArticle[] } | null>(null)
+  // The gate is shown whenever there are pending real-world changes, unless the player dismissed it
+  // ("Review later"); pressing Continue clears the dismissal so it reappears. Resolving clears the
+  // pending set entirely. Derived open state, so no auto-open effect is needed.
+  const [rwDismissed, setRwDismissed] = useState(false)
   // Prior-season career totals (the current season folds in from the store), so milestone /
   // retirement interrupts see real records. Fetched once, like the newsroom.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -80,6 +89,13 @@ export default function Nav() {
     year,
   }), [drivers, teams, raceResults.length, year])
 
+  // Real-world team changes that must be acted on before the off-season can advance (null = nothing
+  // to gate on). Drives both the auto-opening modal and the Continue gate below.
+  const pendingRW = useMemo(
+    () => pendingRealWorldChanges({ realWorldMode, phase, resolved: realWorldChangesResolved, year, teams: pendingNextSeasonState?.teams }),
+    [realWorldMode, phase, realWorldChangesResolved, year, pendingNextSeasonState],
+  )
+
   // Raceday progression — the single CTA walks pre-qualifying → pre-race → finished.
   function handleSimQualifying() { useRaceStore.getState().initSession() }
   function handleStartRace() {
@@ -108,6 +124,14 @@ export default function Nav() {
     setBusy(true)
     try {
       if (isOffSeason(useSeasonStore.getState().phase)) {
+        // Gate: don't advance the off-season while a real-world season's grid changes are unresolved.
+        // Surface them instead — the player must Apply (with any overrides) before progressing.
+        // Recomputed from fresh getState() (not the `pendingRW` memo) to avoid acting on stale state.
+        const st = useSeasonStore.getState()
+        if (pendingRealWorldChanges({ realWorldMode: st.realWorldMode, phase: st.phase, resolved: st.realWorldChangesResolved, year: st.year, teams: st.pendingNextSeasonState?.teams })) {
+          setRwDismissed(false) // un-dismiss so the gate reappears
+          return
+        }
         await advanceOffSeason()
       } else {
         const settings = useSettingsStore.getState()
@@ -258,6 +282,8 @@ export default function Nav() {
       {cta}
 
       {/* News interrupt modal */}
+      <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW && !rwDismissed} transition={pendingRW} onClose={() => setRwDismissed(true)} />
+
       {newsStop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setNewsStop(null)}>
           <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>

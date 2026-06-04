@@ -181,6 +181,10 @@ interface SeasonStore {
   // When true, the season was started from the historical timeline: the market draws real free
   // agents (until the dataset runs out) and season-ends apply real team changes (with consent).
   realWorldMode: boolean
+  // End-of-season gate: true once the player has acted on that season's real-world team changes
+  // (Apply, with whatever overrides). Blocks the off-season from advancing until then. Reset each
+  // time a season concludes.
+  realWorldChangesResolved: boolean
   raceResults: RaceResult[][]  // [round-1]
   dbSeasonId: number | null
 
@@ -244,6 +248,7 @@ export const useSeasonStore = create<SeasonStore>()(
       currentRound: 1,
       currentDate: seasonStartDate(2026),
       realWorldMode: false,
+      realWorldChangesResolved: false,
       raceResults: [],
       dbSeasonId: null,
       devPlans: [],
@@ -332,7 +337,7 @@ export const useSeasonStore = create<SeasonStore>()(
           if (teams.some((t) => t.id === j.id)) return // already applied; don't add a duplicate
           teams.push({ id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) })
         })
-        set({ pendingNextSeasonState: { drivers, teams } })
+        set({ pendingNextSeasonState: { drivers, teams }, realWorldChangesResolved: true })
       },
 
       // God-mode edit of a single driver (e.g. from the world driver page).
@@ -629,6 +634,7 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorHistory: updatedHistory,
           pendingNextSeasonState: { drivers: nextDrivers, teams: nextTeams },
           pendingGridChanges: { additions: [], removals: [] },
+          realWorldChangesResolved: false, // new season's changes need acting on before the off-season advances
         })
       },
 
@@ -775,6 +781,7 @@ export const useSeasonStore = create<SeasonStore>()(
           raceResults: [],
           dbSeasonId: null,
           allUpgradeEvents: [],
+          realWorldChangesResolved: false,
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
           driverStandings: computeDriverStandings(drivers, teams, []),
@@ -794,6 +801,7 @@ export const useSeasonStore = create<SeasonStore>()(
         currentRound: state.currentRound,
         currentDate: state.currentDate,
         realWorldMode: state.realWorldMode,
+        realWorldChangesResolved: state.realWorldChangesResolved,
         raceResults: state.raceResults,
         dbSeasonId: state.dbSeasonId,
         devPlans: state.devPlans,
