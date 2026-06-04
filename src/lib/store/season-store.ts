@@ -22,13 +22,14 @@ import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
-import { runDraft, negotiateRenewals, type DraftPick, type DraftSeat, type RenewalResult } from '@/lib/sim/driver-market'
+import { runDraft, negotiateRenewals, assessExpiringContracts, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
 
 const TOTAL_ROUNDS = calendar2026.length
-// Phase 1 of the driver market: in-season renewals run once, the round before the silly-season window.
+// Driver market in-season beats: a contract watch shortly before the window, then renewals.
+const WATCH_ROUND = 15
 const RENEWAL_ROUND = 18
 
 // Pre-season testing always runs at Barcelona/Catalunya.
@@ -237,6 +238,8 @@ interface SeasonStore {
   seasonDraft: DraftPick[]
   // Round-18 contract renewals this season, for the renewals round-up feature.
   seasonRenewals: RenewalResult[]
+  // Round-15 verdicts on the expiring contracts, for the contract-watch feature.
+  seasonContractWatch: ContractWatch[]
 
   // Computed
   driverStandings: DriverStanding[]
@@ -299,6 +302,7 @@ export const useSeasonStore = create<SeasonStore>()(
       carPaceHistory: [],
       seasonDraft: [],
       seasonRenewals: [],
+      seasonContractWatch: [],
       driverStandings: [],
       constructorStandings: [],
 
@@ -336,6 +340,7 @@ export const useSeasonStore = create<SeasonStore>()(
           carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
           seasonDraft: [],
           seasonRenewals: [],
+          seasonContractWatch: [],
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -544,24 +549,25 @@ export const useSeasonStore = create<SeasonStore>()(
         // Driver development applies after each race.
         let { updatedDrivers } = applyRaceProgression(drivers, Math.random)
 
-        // Phase 1 of the driver market: at the renewal round, each team negotiates with its expiring
-        // drivers. The likelier the driver's media standing matches the team's WCC standing, the likelier
-        // the renewal (and the longer the deal). Whoever isn't re-signed becomes a free agent in the draft.
+        // Phase 1 of the driver market plays out in-season: a contract watch at round 15, then renewals
+        // at round 18. Both compare each expiring driver's grid-wide media standing against their team's
+        // WCC standing — the closer the match, the better the fit (and, at renewal, the likelier + longer
+        // the new deal). Whoever isn't re-signed becomes a free agent in the end-of-season draft.
         let seasonRenewals = get().seasonRenewals
-        if (currentRound === RENEWAL_ROUND) {
+        let seasonContractWatch = get().seasonContractWatch
+        if (currentRound === WATCH_ROUND || currentRound === RENEWAL_ROUND) {
           const standings = computeConstructorStandings(updatedTeams, updatedDrivers, updated)
           const rankInfo = standings.map((cs, idx) => ({ teamId: cs.teamId, points: cs.points, finalPosition: idx + 1 }))
           const mediaScores = computeDriverMediaScores(updatedDrivers, updatedTeams, updated, rankInfo, updatedTeams.length)
-          const result = negotiateRenewals({
-            drivers: updatedDrivers,
-            teams: updatedTeams,
-            mediaScore: new Map(mediaScores.map((s) => [s.driverId, s.score])),
-            wccOrderBestFirst: standings.map((cs) => cs.teamId),
-            currentYear: year,
-            rng: Math.random,
-          })
-          updatedDrivers = result.drivers
-          seasonRenewals = result.renewals
+          const mediaMap = new Map(mediaScores.map((s) => [s.driverId, s.score]))
+          const wccOrderBestFirst = standings.map((cs) => cs.teamId)
+          if (currentRound === WATCH_ROUND) {
+            seasonContractWatch = assessExpiringContracts({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year })
+          } else {
+            const result = negotiateRenewals({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year, rng: Math.random })
+            updatedDrivers = result.drivers
+            seasonRenewals = result.renewals
+          }
         }
 
         set({
@@ -574,6 +580,7 @@ export const useSeasonStore = create<SeasonStore>()(
           devPlans: updatedDevPlans,
           allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
           seasonRenewals,
+          seasonContractWatch,
           // Capture the post-race attributes for this round's progression chart.
           statHistory: appendStatHistory(statHistory, updatedDrivers, currentRound),
           // Capture each car's post-upgrade pace for the Car Development chart.
@@ -856,6 +863,7 @@ export const useSeasonStore = create<SeasonStore>()(
             carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
           seasonDraft: [],
           seasonRenewals: [],
+          seasonContractWatch: [],
             driverStandings: computeDriverStandings(drivers, teams, []),
             constructorStandings: computeConstructorStandings(teams, drivers, []),
           })
@@ -895,6 +903,7 @@ export const useSeasonStore = create<SeasonStore>()(
           carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
           seasonDraft: [],
           seasonRenewals: [],
+          seasonContractWatch: [],
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -917,6 +926,7 @@ export const useSeasonStore = create<SeasonStore>()(
           carPaceHistory: [],
           seasonDraft: [],
           seasonRenewals: [],
+          seasonContractWatch: [],
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -948,6 +958,7 @@ export const useSeasonStore = create<SeasonStore>()(
         carPaceHistory: state.carPaceHistory,
         seasonDraft: state.seasonDraft,
         seasonRenewals: state.seasonRenewals,
+        seasonContractWatch: state.seasonContractWatch,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

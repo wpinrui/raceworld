@@ -77,6 +77,52 @@ export function negotiateRenewals(opts: {
   return { drivers: updated, renewals }
 }
 
+// ---------- Round-15 contract watch (the "could do better / right place / lucky" preview) ----------
+
+export type ContractVerdict = 'could_do_better' | 'right_place' | 'lucky'
+
+export interface ContractWatch {
+  driverId: string
+  driverName: string
+  teamId: string
+  teamName: string
+  verdict: ContractVerdict
+  driverPct: number // grid-wide media percentile (100 = best-rated driver)
+  teamPct: number   // WCC percentile (100 = championship-leading team)
+  diff: number      // driverPct - teamPct (signed): +ve = outdriving the seat, -ve = flattered by it
+}
+
+const WATCH_BAND = 15 // within this percentile gap, the driver is judged to be in the right place
+
+// Reads the expiring contracts shortly before the renewal window and judges each, from the driver's
+// perspective, against the seat: a highly-rated driver in a weak car "could do better"; a modestly-rated
+// one in a strong car would be "lucky" to be kept; a close match is in the "right place".
+export function assessExpiringContracts(opts: {
+  drivers: Driver[]
+  teams: Team[]
+  mediaScore: Map<string, number>
+  wccOrderBestFirst: string[]
+  currentYear: number
+}): ContractWatch[] {
+  const { drivers, teams, mediaScore, wccOrderBestFirst, currentYear } = opts
+  const seated = drivers.filter((d) => d.teamId !== '')
+  const driverOrder = [...seated].sort((a, b) => (mediaScore.get(b.id) ?? 0) - (mediaScore.get(a.id) ?? 0)).map((d) => d.id)
+  const driverPct = rankPercentiles(driverOrder)
+  const teamPct = rankPercentiles(wccOrderBestFirst)
+  const teamName = new Map(teams.map((t) => [t.id, t.name]))
+
+  const out: ContractWatch[] = []
+  for (const d of seated) {
+    if (d.contractExpiresAfterSeason > currentYear) continue // not expiring this year
+    const dp = driverPct.get(d.id) ?? 50
+    const tp = teamPct.get(d.teamId) ?? 50
+    const diff = dp - tp
+    const verdict: ContractVerdict = diff > WATCH_BAND ? 'could_do_better' : diff < -WATCH_BAND ? 'lucky' : 'right_place'
+    out.push({ driverId: d.id, driverName: d.name, teamId: d.teamId, teamName: teamName.get(d.teamId) ?? d.teamId, verdict, driverPct: dp, teamPct: tp, diff })
+  }
+  return out
+}
+
 // ---------- Phase 2: the draft ----------
 
 export type DraftFlavour = 'statement' | 'upset' | 'rookie' | 'veteran_short' | 'chalk'

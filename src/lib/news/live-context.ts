@@ -1,6 +1,7 @@
 import { calendar2026 } from '@/data/calendar'
 import { foldLiveSeason, foldLiveSeasonTeams, type NewsContext, type DriverCareer, type TeamCareer, type RecordsContext } from './engine'
 import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
+import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 
 // Assemble the live (current-season) NewsContext from the store, folding the archive's prior-season
 // career totals on top of the in-progress season. Shared by the newsroom and the Continue loop so
@@ -14,6 +15,10 @@ export interface LiveSeasonSlice {
   allUpgradeEvents: DevUpgradeEvent[]
   constructorHistory: ConstructorSeasonRecord[]
   endOfSeasonSummary: EndOfSeasonSummary | null
+  // Driver-market beats (named to match the store state so callers can pass it straight through).
+  seasonContractWatch?: ContractWatch[]
+  seasonRenewals?: RenewalResult[]
+  seasonDraft?: DraftPick[]
 }
 
 export function buildLiveNewsContext(
@@ -37,5 +42,8 @@ export function buildLiveNewsContext(
     records,
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
     teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
+    contractWatch: s.seasonContractWatch,
+    renewals: s.seasonRenewals,
+    draft: s.seasonDraft,
   }
 }

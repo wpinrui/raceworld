@@ -26,6 +26,7 @@ import type {
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
+import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
 import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
 import milestoneCopy from './milestone-copy.json'
@@ -67,6 +68,10 @@ export interface NewsContext {
                                           // gracefully when it is absent. starts === 0 (or no entry) means
                                           // the driver has never raced in F1; never infer that from age.
   teamCareers?: Record<string, TeamCareer>  // constructor career totals per team, for team milestones (optional)
+  // Driver-market beats for the market journalism (all optional — present only on the live context):
+  contractWatch?: ContractWatch[]  // round-15 verdicts on expiring contracts (could-do-better/right-place/lucky)
+  renewals?: RenewalResult[]       // round-18 in-season contract renewals
+  draft?: DraftPick[]              // end-of-season Signing Day picks (ordered, best seat first)
 }
 
 // Cross-season F1 career totals for one driver, accumulated up to (and including) the context's
