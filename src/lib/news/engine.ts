@@ -3074,8 +3074,8 @@ const CATEGORY_DAY_OFFSET: Record<string, number> = {
   car_launch_livery: 0,
   rookie_debut: 0,
   race_report: 0,         // race day (Sunday)
-  milestone: 0,
-  championship_state: 0,
+  milestone: 1,           // post-race landmark — drops the day after, so Continue catches it after End Race
+  championship_state: 1,  // post-race title reaction — same, the morning after
   feature: 2,
   analysis_opinion: 2,
   driver_to_watch: 3,
