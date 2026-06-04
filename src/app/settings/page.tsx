@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Star, Flag } from 'lucide-react'
+import { Star } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore, DEFAULT_INTERRUPT_CATEGORIES } from '@/lib/store/settings-store'
 import { NEWS_FILTERS } from '@/lib/news/engine'
@@ -14,8 +14,8 @@ export default function SettingsPage() {
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
   const {
-    interruptCategories, followedDriverIds, followedTeamIds, interruptOnFollowed,
-    setCategoryInterrupt, toggleFollowDriver, toggleFollowTeam, setInterruptOnFollowed, resetInterruptsToDefault,
+    interruptOnRaceday, interruptCategories, followedDriverIds, followedTeamIds, interruptOnFollowed,
+    setInterruptOnRaceday, setCategoryInterrupt, toggleFollowDriver, toggleFollowTeam, setInterruptOnFollowed, resetInterruptsToDefault,
   } = useSettingsStore()
 
   const [hydrated, setHydrated] = useState(false)
@@ -72,11 +72,15 @@ export default function SettingsPage() {
             </button>
           </div>
           <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {/* Raceday is always an interrupt and not toggleable. */}
-            <label className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0F1419]/60">
-              <Flag size={15} className="text-[#00D9FF] shrink-0" />
+            {/* Race day interrupts by default, but can be turned off so races auto-simulate. */}
+            <label className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#0F1419]/60 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={interruptOnRaceday}
+                onChange={(e) => setInterruptOnRaceday(e.target.checked)}
+                className="w-4 h-4 shrink-0 accent-[#00D9FF] cursor-pointer"
+              />
               <span className="flex-1 text-sm text-[#FFFFFF]">Race day</span>
-              <span className="text-[10px] uppercase tracking-widest text-[#00D9FF]">Always</span>
             </label>
             {NEWS_FILTERS.map((f) => {
               const on = filterOn(f.categories)
@@ -180,7 +184,7 @@ export default function SettingsPage() {
           <div className="p-5 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm font-semibold text-[#FFFFFF]">Clear save</p>
-              <p className="text-xs text-[#FFFFFF] mt-0.5">Wipes all local save data — season progress, driver stats, and history. Cannot be undone.</p>
+              <p className="text-xs text-[#FFFFFF] mt-0.5">Wipes all local save data: season progress, driver stats, and history. Cannot be undone.</p>
             </div>
             <button
               onClick={() => setClearOpen(true)}
@@ -199,7 +203,7 @@ export default function SettingsPage() {
               <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
               <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Clear Save</h2>
             </div>
-            <p className="text-sm text-[#FFFFFF] mb-5">This will wipe all local save data — season progress, driver stats, and history. Cannot be undone.</p>
+            <p className="text-sm text-[#FFFFFF] mb-5">This will wipe all local save data: season progress, driver stats, and history. Cannot be undone.</p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setClearOpen(false)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Cancel</button>
               <button onClick={handleClearSave} className="px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors">Clear &amp; Reset</button>

@@ -37,6 +37,7 @@ export default function Nav() {
   const teams = useSeasonStore((s) => s.teams)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const racePhase = useRaceStore((s) => s.raceState?.phase)
+  const interruptOnRaceday = useSettingsStore((s) => s.interruptOnRaceday)
 
   const [hydrated, setHydrated] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -92,36 +93,32 @@ export default function Nav() {
     try { await simulateUntilRound(useSeasonStore.getState().currentRound + 1) } finally { setSimming(false) }
   }
 
-  // Advance the clock to the next stop. A news stop opens the interrupt modal; a race stop just
-  // moves the clock onto race day, flipping the CTA to "Go To Race".
-  function runContinueStep() {
-    const s = useSeasonStore.getState()
-    const settings = useSettingsStore.getState()
-    const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase))
-    const stop = computeNextStop({
-      currentDate: s.currentDate,
-      completedRounds: s.raceResults.length,
-      year: s.year,
-      articles,
-      settings,
-    })
-    if (stop.reason === 'news') {
-      s.setCurrentDate(stop.date)
-      setNewsStop({ date: stop.date, articles: stop.articles })
-    } else if (stop.reason === 'race') {
-      s.setCurrentDate(stop.date)
-    }
-  }
-
+  // Advance to the next stop. A news stop opens the interrupt modal; a raceday stop moves the clock
+  // onto race day (CTA flips to "Go To Race"). If race day doesn't interrupt, the race auto-simulates
+  // and the loop carries on to the next stop (next interrupting story, or the season's end).
   async function handleContinue() {
     if (busy) return
     setNewsStop(null)
-    if (offSeason) {
-      setBusy(true)
-      try { await advanceOffSeason() } finally { setBusy(false) }
-      return
+    setBusy(true)
+    try {
+      if (isOffSeason(useSeasonStore.getState().phase)) { await advanceOffSeason(); return }
+      const settings = useSettingsStore.getState()
+      while (true) {
+        const s = useSeasonStore.getState()
+        const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase))
+        const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
+        if (stop.reason === 'news') { s.setCurrentDate(stop.date); setNewsStop({ date: stop.date, articles: stop.articles }); break }
+        if (stop.reason === 'race') {
+          if (settings.interruptOnRaceday) { s.setCurrentDate(stop.date); break }
+          await simulateUntilRound(stop.round + 1)
+          if (isOffSeason(useSeasonStore.getState().phase)) break
+          continue
+        }
+        break // season-end
+      }
+    } finally {
+      setBusy(false)
     }
-    runContinueStep()
   }
 
   async function handleEndRace() {
@@ -153,7 +150,7 @@ export default function Nav() {
     if (offSeason) {
       return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA} title={`Next: ${nextOffSeasonStageLabel(phase)}`}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
     }
-    if (atRaceday) {
+    if (atRaceday && interruptOnRaceday) {
       return (
         <div className="flex items-center gap-2">
           <button onClick={handleSimNextRace} disabled={simming} className={SECONDARY_CTA}>{simming ? 'Simulating…' : 'Simulate Next Race'}</button>
@@ -256,9 +253,8 @@ export default function Nav() {
                 </article>
               ))}
             </div>
-            <div className="flex justify-end gap-3 px-5 py-3 border-t border-[#2A3142]">
-              <button onClick={() => setNewsStop(null)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Dismiss</button>
-              <button onClick={() => { setNewsStop(null); runContinueStep() }} className={PRIMARY_CTA}>Continue<ChevronRight size={14} /></button>
+            <div className="flex justify-end px-5 py-3 border-t border-[#2A3142]">
+              <button onClick={() => setNewsStop(null)} className={PRIMARY_CTA}>Close</button>
             </div>
           </div>
         </div>

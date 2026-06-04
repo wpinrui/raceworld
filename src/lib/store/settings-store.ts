@@ -21,11 +21,13 @@ export const DEFAULT_INTERRUPT_CATEGORIES: string[] = [
 ]
 
 interface SettingsStore {
+  interruptOnRaceday: boolean      // stop the sim on race day (default on; off = races auto-simulate)
   interruptCategories: string[]   // category strings whose articles interrupt the sim
   followedDriverIds: string[]
   followedTeamIds: string[]
   interruptOnFollowed: boolean     // master switch: stop on any story mentioning a followed entity
 
+  setInterruptOnRaceday: (on: boolean) => void
   setCategoryInterrupt: (category: string, on: boolean) => void
   toggleFollowDriver: (id: string) => void
   toggleFollowTeam: (id: string) => void
@@ -36,10 +38,13 @@ interface SettingsStore {
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
+      interruptOnRaceday: true,
       interruptCategories: [...DEFAULT_INTERRUPT_CATEGORIES],
       followedDriverIds: [],
       followedTeamIds: [],
       interruptOnFollowed: true,
+
+      setInterruptOnRaceday: (on) => set({ interruptOnRaceday: on }),
 
       setCategoryInterrupt: (category, on) => {
         const cur = new Set(get().interruptCategories)
