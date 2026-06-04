@@ -6,6 +6,7 @@ import { isOffSeason } from '@/lib/sim/types'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { RaceBanner } from '@/components/home/RaceBanner'
 import { PunditPredictions } from '@/components/home/PunditPredictions'
+import { RealWorldChanges } from '@/components/home/RealWorldChanges'
 import { RankingsPanel } from '@/components/home/RankingsPanel'
 import { CompactStandings } from '@/components/home/CompactStandings'
 import { HeadlinesPanel } from '@/components/home/HeadlinesPanel'
@@ -48,6 +49,8 @@ export default function HomePage() {
             {year} Season · {offSeason ? 'Off-season' : `Round ${currentRound}`}
           </p>
         </div>
+
+        <RealWorldChanges />
 
         <RaceBanner simming={simming} onSimTo={handleSimTo} />
 

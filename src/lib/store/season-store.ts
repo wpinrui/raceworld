@@ -22,6 +22,7 @@ import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
+import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
 
 const TOTAL_ROUNDS = calendar2026.length
 
@@ -177,6 +178,9 @@ interface SeasonStore {
   teams: Team[]
   currentRound: number  // 1-indexed
   currentDate: string   // game clock, ISO 'YYYY-MM-DD' (the FM-style "Continue" advances this)
+  // When true, the season was started from the historical timeline: the market draws real free
+  // agents (until the dataset runs out) and season-ends apply real team changes (with consent).
+  realWorldMode: boolean
   raceResults: RaceResult[][]  // [round-1]
   dbSeasonId: number | null
 
@@ -201,6 +205,13 @@ interface SeasonStore {
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
   setCurrentDate: (date: string) => void
+  setRealWorldMode: (on: boolean) => void
+  // Apply the player-approved subset of a season's real-world team changes to the next-season grid.
+  applyRealWorldChanges: (approved: {
+    joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
+    leaves: string[] // team ids leaving the grid
+    rebrands: { id: string; name: string; shortName: string; color: string; nationality: string }[]
+  }) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
   releaseDriver: (id: string) => void
@@ -232,6 +243,7 @@ export const useSeasonStore = create<SeasonStore>()(
       teams: teams2026.map((t) => ({ ...t })),
       currentRound: 1,
       currentDate: seasonStartDate(2026),
+      realWorldMode: false,
       raceResults: [],
       dbSeasonId: null,
       devPlans: [],
@@ -249,11 +261,14 @@ export const useSeasonStore = create<SeasonStore>()(
         const { constructorHistory } = get()
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = initDevPlans(teams, fundingTiers, Math.random)
-        // Keep existing free agents from store; generate pool only if none present
-        const existingPool = get().drivers.filter((d) => d.teamId === '')
-        const poolDrivers = existingPool.length > 0
-          ? existingPool
-          : generateFreeAgentPool(25, year, drivers, Math.random)
+        // Real-world mode: the pool is the real free agents in the composed grid (no fictional drivers).
+        // Otherwise keep existing free agents from the store, or generate a pool if none present.
+        const poolDrivers = get().realWorldMode
+          ? drivers.filter((d) => d.teamId === '')
+          : (() => {
+              const existingPool = get().drivers.filter((d) => d.teamId === '')
+              return existingPool.length > 0 ? existingPool : generateFreeAgentPool(25, year, drivers, Math.random)
+            })()
         const allDrivers = [
           ...drivers.filter((d) => d.teamId !== ''),
           ...poolDrivers,
@@ -292,6 +307,33 @@ export const useSeasonStore = create<SeasonStore>()(
 
       // Advance / set the game clock (the FM-style "Continue" loop drives this).
       setCurrentDate: (date) => set({ currentDate: date }),
+
+      setRealWorldMode: (on) => set({ realWorldMode: on }),
+
+      // Real-world season-end: apply the approved team changes to the next-season grid (built by
+      // endSeason into pendingNextSeasonState), BEFORE contract negotiations fill the seats. Leaving
+      // teams free their drivers into the market; joiners enter at the back; rebrands swap identity.
+      // Idempotent: a change already reflected in the grid simply isn't offered again.
+      applyRealWorldChanges: (approved) => {
+        const { pendingNextSeasonState, year } = get()
+        if (!pendingNextSeasonState) return
+        const leaveIds = new Set(approved.leaves)
+        let teams = pendingNextSeasonState.teams.filter((t) => !leaveIds.has(t.id))
+        const drivers = pendingNextSeasonState.drivers.map((d) =>
+          leaveIds.has(d.teamId) ? { ...d, teamId: '', contractExpiresAfterSeason: year, seasonsSinceF1Seat: 0 } : d,
+        )
+        const rebrandById = new Map(approved.rebrands.map((r) => [r.id, r]))
+        teams = teams.map((t) => {
+          const r = rebrandById.get(t.id)
+          return r ? { ...t, name: r.name, shortName: r.shortName, color: r.color, nationality: r.nationality } : t
+        })
+        const lowest = teams.reduce((m, t) => Math.min(m, t.carPace), 75)
+        approved.joins.forEach((j, i) => {
+          if (teams.some((t) => t.id === j.id)) return // already applied; don't add a duplicate
+          teams.push({ id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) })
+        })
+        set({ pendingNextSeasonState: { drivers, teams } })
+      },
 
       // God-mode edit of a single driver (e.g. from the world driver page).
       updateDriver: (id, patch) => {
@@ -680,11 +722,16 @@ export const useSeasonStore = create<SeasonStore>()(
         }
 
         const { drivers: pendingDrivers, teams } = pendingNextSeasonState
-        // Ensure at least 8 free agents in the pool; top up if needed
-        const existingPool = pendingDrivers.filter((d) => d.teamId === '')
-        const topUp = existingPool.length < 15
-          ? generateFreeAgentPool(15 - existingPool.length, newYear, pendingDrivers, Math.random)
-          : []
+        // Top up the free-agent pool. Real-world mode brings in that year's real rookies (until the
+        // dataset is exhausted past the last entry year); otherwise generate fictional drivers.
+        const existingIds = new Set(pendingDrivers.map((d) => d.id))
+        let topUp: Driver[]
+        if (get().realWorldMode && newYear <= lastDriverEntryYear()) {
+          topUp = rookiesForYear(newYear).filter((d) => !existingIds.has(d.id))
+        } else {
+          const poolSize = pendingDrivers.filter((d) => d.teamId === '').length
+          topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
+        }
         const drivers = [...pendingDrivers, ...topUp]
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = initDevPlans(teams, fundingTiers, Math.random)
@@ -736,6 +783,7 @@ export const useSeasonStore = create<SeasonStore>()(
         teams: state.teams,
         currentRound: state.currentRound,
         currentDate: state.currentDate,
+        realWorldMode: state.realWorldMode,
         raceResults: state.raceResults,
         dbSeasonId: state.dbSeasonId,
         devPlans: state.devPlans,

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:init": "node -e \"require('./src/lib/db/client').getDb()\"",
-    "news:play": "tsx scripts/news-playthrough.ts"
+    "news:play": "tsx scripts/news-playthrough.ts",
+    "history:check": "tsx scripts/history-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
