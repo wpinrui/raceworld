@@ -1,10 +1,11 @@
 'use client'
 
 import type { DraftPick } from '@/lib/sim/driver-market'
-import type { DroppedDriver } from '@/lib/sim/types'
+import type { Driver, DroppedDriver } from '@/lib/sim/types'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { signingDaySocialPosts } from '@/lib/news/signing-day-social'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverTooltip } from '@/components/world/DriverTooltip'
 import { Tooltip } from '@/components/ui/Tooltip'
 
 const ordinal = (n: number): string => {
@@ -59,6 +60,9 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const stored = useSeasonStore((s) => s.signingDayRevealed)
   const setRevealed = useSeasonStore((s) => s.setSigningDayRevealed)
   const standings = useSeasonStore((s) => s.constructorStandings)
+  const drivers = useSeasonStore((s) => s.drivers)
+  const pending = useSeasonStore((s) => s.pendingNextSeasonState)
+  const driverStandings = useSeasonStore((s) => s.driverStandings)
 
   if (picks.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
@@ -79,6 +83,13 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   for (const p of picks) {
     if (!finishOf.has(p.teamId) && !projected.has(p.teamId)) projected.set(p.teamId, n + ++newCount)
   }
+  // Full driver records + this-year WDC standing, so a free agent's row can show an expanded hover card.
+  const driverById = new Map<string, Driver>()
+  for (const d of pending?.drivers ?? []) driverById.set(d.id, d)
+  for (const d of drivers) driverById.set(d.id, d) // this-season record wins, matching the WDC year
+  const wdcPosOf = new Map(driverStandings.map((s, i) => [s.driverId, i + 1]))
+  const wdcPtsOf = new Map(driverStandings.map((s) => [s.driverId, s.points]))
+
   const wccBadge = (teamId: string): { pos: number; tip: string } => {
     const pos = finishOf.get(teamId)
     if (pos) return { pos, tip: `${ordinal(pos)} in the ${year} constructors' championship` }
@@ -152,13 +163,19 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
           <div className="flex flex-col min-h-0">
             <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">Free agents</p>
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
-              {onClock.odds.map((o, i) => (
-                <div key={o.driverId} className="flex items-center gap-2.5 px-3 py-1.5">
-                  <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
-                  <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
-                  {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
-                </div>
-              ))}
+              {onClock.odds.map((o, i) => {
+                const d = driverById.get(o.driverId)
+                const row = (
+                  <div className="flex items-center gap-2.5 px-3 py-1.5">
+                    <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
+                    <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
+                    {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
+                  </div>
+                )
+                return d
+                  ? <DriverTooltip key={o.driverId} driver={d} year={year} wdcPosition={wdcPosOf.get(o.driverId) ?? null} wdcPoints={wdcPtsOf.get(o.driverId)}>{row}</DriverTooltip>
+                  : <div key={o.driverId}>{row}</div>
+              })}
             </div>
           </div>
         )}
