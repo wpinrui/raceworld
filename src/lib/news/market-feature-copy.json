@@ -89,18 +89,18 @@
       "The {year} renewal window produced {n} confirmed extensions before its formal close, leaving {m} drivers to contest the end-of-season market where teams historically hold the stronger hand."
     ],
     "renewed": [
-      "Fresh deals for {names}.",
-      "Staying put for the season ahead, {names}.",
-      "Extensions confirmed for {names}.",
-      "Locked in before the deadline, {names}.",
-      "Another season secured for {names}."
+      "{names} agreed fresh terms to stay put.",
+      "New contracts were confirmed for {names} before the window closed.",
+      "{names} signed on for another season ahead of the deadline.",
+      "Fresh deals were secured by {names} in the renewal window.",
+      "{names} stayed put, agreeing terms with their current teams."
     ],
     "expiring": [
-      "The open market now awaits {names}.",
-      "No new deal yet for {names}.",
-      "Heading to the open market without a deal, {names}.",
-      "Still unsigned past the deadline, {names}.",
-      "Talks stalled for {names}."
+      "There were no new deals for {names}, who now head to the open market.",
+      "{names} reached the deadline without an agreement.",
+      "{names} entered the open market after talks with their current teams broke down.",
+      "No contract was confirmed for {names}, leaving the door open to rival suitors.",
+      "{names} headed into the end-of-season market without a deal in place."
     ],
     "quote_renewed": [
       "Staying was the easy call, this is exactly where I want to be.",
@@ -143,32 +143,32 @@
       "A {years}-year deal takes {driver} from {from_pos} {from} to {to_pos} {to}, the signing that defined the {year} off-season."
     ],
     "moves": [
-      "Other moves of note involve {names}.",
-      "Also changing teams, {names}.",
-      "Further switches of note involve {names}.",
-      "Elsewhere on the grid, new seats for {names}.",
-      "Rounding out the window, moves for {names}."
+      "{names} switched teams for the new season.",
+      "Fresh moves were also confirmed for {names}.",
+      "{names} joined new teams as the window closed.",
+      "Further deals brought {names} to new garages for the season ahead.",
+      "{names} also changed teams before the market shut."
     ],
     "upsets": [
-      "The shocks of the window came from {names}.",
-      "Few saw the seats for {names} coming.",
-      "The biggest surprises of the window involve {names}.",
-      "Nobody had the deals for {names} on the cards.",
-      "Against the odds, new seats for {names}."
+      "{names} pulled off the biggest surprises of the window.",
+      "Few saw the deals for {names} coming.",
+      "{names} landed seats that almost nobody had predicted.",
+      "The window saved its biggest shocks for {names}.",
+      "{names} signed deals that wrong-footed even the best-connected paddock observers."
     ],
     "rookies": [
-      "New to the grid for next year, {names}.",
-      "Stepping up to a race seat, {names}.",
-      "Making full-time debuts next season, {names}.",
-      "Graduating to the grid, {names}.",
-      "First race seats go to {names}."
+      "{names} earned a first full-time race seat.",
+      "The grid welcomed {names} for the season ahead.",
+      "{names} graduated to a full race seat after impressing in the junior categories.",
+      "A debut season awaited {names} after they secured their first grid spot.",
+      "{names} stepped up to a full-time drive for the campaign ahead."
     ],
     "dropped": [
-      "Out of a drive for next year, {names}.",
-      "No seat next season for {names}.",
-      "Released by their teams, {names}.",
-      "Off the grid for the season ahead, {names}.",
-      "Still without a drive, {names}."
+      "{names} lost out on a seat for next season.",
+      "The grid had no room left for {names}.",
+      "{names} departed without a contract for the year ahead.",
+      "No team confirmed a seat for {names} before the market closed.",
+      "{names} missed out on a drive after failing to agree terms with any team."
     ],
     "quote_signed": [
       "This is the move I have wanted for a long time, and I cannot wait to get going.",
