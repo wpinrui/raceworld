@@ -140,6 +140,11 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
               const isRevealed = i < revealed
               const isOnClock = i === revealed
               const w = wccBadge(p.teamId)
+              const d = driverById.get(p.driverId)
+              const nameLink = <DriverLink id={p.driverId} className="text-sm font-semibold text-[#FFFFFF]">{p.driverName}</DriverLink>
+              const nameEl = d
+                ? <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(p.driverId) ?? null} wdcPoints={wdcPtsOf.get(p.driverId)} career={careers[p.driverId]} side="right"><span className="truncate shrink-0">{nameLink}</span></DriverTooltip>
+                : <span className="truncate shrink-0">{nameLink}</span>
               return (
                 <div
                   key={`${p.teamId}-${i}`}
@@ -152,7 +157,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                   <TeamLink id={p.teamId} className="text-xs font-semibold text-[#FFFFFF] truncate w-24 shrink-0">{p.teamName}</TeamLink>
                   {isRevealed ? (
                     <span className="flex items-center gap-2 min-w-0 flex-1">
-                      <DriverLink id={p.driverId} className="text-sm font-semibold text-[#FFFFFF] truncate shrink-0">{p.driverName}</DriverLink>
+                      {nameEl}
                       <Tag flavour={p.flavour} />
                       <Tooltip content={`${faLabel(p.faRank)} free agent of ${year}`}>
                         <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{faLabel(p.faRank)}</span>
