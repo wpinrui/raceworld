@@ -21,7 +21,7 @@ function CarTooltip({ active, payload, label, teams }: { active?: boolean; paylo
       {rows.map((p) => (
         <p key={p.dataKey} className="flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-          {teams.find((t) => t.id === p.dataKey)?.shortName ?? p.dataKey}: <span className="font-semibold tabular-nums">{p.value.toFixed(1)}</span>
+          {teams.find((t) => t.id === p.dataKey)?.name ?? p.dataKey}: <span className="font-semibold tabular-nums">{p.value.toFixed(1)}</span>
         </p>
       ))}
     </div>
@@ -46,10 +46,9 @@ export function CarDevelopmentChart({ teams, events, completedRounds }: { teams:
   // Order the legend (and so the default emphasis) by current pace, fastest first.
   const ordered = useMemo(() => [...teams].sort((a, b) => b.carPace - a.carPace), [teams])
   const data = useMemo(() => buildSeries(ordered, events, completedRounds), [ordered, events, completedRounds])
-
-  if (completedRounds < 1) {
-    return <p className="px-4 py-8 text-sm text-[#FFFFFF] text-center">Car development charts here once the season is underway.</p>
-  }
+  // Before any race there's a single data point per car (the season-start pace); show dots so it's
+  // visible, since a one-point line has no segment to draw.
+  const singlePoint = data.length === 1
 
   const toggle = (id: string) => setHidden((prev) => {
     const next = new Set(prev)
@@ -59,7 +58,7 @@ export function CarDevelopmentChart({ teams, events, completedRounds }: { teams:
   })
 
   return (
-    <div className="px-3 py-4">
+    <div className="px-3 py-4 min-h-[340px]">
       <div className="flex flex-wrap gap-1.5 px-2 pb-3">
         {ordered.map((t) => {
           const off = hidden.has(t.id)
@@ -93,7 +92,7 @@ export function CarDevelopmentChart({ teams, events, completedRounds }: { teams:
           {ordered.filter((t) => !hidden.has(t.id)).map((t) => (
             <Line
               key={t.id} type="monotone" dataKey={t.id} stroke={t.color}
-              strokeWidth={2} dot={false} isAnimationActive={false} connectNulls
+              strokeWidth={2} dot={singlePoint} isAnimationActive={false} connectNulls
             />
           ))}
         </LineChart>
