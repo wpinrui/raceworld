@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { EllipsisVertical, ChevronRight, Play } from 'lucide-react'
@@ -205,6 +205,40 @@ export default function Nav() {
     }
     return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
   })()
+
+  // Spacebar activates the primary CTA (Football-Manager style). The current action mirrors the `cta`
+  // above; resolved into a ref each render so a single listener always fires the right thing. Skips
+  // when typing in a field or when a modal/menu is open (so space doesn't sim past a story to read).
+  function primaryCtaAction(): (() => void) | null {
+    if (!hydrated) return null
+    if (matchMode) {
+      if (racePhase === 'pre-race') return handleStartRace
+      if (racePhase === 'finished') return busy ? null : handleEndRace
+      if (racePhase === 'qualifying' || racePhase === 'racing') return null
+      return handleSimQualifying
+    }
+    if (!seasonActive) return setupCta && setupCta.ready ? setupCta.start : null
+    if (offSeason) return busy ? null : handleContinue
+    if (atRaceday && interruptOnRaceday) return () => router.push('/race')
+    return busy ? null : handleContinue
+  }
+  const ctaBlocked = newsStop != null || restartOpen || menuOpen || (!!pendingRW && !rwDismissed)
+  const ctaActionRef = useRef<(() => void) | null>(null)
+  // Keep the ref pointed at the current action after each render (not during it).
+  useEffect(() => { ctaActionRef.current = ctaBlocked ? null : primaryCtaAction() })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.code !== 'Space') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      const action = ctaActionRef.current
+      if (!action) return
+      e.preventDefault()
+      action()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Before a season exists, Setup is the only page; once running, the full nav appears.
   const links = seasonActive

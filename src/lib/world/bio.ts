@@ -165,8 +165,10 @@ function teamSentence(career: DriverCareer, a: DriverAttributes, subjCap: string
   const current = stints[stints.length - 1]
   if (!current) return `${subjCap} drives for ${a.teamName}.`
   const suffix = strengthSuffix(strength)
-  const teamEnd = `${current.teamName}${suffix}`        // ends a sentence
-  const teamMid = `${current.teamName}${suffix}${suffix ? ',' : ''}` // mid-sentence: close the appositive
+  // Use the team's CURRENT name (a.teamName), not the stint's first-season name — a constructor that
+  // rebranded (e.g. Stewart -> Jaguar -> Red Bull) keeps one teamId, so the stint label would be stale.
+  const teamEnd = `${a.teamName}${suffix}`        // ends a sentence
+  const teamMid = `${a.teamName}${suffix}${suffix ? ',' : ''}` // mid-sentence: close the appositive
 
   if (stints.length >= 2) {
     const prior = listJoin(stints.slice(0, -1).map((s) => `${s.teamName} (${stintRange(s)})`))
