@@ -8,11 +8,18 @@ import { Panel } from '@/components/world/ui'
 import { generateNews, foldLiveSeason, foldLiveSeasonTeams, CATEGORY_LABELS, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
 import { actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex } from '@/components/news/LinkedText'
+import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
   if (round > calLen) return 'Off-season'
   return `Round ${round}`
+}
+
+// Article byline: drop date (no weekday) plus the round bucket, e.g. "8 Mar 2026 · Round 1".
+function whenLabel(a: NewsArticle, calLen: number): string {
+  const round = roundLabel(a.round, calLen)
+  return a.date ? `${formatDate(fromISODate(a.date), { year: true })} · ${round}` : round
 }
 
 // Modal reader for a single headline. Shows the full article and links through to the
@@ -32,7 +39,7 @@ function ArticleModal({ article, index, onClose }: { article: NewsArticle; index
       >
         <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[#2A3142]">
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">
-            {CATEGORY_LABELS[article.category] ?? article.category} · {roundLabel(article.round, calendar2026.length)}
+            {whenLabel(article, calendar2026.length)} · {CATEGORY_LABELS[article.category] ?? article.category}
           </p>
           <button
             onClick={onClose}
@@ -134,7 +141,7 @@ export function HeadlinesPanel() {
                 >
                   <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
                   <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
-                    {CATEGORY_LABELS[h.category] ?? h.category} · {roundLabel(h.round, calendar2026.length)}
+                    {whenLabel(h, calendar2026.length)} · {CATEGORY_LABELS[h.category] ?? h.category}
                   </span>
                 </button>
               </li>

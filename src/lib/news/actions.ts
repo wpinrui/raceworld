@@ -13,6 +13,7 @@ import {
 } from '@/lib/db/queries'
 import { generateNews, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from './engine'
 import type { Driver, Team, RaceResult, Circuit, EndOfSeasonSummary } from '@/lib/sim/types'
+import { calendar2026 } from '@/data/calendar'
 
 // Reconstruct the grid changes around an archived season by diffing its team roster against the
 // NEXT season's: a team gone next year departed (farewell on this season), a team new next year
@@ -150,6 +151,9 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
 
   const calendar: Circuit[] = races.map((race) => ({
     id: race.circuit_id, name: race.circuit_name, code: '', location: '', country: '', laps: 0, flatModifier: 0,
+    // Pull the real Sunday-ordinal from the live calendar by id so archived article dates resolve to
+    // the correct date for that season's year (the DB doesn't store scheduling).
+    sundayOfYear: calendar2026.find((c) => c.id === race.circuit_id)?.sundayOfYear ?? 0,
   }))
 
   const ctx: NewsContext = {

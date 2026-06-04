@@ -16,6 +16,7 @@ import type {
 } from '@/lib/sim/types'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
+import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
@@ -26,6 +27,15 @@ const TOTAL_ROUNDS = calendar2026.length
 
 // Pre-season testing always runs at Barcelona/Catalunya.
 const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[0]
+
+// The game clock starts on 1 January of the season year — a pre-season window (launches,
+// testing) ahead of the opening round. Stored as a serialisable 'YYYY-MM-DD' string.
+const seasonStartDate = (year: number) => `${year}-01-01`
+// Race day (ISO date string) for a 1-based round in a given season year.
+const roundDate = (year: number, round: number): string => {
+  const c = calendar2026[round - 1]
+  return c ? toISODate(raceDate(year, c)) : seasonStartDate(year)
+}
 
 type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
 
@@ -166,6 +176,7 @@ interface SeasonStore {
   drivers: Driver[]
   teams: Team[]
   currentRound: number  // 1-indexed
+  currentDate: string   // game clock, ISO 'YYYY-MM-DD' (the FM-style "Continue" advances this)
   raceResults: RaceResult[][]  // [round-1]
   dbSeasonId: number | null
 
@@ -189,6 +200,7 @@ interface SeasonStore {
   // Actions
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
+  setCurrentDate: (date: string) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
   releaseDriver: (id: string) => void
@@ -219,6 +231,7 @@ export const useSeasonStore = create<SeasonStore>()(
       drivers: drivers2026.map((d) => ({ ...d })),
       teams: teams2026.map((t) => ({ ...t })),
       currentRound: 1,
+      currentDate: seasonStartDate(2026),
       raceResults: [],
       dbSeasonId: null,
       devPlans: [],
@@ -251,6 +264,7 @@ export const useSeasonStore = create<SeasonStore>()(
           drivers: allDrivers,
           teams,
           currentRound: 1,
+          currentDate: seasonStartDate(year),
           raceResults: [],
           dbSeasonId: null,
           devPlans,
@@ -275,6 +289,9 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
         })
       },
+
+      // Advance / set the game clock (the FM-style "Continue" loop drives this).
+      setCurrentDate: (date) => set({ currentDate: date }),
 
       // God-mode edit of a single driver (e.g. from the world driver page).
       updateDriver: (id, patch) => {
@@ -411,7 +428,7 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       recordRaceResult: (results) => {
-        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory } = get()
+        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory, year } = get()
         const updated = [...raceResults]
         updated[currentRound - 1] = results
 
@@ -425,6 +442,8 @@ export const useSeasonStore = create<SeasonStore>()(
         set({
           raceResults: updated,
           phase: 'post-race',
+          // The clock catches up to race day for the round just run (keeps live + headless sim truthful).
+          currentDate: roundDate(year, currentRound),
           teams: updatedTeams,
           drivers: updatedDrivers,
           devPlans: updatedDevPlans,
@@ -646,6 +665,7 @@ export const useSeasonStore = create<SeasonStore>()(
             phase: 'idle',
             year: newYear,
             currentRound: 1,
+            currentDate: seasonStartDate(newYear),
             raceResults: [],
             dbSeasonId: null,
             devPlans,
@@ -675,6 +695,7 @@ export const useSeasonStore = create<SeasonStore>()(
           drivers,
           teams,
           currentRound: 1,
+          currentDate: seasonStartDate(newYear),
           raceResults: [],
           dbSeasonId: null,
           devPlans,
@@ -689,10 +710,11 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       resetToIdle: () => {
-        const { drivers, teams } = get()
+        const { drivers, teams, year } = get()
         set({
           phase: 'idle',
           currentRound: 1,
+          currentDate: seasonStartDate(year),
           raceResults: [],
           dbSeasonId: null,
           allUpgradeEvents: [],
@@ -713,6 +735,7 @@ export const useSeasonStore = create<SeasonStore>()(
         drivers: state.drivers,
         teams: state.teams,
         currentRound: state.currentRound,
+        currentDate: state.currentDate,
         raceResults: state.raceResults,
         dbSeasonId: state.dbSeasonId,
         devPlans: state.devPlans,
@@ -729,6 +752,12 @@ export const useSeasonStore = create<SeasonStore>()(
         const { drivers, teams, raceResults } = state
         state.driverStandings = computeDriverStandings(drivers, teams, raceResults)
         state.constructorStandings = computeConstructorStandings(teams, drivers, raceResults)
+        // Saves from before the date system: backfill the game clock from the current round
+        // (the upcoming race's date), or the season start if no valid round.
+        if (!state.currentDate) {
+          const r = state.currentRound
+          state.currentDate = r >= 1 && r <= TOTAL_ROUNDS ? roundDate(state.year, r) : seasonStartDate(state.year)
+        }
         // Saves from before M4: default the grid-change queue and backfill each dev
         // plan's pre-rolled pending upgrade so the override UI always has a value.
         if (!state.pendingGridChanges) state.pendingGridChanges = { additions: [], removals: [] }

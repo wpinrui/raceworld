@@ -8,7 +8,6 @@ import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 import { buildRaceResults } from '@/lib/sim/race-results'
-import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
 import RaceTable from '@/components/race/RaceTable'
 import GodModePanel from '@/components/race/GodModePanel'
 import CommentaryFeed from '@/components/race/CommentaryFeed'
@@ -26,9 +25,9 @@ export default function RacePage() {
   const router = useRouter()
   const season = useSeasonStore()
   const {
-    raceState, drivers, teams, forms, strategyNoise, godModeDriverId,
-    loadFromSeason, updateDriverForm, setStrategyNoise, setGodModeDriver,
-    initSession, tickLap, setSpeed, setPaused, resetSession,
+    raceState, drivers, teams, forms, godModeDriverId,
+    loadFromSeason, updateDriverForm, setGodModeDriver,
+    tickLap, setSpeed, setPaused,
   } = useRaceStore()
 
   const phase = raceState?.phase ?? 'pre-qualifying'
@@ -38,11 +37,8 @@ export default function RacePage() {
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
   const [showSpeed4Modal, setShowSpeed4Modal] = useState(false)
   const [speed4Confirmed, setSpeed4Confirmed] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [hydrated, setHydrated] = useState(false)
-  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const [lapProgress, setLapProgress] = useState(0)
-  const [autoSimming, setAutoSimming] = useState(false)
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextTickAtRef = useRef<number>(0)
@@ -133,18 +129,6 @@ export default function RacePage() {
     return () => clearInterval(timer)
   }, [phase, paused, speed])
 
-  useEffect(() => {
-    if (!autoSimming) return
-    if (isOffSeason(season.phase)) { setAutoSimming(false); return }
-    if (phase === 'pre-qualifying') { const t = setTimeout(() => initSession(), 100); return () => clearTimeout(t) }
-    if (phase === 'pre-race') {
-      const rs = useRaceStore.getState().raceState
-      if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'racing' } })
-      setSpeed4Confirmed(true); setSpeed(4); return
-    }
-    if (phase === 'finished' && !saving) { handleSaveAndContinue(); return }
-  }, [autoSimming, phase, saving, season.phase]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleSpeedClick = (s: SimSpeed) => {
     if (s === 4) { setShowSpeed4Modal(true); return }
     setSpeed4Confirmed(false); setSpeed(s)
@@ -157,35 +141,6 @@ export default function RacePage() {
     return buildRaceResults(raceState, drivers, teams)
   }
 
-  async function handleSaveAndContinue() {
-    if (saving || !currentCircuit) return
-    setSaving(true)
-    try {
-      const results = computeResults()
-      season.recordRaceResult(results)
-      let dbSeasonId = season.dbSeasonId
-      if (!dbSeasonId) { dbSeasonId = await actionCreateSeason(season.year); season.setDbSeasonId(dbSeasonId) }
-      // Post-race attributes (recordRaceResult has already applied progression) for the
-      // career ratings-progression chart.
-      const snapshots = useSeasonStore.getState().drivers
-        .filter((d) => d.teamId !== '')
-        .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }))
-      await actionFlushRaceResult(dbSeasonId, season.currentRound, currentCircuit.id, currentCircuit.name, results, snapshots)
-      if (season.currentRound >= calendar2026.length) {
-        season.endSeason(); router.push('/home')
-      } else {
-        season.advanceRound()
-        const { currentRound, drivers: sd, teams: st } = useSeasonStore.getState()
-        const nextCircuit = calendar2026[currentRound - 1]
-        resetSession(sd.filter((d) => d.teamId !== ''), st, nextCircuit?.id ?? currentCircuit.id)
-        setSaving(false)
-      }
-    } catch (err) {
-      console.error('Failed to save race result:', err)
-      setSaving(false)
-    }
-  }
-
   if (!hydrated) return null
 
   const resultsForDisplay = phase === 'finished' ? computeResults() : []
@@ -195,9 +150,7 @@ export default function RacePage() {
     <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
       <RaceHeader
         phase={phase} raceState={raceState} lapProgress={lapProgress}
-        currentCircuit={currentCircuit} autoSimming={autoSimming}
-        onStopAutoSim={() => setAutoSimming(false)}
-        onRestartWeekend={() => setShowRestartConfirm(true)}
+        currentCircuit={currentCircuit}
       />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -206,11 +159,8 @@ export default function RacePage() {
           {phase === 'pre-qualifying' && (
             <PreQualPanel
               drivers={drivers} teams={teams} forms={forms}
-              strategyNoise={strategyNoise} currentCircuit={currentCircuit}
-              onStrategyNoiseChange={setStrategyNoise}
+              currentCircuit={currentCircuit}
               onFormChange={updateDriverForm}
-              onBegin={initSession}
-              onAutoSim={() => setAutoSimming(true)}
             />
           )}
           {phase === 'qualifying' && (
@@ -222,7 +172,6 @@ export default function RacePage() {
             <PreRacePanel
               raceState={raceState} drivers={drivers} teams={teams}
               currentCircuit={currentCircuit}
-              onStartRace={() => useRaceStore.setState({ raceState: { ...raceState, phase: 'racing' } })}
             />
           )}
           {(phase === 'racing' || phase === 'finished') && raceState && (
@@ -240,11 +189,7 @@ export default function RacePage() {
         {/* Right 40% */}
         <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
           {phase === 'finished' ? (
-            <PostRacePanel
-              results={resultsForDisplay} teams={teams}
-              currentRound={season.currentRound} saving={saving}
-              onSaveAndContinue={handleSaveAndContinue}
-            />
+            <PostRacePanel results={resultsForDisplay} teams={teams} />
           ) : (
             <>
               <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">
@@ -289,20 +234,6 @@ export default function RacePage() {
           speed={speed} paused={paused}
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
-        />
-      )}
-
-      {showRestartConfirm && (
-        <ConfirmModal
-          title="Restart Weekend?"
-          body={`This will discard the current session and restart qualifying for Round ${season.currentRound}. Race results will not be saved.`}
-          confirmLabel="Restart"
-          confirmClass="bg-[#DC143C] hover:bg-[#b01030] text-white"
-          onConfirm={() => {
-            if (currentCircuit) resetSession(gridDrivers, season.teams, currentCircuit.id)
-            setShowRestartConfirm(false)
-          }}
-          onCancel={() => setShowRestartConfirm(false)}
         />
       )}
 

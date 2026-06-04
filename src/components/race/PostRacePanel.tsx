@@ -1,18 +1,14 @@
 'use client'
 
 import type { RaceResult, Team } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
+import { DriverLink } from '@/components/world/EntityLink'
 
 interface Props {
   results: RaceResult[]
   teams: Team[]
-  currentRound: number
-  saving: boolean
-  onSaveAndContinue: () => void
 }
 
-export function PostRacePanel({ results, teams, currentRound, saving, onSaveAndContinue }: Props) {
-  const isLastRound = currentRound >= calendar2026.length
+export function PostRacePanel({ results, teams }: Props) {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
@@ -40,7 +36,7 @@ export function PostRacePanel({ results, teams, currentRound, saving, onSaveAndC
                   <td className="py-1 px-1">
                     <div className="flex items-center gap-1.5">
                       <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#FFFFFF' }} />
-                      <span className="text-[#FFFFFF] truncate">{r.driverName}</span>
+                      <DriverLink id={r.driverId} className="text-[#FFFFFF] truncate">{r.driverName}</DriverLink>
                     </div>
                   </td>
                   <td className="py-1 px-1 text-right font-bold">
@@ -55,16 +51,6 @@ export function PostRacePanel({ results, teams, currentRound, saving, onSaveAndC
         </table>
       </div>
 
-      <div className="shrink-0 p-4 border-t border-[#2A3142]">
-        <p className="text-xs text-[#FFFFFF] mb-3">Round {currentRound}/{calendar2026.length} complete</p>
-        <button
-          onClick={onSaveAndContinue}
-          disabled={saving}
-          className="w-full py-3 bg-[#00D9FF] hover:bg-[#009CB8] text-[#0F1419] font-bold text-sm uppercase tracking-wider rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? 'Saving...' : isLastRound ? 'End Season →' : `Save & Continue to Round ${currentRound + 1}`}
-        </button>
-      </div>
     </div>
   )
 }

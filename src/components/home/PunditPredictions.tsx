@@ -1,10 +1,16 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
+import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
 import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
 import { positionPalette } from '@/components/world/pills'
+import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
+import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
+import { MarketPanel } from '@/components/standings/MarketPanel'
+import { TestingPanel } from '@/components/standings/TestingPanel'
 import type { Driver, Team, RaceResult } from '@/lib/sim/types'
 
 const FORM_RACES = 4 // recent races that feed the form read
@@ -59,11 +65,96 @@ function FormPill({ pos }: { pos: number | null }) {
   return <span className="inline-flex h-4 min-w-4 items-center justify-center rounded px-1 text-[9px] font-bold tabular-nums" style={{ backgroundColor: bg, color: fg }}>{pos}</span>
 }
 
+// Module-scoped so it survives unmount/remount: which off-season phase we've already auto-opened.
+// This makes the recap pop exactly once when you Continue into a stage, not every time you return to
+// Home (e.g. Home → Standings → Home). It only re-fires when the phase actually changes (next Continue).
+let lastAutoOpenedPhase: string | null = null
+
+const STAGE_LABEL: Record<string, string> = {
+  'end-of-season': 'Season Review',
+  'contract-negotiations': 'Contract Moves',
+  'driver-retirements': 'Retirements',
+  'pre-season-testing': 'Testing',
+}
+
+// Off-season mode: Pundit Predictions becomes the season-review surface. One button per stage already
+// reached; each opens a modal recapping how that stage went (Continue, top-right, runs the next one).
+function OffSeasonReview() {
+  const season = useSeasonStore()
+  const summary = season.endOfSeasonSummary
+  const [open, setOpen] = useState<string | null>(null)
+
+  // Auto-open the recap for whatever off-season stage you've just advanced into — once per phase, so
+  // returning to Home (after Standings, etc.) doesn't reopen it. The next Continue changes the phase
+  // and re-arms it.
+  useEffect(() => {
+    if (OFF_SEASON_PHASES.includes(season.phase) && lastAutoOpenedPhase !== season.phase) {
+      lastAutoOpenedPhase = season.phase
+      setOpen(season.phase)
+    }
+  }, [season.phase])
+
+  if (!summary) {
+    return <Panel title="Off-Season"><p className="text-sm text-[#FFFFFF]">Wrapping up the season…</p></Panel>
+  }
+
+  const progressIdx = OFF_SEASON_PHASES.indexOf(season.phase)
+  const reached = OFF_SEASON_PHASES.filter((_, i) => i <= progressIdx)
+  const marketTeams = [
+    ...season.teams,
+    ...(season.pendingNextSeasonState?.teams ?? []).filter((pt) => !season.teams.some((t) => t.id === pt.id)),
+  ]
+
+  return (
+    <Panel title={`Season ${season.year} · Off-Season`} flush fill>
+      <div className="p-4">
+        <div className="flex flex-wrap gap-2">
+          {reached.map((p) => (
+            <button
+              key={p}
+              onClick={() => setOpen(p)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors ${
+                p === season.phase ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
+              }`}
+            >
+              {STAGE_LABEL[p]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(null)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{STAGE_LABEL[open]}</h2>
+              <button onClick={() => setOpen(null)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {open === 'end-of-season' && (
+                <SeasonReviewPanel summary={summary} drivers={season.drivers} teams={season.teams} driverStandings={season.driverStandings} constructorStandings={season.constructorStandings} />
+              )}
+              {open === 'contract-negotiations' && <MarketPanel summary={summary} teams={marketTeams} />}
+              {open === 'driver-retirements' && <RetirementsPanel summary={summary} drivers={season.drivers} />}
+              {open === 'pre-season-testing' && (
+                <TestingPanel summary={summary} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
+
 export function PunditPredictions() {
+  const phase = useSeasonStore((s) => s.phase)
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
   const currentRound = useSeasonStore((s) => s.currentRound)
   const raceResults = useSeasonStore((s) => s.raceResults)
+
+  if (isOffSeason(phase)) return <OffSeasonReview />
 
   const nextRace = calendar2026[currentRound - 1]
   if (!nextRace) {

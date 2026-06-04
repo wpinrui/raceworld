@@ -4,14 +4,22 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, foldLiveSeason, foldLiveSeasonTeams, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
+import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
   if (round > calLen) return 'Off-season'
   return `Round ${round}`
+}
+
+// Article byline: drop date (no weekday) plus the round bucket, e.g. "8 Mar 2026 · Round 1".
+function whenLabel(a: NewsArticle, calLen: number): string {
+  const round = roundLabel(a.round, calLen)
+  return a.date ? `${formatDate(fromISODate(a.date), { year: true })} · ${round}` : round
 }
 
 export default function NewsroomPage() {
@@ -61,24 +69,10 @@ export default function NewsroomPage() {
   }, [liveYear, archivedYears])
 
   // Live season: generated client-side from the store (full attributes available).
-  const liveArticles = useMemo(() => {
-    const ctx: NewsContext = {
-      year: s.year,
-      phase: s.phase,
-      completedRounds: s.raceResults.length,
-      drivers: s.drivers,
-      teams: s.teams,
-      raceResults: s.raceResults,
-      upgradeEvents: s.allUpgradeEvents,
-      constructorHistory: s.constructorHistory,
-      endOfSeason: s.endOfSeasonSummary,
-      calendar: calendar2026,
-      live: true,
-      careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
-      teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
-    }
-    return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase])
+  const liveArticles = useMemo(
+    () => generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase)),
+    [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {
@@ -199,7 +193,7 @@ export default function NewsroomPage() {
                       >
                         <p className="text-sm font-semibold text-[#FFFFFF]">{a.headline}</p>
                         <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
-                          {CATEGORY_LABELS[a.category] ?? a.category} · {roundLabel(a.round, calendar2026.length)}
+                          {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
                         </p>
                       </button>
                     )
@@ -208,7 +202,7 @@ export default function NewsroomPage() {
               </Panel>
 
               {/* Reader */}
-              <Panel title={selected ? `${CATEGORY_LABELS[selected.category] ?? selected.category} · ${roundLabel(selected.round, calendar2026.length)}` : 'Article'} className="lg:col-span-2">
+              <Panel title={selected ? `${whenLabel(selected, calendar2026.length)} · ${CATEGORY_LABELS[selected.category] ?? selected.category}` : 'Article'} className="lg:col-span-2">
                 {selected ? (
                   <article className="space-y-3">
                     <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} /></h2>

@@ -5,6 +5,7 @@ import { Trash2, ChevronDown } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team } from '@/lib/sim/types'
 import { STAT_KEYS, STAT_LABELS, computeOverall } from './stat-utils'
+import { DriverLink } from '@/components/world/EntityLink'
 import { OverallRing } from './OverallRing'
 import { StatBar } from './StatBar'
 import { StatSlider } from './StatSlider'
@@ -47,7 +48,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
           <OverallRing overall={overall} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-base font-semibold text-[#FFFFFF] truncate">{driver.name}</span>
+              <DriverLink id={driver.id} className="text-base font-semibold text-[#FFFFFF] truncate">{driver.name}</DriverLink>
               <ReactCountryFlag
                 countryCode={driver.nationality || 'GB'}
                 svg

@@ -10,12 +10,8 @@ interface Props {
   drivers: Driver[]
   teams: Team[]
   forms: Record<string, number>
-  strategyNoise: number
   currentCircuit: Circuit | undefined
-  onStrategyNoiseChange: (v: number) => void
   onFormChange: (id: string, v: number) => void
-  onBegin: () => void
-  onAutoSim: () => void
 }
 
 type SortKey = 'driver' | 'team' | 'form' | 'car' | 'pace' | 'wet' | 'ovt' | 'smt'
@@ -88,8 +84,7 @@ function Th({ col, children, right, activeSortKey, sortDir, onSort }: ThProps) {
 }
 
 export function PreQualPanel({
-  drivers, teams, forms, strategyNoise, currentCircuit,
-  onStrategyNoiseChange, onFormChange, onBegin, onAutoSim,
+  drivers, teams, forms, currentCircuit, onFormChange,
 }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('car')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -118,31 +113,6 @@ export function PreQualPanel({
           </p>
         </div>
 
-        <div className="shrink-0">
-          <label className="block text-xs font-bold tracking-wider text-[#FFFFFF] uppercase mb-2">
-            Strategy Noise <span className="text-[#00D9FF]">{Math.round(strategyNoise * 100)}%</span>
-          </label>
-          <input
-            type="range" min={0} max={1} step={0.05}
-            value={strategyNoise}
-            onChange={(e) => onStrategyNoiseChange(Number(e.target.value))}
-            className="w-32 accent-[#00D9FF]"
-          />
-        </div>
-
-        <button
-          onClick={onBegin}
-          className="px-6 py-2.5 bg-[#00D9FF] hover:bg-[#009CB8] text-[#0F1419] text-sm font-black tracking-widest uppercase rounded transition-colors shrink-0"
-        >
-          Begin Race Weekend
-        </button>
-
-        <button
-          onClick={onAutoSim}
-          className="px-4 py-2.5 bg-[#2A3142] hover:bg-[#303848] text-[#FFFFFF] text-xs font-bold tracking-widest uppercase rounded transition-colors shrink-0 cursor-pointer"
-        >
-          Sim Rest of Season
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-6 py-3">

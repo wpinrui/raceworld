@@ -9,6 +9,7 @@ import { drivers2026, teams2026 } from '@/data/2026-grid'
 import type { Driver, Team } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
+import { TeamLink } from '@/components/world/EntityLink'
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -210,7 +211,7 @@ export default function SetupPage() {
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
                 <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: team.color }} />
                 <div className="flex-1">
-                  <div className="font-semibold text-[#FFFFFF]">{team.name}</div>
+                  <div className="font-semibold"><TeamLink id={team.id} className="text-[#FFFFFF]">{team.name}</TeamLink></div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-[#FFFFFF]">Car pace</span>
                     <input
