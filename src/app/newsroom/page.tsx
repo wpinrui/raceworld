@@ -99,11 +99,11 @@ export default function NewsroomPage() {
     return () => { cancelled = true }
   }, [isLive, allSeasons, selectedYear])
 
-  // All-seasons feed: every archived snapshot, loaded once and cached.
+  // All-seasons feed: every archived snapshot, loaded once and cached. `loadingAll` is set in the
+  // toggle handler (synchronously, so there's no flash of the live-only list before this fires).
   useEffect(() => {
     if (!allSeasons || allData) return
     let cancelled = false
-    setLoadingAll(true)
     actionGetAllSeasonNews()
       .then((d) => { if (!cancelled) setAllData(d) })
       .catch(() => { if (!cancelled) setAllData({ articles: [], drivers: [], teams: [] }) })
@@ -188,7 +188,7 @@ export default function NewsroomPage() {
     drivers: scopeDrivers, teams: scopeTeams,
     circuits: calendar2026.map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
     year: selected?.year ?? liveYear,
-  }), [scopeDrivers, scopeTeams, selected, liveYear])
+  }), [scopeDrivers, scopeTeams, selected?.year, liveYear])
   const index = allSeasons ? allSeasonsIndex : (isLive ? liveIndex : archivedIndex)
 
   const loading = allSeasons ? loadingAll : (!isLive && loadingArchive)
@@ -211,7 +211,7 @@ export default function NewsroomPage() {
           <h1 className="font-display text-2xl tracking-wider uppercase">Newsroom</h1>
           <div className="flex items-center gap-3">
             {(years.length > 1 || archivedYears.length > 0) && (
-              <button onClick={() => { setAllSeasons((v) => !v); setSelectedId(null) }} className={toggleCls(allSeasons)}>
+              <button onClick={() => { if (!allSeasons && !allData) setLoadingAll(true); setAllSeasons((v) => !v); setSelectedId(null) }} className={toggleCls(allSeasons)}>
                 All seasons
               </button>
             )}
@@ -220,7 +220,7 @@ export default function NewsroomPage() {
                 Season
                 <select
                   value={selectedYear}
-                  onChange={(e) => { setSelectedYear(Number(e.target.value)); setSelectedId(null) }}
+                  onChange={(e) => { setSelectedYear(Number(e.target.value)); setFilter(null); setSelectedId(null) }}
                   className="bg-[#0F1419] border border-[#2A3142] rounded px-2 py-1 text-sm font-semibold text-[#FFFFFF] focus:border-[#00D9FF] outline-none"
                 >
                   {years.map((y) => (
