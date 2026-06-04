@@ -112,7 +112,11 @@ export function runDriverMarket(
   const teamScoreMap = new Map(teamMediaScores.map((s) => [s.teamId, s.score]))
   const teamNameMap = new Map(teams.map((t) => [t.id, t.name]))
   const driverMedia = (id: string) => scoreMap.get(id) ?? 0
-  const teamMedia = (id: string) => teamScoreMap.get(id) ?? 50
+  // A team absent from the media map has no reputation yet — a brand-new constructor added by the
+  // real-world transition AFTER the scores were computed. It must be the LEAST attractive seat (0), not
+  // a mid-grid default (50); otherwise free agents (even the reigning champion) rank a backmarker
+  // startup like a midfielder and the matching can sign them there.
+  const teamMedia = (id: string) => teamScoreMap.get(id) ?? 0
   const currentYear = newYear - 1
   const round1 = (n: number) => Math.round(n * 10) / 10
 
