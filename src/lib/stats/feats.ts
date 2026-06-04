@@ -23,11 +23,8 @@ import {
 import type { Feat } from './types'
 
 // --- thresholds (see chat summary) ---
-const WIN_MILESTONES = [10, 25, 50, 100, 150, 200]
-const POLE_MILESTONES = [10, 25, 50, 100]
-const PODIUM_MILESTONES = [25, 50, 100, 150, 200]
-const POINTS_MILESTONES = [500, 1000, 2500, 5000, 10000]
-const START_MILESTONES = [50, 100, 150, 200, 250, 300]
+// Volume "club" milestone thresholds moved to src/lib/stats/milestone-defs.ts (the Milestones tab /
+// newsroom own them now); feats here cover records, single-season records, streaks and titles.
 const WIN_STREAK_MIN = 3
 const PODIUM_STREAK_MIN = 5
 const POINTS_STREAK_MIN = 10
@@ -36,12 +33,6 @@ const PHOTO_FINISH_S = 1
 const ATTRITION_FRACTION = 0.4
 const COMEBACK_GAIN = 10
 const TOP_RANK_BADGE = 5
-
-const highestCrossed = (total: number, thresholds: number[]): number | null => {
-  let hit: number | null = null
-  for (const t of thresholds) if (total >= t) hit = t
-  return hit
-}
 
 // 1-based rank of `value` among all `values` with value > 0 (ties share the better rank).
 const rankOf = (value: number, values: number[]): number =>
@@ -115,23 +106,9 @@ export function getDriverHonours(driverId: string): Feat[] {
     }
   }
 
-  // Volume milestones (the classic "clubs")
-  const milestoneSpecs: Array<{ key: keyof DriverCareer; thresholds: number[]; noun: string }> = [
-    { key: 'wins', thresholds: WIN_MILESTONES, noun: 'Grand Prix wins' },
-    { key: 'poles', thresholds: POLE_MILESTONES, noun: 'pole positions' },
-    { key: 'podiums', thresholds: PODIUM_MILESTONES, noun: 'podiums' },
-    { key: 'points', thresholds: POINTS_MILESTONES, noun: 'career points' },
-    { key: 'races', thresholds: START_MILESTONES, noun: 'race starts' },
-  ]
-  for (const { key, thresholds, noun } of milestoneSpecs) {
-    const hit = highestCrossed(me[key] as number, thresholds)
-    if (hit != null) {
-      feats.push({
-        id: `driver-milestone-${String(key)}`, category: 'milestone', priority: 55,
-        title: `${hit}+ ${noun}`, value: hit,
-      })
-    }
-  }
+  // (Volume "club" milestones, e.g. "50+ wins", now live on the driver page's dedicated Milestones
+  // tab — synced to the newsroom thresholds via src/lib/stats/milestone-defs.ts. Feats keep only what
+  // milestones don't cover: all-time records, single-season records, streaks, and championships.)
 
   // Single-season records held (all-time). On a tie every holder is awarded the
   // record (checked against the max value, not just the first row that reached it).

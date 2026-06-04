@@ -8,18 +8,48 @@ import { DriverStandingsTable } from '@/components/standings/DriverStandingsTabl
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
 import { TeammateH2HPanel } from '@/components/standings/TeammateH2HPanel'
 import { PowerRankingsPanel } from '@/components/standings/PowerRankingsPanel'
-import { actionGetArchivedSeasons, actionGetSeasonStandings } from '@/lib/db/actions'
+import { AllTimeStatsTable, type AllTimeColumn } from '@/components/standings/AllTimeStatsTable'
+import { actionGetArchivedSeasons, actionGetSeasonStandings, actionGetAllTimeDriverStats, actionGetAllTimeTeamStats } from '@/lib/db/actions'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
-import type { DbSeason } from '@/lib/db/queries'
+import type { DbSeason, AllTimeDriverStat, AllTimeTeamStat } from '@/lib/db/queries'
 
-type Tab = 'drivers' | 'constructors' | 'h2h' | 'power'
+type Tab = 'drivers' | 'constructors' | 'h2h' | 'power' | 'alltime'
 
 const TABS: [Tab, string][] = [
   ['drivers', 'Drivers'],
   ['constructors', 'Constructors'],
   ['h2h', 'Teammates'],
   ['power', 'Power Rankings'],
+  ['alltime', 'All-Time'],
+]
+
+const DRIVER_ALLTIME_COLS: AllTimeColumn<AllTimeDriverStat>[] = [
+  { key: 'name', label: 'Driver' },
+  { key: 'seasons', label: 'Seasons', type: 'num' },
+  { key: 'races', label: 'Races', type: 'num' },
+  { key: 'firstYear', label: 'First', type: 'year' },
+  { key: 'lastYear', label: 'Last', type: 'year' },
+  { key: 'wins', label: 'Wins', type: 'num' },
+  { key: 'poles', label: 'Poles', type: 'num' },
+  { key: 'podiums', label: 'Podiums', type: 'num' },
+  { key: 'points', label: 'Points', type: 'num' },
+  { key: 'retirements', label: 'DNFs', type: 'num' },
+  { key: 'championships', label: 'Titles', type: 'num' },
+]
+
+const TEAM_ALLTIME_COLS: AllTimeColumn<AllTimeTeamStat>[] = [
+  { key: 'name', label: 'Constructor' },
+  { key: 'seasons', label: 'Seasons', type: 'num' },
+  { key: 'races', label: 'Races', type: 'num' },
+  { key: 'firstYear', label: 'First', type: 'year' },
+  { key: 'lastYear', label: 'Last', type: 'year' },
+  { key: 'wins', label: 'Wins', type: 'num' },
+  { key: 'poles', label: 'Poles', type: 'num' },
+  { key: 'podiums', label: 'Podiums', type: 'num' },
+  { key: 'points', label: 'Points', type: 'num' },
+  { key: 'retirements', label: 'DNFs', type: 'num' },
+  { key: 'championships', label: 'Titles', type: 'num' },
 ]
 
 interface ArchivedView {
@@ -35,14 +65,18 @@ export default function StandingsPage() {
   const [archivedSeasons, setArchivedSeasons] = useState<DbSeason[]>([])
   const [selectedArchive, setSelectedArchive] = useState<ArchivedView | null>(null)
   const [loadingArchive, setLoadingArchive] = useState(false)
+  const [allTimeDrivers, setAllTimeDrivers] = useState<AllTimeDriverStat[]>([])
+  const [allTimeTeams, setAllTimeTeams] = useState<AllTimeTeamStat[]>([])
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     setHydrated(true)
     actionGetArchivedSeasons().then(setArchivedSeasons)
+    actionGetAllTimeDriverStats().then(setAllTimeDrivers).catch(() => setAllTimeDrivers([]))
+    actionGetAllTimeTeamStats().then(setAllTimeTeams).catch(() => setAllTimeTeams([]))
     // Deep-link support: /standings?tab=constructors etc. (e.g. from the home dashboard).
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'drivers' || t === 'constructors' || t === 'h2h' || t === 'power') setTab(t)
+    if (t === 'drivers' || t === 'constructors' || t === 'h2h' || t === 'power' || t === 'alltime') setTab(t)
   }, [])
 
   async function loadArchivedSeason(s: DbSeason) {
@@ -198,6 +232,33 @@ export default function StandingsPage() {
               driverStandings={season.driverStandings}
             />
           </>
+        )}
+
+        {/* All-time historical stats (archived seasons only) — searchable + sortable */}
+        {tab === 'alltime' && (
+          <div className="space-y-8">
+            <p className="text-xs text-[#FFFFFF]">All-time totals across archived seasons. The current season folds in once it is archived.</p>
+            <div>
+              <h2 className="font-display text-base tracking-wide uppercase mb-2 text-[#FFFFFF]">Drivers</h2>
+              {allTimeDrivers.length === 0 ? (
+                <p className="text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+              ) : (
+                <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
+                  <AllTimeStatsTable rows={allTimeDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" />
+                </div>
+              )}
+            </div>
+            <div>
+              <h2 className="font-display text-base tracking-wide uppercase mb-2 text-[#FFFFFF]">Constructors</h2>
+              {allTimeTeams.length === 0 ? (
+                <p className="text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+              ) : (
+                <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
+                  <AllTimeStatsTable rows={allTimeTeams} columns={TEAM_ALLTIME_COLS} kind="team" />
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
       </div>

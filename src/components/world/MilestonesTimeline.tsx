@@ -8,9 +8,9 @@ const KIND_COLOR: Record<MilestoneKind, string> = {
   title: '#FFD24A',
   win: '#00D9FF',
   podium: '#FF8000',
+  pole: '#A855F7',
   start: '#7C8698',
   points: '#27F4D2',
-  season: '#A855F7',
 }
 
 // "Round 5 (Spain)" — circuit country resolved from the calendar.

@@ -21,6 +21,8 @@ import {
   getDistinctTeamIds,
   getAllSeasonChampions,
   getAllTimeLeaders,
+  getAllTimeDriverStats,
+  getAllTimeTeamStats,
   getSearchIndex,
   getArchivedSeasonIdByYear,
   getDriverRacesInSeason,
@@ -36,6 +38,8 @@ import {
   type DbSeason,
   type DbRaceResultRow,
   type DriverAttributeSnapshot,
+  type AllTimeDriverStat,
+  type AllTimeTeamStat,
 } from './queries'
 import { overall } from '@/lib/sim/progression'
 import { aggregateTeammateH2H, type H2HRaceRow } from '@/lib/world/h2h'
@@ -61,7 +65,7 @@ function toDriverSeasonRace(r: DbRaceResultRow): DriverSeasonRace {
   return {
     round: r.round, circuitId: r.circuit_id, circuitName: r.circuit_name,
     gridPosition: r.grid_position, finishPosition: r.dnf ? null : r.finish_position,
-    dnf: !!r.dnf, points: r.points, lapsCompleted: r.laps_completed,
+    dnf: !!r.dnf, points: r.points, form: r.form ?? 5, lapsCompleted: r.laps_completed,
     q1: r.q1_time_ms, q2: r.q2_time_ms, q3: r.q3_time_ms, stints: parseStints(r.stints_json),
   }
 }
@@ -214,6 +218,14 @@ export async function actionGetWorldOverview(): Promise<WorldOverview> {
 
 export async function actionGetSearchIndex(): Promise<SearchEntry[]> {
   return getSearchIndex()
+}
+
+export async function actionGetAllTimeDriverStats(): Promise<AllTimeDriverStat[]> {
+  return getAllTimeDriverStats()
+}
+
+export async function actionGetAllTimeTeamStats(): Promise<AllTimeTeamStat[]> {
+  return getAllTimeTeamStats()
 }
 
 // --- Stats engine: feats & records (archived seasons) ---

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Pencil, Check, Lock } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
-import { useDriverCareer, useEntityHonours } from '@/lib/world/hooks'
+import { useDriverCareer, useEntityHonours, useDriverSeason } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { HonoursPanel } from '@/components/world/HonoursPanel'
 import { StatBar } from '@/components/setup/StatBar'
@@ -24,11 +24,12 @@ import { MilestonesTimeline } from '@/components/world/MilestonesTimeline'
 import { TeammateH2HHistory } from '@/components/world/TeammateH2HHistory'
 import { CareerStatsTable } from '@/components/world/CareerStatsTable'
 import { RecentFormCard } from '@/components/world/RecentFormCard'
+import { SeasonFormChart } from '@/components/world/SeasonFormChart'
 import { buildDriverBio } from '@/lib/world/bio'
 import { buildMilestones } from '@/lib/world/milestones'
 import { overall } from '@/lib/sim/progression'
 
-type Tab = 'overview' | 'development' | 'results' | 'h2h'
+type Tab = 'overview' | 'development' | 'results' | 'milestones' | 'form' | 'h2h'
 
 // Compact white stat for the header band (replaces the per-page rating ring). `tier`
 // drives visual hierarchy: 1 = headline ratings, 2 = marquee achievements, 3 = volume.
@@ -94,6 +95,12 @@ export default function DriverPage() {
   const [assignTeam, setAssignTeam] = useState('')
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
+  // Form tab: which season's full-season form to show. Defaults to the driver's most recent season;
+  // useDriverSeason transparently builds the live season from the store and fetches archived ones.
+  const [formYear, setFormYear] = useState<number | null>(null)
+  const careerYears = career ? [...new Set(career.seasons.map((s) => s.year))].sort((x, y) => y - x) : []
+  const effectiveFormYear = formYear ?? careerYears[0] ?? seasonYear
+  const { detail: formDetail, loading: formLoading } = useDriverSeason(id, effectiveFormYear)
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
@@ -196,6 +203,8 @@ export default function DriverPage() {
                     { key: 'overview', label: 'Overview' },
                     { key: 'development', label: 'Development' },
                     { key: 'results', label: 'Results' },
+                    { key: 'milestones', label: 'Milestones' },
+                    { key: 'form', label: 'Form' },
                     { key: 'h2h', label: 'Head-to-Head' },
                   ]}
                   active={tab}
@@ -394,14 +403,39 @@ export default function DriverPage() {
               )}
 
               {tab === 'development' && (
-                <div className="flex-1 min-h-0 grid gap-4 lg:grid-cols-12 lg:grid-rows-1 overflow-y-auto lg:overflow-hidden">
-                  <Panel title="Ratings progression" flush fill className="lg:col-span-8">
-                    <RatingsProgressionChart history={career.ratingsHistory} />
-                  </Panel>
-                  <Panel title="Career milestones" flush fill className="lg:col-span-4">
-                    <MilestonesTimeline events={[...milestones].reverse()} />
-                  </Panel>
-                </div>
+                <Panel title="Ratings progression" flush fill className="flex-1 min-h-0">
+                  <RatingsProgressionChart history={career.ratingsHistory} />
+                </Panel>
+              )}
+
+              {tab === 'milestones' && (
+                <Panel title="Career milestones" flush fill className="flex-1 min-h-0 overflow-y-auto">
+                  <MilestonesTimeline events={[...milestones].reverse()} />
+                </Panel>
+              )}
+
+              {tab === 'form' && (
+                <Panel title="Season form" flush fill className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="px-5 pt-3 flex items-center gap-2">
+                    <label className="text-xs uppercase tracking-widest text-[#FFFFFF]">Season</label>
+                    <select
+                      value={effectiveFormYear}
+                      onChange={(e) => setFormYear(Number(e.target.value))}
+                      className="bg-[#0F1419] border border-[#2A3142] rounded px-2 py-1 text-xs font-semibold text-[#FFFFFF] focus:border-[#00D9FF] outline-none"
+                    >
+                      {(careerYears.length ? careerYears : [seasonYear]).map((y) => (
+                        <option key={y} value={y} className="bg-[#0F1419] text-[#FFFFFF]">{y}{y === seasonYear ? ' (current)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {formLoading ? (
+                    <p className="px-5 py-4 text-sm text-[#FFFFFF] animate-pulse">Loading…</p>
+                  ) : formDetail && formDetail.races.length > 0 ? (
+                    <SeasonFormChart races={formDetail.races} />
+                  ) : (
+                    <p className="px-5 py-4 text-sm text-[#FFFFFF]">No race form recorded for this season.</p>
+                  )}
+                </Panel>
               )}
 
               {tab === 'results' && (

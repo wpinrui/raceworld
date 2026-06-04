@@ -30,6 +30,7 @@ import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulbe
 import milestoneCopy from './milestone-copy.json'
 import titleCopy from './titlescenario-copy.json'
 import sillyCopy from './sillyseason-copy.json'
+import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
 export interface NewsContext {
   year: number
@@ -741,12 +742,9 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-// --- Career milestones (issue #19): milestones are counted per CAREER, never per season. A
-// milestone fires on the FIRST ever, then on every step thereafter: 50 starts, 250 points, 10
-// podiums, 5 wins, 5 poles.
-const MILESTONE_STEP: Record<'starts' | 'points' | 'podiums' | 'wins' | 'poles', number> = {
-  starts: 50, points: 250, podiums: 10, wins: 5, poles: 5,
-}
+// --- Career milestones (issue #19): counted per CAREER, never per season. The thresholds and the
+// crossing logic live in src/lib/stats/milestone-defs.ts (MILESTONE_STEP / milestoneCrossed), shared
+// with the World driver page so the two never drift. Team milestones keep their own steps below.
 
 // A driver's career totals as of AFTER round `r` of this season (r = 0 → before the season began).
 // ctx.careers holds the total INCLUDING the whole completed season, so we subtract this season back
@@ -772,16 +770,6 @@ function careerTotalsThroughRound(ctx: NewsContext, id: string, r: number): { st
     starts: c.starts - sSt + aSt, points: c.points - sPt + aPt,
     podiums: c.podiums - sPo + aPo, wins: c.wins - sWi + aWi, poles: c.poles - sPl + aPl,
   }
-}
-
-// The milestone value crossed between `before` and `after` for a category, or null. Crossing into 1
-// (the first ever) is always a milestone; thereafter each multiple of the category step. A single
-// round can cross at most one threshold (steps far exceed any one-race gain), so one value suffices.
-function milestoneCrossed(cat: keyof typeof MILESTONE_STEP, before: number, after: number): number | null {
-  if (before < 1 && after >= 1) return 1
-  const s = MILESTONE_STEP[cat]
-  if (after >= s && Math.floor(after / s) > Math.floor(before / s)) return Math.floor(after / s) * s
-  return null
 }
 
 // Team (constructor) milestone steps. A team scores far faster than a driver (two cars), so the
