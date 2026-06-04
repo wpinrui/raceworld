@@ -1,6 +1,10 @@
+'use client'
+
+import { Star } from 'lucide-react'
 import type { DriverStanding, Team } from '@/lib/sim/types'
 import { ResultCell } from './ResultCell'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { useFollowed } from '@/lib/store/useFollowed'
 
 interface Props {
   standings: DriverStanding[]
@@ -10,6 +14,7 @@ interface Props {
 }
 
 export function DriverStandingsTable({ standings, teams, totalRounds, completedRounds }: Props) {
+  const followed = useFollowed()
   return (
     <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
       <table className="w-full border-collapse text-sm">
@@ -30,6 +35,7 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
           {standings.map((standing, idx) => {
             const team = teams.find((t) => t.id === standing.teamId)
             const teamColor = team?.color ?? '#FFFFFF'
+            const isFollowed = followed.drivers.has(standing.driverId)
             return (
               <tr
                 key={standing.driverId}
@@ -41,7 +47,8 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
                 <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
                   <div className="flex items-center gap-2">
                     <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
-                    <DriverLink id={standing.driverId} className="font-semibold text-[#FFFFFF] whitespace-nowrap">{standing.driverName}</DriverLink>
+                    <DriverLink id={standing.driverId} className={`font-semibold whitespace-nowrap ${isFollowed ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{standing.driverName}</DriverLink>
+                    {isFollowed && <Star size={11} className="fill-[#00D9FF] text-[#00D9FF] shrink-0" />}
                   </div>
                 </td>
                 <td className="py-1.5 px-3 text-[#FFFFFF] text-xs"><TeamLink id={standing.teamId}>{standing.teamName}</TeamLink></td>
