@@ -63,6 +63,7 @@ export default function Nav() {
   const nextRaceDate = nextRaceRound <= total ? toISODate(raceDate(year, calendar2026[nextRaceRound - 1])) : null
   const atRaceday = !!nextRaceDate && currentDate >= nextRaceDate
   const circuit = calendar2026[currentRound - 1]
+  const dateLabel = currentDate ? formatDate(fromISODate(currentDate), { weekday: true, year: true }) : ''
 
   // Hyperlink matcher for the interrupt modal (live roster; circuits limited to rounds run).
   const newsIndex = useMemo(() => buildNewsIndex({
@@ -183,7 +184,7 @@ export default function Nav() {
         // Isolated match-mode banner: no nav links, no search — just the race identity + overflow + CTA.
         <>
           <span className="text-xs tabular-nums text-[#FFFFFF]">
-            {year} · Round {String(currentRound).padStart(2, '0')}/{String(total).padStart(2, '0')}
+            {dateLabel} · Round {String(currentRound).padStart(2, '0')}/{String(total).padStart(2, '0')}
             {circuit && <span> · {circuit.name}</span>}
           </span>
           <div className="flex-1" />
@@ -210,7 +211,7 @@ export default function Nav() {
 
           <div className="flex items-center gap-3 text-xs tabular-nums text-[#FFFFFF]">
             {hydrated && (seasonActive
-              ? <span>{year} · {offSeason ? 'Off-season' : `Round ${String(currentRound).padStart(2, '0')}/${String(total).padStart(2, '0')}`}{circuit && !offSeason && <span> · {circuit.name}</span>}</span>
+              ? <span>{dateLabel} · {offSeason ? 'Off-season' : `Round ${String(currentRound).padStart(2, '0')}/${String(total).padStart(2, '0')}`}{circuit && !offSeason && <span> · {circuit.name}</span>}</span>
               : <span>No active season</span>)}
           </div>
         </>

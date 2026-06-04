@@ -8,11 +8,17 @@ import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type Dri
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
+import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
   if (round > calLen) return 'Off-season'
   return `Round ${round}`
+}
+
+// Article byline: the drop date if we have one, else the round bucket.
+function whenLabel(a: NewsArticle, calLen: number): string {
+  return a.date ? formatDate(fromISODate(a.date), { weekday: true, year: true }) : roundLabel(a.round, calLen)
 }
 
 export default function NewsroomPage() {
@@ -186,7 +192,7 @@ export default function NewsroomPage() {
                       >
                         <p className="text-sm font-semibold text-[#FFFFFF]">{a.headline}</p>
                         <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
-                          {CATEGORY_LABELS[a.category] ?? a.category} · {roundLabel(a.round, calendar2026.length)}
+                          {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
                         </p>
                       </button>
                     )
@@ -195,7 +201,7 @@ export default function NewsroomPage() {
               </Panel>
 
               {/* Reader */}
-              <Panel title={selected ? `${CATEGORY_LABELS[selected.category] ?? selected.category} · ${roundLabel(selected.round, calendar2026.length)}` : 'Article'} className="lg:col-span-2">
+              <Panel title={selected ? `${whenLabel(selected, calendar2026.length)} · ${CATEGORY_LABELS[selected.category] ?? selected.category}` : 'Article'} className="lg:col-span-2">
                 {selected ? (
                   <article className="space-y-3">
                     <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} /></h2>
