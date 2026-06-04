@@ -10,6 +10,7 @@ import type { Driver, Team } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
 import { TeamLink } from '@/components/world/EntityLink'
+import { composeSeason, historyYears } from '@/lib/history/compose'
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -29,6 +30,9 @@ export default function SetupPage() {
   const [newTeamName, setNewTeamName] = useState('')
   const [newTeamShort, setNewTeamShort] = useState('')
   const [newTeamColor, setNewTeamColor] = useState('#888888')
+  // Historical start: which year to pre-populate, and whether real-world changes apply each season-end.
+  const [startYear, setStartYear] = useState(2026)
+  const [realWorld, setRealWorld] = useState(false)
 
   useEffect(() => {
     setHydrated(true)
@@ -37,8 +41,17 @@ export default function SetupPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handlePrePopulate() {
-    setLocalDrivers(drivers2026.map((d) => ({ ...d })))
-    setLocalTeams(teams2026.map((t) => ({ ...t })))
+    if (startYear === 2026) {
+      setLocalDrivers(drivers2026.map((d) => ({ ...d })))
+      setLocalTeams(teams2026.map((t) => ({ ...t })))
+      setRealWorld(false)
+    } else {
+      const composed = composeSeason(startYear)
+      if (!composed) { setImportError(`No historical data for ${startYear}`); return }
+      setLocalDrivers(composed.drivers)
+      setLocalTeams(composed.teams)
+      setRealWorld(true) // historical starts default to applying real-world changes; toggle off to opt out
+    }
     setImportError(null)
   }
 
@@ -126,7 +139,8 @@ export default function SetupPage() {
   }
 
   function handleStartSeason() {
-    seasonStore.initSeason(localDrivers, localTeams, seasonStore.year)
+    seasonStore.setRealWorldMode(realWorld)
+    seasonStore.initSeason(localDrivers, localTeams, startYear)
     useRaceStore.getState().resetSession()
     router.push('/race')
   }
@@ -169,10 +183,23 @@ export default function SetupPage() {
             {!isActive && (
               <>
                 {isFreshGame && (
-                  <button onClick={handlePrePopulate}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
-                    <RotateCcw size={13} /> Pre-populate 2026
-                  </button>
+                  <>
+                    <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))}
+                      className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
+                      <option value={2026}>2026 (default grid)</option>
+                      {historyYears().filter((y) => y !== 2026).map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <button onClick={handlePrePopulate}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                      <RotateCcw size={13} /> Pre-populate {startYear}
+                    </button>
+                    {startYear !== 2026 && (
+                      <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                        <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                        Real-world changes
+                      </label>
+                    )}
+                  </>
                 )}
                 <button onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
@@ -193,7 +220,7 @@ export default function SetupPage() {
             ) : (
               <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                Start Season {seasonStore.year} <ChevronRight size={14} />
+                Start Season {startYear} <ChevronRight size={14} />
               </button>
             )}
           </div>
