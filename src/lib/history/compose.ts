@@ -15,13 +15,14 @@ const STAT_KEYS: (keyof Stats)[] = ['pace', 'wetWeatherPace', 'overtaking', 'smo
 const round1 = (n: number) => Math.round(n * 10) / 10
 
 // Expected-value (no-RNG) version of one applyRaceProgression tick for a single driver.
+// Keep the 15 here in step with progression.ts (races-to-potential pacing of the development curve).
 function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number): Stats {
   const ov = overall(stats)
   const next = { ...stats }
   if (age < primeEnd) {
     if (ov >= peakPotential) return stats
     const yearsTillPrime = Math.max(0.001, primeEnd - age)
-    const racesToPotential = Math.max(1, 20 * yearsTillPrime)
+    const racesToPotential = Math.max(1, 15 * yearsTillPrime)
     const gap = peakPotential - ov
     const gain = Math.min(gap, (gap / racesToPotential) * 1.5) // per-race median
     for (const k of STAT_KEYS) next[k] = Math.min(100, round1(stats[k] + gain))
