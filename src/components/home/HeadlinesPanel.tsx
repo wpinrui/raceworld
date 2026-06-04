@@ -131,11 +131,11 @@ export function HeadlinesPanel() {
 
   return (
     <>
-      <Panel title={title} flush>
+      <Panel title={title} flush fill>
         {headlines.length === 0 ? (
           <p className="px-5 py-3 text-sm text-[#FFFFFF]">No headlines yet. Run a race and the newsroom will fill up.</p>
         ) : (
-          <ul className="max-h-[17.5rem] overflow-y-auto">
+          <ul>
             {headlines.map((h) => (
               <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
                 <button

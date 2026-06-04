@@ -8,6 +8,7 @@ import { ChevronRight } from 'lucide-react'
 import { Panel } from '@/components/world/ui'
 import { calendar2026 } from '@/data/calendar'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { isOffSeason } from '@/lib/sim/types'
 
 const PODIUM = ['#D4AC00', '#9E9E9E', '#C0622B'] // gold / silver / bronze
 
@@ -28,6 +29,7 @@ export function RaceBanner({ simming, onSimTo }: Props) {
   const router = useRouter()
   const currentRound = useSeasonStore((s) => s.currentRound)
   const year = useSeasonStore((s) => s.year)
+  const phase = useSeasonStore((s) => s.phase)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const teams = useSeasonStore((s) => s.teams)
   const teamColor = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
@@ -100,7 +102,15 @@ export function RaceBanner({ simming, onSimTo }: Props) {
   }, [simming])
 
   return (
-    <Panel title="Calendar" flush>
+    <Panel
+      flush
+      title={
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-1 rounded-sm bg-[#DC143C]" />
+          Formula 1 · {year} · {isOffSeason(phase) ? 'Off-season' : `Round ${currentRound}`}
+        </span>
+      }
+    >
       <div ref={scrollRef} className="flex gap-2 overflow-x-auto px-5 py-4">
         {calendar2026.map((c, idx) => {
           const round = idx + 1

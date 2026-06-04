@@ -43,8 +43,8 @@ export function CarDevelopmentChart({ teams, history }: { teams: Team[]; history
   })
 
   return (
-    <div className="px-3 py-4 min-h-[340px]">
-      <div className="flex flex-wrap gap-1.5 px-2 pb-3">
+    <div className="flex flex-col h-full px-3 py-3">
+      <div className="flex flex-wrap gap-1.5 px-2 pb-3 shrink-0">
         {ordered.map((t) => {
           const off = hidden.has(t.id)
           return (
@@ -61,7 +61,8 @@ export function CarDevelopmentChart({ teams, history }: { teams: Team[]; history
           )
         })}
       </div>
-      <ResponsiveContainer width="100%" height={300}>
+      <div className="flex-1 min-h-0">
+      <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: -16 }}>
           <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
           <XAxis
@@ -82,6 +83,7 @@ export function CarDevelopmentChart({ teams, history }: { teams: Team[]; history
           ))}
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }
