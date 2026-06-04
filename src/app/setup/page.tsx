@@ -115,6 +115,7 @@ export default function SetupPage() {
       id,
       name,
       shortName: (newTeamShort.trim() || name.slice(0, 3)).toUpperCase().slice(0, 4),
+      nationality: '', // new outfits default to rest-of-world until set
       color: newTeamColor,
       carPace: 0, // placeholder; set to the lowest grid pace when the change applies
     })

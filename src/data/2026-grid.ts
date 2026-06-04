@@ -2,17 +2,17 @@ import { Driver, Team } from '@/lib/sim/types'
 
 // Car pace order based on 2025 constructors standings
 export const teams2026: Team[] = [
-  { id: 'mercedes', name: 'Mercedes', shortName: 'MER', color: '#27F4D2', carPace: 75 }, // 1st
-  { id: 'ferrari', name: 'Ferrari', shortName: 'FER', color: '#E8002D', carPace: 70 }, // 2nd
-  { id: 'mclaren', name: 'McLaren', shortName: 'MCL', color: '#FF8000', carPace: 65 }, // 3rd
-  { id: 'redbull', name: 'Red Bull', shortName: 'RBR', color: '#3671C6', carPace: 60 }, // 4th
-  { id: 'alpine', name: 'Alpine', shortName: 'ALP', color: '#FF87BC', carPace: 55 }, // 5th
-  { id: 'racingbulls', name: 'Racing Bulls', shortName: 'RB', color: '#6692FF', carPace: 50 }, // 6th
-  { id: 'haas', name: 'Haas', shortName: 'HAA', color: '#B6BABD', carPace: 45 }, // 7th
-  { id: 'williams', name: 'Williams', shortName: 'WIL', color: '#64C4FF', carPace: 40 }, // 8th
-  { id: 'audi', name: 'Audi', shortName: 'AUD', color: '#BB0020', carPace: 35 }, // 9th
-  { id: 'astonmartin', name: 'Aston Martin', shortName: 'AMR', color: '#229971', carPace: 30 }, // 10th
-  { id: 'cadillac', name: 'Cadillac', shortName: 'CAD', color: '#94A3B8', carPace: 25 }, // 11th
+  { id: 'mercedes', name: 'Mercedes', shortName: 'MER', nationality: 'DE', color: '#27F4D2', carPace: 75 }, // 1st
+  { id: 'ferrari', name: 'Ferrari', shortName: 'FER', nationality: 'IT', color: '#E8002D', carPace: 70 }, // 2nd
+  { id: 'mclaren', name: 'McLaren', shortName: 'MCL', nationality: 'GB', color: '#FF8000', carPace: 65 }, // 3rd
+  { id: 'redbull', name: 'Red Bull', shortName: 'RBR', nationality: 'AT', color: '#3671C6', carPace: 60 }, // 4th
+  { id: 'alpine', name: 'Alpine', shortName: 'ALP', nationality: 'FR', color: '#FF87BC', carPace: 55 }, // 5th
+  { id: 'racingbulls', name: 'Racing Bulls', shortName: 'RB', nationality: 'IT', color: '#6692FF', carPace: 50 }, // 6th
+  { id: 'haas', name: 'Haas', shortName: 'HAA', nationality: 'US', color: '#B6BABD', carPace: 45 }, // 7th
+  { id: 'williams', name: 'Williams', shortName: 'WIL', nationality: 'GB', color: '#64C4FF', carPace: 40 }, // 8th
+  { id: 'audi', name: 'Audi', shortName: 'AUD', nationality: 'DE', color: '#BB0020', carPace: 35 }, // 9th
+  { id: 'astonmartin', name: 'Aston Martin', shortName: 'AMR', nationality: 'GB', color: '#229971', carPace: 30 }, // 10th
+  { id: 'cadillac', name: 'Cadillac', shortName: 'CAD', nationality: 'US', color: '#94A3B8', carPace: 25 }, // 11th
 ]
 
 export const drivers2026: Driver[] = [

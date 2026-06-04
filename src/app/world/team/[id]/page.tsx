@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { Pencil, Check } from 'lucide-react'
 import { useTeamCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
@@ -10,6 +11,8 @@ import { HonoursPanel } from '@/components/world/HonoursPanel'
 import { calendar2026 } from '@/data/calendar'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
+import { CountrySelect } from '@/components/CountrySelect'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
 import { UpgradeOverride } from '@/components/world/UpgradeOverride'
@@ -24,14 +27,19 @@ export default function TeamPage() {
   const { feats: honours, loading: honoursLoading } = useEntityHonours('team', id)
   const devPlan = useSeasonStore((s) => s.devPlans.find((p) => p.teamId === id))
   const currentRound = useSeasonStore((s) => s.currentRound)
-  const onGrid = useSeasonStore((s) => s.teams.some((t) => t.id === id))
+  const liveTeam = useSeasonStore((s) => s.teams.find((t) => t.id === id))
+  const updateTeam = useSeasonStore((s) => s.updateTeam)
+  const onGrid = !!liveTeam
   // Only editable while the season is running: upgrades are delivered during races, and
   // startNewSeason re-rolls every dev plan from scratch, so off-season edits wouldn't survive.
   const upgradeEditable = useSeasonStore((s) => !isOffSeason(s.phase))
   const [tab, setTab] = useState<Tab>('overview')
+  const [editing, setEditing] = useState(false)
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
+
+  const inputClass = 'w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
@@ -45,15 +53,47 @@ export default function TeamPage() {
             <>
               {/* Header band */}
               <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-4 flex-wrap">
-                <div className="w-1.5 h-10 rounded-sm" style={{ backgroundColor: career.teamColor ?? '#6B7280' }} />
-                <div className="flex-1 min-w-0">
-                  <h1 className="font-display text-2xl tracking-wider uppercase">{career.teamName}</h1>
-                  <p className="text-sm text-[#FFFFFF] mt-0.5">
-                    {career.currentPosition != null
-                      ? <>Currently P{career.currentPosition} · car pace {career.carPace}</>
-                      : <span className="italic">Not on the current grid</span>}
-                  </p>
-                </div>
+                <div className="w-1.5 h-10 rounded-sm" style={{ backgroundColor: liveTeam?.color ?? career.teamColor ?? '#6B7280' }} />
+                {editing && liveTeam ? (
+                  <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs text-[#FFFFFF] block mb-1">Name</label>
+                      <input type="text" value={liveTeam.name} onChange={(e) => updateTeam(id, { name: e.target.value })} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#FFFFFF] block mb-1">Colour</label>
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={liveTeam.color} onChange={(e) => updateTeam(id, { color: e.target.value })} className="h-9 w-10 shrink-0 rounded bg-[#0F1419] border border-[#303848] cursor-pointer p-0.5" />
+                        <input type="text" value={liveTeam.color} onChange={(e) => updateTeam(id, { color: e.target.value })} className={inputClass} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#FFFFFF] block mb-1">Nationality</label>
+                      <CountrySelect value={liveTeam.nationality} onChange={(code) => updateTeam(id, { nationality: code })} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <NationalityFlag code={liveTeam?.nationality} size="1.4em" />
+                      <h1 className="font-display text-2xl tracking-wider uppercase">{career.teamName}</h1>
+                    </div>
+                    <p className="text-sm text-[#FFFFFF] mt-0.5">
+                      {career.currentPosition != null
+                        ? <>Currently P{career.currentPosition} · car pace {career.carPace}</>
+                        : <span className="italic">Not on the current grid</span>}
+                    </p>
+                  </div>
+                )}
+                {liveTeam && (
+                  <button
+                    onClick={() => setEditing((v) => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+                  >
+                    {editing ? <Check size={13} /> : <Pencil size={13} />}
+                    {editing ? 'Done' : 'God mode'}
+                  </button>
+                )}
               </div>
 
               <TabBar<Tab>

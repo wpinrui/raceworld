@@ -162,6 +162,7 @@ export interface DriverSeasonRace {
   finishPosition: number | null // null = DNF
   dnf: boolean
   points: number
+  form: number // pre-race form (0-10 FM-style match rating); 5 when unknown
   lapsCompleted: number
   q1: number | null // qualifying lap times, seconds
   q2: number | null

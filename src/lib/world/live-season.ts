@@ -21,6 +21,7 @@ export function buildLiveDriverSeason(driverId: string, store: LiveStore): Drive
       finishPosition: r.dnf ? null : r.finishPosition,
       dnf: r.dnf,
       points: r.points,
+      form: r.form ?? 5,
       lapsCompleted: r.lapsCompleted,
       q1: r.q1Time, q2: r.q2Time, q3: r.q3Time,
       stints: r.stints,

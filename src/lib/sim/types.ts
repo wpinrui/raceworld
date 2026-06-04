@@ -27,6 +27,7 @@ export interface Team {
   id: string
   name: string
   shortName: string
+  nationality: string    // constructor licence country, ISO 3166-1 alpha-2; '' = rest of world
   color: string          // primary hex
   carPace: number        // 75/70/65/60/55/50/45/40/35/30
 }

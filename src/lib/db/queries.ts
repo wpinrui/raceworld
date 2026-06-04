@@ -259,12 +259,16 @@ export interface DbRaceResultRow extends DbRaceResult {
   round: number
   circuit_id: string
   circuit_name: string
+  form?: number | null   // pre-race form, joined for the driver-season path only
 }
 
 export function getDriverRacesInSeason(seasonId: number, driverId: string): DbRaceResultRow[] {
   return getDb().prepare(`
-    SELECT rr.*, r.round AS round, r.circuit_id AS circuit_id, r.circuit_name AS circuit_name
-    FROM race_results rr JOIN races r ON r.id = rr.race_id
+    SELECT rr.*, r.round AS round, r.circuit_id AS circuit_id, r.circuit_name AS circuit_name,
+      drf.form AS form
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    LEFT JOIN driver_race_form drf ON drf.race_id = rr.race_id AND drf.driver_id = rr.driver_id
     WHERE r.season_id = ? AND rr.driver_id = ?
     ORDER BY r.round
   `).all(seasonId, driverId) as DbRaceResultRow[]
@@ -603,6 +607,65 @@ export function getAllSeasonChampions(): SeasonChampions[] {
       constructorChampionName: cc ? getMostRecentTeamName(cc.team_id) : null,
     }
   })
+}
+
+// --- All-time stats tables (standings page) — per driver / per team across ARCHIVED seasons. The
+// live season folds in once archived, matching every other historical query here. ---
+export interface AllTimeDriverStat {
+  id: string; name: string; seasons: number; races: number; firstYear: number; lastYear: number
+  wins: number; poles: number; podiums: number; points: number; retirements: number; wdc: number
+}
+export function getAllTimeDriverStats(): AllTimeDriverStat[] {
+  const rows = getDb().prepare(`
+    SELECT rr.driver_id AS id, MAX(rr.driver_name) AS name,
+      COUNT(DISTINCT r.season_id) AS seasons,
+      COUNT(*) AS races,
+      MIN(s.year) AS firstYear, MAX(s.year) AS lastYear,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      SUM(rr.dnf) AS retirements
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived'
+    GROUP BY rr.driver_id
+  `).all() as Omit<AllTimeDriverStat, 'wdc'>[]
+  const titles = new Map<string, number>()
+  for (const c of getAllSeasonChampions()) if (c.driverChampionId) titles.set(c.driverChampionId, (titles.get(c.driverChampionId) ?? 0) + 1)
+  return rows.map((r) => ({ ...r, wdc: titles.get(r.id) ?? 0 }))
+}
+
+export interface AllTimeTeamStat {
+  id: string; name: string; seasons: number; races: number; firstYear: number; lastYear: number
+  wins: number; poles: number; podiums: number; points: number; retirements: number; wdc: number; wcc: number
+}
+export function getAllTimeTeamStats(): AllTimeTeamStat[] {
+  const rows = getDb().prepare(`
+    SELECT rr.team_id AS id, MAX(rr.team_name) AS name,
+      COUNT(DISTINCT r.season_id) AS seasons,
+      COUNT(DISTINCT r.id) AS races,
+      MIN(s.year) AS firstYear, MAX(s.year) AS lastYear,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      SUM(rr.dnf) AS retirements
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived'
+    GROUP BY rr.team_id
+  `).all() as Omit<AllTimeTeamStat, 'wdc' | 'wcc'>[]
+  // WCC = the team's own constructors' titles; WDC = drivers' titles won by a driver racing for the team.
+  const wcc = new Map<string, number>()
+  const wdc = new Map<string, number>()
+  for (const c of getAllSeasonChampions()) {
+    if (c.constructorChampionId) wcc.set(c.constructorChampionId, (wcc.get(c.constructorChampionId) ?? 0) + 1)
+    if (c.driverChampionTeamId) wdc.set(c.driverChampionTeamId, (wdc.get(c.driverChampionTeamId) ?? 0) + 1)
+  }
+  return rows.map((r) => ({ ...r, wdc: wdc.get(r.id) ?? 0, wcc: wcc.get(r.id) ?? 0 }))
 }
 
 export function getDriverFinishInSeason(seasonId: number, driverId: string): number | null {
