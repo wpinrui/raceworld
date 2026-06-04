@@ -3382,7 +3382,9 @@ const RENEWAL_PIN_ROUND = 18  // matches the store's RENEWAL_ROUND
 // tell. Singularise the known market count nouns (with an optional single adjective in between) when they
 // follow a bare "1", so the copy agrees whatever the real numbers turn out to be.
 const MARKET_COUNT_NOUNS = /\b1 ((?:out-of-contract |unsigned |expiring |confirmed |driver )?)(drivers|contracts|deals|seats|names|renewals|extensions|re-signings|confirmations|signings|moves)\b/gi
-const agree1 = (text: string): string => text.replace(MARKET_COUNT_NOUNS, (_m, adj: string, noun: string) => `1 ${adj}${noun.replace(/s$/i, '')}`)
+const agree1 = (text: string): string => text
+  .replace(MARKET_COUNT_NOUNS, (_m, adj: string, noun: string) => `1 ${adj}${noun.replace(/s$/i, '')}`)
+  .replace(/ {2,}/g, ' ') // collapse stray double spaces (e.g. an empty standing slot for a brand-new team)
 function agreeArticle(a: NewsArticle): NewsArticle {
   return { ...a, headline: agree1(a.headline), dek: agree1(a.dek), body: agree1(a.body) }
 }
@@ -3403,7 +3405,7 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   type Verdict = 'could_do_better' | 'right_place' | 'lucky'
   // Most newsworthy first: the biggest over- and under-placements lead; well-matched cases sit nearest 0.
   const newsworthiness = (key: Verdict) => (a: ContractWatch, b: ContractWatch) =>
-    key === 'could_do_better' ? b.diff - a.diff : key === 'lucky' ? a.diff - b.diff : Math.abs(a.diff) - Math.abs(b.diff)
+    key === 'could_do_better' ? b.diff - a.diff : key === 'lucky' ? a.diff - b.diff : Math.abs(b.diff) - Math.abs(a.diff)
   const chunk = (key: Verdict) => {
     const list = watch.filter((w) => w.verdict === key).sort(newsworthiness(key))
     if (list.length === 0) return ''
@@ -3427,7 +3429,8 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
 // Round-18 round-up once the renewal window closes. Chunked: one sentence lists the re-signings (team +
 // length), one lists who is heading to the market.
 function renewalsFeature(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.live || ctx.endOfSeason || ctx.completedRounds < RENEWAL_PIN_ROUND) return []
+  // Fires from round 18 on (incl. the off-season archive snapshot, so it persists to archived seasons).
+  if (!ctx.live || ctx.completedRounds < RENEWAL_PIN_ROUND) return []
   const renewals = ctx.renewals ?? []
   const stillExpiring = ctx.drivers.filter((d) => d.teamId !== '' && d.contractExpiresAfterSeason === ctx.year)
   if (renewals.length === 0 && stillExpiring.length === 0) return []
