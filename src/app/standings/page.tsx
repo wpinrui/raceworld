@@ -125,8 +125,11 @@ export default function StandingsPage() {
     setLoadingArchive(false)
   }
 
-  const totalRounds = calendar2026.length
-  const completedRounds = season.raceResults.length
+  // An archived season is complete: show all of ITS rounds, not the live season's progress. Its
+  // round count is the length of any standing's per-round results array.
+  const archivedRounds = selectedArchive?.driverStandings[0]?.results.length ?? 0
+  const totalRounds = selectedArchive ? archivedRounds : calendar2026.length
+  const completedRounds = selectedArchive ? archivedRounds : season.raceResults.length
 
   const displayDrivers = selectedArchive ? selectedArchive.driverStandings : season.driverStandings
   const displayConstructors = selectedArchive ? selectedArchive.constructorStandings : season.constructorStandings
