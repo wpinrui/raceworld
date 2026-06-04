@@ -13,6 +13,7 @@ import { raceDate, toISODate, fromISODate, formatDate } from '@/lib/sim/calendar
 import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop } from '@/lib/sim/continue-loop'
+import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { advanceOffSeason, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
@@ -20,6 +21,7 @@ import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/
 import WorldSearch from '@/components/WorldSearch'
 
 const PRIMARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-50 transition-colors'
+const SECONDARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#2A3142] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#303848] disabled:opacity-50 transition-colors'
 const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] transition-colors'
 
 export default function Nav() {
@@ -40,6 +42,7 @@ export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [restartOpen, setRestartOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [simming, setSimming] = useState(false)
   const [newsStop, setNewsStop] = useState<{ date: string; articles: NewsArticle[] } | null>(null)
   // Prior-season career totals (the current season folds in from the store), so milestone /
   // retirement interrupts see real records. Fetched once, like the newsroom.
@@ -79,6 +82,13 @@ export default function Nav() {
     useRaceStore.getState().resetSession()
     setMenuOpen(false)
     router.push('/home')
+  }
+
+  // Headlessly run just the next race (no match mode), then land back pre-race at the round after.
+  async function handleSimNextRace() {
+    if (simming) return
+    setSimming(true)
+    try { await simulateUntilRound(useSeasonStore.getState().currentRound + 1) } finally { setSimming(false) }
   }
 
   // Advance the clock to the next stop. A news stop opens the interrupt modal; a race stop just
@@ -143,7 +153,12 @@ export default function Nav() {
       return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA} title={`Next: ${nextOffSeasonStageLabel(phase)}`}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
     }
     if (atRaceday) {
-      return <Link href="/race" className={PRIMARY_CTA}>Go To Race<ChevronRight size={14} /></Link>
+      return (
+        <div className="flex items-center gap-2">
+          <button onClick={handleSimNextRace} disabled={simming} className={SECONDARY_CTA}>{simming ? 'Simulating…' : 'Simulate Next Race'}</button>
+          <Link href="/race" className={PRIMARY_CTA}>Go To Race<ChevronRight size={14} /></Link>
+        </div>
+      )
     }
     return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
   })()

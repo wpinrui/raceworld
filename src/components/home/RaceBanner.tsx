@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import ReactCountryFlag from 'react-country-flag'
 import { ChevronRight } from 'lucide-react'
 import { Panel } from '@/components/world/ui'
@@ -24,16 +25,19 @@ interface Props {
 // classification; the current race links into the weekend; any future race can be
 // fast-simulated up to (so you land pre-race there) without leaving the home screen.
 export function RaceBanner({ simming, onSimTo }: Props) {
+  const router = useRouter()
   const currentRound = useSeasonStore((s) => s.currentRound)
   const year = useSeasonStore((s) => s.year)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const teams = useSeasonStore((s) => s.teams)
   const teamColor = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
+  // Which race's action modal is open (Go To Race / Simulate). null = closed.
+  const [modalRound, setModalRound] = useState<number | null>(null)
 
   // The calendar scrolls horizontally (mouse wheel) and keeps the current race centred
   // (so simulated results scroll into view as the round advances). Both ease to a target.
   const scrollRef = useRef<HTMLDivElement>(null)
-  const currentRef = useRef<HTMLAnchorElement>(null)
+  const currentRef = useRef<HTMLButtonElement>(null)
   const targetRef = useRef<number | null>(null)
   const rafRef = useRef(0)
   const easeTo = useCallback((left: number) => {
@@ -151,43 +155,67 @@ export function RaceBanner({ simming, onSimTo }: Props) {
             )
           }
 
-          // Current — link into the race weekend.
+          // Current — open the action modal (Go To Race / Simulate Race).
           if (current) {
             return (
-              <Link
+              <button
                 key={round}
                 ref={currentRef}
-                href="/race"
-                className="flex min-w-[160px] flex-col gap-1.5 rounded-lg border border-[#00D9FF] bg-[#00D9FF]/10 px-3 py-2.5 transition-colors hover:bg-[#00D9FF]/20"
+                onClick={() => setModalRound(round)}
+                className="flex min-w-[160px] flex-col gap-1.5 rounded-lg border border-[#00D9FF] bg-[#00D9FF]/10 px-3 py-2.5 text-left transition-colors hover:bg-[#00D9FF]/20"
               >
                 {head}
                 {title}
                 <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-widest text-[#00D9FF]">
                   Race weekend <ChevronRight size={11} />
                 </span>
-              </Link>
+              </button>
             )
           }
 
-          // Upcoming — fast-simulate up to this race.
+          // Upcoming — open the action modal (Simulate Until Race).
           return (
-            <div
+            <button
               key={round}
-              className="flex min-w-[160px] flex-col gap-1.5 rounded-lg border border-[#2A3142] bg-[#1E2431] px-3 py-2.5"
+              onClick={() => setModalRound(round)}
+              className="flex min-w-[160px] flex-col gap-1.5 rounded-lg border border-[#2A3142] bg-[#1E2431] px-3 py-2.5 text-left transition-colors hover:border-[#00D9FF]"
             >
               {head}
               {title}
-              <button
-                disabled={simming}
-                onClick={() => onSimTo(round)}
-                className="mt-1 inline-flex cursor-pointer items-center justify-center gap-1 rounded bg-[#2A3142] px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[#FFFFFF] transition-colors hover:bg-[#303848] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {simming ? 'Simulating…' : 'Sim to here'}
-              </button>
-            </div>
+            </button>
           )
         })}
       </div>
+
+      {modalRound != null && (() => {
+        const c = calendar2026[modalRound - 1]
+        const isCurrent = modalRound === currentRound
+        const cancel = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors'
+        const secondary = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] disabled:opacity-40 transition-colors'
+        const primary = 'px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-bold uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-40 transition-colors'
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setModalRound(null)}>
+            <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="w-1 h-5 rounded-sm bg-[#00D9FF]" />
+                <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Round {modalRound} · {c?.name}</h2>
+              </div>
+              <p className="text-sm text-[#FFFFFF] mb-5 ml-3.5">{c?.location}</p>
+              <div className="flex justify-end gap-3 flex-wrap">
+                <button onClick={() => setModalRound(null)} className={cancel}>Cancel</button>
+                {isCurrent ? (
+                  <>
+                    <button disabled={simming} onClick={() => { onSimTo(modalRound + 1); setModalRound(null) }} className={secondary}>Simulate Race</button>
+                    <button onClick={() => router.push('/race')} className={primary}>Go To Race</button>
+                  </>
+                ) : (
+                  <button disabled={simming} onClick={() => { onSimTo(modalRound); setModalRound(null) }} className={primary}>Simulate Until Race</button>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </Panel>
   )
 }
