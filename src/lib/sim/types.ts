@@ -21,6 +21,8 @@ export interface Driver {
   contractExpiresAfterSeason: number
   seasonsSinceF1Seat?: number // consecutive seasons without an F1 seat; removed from the market at 5
   photoUrl?: string      // god-mode override; when set, used instead of any real photo or the generated avatar
+  debutYear?: number     // real-world debut season (historical mode); lets the newsroom tell a true
+                         // rookie from a driver who raced before the game's reach. Absent for generated drivers.
 }
 
 export interface Team {

@@ -26,6 +26,9 @@ export default function SettingsPage() {
   async function handleClearSave() {
     await actionResetDatabase()
     localStorage.removeItem('raceworld-season')
+    // Personal settings (followed drivers/teams, interrupt prefs) are their own persisted store; a
+    // New Game must clear them too, or follows leak across saves.
+    localStorage.removeItem('raceworld-settings')
     window.location.href = '/setup'
   }
 
