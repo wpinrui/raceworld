@@ -13,6 +13,9 @@ const ordinal = (n: number): string => {
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`
 }
 
+// Free-agent standing label: the top name is just "Best", the rest are "3rd best" etc.
+const faLabel = (rank: number): string => (rank === 1 ? 'Best' : `${ordinal(rank)} best`)
+
 // Signing Day: the off-season free-agency event, revealed one signing at a time (the most coveted seat
 // first). The component fills the modal height as a fixed frame: the seats board, the running contenders,
 // and the analyst reaction each scroll INSIDE their own region, so the modal itself never scrolls. The
@@ -55,6 +58,7 @@ function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
 export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPick[]; year: number; dropped?: DroppedDriver[] }) {
   const stored = useSeasonStore((s) => s.signingDayRevealed)
   const setRevealed = useSeasonStore((s) => s.setSigningDayRevealed)
+  const standings = useSeasonStore((s) => s.constructorStandings)
 
   if (picks.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
@@ -65,6 +69,22 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const onClock = revealed < total ? picks[revealed] : null
   const complete = !onClock
   const posts = signingDaySocialPosts(picks).filter((p) => p.pickIndex < revealed).sort((a, b) => b.pickIndex - a.pickIndex)
+
+  // Each team's constructors'-championship standing for the badge. Established teams take their just-ended
+  // finish; new teams (no finish) slot in below the field, projected to finish in the season ahead.
+  const finishOf = new Map(standings.map((cs, i) => [cs.teamId, i + 1]))
+  const n = standings.length
+  const projected = new Map<string, number>()
+  let newCount = 0
+  for (const p of picks) {
+    if (!finishOf.has(p.teamId) && !projected.has(p.teamId)) projected.set(p.teamId, n + ++newCount)
+  }
+  const wccBadge = (teamId: string): { pos: number; tip: string } => {
+    const pos = finishOf.get(teamId)
+    if (pos) return { pos, tip: `${ordinal(pos)} in the ${year} constructors' championship` }
+    const proj = projected.get(teamId) ?? n + 1
+    return { pos: proj, tip: `Projected to finish ${ordinal(proj)} in ${year + 1}` }
+  }
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -95,20 +115,23 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
             {picks.map((p, i) => {
               const isRevealed = i < revealed
               const isOnClock = i === revealed
+              const w = wccBadge(p.teamId)
               return (
                 <div
                   key={`${p.teamId}-${i}`}
                   className={`flex items-center gap-2.5 px-3 py-2 ${isOnClock ? 'bg-[#00D9FF]/10 ring-1 ring-inset ring-[#00D9FF]/40' : ''}`}
                 >
-                  <span className="w-6 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
+                  <Tooltip content={w.tip}>
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2A3142] text-[10px] font-bold tabular-nums text-[#FFFFFF] cursor-default">{w.pos}</span>
+                  </Tooltip>
                   <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: p.teamColor }} />
                   <TeamLink id={p.teamId} className="text-xs font-semibold text-[#FFFFFF] truncate w-24 shrink-0">{p.teamName}</TeamLink>
                   {isRevealed ? (
                     <span className="flex items-center gap-2 min-w-0 flex-1">
                       <DriverLink id={p.driverId} className="text-sm font-semibold text-[#FFFFFF] truncate shrink-0">{p.driverName}</DriverLink>
                       <Tag flavour={p.flavour} />
-                      <Tooltip content={`${ordinal(p.faRank)} best free agent of ${year}`}>
-                        <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{ordinal(p.faRank)} best</span>
+                      <Tooltip content={`${faLabel(p.faRank)} free agent of ${year}`}>
+                        <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{faLabel(p.faRank)}</span>
                       </Tooltip>
                       {fromLabel(p) && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromLabel(p)}</span>}
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
