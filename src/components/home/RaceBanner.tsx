@@ -64,6 +64,20 @@ export function RaceBanner({ simming, onSimTo }: Props) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [easeTo])
 
+  // On mount (i.e. each time you navigate to Home), jump the calendar so the next race —
+  // the current round — is in view, instead of always starting at round 1. One-shot: it
+  // won't fight manual scrolling afterwards.
+  const didInitialCentre = useRef(false)
+  useEffect(() => {
+    if (didInitialCentre.current) return
+    const el = scrollRef.current
+    const cur = currentRef.current
+    if (!el || !cur) return
+    didInitialCentre.current = true
+    const delta = cur.getBoundingClientRect().left + cur.offsetWidth / 2 - (el.getBoundingClientRect().left + el.clientWidth / 2)
+    el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, el.scrollLeft + delta))
+  }, [])
+
   // ONLY while a sim is running, keep the current race centred so results scroll into
   // view as the round advances. Outside a sim we leave the scroll alone so manual
   // scrolling (wheel or scrollbar) isn't fought.
