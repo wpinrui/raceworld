@@ -2,13 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
 import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
-import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
+import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetAllSeasonNews, actionGetDriverCareers, actionGetTeamCareers, type AllSeasonNews } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
+import EntityFilter, { type EntityValue } from '@/components/news/EntityFilter'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
+
+type Dated = NewsArticle & { year: number }
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
@@ -24,8 +28,14 @@ function whenLabel(a: NewsArticle, calLen: number): string {
 
 export default function NewsroomPage() {
   const s = useSeasonStore()
+  const followedDriverIds = useSettingsStore((st) => st.followedDriverIds)
+  const followedTeamIds = useSettingsStore((st) => st.followedTeamIds)
   const [hydrated, setHydrated] = useState(false)
   const [filter, setFilter] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [entity, setEntity] = useState<EntityValue | null>(null)
+  const [following, setFollowing] = useState(false)
+  const [allSeasons, setAllSeasons] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedYear, setSelectedYear] = useState<number>(s.year)
   const [archivedYears, setArchivedYears] = useState<number[]>([])
@@ -33,6 +43,9 @@ export default function NewsroomPage() {
   // Roster for the selected archived season, used to hyperlink names in the article text.
   const [archivedRoster, setArchivedRoster] = useState<{ drivers: { id: string; name: string }[]; teams: { id: string; name: string }[]; circuits: { name: string; round: number }[] }>({ drivers: [], teams: [], circuits: [] })
   const [loadingArchive, setLoadingArchive] = useState(false)
+  // Cross-season ("all seasons") feed, loaded once on demand.
+  const [allData, setAllData] = useState<AllSeasonNews | null>(null)
+  const [loadingAll, setLoadingAll] = useState(false)
   // Prior-season F1 career totals from the archive DB (the current season is folded in from the
   // store), so the live newsroom's retirement obituaries and driver-to-watch see real records.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -76,7 +89,7 @@ export default function NewsroomPage() {
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {
-    if (isLive) return
+    if (isLive || allSeasons) return
     let cancelled = false
     setLoadingArchive(true)
     actionGetSeasonNews(selectedYear)
@@ -84,12 +97,83 @@ export default function NewsroomPage() {
       .catch(() => { if (!cancelled) { setArchivedArticles([]); setArchivedRoster({ drivers: [], teams: [], circuits: [] }) } })
       .finally(() => { if (!cancelled) setLoadingArchive(false) })
     return () => { cancelled = true }
-  }, [isLive, selectedYear])
+  }, [isLive, allSeasons, selectedYear])
 
-  const articles = isLive ? liveArticles : archivedArticles
+  // All-seasons feed: every archived snapshot, loaded once and cached. `loadingAll` is set in the
+  // toggle handler (synchronously, so there's no flash of the live-only list before this fires).
+  useEffect(() => {
+    if (!allSeasons || allData) return
+    let cancelled = false
+    actionGetAllSeasonNews()
+      .then((d) => { if (!cancelled) setAllData(d) })
+      .catch(() => { if (!cancelled) setAllData({ articles: [], drivers: [], teams: [] }) })
+      .finally(() => { if (!cancelled) setLoadingAll(false) })
+    return () => { cancelled = true }
+  }, [allSeasons, allData])
 
-  // Name-to-world-page matcher for hyperlinking article text. Live: from the store; archived: from
-  // the roster the news action returned. Circuits are limited to rounds that have actually run.
+  const liveDated = useMemo<Dated[]>(() => liveArticles.map((a) => ({ ...a, year: liveYear })), [liveArticles, liveYear])
+
+  // The article pool for the current scope: all seasons (live + every archive), the live season, or
+  // one selected archived season. Every article carries its year.
+  const pool = useMemo<Dated[]>(() => {
+    if (allSeasons) return [...liveDated, ...(allData?.articles ?? [])]
+    if (isLive) return liveDated
+    return archivedArticles.map((a) => ({ ...a, year: selectedYear }))
+  }, [allSeasons, liveDated, allData, isLive, archivedArticles, selectedYear])
+
+  // Driver/team roster for the current scope: feeds the entity picker, the per-article entity chips,
+  // and the name-hyperlink index.
+  const scopeDrivers = useMemo(() => {
+    if (allSeasons) {
+      const m = new Map<string, string>()
+      for (const d of allData?.drivers ?? []) m.set(d.id, d.name)
+      for (const d of s.drivers) m.set(d.id, d.name)
+      return [...m].map(([id, name]) => ({ id, name }))
+    }
+    if (isLive) return s.drivers.map((d) => ({ id: d.id, name: d.name }))
+    return archivedRoster.drivers
+  }, [allSeasons, allData, s.drivers, isLive, archivedRoster])
+  const scopeTeams = useMemo(() => {
+    if (allSeasons) {
+      const m = new Map<string, string>()
+      for (const t of allData?.teams ?? []) m.set(t.id, t.name)
+      for (const t of s.teams) m.set(t.id, t.name)
+      return [...m].map(([id, name]) => ({ id, name }))
+    }
+    if (isLive) return s.teams.map((t) => ({ id: t.id, name: t.name }))
+    return archivedRoster.teams
+  }, [allSeasons, allData, s.teams, isLive, archivedRoster])
+  const driverName = useMemo(() => new Map(scopeDrivers.map((d) => [d.id, d.name])), [scopeDrivers])
+  const teamName = useMemo(() => new Map(scopeTeams.map((t) => [t.id, t.name])), [scopeTeams])
+
+  // Which categories actually have an article in this scope (drives which chips are enabled).
+  const present = useMemo(() => new Set(pool.map((a) => a.category)), [pool])
+  const hasFollows = followedDriverIds.length + followedTeamIds.length > 0
+
+  // Compose all filters (AND): category group, entity, Following, full-text search.
+  const activeGroup = filter ? NEWS_FILTERS.find((f) => f.label === filter) : null
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const followed = new Set([...followedDriverIds, ...followedTeamIds])
+    return pool.filter((a) => {
+      if (activeGroup && !activeGroup.categories.includes(a.category)) return false
+      if (entity) {
+        const ids = entity.kind === 'driver' ? a.entities?.driverIds : a.entities?.teamIds
+        if (!ids?.includes(entity.id)) return false
+      }
+      if (following) {
+        const ents = a.entities ? [...a.entities.driverIds, ...a.entities.teamIds] : []
+        if (!ents.some((id) => followed.has(id))) return false
+      }
+      if (q && !`${a.headline} ${a.dek} ${a.body}`.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [pool, activeGroup, entity, following, query, followedDriverIds, followedTeamIds])
+
+  const effectiveId = selectedId && shown.some((a) => a.id === selectedId) ? selectedId : (shown[0]?.id ?? null)
+  const selected: Dated | null = shown.find((a) => a.id === effectiveId) ?? null
+
+  // Name-to-world-page matcher for hyperlinking article text.
   const liveIndex = useMemo(() => buildNewsIndex({
     drivers: s.drivers.map((d) => ({ id: d.id, name: d.name })),
     teams: s.teams.map((t) => ({ id: t.id, name: t.name })),
@@ -99,106 +183,125 @@ export default function NewsroomPage() {
   const archivedIndex = useMemo(() => buildNewsIndex({
     drivers: archivedRoster.drivers, teams: archivedRoster.teams, circuits: archivedRoster.circuits, year: selectedYear,
   }), [archivedRoster, selectedYear])
-  const index = isLive ? liveIndex : archivedIndex
+  // Cross-season: union roster + the selected article's own year for circuit links.
+  const allSeasonsIndex = useMemo(() => buildNewsIndex({
+    drivers: scopeDrivers, teams: scopeTeams,
+    circuits: calendar2026.map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    year: selected?.year ?? liveYear,
+  }), [scopeDrivers, scopeTeams, selected?.year, liveYear])
+  const index = allSeasons ? allSeasonsIndex : (isLive ? liveIndex : archivedIndex)
 
-  // Which categories actually have an article in this season (drives which chips are enabled).
-  const present = useMemo(() => new Set(articles.map((a) => a.category)), [articles])
-
-  // `filter` holds a chip label (or null for All). Resolve it to the categories it covers.
-  const activeGroup = filter ? NEWS_FILTERS.find((f) => f.label === filter) : null
-  const shown = activeGroup ? articles.filter((a) => activeGroup.categories.includes(a.category)) : articles
-  const effectiveId = selectedId && shown.some((a) => a.id === selectedId) ? selectedId : (shown[0]?.id ?? null)
-  const selected: NewsArticle | null = shown.find((a) => a.id === effectiveId) ?? null
+  const loading = allSeasons ? loadingAll : (!isLive && loadingArchive)
 
   if (!hydrated) return null
+
+  const toggleCls = (active: boolean, enabled = true) =>
+    `px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+      active
+        ? 'border-[#00D9FF] text-[#00D9FF]'
+        : enabled
+          ? 'border-[#2A3142] text-[#FFFFFF] hover:border-[#303848]'
+          : 'border-[#1B2230] text-[#6B7280] cursor-not-allowed'
+    }`
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
         <div className="flex items-center justify-between gap-4">
           <h1 className="font-display text-2xl tracking-wider uppercase">Newsroom</h1>
-          {years.length > 1 && (
-            <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-[#FFFFFF]">
-              Season
-              <select
-                value={selectedYear}
-                onChange={(e) => { setSelectedYear(Number(e.target.value)); setFilter(null); setSelectedId(null) }}
-                className="bg-[#0F1419] border border-[#2A3142] rounded px-2 py-1 text-sm font-semibold text-[#FFFFFF] focus:border-[#00D9FF] outline-none"
-              >
-                {years.map((y) => (
-                  <option key={y} value={y} className="bg-[#0F1419] text-[#FFFFFF]">
-                    {y}{y === liveYear ? ' (current)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <div className="flex items-center gap-3">
+            {(years.length > 1 || archivedYears.length > 0) && (
+              <button onClick={() => { if (!allSeasons && !allData) setLoadingAll(true); setAllSeasons((v) => !v); setSelectedId(null) }} className={toggleCls(allSeasons)}>
+                All seasons
+              </button>
+            )}
+            {years.length > 1 && !allSeasons && (
+              <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-[#FFFFFF]">
+                Season
+                <select
+                  value={selectedYear}
+                  onChange={(e) => { setSelectedYear(Number(e.target.value)); setFilter(null); setSelectedId(null) }}
+                  className="bg-[#0F1419] border border-[#2A3142] rounded px-2 py-1 text-sm font-semibold text-[#FFFFFF] focus:border-[#00D9FF] outline-none"
+                >
+                  {years.map((y) => (
+                    <option key={y} value={y} className="bg-[#0F1419] text-[#FFFFFF]">
+                      {y}{y === liveYear ? ' (current)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
         </div>
 
-        {!isLive && loadingArchive ? (
+        {loading ? (
           <Panel title="Newsroom">
-            <p className="text-sm text-[#FFFFFF]">Loading the {selectedYear} archive…</p>
+            <p className="text-sm text-[#FFFFFF]">Loading {allSeasons ? 'all seasons' : `the ${selectedYear} archive`}…</p>
           </Panel>
-        ) : articles.length === 0 ? (
+        ) : pool.length === 0 ? (
           <Panel title="Newsroom">
             <p className="text-sm text-[#FFFFFF]">
-              {isLive
+              {isLive && !allSeasons
                 ? 'No news yet. Start a season and run a race, and the headlines will appear here.'
-                : `No archived news for ${selectedYear}.`}
+                : 'No archived news yet.'}
             </p>
           </Panel>
         ) : (
           <>
-            {/* Category filter — full taxonomy always shown; empty categories are disabled. */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFilter(null)}
-                className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${filter === null ? 'border-[#00D9FF] text-[#00D9FF]' : 'border-[#2A3142] text-[#FFFFFF] hover:border-[#303848]'}`}
-              >
-                All
-              </button>
+            {/* Search */}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search stories…"
+              className="w-full bg-[#0F1419] border border-[#2A3142] rounded-md px-3 py-2 text-sm text-[#FFFFFF] placeholder:text-[#6B7280] focus:border-[#00D9FF] outline-none"
+            />
+
+            {/* Category filter + Following + entity filter — full taxonomy always shown; empty categories disabled. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => setFilter(null)} className={toggleCls(filter === null)}>All</button>
               {NEWS_FILTERS.map((f) => {
                 const enabled = f.categories.some((c) => present.has(c))
-                const active = filter === f.label
                 return (
-                  <button
-                    key={f.label}
-                    onClick={() => enabled && setFilter(f.label)}
-                    disabled={!enabled}
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                      active
-                        ? 'border-[#00D9FF] text-[#00D9FF]'
-                        : enabled
-                          ? 'border-[#2A3142] text-[#FFFFFF] hover:border-[#303848]'
-                          : 'border-[#1B2230] text-[#6B7280] cursor-not-allowed'
-                    }`}
-                  >
+                  <button key={f.label} onClick={() => enabled && setFilter(f.label)} disabled={!enabled} className={toggleCls(filter === f.label, enabled)}>
                     {f.label}
                   </button>
                 )
               })}
+              <span className="mx-1 h-4 w-px bg-[#2A3142]" />
+              <button
+                onClick={() => hasFollows && setFollowing((v) => !v)}
+                disabled={!hasFollows}
+                className={toggleCls(following, hasFollows)}
+              >
+                Following
+              </button>
+              <EntityFilter drivers={scopeDrivers} teams={scopeTeams} value={entity} onChange={(v) => { setEntity(v); setSelectedId(null) }} />
             </div>
 
             <div className="grid gap-5 lg:grid-cols-3">
               {/* Headlines list */}
-              <Panel title="Headlines" flush className="lg:col-span-1">
-                <div className="divide-y divide-[#2A3142] max-h-[70vh] overflow-y-auto">
-                  {shown.map((a) => {
-                    const active = a.id === effectiveId
-                    return (
-                      <button
-                        key={a.id}
-                        onClick={() => setSelectedId(a.id)}
-                        className={`w-full text-left px-4 py-3 transition-colors ${active ? 'bg-[#0F1419]' : 'hover:bg-[#0F1419]/50'}`}
-                      >
-                        <p className="text-sm font-semibold text-[#FFFFFF]">{a.headline}</p>
-                        <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
-                          {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
+              <Panel title={`Headlines${shown.length ? ` (${shown.length})` : ''}`} flush className="lg:col-span-1">
+                {shown.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-[#FFFFFF]">No stories match your filters.</p>
+                ) : (
+                  <div className="divide-y divide-[#2A3142] max-h-[70vh] overflow-y-auto">
+                    {shown.map((a) => {
+                      const active = a.id === effectiveId
+                      return (
+                        <button
+                          key={`${a.year}:${a.id}`}
+                          onClick={() => setSelectedId(a.id)}
+                          className={`w-full text-left px-4 py-3 transition-colors ${active ? 'bg-[#0F1419]' : 'hover:bg-[#0F1419]/50'}`}
+                        >
+                          <p className="text-sm font-semibold text-[#FFFFFF]">{a.headline}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
+                            {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </Panel>
 
               {/* Reader */}
@@ -208,6 +311,27 @@ export default function NewsroomPage() {
                     <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} /></h2>
                     <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={selected.dek} index={index} /></p>
                     <LinkedParagraphs text={selected.body} index={index} />
+                    {selected.entities && (selected.entities.driverIds.length + selected.entities.teamIds.length > 0) && (
+                      <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#2A3142]">
+                        <span className="text-[10px] uppercase tracking-widest text-[#6B7280] self-center mr-1">Filter</span>
+                        {selected.entities.driverIds.map((id) => {
+                          const name = driverName.get(id)
+                          return name ? (
+                            <button key={`d:${id}`} onClick={() => { setEntity({ kind: 'driver', id, name }); setSelectedId(null) }} className="px-2 py-0.5 rounded-full text-xs border border-[#2A3142] text-[#FFFFFF] hover:border-[#00D9FF] hover:text-[#00D9FF] transition-colors">
+                              {name}
+                            </button>
+                          ) : null
+                        })}
+                        {selected.entities.teamIds.map((id) => {
+                          const name = teamName.get(id)
+                          return name ? (
+                            <button key={`t:${id}`} onClick={() => { setEntity({ kind: 'team', id, name }); setSelectedId(null) }} className="px-2 py-0.5 rounded-full text-xs border border-[#2A3142] text-[#FFFFFF] hover:border-[#00D9FF] hover:text-[#00D9FF] transition-colors">
+                              {name}
+                            </button>
+                          ) : null
+                        })}
+                      </div>
+                    )}
                   </article>
                 ) : (
                   <p className="text-sm text-[#FFFFFF]">Select a headline to read it.</p>
