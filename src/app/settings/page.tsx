@@ -21,15 +21,17 @@ export default function SettingsPage() {
   const [hydrated, setHydrated] = useState(false)
   const [q, setQ] = useState('')
   const [clearOpen, setClearOpen] = useState(false)
+  const [clearError, setClearError] = useState(false)
   useEffect(() => setHydrated(true), [])
 
   async function handleClearSave() {
-    // Even if the DB reset fails, still clear local state and navigate — never strand the player on a
-    // half-cleared save. The next New Game re-runs the reset anyway.
+    // Reset the DB FIRST. If it fails, do nothing else: clearing localStorage now would leave a fresh
+    // save pointed at a stale archive (ghost data). Surface the failure and keep everything consistent.
     try {
       await actionResetDatabase()
     } catch {
-      // swallow: local clear + redirect below still run
+      setClearError(true)
+      return
     }
     localStorage.removeItem('raceworld-season')
     // Personal settings (followed drivers/teams, interrupt prefs) are their own persisted store; a
@@ -196,7 +198,7 @@ export default function SettingsPage() {
               <p className="text-xs text-[#FFFFFF] mt-0.5">Wipes all local save data: season progress, driver stats, and history. Cannot be undone.</p>
             </div>
             <button
-              onClick={() => setClearOpen(true)}
+              onClick={() => { setClearError(false); setClearOpen(true) }}
               className="shrink-0 px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors"
             >
               Clear Save
@@ -213,6 +215,7 @@ export default function SettingsPage() {
               <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Clear Save</h2>
             </div>
             <p className="text-sm text-[#FFFFFF] mb-5">This will wipe all local save data: season progress, driver stats, and history. Cannot be undone.</p>
+            {clearError && <p className="text-sm text-[#DC143C] mb-5">Reset failed. Nothing was cleared, your save is intact. Try again.</p>}
             <div className="flex justify-end gap-3">
               <button onClick={() => setClearOpen(false)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Cancel</button>
               <button onClick={handleClearSave} className="px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors">Clear &amp; Reset</button>

@@ -303,7 +303,7 @@ export default function StandingsPage() {
                 {s.open && (
                   <div className="flex-1 min-h-0 border-t border-[#2A3142]">
                     {s.empty
-                      ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No archived seasons yet.</p>
+                      ? <p className="px-4 py-4 text-sm text-[#FFFFFF]">No all-time data yet. Run a race, or finish a season, and it will appear here.</p>
                       : s.table}
                   </div>
                 )}
