@@ -65,7 +65,12 @@ export function OffSeasonPanel() {
     const freshHistory = await actionGetRecentConstructorHistory(5)
     season.loadConstructorHistory(freshHistory)
     season.startNewSeason()
-    router.push('/setup')
+    // Launch the new season immediately rather than detouring to the market: the grid was
+    // already settled across contract-negotiations + testing. The Market tab stays open for
+    // any pre-race tweaks, but it's no longer a mandatory stop. Land the player on Home, racing.
+    const s = useSeasonStore.getState()
+    s.initSeason(s.drivers, s.teams, s.year)
+    router.push('/home')
   }
 
   if (!summary) return null
