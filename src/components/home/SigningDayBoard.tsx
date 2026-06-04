@@ -5,6 +5,13 @@ import type { DroppedDriver } from '@/lib/sim/types'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { signingDaySocialPosts } from '@/lib/news/signing-day-social'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { Tooltip } from '@/components/ui/Tooltip'
+
+const ordinal = (n: number): string => {
+  const v = n % 100
+  const s = ['th', 'st', 'nd', 'rd']
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`
+}
 
 // Signing Day: the off-season free-agency event, revealed one signing at a time (the most coveted seat
 // first). The component fills the modal height as a fixed frame: the seats board, the running contenders,
@@ -100,7 +107,9 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                     <span className="flex items-center gap-2 min-w-0 flex-1">
                       <DriverLink id={p.driverId} className="text-sm font-semibold text-[#FFFFFF] truncate shrink-0">{p.driverName}</DriverLink>
                       <Tag flavour={p.flavour} />
-                      <span className="text-[10px] text-[#FFFFFF] tabular-nums shrink-0">FA #{p.faRank}</span>
+                      <Tooltip content={`${ordinal(p.faRank)} best free agent of ${year}`}>
+                        <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{ordinal(p.faRank)} best</span>
+                      </Tooltip>
                       {fromLabel(p) && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromLabel(p)}</span>}
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
