@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
@@ -79,6 +79,12 @@ function OffSeasonReview() {
   const summary = season.endOfSeasonSummary
   const [open, setOpen] = useState<string | null>(null)
 
+  // Auto-open the recap for whatever off-season stage you've just advanced into (Continue runs the
+  // next stage, then its modal pops). Closing it leaves it closed until the next stage.
+  useEffect(() => {
+    if (OFF_SEASON_PHASES.includes(season.phase)) setOpen(season.phase)
+  }, [season.phase])
+
   if (!summary) {
     return <Panel title="Off-Season"><p className="text-sm text-[#FFFFFF]">Wrapping up the season…</p></Panel>
   }
@@ -91,7 +97,7 @@ function OffSeasonReview() {
   ]
 
   return (
-    <Panel title={`Season ${season.year} · Off-Season`} flush>
+    <Panel title={`Season ${season.year} · Off-Season`} flush fill>
       <div className="p-4">
         <div className="flex flex-wrap gap-2">
           {reached.map((p) => (
