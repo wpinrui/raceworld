@@ -190,18 +190,18 @@ export function RaceBanner({ simming, onSimTo }: Props) {
       {modalRound != null && (() => {
         const c = calendar2026[modalRound - 1]
         const isCurrent = modalRound === currentRound
-        const cancel = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors'
-        const secondary = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] disabled:opacity-40 transition-colors'
-        const primary = 'px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-bold uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-40 transition-colors'
+        const cancel = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide whitespace-nowrap hover:bg-[#303848] transition-colors'
+        const secondary = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide whitespace-nowrap hover:bg-[#303848] disabled:opacity-40 transition-colors'
+        const primary = 'px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-bold uppercase tracking-wide whitespace-nowrap hover:bg-[#009CB8] disabled:opacity-40 transition-colors'
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setModalRound(null)}>
-            <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-[30rem] max-w-[90vw] shadow-xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-2.5 mb-1">
                 <div className="w-1 h-5 rounded-sm bg-[#00D9FF]" />
                 <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Round {modalRound} · {c?.name}</h2>
               </div>
               <p className="text-sm text-[#FFFFFF] mb-5 ml-3.5">{c?.location}</p>
-              <div className="flex justify-end gap-3 flex-wrap">
+              <div className="flex justify-end gap-2">
                 <button onClick={() => setModalRound(null)} className={cancel}>Cancel</button>
                 {isCurrent ? (
                   <>
