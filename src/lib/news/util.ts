@@ -29,14 +29,19 @@ export function fill(tmpl: string, slots: Record<string, string | number>): stri
   // Alpine, Antonelli) or with an ordinal/number that sounds vowel-initial (8th, 11th, 18th, 80th).
   // English oddities like "a European" never appear as token values, so the letter test is safe.
   const vowelSound = (s: string) => /^[aeiou]/i.test(s) || /^(8|11|18)/.test(s)
-  // Substitute {token}s. When a token is immediately preceded by the indefinite article ("a"/"an",
-  // any case), correct the article to agree with the value, so "a {team}" becomes "an Audi" etc.
-  return tmpl.replace(/\b([Aa])n? (\{(\w+)\})|\{(\w+)\}/g, (_m, art, _tok, k1, k2) => {
-    if (art === undefined) return valOf(k2)
-    const val = valOf(k1)
-    const an = vowelSound(val)
-    const article = art === 'A' ? (an ? 'An' : 'A') : (an ? 'an' : 'a')
-    return `${article} ${val}`
+  // Substitute {token}s with two agreements applied automatically:
+  //  - a preceding indefinite article ("a"/"an") is corrected to the value ("a {team}" -> "an Audi");
+  //  - a trailing possessive ("{team}'s") follows the name rule (s-ending names take a bare
+  //    apostrophe: "Mercedes'", "Williams'"; others take "'s": "Russell's").
+  return tmpl.replace(/\b([Aa])n? (\{(\w+)\})|\{(\w+)\}('s)?/g, (_m, art, _tok, k1, k2, possSuffix) => {
+    if (art !== undefined) {
+      const val = valOf(k1)
+      const an = vowelSound(val)
+      return `${art === 'A' ? (an ? 'An' : 'A') : (an ? 'an' : 'a')} ${val}`
+    }
+    const val = valOf(k2)
+    if (possSuffix) return /s$/i.test(val) ? `${val}'` : `${val}'s`
+    return val
   })
 }
 
