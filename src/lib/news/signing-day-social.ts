@@ -17,15 +17,17 @@ export interface SocialPost {
 type Persona = 'insider' | 'stats' | 'pundit' | 'contracts'
 type Flavour = DraftPick['flavour']
 
-// One voice per signing, chosen for the angle that makes the move interesting.
-function personaFor(f: Flavour): Persona {
-  switch (f) {
-    case 'upset': return 'stats'          // the long odds are the story
-    case 'statement': return 'contracts'  // the multi-year commitment is the story
-    case 'rookie': return 'pundit'        // an unknown quantity to weigh up
-    case 'veteran_short': return 'pundit' // a one-year stopgap, judged on track (contracts copy assumes long deals)
-    default: return 'insider'             // chalk: confirmed, as expected
-  }
+// Each signing type draws from several flavour-appropriate analyst voices, for variety across a busy
+// window and across seasons. Contracts is excluded from veteran deals (its copy assumes long terms).
+const FLAVOUR_PERSONAS: Record<Flavour, Persona[]> = {
+  upset: ['stats', 'insider', 'pundit'],
+  statement: ['contracts', 'insider', 'pundit', 'stats'],
+  rookie: ['pundit', 'insider', 'stats'],
+  veteran_short: ['pundit', 'insider', 'stats'],
+  chalk: ['insider', 'stats', 'pundit'],
+}
+function personaFor(p: DraftPick): Persona {
+  return pick(FLAVOUR_PERSONAS[p.flavour], `sd-persona-${p.driverId}`)
 }
 
 function poolFor(persona: Persona, f: Flavour): string[] {
@@ -53,7 +55,7 @@ const sentenceCase = (s: string): string => s.replace(/(^|[.!?]\s+)([a-z])/g, (_
 
 export function signingDaySocialPosts(picks: DraftPick[]): SocialPost[] {
   return picks.map((p, i) => {
-    const persona = personaFor(p.flavour)
+    const persona = personaFor(p)
     const meta = copy.personas[persona]
     const seed = `sd-${p.driverId}-${persona}`
     return { id: seed, handle: meta.handle, name: meta.name, text: sentenceCase(fill(pick(poolFor(persona, p.flavour), seed), slotsFor(p))), pickIndex: i }
