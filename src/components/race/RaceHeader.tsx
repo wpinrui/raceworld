@@ -39,11 +39,6 @@ export function RaceHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-4">
-        {phase === 'finished' && (
-          <span className="text-xs text-[#FFFFFF] tracking-wider uppercase">Hit End Race (top right) to continue</span>
-        )}
-      </div>
     </div>
   )
 }

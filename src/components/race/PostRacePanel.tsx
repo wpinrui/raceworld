@@ -1,17 +1,14 @@
 'use client'
 
 import type { RaceResult, Team } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
 import { DriverLink } from '@/components/world/EntityLink'
 
 interface Props {
   results: RaceResult[]
   teams: Team[]
-  currentRound: number
 }
 
-export function PostRacePanel({ results, teams, currentRound }: Props) {
-  const isLastRound = currentRound >= calendar2026.length
+export function PostRacePanel({ results, teams }: Props) {
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
@@ -54,11 +51,6 @@ export function PostRacePanel({ results, teams, currentRound }: Props) {
         </table>
       </div>
 
-      <div className="shrink-0 p-4 border-t border-[#2A3142]">
-        <p className="text-xs text-[#FFFFFF]">
-          Round {currentRound}/{calendar2026.length} complete — hit <span className="font-semibold text-[#00D9FF]">{isLastRound ? 'End Race' : 'End Race'}</span> (top right) to bank the result and continue.
-        </p>
-      </div>
     </div>
   )
 }

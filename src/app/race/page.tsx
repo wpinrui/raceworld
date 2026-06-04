@@ -192,10 +192,7 @@ export default function RacePage() {
         {/* Right 40% */}
         <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
           {phase === 'finished' ? (
-            <PostRacePanel
-              results={resultsForDisplay} teams={teams}
-              currentRound={season.currentRound}
-            />
+            <PostRacePanel results={resultsForDisplay} teams={teams} />
           ) : (
             <>
               <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">
