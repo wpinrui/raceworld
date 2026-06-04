@@ -93,21 +93,21 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                   key={`${p.teamId}-${i}`}
                   className={`flex items-center gap-2.5 px-3 py-2 ${isOnClock ? 'bg-[#00D9FF]/10 ring-1 ring-inset ring-[#00D9FF]/40' : ''}`}
                 >
-                  <span className="w-6 text-xs font-bold tabular-nums text-[#6B7280] shrink-0">{i + 1}</span>
+                  <span className="w-6 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
                   <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: p.teamColor }} />
                   <TeamLink id={p.teamId} className="text-xs font-semibold text-[#FFFFFF] truncate w-24 shrink-0">{p.teamName}</TeamLink>
                   {isRevealed ? (
                     <span className="flex items-center gap-2 min-w-0 flex-1">
                       <DriverLink id={p.driverId} className="text-sm font-semibold text-[#FFFFFF] truncate shrink-0">{p.driverName}</DriverLink>
                       <Tag flavour={p.flavour} />
-                      <span className="text-[10px] text-[#6B7280] tabular-nums shrink-0">FA #{p.faRank}</span>
-                      {fromLabel(p) && <span className="text-[10px] text-[#6B7280] truncate hidden sm:inline">{fromLabel(p)}</span>}
+                      <span className="text-[10px] text-[#FFFFFF] tabular-nums shrink-0">FA #{p.faRank}</span>
+                      {fromLabel(p) && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromLabel(p)}</span>}
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (
                     <span className="text-xs italic text-[#00D9FF] flex-1">Up next…</span>
                   ) : (
-                    <span className="text-xs text-[#6B7280] flex-1">Seat open</span>
+                    <span className="text-xs text-[#FFFFFF] flex-1">Seat open</span>
                   )}
                 </div>
               )
@@ -122,7 +122,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
               {onClock.odds.map((o, i) => (
                 <div key={o.driverId} className="flex items-center gap-2.5 px-3 py-1.5">
-                  <span className="w-5 text-xs font-bold tabular-nums text-[#6B7280] shrink-0">{i + 1}</span>
+                  <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
                   <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
                   {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
                 </div>
@@ -140,7 +140,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
             {dropped.map((d) => (
               <span key={d.driverId} className="text-xs text-[#FFFFFF]">
                 <DriverLink id={d.driverId} className="text-[#FFFFFF]">{d.driverName}</DriverLink>
-                <span className="text-[#6B7280]"> ({d.fromTeamName})</span>
+                <span className="text-[#FFFFFF]"> ({d.fromTeamName})</span>
               </span>
             ))}
           </div>
@@ -163,7 +163,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                 <div className="min-w-0">
                   <p className="text-xs">
                     <span className="font-semibold text-[#FFFFFF]">{post.name}</span>{' '}
-                    <span className="text-[#6B7280]">{post.handle}</span>
+                    <span className="text-[#FFFFFF]">{post.handle}</span>
                   </p>
                   <p className="text-sm text-[#FFFFFF]">{post.text}</p>
                 </div>
