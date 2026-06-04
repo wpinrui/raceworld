@@ -33,6 +33,7 @@ import milestoneCopy from './milestone-copy.json'
 import titleCopy from './titlescenario-copy.json'
 import recordsCopy from './records-copy.json'
 import sillyCopy from './sillyseason-copy.json'
+import marketFeatureCopy from './market-feature-copy.json'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
 // Records-journalism context: prior all-time single-season records (one mark per metric, from archived
@@ -3371,6 +3372,124 @@ function recordNews(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
+// ---- Driver-market journalism: a round-15 watch, a round-18 renewals round-up, and an off-season
+// retrospective. All three are fed by the store's market beats (ctx.contractWatch / renewals / draft);
+// they only run on the live context (archived seasons replay the snapshot taken when these were live).
+const WATCH_PIN_ROUND = 15    // matches the store's WATCH_ROUND
+const RENEWAL_PIN_ROUND = 18  // matches the store's RENEWAL_ROUND
+
+// A count of 1 against a hardcoded plural noun ("1 drivers", "1 Expiring Contracts") reads as a template
+// tell. Singularise the known market count nouns (with an optional single adjective in between) when they
+// follow a bare "1", so the copy agrees whatever the real numbers turn out to be.
+const MARKET_COUNT_NOUNS = /\b1 ((?:out-of-contract |unsigned |expiring |confirmed |driver )?)(drivers|contracts|deals|seats|names|renewals|extensions|re-signings|confirmations|signings|moves)\b/gi
+const agree1 = (text: string): string => text.replace(MARKET_COUNT_NOUNS, (_m, adj: string, noun: string) => `1 ${adj}${noun.replace(/s$/i, '')}`)
+function agreeArticle(a: NewsArticle): NewsArticle {
+  return { ...a, headline: agree1(a.headline), dek: agree1(a.dek), body: agree1(a.body) }
+}
+
+// Round-15 survey of the expiring contracts, grading each from the driver's side: outdriving the seat
+// ("could do better"), well-matched ("right place"), or flattered by the car ("lucky").
+function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
+  const watch = ctx.contractWatch
+  if (!ctx.live || !watch || watch.length === 0) return []
+  const c = marketFeatureCopy.watch
+  const year = ctx.year
+  const seed = `contract-watch-${year}`
+  const hslots = { n: watch.length, year }
+  const lineFor = (w: ContractWatch, key: 'could_do_better' | 'right_place' | 'lucky') =>
+    fill(pick(c[key], `${seed}-${w.driverId}`), { driver: w.driverName, driver_last: lastName(w.driverName), team: w.teamName, team_poss: poss(w.teamName), year, next: year + 1 })
+  const section = (key: 'could_do_better' | 'right_place' | 'lucky', leadKey: 'group_could_do_better' | 'group_right_place' | 'group_lucky') => {
+    const list = watch.filter((w) => w.verdict === key)
+    if (list.length === 0) return ''
+    return paras(fill(pick(c[leadKey], `${seed}|${key}`), hslots), ...list.map((w) => lineFor(w, key)))
+  }
+  const body = paras(
+    fill(pick(c.intro, `${seed}|intro`), hslots),
+    section('could_do_better', 'group_could_do_better'),
+    section('right_place', 'group_right_place'),
+    section('lucky', 'group_lucky'),
+    fill(pick(c.close, `${seed}|close`), hslots),
+  )
+  return [agreeArticle({
+    id: seed, category: 'silly_season', round: WATCH_PIN_ROUND, priority: 34,
+    headline: fill(pick(c.headline, `${seed}|h`), hslots),
+    dek: fill(pick(c.dek, `${seed}|d`), hslots),
+    body,
+  })]
+}
+
+// Round-18 round-up once the renewal window has closed: who re-signed, and who is heading to the market.
+function renewalsFeature(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.endOfSeason || ctx.completedRounds < RENEWAL_PIN_ROUND) return []
+  const renewals = ctx.renewals ?? []
+  const stillExpiring = ctx.drivers.filter((d) => d.teamId !== '' && d.contractExpiresAfterSeason === ctx.year)
+  if (renewals.length === 0 && stillExpiring.length === 0) return []
+  const c = marketFeatureCopy.renewals
+  const year = ctx.year
+  const seed = `renewals-roundup-${year}`
+  const next = year + 1
+  const hslots = { n: renewals.length, m: stillExpiring.length, year, next }
+  const renewedLines = renewals.map((r) =>
+    fill(pick(c.renewed, `${seed}-${r.driverId}`), { driver: r.driverName, driver_last: lastName(r.driverName), team: r.teamName, years: r.years, until: year + r.years, year, next }))
+  const expiringLines = stillExpiring.map((d) =>
+    fill(pick(c.expiring, `${seed}-exp-${d.id}`), { driver: d.name, driver_last: lastName(d.name), team: teamName(ctx, d.teamId), year, next }))
+  const body = paras(
+    fill(pick(c.intro, `${seed}|intro`), hslots),
+    ...renewedLines,
+    expiringLines.length ? fill(pick(c.expiring_lead, `${seed}|exlead`), hslots) : '',
+    ...expiringLines,
+    fill(pick(c.close, `${seed}|close`), hslots),
+  )
+  return [agreeArticle({
+    id: seed, category: 'silly_season', round: RENEWAL_PIN_ROUND, priority: 36,
+    headline: fill(pick(c.headline, `${seed}|h`), hslots),
+    dek: fill(pick(c.dek, `${seed}|d`), hslots),
+    body,
+  })]
+}
+
+// End-of-season retrospective on the whole market: the marquee move, the upsets, the rookies, the cuts.
+function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
+  const eos = ctx.endOfSeason
+  if (!eos) return []
+  const moves = eos.marketMoves ?? []
+  const realMoves = moves.filter((m) => m.fromTeamId && m.fromTeamId !== m.toTeamId && m.mediaScore > 0)
+  const dropped = eos.droppedDrivers ?? []
+  const draft = ctx.draft ?? []
+  if (realMoves.length === 0 && dropped.length === 0 && draft.length === 0) return []
+  const c = marketFeatureCopy.offseason
+  const year = eos.seasonYear
+  const next = year + 1
+  const seed = `offseason-moves-${year}`
+  const hslots = { year, next, k: dropped.length }
+
+  const marquee = [...realMoves].sort((a, b) => b.mediaScore - a.mediaScore)[0]
+  const marqueePara = marquee
+    ? fill(pick(c.headline_move, `${seed}|hm`), { driver: marquee.driverName, driver_last: lastName(marquee.driverName), team: marquee.toTeamName, prev: marquee.fromTeamId ? teamName(ctx, marquee.fromTeamId) : 'free agency', years: marquee.contractLength, year, next })
+    : ''
+  const upsetLines = draft.filter((p) => p.flavour === 'upset').slice(0, 3)
+    .map((p) => fill(pick(c.upset_line, `${seed}-up-${p.driverId}`), { driver: p.driverName, driver_last: lastName(p.driverName), team: p.teamName, pct: Math.round(p.pickPct), year, next }))
+  const rookieLines = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore === 0).slice(0, 3)
+    .map((m) => fill(pick(c.rookie_line, `${seed}-rk-${m.driverId}`), { driver: m.driverName, driver_last: lastName(m.driverName), team: m.toTeamName, year, next }))
+  const droppedLines = dropped.map((d) => fill(pick(c.dropped_line, `${seed}-dr-${d.driverId}`), { driver: d.driverName, driver_last: lastName(d.driverName), team: d.fromTeamName, year, next }))
+
+  const body = paras(
+    fill(pick(c.intro, `${seed}|intro`), hslots),
+    marqueePara,
+    ...upsetLines,
+    ...rookieLines,
+    droppedLines.length ? fill(pick(c.dropped_lead, `${seed}|drlead`), hslots) : '',
+    ...droppedLines,
+    fill(pick(c.close, `${seed}|close`), hslots),
+  )
+  return [agreeArticle({
+    id: seed, category: 'silly_season', round: ctx.calendar.length + 1, priority: 85,
+    headline: fill(pick(c.headline, `${seed}|h`), hslots),
+    dek: fill(pick(c.dek, `${seed}|d`), hslots),
+    body,
+  })]
+}
+
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...preSeason(ctx),
@@ -3388,6 +3507,9 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...driverToWatch(ctx),
     ...midSeasonSwaps(ctx),
     ...recordNews(ctx),
+    ...contractWatchFeature(ctx),
+    ...renewalsFeature(ctx),
+    ...offSeasonFeature(ctx),
   ]
   // de-dupe by id, then newest round first, higher priority first
   const seen = new Set<string>()
