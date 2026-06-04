@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { EllipsisVertical } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { isOffSeason } from '@/lib/sim/types'
+import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { calendar2026 } from '@/data/calendar'
 import { actionResetDatabase } from '@/lib/db/actions'
 import WorldSearch from '@/components/WorldSearch'
@@ -14,6 +16,7 @@ export default function Nav() {
   const { phase, currentRound, year } = useSeasonStore()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [simming, setSimming] = useState(false)
 
   async function handleClearSave() {
     await actionResetDatabase()
@@ -23,6 +26,20 @@ export default function Nav() {
 
   const seasonActive = phase !== 'idle'
   const circuit = calendar2026[currentRound - 1]
+  // "Simulate next race" — progress one round from anywhere, as long as a season is actually
+  // running (not idle, not the off-season) and there's a race left to run.
+  const canSimNext = seasonActive && !isOffSeason(phase) && currentRound <= calendar2026.length
+
+  async function handleSimNext() {
+    if (simming) return
+    setMenuOpen(false)
+    setSimming(true)
+    try {
+      await simulateUntilRound(currentRound + 1)
+    } finally {
+      setSimming(false)
+    }
+  }
 
   const links = [
     { href: '/home', label: 'HOME' },
@@ -77,6 +94,7 @@ export default function Nav() {
               {year} · Round {String(currentRound).padStart(2, '0')}/{String(calendar2026.length).padStart(2, '0')}
             </span>
             <span className="text-[#FFFFFF]"> · {circuit.name}</span>
+            {simming && <span className="text-[#00D9FF] animate-pulse"> · Simulating…</span>}
           </span>
         ) : (
           <span className="text-[#FFFFFF]">No active season</span>
@@ -91,7 +109,16 @@ export default function Nav() {
             <EllipsisVertical size={16} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-8 z-50 w-44 rounded-lg bg-[#1E2431] border border-[#2A3142] shadow-xl py-1">
+            <div className="absolute right-0 top-8 z-50 w-48 rounded-lg bg-[#1E2431] border border-[#2A3142] shadow-xl py-1">
+              {canSimNext && (
+                <button
+                  onClick={handleSimNext}
+                  disabled={simming}
+                  className="w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] hover:text-[#00D9FF] transition-colors disabled:opacity-50"
+                >
+                  {simming ? 'Simulating…' : 'Simulate next race'}
+                </button>
+              )}
               <button
                 onClick={() => { setMenuOpen(false); setConfirmOpen(true) }}
                 className="w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] hover:text-[#DC143C] transition-colors"
