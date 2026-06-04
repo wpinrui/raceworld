@@ -9,10 +9,10 @@
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
   getDriverCareersUpToYear, getTeamCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
-  saveSeasonNews, getSeasonNews,
+  saveSeasonNews, getSeasonNews, getAllDriverSeasonTallies, getAllTeamSeasonTallies,
   type DbRaceResult,
 } from '@/lib/db/queries'
-import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer } from './engine'
+import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type RecordsContext, type RecordMetric, type SeasonRecordMark } from './engine'
 import type { Driver, Team, RaceResult, Circuit, EndOfSeasonSummary } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 
@@ -81,6 +81,40 @@ function buildTeamCareers(throughYear: number): Record<string, TeamCareer> {
 
 export async function actionGetTeamCareers(throughYear: number): Promise<Record<string, TeamCareer>> {
   return buildTeamCareers(throughYear)
+}
+
+// Prior all-time single-season records (the max per metric across archived seasons, with holder + year)
+// plus id->name maps, for the records-driven news producer. Archived-only, so the live season is the
+// challenger. Empty marks (e.g. season one) leave the producer with nothing to break.
+export async function actionGetSeasonRecords(): Promise<RecordsContext> {
+  const driverTallies = getAllDriverSeasonTallies()
+  const teamTallies = getAllTeamSeasonTallies()
+  const driverNames: Record<string, string> = {}
+  const teamNames: Record<string, string> = {}
+  for (const t of driverTallies) driverNames[t.driverId] = t.driverName
+  for (const t of teamTallies) teamNames[t.teamId] = t.teamName
+
+  function bestMark<T extends { year: number }>(rows: T[], value: (r: T) => number, holder: (r: T) => string): SeasonRecordMark | undefined {
+    let best: T | undefined
+    for (const r of rows) if (best === undefined || value(r) > value(best)) best = r
+    if (!best || value(best) < 1) return undefined // no meaningful prior record to beat
+    return { value: value(best), holderName: holder(best), year: best.year }
+  }
+
+  const seasonDriver: Partial<Record<RecordMetric, SeasonRecordMark>> = {
+    wins: bestMark(driverTallies, (r) => r.wins, (r) => r.driverName),
+    poles: bestMark(driverTallies, (r) => r.poles, (r) => r.driverName),
+    podiums: bestMark(driverTallies, (r) => r.podiums, (r) => r.driverName),
+    points: bestMark(driverTallies, (r) => r.points, (r) => r.driverName),
+    dnfs: bestMark(driverTallies, (r) => r.dnfs, (r) => r.driverName),
+  }
+  const seasonTeam: Partial<Record<RecordMetric, SeasonRecordMark>> = {
+    wins: bestMark(teamTallies, (r) => r.wins, (r) => r.teamName),
+    podiums: bestMark(teamTallies, (r) => r.podiums, (r) => r.teamName),
+    points: bestMark(teamTallies, (r) => r.points, (r) => r.teamName),
+  }
+  const archivedSeasons = new Set(driverTallies.map((t) => t.seasonId)).size
+  return { archivedSeasons, seasonDriver, seasonTeam, driverNames, teamNames }
 }
 
 function toRaceResult(r: DbRaceResult): RaceResult {

@@ -1,5 +1,5 @@
 import { calendar2026 } from '@/data/calendar'
-import { foldLiveSeason, foldLiveSeasonTeams, type NewsContext, type DriverCareer, type TeamCareer } from './engine'
+import { foldLiveSeason, foldLiveSeasonTeams, type NewsContext, type DriverCareer, type TeamCareer, type RecordsContext } from './engine'
 import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
 
 // Assemble the live (current-season) NewsContext from the store, folding the archive's prior-season
@@ -20,6 +20,7 @@ export function buildLiveNewsContext(
   s: LiveSeasonSlice,
   careerBase: Record<string, DriverCareer>,
   teamCareerBase: Record<string, TeamCareer>,
+  records?: RecordsContext,
 ): NewsContext {
   return {
     year: s.year,
@@ -33,6 +34,7 @@ export function buildLiveNewsContext(
     endOfSeason: s.endOfSeasonSummary,
     calendar: calendar2026,
     live: true,
+    records,
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
     teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
   }

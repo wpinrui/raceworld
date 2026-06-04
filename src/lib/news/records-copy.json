@@ -1,0 +1,98 @@
+{
+  "careerLeader": {
+    "headline": [
+      "{name} sets the all-time {metric} record",
+      "{name} becomes the outright leader in {metric}",
+      "{name} rewrites history with record {metric}",
+      "{name} stands alone atop the all-time {metric} list"
+    ],
+    "dek": [
+      "{name} has passed {passed} to become the all-time leader in {metric}, reaching {value}.",
+      "With {value} {metric} to their name, {name} has surpassed {passed} to stand alone at the top of the all-time list.",
+      "{name} now holds the record for {metric} outright, moving clear of {passed} on {value}.",
+      "History made, as {name} overtakes {passed} to become the most prolific in {metric} with {value}."
+    ],
+    "body": [
+      [
+        "{name} now stands alone at the top of the all-time {metric} list, having reached {value}.",
+        "With {value} {metric} to their name, {name} is the outright record holder in the category.",
+        "{name} has surpassed every name in the history of the sport, recording {value} {metric} in total.",
+        "The all-time {metric} record now belongs to {name}, who has accumulated {value}."
+      ],
+      [
+        "{passed} had held the mark on {prev}, a figure that stood for years before today.",
+        "The previous record of {prev} was held by {passed}, a benchmark that has now been left behind.",
+        "{passed} set the standard at {prev}, and it has taken until now for anyone to go further.",
+        "At {prev}, {passed} had seemed untouchable in this category until {name} arrived at this milestone."
+      ],
+      [
+        "It is a landmark that few could have imagined when the career began.",
+        "The record reflects a consistency and longevity that defines the very top of the sport.",
+        "Whether the mark will ever be surpassed again is a question that belongs to another era.",
+        "The achievement speaks for itself, a number written permanently into the record books."
+      ]
+    ]
+  },
+  "careerClimb": {
+    "headline": [
+      "{name} climbs to {rank} on the all-time {metric} list",
+      "{name} moves into {rank} all time in {metric}",
+      "{name} passes {passed} to reach {rank} in career {metric}",
+      "{name} is now {rank} in the history books for {metric}"
+    ],
+    "dek": [
+      "{name} has moved ahead of {passed} to sit {rank} on the all-time {metric} list with {value}.",
+      "Reaching {value} {metric} in total, {name} climbs to {rank} in the all-time standings, passing {passed}.",
+      "{name} now ranks {rank} all time in {metric} after moving clear of {passed} on {value}.",
+      "With {value} {metric} to their name, {name} has overtaken {passed} to sit {rank} in championship history."
+    ],
+    "body": [
+      [
+        "{name} has reached {value} {metric} in total, moving ahead of {passed} and into {rank} place on the all-time list.",
+        "The tally now stands at {value} {metric}, enough to displace {passed} and claim {rank} in the all-time rankings.",
+        "Passing {passed} at {value}, {name} now occupies {rank} on the definitive list of {metric} in championship history.",
+        "{name} sits {rank} all time in {metric} after surpassing {passed} with a career total of {value}."
+      ],
+      [
+        "The top of the list remains within reach, and the tally continues to grow.",
+        "There are still races ahead, and the position may not be the final word on where {name} ultimately finishes.",
+        "It is another entry on a career record that has been building steadily across the seasons.",
+        "The climb up this particular list underlines a career that has aged with remarkable durability."
+      ]
+    ]
+  },
+  "seasonRecord": {
+    "headline": [
+      "{name} sets a new single-season {metric} record",
+      "{name} breaks the single-season {metric} record",
+      "{name} eclipses the all-time single-season {metric} mark",
+      "Single-season {metric} record falls to {name}"
+    ],
+    "dek": [
+      "{name} has broken the all-time single-season {metric} record, reaching {value} at {circuit}.",
+      "With {value} {metric} in a single campaign, {name} has set a new benchmark at {circuit}, surpassing the {old} set by {old_holder} in {old_year}.",
+      "The single-season {metric} record is rewritten at {circuit}, with {name} reaching {value}.",
+      "{name} has the most {metric} in a single season in championship history, recording {value} at {circuit}."
+    ],
+    "body": [
+      [
+        "{name} has now reached {value} {metric} in the current season, a new high-water mark for a single campaign in the championship.",
+        "The total stands at {value} {metric} this season, a figure no one in the history of the sport has bettered in a single year.",
+        "With {value} {metric} recorded in this campaign alone, {name} has moved past every single-season precedent in the record books.",
+        "{name} reaches {value} {metric}, more than any competitor has managed across one championship year."
+      ],
+      [
+        "The previous best was {old}, set by {old_holder} in {old_year}, a record that had stood without serious challenge until this season.",
+        "{old_holder} had held the mark since {old_year} with {old}, and it has taken until now for the figure to be exceeded.",
+        "That betters the {old} {old_holder} posted in {old_year}, the benchmark against which this season has been measured all year.",
+        "The old record of {old}, belonging to {old_holder} from {old_year}, has finally been overtaken."
+      ],
+      [
+        "The milestone came at {circuit}, and there are still rounds remaining for the total to grow further.",
+        "It fell at {circuit}, and with races still to run, the final figure may move the record even further out of reach.",
+        "{circuit} provided the backdrop as the record changed hands, with the season not yet complete.",
+        "The record was broken at {circuit}, leaving the sport to recalibrate what a single season can look like."
+      ]
+    ]
+  }
+}
