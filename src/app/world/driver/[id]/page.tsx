@@ -173,6 +173,7 @@ export default function DriverPage() {
                   )}
                 </div>
                 <div className="flex-1 flex items-end justify-end gap-x-7 gap-y-3 flex-wrap">
+                  <HeaderStat label="Races" value={career.totals.races} tier={3} />
                   <HeaderStat label="Titles" value={career.totals.titles} tier={3} />
                   <HeaderStat label="Wins" value={career.totals.wins} tier={3} />
                   <HeaderStat label="Podiums" value={career.totals.podiums} tier={3} />

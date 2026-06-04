@@ -4,21 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, foldLiveSeason, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer } from '@/lib/news/engine'
-import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers } from '@/lib/news/actions'
+import { generateNews, foldLiveSeason, foldLiveSeasonTeams, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
+import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 
 function roundLabel(round: number, calLen: number): string {
   if (round <= 0) return 'Pre-season'
   if (round > calLen) return 'Off-season'
   return `Round ${round}`
-}
-
-function Paragraphs({ text }: { text: string }) {
-  return (
-    <div className="space-y-3 text-sm leading-relaxed text-[#FFFFFF]">
-      {text.split(/\n\n+/).map((p, i) => <p key={i}>{p.trim()}</p>)}
-    </div>
-  )
 }
 
 export default function NewsroomPage() {
@@ -29,10 +22,13 @@ export default function NewsroomPage() {
   const [selectedYear, setSelectedYear] = useState<number>(s.year)
   const [archivedYears, setArchivedYears] = useState<number[]>([])
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
+  // Roster for the selected archived season, used to hyperlink names in the article text.
+  const [archivedRoster, setArchivedRoster] = useState<{ drivers: { id: string; name: string }[]; teams: { id: string; name: string }[]; circuits: { name: string; round: number }[] }>({ drivers: [], teams: [], circuits: [] })
   const [loadingArchive, setLoadingArchive] = useState(false)
   // Prior-season F1 career totals from the archive DB (the current season is folded in from the
   // store), so the live newsroom's retirement obituaries and driver-to-watch see real records.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
+  const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   useEffect(() => {
     setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
@@ -52,6 +48,7 @@ export default function NewsroomPage() {
   // in the archive).
   useEffect(() => {
     actionGetDriverCareers(s.year - 1).then(setCareerBase).catch(() => setCareerBase({}))
+    actionGetTeamCareers(s.year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
   }, [s.year])
 
   const liveYear = s.year
@@ -78,9 +75,10 @@ export default function NewsroomPage() {
       calendar: calendar2026,
       live: true,
       careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
+      teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
     }
     return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase])
+  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase])
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {
@@ -88,13 +86,26 @@ export default function NewsroomPage() {
     let cancelled = false
     setLoadingArchive(true)
     actionGetSeasonNews(selectedYear)
-      .then((a) => { if (!cancelled) setArchivedArticles(a) })
-      .catch(() => { if (!cancelled) setArchivedArticles([]) })
+      .then((res) => { if (!cancelled) { setArchivedArticles(res.articles); setArchivedRoster({ drivers: res.drivers, teams: res.teams, circuits: res.circuits }) } })
+      .catch(() => { if (!cancelled) { setArchivedArticles([]); setArchivedRoster({ drivers: [], teams: [], circuits: [] }) } })
       .finally(() => { if (!cancelled) setLoadingArchive(false) })
     return () => { cancelled = true }
   }, [isLive, selectedYear])
 
   const articles = isLive ? liveArticles : archivedArticles
+
+  // Name-to-world-page matcher for hyperlinking article text. Live: from the store; archived: from
+  // the roster the news action returned. Circuits are limited to rounds that have actually run.
+  const liveIndex = useMemo(() => buildNewsIndex({
+    drivers: s.drivers.map((d) => ({ id: d.id, name: d.name })),
+    teams: s.teams.map((t) => ({ id: t.id, name: t.name })),
+    circuits: calendar2026.slice(0, s.raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    year: liveYear,
+  }), [s.drivers, s.teams, s.raceResults.length, liveYear])
+  const archivedIndex = useMemo(() => buildNewsIndex({
+    drivers: archivedRoster.drivers, teams: archivedRoster.teams, circuits: archivedRoster.circuits, year: selectedYear,
+  }), [archivedRoster, selectedYear])
+  const index = isLive ? liveIndex : archivedIndex
 
   // Which categories actually have an article in this season (drives which chips are enabled).
   const present = useMemo(() => new Set(articles.map((a) => a.category)), [articles])
@@ -200,9 +211,9 @@ export default function NewsroomPage() {
               <Panel title={selected ? `${CATEGORY_LABELS[selected.category] ?? selected.category} · ${roundLabel(selected.round, calendar2026.length)}` : 'Article'} className="lg:col-span-2">
                 {selected ? (
                   <article className="space-y-3">
-                    <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]">{selected.headline}</h2>
-                    <p className="text-sm italic text-[#FFFFFF]">{selected.dek}</p>
-                    <Paragraphs text={selected.body} />
+                    <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} /></h2>
+                    <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={selected.dek} index={index} /></p>
+                    <LinkedParagraphs text={selected.body} index={index} />
                   </article>
                 ) : (
                   <p className="text-sm text-[#FFFFFF]">Select a headline to read it.</p>

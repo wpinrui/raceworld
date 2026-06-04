@@ -24,9 +24,24 @@ export function chance(seed: string, pct: number): boolean {
 
 // Substitute {slot} tokens. Missing slots render empty.
 export function fill(tmpl: string, slots: Record<string, string | number>): string {
-  return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
-    const v = slots[k]
-    return v == null ? '' : String(v)
+  const valOf = (k: string) => { const v = slots[k]; return v == null ? '' : String(v) }
+  // A substituted value reads with a vowel sound if it starts with a vowel (proper nouns: Audi,
+  // Alpine, Antonelli) or with an ordinal/number that sounds vowel-initial (8th, 11th, 18th, 80th).
+  // English oddities like "a European" never appear as token values, so the letter test is safe.
+  const vowelSound = (s: string) => /^[aeiou]/i.test(s) || /^(8|11|18)/.test(s)
+  // Substitute {token}s with two agreements applied automatically:
+  //  - a preceding indefinite article ("a"/"an") is corrected to the value ("a {team}" -> "an Audi");
+  //  - a trailing possessive ("{team}'s") follows the name rule (s-ending names take a bare
+  //    apostrophe: "Mercedes'", "Williams'"; others take "'s": "Russell's").
+  return tmpl.replace(/\b([Aa])n? (\{(\w+)\})|\{(\w+)\}('s)?/g, (_m, art, _tok, k1, k2, possSuffix) => {
+    if (art !== undefined) {
+      const val = valOf(k1)
+      const an = vowelSound(val)
+      return `${art === 'A' ? (an ? 'An' : 'A') : (an ? 'an' : 'a')} ${val}`
+    }
+    const val = valOf(k2)
+    if (possSuffix) return /s$/i.test(val) ? `${val}'` : `${val}'s`
+    return val
   })
 }
 

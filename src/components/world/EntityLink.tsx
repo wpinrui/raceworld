@@ -13,3 +13,8 @@ export function TeamLink({ id, children, className = '' }: { id: string; childre
   if (!id) return <>{children}</>
   return <Link href={`/world/team/${id}`} className={`${LINK} ${className}`}>{children}</Link>
 }
+
+export function CircuitLink({ year, round, children, className = '' }: { year: number; round: number; children: React.ReactNode; className?: string }) {
+  if (!year || !round) return <>{children}</>
+  return <Link href={`/world/season/${year}/${round}`} className={`${LINK} ${className}`}>{children}</Link>
+}

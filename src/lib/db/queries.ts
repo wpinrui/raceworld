@@ -484,6 +484,27 @@ export function getDriverCareersUpToYear(year: number): DbDriverCareerAgg[] {
   `).all(year) as DbDriverCareerAgg[]
 }
 
+// Per-CONSTRUCTOR career aggregates from archived seasons up to and including `year`, for team
+// milestones. `races` is distinct Grands Prix entered; wins/podiums/poles count per car.
+export interface DbTeamCareerAgg {
+  teamId: string; races: number; wins: number; podiums: number; poles: number; points: number
+}
+export function getTeamCareersUpToYear(year: number): DbTeamCareerAgg[] {
+  return getDb().prepare(`
+    SELECT rr.team_id AS teamId,
+      COUNT(DISTINCT r.id) AS races,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
+      SUM(rr.points) AS points
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived' AND s.year <= ?
+    GROUP BY rr.team_id
+  `).all(year) as DbTeamCareerAgg[]
+}
+
 export interface DbTeamCareerRow {
   seasonYear: number; seasonId: number; teamName: string
   races: number; wins: number; podiums: number; points: number
