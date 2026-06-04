@@ -23,7 +23,7 @@ function personaFor(f: Flavour): Persona {
     case 'upset': return 'stats'          // the long odds are the story
     case 'statement': return 'contracts'  // the multi-year commitment is the story
     case 'rookie': return 'pundit'        // an unknown quantity to weigh up
-    case 'veteran_short': return 'contracts' // a one-year stopgap
+    case 'veteran_short': return 'pundit' // a one-year stopgap, judged on track (contracts copy assumes long deals)
     default: return 'insider'             // chalk: confirmed, as expected
   }
 }
@@ -37,9 +37,9 @@ function poolFor(persona: Persona, f: Flavour): string[] {
   }
 }
 
-// How coveted the signed driver was, in words (no numbers), from their free-agent ranking.
+// How coveted the signed driver was, in words (no numbers), matching the board's "best" badge wording.
 function faPhrase(rank: number): string {
-  return rank === 1 ? 'the most sought-after free agent' : rank <= 3 ? 'a top free agent' : `the ${ordinal(rank)}-rated free agent`
+  return rank === 1 ? 'the best free agent on the market' : `the ${ordinal(rank)} best free agent`
 }
 
 function slotsFor(p: DraftPick): Record<string, string | number> {
