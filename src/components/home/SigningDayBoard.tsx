@@ -27,10 +27,10 @@ function accentFor(handle: string): string {
   return HANDLE_COLOR[handle]
 }
 
-// Where the signed driver came from, for the seats board. Empty for rookies (the badge already says so).
+// The old team, shown only when it adds something: a switch or a re-signing. Empty for rookies (the
+// badge says so) and for drivers who were already free agents (the FA ranking already says so).
 function fromLabel(p: DraftPick): string {
-  if (p.flavour === 'rookie') return ''
-  if (!p.prevTeamName) return 'free agent'
+  if (p.flavour === 'rookie' || !p.prevTeamName) return ''
   if (p.prevTeamName === p.teamName) return 're-signs'
   return `from ${p.prevTeamName}`
 }
