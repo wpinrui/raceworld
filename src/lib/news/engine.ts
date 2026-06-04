@@ -1982,6 +1982,169 @@ function previews(ctx: NewsContext): NewsArticle[] {
 // debutants. These are round-0 stories that PERSIST all season (the newsroom is a feed, not a
 // snapshot of the current round) — they sort to the bottom once racing starts, but never vanish.
 // Live-only (needs car pace + roster).
+// Like pick(), but avoids repeating a variant already used in the same set (e.g. across the teams in
+// one launch article), falling back to the full pool only once every option has been spent.
+function pickUnique(pool: string[], seed: string, used: Set<string>): string {
+  const avail = pool.filter((s) => !used.has(s))
+  const chosen = pick(avail.length ? avail : pool, seed)
+  used.add(chosen)
+  return chosen
+}
+
+// Car-launch prose pools (Sonnet-authored). `line` introduces a team + its drivers; `refPos` adds a
+// last-season reference using {art} {last_pos}; `refNew` covers a team with no prior finish on record
+// (the first season, or a genuine new entrant — never call them "new"). Pools are deliberately large
+// so the no-repeat picker can give every car in a tier a distinct line and reference.
+const LAUNCH_COPY: {
+  line: string[]; refPos: string[]; refNew: string[]
+  tiers: Record<'front-running' | 'midfield' | 'backmarker', { prio: number; headline: string[]; dek: string[]; intro: string[]; close: string[] }>
+} = {
+  line: [
+    'Over at {team}, {squad} will carry the hopes of a factory that spent the winter rethinking its aerodynamic philosophy from the floor up.',
+    '{squad} are tasked with extracting the maximum from a {team} package that engineers describe as the most cohesive they have produced in years.',
+    'For {team}, the wraps come off a machine that the drawing office has been quietly confident about since the first CFD runs landed in late autumn.',
+    'At {team}, {squad} debut a car that bears almost no visual resemblance to the chassis they ended last season with.',
+    'The {team} launch reveals a sharply reworked sidepod concept, and it is {squad} who will find out whether the theory translates on track.',
+    '{squad} stepped into the simulator for the first time last month and the feedback, by all accounts, was encouraging for everyone at {team}.',
+    'Shaped by a winter of wind-tunnel hours and a factory culture that reportedly refused to carry a single compromise into {year}, {team_poss} new car makes its case on aesthetics alone.',
+    'Built around a revised suspension geometry that the {team} technical staff have been pushing for two seasons, the {year} car hands {squad} a notably different tool.',
+    '{team} pull the covers back on a car that the design team insists solves the rear-stability issues that cost points on the high-speed circuits last year.',
+    'Every aero surface on {team_poss} {year} contender is new, and {squad} have already logged hours in the simulator working to understand it.',
+    'From the nose cone to the diffuser, {team} have gone again, and {squad} arrive at the launch with a reputation to build on.',
+    'A leaner rear packaging concept anchors {team_poss} {year} challenger, with {squad} set to discover whether the trade-offs are worth it when the lights go out in testing.',
+    'What {team} reveal today is a car that the engineers say reflects a conscious decision to chase peak downforce rather than a broad operating window.',
+    '{squad} join {team} in a year the team has framed internally as a reset, with a new car that carries none of last season\'s architectural compromises.',
+    'The factory mood at {team} has been quietly confident all winter, and the machine {squad} are set to race suggests there is substance behind that confidence.',
+    'Compact, low, and visually striking, {team_poss} launch car makes a statement before {squad} have turned a wheel in anger.',
+  ],
+  refPos: [
+    '{art} {last_pos}-place finish last season set the target every line of this car was drawn against.',
+    'The design brief was clear: improve on {art} {last_pos}-place constructors result that left the factory hungry for more.',
+    'Closing the chapter on {art} {last_pos}-place campaign, this car represents the team\'s answer to the questions that season raised.',
+    'Engineers were handed {art} {last_pos}-place finish as their starting point and asked to find time everywhere.',
+    'That {art} {last_pos}-place result was the honest baseline; what the team has built since is an attempt to move substantially beyond it.',
+    '{art} {last_pos}-place constructors result gave the development programme a specific and uncomfortable benchmark to beat.',
+    'The lessons of {art} {last_pos}-place season are baked into every revised package on show today.',
+    'Measuring the ambition of this launch against {art} {last_pos}-place finish last year, the direction of travel is unmistakable.',
+    'Last year\'s {last_pos}-place constructors standing sent the drawing office back to first principles over the winter.',
+    'From {art} {last_pos}-place championship position, the team\'s stated aim is to move the needle decisively in {year}.',
+    'The {last_pos}-place finish that closed out last season is the number the whole factory has been trying to make obsolete.',
+    'With {art} {last_pos}-place result as the honest yardstick, the {year} car has been engineered to address every shortcoming that produced it.',
+  ],
+  refNew: [
+    'With no constructors result on the board to measure against, this launch is the only public yardstick on the car.',
+    'There is no prior championship finish to anchor expectations, so the car itself must do the talking.',
+    'No constructors data exists to set a baseline, which means every lap in testing will be the first hard evidence anyone has.',
+    'Without a finishing position in the standings to reference, the technical detail on display today is the sole benchmark available.',
+    'The record books hold no constructors result for this squad, so the {year} car enters service as an unknown quantity by definition.',
+    'There is simply no prior championship finish on the ledger, and that makes today\'s reveal the first real measure of intent.',
+    'No previous constructors campaign provides a frame of reference here; the car and its timing data will have to speak for themselves.',
+    'Because no constructors result exists to judge against, the engineering choices visible in this launch carry unusual scrutiny.',
+    'The absence of any constructors finish to compare with means the {year} car sets its own starting line from day one of testing.',
+    'Without a constructors result to anchor the narrative, the team\'s ambitions must be read from what the drawing office has actually built.',
+    'No championship position has been recorded for this team, leaving today\'s unveiling as the only concrete evidence of where they stand.',
+    'There is no finishing-position history to draw on, so the technical specification revealed today is the single reference point the paddock has.',
+  ],
+  tiers: {
+    'front-running': {
+      prio: 34,
+      headline: [
+        'The fastest cars of {year} break cover',
+        'Front-runners unveiled as {year} pre-season begins',
+        'Title contenders show their hand for {year}',
+        '{year} championship hopefuls pull back the wraps',
+        'Win contenders launch as {year} takes shape',
+        'The cars built to lead the grid in {year} arrive',
+      ],
+      dek: [
+        '{n} {teams_word} with genuine podium ambitions have launched their {year} contenders, led by {lead}.',
+        '{lead} heads a group of {n} {teams_word} whose cars were built with one purpose, reaching the top step.',
+        'From {lead} to the back of this elite pack, {n} {teams_word} believe they have the tools to challenge for wins in {year}.',
+        'The {n} {teams_word} at the sharp end of the {year} grid are in the open, with {lead} setting the early benchmark.',
+        '{n} {teams_word}, {lead} among them, have laid out cars they expect to see at the front in {year}.',
+      ],
+      intro: [
+        'The cars that will contest race victories in {year} are no longer a secret. {n} {teams_word} with credible championship ambitions have unveiled their contenders, and the engineering statements on show are striking.',
+        'Pre-season proper is underway as {n} front-running {teams_word} bring their {year} machines into the open. {lead} arrives with the loudest statement, but the rest of the group have not come to make up the numbers.',
+        '{lead} and {n} other {teams_word} with genuine title intentions have launched their {year} cars within days of one another, compressing the field\'s design philosophies into a single revealing week.',
+        'The {year} campaign takes shape as {n} {teams_word} at the front of the expected order pull the covers off. Every one of them has been built to win, and the technical differences between them are already a talking point.',
+        'Scrutiny falls on {n} {teams_word} as the fastest expected cars of {year} make their public debut. {lead} may lead the conversation, but the entire group has arrived with something to say.',
+      ],
+      close: [
+        'How the gaps between this group actually emerge will only be known once the timing screens light up in testing.',
+        'The launches confirm intent; only laps will confirm whether the engineering has delivered on the winter\'s promises.',
+        'Whatever the simulations suggested over the winter, the {year} season will settle the order in real time.',
+        'Every team in this group believes it can win; which of them is right is a question only the {year} championship can answer.',
+        'The pace claims will be tested soon enough, and no launch rendering has ever won a points haul.',
+      ],
+    },
+    midfield: {
+      prio: 33,
+      headline: [
+        'The midfield pack reveals its {year} weapons',
+        'Points hunters launch as {year} shapes up',
+        'Midfield contenders break cover ahead of {year}',
+        '{year} brings fresh cars and reshuffled hopes for the midfield',
+        'The dense midfield pack shows its hand for {year}',
+        'Upgrade season starts at launch as midfield teams unveil for {year}',
+      ],
+      dek: [
+        '{n} {teams_word} scrapping for points positions have launched their {year} cars, with {lead} setting the tone.',
+        'The midfield is rarely decided at the launch, but {n} {teams_word}, {lead} among them, have given the first clues.',
+        '{lead} leads {n} midfield {teams_word} into the open, each convinced its winter work has found time in the middle of the pack.',
+        '{n} {teams_word} built to compete for every point on offer in {year} have now shown what they are bringing to the fight.',
+        'From {lead} to the back of the group, {n} midfield {teams_word} have launched cars that could easily swap positions by the season\'s end.',
+      ],
+      intro: [
+        'The most unpredictable part of the grid is in the open. {n} midfield {teams_word} have launched their {year} machines, knowing the gaps between them will shift almost every fortnight.',
+        'History says the midfield order in {year} will look nothing like it does today, but that has not stopped {n} {teams_word} from making confident engineering statements at launch.',
+        '{lead} and a clutch of rivals have pulled back the covers on what each of them believes is a step forward. Whether those steps are big enough to move the needle in {year} is the question every points-chasing team is sitting with.',
+        'The midfield grid for {year} is taking shape, with {n} {teams_word} now in the open. The margins between them at launch are slim enough that a single aero swing could separate the leaders from the laggards by summer.',
+        '{n} {teams_word} in the points-hunting tier have launched their {year} cars, each aware that a good upgrade cycle can lift them and a missed development step can drop them just as fast.',
+      ],
+      close: [
+        'In the midfield, the launch order is irrelevant; what matters is who has found the most performance when the real season begins.',
+        'The {year} midfield story will be written over upgrade cycles, not at the launch pad.',
+        'Every team here launches with a case to make; whether the data backs it up will emerge round by round.',
+        'The launches confirm the winter\'s direction; the races will confirm whether any of these teams found enough of it.',
+        'Whatever advantage exists between them today will likely be gone, reversed, and rebuilt before the {year} title is decided.',
+      ],
+    },
+    backmarker: {
+      prio: 32,
+      headline: [
+        'The back of the grid shows its {year} ambitions',
+        'Ground-up effort on display as backmarker teams launch for {year}',
+        'The teams with most to prove launch their {year} cars',
+        '{year} starts here for the teams chasing the field',
+        'Ambitious launches as the back of the grid builds toward {year}',
+        'Hard yards ahead as the backmarker teams reveal their {year} machines',
+      ],
+      dek: [
+        '{n} {teams_word} facing the toughest challenge on the {year} grid have launched their cars, with {lead} carrying the highest expectations of the group.',
+        'The {year} grid is complete at its back end as {n} {teams_word} launch cars built to close the gap to the pack ahead.',
+        '{lead} heads a group of {n} {teams_word} who launched with honest appraisals of the distance they need to travel in {year}.',
+        '{n} {teams_word} at the back of the expected order have launched for {year}, all of them framing the season as a step in a longer journey.',
+        'The cars launched by {n} {teams_word} start from the most difficult position on the {year} grid, but each carries a specific engineering argument for closing the gap.',
+      ],
+      intro: [
+        'Not every car in {year} will fight for points from round one, but the teams at the back of the grid have not come without a plan. {n} {teams_word} have now launched, each with a development arc that extends well beyond the opening race.',
+        'The {year} grid is filled in at its rear end as {n} {teams_word} bring their machines into public view. The challenge ahead of each of them is documented and significant, but the launches reveal teams that are working methodically toward the pack.',
+        '{lead} and the other teams starting the {year} season from the back of the expected order have now committed their designs to the scrutiny of the paddock. The cars reveal how each of them has chosen to prioritise their limited resources.',
+        'The most honest engineering statements in any pre-season often come from the back of the grid. {n} {teams_word} have launched their {year} cars with clear-eyed acknowledgement of the gap to close, alongside specific technical arguments for how they intend to close it.',
+        'For the {n} {teams_word} at the rear of the {year} order, the launch is the start of a longer process. The cars on show today will look different by mid-season, and that is entirely by design.',
+      ],
+      close: [
+        'The distance to the midfield is real, but every team here has launched with a development roadmap that does not stop at round one.',
+        'Progress in this part of the grid is measured in tenths chipped away over a full season, and the teams here know it.',
+        'How much ground these teams can recover in {year} will depend on development pace as much as the car they launch with.',
+        'The gap to the pack ahead has been the winter\'s primary brief; whether the answers found are sufficient will take a full season to measure.',
+        'Launches here are declarations of direction more than declarations of pace, and the direction from each of these teams is forward.',
+      ],
+    },
+  },
+}
+
 function preSeason(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
@@ -2032,75 +2195,39 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
     ),
   })
   // Launch coverage grouped into three pieces by the paddock's pace tier — front-runners, midfield,
-  // backmarkers — rather than one article per team (too many) or a single grid-wide piece. Each lists
-  // every car in its tier (fastest first), with the tier itself the performance hint.
+  // backmarkers. Each lists every car in its tier (fastest first); a no-repeat picker hands each team
+  // a distinct line and reference from the large LAUNCH_COPY pools so a group never reads templated.
   {
     const lyear = ctx.year
     const tierKey = (t: Team) => tierWord(paceRank(ctx, t.id), ctx.teams.length)
-    const teamLine = (t: Team): string => {
-      const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
-      const lastPos = lastSeasonPos(ctx, t.id)
-      const ts = { team: t.name, team_poss: poss(t.name), squad: listJoin(squad) || 'an unchanged line-up', last_pos: lastPos ? ordinal(lastPos) : '', year: lyear }
-      const tseed = `launch-${lyear}|${t.id}`
-      const base = fill(pick([
-        '{team} unveil their {year} challenger, {squad} tasked with extracting every tenth.',
-        'For {team}, {squad} are the pairing trusted to deliver this year.',
-        '{team} pull the covers off the car {squad} will campaign.',
-        '{team} present their new machine, with {squad} behind the wheel.',
-        '{team} reveal the {year} car {squad} will race.',
-      ], `${tseed}|line`), ts)
-      const ref = lastPos
-        ? fill(pick([
-            ' It follows a {last_pos}-place finish in last year\'s constructors, the number the engineers have pinned to the wall.',
-            ' Coming off {last_pos} in the constructors, the brief for this car was not a subtle one.',
-          ], `${tseed}|ref`), ts)
-        : fill(pick([
-            ' With no prior finish to measure against, this launch is the only public benchmark on it.',
-            ' A fresh entry with its own benchmark still to set.',
-          ], `${tseed}|ref`), ts)
-      return base + ref
-    }
-    const TIER_COPY: Record<'front-running' | 'midfield' | 'backmarker', { prio: number; h: string[]; d: string[]; intro: string[]; close: string[] }> = {
-      'front-running': {
-        prio: 34,
-        h: ['The {year} front-runners break cover', 'The fastest cars of {year} are revealed', 'The teams to beat unveil their {year} machines', 'The sharp end shows its hand for {year}'],
-        d: ['The cars expected to fight at the front in {year} are out in the open.', 'Pre-season pace puts these {n} {teams_word} at the head of the {year} field.'],
-        intro: ['These are the cars the paddock expects to fight for {year} wins, the quickest machines on the early read.', 'Pre-season running points to this group leading the way in {year}, {lead} setting the early benchmark.'],
-        close: ['Pre-season billing is a starting position, not a finishing one, and the development race will test every one of them.', 'Winter pace rarely survives the season unchanged, but this is where the {year} title fight begins.'],
-      },
-      midfield: {
-        prio: 33,
-        h: ['The {year} midfield shows its hand', 'The midfield pack reveal their {year} cars', 'The {year} midfield breaks cover', 'The chasing pack unveil their {year} machines'],
-        d: ['The cars set to scrap over the points in {year} are revealed.', 'The {year} midfield, where a single upgrade can reshape the order, breaks cover.'],
-        intro: ['This is the densest part of the grid, where tenths separate cars and a good upgrade can vault a team up the order in {year}.', 'The midfield is where {year} will be most fiercely contested, and these are the {n} {teams_word} that will fight over it.'],
-        close: ['In a group this tight, in-season development tends to decide who finishes best of the rest.', 'Nothing is settled here; the midfield order will move all {year} long.'],
-      },
-      backmarker: {
-        prio: 32,
-        h: ['The back of the {year} grid breaks cover', 'The {year} backmarkers reveal their cars', 'The grid\'s outsiders unveil their {year} machines', 'The rear of the {year} field shows its hand'],
-        d: ['The cars with the most to prove in {year} are out in the open.', 'The {n} {teams_word} starting {year} on the back foot reveal their machines.'],
-        intro: ['These teams begin {year} with ground to make up, the early pace leaving them at the back of the field.', 'For this group, {year} is about closing a gap, and the launch cars are the first step.'],
-        close: ['A strong development year can drag any of them into the midfield fight before the season is out.', 'The gap looks large now, but a single good upgrade can change the conversation.'],
-      },
-    }
     for (const tier of ['front-running', 'midfield', 'backmarker'] as const) {
       const group = [...ctx.teams].filter((t) => tierKey(t) === tier).sort((a, b) => b.carPace - a.carPace)
       if (group.length === 0) continue
       const lseed = `launch-${lyear}-${tier}`
       const lslots = { year: lyear, lead: group[0]?.name ?? '', n: group.length, teams_word: plural(group.length, 'team') }
-      const C = TIER_COPY[tier]
+      const C = LAUNCH_COPY.tiers[tier]
+      const usedLine = new Set<string>()
+      const usedRef = new Set<string>()
+      const teamLine = (t: Team): string => {
+        const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
+        const lastPos = lastSeasonPos(ctx, t.id)
+        const ts = {
+          team: t.name, team_poss: poss(t.name), squad: listJoin(squad) || 'an unchanged line-up',
+          last_pos: lastPos ? ordinal(lastPos) : '', art: lastPos && /^(8|11|18)/.test(String(lastPos)) ? 'an' : 'a', year: lyear,
+        }
+        const tseed = `launch-${lyear}|${t.id}`
+        const line = fill(pickUnique(LAUNCH_COPY.line, `${tseed}|line`, usedLine), ts)
+        const ref = fill(pickUnique(lastPos ? LAUNCH_COPY.refPos : LAUNCH_COPY.refNew, `${tseed}|ref`, usedRef), ts)
+        return `${line} ${ref}`
+      }
       out.push({
         id: lseed, category: 'car_launch_livery', round: 0, priority: C.prio,
-        headline: fill(pick(C.h, `${lseed}|h`), lslots),
-        dek: fill(pick(C.d, `${lseed}|d`), lslots),
+        headline: fill(pick(C.headline, `${lseed}|h`), lslots),
+        dek: fill(pick(C.dek, `${lseed}|d`), lslots),
         body: paras(
           fill(pick(C.intro, `${lseed}|intro`), lslots),
           ...group.map(teamLine),
           fill(pick(C.close, `${lseed}|close`), lslots),
-          texture(`${lseed}|q`, [
-            '"Every team thinks they have made a step over the winter, that is the nature of this sport," one senior engineer noted.',
-            '"The timing screens in testing tell you something, but never everything," a paddock veteran cautioned.',
-          ], lslots, 70),
         ),
       })
     }
