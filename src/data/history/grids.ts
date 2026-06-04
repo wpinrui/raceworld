@@ -1,8 +1,8 @@
 import type { HistoricalSeasonGrid } from './types'
 
 // The real-world per-year grids (teams in constructors'-championship order, lineups by driver id),
-// generated from teams.json. A stable team id across years carries a rebrand (e.g. 'silverstone' =
-// Jordan -> MF1 -> Spyker -> Force India); a new id is a fresh entry on the grid.
+// generated from source/teams.json. A stable team id across years carries a rebrand (e.g. 'silverstone'
+// = Jordan -> Midland -> Spyker -> Force India); a new id is a fresh entry on the grid.
 export const historicalGrids: HistoricalSeasonGrid[] = [
   {
     year: 1996,

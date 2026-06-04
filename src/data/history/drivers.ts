@@ -1,6 +1,6 @@
 import type { HistoricalDriver } from './types'
 
-// Every driver who raced 1996-2026, generated from drivers.txt (bio + market entry derived as debut
+// Every driver who raced 1996-2026, generated from source/drivers.txt (bio + market entry derived as debut
 // year - 1). Ratings (pace/wet/overtaking/smoothness/peakPotential/primeEnd/narrative) are added
 // later, suggested and signed off; until then the composer treats a driver as a generic midfielder.
 export const historicalDrivers: HistoricalDriver[] = [
