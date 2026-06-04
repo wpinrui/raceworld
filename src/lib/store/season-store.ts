@@ -190,6 +190,7 @@ interface SeasonStore {
   initSeason: (drivers: Driver[], teams: Team[], year: number) => void
   updateGrid: (drivers: Driver[], teams: Team[]) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
+  updateTeam: (id: string, patch: Partial<Team>) => void
   releaseDriver: (id: string) => void
   extendContract: (id: string, seasons: number) => void
   assignDriverToTeam: (driverId: string, teamId: string) => void
@@ -283,6 +284,18 @@ export const useSeasonStore = create<SeasonStore>()(
           drivers: next,
           driverStandings: computeDriverStandings(next, teams, raceResults),
           constructorStandings: computeConstructorStandings(teams, next, raceResults),
+        })
+      },
+
+      // God-mode edit of a single team (e.g. from the world team page): name, colour,
+      // nationality, etc. Recompute standings so renames show through immediately.
+      updateTeam: (id, patch) => {
+        const { drivers, teams, raceResults } = get()
+        const next = teams.map((t) => (t.id === id ? { ...t, ...patch } : t))
+        set({
+          teams: next,
+          driverStandings: computeDriverStandings(drivers, next, raceResults),
+          constructorStandings: computeConstructorStandings(next, drivers, raceResults),
         })
       },
 
