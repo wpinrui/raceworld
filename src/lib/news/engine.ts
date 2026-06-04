@@ -2920,7 +2920,9 @@ function analysis(ctx: NewsContext): NewsArticle[] {
 // career record. Either way it closes on the actual market projection (seeded ±10 media error) for
 // whether a return looks likely.
 function driverToWatch(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.live || ctx.endOfSeason) return []
+  // Fires every 4th round (mid-season), so like silly-season it belongs in the season's permanent
+  // record. Don't gate on endOfSeason or the retrospective loses the whole season's market narrative.
+  if (!ctx.live) return []
   const freeAgents = ctx.drivers.filter((d) => d.teamId === '')
   if (freeAgents.length === 0 || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
