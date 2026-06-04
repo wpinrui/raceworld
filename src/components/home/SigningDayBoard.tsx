@@ -27,9 +27,9 @@ function accentFor(handle: string): string {
   return HANDLE_COLOR[handle]
 }
 
-// Where the signed driver came from, for the seats board.
+// Where the signed driver came from, for the seats board. Empty for rookies (the badge already says so).
 function fromLabel(p: DraftPick): string {
-  if (p.flavour === 'rookie') return 'rookie'
+  if (p.flavour === 'rookie') return ''
   if (!p.prevTeamName) return 'free agent'
   if (p.prevTeamName === p.teamName) return 're-signs'
   return `from ${p.prevTeamName}`
@@ -100,7 +100,8 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                     <span className="flex items-center gap-2 min-w-0 flex-1">
                       <DriverLink id={p.driverId} className="text-sm font-semibold text-[#FFFFFF] truncate shrink-0">{p.driverName}</DriverLink>
                       <Tag flavour={p.flavour} />
-                      <span className="text-[10px] text-[#6B7280] truncate hidden sm:inline">{fromLabel(p)}</span>
+                      <span className="text-[10px] text-[#6B7280] tabular-nums shrink-0">FA #{p.faRank}</span>
+                      {fromLabel(p) && <span className="text-[10px] text-[#6B7280] truncate hidden sm:inline">{fromLabel(p)}</span>}
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (
@@ -123,9 +124,9 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
               {onClock.odds.map((o, i) => (
                 <div key={o.driverId} className="flex items-center gap-2.5 px-3 py-1.5">
+                  <span className="w-5 text-xs font-bold tabular-nums text-[#6B7280] shrink-0">{i + 1}</span>
                   <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
                   {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
-                  <span className="text-[10px] text-[#6B7280] tabular-nums shrink-0">Free agent #{o.rank}</span>
                 </div>
               ))}
             </div>
