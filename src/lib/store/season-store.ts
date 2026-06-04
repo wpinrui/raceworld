@@ -634,9 +634,19 @@ export const useSeasonStore = create<SeasonStore>()(
 
       // Phase 2: free agents sign for the coming season.
       runContractNegotiations: () => {
-        const { pendingNextSeasonState, endOfSeasonSummary, year } = get()
+        const { pendingNextSeasonState, endOfSeasonSummary, year, realWorldMode } = get()
         if (!pendingNextSeasonState || !endOfSeasonSummary) return
-        const { drivers, teams } = pendingNextSeasonState
+        const { teams } = pendingNextSeasonState
+        const newYear = year + 1
+
+        // Real-world mode (while the dataset still has entrants): seed next year's real rookies into
+        // the free-agent pool so the emergent market signs real drivers, never fictional fill-ins,
+        // before 2026. The market still decides who-signs-where; we only make the pool real.
+        let drivers = pendingNextSeasonState.drivers
+        if (realWorldMode && newYear <= lastDriverEntryYear()) {
+          const have = new Set(drivers.map((d) => d.id))
+          drivers = [...drivers, ...rookiesForYear(newYear).filter((d) => !have.has(d.id))]
+        }
 
         const { updatedDrivers, marketMoves, seatContests, droppedDrivers } = runDriverMarket(
           drivers,
@@ -644,7 +654,7 @@ export const useSeasonStore = create<SeasonStore>()(
           endOfSeasonSummary.driverMediaScores,
           endOfSeasonSummary.teamMediaScores,
           endOfSeasonSummary.retentionDelta ?? {},
-          year + 1,
+          newYear,
           Math.random,
         )
 
