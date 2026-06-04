@@ -2,6 +2,7 @@
 
 import type { RaceResult, Team } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
+import { DriverLink } from '@/components/world/EntityLink'
 
 interface Props {
   results: RaceResult[]
@@ -40,7 +41,7 @@ export function PostRacePanel({ results, teams, currentRound, saving, onSaveAndC
                   <td className="py-1 px-1">
                     <div className="flex items-center gap-1.5">
                       <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#FFFFFF' }} />
-                      <span className="text-[#FFFFFF] truncate">{r.driverName}</span>
+                      <DriverLink id={r.driverId} className="text-[#FFFFFF] truncate">{r.driverName}</DriverLink>
                     </div>
                   </td>
                   <td className="py-1 px-1 text-right font-bold">
