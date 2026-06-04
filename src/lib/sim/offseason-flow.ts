@@ -4,7 +4,7 @@ import {
   actionInsertConstructorStandings,
   actionGetRecentConstructorHistory,
 } from '@/lib/db/actions'
-import { actionGetDriverCareers, actionGetTeamCareers, actionSaveSeasonNews } from '@/lib/news/actions'
+import { actionGetDriverCareers, actionGetTeamCareers, actionGetSeasonRecords, actionSaveSeasonNews } from '@/lib/news/actions'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { generateNews } from '@/lib/news/engine'
 
@@ -30,15 +30,16 @@ export async function advanceOffSeason(): Promise<string> {
         // Snapshot the complete live feed before archiving: the attribute-dependent producers
         // (silly-season, driver-to-watch) can't be rebuilt from results, so we persist them now.
         // The store still holds the finished season here (next-season state is pending, not live).
-        const [careerBase, teamCareerBase] = await Promise.all([
+        const [careerBase, teamCareerBase, records] = await Promise.all([
           actionGetDriverCareers(s.year - 1),
           actionGetTeamCareers(s.year - 1),
+          actionGetSeasonRecords(),
         ])
         const articles = generateNews(buildLiveNewsContext({
           year: s.year, phase: s.phase, raceResults: s.raceResults, drivers: s.drivers, teams: s.teams,
           allUpgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
           endOfSeasonSummary: s.endOfSeasonSummary,
-        }, careerBase, teamCareerBase))
+        }, careerBase, teamCareerBase, records))
         await actionSaveSeasonNews(s.dbSeasonId, JSON.stringify(articles))
 
         await actionArchiveSeason(s.dbSeasonId)

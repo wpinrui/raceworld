@@ -17,7 +17,7 @@
 
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { NewsArticle, NewsContext, DriverCareer, TeamCareer } from '@/lib/news/engine'
+import type { NewsArticle, NewsContext, DriverCareer, TeamCareer, RecordsContext } from '@/lib/news/engine'
 import type { RaceResult } from '@/lib/sim/types'
 
 // ---- args -------------------------------------------------------------------
@@ -114,13 +114,49 @@ async function main() {
     }
   }
 
+  // Per-season tallies of COMPLETED seasons, for the records producer's baselines + history-depth gate
+  // (mirrors actionGetSeasonRecords, but from the in-memory run; the live season is appended only once
+  // it finishes, so captures during a season see prior seasons only).
+  type DRow = { year: number; id: string; name: string; wins: number; poles: number; podiums: number; points: number; dnfs: number }
+  type TRow = { year: number; id: string; name: string; wins: number; podiums: number; points: number }
+  const driverRows: DRow[] = []
+  const teamRows: TRow[] = []
+  const recordCompletedSeason = (yr: number, rounds: RaceResult[][]) => {
+    const d = new Map<string, DRow>(); const t = new Map<string, TRow>()
+    for (const round of rounds) for (const r of round) {
+      const fp = r.finishPosition
+      const dr = d.get(r.driverId) ?? { year: yr, id: r.driverId, name: r.driverName, wins: 0, poles: 0, podiums: 0, points: 0, dnfs: 0 }
+      dr.points += r.points; if (fp === 1) dr.wins++; if (r.gridPosition === 1) dr.poles++; if (fp != null && fp <= 3) dr.podiums++; if (r.dnf) dr.dnfs++
+      d.set(r.driverId, dr)
+      const tr = t.get(r.teamId) ?? { year: yr, id: r.teamId, name: r.teamName, wins: 0, podiums: 0, points: 0 }
+      tr.points += r.points; if (fp === 1) tr.wins++; if (fp != null && fp <= 3) tr.podiums++
+      t.set(r.teamId, tr)
+    }
+    driverRows.push(...d.values()); teamRows.push(...t.values())
+  }
+  const best = <T extends { year: number }>(rows: T[], val: (r: T) => number, name: (r: T) => string) => {
+    let b: T | undefined; for (const r of rows) if (!b || val(r) > val(b)) b = r
+    return b && val(b) >= 1 ? { value: val(b), holderName: name(b), year: b.year } : undefined
+  }
+  const buildRecords = (): RecordsContext => {
+    const driverNames: Record<string, string> = {}; const teamNames: Record<string, string> = {}
+    for (const r of driverRows) driverNames[r.id] = r.name
+    for (const r of teamRows) teamNames[r.id] = r.name
+    return {
+      archivedSeasons: new Set(driverRows.map((r) => r.year)).size,
+      seasonDriver: { wins: best(driverRows, (r) => r.wins, (r) => r.name), poles: best(driverRows, (r) => r.poles, (r) => r.name), podiums: best(driverRows, (r) => r.podiums, (r) => r.name), points: best(driverRows, (r) => r.points, (r) => r.name), dnfs: best(driverRows, (r) => r.dnfs, (r) => r.name) },
+      seasonTeam: { wins: best(teamRows, (r) => r.wins, (r) => r.name), podiums: best(teamRows, (r) => r.podiums, (r) => r.name), points: best(teamRows, (r) => r.points, (r) => r.name) },
+      driverNames, teamNames,
+    }
+  }
+
   const buildCtx = (): NewsContext => {
     const s = season()
     return {
       year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
       upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
-      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers, teamCareers,
+      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers, teamCareers, records: buildRecords(),
     }
   }
 
@@ -199,6 +235,9 @@ async function main() {
       ?? season().constructorStandings[0]?.teamName ?? '(unknown)'
     summaries.push({ year, champion, wcc, races: season().raceResults.length })
     process.stderr.write(`  ${year}: WDC ${champion}, WCC ${wcc}\n`)
+
+    // Bank this completed season's tallies so next season's records baselines + depth gate see it.
+    recordCompletedSeason(year, season().raceResults)
   }
 
   // ---- assemble markdown ----------------------------------------------------

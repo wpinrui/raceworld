@@ -10,13 +10,13 @@ import { useSettingsStore } from '@/lib/store/settings-store'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 import { raceDate, toISODate, fromISODate, formatDate } from '@/lib/sim/calendar-dates'
-import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop } from '@/lib/sim/continue-loop'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { advanceOffSeason, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
-import { actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
+import { actionGetDriverCareers, actionGetTeamCareers, actionGetSeasonRecords } from '@/lib/news/actions'
 import { useSetupCta } from '@/lib/store/setup-cta'
 import { pendingRealWorldChanges } from '@/lib/history/transitions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
@@ -60,6 +60,7 @@ export default function Nav() {
   // retirement interrupts see real records. Fetched once, like the newsroom.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
+  const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
 
   useEffect(() => setHydrated(true), [])
   // Pre-season (no season started yet): Setup is the only reachable page.
@@ -69,6 +70,7 @@ export default function Nav() {
   useEffect(() => {
     actionGetDriverCareers(year - 1).then(setCareerBase).catch(() => setCareerBase({}))
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
+    actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
   }, [year])
 
   const seasonActive = phase !== 'idle'
@@ -137,7 +139,7 @@ export default function Nav() {
         const settings = useSettingsStore.getState()
         while (true) {
           const s = useSeasonStore.getState()
-          const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase))
+          const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records))
           const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
           if (stop.reason === 'news') { s.setCurrentDate(stop.date); setNewsStop({ date: stop.date, articles: stop.articles }); break }
           if (stop.reason === 'race') {
