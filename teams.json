@@ -2,7 +2,7 @@
   "1996": [
     {
       "id": "williams",
-      "name": "Williams-Renault",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -24,7 +24,7 @@
     },
     {
       "id": "enstone",
-      "name": "Benetton-Renault",
+      "name": "Benetton",
       "shortName": "BEN",
       "nationality": "Italy",
       "color": "#1E8C5A",
@@ -35,7 +35,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#D50000",
@@ -46,7 +46,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Peugeot",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -57,7 +57,7 @@
     },
     {
       "id": "prost",
-      "name": "Ligier-Mugen-Honda",
+      "name": "Ligier",
       "shortName": "LIG",
       "nationality": "France",
       "color": "#0033A0",
@@ -68,7 +68,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ford",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -79,7 +79,7 @@
     },
     {
       "id": "brackley",
-      "name": "Tyrrell-Yamaha",
+      "name": "Tyrrell",
       "shortName": "TYR",
       "nationality": "United Kingdom",
       "color": "#1B3D6E",
@@ -90,7 +90,7 @@
     },
     {
       "id": "arrows",
-      "name": "Footwork-Hart",
+      "name": "Footwork",
       "shortName": "FOO",
       "nationality": "United Kingdom",
       "color": "#E37222",
@@ -101,7 +101,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Ford",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -112,7 +112,7 @@
     },
     {
       "id": "forti",
-      "name": "Forti-Ford",
+      "name": "Forti",
       "shortName": "FOR",
       "nationality": "Italy",
       "color": "#FFC000",
@@ -125,7 +125,7 @@
   "1997": [
     {
       "id": "williams",
-      "name": "Williams-Renault",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -147,7 +147,7 @@
     },
     {
       "id": "enstone",
-      "name": "Benetton-Renault",
+      "name": "Benetton",
       "shortName": "BEN",
       "nationality": "Italy",
       "color": "#1E8C5A",
@@ -158,7 +158,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -169,7 +169,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Peugeot",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -180,7 +180,7 @@
     },
     {
       "id": "prost",
-      "name": "Prost-Mugen-Honda",
+      "name": "Prost",
       "shortName": "PRO",
       "nationality": "France",
       "color": "#0033A0",
@@ -191,7 +191,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -202,7 +202,7 @@
     },
     {
       "id": "arrows",
-      "name": "Arrows-Yamaha",
+      "name": "Arrows",
       "shortName": "ARR",
       "nationality": "United Kingdom",
       "color": "#E37222",
@@ -213,7 +213,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Stewart-Ford",
+      "name": "Stewart",
       "shortName": "STE",
       "nationality": "United Kingdom",
       "color": "#1D3557",
@@ -224,7 +224,7 @@
     },
     {
       "id": "brackley",
-      "name": "Tyrrell-Ford",
+      "name": "Tyrrell",
       "shortName": "TYR",
       "nationality": "United Kingdom",
       "color": "#1B3D6E",
@@ -235,7 +235,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Hart",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -246,7 +246,7 @@
     },
     {
       "id": "lola",
-      "name": "Lola-Ford",
+      "name": "Lola",
       "shortName": "LOL",
       "nationality": "United Kingdom",
       "color": "#D40000",
@@ -259,7 +259,7 @@
   "1998": [
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -281,7 +281,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mecachrome",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -292,7 +292,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Mugen-Honda",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -303,7 +303,7 @@
     },
     {
       "id": "enstone",
-      "name": "Benetton-Playlife",
+      "name": "Benetton",
       "shortName": "BEN",
       "nationality": "Italy",
       "color": "#1E8C5A",
@@ -314,7 +314,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -336,7 +336,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Stewart-Ford",
+      "name": "Stewart",
       "shortName": "STE",
       "nationality": "United Kingdom",
       "color": "#1D3557",
@@ -347,7 +347,7 @@
     },
     {
       "id": "prost",
-      "name": "Prost-Peugeot",
+      "name": "Prost",
       "shortName": "PRO",
       "nationality": "France",
       "color": "#0033A0",
@@ -358,7 +358,7 @@
     },
     {
       "id": "brackley",
-      "name": "Tyrrell-Ford",
+      "name": "Tyrrell",
       "shortName": "TYR",
       "nationality": "United Kingdom",
       "color": "#1B3D6E",
@@ -369,7 +369,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Ford",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -393,7 +393,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -404,7 +404,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Mugen-Honda",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -415,7 +415,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Stewart-Ford",
+      "name": "Stewart",
       "shortName": "STE",
       "nationality": "United Kingdom",
       "color": "#1D3557",
@@ -426,7 +426,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Supertec",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -437,7 +437,7 @@
     },
     {
       "id": "enstone",
-      "name": "Benetton-Playlife",
+      "name": "Benetton",
       "shortName": "BEN",
       "nationality": "Italy",
       "color": "#1E8C5A",
@@ -448,7 +448,7 @@
     },
     {
       "id": "prost",
-      "name": "Prost-Peugeot",
+      "name": "Prost",
       "shortName": "PRO",
       "nationality": "France",
       "color": "#0033A0",
@@ -459,7 +459,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -470,7 +470,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Ford",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -492,7 +492,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Supertec",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -516,7 +516,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -527,7 +527,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-BMW",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -538,7 +538,7 @@
     },
     {
       "id": "enstone",
-      "name": "Benetton-Playlife",
+      "name": "Benetton",
       "shortName": "BEN",
       "nationality": "Italy",
       "color": "#1E8C5A",
@@ -549,7 +549,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Honda",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -560,7 +560,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Mugen-Honda",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -571,7 +571,7 @@
     },
     {
       "id": "arrows",
-      "name": "Arrows-Supertec",
+      "name": "Arrows",
       "shortName": "ARR",
       "nationality": "United Kingdom",
       "color": "#E37222",
@@ -582,7 +582,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -593,7 +593,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Jaguar-Cosworth",
+      "name": "Jaguar",
       "shortName": "JAG",
       "nationality": "United Kingdom",
       "color": "#115740",
@@ -604,7 +604,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Fondmetal",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -615,7 +615,7 @@
     },
     {
       "id": "prost",
-      "name": "Prost-Peugeot",
+      "name": "Prost",
       "shortName": "PRO",
       "nationality": "France",
       "color": "#0033A0",
@@ -639,7 +639,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -650,7 +650,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-BMW",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -661,7 +661,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -672,7 +672,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Honda",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -683,7 +683,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Honda",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -694,7 +694,7 @@
     },
     {
       "id": "enstone",
-      "name": "Benetton-Renault",
+      "name": "Benetton",
       "shortName": "BEN",
       "nationality": "Italy",
       "color": "#1E8C5A",
@@ -705,7 +705,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Jaguar-Cosworth",
+      "name": "Jaguar",
       "shortName": "JAG",
       "nationality": "United Kingdom",
       "color": "#115740",
@@ -716,7 +716,7 @@
     },
     {
       "id": "prost",
-      "name": "Prost-Acer",
+      "name": "Prost",
       "shortName": "PRO",
       "nationality": "France",
       "color": "#0033A0",
@@ -727,7 +727,7 @@
     },
     {
       "id": "arrows",
-      "name": "Arrows-Asiatech",
+      "name": "Arrows",
       "shortName": "ARR",
       "nationality": "United Kingdom",
       "color": "#E37222",
@@ -738,7 +738,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-European",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -762,7 +762,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-BMW",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -773,7 +773,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -795,7 +795,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -806,7 +806,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Honda",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -817,7 +817,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Jaguar-Cosworth",
+      "name": "Jaguar",
       "shortName": "JAG",
       "nationality": "United Kingdom",
       "color": "#115740",
@@ -828,7 +828,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Honda",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -839,7 +839,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Asiatech",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -861,7 +861,7 @@
     },
     {
       "id": "arrows",
-      "name": "Arrows-Cosworth",
+      "name": "Arrows",
       "shortName": "ARR",
       "nationality": "United Kingdom",
       "color": "#E37222",
@@ -885,7 +885,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-BMW",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -896,7 +896,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -918,7 +918,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Honda",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -929,7 +929,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -940,7 +940,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Jaguar-Cosworth",
+      "name": "Jaguar",
       "shortName": "JAG",
       "nationality": "United Kingdom",
       "color": "#115740",
@@ -962,7 +962,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Ford",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -973,7 +973,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Cosworth",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -997,7 +997,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Honda",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -1019,7 +1019,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-BMW",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1030,7 +1030,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1041,7 +1041,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -1052,7 +1052,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Jaguar-Cosworth",
+      "name": "Jaguar",
       "shortName": "JAG",
       "nationality": "United Kingdom",
       "color": "#115740",
@@ -1074,7 +1074,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Ford",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -1085,7 +1085,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Cosworth",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -1109,7 +1109,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1142,7 +1142,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-BMW",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1153,7 +1153,7 @@
     },
     {
       "id": "brackley",
-      "name": "BAR-Honda",
+      "name": "BAR",
       "shortName": "BAR",
       "nationality": "United Kingdom",
       "color": "#D52B1E",
@@ -1164,7 +1164,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Cosworth",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1175,7 +1175,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Petronas",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#C00000",
@@ -1186,7 +1186,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Jordan-Toyota",
+      "name": "Jordan",
       "shortName": "JOR",
       "nationality": "Ireland",
       "color": "#FFD500",
@@ -1197,7 +1197,7 @@
     },
     {
       "id": "faenza",
-      "name": "Minardi-Cosworth",
+      "name": "Minardi",
       "shortName": "MIN",
       "nationality": "Italy",
       "color": "#000000",
@@ -1232,7 +1232,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1276,7 +1276,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Ferrari",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1287,7 +1287,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Cosworth",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1298,7 +1298,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Cosworth",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -1309,7 +1309,7 @@
     },
     {
       "id": "silverstone",
-      "name": "MF1-Toyota",
+      "name": "MF1",
       "shortName": "MF1",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -1320,7 +1320,7 @@
     },
     {
       "id": "superaguri",
-      "name": "Super Aguri-Honda",
+      "name": "Super Aguri",
       "shortName": "SAF",
       "nationality": "Japan",
       "color": "#BC002D",
@@ -1344,7 +1344,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1377,7 +1377,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Toyota",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1388,7 +1388,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1410,7 +1410,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -1432,7 +1432,7 @@
     },
     {
       "id": "superaguri",
-      "name": "Super Aguri-Honda",
+      "name": "Super Aguri",
       "shortName": "SAF",
       "nationality": "Japan",
       "color": "#BC002D",
@@ -1443,7 +1443,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Spyker-Ferrari",
+      "name": "Spyker",
       "shortName": "SPY",
       "nationality": "Netherlands",
       "color": "#FF6600",
@@ -1467,7 +1467,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1511,7 +1511,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -1522,7 +1522,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1533,7 +1533,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Toyota",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1555,7 +1555,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Ferrari",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -1566,7 +1566,7 @@
     },
     {
       "id": "superaguri",
-      "name": "Super Aguri-Honda",
+      "name": "Super Aguri",
       "shortName": "SAF",
       "nationality": "Japan",
       "color": "#BC002D",
@@ -1579,7 +1579,7 @@
   "2009": [
     {
       "id": "brackley",
-      "name": "Brawn-Mercedes",
+      "name": "Brawn",
       "shortName": "BRW",
       "nationality": "United Kingdom",
       "color": "#B5D200",
@@ -1590,7 +1590,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1601,7 +1601,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1645,7 +1645,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Toyota",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1667,7 +1667,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -1678,7 +1678,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -1691,7 +1691,7 @@
   "2010": [
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1702,7 +1702,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1746,7 +1746,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Cosworth",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1757,7 +1757,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -1768,7 +1768,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -1779,7 +1779,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -1790,7 +1790,7 @@
     },
     {
       "id": "caterham",
-      "name": "Lotus-Cosworth",
+      "name": "Lotus",
       "shortName": "LOT",
       "nationality": "Malaysia",
       "color": "#00594F",
@@ -1801,7 +1801,7 @@
     },
     {
       "id": "hrt",
-      "name": "HRT-Cosworth",
+      "name": "HRT",
       "shortName": "HRT",
       "nationality": "Spain",
       "color": "#8B0000",
@@ -1812,7 +1812,7 @@
     },
     {
       "id": "manor",
-      "name": "Virgin-Cosworth",
+      "name": "Virgin",
       "shortName": "VIR",
       "nationality": "United Kingdom",
       "color": "#E2001A",
@@ -1825,7 +1825,7 @@
   "2011": [
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1836,7 +1836,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1880,7 +1880,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -1891,7 +1891,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -1902,7 +1902,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -1913,7 +1913,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Cosworth",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -1924,7 +1924,7 @@
     },
     {
       "id": "caterham",
-      "name": "Lotus-Renault",
+      "name": "Lotus",
       "shortName": "LOT",
       "nationality": "Malaysia",
       "color": "#00594F",
@@ -1935,7 +1935,7 @@
     },
     {
       "id": "hrt",
-      "name": "HRT-Cosworth",
+      "name": "HRT",
       "shortName": "HRT",
       "nationality": "Spain",
       "color": "#8B0000",
@@ -1946,7 +1946,7 @@
     },
     {
       "id": "manor",
-      "name": "Virgin-Cosworth",
+      "name": "Virgin",
       "shortName": "VIR",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -1959,7 +1959,7 @@
   "2012": [
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -1981,7 +1981,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -1992,7 +1992,7 @@
     },
     {
       "id": "enstone",
-      "name": "Lotus-Renault",
+      "name": "Lotus",
       "shortName": "LOT",
       "nationality": "United Kingdom",
       "color": "#B8941F",
@@ -2014,7 +2014,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -2025,7 +2025,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -2036,7 +2036,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Renault",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2047,7 +2047,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2058,7 +2058,7 @@
     },
     {
       "id": "caterham",
-      "name": "Caterham-Renault",
+      "name": "Caterham",
       "shortName": "CAT",
       "nationality": "Malaysia",
       "color": "#00594F",
@@ -2069,7 +2069,7 @@
     },
     {
       "id": "manor",
-      "name": "Marussia-Cosworth",
+      "name": "Marussia",
       "shortName": "MRU",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -2080,7 +2080,7 @@
     },
     {
       "id": "hrt",
-      "name": "HRT-Cosworth",
+      "name": "HRT",
       "shortName": "HRT",
       "nationality": "Spain",
       "color": "#8B0000",
@@ -2093,7 +2093,7 @@
   "2013": [
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2126,7 +2126,7 @@
     },
     {
       "id": "enstone",
-      "name": "Lotus-Renault",
+      "name": "Lotus",
       "shortName": "LOT",
       "nationality": "United Kingdom",
       "color": "#B8941F",
@@ -2137,7 +2137,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -2148,7 +2148,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -2159,7 +2159,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -2170,7 +2170,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2181,7 +2181,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Renault",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2192,7 +2192,7 @@
     },
     {
       "id": "manor",
-      "name": "Marussia-Cosworth",
+      "name": "Marussia",
       "shortName": "MRU",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -2203,7 +2203,7 @@
     },
     {
       "id": "caterham",
-      "name": "Caterham-Renault",
+      "name": "Caterham",
       "shortName": "CAT",
       "nationality": "Malaysia",
       "color": "#00594F",
@@ -2227,7 +2227,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2238,7 +2238,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2260,7 +2260,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -2271,7 +2271,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -2282,7 +2282,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Renault",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2293,7 +2293,7 @@
     },
     {
       "id": "enstone",
-      "name": "Lotus-Renault",
+      "name": "Lotus",
       "shortName": "LOT",
       "nationality": "United Kingdom",
       "color": "#B8941F",
@@ -2304,7 +2304,7 @@
     },
     {
       "id": "manor",
-      "name": "Marussia-Ferrari",
+      "name": "Marussia",
       "shortName": "MRU",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -2315,7 +2315,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -2326,7 +2326,7 @@
     },
     {
       "id": "caterham",
-      "name": "Caterham-Renault",
+      "name": "Caterham",
       "shortName": "CAT",
       "nationality": "Malaysia",
       "color": "#00594F",
@@ -2361,7 +2361,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2372,7 +2372,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Renault",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2383,7 +2383,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -2394,7 +2394,7 @@
     },
     {
       "id": "enstone",
-      "name": "Lotus-Mercedes",
+      "name": "Lotus",
       "shortName": "LOT",
       "nationality": "United Kingdom",
       "color": "#B8941F",
@@ -2405,7 +2405,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Renault",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2416,7 +2416,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -2427,7 +2427,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Honda",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#C8C8C8",
@@ -2438,7 +2438,7 @@
     },
     {
       "id": "manor",
-      "name": "Marussia-Ferrari",
+      "name": "Marussia",
       "shortName": "MRU",
       "nationality": "Russia",
       "color": "#E2001A",
@@ -2462,7 +2462,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-TAG Heuer",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2484,7 +2484,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF6600",
@@ -2495,7 +2495,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2506,7 +2506,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Honda",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -2517,7 +2517,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Ferrari",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2528,7 +2528,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -2550,7 +2550,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -2561,7 +2561,7 @@
     },
     {
       "id": "manor",
-      "name": "MRT-Mercedes",
+      "name": "Manor",
       "shortName": "MRT",
       "nationality": "United Kingdom",
       "color": "#E2001A",
@@ -2596,7 +2596,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-TAG Heuer",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2607,7 +2607,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF80C7",
@@ -2618,7 +2618,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2651,7 +2651,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -2662,7 +2662,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Honda",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -2673,7 +2673,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#006EB6",
@@ -2708,7 +2708,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-TAG Heuer",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2730,7 +2730,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -2741,7 +2741,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Renault",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -2752,7 +2752,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India-Mercedes",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF80C7",
@@ -2763,7 +2763,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Sauber-Ferrari",
+      "name": "Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#9B0000",
@@ -2774,7 +2774,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Honda",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2785,7 +2785,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2796,7 +2796,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Force India (Sahara)",
+      "name": "Force India",
       "shortName": "FOR",
       "nationality": "India",
       "color": "#FF80C7",
@@ -2831,7 +2831,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Honda",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2842,7 +2842,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Renault",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -2864,7 +2864,7 @@
     },
     {
       "id": "faenza",
-      "name": "Toro Rosso-Honda",
+      "name": "Toro Rosso",
       "shortName": "STR",
       "nationality": "Italy",
       "color": "#0E2A6B",
@@ -2875,7 +2875,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Racing Point-Mercedes",
+      "name": "Racing Point",
       "shortName": "RP",
       "nationality": "United Kingdom",
       "color": "#FF80C7",
@@ -2886,7 +2886,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Alfa Romeo-Ferrari",
+      "name": "Alfa Romeo",
       "shortName": "ALF",
       "nationality": "Switzerland",
       "color": "#900000",
@@ -2897,7 +2897,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#C0A062",
@@ -2908,7 +2908,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -2932,7 +2932,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Honda",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -2943,7 +2943,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Renault",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -2954,7 +2954,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Racing Point-Mercedes",
+      "name": "Racing Point",
       "shortName": "RP",
       "nationality": "United Kingdom",
       "color": "#FF80C7",
@@ -2987,7 +2987,7 @@
     },
     {
       "id": "faenza",
-      "name": "AlphaTauri-Honda",
+      "name": "AlphaTauri",
       "shortName": "AT",
       "nationality": "Italy",
       "color": "#20394C",
@@ -2998,7 +2998,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Alfa Romeo-Ferrari",
+      "name": "Alfa Romeo",
       "shortName": "ALF",
       "nationality": "Switzerland",
       "color": "#900000",
@@ -3009,7 +3009,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -3020,7 +3020,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -3044,7 +3044,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Honda",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -3066,7 +3066,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -3077,7 +3077,7 @@
     },
     {
       "id": "enstone",
-      "name": "Alpine-Renault",
+      "name": "Alpine",
       "shortName": "ALP",
       "nationality": "France",
       "color": "#0078C1",
@@ -3088,7 +3088,7 @@
     },
     {
       "id": "faenza",
-      "name": "AlphaTauri-Honda",
+      "name": "AlphaTauri",
       "shortName": "AT",
       "nationality": "Italy",
       "color": "#20394C",
@@ -3099,7 +3099,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Aston Martin-Mercedes",
+      "name": "Aston Martin",
       "shortName": "AMR",
       "nationality": "United Kingdom",
       "color": "#006F62",
@@ -3110,7 +3110,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -3121,7 +3121,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Alfa Romeo-Ferrari",
+      "name": "Alfa Romeo",
       "shortName": "ALF",
       "nationality": "Switzerland",
       "color": "#900000",
@@ -3132,7 +3132,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -3145,7 +3145,7 @@
   "2022": [
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-RBPT",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -3178,7 +3178,7 @@
     },
     {
       "id": "enstone",
-      "name": "Alpine-Renault",
+      "name": "Alpine",
       "shortName": "ALP",
       "nationality": "France",
       "color": "#0078C1",
@@ -3189,7 +3189,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -3200,7 +3200,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Alfa Romeo-Ferrari",
+      "name": "Alfa Romeo",
       "shortName": "ALF",
       "nationality": "Switzerland",
       "color": "#900000",
@@ -3211,7 +3211,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Aston Martin-Mercedes",
+      "name": "Aston Martin",
       "shortName": "AMR",
       "nationality": "United Kingdom",
       "color": "#006F62",
@@ -3222,7 +3222,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -3233,7 +3233,7 @@
     },
     {
       "id": "faenza",
-      "name": "AlphaTauri-RBPT",
+      "name": "AlphaTauri",
       "shortName": "AT",
       "nationality": "Italy",
       "color": "#20394C",
@@ -3244,7 +3244,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -3257,7 +3257,7 @@
   "2023": [
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Honda RBPT",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -3290,7 +3290,7 @@
     },
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -3301,7 +3301,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Aston Martin-Mercedes",
+      "name": "Aston Martin",
       "shortName": "AMR",
       "nationality": "United Kingdom",
       "color": "#006F62",
@@ -3312,7 +3312,7 @@
     },
     {
       "id": "enstone",
-      "name": "Alpine-Renault",
+      "name": "Alpine",
       "shortName": "ALP",
       "nationality": "France",
       "color": "#0078C1",
@@ -3323,7 +3323,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -3334,7 +3334,7 @@
     },
     {
       "id": "faenza",
-      "name": "AlphaTauri-Honda RBPT",
+      "name": "AlphaTauri",
       "shortName": "AT",
       "nationality": "Italy",
       "color": "#20394C",
@@ -3345,7 +3345,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Alfa Romeo-Ferrari",
+      "name": "Alfa Romeo",
       "shortName": "ALF",
       "nationality": "Switzerland",
       "color": "#900000",
@@ -3356,7 +3356,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -3369,7 +3369,7 @@
   "2024": [
     {
       "id": "mclaren",
-      "name": "McLaren-Mercedes",
+      "name": "McLaren",
       "shortName": "MCL",
       "nationality": "United Kingdom",
       "color": "#FF8000",
@@ -3391,7 +3391,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull-Honda RBPT",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -3413,7 +3413,7 @@
     },
     {
       "id": "silverstone",
-      "name": "Aston Martin-Mercedes",
+      "name": "Aston Martin",
       "shortName": "AMR",
       "nationality": "United Kingdom",
       "color": "#006F62",
@@ -3424,7 +3424,7 @@
     },
     {
       "id": "enstone",
-      "name": "Alpine-Renault",
+      "name": "Alpine",
       "shortName": "ALP",
       "nationality": "France",
       "color": "#0078C1",
@@ -3435,7 +3435,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas-Ferrari",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -3446,7 +3446,7 @@
     },
     {
       "id": "faenza",
-      "name": "RB-Honda RBPT",
+      "name": "RB",
       "shortName": "RB",
       "nationality": "Italy",
       "color": "#1634CB",
@@ -3457,7 +3457,7 @@
     },
     {
       "id": "williams",
-      "name": "Williams-Mercedes",
+      "name": "Williams",
       "shortName": "WIL",
       "nationality": "United Kingdom",
       "color": "#1A3C8E",
@@ -3468,7 +3468,7 @@
     },
     {
       "id": "hinwil",
-      "name": "Kick Sauber-Ferrari",
+      "name": "Kick Sauber",
       "shortName": "SAU",
       "nationality": "Switzerland",
       "color": "#00E701",
@@ -3503,7 +3503,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull Racing",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -3558,7 +3558,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas F1 Team",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
@@ -3626,7 +3626,7 @@
     },
     {
       "id": "miltonkeynes",
-      "name": "Red Bull Racing",
+      "name": "Red Bull",
       "shortName": "RBR",
       "nationality": "Austria",
       "color": "#121F45",
@@ -3659,7 +3659,7 @@
     },
     {
       "id": "haas",
-      "name": "Haas F1 Team",
+      "name": "Haas",
       "shortName": "HAA",
       "nationality": "United States",
       "color": "#B6BABD",
