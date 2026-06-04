@@ -24,7 +24,13 @@ export default function SettingsPage() {
   useEffect(() => setHydrated(true), [])
 
   async function handleClearSave() {
-    await actionResetDatabase()
+    // Even if the DB reset fails, still clear local state and navigate — never strand the player on a
+    // half-cleared save. The next New Game re-runs the reset anyway.
+    try {
+      await actionResetDatabase()
+    } catch {
+      // swallow: local clear + redirect below still run
+    }
     localStorage.removeItem('raceworld-season')
     // Personal settings (followed drivers/teams, interrupt prefs) are their own persisted store; a
     // New Game must clear them too, or follows leak across saves.
