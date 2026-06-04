@@ -27,6 +27,7 @@ import type {
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
+import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
 import milestoneCopy from './milestone-copy.json'
 import titleCopy from './titlescenario-copy.json'
 import sillyCopy from './sillyseason-copy.json'
@@ -89,6 +90,9 @@ export interface NewsArticle {
   headline: string
   dek: string
   body: string
+  // Always populated by generateNews (optional only so the per-producer literals stay terse):
+  date?: string      // ISO 'YYYY-MM-DD' the story drops on, derived from round + category + calendar
+  entities?: { driverIds: string[]; teamIds: string[]; circuitId?: string } // who/what it mentions (for name-follow + linking)
 }
 
 const DRIVER_MAX_PER_RACE = 25
@@ -123,7 +127,7 @@ const CIRCUIT_TRAITS: Record<string, string> = {
   bahrain: 'the abrasive Bahrain surface',
   'saudi-arabia': 'the high-speed walls of Jeddah',
   miami: 'the Miami heat',
-  imola: 'the narrow, old-school Imola',
+  madrid: 'the fast street sweeps of the Madring',
   monaco: 'the tight streets of Monaco',
   spain: 'the aero-hungry corners of Barcelona',
   canada: 'the stop-start rhythm of Montreal',
@@ -3061,6 +3065,91 @@ function midSeasonSwaps(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
+// --- Article dating + entity tagging (applied centrally so per-producer literals stay terse) ---
+
+// Days a category's story drops relative to its round's race day (negative = before the race).
+const CATEGORY_DAY_OFFSET: Record<string, number> = {
+  preview_schedule: -4,   // race-week preview
+  technical_upgrade: -2,  // upgrade reveal in practice
+  car_launch_livery: 0,
+  rookie_debut: 0,
+  race_report: 0,         // race day (Sunday)
+  milestone: 0,
+  championship_state: 0,
+  feature: 2,
+  analysis_opinion: 2,
+  driver_to_watch: 3,
+  silly_season: 4,
+  mid_season_swap: 1,
+  driver_signing: 14,     // off-season market, anchored to the finale
+  driver_exit: 14,
+  career_retirement: 7,
+  team_entry: 21,
+  team_exit: 21,
+}
+
+function raceDayOf(ctx: NewsContext, round: number): Date {
+  const c = ctx.calendar[round - 1]
+  return c ? raceDate(ctx.year, c) : new Date(Date.UTC(ctx.year, 5, 1)) // archived fallback (cosmetic)
+}
+
+// The date a story drops (ISO). Pre-season (round 0) anchors ~2 weeks before the opener; the
+// off-season (round > N) anchors to the finale; in-season rounds to their race day + offset.
+function articleDate(ctx: NewsContext, a: NewsArticle): string {
+  const n = ctx.calendar.length
+  if (a.round <= 0) return toISODate(addDays(raceDayOf(ctx, 1), a.category === 'car_launch_livery' ? -24 : -14))
+  const anchor = a.round > n ? n : a.round
+  return toISODate(addDays(raceDayOf(ctx, anchor), CATEGORY_DAY_OFFSET[a.category] ?? 0))
+}
+
+function escapeRe(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+
+type EntTarget = { kind: 'driver' | 'team'; id: string }
+interface EntityMatcher { regex: RegExp | null; lookup: Map<string, EntTarget> }
+
+// Engine-side mirror of buildNewsIndex (LinkedText.tsx): longest-first, ambiguity-safe name → entity,
+// so an article's tagged ids match exactly what the UI hyperlinks.
+function buildEntityMatcher(ctx: NewsContext): EntityMatcher {
+  const map = new Map<string, EntTarget | null>()
+  const add = (variant: string, target: EntTarget) => {
+    const v = variant.trim()
+    if (!v) return
+    const cur = map.get(v)
+    if (cur === undefined) map.set(v, target)
+    else if (!cur || cur.kind !== target.kind || cur.id !== target.id) map.set(v, null) // ambiguous → drop
+  }
+  for (const d of ctx.drivers) {
+    if (!d.id || !d.name) continue
+    add(d.name, { kind: 'driver', id: d.id })
+    add(lastName(d.name), { kind: 'driver', id: d.id })
+  }
+  for (const t of ctx.teams) {
+    if (!t.id || !t.name) continue
+    add(t.name, { kind: 'team', id: t.id })
+  }
+  const lookup = new Map<string, EntTarget>()
+  for (const [k, v] of map) if (v) lookup.set(k, v)
+  const variants = [...lookup.keys()].sort((a, b) => b.length - a.length)
+  const regex = variants.length ? new RegExp(`\\b(${variants.map(escapeRe).join('|')})\\b`, 'g') : null
+  return { regex, lookup }
+}
+
+function entitiesFor(ctx: NewsContext, a: NewsArticle, m: EntityMatcher): NonNullable<NewsArticle['entities']> {
+  const driverIds = new Set<string>()
+  const teamIds = new Set<string>()
+  if (m.regex) {
+    const text = `${a.headline}\n${a.dek}\n${a.body}`
+    for (const match of text.matchAll(m.regex)) {
+      const t = m.lookup.get(match[0])
+      if (!t) continue
+      if (t.kind === 'driver') driverIds.add(t.id)
+      else teamIds.add(t.id)
+    }
+  }
+  const c = a.round >= 1 && a.round <= ctx.calendar.length ? ctx.calendar[a.round - 1]?.id : undefined
+  return { driverIds: [...driverIds], teamIds: [...teamIds], ...(c ? { circuitId: c } : {}) }
+}
+
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...preSeason(ctx),
@@ -3082,7 +3171,10 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
   const seen = new Set<string>()
   const deduped = all.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)))
   deduped.sort((a, b) => (b.round - a.round) || (b.priority - a.priority) || a.id.localeCompare(b.id))
-  return deduped.slice(0, 400)
+  // Stamp each surviving article with the date it drops and the entities it mentions (for the
+  // FM-style Continue loop's date-spread + name-follow interruption, and consistent hyperlinking).
+  const matcher = buildEntityMatcher(ctx)
+  return deduped.slice(0, 400).map((a) => ({ ...a, date: articleDate(ctx, a), entities: entitiesFor(ctx, a, matcher) }))
 }
 
 // Small helper so the page can label each card by category without importing the list.
