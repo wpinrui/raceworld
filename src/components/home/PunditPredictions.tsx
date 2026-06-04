@@ -92,10 +92,7 @@ function OffSeasonReview() {
 
   return (
     <Panel title={`Season ${season.year} · Off-Season`} flush>
-      <div className="p-4 space-y-3">
-        <p className="text-xs text-[#FFFFFF]">
-          Press <span className="font-semibold text-[#00D9FF]">Continue</span> (top right) to run the next stage. Review what has happened so far:
-        </p>
+      <div className="p-4">
         <div className="flex flex-wrap gap-2">
           {reached.map((p) => (
             <button
