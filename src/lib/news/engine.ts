@@ -2031,30 +2031,23 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
       ], `${seed}|b3`), sp),
     ),
   })
-  // One consolidated launch piece covering every team's new car, fastest to slowest, each with the
-  // paddock's tier read as a performance hint — rather than a separate, near-identical article per team.
+  // Launch coverage grouped into three pieces by the paddock's pace tier — front-runners, midfield,
+  // backmarkers — rather than one article per team (too many) or a single grid-wide piece. Each lists
+  // every car in its tier (fastest first), with the tier itself the performance hint.
   {
-    const lseed = `launch-${ctx.year}`
-    const byPaceTeams = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
-    const total = ctx.teams.length
-    const lslots: Record<string, string | number> = {
-      year: ctx.year, fav: byPaceTeams[0]?.name ?? '', fav2: byPaceTeams[1]?.name ?? '',
-      tail: byPaceTeams[byPaceTeams.length - 1]?.name ?? '', n_teams: total,
-    }
-    const teamLines = byPaceTeams.map((t) => {
+    const lyear = ctx.year
+    const tierKey = (t: Team) => tierWord(paceRank(ctx, t.id), ctx.teams.length)
+    const teamLine = (t: Team): string => {
       const squad = ctx.drivers.filter((d) => d.teamId === t.id).map((d) => d.name)
       const lastPos = lastSeasonPos(ctx, t.id)
-      const ts = {
-        team: t.name, team_poss: poss(t.name), squad: listJoin(squad) || 'an unchanged line-up',
-        tier: tierWord(paceRank(ctx, t.id), total), last_pos: lastPos ? ordinal(lastPos) : '', year: ctx.year,
-      }
-      const tseed = `${lseed}|${t.id}`
+      const ts = { team: t.name, team_poss: poss(t.name), squad: listJoin(squad) || 'an unchanged line-up', last_pos: lastPos ? ordinal(lastPos) : '', year: lyear }
+      const tseed = `launch-${lyear}|${t.id}`
       const base = fill(pick([
-        '{team} arrive rated as a {tier} proposition, {squad} charged with making the most of it.',
-        'For {team}, the new car lands in the {tier} bracket, {squad} the pairing trusted to deliver.',
-        '{team} unveil a {tier} machine, {squad} tasked with extracting every tenth.',
-        'The {team} car is pitched as a {tier} entry this year, with {squad} behind the wheel.',
-        '{team} pull the covers off a {tier} contender for {squad} to campaign.',
+        '{team} unveil their {year} challenger, {squad} tasked with extracting every tenth.',
+        'For {team}, {squad} are the pairing trusted to deliver this year.',
+        '{team} pull the covers off the car {squad} will campaign.',
+        '{team} present their new machine, with {squad} behind the wheel.',
+        '{team} reveal the {year} car {squad} will race.',
       ], `${tseed}|line`), ts)
       const ref = lastPos
         ? fill(pick([
@@ -2062,41 +2055,55 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
             ' Coming off {last_pos} in the constructors, the brief for this car was not a subtle one.',
           ], `${tseed}|ref`), ts)
         : fill(pick([
-            ' With no prior finish to measure against, the tier billing is the only public benchmark on it.',
+            ' With no prior finish to measure against, this launch is the only public benchmark on it.',
             ' A fresh entry with its own benchmark still to set.',
           ], `${tseed}|ref`), ts)
       return base + ref
-    })
-    out.push({
-      id: lseed, category: 'car_launch_livery', round: 0, priority: 32,
-      headline: fill(pick([
-        'The {year} cars break cover',
-        'Every {year} challenger is revealed',
-        'The {year} grid pulls the covers off',
-        'Launch season arrives for {year}',
-        'The {year} field shows its hand',
-      ], `${lseed}|h`), lslots),
-      dek: fill(pick([
-        'Every team has revealed its {year} challenger. Here is how the new grid shapes up, fastest to slowest.',
-        'All {n_teams} cars are out in the open, and {fav} set the early benchmark.',
-        'The {year} grid is unwrapped, {fav} fastest of the lot and {tail} with ground to make up.',
-      ], `${lseed}|d`), lslots),
-      body: paras(
-        fill(pick([
-          'Launch season is done, and the {year} grid has shown its hand. {fav} carry the fastest raw pace into the season, with {fav2} the closest to them on the early read.',
-          'With every car now revealed, the {year} pecking order has an early shape: {fav} at the head of it, {fav2} their nearest challenger.',
-        ], `${lseed}|intro`), lslots),
-        ...teamLines,
-        fill(pick([
-          'Pre-season tiers are a starting position, not a finishing one, and the development race will redraw this order long before the flag falls on {year}.',
-          'How these cars are rated today and how they finish {year} are rarely the same thing, and the upgrade war starts the moment the lights go out.',
-        ], `${lseed}|close`), lslots),
-        texture(`${lseed}|q`, [
-          '"Every team thinks they have made a step over the winter, that is the nature of this sport," one senior engineer noted.',
-          '"The timing screens in testing tell you something, but never everything," a paddock veteran cautioned.',
-        ], lslots, 80),
-      ),
-    })
+    }
+    const TIER_COPY: Record<'front-running' | 'midfield' | 'backmarker', { prio: number; h: string[]; d: string[]; intro: string[]; close: string[] }> = {
+      'front-running': {
+        prio: 34,
+        h: ['The {year} front-runners break cover', 'The fastest cars of {year} are revealed', 'The teams to beat unveil their {year} machines', 'The sharp end shows its hand for {year}'],
+        d: ['The cars expected to fight at the front in {year} are out in the open.', 'Pre-season pace puts these {n} {teams_word} at the head of the {year} field.'],
+        intro: ['These are the cars the paddock expects to fight for {year} wins, the quickest machines on the early read.', 'Pre-season running points to this group leading the way in {year}, {lead} setting the early benchmark.'],
+        close: ['Pre-season billing is a starting position, not a finishing one, and the development race will test every one of them.', 'Winter pace rarely survives the season unchanged, but this is where the {year} title fight begins.'],
+      },
+      midfield: {
+        prio: 33,
+        h: ['The {year} midfield shows its hand', 'The midfield pack reveal their {year} cars', 'The {year} midfield breaks cover', 'The chasing pack unveil their {year} machines'],
+        d: ['The cars set to scrap over the points in {year} are revealed.', 'The {year} midfield, where a single upgrade can reshape the order, breaks cover.'],
+        intro: ['This is the densest part of the grid, where tenths separate cars and a good upgrade can vault a team up the order in {year}.', 'The midfield is where {year} will be most fiercely contested, and these are the {n} {teams_word} that will fight over it.'],
+        close: ['In a group this tight, in-season development tends to decide who finishes best of the rest.', 'Nothing is settled here; the midfield order will move all {year} long.'],
+      },
+      backmarker: {
+        prio: 32,
+        h: ['The back of the {year} grid breaks cover', 'The {year} backmarkers reveal their cars', 'The grid\'s outsiders unveil their {year} machines', 'The rear of the {year} field shows its hand'],
+        d: ['The cars with the most to prove in {year} are out in the open.', 'The {n} {teams_word} starting {year} on the back foot reveal their machines.'],
+        intro: ['These teams begin {year} with ground to make up, the early pace leaving them at the back of the field.', 'For this group, {year} is about closing a gap, and the launch cars are the first step.'],
+        close: ['A strong development year can drag any of them into the midfield fight before the season is out.', 'The gap looks large now, but a single good upgrade can change the conversation.'],
+      },
+    }
+    for (const tier of ['front-running', 'midfield', 'backmarker'] as const) {
+      const group = [...ctx.teams].filter((t) => tierKey(t) === tier).sort((a, b) => b.carPace - a.carPace)
+      if (group.length === 0) continue
+      const lseed = `launch-${lyear}-${tier}`
+      const lslots = { year: lyear, lead: group[0]?.name ?? '', n: group.length, teams_word: plural(group.length, 'team') }
+      const C = TIER_COPY[tier]
+      out.push({
+        id: lseed, category: 'car_launch_livery', round: 0, priority: C.prio,
+        headline: fill(pick(C.h, `${lseed}|h`), lslots),
+        dek: fill(pick(C.d, `${lseed}|d`), lslots),
+        body: paras(
+          fill(pick(C.intro, `${lseed}|intro`), lslots),
+          ...group.map(teamLine),
+          fill(pick(C.close, `${lseed}|close`), lslots),
+          texture(`${lseed}|q`, [
+            '"Every team thinks they have made a step over the winter, that is the nature of this sport," one senior engineer noted.',
+            '"The timing screens in testing tell you something, but never everything," a paddock veteran cautioned.',
+          ], lslots, 70),
+        ),
+      })
+    }
   }
   // Rookie spotlights (up to two a season) must not read verbatim like one another. Track the
   // variants used per pool so the second article always draws from the ones the first did not.
