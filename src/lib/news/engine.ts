@@ -1270,10 +1270,14 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
         clinch_margin: clinchMargin, margin_pts: plural(Math.abs(clinchMargin), 'point'),
         worst_pos: ordinal(worstPos), surv: 1 - clinchMargin, surv_pts: plural(1 - clinchMargin, 'point'),
       }
-      // The win scenario.
-      const winText = conds.length
-        ? fill(pick(['Win the {circuit}, and {leader_last} is champion provided {conds}.', 'Victory at the {circuit} crowns {leader_last}, as long as {conds}.'], `${seed}|win`), slots)
-        : fill(pick(['Win the {circuit}, and the title is {leader_last}\'s whatever the others do.', 'A win at the {circuit} settles it outright.'], `${seed}|win`), slots)
+      // The win scenario. When the lead is so big the leader clinches even by losing ground
+      // (clinchMargin <= 0), a "win the race" line undersells it — finishing ahead of the rival is
+      // already enough — so it is dropped and the swing line below carries the real scenario.
+      const winText = clinchMargin > 0
+        ? (conds.length
+            ? fill(pick(['Win the {circuit}, and {leader_last} is champion provided {conds}.', 'Victory at the {circuit} crowns {leader_last}, as long as {conds}.'], `${seed}|win`), slots)
+            : fill(pick(['Win the {circuit}, and the title is {leader_last}\'s whatever the others do.', 'A win at the {circuit} settles it outright.'], `${seed}|win`), slots))
+        : ''
       // The full swing (covers finishing other than first) and the flip side into the next race.
       const swingText = clinchMargin <= 0
         ? fill(pick(['Such is the lead that {leader_last} is champion at the {circuit} unless {s_last} outscores them by {surv} {surv_pts}.', '{leader_last} clinches barring {s_last} outscoring them by {surv} {surv_pts}.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Only that keeps the fight alive into the {next_circuit}.', 'Anything short of that and it is done.'], `${seed}|sw2`), slots)
