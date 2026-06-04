@@ -206,6 +206,12 @@ interface SeasonStore {
   updateGrid: (drivers: Driver[], teams: Team[]) => void
   setCurrentDate: (date: string) => void
   setRealWorldMode: (on: boolean) => void
+  // Apply the player-approved subset of a season's real-world team changes to the next-season grid.
+  applyRealWorldChanges: (approved: {
+    joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
+    leaves: string[] // team ids leaving the grid
+    rebrands: { id: string; name: string; shortName: string; color: string; nationality: string }[]
+  }) => void
   updateDriver: (id: string, patch: Partial<Driver>) => void
   updateTeam: (id: string, patch: Partial<Team>) => void
   releaseDriver: (id: string) => void
@@ -303,6 +309,30 @@ export const useSeasonStore = create<SeasonStore>()(
       setCurrentDate: (date) => set({ currentDate: date }),
 
       setRealWorldMode: (on) => set({ realWorldMode: on }),
+
+      // Real-world season-end: apply the approved team changes to the next-season grid (built by
+      // endSeason into pendingNextSeasonState), BEFORE contract negotiations fill the seats. Leaving
+      // teams free their drivers into the market; joiners enter at the back; rebrands swap identity.
+      // Idempotent: a change already reflected in the grid simply isn't offered again.
+      applyRealWorldChanges: (approved) => {
+        const { pendingNextSeasonState, year } = get()
+        if (!pendingNextSeasonState) return
+        const leaveIds = new Set(approved.leaves)
+        let teams = pendingNextSeasonState.teams.filter((t) => !leaveIds.has(t.id))
+        let drivers = pendingNextSeasonState.drivers.map((d) =>
+          leaveIds.has(d.teamId) ? { ...d, teamId: '', contractExpiresAfterSeason: year, seasonsSinceF1Seat: 0 } : d,
+        )
+        const rebrandById = new Map(approved.rebrands.map((r) => [r.id, r]))
+        teams = teams.map((t) => {
+          const r = rebrandById.get(t.id)
+          return r ? { ...t, name: r.name, shortName: r.shortName, color: r.color, nationality: r.nationality } : t
+        })
+        const lowest = teams.reduce((m, t) => Math.min(m, t.carPace), 75)
+        approved.joins.forEach((j, i) => {
+          teams.push({ id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) })
+        })
+        set({ pendingNextSeasonState: { drivers, teams } })
+      },
 
       // God-mode edit of a single driver (e.g. from the world driver page).
       updateDriver: (id, patch) => {
