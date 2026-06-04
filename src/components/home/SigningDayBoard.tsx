@@ -131,8 +131,8 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
         <span className="ml-auto text-xs text-[#FFFFFF] tabular-nums">{revealed} / {total} seats filled</span>
       </div>
 
-      {/* Main area (flex-1): the seats board and the contenders each scroll inside their own column. */}
-      <div className={`flex-1 min-h-0 grid gap-4 ${onClock ? 'lg:grid-cols-[3fr_2fr]' : 'grid-cols-1'}`}>
+      {/* Main area (flex-1): the seats board and the free agents each scroll inside their own column. */}
+      <div className="flex-1 min-h-0 grid gap-4 lg:grid-cols-[3fr_2fr]">
         <div className="flex flex-col min-h-0">
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">Open seats</p>
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
@@ -176,43 +176,44 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
           </div>
         </div>
 
-        {/* Contenders for the seat about to be filled (hidden once every seat is settled) */}
-        {onClock && (
-          <div className="flex flex-col min-h-0">
-            <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">Free agents</p>
-            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
-              {onClock.odds.map((o, i) => {
-                const d = driverById.get(o.driverId)
-                const row = (
-                  <div className="flex items-center gap-2.5 px-3 py-1.5">
-                    <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
-                    <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
-                    {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
-                  </div>
-                )
-                return d
-                  ? <DriverTooltip key={o.driverId} driver={d} year={year} wdcPosition={wdcPosOf.get(o.driverId) ?? null} wdcPoints={wdcPtsOf.get(o.driverId)} career={careers[o.driverId]}>{row}</DriverTooltip>
-                  : <div key={o.driverId}>{row}</div>
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Released: free agents who found no seat. Shown only once the board clears, so it's no spoiler. */}
-      {complete && dropped.length > 0 && (
-        <div className="shrink-0">
-          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5">Released <span className="text-[#DC143C]">· {dropped.length}</span></p>
-          <div className="max-h-20 overflow-y-auto flex flex-wrap gap-x-4 gap-y-1 rounded-lg bg-[#0F1419]/40 px-3 py-2">
-            {dropped.map((d) => (
-              <span key={d.driverId} className="text-xs text-[#FFFFFF]">
-                <DriverLink id={d.driverId} className="text-[#FFFFFF]">{d.driverName}</DriverLink>
-                <span className="text-[#FFFFFF]"> ({d.fromTeamName})</span>
-              </span>
-            ))}
+        {/* Free agents: the contenders for the seat on the clock while signing, then whoever went
+            unsigned once every seat is settled. Always visible, so it's clear who missed out. */}
+        <div className="flex flex-col min-h-0">
+          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
+            Free agents{complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}
+          </p>
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
+            {onClock
+              ? onClock.odds.map((o, i) => {
+                  const d = driverById.get(o.driverId)
+                  const row = (
+                    <div className="flex items-center gap-2.5 px-3 py-1.5">
+                      <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
+                      <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
+                      {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
+                    </div>
+                  )
+                  return d
+                    ? <DriverTooltip key={o.driverId} driver={d} year={year} wdcPosition={wdcPosOf.get(o.driverId) ?? null} wdcPoints={wdcPtsOf.get(o.driverId)} career={careers[o.driverId]}>{row}</DriverTooltip>
+                    : <div key={o.driverId}>{row}</div>
+                })
+              : dropped.length > 0
+                ? dropped.map((dd) => {
+                    const d = driverById.get(dd.driverId)
+                    const row = (
+                      <div className="flex items-center gap-2.5 px-3 py-1.5">
+                        <DriverLink id={dd.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{dd.driverName}</DriverLink>
+                        <span className="text-[10px] text-[#FFFFFF] shrink-0">{dd.fromTeamName}</span>
+                      </div>
+                    )
+                    return d
+                      ? <DriverTooltip key={dd.driverId} driver={d} year={year} wdcPosition={wdcPosOf.get(dd.driverId) ?? null} wdcPoints={wdcPtsOf.get(dd.driverId)} career={careers[dd.driverId]}>{row}</DriverTooltip>
+                      : <div key={dd.driverId}>{row}</div>
+                  })
+                : <p className="px-3 py-2 text-sm text-[#FFFFFF]">Every free agent found a seat.</p>}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Analyst reaction to the confirmed signings, in its own bounded scroll band. */}
       {posts.length > 0 && (
