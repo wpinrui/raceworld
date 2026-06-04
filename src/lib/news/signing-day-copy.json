@@ -1,0 +1,136 @@
+{
+  "personas": {
+    "insider": { "handle": "@AlbertChenF1", "name": "Albert Chen" },
+    "stats": { "handle": "@StatcastF1", "name": "Statcast F1" },
+    "pundit": { "handle": "@WebbOnF1", "name": "Marcus Webb" },
+    "contracts": { "handle": "@PaddockTerms", "name": "Sofia Reyes" }
+  },
+  "insider": {
+    "upset": [
+      "BREAKING: {driver} to {team}. Sources confirm. This one came out of nowhere, {pct}% market price before this morning.",
+      "Not what anyone was modelling. {driver_last} to {team}, done. {prev} connection made this possible behind the scenes.",
+      "Done deal: {driver} joins {team}. I flagged this as a fringe scenario 72 hours ago. The grid absorbs another surprise.",
+      "As I reported last week, {team} had a fallback name on the list. That name is {driver}. Official shortly.",
+      "Hearing {driver_last} pushed hard for {team} even as other doors opened. Conviction move. Paperwork signed.",
+      "Signed, sealed: {driver} to {team}. Nobody in the paddock priced this above {pct}%. Some quiet work got done.",
+      "Confirmation landing now: {driver} at {team}. {prev} tenure ends. The grid just got more unpredictable.",
+      "{driver_last} to {team} confirmed. Low probability on every model, high conviction from the team. Interesting call."
+    ],
+    "statement": [
+      "CONFIRMED: {driver} signs with {team} on a {years}-year deal. That is a serious statement of intent from the team.",
+      "Done. {driver} to {team}, {years} years. The seat rank speaks for itself, {team} locked in their choice early.",
+      "{driver_last} and {team} finalise a {years}-year contract. That length of commitment from both sides tells you everything.",
+      "As I reported: {team} moves decisively. {driver}, {years} years, the {seat_ord} seat on the market. No hesitation.",
+      "{years} years at {team} for {driver_last}. That deal signals {team} are building around this driver for the medium term.",
+      "BREAKING: {driver} to {team}, multi-year deal. The top end of the market just got resolved. {prev} era closes.",
+      "Signed: {driver_last} gets the {seat_ord} most coveted seat on the grid. {years} years. {team} mean business.",
+      "{team} land {driver} on a {years}-year contract. Hearing the financial package is competitive. Nothing left to chance here."
+    ],
+    "rookie": [
+      "Confirmed: {driver} makes the step up from {prev} to {team}. Junior pipeline pays off. New name to watch.",
+      "{driver_last} to {team} from {prev}. The team bet on the youth ticket. Hearing {prev} backed the promotion actively.",
+      "Done deal: {driver} graduates from {prev} and lands at {team}. The grid has a new face. Watch the debut closely.",
+      "BREAKING: {driver} signs with {team}. Comes in from {prev}. Rookie contract confirmed, short-term with options.",
+      "{team} confirm {driver} from {prev}. They had enough data to move. Junior records rarely get ignored this long.",
+      "Hearing {driver_last} had multiple offers after {prev}. Chose {team}. That decision will define the next chapter.",
+      "{driver} from {prev} to {team}, confirmed. This is a full seat, not an academy placement. The team is committed.",
+      "Announced: {driver_last} joins the grid at {team}. {prev} background. The field gets younger by one."
+    ],
+    "veteran_short": [
+      "Confirmed: {driver} signs with {team} for one year. Experience rental. Both parties keep their options open.",
+      "{driver_last} to {team}, 12-month deal. As I reported last week, this was always the shape of the agreement.",
+      "Done: {driver} gets one more year, this time at {team}. Single-season terms, no extension clause from what I hear.",
+      "{team} confirm {driver_last} on a one-year contract. Bridge hire, buys the team time. {prev} chapter is closed.",
+      "SIGNED: {driver} to {team}, one season. The team wanted the experience, the driver wanted a seat. Clean exchange.",
+      "{driver_last} lands at {team} for {years} year. Short, transactional. The paddock expected something like this.",
+      "Hearing {team} went back to {driver_last} after talks with younger names stalled. One-year deal, announced shortly.",
+      "Confirmed: {driver} for one year at {team}. Experience on the books. Long-term answer still outstanding for the team."
+    ],
+    "chalk": [
+      "Officially confirmed: {driver} stays at or joins {team}. The market priced this in weeks ago. Paperwork finally done.",
+      "{driver_last} to {team}, done. {pct}% probability before today, and the obvious call lands as expected.",
+      "As I reported in pre-season: {driver} and {team} would sort this. Announcement now official. No surprises here.",
+      "CONFIRMED: {driver} signed. The grid settles exactly where the models pointed. {team} made the sensible choice.",
+      "{team} close the obvious move: {driver_last} is theirs. Nobody in the paddock will be opening emergency tabs over this one.",
+      "Done deal, as expected. {driver} to {team}. {prev} link made this the likely outcome. It is now the confirmed one.",
+      "{driver_last} confirmed at {team}. The {pct}% favourite gets the seat. Rare that the market is this right this fast.",
+      "Signed: {driver} at {team}. Most-predictable signing of the window. Credit to both sides for moving early and quietly."
+    ]
+  },
+  "pundit": {
+    "upset": [
+      "{driver_last} at {team} raises real questions about pairing balance. Not a move anyone scripted, but it could work on paper.",
+      "On track, {driver} to {team} is a left-field choice. The car will suit certain skills. Others will be tested hard.",
+      "Not what I modelled. {driver_last} and {team}: racecraft fits the chassis philosophy if the adaptation comes quickly.",
+      "From a performance view, {driver} at {team} is a legitimate gamble. The upside is real. So is the risk.",
+      "If {team} needed a disruptor in that garage, {driver_last} delivers. Unconventional pick, but the on-track logic is there.",
+      "Pairing dynamics aside, {driver} joining {team} from {prev} represents an interesting stylistic shift for that team.",
+      "{driver_last} to {team}: nobody called it. On lap times alone, there is a case. The tactical fit will take time to read.",
+      "From a racecraft standpoint, {driver} suits {team}'s mid-corner demands. The surprise is the destination, not the ability."
+    ],
+    "statement": [
+      "{driver} on {years} years at {team}: {team} have locked in their fastest car driver for the medium term. Strong call.",
+      "From a performance standpoint, {driver_last} in the {seat_ord} seat for {years} years is the right move at the right time.",
+      "{team} sign {driver} long-term. On paper, this pairing has the pace to challenge at the front consistently.",
+      "{years} years for {driver_last} at {team}: the team can now build a development programme around a settled line-up.",
+      "The {seat_ord} seat on the grid goes to {driver}. {years}-year deal. {team} aren't planning to rebuild mid-cycle.",
+      "On track, {driver_last} gives {team} what they needed: race pace and qualifying consistency. Long deal is warranted.",
+      "{driver} at {team} for {years} years. From a tactical view, stability in that seat frees up engineering resource. Good move.",
+      "Performance logic supports this: {driver_last} in the {seat_ord} car for a long stretch. {team} aren't hedging."
+    ],
+    "rookie": [
+      "{driver_last} from {prev}: the raw speed is there. The question is whether {team}'s car exposes the gaps early.",
+      "Rookie signing at {team}: {driver} has the junior record. First season in this field will be a steep gradient.",
+      "From a racecraft view, {driver_last} from {prev} is unproven over a full campaign. {team} take on both risk and upside.",
+      "{driver} steps up from {prev} to a race seat at {team}. The technical adaptation period will define the first half of the year.",
+      "On pace evidence from {prev}, {driver_last} deserves this chance. How {team} manage the development arc will matter.",
+      "{team} go with {driver} from {prev}. Youth pick. Tactically, this clears space to build a long-term driver programme.",
+      "{driver_last} to {team}: if the junior stats translate, {team} land a bargain. That translation is the only question.",
+      "Interesting gamble by {team}: {driver} from {prev} straight into a competitive seat. Sink or swim philosophy."
+    ],
+    "veteran_short": [
+      "{driver_last} for one year at {team}: known quantity, known ceiling. The team gets reliability over ambition this season.",
+      "One year, {driver} at {team}. From a performance view, this is a steady-state decision. Not a title-winning one.",
+      "{team} sign {driver_last} on a short deal. Tactically, experience on the books, but no long-term commitment on either side.",
+      "Veteran on a one-year: {driver} knows these cars. The pace window may be narrow, but the race management adds value.",
+      "{driver_last} to {team} for {years} year. The racecraft is established. What you see is what you get, and {team} know that.",
+      "From a pairing standpoint, {driver} at {team} on a short term gives the team a safe pair of hands while they plan ahead.",
+      "One season for {driver_last} at {team}: low upside, low downside. Sometimes that is exactly what a programme needs.",
+      "{team} lean on {driver}'s experience for a season. Dependable signing. The exits will be harder to negotiate than the entry."
+    ],
+    "chalk": [
+      "Expected, and correct. {driver_last} at {team} is the highest-probability performance outcome from the available field.",
+      "On paper, {driver} was always the right fit for {team}. The obvious signing lands. No tactical complaints here.",
+      "{team} do the sensible thing: {driver_last} confirmed. Racecraft profile fits, the car fits, the timing fits.",
+      "{driver} to {team}: no drama, right call. From a performance standpoint, this pairing has genuine front-running potential.",
+      "Chalk move at {team}: {driver_last} signed. The alternatives would have been lateral moves at best. Good process.",
+      "{driver} confirmed at {team}. On-track logic is clean. {pct}% market favourite secures the seat it always suited.",
+      "Straightforward from a performance view: {driver_last} and {team} were always the most coherent pairing on the board.",
+      "{team} confirm {driver}. No gymnastics required to justify this one. Best available driver, best fit. Done."
+    ]
+  },
+  "stats": [
+    "{driver_last} to {team}: model gave this outcome {pct}% probability. The realized likelihood of the full draft sequence reaching this point: {realized}%.",
+    "Pre-signing market: {pct}% chance {driver_last} lands at {team}. Seat desirability rank: {seat_ord} on the grid. That pairing is now confirmed.",
+    "Statcast had {driver} at {pct}% for this seat. Among all possible signings today, this sequence had a {realized}% combined probability.",
+    "Seat rank {rank} on the grid goes to {driver_last}. Model implied probability: {pct}%. Outcome is within the expected range.",
+    "{driver} signs with {team}. This was the {pct}% scenario. The full draft path that produced this result: {realized}% likely.",
+    "Market probability for {driver_last} to {team}: {pct}%. Seat desirability: {seat_ord} available. Numbers said probable; confirmed.",
+    "Probability check: {driver} to {team} modelled at {pct}%. Combined signing-sequence odds: {realized}%. Grid shape resolves.",
+    "{driver_last} lands in seat rank {rank}. Pre-draft probability: {pct}%. Realized sequence probability: {realized}%. Tracking as expected.",
+    "Full number on {driver} to {team}: {pct}% implied before today, {realized}% for the entire chain of moves that led here.",
+    "Signing confirmed. {driver_last} to {team}, rank {rank} seat. Model had {pct}% on this pairing. Sequence probability: {realized}%."
+  ],
+  "contracts": [
+    "{driver_last} to {team} on a {years}-year deal. Length signals genuine confidence from both parties in the project.",
+    "{years} years for {driver} at {team}. Market leverage ran both ways on this one; the length reflects who blinked first.",
+    "{driver_last} signs with {team}: {years}-year commitment. Long-term contracts at this team have historically been honoured in full.",
+    "Contract confirmed: {driver} at {team}, {years} years. Security for the driver; runway for the team to develop around a fixed seat.",
+    "{driver_last}, {team}, {years} year(s). Short-term deals at this tier usually carry option clauses. Worth watching for.",
+    "{years}-year paper for {driver} at {team}. From {prev}. The term suggests {team} see this as a cornerstone, not a patch.",
+    "{driver_last} locks in {years} year(s) at {team}. Shorter deals keep more leverage client-side. Structure matters here.",
+    "Done: {driver} and {team}, {years} year(s). Contract length in this bracket tends to track car competitiveness expectation.",
+    "{years}-year deal for {driver_last} at {team}. Multi-year contracts reduce mid-season renegotiation risk for both parties.",
+    "{driver} to {team}: {years} year(s). Came from {prev}. The deal structure reflects where both sides sit on the power curve."
+  ]
+}
