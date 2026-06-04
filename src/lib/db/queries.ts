@@ -46,6 +46,19 @@ export function archiveSeason(seasonId: number): void {
   getDb().prepare("UPDATE seasons SET status = 'archived' WHERE id = ?").run(seasonId)
 }
 
+// Persist (or replace) the complete generated news feed for a season, as a JSON array of articles.
+export function saveSeasonNews(seasonId: number, articlesJson: string): void {
+  getDb()
+    .prepare('INSERT INTO season_news (season_id, articles_json) VALUES (?, ?) ON CONFLICT(season_id) DO UPDATE SET articles_json = excluded.articles_json')
+    .run(seasonId, articlesJson)
+}
+
+// The persisted news feed for a season, or null if none was snapshotted (e.g. archived pre-feature).
+export function getSeasonNews(seasonId: number): string | null {
+  const row = getDb().prepare('SELECT articles_json FROM season_news WHERE season_id = ?').get(seasonId) as { articles_json: string } | undefined
+  return row?.articles_json ?? null
+}
+
 // Wipe all season/race data. The DB is a single file that outlives a localStorage
 // save, so a new game must clear it or archived seasons pile up across playthroughs.
 export function resetDatabase(): void {

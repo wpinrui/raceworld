@@ -66,4 +66,12 @@ CREATE TABLE IF NOT EXISTS driver_race_form (
   form REAL NOT NULL,
   UNIQUE(race_id, driver_id)
 );
+
+-- Snapshot of the complete generated news feed for a season, captured when the season archives.
+-- The live feed leans on driver attributes (silly-season, driver-to-watch) that the archive can't
+-- rebuild, so we persist the finished feed verbatim and replay it for past seasons.
+CREATE TABLE IF NOT EXISTS season_news (
+  season_id INTEGER PRIMARY KEY REFERENCES seasons(id),
+  articles_json TEXT NOT NULL
+);
 `
