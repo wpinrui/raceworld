@@ -13,18 +13,23 @@ import type {
   EndOfSeasonSummary,
   DriverProgressionEvent,
   PendingGridChanges,
+  MarketMove,
+  DroppedDriver,
 } from '@/lib/sim/types'
 import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { calendar2026 } from '@/data/calendar'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
-import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, runDriverMarket, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
+import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
+import { runDraft, negotiateRenewals, type DraftPick, type DraftSeat, type RenewalResult } from '@/lib/sim/driver-market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
 
 const TOTAL_ROUNDS = calendar2026.length
+// Phase 1 of the driver market: in-season renewals run once, the round before the silly-season window.
+const RENEWAL_ROUND = 18
 
 // Pre-season testing always runs at Barcelona/Catalunya.
 const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[0]
@@ -228,6 +233,10 @@ interface SeasonStore {
   statHistory: StatHistory
   // Per-round car-pace snapshots for the current season's Car Development chart.
   carPaceHistory: CarPaceSnapshot[]
+  // The end-of-season draft picks (ordered, best seat first), for the Signing Day reveal.
+  seasonDraft: DraftPick[]
+  // Round-18 contract renewals this season, for the renewals round-up feature.
+  seasonRenewals: RenewalResult[]
 
   // Computed
   driverStandings: DriverStanding[]
@@ -288,6 +297,8 @@ export const useSeasonStore = create<SeasonStore>()(
       seasonStartStats: {},
       statHistory: {},
       carPaceHistory: [],
+      seasonDraft: [],
+      seasonRenewals: [],
       driverStandings: [],
       constructorStandings: [],
 
@@ -323,6 +334,8 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonStartStats: snapshotStats(allDrivers),
           statHistory: seedStatHistory(allDrivers),
           carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
+          seasonDraft: [],
+          seasonRenewals: [],
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -529,7 +542,27 @@ export const useSeasonStore = create<SeasonStore>()(
           applyUpgradeEvents(currentRound, teams, devPlans, Math.random)
 
         // Driver development applies after each race.
-        const { updatedDrivers } = applyRaceProgression(drivers, Math.random)
+        let { updatedDrivers } = applyRaceProgression(drivers, Math.random)
+
+        // Phase 1 of the driver market: at the renewal round, each team negotiates with its expiring
+        // drivers. The likelier the driver's media standing matches the team's WCC standing, the likelier
+        // the renewal (and the longer the deal). Whoever isn't re-signed becomes a free agent in the draft.
+        let seasonRenewals = get().seasonRenewals
+        if (currentRound === RENEWAL_ROUND) {
+          const standings = computeConstructorStandings(updatedTeams, updatedDrivers, updated)
+          const rankInfo = standings.map((cs, idx) => ({ teamId: cs.teamId, points: cs.points, finalPosition: idx + 1 }))
+          const mediaScores = computeDriverMediaScores(updatedDrivers, updatedTeams, updated, rankInfo, updatedTeams.length)
+          const result = negotiateRenewals({
+            drivers: updatedDrivers,
+            teams: updatedTeams,
+            mediaScore: new Map(mediaScores.map((s) => [s.driverId, s.score])),
+            wccOrderBestFirst: standings.map((cs) => cs.teamId),
+            currentYear: year,
+            rng: Math.random,
+          })
+          updatedDrivers = result.drivers
+          seasonRenewals = result.renewals
+        }
 
         set({
           raceResults: updated,
@@ -540,6 +573,7 @@ export const useSeasonStore = create<SeasonStore>()(
           drivers: updatedDrivers,
           devPlans: updatedDevPlans,
           allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
+          seasonRenewals,
           // Capture the post-race attributes for this round's progression chart.
           statHistory: appendStatHistory(statHistory, updatedDrivers, currentRound),
           // Capture each car's post-upgrade pace for the Car Development chart.
@@ -685,36 +719,77 @@ export const useSeasonStore = create<SeasonStore>()(
         })
       },
 
-      // Phase 2: free agents sign for the coming season.
+      // Phase 2: the end-of-season DRAFT fills every open seat (best car first) from the free-agent
+      // pool weighted by media (round-18 renewals + multi-year deals keep their seats). Picks are stored
+      // for the Signing Day reveal; the resulting moves are mapped onto the summary for the newsroom.
       runContractNegotiations: () => {
         const { pendingNextSeasonState, endOfSeasonSummary, year, realWorldMode } = get()
         if (!pendingNextSeasonState || !endOfSeasonSummary) return
         const { teams } = pendingNextSeasonState
         const newYear = year + 1
 
-        // Real-world mode (while the dataset still has entrants): seed next year's real rookies into
-        // the free-agent pool so the emergent market signs real drivers, never fictional fill-ins,
-        // before 2026. The market still decides who-signs-where; we only make the pool real.
-        let drivers = pendingNextSeasonState.drivers
+        // Real-world mode (while the dataset still has entrants): seed next year's real rookies into the
+        // pool so the draft signs real drivers, never fictional fill-ins, before 2026.
+        let allDrivers = pendingNextSeasonState.drivers
         if (realWorldMode && newYear <= lastDriverEntryYear()) {
-          const have = new Set(drivers.map((d) => d.id))
-          drivers = [...drivers, ...rookiesForYear(newYear).filter((d) => !have.has(d.id))]
+          const have = new Set(allDrivers.map((d) => d.id))
+          allDrivers = [...allDrivers, ...rookiesForYear(newYear).filter((d) => !have.has(d.id))]
         }
 
-        const { updatedDrivers, marketMoves, seatContests, droppedDrivers } = runDriverMarket(
-          drivers,
-          teams,
-          endOfSeasonSummary.driverMediaScores,
-          endOfSeasonSummary.teamMediaScores,
-          endOfSeasonSummary.retentionDelta ?? {},
-          newYear,
-          Math.random,
-        )
+        // Under contract for next year (incl. round-18 renewals) -> keeps the seat.
+        const stayingIds = new Set(allDrivers.filter((d) => d.teamId !== '' && d.contractExpiresAfterSeason > year).map((d) => d.id))
+        const stayCount = new Map<string, number>()
+        for (const d of allDrivers) if (stayingIds.has(d.id)) stayCount.set(d.teamId, (stayCount.get(d.teamId) ?? 0) + 1)
+
+        // Open seats, most desirable (fastest car) first.
+        const seats: DraftSeat[] = []
+        for (const t of [...teams].sort((a, b) => b.carPace - a.carPace)) {
+          for (let i = 0; i < Math.max(0, 2 - (stayCount.get(t.id) ?? 0)); i++) seats.push({ teamId: t.id, teamName: t.name, teamColor: t.color })
+        }
+
+        // Free-agent pool ranked by media; free agents with no media fall back to a pace proxy.
+        const mediaMap = new Map(endOfSeasonSummary.driverMediaScores.map((s) => [s.driverId, s.score]))
+        const valueOf = (d: Driver) => mediaMap.get(d.id) ?? Math.max(0, Math.min(100, 35 + (d.pace - 68) * 0.8))
+        const teamNameOf = new Map(teams.map((t) => [t.id, t.name]))
+        const prevTeam = new Map(allDrivers.map((d) => [d.id, d.teamId]))
+        const pool = allDrivers.filter((d) => !stayingIds.has(d.id)).sort((a, b) => valueOf(b) - valueOf(a))
+
+        const picks = runDraft({ seats, pool, teams, currentYear: year, rng: Math.random })
+        const pickById = new Map(picks.map((p) => [p.driverId, p]))
+
+        const marketMoves: MarketMove[] = picks.map((p) => ({
+          driverId: p.driverId, driverName: p.driverName,
+          fromTeamId: prevTeam.get(p.driverId) || null,
+          toTeamId: p.teamId, toTeamName: p.teamName,
+          contractLength: p.years, contractExpiresAfterSeason: year + p.years,
+          mediaScore: mediaMap.get(p.driverId) ?? 0,
+          isResignation: prevTeam.get(p.driverId) === p.teamId,
+        }))
+
+        const updatedDrivers: Driver[] = allDrivers.map((d) => {
+          const p = pickById.get(d.id)
+          if (p) return { ...d, teamId: p.teamId, contractExpiresAfterSeason: year + p.years, seasonsSinceF1Seat: 0 }
+          if (stayingIds.has(d.id)) return d
+          return { ...d, teamId: '' } // unpicked -> free agent
+        })
+
+        // The pool can run dry before every seat is filled — generate rookies for the rest.
+        for (let i = picks.length; i < seats.length; i++) {
+          const seat = seats[i]
+          const rookie = generateRookie(seat.teamId, newYear, Math.random)
+          updatedDrivers.push(rookie)
+          marketMoves.push({ driverId: rookie.id, driverName: rookie.name, fromTeamId: null, toTeamId: seat.teamId, toTeamName: seat.teamName, contractLength: 1, contractExpiresAfterSeason: newYear, mediaScore: 0, isResignation: false })
+        }
+
+        const droppedDrivers: DroppedDriver[] = pool
+          .filter((d) => !pickById.has(d.id) && (prevTeam.get(d.id) || '') !== '')
+          .map((d) => ({ driverId: d.id, driverName: d.name, fromTeamId: prevTeam.get(d.id)!, fromTeamName: teamNameOf.get(prevTeam.get(d.id)!) ?? prevTeam.get(d.id)!, mediaScore: mediaMap.get(d.id) ?? 0 }))
 
         set({
           phase: 'contract-negotiations',
-          endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests, droppedDrivers },
+          endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests: [], droppedDrivers },
           pendingNextSeasonState: { drivers: updatedDrivers, teams },
+          seasonDraft: picks,
         })
       },
 
@@ -779,6 +854,8 @@ export const useSeasonStore = create<SeasonStore>()(
             seasonStartStats: snapshotStats(drivers),
             statHistory: seedStatHistory(drivers),
             carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
+          seasonDraft: [],
+          seasonRenewals: [],
             driverStandings: computeDriverStandings(drivers, teams, []),
             constructorStandings: computeConstructorStandings(teams, drivers, []),
           })
@@ -816,6 +893,8 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonStartStats: snapshotStats(drivers),
           statHistory: seedStatHistory(drivers),
           carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
+          seasonDraft: [],
+          seasonRenewals: [],
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -836,6 +915,8 @@ export const useSeasonStore = create<SeasonStore>()(
           // Season-scoped per-round history is cleared too, matching raceResults/allUpgradeEvents.
           statHistory: {},
           carPaceHistory: [],
+          seasonDraft: [],
+          seasonRenewals: [],
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -865,6 +946,8 @@ export const useSeasonStore = create<SeasonStore>()(
         seasonStartStats: state.seasonStartStats,
         statHistory: state.statHistory,
         carPaceHistory: state.carPaceHistory,
+        seasonDraft: state.seasonDraft,
+        seasonRenewals: state.seasonRenewals,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
