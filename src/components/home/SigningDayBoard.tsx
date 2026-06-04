@@ -1,9 +1,12 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import type { DraftPick } from '@/lib/sim/driver-market'
 import type { Driver, DroppedDriver } from '@/lib/sim/types'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { signingDaySocialPosts } from '@/lib/news/signing-day-social'
+import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
+import { actionGetDriverCareers } from '@/lib/news/actions'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverTooltip } from '@/components/world/DriverTooltip'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -63,6 +66,16 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const drivers = useSeasonStore((s) => s.drivers)
   const pending = useSeasonStore((s) => s.pendingNextSeasonState)
   const driverStandings = useSeasonStore((s) => s.driverStandings)
+  const raceResults = useSeasonStore((s) => s.raceResults)
+  const eos = useSeasonStore((s) => s.endOfSeasonSummary)
+
+  // Career totals (archived base + the season just run), for the free-agent hover cards.
+  const [careers, setCareers] = useState<Record<string, DriverCareer>>({})
+  useEffect(() => {
+    actionGetDriverCareers(year - 1)
+      .then((base) => setCareers(foldLiveSeason(base, year, raceResults, eos?.driverChampion)))
+      .catch(() => setCareers({}))
+  }, [year, raceResults, eos])
 
   if (picks.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
@@ -173,7 +186,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                   </div>
                 )
                 return d
-                  ? <DriverTooltip key={o.driverId} driver={d} year={year} wdcPosition={wdcPosOf.get(o.driverId) ?? null} wdcPoints={wdcPtsOf.get(o.driverId)}>{row}</DriverTooltip>
+                  ? <DriverTooltip key={o.driverId} driver={d} year={year} wdcPosition={wdcPosOf.get(o.driverId) ?? null} wdcPoints={wdcPtsOf.get(o.driverId)} career={careers[o.driverId]}>{row}</DriverTooltip>
                   : <div key={o.driverId}>{row}</div>
               })}
             </div>
