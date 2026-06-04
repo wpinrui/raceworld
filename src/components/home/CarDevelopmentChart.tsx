@@ -2,14 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
-import type { Team, DevUpgradeEvent } from '@/lib/sim/types'
+import type { Team } from '@/lib/sim/types'
+import type { CarPaceSnapshot } from '@/lib/store/season-store'
 
-// Each car's pace across the season, reconstructed from the current pace and the upgrade log: a car's
-// pace at the end of round r is its current pace minus every (non-failed) upgrade delivered after r.
-// Failed upgrades are logged with paceDelta 0, so they fall out of the sum. No stored history needed;
-// mid-season the only thing that moves carPace is an upgrade event.
-const round1 = (n: number) => Math.round(n * 10) / 10
-
+// Each car's pace across the season, read straight from the per-round snapshots the store records
+// (round 0 = season start). God-mode pace edits refresh the latest snapshot, so the chart always
+// matches reality without reconstructing from the upgrade log.
 interface Row { round: number; [teamId: string]: number }
 
 function CarTooltip({ active, payload, label, teams }: { active?: boolean; payload?: Array<{ dataKey: string; value: number; color: string }>; label?: number; teams: Team[] }) {
@@ -28,24 +26,11 @@ function CarTooltip({ active, payload, label, teams }: { active?: boolean; paylo
   )
 }
 
-function buildSeries(teams: Team[], events: DevUpgradeEvent[], completedRounds: number): Row[] {
-  const rows: Row[] = []
-  for (let r = 0; r <= completedRounds; r++) {
-    const row: Row = { round: r }
-    for (const t of teams) {
-      const future = events.reduce((s, e) => (e.teamId === t.id && e.round > r ? s + e.paceDelta : s), 0)
-      row[t.id] = round1(t.carPace - future)
-    }
-    rows.push(row)
-  }
-  return rows
-}
-
-export function CarDevelopmentChart({ teams, events, completedRounds }: { teams: Team[]; events: DevUpgradeEvent[]; completedRounds: number }) {
+export function CarDevelopmentChart({ teams, history }: { teams: Team[]; history: CarPaceSnapshot[] }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   // Order the legend (and so the default emphasis) by current pace, fastest first.
   const ordered = useMemo(() => [...teams].sort((a, b) => b.carPace - a.carPace), [teams])
-  const data = useMemo(() => buildSeries(ordered, events, completedRounds), [ordered, events, completedRounds])
+  const data = useMemo<Row[]>(() => history.map((h) => ({ round: h.round, ...h.paces })), [history])
   // Before any race there's a single data point per car (the season-start pace); show dots so it's
   // visible, since a one-point line has no segment to draw.
   const singlePoint = data.length === 1

@@ -11,7 +11,7 @@ export function RankingsPanel() {
   const teams = useSeasonStore((s) => s.teams)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const constructorStandings = useSeasonStore((s) => s.constructorStandings)
-  const allUpgradeEvents = useSeasonStore((s) => s.allUpgradeEvents)
+  const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
 
   const driverById = new Map(drivers.map((d) => [d.id, d]))
   const teamById = new Map(teams.map((t) => [t.id, t]))
@@ -61,7 +61,7 @@ export function RankingsPanel() {
       </Panel>
 
       <Panel title="Car Development" flush>
-        <CarDevelopmentChart teams={teams} events={allUpgradeEvents} completedRounds={raceResults.length} />
+        <CarDevelopmentChart teams={teams} history={carPaceHistory} />
       </Panel>
     </div>
   )
