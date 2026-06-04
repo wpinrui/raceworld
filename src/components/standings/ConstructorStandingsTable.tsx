@@ -1,6 +1,10 @@
+'use client'
+
+import { Star } from 'lucide-react'
 import type { ConstructorStanding, Driver, Team } from '@/lib/sim/types'
 import { ResultCell } from './ResultCell'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { useFollowed } from '@/lib/store/useFollowed'
 
 interface Props {
   standings: ConstructorStanding[]
@@ -11,6 +15,7 @@ interface Props {
 }
 
 export function ConstructorStandingsTable({ standings, drivers, teams, totalRounds, completedRounds }: Props) {
+  const followed = useFollowed()
   return (
     <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
       <table className="w-full border-collapse text-sm">
@@ -58,11 +63,17 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
-                        <TeamLink id={standing.teamId} className="font-semibold text-[#FFFFFF] whitespace-nowrap">{standing.teamName}</TeamLink>
+                        <TeamLink id={standing.teamId} className={`font-semibold whitespace-nowrap ${followed.teams.has(standing.teamId) ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{standing.teamName}</TeamLink>
+                        {followed.teams.has(standing.teamId) && <Star size={11} className="fill-[#00D9FF] text-[#00D9FF] shrink-0" />}
                       </div>
                     </td>
                   )}
-                  <td className="py-1.5 px-3 text-[#FFFFFF] text-xs whitespace-nowrap"><DriverLink id={driver.id}>{driver.name}</DriverLink></td>
+                  <td className="py-1.5 px-3 text-xs whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1">
+                      <DriverLink id={driver.id} className={followed.drivers.has(driver.id) ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}>{driver.name}</DriverLink>
+                      {followed.drivers.has(driver.id) && <Star size={10} className="fill-[#00D9FF] text-[#00D9FF] shrink-0" />}
+                    </span>
+                  </td>
                   {Array.from({ length: totalRounds }, (_, i) => (
                     i < completedRounds
                       ? <ResultCell key={i} position={driverResults[i] ?? null} />

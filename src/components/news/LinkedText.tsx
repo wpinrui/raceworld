@@ -9,6 +9,10 @@
 import React from 'react'
 import { DriverLink, TeamLink, CircuitLink } from '@/components/world/EntityLink'
 import { lastName } from '@/lib/news/util'
+import { useFollowed } from '@/lib/store/useFollowed'
+
+// A followed driver/team's name is accented + dotted-underlined wherever it appears in a story.
+const FOLLOW_HL = 'text-[#00D9FF] underline decoration-dotted decoration-[#00D9FF]/60 underline-offset-2'
 
 type LinkTarget =
   | { kind: 'driver'; id: string }
@@ -78,6 +82,7 @@ export function buildNewsIndex(opts: {
 
 // Render a single run of text, linking recognised names. Falls back to plain text when no index.
 export function LinkedText({ text, index }: { text: string; index: NewsIndex | null }): React.ReactElement {
+  const followed = useFollowed()
   if (!index || !index.regex || !text) return <>{text}</>
   const out: React.ReactNode[] = []
   let last = 0
@@ -86,8 +91,8 @@ export function LinkedText({ text, index }: { text: string; index: NewsIndex | n
     const matched = m[0]
     if (start > last) out.push(text.slice(last, start))
     const t = index.lookup.get(matched)
-    if (t?.kind === 'driver') out.push(<DriverLink key={start} id={t.id}>{matched}</DriverLink>)
-    else if (t?.kind === 'team') out.push(<TeamLink key={start} id={t.id}>{matched}</TeamLink>)
+    if (t?.kind === 'driver') out.push(<DriverLink key={start} id={t.id} className={followed.drivers.has(t.id) ? FOLLOW_HL : ''}>{matched}</DriverLink>)
+    else if (t?.kind === 'team') out.push(<TeamLink key={start} id={t.id} className={followed.teams.has(t.id) ? FOLLOW_HL : ''}>{matched}</TeamLink>)
     else if (t?.kind === 'circuit') out.push(<CircuitLink key={start} year={index.year} round={t.round}>{matched}</CircuitLink>)
     else out.push(matched)
     last = start + matched.length
