@@ -329,6 +329,7 @@ export const useSeasonStore = create<SeasonStore>()(
         })
         const lowest = teams.reduce((m, t) => Math.min(m, t.carPace), 75)
         approved.joins.forEach((j, i) => {
+          if (teams.some((t) => t.id === j.id)) return // already applied; don't add a duplicate
           teams.push({ id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) })
         })
         set({ pendingNextSeasonState: { drivers, teams } })

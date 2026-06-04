@@ -6,6 +6,7 @@ import { overall } from '../src/lib/sim/progression'
 import { projectToYear, composeSeason, historyYears, lastDriverEntryYear, rookiesForYear } from '../src/lib/history/compose'
 import { realWorldTransition } from '../src/lib/history/transitions'
 import { historicalDrivers } from '../src/data/history/drivers'
+import { historicalGrids } from '../src/data/history/grids'
 import type { HistoricalDriver } from '../src/data/history/types'
 
 let failures = 0
@@ -58,6 +59,14 @@ const tr = s2005 ? realWorldTransition(2005, s2005.teams) : null
 check('realWorldTransition(2005) has data', !!tr && tr.hasData)
 check('  Super Aguri joins for 2006', !!tr && tr.teamJoins.some((t) => t.id === 'superaguri'))
 check('  Jordan rebrands to Midland', !!tr && tr.teamRebrands.some((r) => r.id === 'silverstone' && r.to.name === 'Midland'))
+
+// No grid may carry a duplicate team id or seat the same driver twice (corrupts composeSeason).
+const dupGrids = historicalGrids.filter((g) => {
+  const tids = g.teams.map((t) => t.id)
+  const dids = g.lineup.map((s) => s.driverId)
+  return new Set(tids).size !== tids.length || new Set(dids).size !== dids.length
+})
+check('no grid has duplicate teams or seated drivers', dupGrids.length === 0, dupGrids.map((g) => g.year).join(', '))
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)
 process.exit(failures === 0 ? 0 : 1)

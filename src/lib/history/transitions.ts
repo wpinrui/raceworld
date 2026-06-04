@@ -41,11 +41,9 @@ export function realWorldTransition(currentYear: number, currentTeams: Team[]): 
     .map((t) => ({ id: t.id, name: t.name }))
   const teamRebrands: TeamRebrand[] = currentTeams.flatMap((live) => {
     const to = nextById.get(live.id)
-    if (!to) return []
-    const changed = to.name !== live.name || to.shortName !== live.shortName || to.color !== live.color || to.nationality !== live.nationality
-    return changed
-      ? [{ id: live.id, from: { name: live.name, shortName: live.shortName, color: live.color, nationality: live.nationality }, to }]
-      : []
+    // Only a NAME change is a rebrand; a livery colour/shortName tweak with the same name is not.
+    if (!to || to.name === live.name) return []
+    return [{ id: live.id, from: { name: live.name, shortName: live.shortName, color: live.color, nationality: live.nationality }, to }]
   })
   const rookieEntries: HistoricalDriver[] = historicalDrivers.filter((d) => d.marketEntryYear === toYear)
 

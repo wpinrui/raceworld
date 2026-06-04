@@ -891,7 +891,6 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#9B0000' },
       { id: 'faenza', name: "Toro Rosso", shortName: 'STR', nationality: 'IT', color: '#0E2A6B' },
       { id: 'williams', name: "Williams", shortName: 'WIL', nationality: 'GB', color: '#1A3C8E' },
-      { id: 'silverstone', name: "Force India", shortName: 'FOR', nationality: 'IN', color: '#FF80C7' },
     ],
     lineup: [
       { driverId: 'lewis-hamilton', teamId: 'brackley' },
@@ -914,8 +913,6 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { driverId: 'brendon-hartley', teamId: 'faenza' },
       { driverId: 'lance-stroll', teamId: 'williams' },
       { driverId: 'sergey-sirotkin', teamId: 'williams' },
-      { driverId: 'sergio-perez', teamId: 'silverstone' },
-      { driverId: 'esteban-ocon', teamId: 'silverstone' },
     ],
   },
   {

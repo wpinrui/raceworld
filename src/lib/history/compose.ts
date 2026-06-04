@@ -97,13 +97,16 @@ export function composeSeason(year: number): { drivers: Driver[]; teams: Team[] 
   if (!grid) return null
 
   const byId = new Map(historicalDrivers.map((d) => [d.id, d]))
-  const teams: Team[] = grid.teams.map((t, i) => ({
-    id: t.id, name: t.name, shortName: t.shortName, nationality: t.nationality, color: t.color, carPace: carPaceForRank(i),
-  }))
+  // De-dupe teams by id defensively (a stray duplicate in the source must not double a constructor).
+  const seenTeam = new Set<string>()
+  const teams: Team[] = grid.teams
+    .filter((t) => (seenTeam.has(t.id) ? false : (seenTeam.add(t.id), true)))
+    .map((t, i) => ({ id: t.id, name: t.name, shortName: t.shortName, nationality: t.nationality, color: t.color, carPace: carPaceForRank(i) }))
 
   const seatedIds = new Set<string>()
   const drivers: Driver[] = []
   for (const seat of grid.lineup) {
+    if (seatedIds.has(seat.driverId)) continue // never seat the same driver twice
     const h = byId.get(seat.driverId)
     if (!h) continue // unknown driver id in the lineup; skipped (data not yet filled)
     seatedIds.add(h.id)
