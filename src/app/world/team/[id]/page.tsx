@@ -55,7 +55,7 @@ export default function TeamPage() {
               <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-4 flex-wrap">
                 <div className="w-1.5 h-10 rounded-sm" style={{ backgroundColor: liveTeam?.color ?? career.teamColor ?? '#6B7280' }} />
                 {editing && liveTeam ? (
-                  <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="text-xs text-[#FFFFFF] block mb-1">Name</label>
                       <input type="text" value={liveTeam.name} onChange={(e) => updateTeam(id, { name: e.target.value })} className={inputClass} />
@@ -70,6 +70,14 @@ export default function TeamPage() {
                     <div>
                       <label className="text-xs text-[#FFFFFF] block mb-1">Nationality</label>
                       <CountrySelect value={liveTeam.nationality} onChange={(code) => updateTeam(id, { nationality: code })} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#FFFFFF] block mb-1">Car pace</label>
+                      <input
+                        type="number" min={0} max={100} step={1} value={liveTeam.carPace}
+                        onChange={(e) => updateTeam(id, { carPace: Number(e.target.value) })}
+                        className={inputClass}
+                      />
                     </div>
                   </div>
                 ) : (

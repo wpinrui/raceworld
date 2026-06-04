@@ -83,6 +83,32 @@ function appendStatHistory(prev: StatHistory, drivers: Driver[], round: number):
   return next
 }
 
+// Per-round snapshot of every car's pace, for the home Car Development chart. Round 0 = season start;
+// one entry is appended per completed round. A god-mode pace edit refreshes the latest (current) entry,
+// so the chart stays accurate without reconstructing from the upgrade log (which can't see edits).
+export interface CarPaceSnapshot { round: number; paces: Record<string, number> }
+
+function snapshotCarPaces(teams: Team[]): Record<string, number> {
+  const paces: Record<string, number> = {}
+  for (const t of teams) paces[t.id] = t.carPace
+  return paces
+}
+
+// One-time backfill for saves that predate carPaceHistory: rebuild it from the current pace minus the
+// upgrades delivered after each round (best-effort; can't see past god-mode edits, which weren't logged).
+function reconstructCarPaceHistory(teams: Team[], events: DevUpgradeEvent[], completedRounds: number): CarPaceSnapshot[] {
+  const out: CarPaceSnapshot[] = []
+  for (let r = 0; r <= completedRounds; r++) {
+    const paces: Record<string, number> = {}
+    for (const t of teams) {
+      const future = events.reduce((s, e) => (e.teamId === t.id && e.round > r ? s + e.paceDelta : s), 0)
+      paces[t.id] = Math.round((t.carPace - future) * 10) / 10
+    }
+    out.push({ round: r, paces })
+  }
+  return out
+}
+
 // Standings are derived purely from race history, never from CURRENT grid membership,
 // so god-mode mid-season moves (release, reassign — even cut-and-rehire to the same
 // team) stay correct: a driver's points follow the DRIVER, a team's points stay with
@@ -200,6 +226,8 @@ interface SeasonStore {
   seasonStartStats: Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
   // Per-race attribute snapshots for the CURRENT (unarchived) season's progression chart.
   statHistory: StatHistory
+  // Per-round car-pace snapshots for the current season's Car Development chart.
+  carPaceHistory: CarPaceSnapshot[]
 
   // Computed
   driverStandings: DriverStanding[]
@@ -259,6 +287,7 @@ export const useSeasonStore = create<SeasonStore>()(
       pendingGridChanges: { additions: [], removals: [] },
       seasonStartStats: {},
       statHistory: {},
+      carPaceHistory: [],
       driverStandings: [],
       constructorStandings: [],
 
@@ -293,6 +322,7 @@ export const useSeasonStore = create<SeasonStore>()(
           pendingNextSeasonState: null,
           seasonStartStats: snapshotStats(allDrivers),
           statHistory: seedStatHistory(allDrivers),
+          carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -301,10 +331,15 @@ export const useSeasonStore = create<SeasonStore>()(
       // Persist in-place edits to the grid (driver market screen) without
       // resetting the season. Recompute standings so renames / team moves show.
       updateGrid: (drivers, teams) => {
-        const { raceResults } = get()
+        const { raceResults, carPaceHistory } = get()
+        // Keep the latest car-pace snapshot in step with any pace edits made on the market screen.
+        const history = carPaceHistory.length > 0
+          ? carPaceHistory.map((h, i) => (i === carPaceHistory.length - 1 ? { round: h.round, paces: snapshotCarPaces(teams) } : h))
+          : carPaceHistory
         set({
           drivers,
           teams,
+          carPaceHistory: history,
           driverStandings: computeDriverStandings(drivers, teams, raceResults),
           constructorStandings: computeConstructorStandings(teams, drivers, raceResults),
         })
@@ -354,10 +389,16 @@ export const useSeasonStore = create<SeasonStore>()(
       // God-mode edit of a single team (e.g. from the world team page): name, colour,
       // nationality, etc. Recompute standings so renames show through immediately.
       updateTeam: (id, patch) => {
-        const { drivers, teams, raceResults } = get()
+        const { drivers, teams, raceResults, carPaceHistory } = get()
         const next = teams.map((t) => (t.id === id ? { ...t, ...patch } : t))
+        // A god-mode pace edit refreshes the latest (current) snapshot so the Car Development chart
+        // reflects it immediately; earlier rounds keep their real recorded paces.
+        const history = patch.carPace !== undefined && carPaceHistory.length > 0
+          ? carPaceHistory.map((h, i) => (i === carPaceHistory.length - 1 ? { round: h.round, paces: snapshotCarPaces(next) } : h))
+          : carPaceHistory
         set({
           teams: next,
+          carPaceHistory: history,
           driverStandings: computeDriverStandings(drivers, next, raceResults),
           constructorStandings: computeConstructorStandings(next, drivers, raceResults),
         })
@@ -475,7 +516,7 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       recordRaceResult: (results) => {
-        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory, year } = get()
+        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory, carPaceHistory, year } = get()
         const updated = [...raceResults]
         updated[currentRound - 1] = results
 
@@ -497,6 +538,8 @@ export const useSeasonStore = create<SeasonStore>()(
           allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
           // Capture the post-race attributes for this round's progression chart.
           statHistory: appendStatHistory(statHistory, updatedDrivers, currentRound),
+          // Capture each car's post-upgrade pace for the Car Development chart.
+          carPaceHistory: [...carPaceHistory.filter((h) => h.round !== currentRound), { round: currentRound, paces: snapshotCarPaces(updatedTeams) }],
           driverStandings: computeDriverStandings(updatedDrivers, updatedTeams, updated),
           constructorStandings: computeConstructorStandings(updatedTeams, updatedDrivers, updated),
         })
@@ -731,6 +774,7 @@ export const useSeasonStore = create<SeasonStore>()(
             endOfSeasonSummary: null,
             seasonStartStats: snapshotStats(drivers),
             statHistory: seedStatHistory(drivers),
+            carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
             driverStandings: computeDriverStandings(drivers, teams, []),
             constructorStandings: computeConstructorStandings(teams, drivers, []),
           })
@@ -767,6 +811,7 @@ export const useSeasonStore = create<SeasonStore>()(
           pendingNextSeasonState: null,
           seasonStartStats: snapshotStats(drivers),
           statHistory: seedStatHistory(drivers),
+          carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -812,12 +857,18 @@ export const useSeasonStore = create<SeasonStore>()(
         pendingGridChanges: state.pendingGridChanges,
         seasonStartStats: state.seasonStartStats,
         statHistory: state.statHistory,
+        carPaceHistory: state.carPaceHistory,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
         const { drivers, teams, raceResults } = state
         state.driverStandings = computeDriverStandings(drivers, teams, raceResults)
         state.constructorStandings = computeConstructorStandings(teams, drivers, raceResults)
+        // Saves from before car-pace snapshots: backfill the season's history from the upgrade log so
+        // the Car Development chart isn't empty for an in-progress season.
+        if ((!state.carPaceHistory || state.carPaceHistory.length === 0) && teams.length > 0) {
+          state.carPaceHistory = reconstructCarPaceHistory(teams, state.allUpgradeEvents ?? [], raceResults.length)
+        }
         // Saves from before the date system: backfill the game clock from the current round
         // (the upcoming race's date), or the season start if no valid round.
         if (!state.currentDate) {
