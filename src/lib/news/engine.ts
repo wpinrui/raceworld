@@ -3399,25 +3399,23 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   const c = marketFeatureCopy.watch
   const year = ctx.year
   const seed = `contract-watch-${year}`
-  const hslots = { n: watch.length, year }
+  const hslots = { n: watch.length, year, next: year + 1 }
   type Verdict = 'could_do_better' | 'right_place' | 'lucky'
   // Most newsworthy first: the biggest over- and under-placements lead; well-matched cases sit nearest 0.
   const newsworthiness = (key: Verdict) => (a: ContractWatch, b: ContractWatch) =>
     key === 'could_do_better' ? b.diff - a.diff : key === 'lucky' ? a.diff - b.diff : Math.abs(a.diff) - Math.abs(b.diff)
-  const quoteKey = { could_do_better: 'quote_could_do_better', right_place: 'quote_right_place', lucky: 'quote_lucky' } as const
   const chunk = (key: Verdict) => {
     const list = watch.filter((w) => w.verdict === key).sort(newsworthiness(key))
     if (list.length === 0) return ''
     const names = listJoin(list.map((w) => `${w.driverName} (${w.teamName})`))
     const line = fill(pick(c[key], `${seed}|${key}`), { ...hslots, names })
-    return paras(line, quoteLine(c[quoteKey[key]], `${seed}|q-${key}`, list[0].driverName))
+    // Only the could-do-better group carries a quote (the most newsworthy case); the rest read straight.
+    return key === 'could_do_better' ? paras(line, quoteLine(c.quote_could_do_better, `${seed}|q-cdb`, list[0].driverName)) : line
   }
-  const body = paras(
-    fill(pick(c.intro, `${seed}|intro`), hslots),
-    chunk('could_do_better'),
-    chunk('right_place'),
-    chunk('lucky'),
-  )
+  // "As for ..." only works as a transition, never to open the run of verdicts; force the first to "For ...".
+  const verdicts = [chunk('could_do_better'), chunk('right_place'), chunk('lucky')].filter(Boolean)
+  if (verdicts.length) verdicts[0] = verdicts[0].replace(/^As for /, 'For ')
+  const body = paras(fill(pick(c.intro, `${seed}|intro`), hslots), ...verdicts)
   return [agreeArticle({
     id: seed, category: 'silly_season', round: WATCH_PIN_ROUND, priority: 34,
     headline: fill(pick(c.title, `${seed}|h`), hslots),

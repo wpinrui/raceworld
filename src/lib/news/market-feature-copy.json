@@ -20,25 +20,25 @@
       "Formula racing's contract calendar has arrived at its most consequential moment, with {n} drivers in {year} holding deals that expire at season's end."
     ],
     "could_do_better": [
-      "A better seat looks overdue for {names}.",
-      "The car is the limiting factor for {names}, not the driving.",
-      "A step up is well earned by {names}.",
-      "Better machinery is the only thing missing for {names}.",
-      "The pace is there for {names}, the car is not."
+      "For {names}, the results are being held back by the machinery, and a move to a stronger team looks well overdue.",
+      "As for {names}, the pace has been there all season, and bigger teams would be foolish not to come calling.",
+      "For {names}, the car has been the ceiling all year, and a step up to better machinery looks thoroughly merited.",
+      "As for {names}, outperforming that car week after week is the kind of form that does not go unnoticed for long.",
+      "For {names}, the driving has been well ahead of where the car can put them, and the market should reflect that."
     ],
     "right_place": [
-      "The current seat looks a fair fit for {names}.",
-      "Driver and machinery are well matched for {names}.",
-      "Output matches the car for {names}.",
-      "An even balance of driver and seat holds for {names}.",
-      "The seat reflects the level of {names}."
+      "For {names}, fans and pundits alike expect them to stay put for {next}.",
+      "As for {names}, the fit between driver and team looks natural, and few would argue against them seeing out {next} right where they are.",
+      "For {names}, the current seat suits them well, and a renewal heading into {next} would surprise nobody in the paddock.",
+      "As for {names}, the results reflect the machinery and the machinery reflects the driver, which makes staying put for {next} the obvious call.",
+      "For {names}, everything about the pairing makes sense, and the expectation going into {next} is that it continues."
     ],
     "lucky": [
-      "The car is doing the heavy lifting for {names}.",
-      "Strong machinery is flattering {names}.",
-      "The points owe more to the car than to {names}.",
-      "A quick car is doing the talking for {names}.",
-      "The seat is overdelivering for {names}."
+      "As for {names}, a move up the grid seems unlikely, and staying put would suit them well.",
+      "For {names}, the car has been doing most of the talking this season, and holding onto that seat into {next} would be a fine result.",
+      "As for {names}, the machinery has been flattering the numbers, and a move up looks a stretch given what the data actually shows.",
+      "For {names}, a strong car has papered over some cracks, and staying put for {next} is probably the best outcome available.",
+      "As for {names}, the points flatter more than the raw pace, and few expect the market to come knocking with anything better."
     ],
     "quote_could_do_better": [
       "Give me a car that can fight and I will show you what I can actually do.",
