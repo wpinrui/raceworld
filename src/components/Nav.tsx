@@ -119,6 +119,13 @@ export default function Nav() {
                   {simming ? 'Simulating…' : 'Simulate next race'}
                 </button>
               )}
+              <Link
+                href="/settings"
+                onClick={() => setMenuOpen(false)}
+                className="block w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] hover:text-[#00D9FF] transition-colors"
+              >
+                Settings
+              </Link>
               <button
                 onClick={() => { setMenuOpen(false); setConfirmOpen(true) }}
                 className="w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] hover:text-[#DC143C] transition-colors"
