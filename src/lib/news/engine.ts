@@ -27,6 +27,7 @@ import type {
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
+import milestoneCopy from './milestone-copy.json'
 
 export interface NewsContext {
   year: number
@@ -742,77 +743,6 @@ function milestoneCrossed(cat: keyof typeof MILESTONE_STEP, before: number, afte
   return null
 }
 
-// Prose pools for the non-win career milestones (starts / points / podiums / poles), split into the
-// maiden (first ever) and the recurring nth-step treatments. Win milestones are handled inline in
-// milestones() with their own richer, conditional body.
-type MileCopy = { h: string[]; d: string[]; b1: string[]; b2: string[]; q: string[] }
-const MILESTONE_COPY: Record<'podiums' | 'poles' | 'points' | 'starts', { maiden: MileCopy; nth: MileCopy }> = {
-  podiums: {
-    maiden: {
-      h: ['{driver_last} stands on the podium for the first time at the {circuit}', 'A maiden F1 podium for {driver_last} at the {circuit}', '{driver_last} breaks into the top three for the first time at the {circuit}'],
-      d: ['{driver} finished {pos} at the {circuit} for the first podium of {their} Formula 1 career.', 'The {circuit} handed {driver_last} a first taste of the rostrum, {pos} at the flag.'],
-      b1: ['{driver} brought {team_poss} car home {pos} at the {circuit} to stand on a Formula 1 podium for the first time, a marker every driver carries for good.', 'A first podium does not leave you, and {driver_last} secured one with {pos} at the {circuit}.'],
-      b2: ['{they_cap} kept it clean when the pressure came, and the result reflected a weekend without a wasted lap.', 'For {team}, seeing {driver_last} on the rostrum is the kind of return that changes how a season is judged.'],
-      q: ['"I have dreamed about this since I was a kid, and to finally do it means everything," said {driver_last}.', '"The whole team has worked so hard for this, this one is for all of them," said {driver_last}.'],
-    },
-    nth: {
-      h: ['{driver_last} reaches {n} career podiums at the {circuit}', 'Podium number {n} for {driver_last} at the {circuit}', '{driver_last} returns to the rostrum for the {nth} time at the {circuit}'],
-      d: ['{driver_poss} {pos} at the {circuit} was the {nth} podium of {their} career.', 'The {circuit} brought up {n} career podiums for {driver_last}.'],
-      b1: ['{driver_last} finished {pos} at the {circuit} to reach {n} podiums in Formula 1, a tally that marks {them} out as a regular at the sharp end.', '{pos} at the {circuit} took {driver_poss} career podium count to {n}, the kind of number that does not happen by accident.'],
-      b2: ['Consistency at the front is its own achievement, and {driver_last} keeps adding to a record that speaks for itself.', 'For {team}, a driver who keeps finding the podium is the foundation any campaign is built on.'],
-      q: ['"They never get old, every single one of them is special," said {driver_last}.', '"I just want to keep putting the car where it belongs," said {driver_last}.'],
-    },
-  },
-  poles: {
-    maiden: {
-      h: ['{driver_last} takes a maiden pole at the {circuit}', '{driver_last} qualifies on pole for the first time at the {circuit}', 'A first career pole for {driver_last} at the {circuit}'],
-      d: ['{driver} lined up on pole position for the first time in {their} career at the {circuit}.', 'The {circuit} delivered {driver_last} a maiden Formula 1 pole.'],
-      b1: ['{driver} put it on pole at the {circuit} for the first time in {their} career, the reward for a lap that left nothing on the table.', 'A first pole position is a statement of raw speed, and {driver_last} made it at the {circuit}.'],
-      b2: ['Pole does not guarantee a result, but it tells you the pace is there when it matters most.', 'For {team}, seeing {driver_poss} name at the top of the timesheet is a sign of where the car can run.'],
-      q: ['"The lap just came together, everything I asked of the car it gave me," said {driver_last}.', '"To start a race from the front for the first time is a feeling I will not forget," said {driver_last}.'],
-    },
-    nth: {
-      h: ['{driver_last} records {n} career poles at the {circuit}', 'Pole number {n} for {driver_last} at the {circuit}', '{driver_last} tops qualifying for the {nth} time in {their} career at the {circuit}'],
-      d: ['{driver_poss} pole at the {circuit} was the {nth} of {their} career.', 'The {circuit} took {driver_last} to {n} career pole positions.'],
-      b1: ['{driver_last} claimed pole at the {circuit} for the {nth} time in {their} career, one more lap to add to a growing collection.', 'A {n}-pole career is built one Saturday at a time, and {driver_last} added the latest at the {circuit}.'],
-      b2: ['Single-lap pace like this rarely fades, and {driver_last} keeps reminding the grid of it.', 'For {team}, a driver who can deliver on Saturday is half the battle won before lights out.'],
-      q: ['"When the car is this good, my job is to make the most of it, and today I did," said {driver_last}.', '"Qualifying is where you show your speed, and I love these moments," said {driver_last}.'],
-    },
-  },
-  points: {
-    maiden: {
-      h: ['{driver_last} scores in Formula 1 for the first time at the {circuit}', '{driver_last} reaches the points for the first time at the {circuit}', '{driver_last} opens {their} F1 points account at the {circuit}'],
-      d: ['{driver} reached the points for the first time in {their} Formula 1 career with {pos} at the {circuit}.', 'The {circuit} gave {driver_last} a first championship score.'],
-      b1: ['{driver} finished {pos} at the {circuit} to score in Formula 1 for the first time, the kind of result a young career is built on.', 'A first points finish is a threshold crossed only once, and {driver_last} crossed it with {pos} at the {circuit}.'],
-      b2: ['Every points finish at this level has to be earned, and {driver_last} earned this one.', 'For {team}, seeing {driver_last} in the points is the return on patience that every project needs.'],
-      q: ['"It might be the first of many, and I cannot wait for what comes next," said {driver_last}.', '"This is what we have all been working towards, and there is more to come," said {driver_last}.'],
-    },
-    nth: {
-      h: ['{driver_last} passes {n} career points at the {circuit}', '{driver_last} moves beyond {n} championship points at the {circuit}', '{n} career points and counting for {driver_last} after the {circuit}'],
-      d: ['{driver_poss} haul at the {circuit} took {their} career tally past {n} points.', 'The {circuit} carried {driver_last} beyond {n} career points.'],
-      b1: ['{driver_last} moved past {n} career points at the {circuit}, a tally only the long-servers and the genuinely quick ever reach.', 'Crossing {n} points is a marker of longevity and consistency, and {driver_last} reached it at the {circuit}.'],
-      b2: ['Points accumulate quietly, race after race, until the total says something about a whole career.', 'For {team}, a driver banking points this regularly is the backbone of any constructors campaign.'],
-      q: ['"I do not really think about the numbers, but that one is nice to hear," said {driver_last}.', '"It means I have been doing something right for a long time," said {driver_last}.'],
-    },
-  },
-  starts: {
-    maiden: {
-      h: ['{driver_last} makes {their} Formula 1 debut at the {circuit}', 'A first Grand Prix start for {driver_last} at the {circuit}', '{driver_last} lines up for {their} first F1 race at the {circuit}'],
-      d: ['{driver} took the start of {their} first Formula 1 Grand Prix at the {circuit}.', 'The {circuit} marked the first race start of {driver_poss} career.'],
-      b1: ['{driver} lined up for the first Grand Prix of {their} career at the {circuit}, the moment a whole racing journey is pointed towards.', 'A Formula 1 debut comes once, and {driver_last} had it at the {circuit}.'],
-      b2: ['The hard part now is staying, and {driver_last} will know the real work starts here.', 'For {team}, handing a driver a first start is a vote of confidence as much as an opportunity.'],
-      q: ['"I have wanted this my whole life, and now the real journey begins," said {driver_last}.', '"To finally be on the grid in Formula 1 is a dream, but I am here to do a job," said {driver_last}.'],
-    },
-    nth: {
-      h: ['{driver_last} reaches {n} Grand Prix starts at the {circuit}', 'Start number {n} for {driver_last} at the {circuit}', '{driver_last} marks {n} F1 races at the {circuit}'],
-      d: ['The {circuit} was the {nth} Formula 1 start of {driver_poss} career.', '{driver_last} reached {n} Grand Prix starts at the {circuit}.'],
-      b1: ['{driver_last} took the start at the {circuit} for the {nth} time in {their} career, a number that speaks to staying power in an unforgiving sport.', 'Reaching {n} Grand Prix starts means {driver_last} has outlasted far more drivers than {they} ever lined up against.'],
-      b2: ['Longevity at this level is never an accident; it takes pace enough to stay wanted year after year.', 'For {team}, experience like {driver_poss} is a resource a garage leans on every weekend.'],
-      q: ['"I still get the same nerves on the grid as my very first race," said {driver_last}.', '"This sport has given me everything, and I am not done yet," said {driver_last}.'],
-    },
-  },
-}
-
 type MileCat = 'wins' | 'podiums' | 'poles' | 'points' | 'starts'
 
 // Significance ordering across every milestone kind, so the most newsworthy one leads the per-race
@@ -823,24 +753,27 @@ function milestoneSig(cat: MileCat, value: number): number {
   return rank[cat] * 1_000_000 + (value === 1 ? 500_000 : value)
 }
 
-// A compact one-sentence summary of a career milestone, for the secondary entries listed beneath the
-// headline milestone in the per-race roundup.
+// A compact one-sentence summary of a single career milestone, for the secondary entries listed
+// beneath the headline milestone in the per-race roundup. Prose lives in milestone-copy.json.
 function milestoneLine(ctx: NewsContext, res: RaceResult, cat: MileCat, value: number): string {
-  const maiden = value === 1
   const seed = `mileline-${ctx.year}-${res.driverId}-${cat}`
   const slots = {
     driver_last: lastName(res.driverName), driver_poss: poss(lastName(res.driverName)), team: res.teamName,
     n: value, nth: ordinal(value), pos: ordinal(res.finishPosition ?? 0),
     ...pronouns(ctx.drivers.find((d) => d.id === res.driverId)?.gender),
   }
-  const pools: Record<MileCat, [string[], string[]]> = {
-    wins: [['{driver_last} took the first win of {their} career.'], ['{driver_last} brought up {n} career wins.']],
-    podiums: [['{driver_last} stood on the podium for the first time, finishing {pos}.'], ['{driver_last} reached {n} career podiums with {pos}.']],
-    poles: [['{driver_last} took a maiden pole.'], ['{driver_last} recorded {n} career poles.']],
-    points: [['{driver_last} scored in Formula 1 for the first time, finishing {pos}.'], ['{driver_last} moved past {n} career points.']],
-    starts: [['{driver_last} made {their} Formula 1 debut.'], ['{driver_last} reached {n} Grand Prix starts.']],
-  }
-  return fill(pick(pools[cat][maiden ? 0 : 1], seed), slots)
+  return fill(pick(milestoneCopy.milestoneLine[cat][value === 1 ? 'maiden' : 'nth'], seed), slots)
+}
+
+// When several drivers cross the SAME milestone (category + value) in one race, combine them into a
+// single line naming all of them rather than repeating near-identical sentences. Only podiums / points
+// / starts can have multiple holders in a race; wins and poles never do (one winner, one pole-sitter).
+function combinedLine(ctx: NewsContext, members: { res: RaceResult }[], cat: MileCat, value: number): string {
+  const key = `${cat}${value === 1 ? 'Maiden' : 'Nth'}` as keyof typeof milestoneCopy.combined
+  const pool = milestoneCopy.combined[key]
+  if (!pool) return members.map((m) => milestoneLine(ctx, m.res, cat, value)).join(' ')
+  const names = listJoin(members.map((m) => lastName(m.res.driverName)))
+  return fill(pick(pool, `mile-combined-${ctx.year}-${cat}-${value}`), { names, n: value, nth: ordinal(value) })
 }
 
 // TRIGGER: per race, ONE milestone article. Every career milestone crossed that race (issue #19) —
@@ -947,92 +880,29 @@ function milestones(ctx: NewsContext): NewsArticle[] {
         ...pronouns(ctx.drivers.find((d) => d.id === w.driverId)?.gender),
       }
       if (maiden) {
-        headline = fill(pick([
-          '{driver_last} wins for the first time at the {circuit}',
-          'A maiden Formula 1 victory for {driver_last} at the {circuit}',
-          '{driver_last} becomes a Grand Prix winner at the {circuit}',
-          '{team} celebrate {driver_poss} first win at the {circuit}',
-          '{driver_last} breaks through for a maiden win at the {circuit}',
-        ], `${seed}|h`), s)
-        dek = fill(pick([
-          '{driver} took the first win of {their} Formula 1 career at the {circuit}.',
-          'A maiden victory for {driver_last} at the {circuit}, a moment {they} will carry for the rest of {their} career.',
-          '{driver} crossed the line first at the {circuit} to become a Grand Prix winner for the first time.',
-        ], `${seed}|d`), s)
+        const M = milestoneCopy.winMaiden
+        headline = fill(pick(M.headline, `${seed}|h`), s)
+        dek = fill(pick(M.dek, `${seed}|d`), s)
         lead = [
-          fill(pick([
-            '{driver} took the chequered flag at the {circuit} to register the first win of {their} Formula 1 career, a result that felt both earned and overdue in {team_poss} camp.',
-            'The victory at the {circuit} was the one {driver_last} had been chasing since {they} arrived in the sport, a clean afternoon that ended with {them} on the top step for the first time.',
-            'The scenes at the {circuit} as {driver_last} crossed the line told the story of a driver and a team who had waited a long time for this first win.',
-          ], `${seed}|b1`), s),
-          fromPole ? fill(pick([
-            '{driver_last} converted pole into the win at the {circuit}, the cleanest possible way to take a maiden victory.',
-            'Starting from the front and finishing there, {driver_last} turned pole into a first win with a controlled lights-to-flag drive.',
-          ], `${seed}|pole`), s) : '',
-          priorSeconds >= 1 ? fill(pick([
-            'Having finished runner-up {prior_seconds} {seconds_times} before, {driver_last} finally made the extra place count at the {circuit}.',
-            'After {prior_seconds} {seconds_noun} and a best of {prior_best}, {driver_last} converted at last at the {circuit}.',
-          ], `${seed}|nm`), s) : '',
-          fill(pick([
-            'The {circuit} will sit permanently in {driver_poss} story, the place {they} became a Formula 1 race winner for the first time.',
-            'A maiden F1 victory is a threshold crossed only once, and {driver_last} crossed it at the {circuit}.',
-            '{driver_poss} first Formula 1 win is a moment the sport records for good, and the {circuit} is the answer {they} will give every time.',
-          ], `${seed}|mr`), s),
-          homeWin ? fill(pick([
-            '{driver_poss} first win came on home soil, charging the moment for {them} and a crowd that cheered every metre.',
-            'To break through in front of a home crowd is as good as it gets, and {driver_last} knew it the instant {they} crossed the line.',
-          ], `${seed}|home`), s) : '',
-          texture(seed, [
-            'The radio when the flag fell told the story, a roar from the {team} wall and {driver_poss} voice cracking before the words came.',
-            '{driver_last} was mobbed in parc ferme, mechanics spilling past the barriers before the car had fully stopped.',
-            'Inside the {team} garage the restraint that had held through harder rounds vanished the instant the screens showed P1 confirmed.',
-            'On the slow-down lap, {driver_last} could manage only a cracked "thank you, every single one of you" over the radio.',
-          ], s),
-          texture(`${seed}|q`, [
-            '"This one means everything to me and to everyone at {team} who worked so hard for it," said {driver_last}.',
-            '"We knew the pace was there, we just needed a clean race to show it, and the {circuit} gave us that," said {driver_last}.',
-            '"I have had some hard weekends, and to win for the first time makes all of it worth it," said {driver_last}.',
-          ], s, 80),
+          fill(pick(M.b1, `${seed}|b1`), s),
+          fromPole ? fill(pick(M.pole, `${seed}|pole`), s) : '',
+          priorSeconds >= 1 ? fill(pick(M.nm, `${seed}|nm`), s) : '',
+          fill(pick(M.mr, `${seed}|mr`), s),
+          homeWin ? fill(pick(M.home, `${seed}|home`), s) : '',
+          texture(seed, M.scene, s),
+          texture(`${seed}|q`, M.quote, s, 80),
         ]
       } else {
-        headline = fill(pick([
-          '{driver_last} records {n} career wins at the {circuit}',
-          'Win number {n} for {driver_last} at the {circuit}',
-          '{driver_last} reaches {n} Grand Prix victories at the {circuit}',
-          '{driver_last} hits {n} career wins with victory at the {circuit}',
-        ], `${seed}|h`), s)
-        dek = fill(pick([
-          '{driver_poss} victory at the {circuit} was the {nth} win of {their} career.',
-          'The {circuit} took {driver_last} to {n} career wins.',
-          '{driver} won the {circuit} to bring up {n} Grand Prix victories.',
-        ], `${seed}|d`), s)
+        const M = milestoneCopy.winNth
+        headline = fill(pick(M.headline, `${seed}|h`), s)
+        dek = fill(pick(M.dek, `${seed}|d`), s)
         lead = [
-          fill(pick([
-            '{driver} won the {circuit} to reach {n} career victories, a number that places {them} among the drivers who win not once but habitually.',
-            'Victory at the {circuit} was career win number {n} for {driver_last}, another afternoon spent doing what {they} does best.',
-          ], `${seed}|b1`), s),
-          fromPole ? fill(pick([
-            'Pole converted to win, {driver_last} controlled the {circuit} from the front to bank number {n}.',
-            'Lights to flag from pole, {driver_last} made win {n} look the more straightforward for a clean Saturday.',
-          ], `${seed}|pole`), s) : '',
-          priorSeconds >= 1 ? fill(pick([
-            'After {prior_seconds} {seconds_noun} earlier in the year, {driver_last} returned to the top step at the {circuit}.',
-            'The runner-up finishes had stacked up, {prior_seconds} of them, before {driver_last} converted again at the {circuit}.',
-          ], `${seed}|nm`), s) : '',
-          fill(pick([
-            'Wins in clusters are how careers are measured, and {driver_last} keeps adding to a tally that already commands respect.',
-            'Reaching {n} victories is the mark of a driver the grid plans around, not against.',
-            'Every win after the first says something different, and {n} of them says {driver_last} belongs at the front.',
-          ], `${seed}|b2`), s),
-          homeWin ? fill(pick([
-            'That it came on home soil only sharpened the moment for {driver_last} and the crowd behind {them}.',
-            'A home crowd got to see number {n} in person, and {driver_last} fed off every cheer.',
-          ], `${seed}|home`), s) : '',
-          texture(`${seed}|q`, [
-            '"They mean as much as the first one, every single time," said {driver_last}.',
-            '"The car was mega today, and the whole team deserves this," said {driver_last}.',
-            '"I just keep my head down and win races when the chance is there," said {driver_last}.',
-          ], s, 80),
+          fill(pick(M.b1, `${seed}|b1`), s),
+          fromPole ? fill(pick(M.pole, `${seed}|pole`), s) : '',
+          priorSeconds >= 1 ? fill(pick(M.nm, `${seed}|nm`), s) : '',
+          fill(pick(M.b2, `${seed}|b2`), s),
+          homeWin ? fill(pick(M.home, `${seed}|home`), s) : '',
+          texture(`${seed}|q`, M.quote, s, 80),
         ]
       }
     } else if (top.kind === 'career') {
@@ -1045,7 +915,7 @@ function milestones(ctx: NewsContext): NewsArticle[] {
         n: top.value, nth: ordinal(top.value), pos: ordinal(d.finishPosition ?? 0),
         ...pronouns(ctx.drivers.find((dd) => dd.id === d.driverId)?.gender),
       }
-      const C = MILESTONE_COPY[cat][maiden ? 'maiden' : 'nth']
+      const C = milestoneCopy.MILESTONE_COPY[cat][maiden ? 'maiden' : 'nth']
       headline = fill(pick(C.h, `${seed}|h`), s)
       dek = fill(pick(C.d, `${seed}|d`), s)
       lead = [fill(pick(C.b1, `${seed}|b1`), s), fill(pick(C.b2, `${seed}|b2`), s), texture(`${seed}|q`, C.q, s, 80)]
@@ -1118,16 +988,29 @@ function milestones(ctx: NewsContext): NewsArticle[] {
       ]
     }
 
-    const lines = rest.map((e) => {
-      if (e.kind === 'career') return milestoneLine(ctx, e.res, e.cat, e.value)
-      if (e.kind === 'onetwo') return fill(pick(['{team} completed a one-two, {d1_last} leading {d2_last} home.', 'A {team} one-two as well, {d1_last} ahead of {d2_last}.'], `${seed}|otl`), { team: p1.teamName, d1_last: lastName(p1.driverName), d2_last: lastName(p2.driverName) })
-      return fill(pick(['{driver_last} took a surprise podium for {team}, finishing {pos}.', 'A shock {pos} for {driver_last} and {team}, too.'], `${seed}|spl-${e.res.driverId}`), { driver_last: lastName(e.res.driverName), team: e.res.teamName, pos: ordinal(e.res.finishPosition ?? 0) })
-    })
+    // Secondary-milestone lines, combining identical career milestones (same category + value) across
+    // drivers into ONE line so a cohort hitting e.g. 50 starts together reads as a single sentence
+    // rather than nineteen near-identical ones.
+    const emitted = new Set<string>()
+    const lines: string[] = []
+    for (const e of rest) {
+      if (e.kind === 'career') {
+        const key = `${e.cat}:${e.value}`
+        if (emitted.has(key)) continue
+        emitted.add(key)
+        const members = rest.filter((m): m is Career => m.kind === 'career' && m.cat === e.cat && m.value === e.value)
+        lines.push(members.length > 1 ? combinedLine(ctx, members, e.cat, e.value) : milestoneLine(ctx, e.res, e.cat, e.value))
+      } else if (e.kind === 'onetwo') {
+        lines.push(fill(pick(['{team} completed a one-two, {d1_last} leading {d2_last} home.', 'A {team} one-two as well, {d1_last} ahead of {d2_last}.'], `${seed}|otl`), { team: p1.teamName, d1_last: lastName(p1.driverName), d2_last: lastName(p2.driverName) }))
+      } else {
+        lines.push(fill(pick(['{driver_last} took a surprise podium for {team}, finishing {pos}.', 'A shock {pos} for {driver_last} and {team}, too.'], `${seed}|spl-${e.res.driverId}`), { driver_last: lastName(e.res.driverName), team: e.res.teamName, pos: ordinal(e.res.finishPosition ?? 0) }))
+      }
+    }
     const priority = top.kind === 'onetwo' ? 60 : top.kind === 'surprise' ? 55
       : top.cat === 'wins' ? (top.value === 1 ? 72 : 66)
       : top.cat === 'podiums' ? 58 : top.cat === 'poles' ? 50 : top.cat === 'points' ? 46 : 44
     const restPara = lines.length
-      ? fill(pick(['There were other landmarks at the {circuit}, too.', 'It was a day for the record books in more ways than one.', 'Other milestones fell at the {circuit} as well.'], `${seed}|conn`), { circuit: circuitName }) + ' ' + lines.join(' ')
+      ? fill(pick(milestoneCopy.connector, `${seed}|conn`), { circuit: circuitName }) + ' ' + lines.join(' ')
       : ''
     out.push({ id: seed, category: 'milestone', round: r, priority, headline, dek, body: paras(...lead, restPara) })
   }
