@@ -8,10 +8,10 @@
 
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
-  getDriverCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
+  getDriverCareersUpToYear, getTeamCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
   type DbRaceResult,
 } from '@/lib/db/queries'
-import { generateNews, type NewsContext, type NewsArticle, type DriverCareer } from './engine'
+import { generateNews, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from './engine'
 import type { Driver, Team, RaceResult, Circuit, EndOfSeasonSummary } from '@/lib/sim/types'
 
 // Reconstruct the grid changes around an archived season by diffing its team roster against the
@@ -65,6 +65,20 @@ function buildCareers(throughYear: number): Record<string, DriverCareer> {
 // to `throughYear`, which the live store's drivers/free agents are keyed against.
 export async function actionGetDriverCareers(throughYear: number): Promise<Record<string, DriverCareer>> {
   return buildCareers(throughYear)
+}
+
+// Per-team constructor career totals from the archive, up to and including `throughYear`. The basis
+// for team milestones; the live newsroom folds the current season on top via foldLiveSeasonTeams.
+function buildTeamCareers(throughYear: number): Record<string, TeamCareer> {
+  const out: Record<string, TeamCareer> = {}
+  for (const a of getTeamCareersUpToYear(throughYear)) {
+    out[a.teamId] = { teamId: a.teamId, races: a.races, wins: a.wins, podiums: a.podiums, poles: a.poles, points: a.points }
+  }
+  return out
+}
+
+export async function actionGetTeamCareers(throughYear: number): Promise<Record<string, TeamCareer>> {
+  return buildTeamCareers(throughYear)
 }
 
 function toRaceResult(r: DbRaceResult): RaceResult {
@@ -153,6 +167,7 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
     calendar,
     live: false,
     careers: buildCareers(year),
+    teamCareers: buildTeamCareers(year),
   }
   return {
     articles: generateNews(ctx),

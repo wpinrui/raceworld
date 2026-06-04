@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, foldLiveSeason, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer } from '@/lib/news/engine'
-import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers } from '@/lib/news/actions'
+import { generateNews, foldLiveSeason, foldLiveSeasonTeams, CATEGORY_LABELS, NEWS_FILTERS, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from '@/lib/news/engine'
+import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 
 function roundLabel(round: number, calLen: number): string {
@@ -28,6 +28,7 @@ export default function NewsroomPage() {
   // Prior-season F1 career totals from the archive DB (the current season is folded in from the
   // store), so the live newsroom's retirement obituaries and driver-to-watch see real records.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
+  const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   useEffect(() => {
     setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
@@ -47,6 +48,7 @@ export default function NewsroomPage() {
   // in the archive).
   useEffect(() => {
     actionGetDriverCareers(s.year - 1).then(setCareerBase).catch(() => setCareerBase({}))
+    actionGetTeamCareers(s.year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
   }, [s.year])
 
   const liveYear = s.year
@@ -73,9 +75,10 @@ export default function NewsroomPage() {
       calendar: calendar2026,
       live: true,
       careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
+      teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
     }
     return generateNews(ctx)
-  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase])
+  }, [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase])
 
   // Past season: fetched from the archive DB on demand.
   useEffect(() => {

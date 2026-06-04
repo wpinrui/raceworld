@@ -535,5 +535,57 @@
       "{driver_last} took {pos} for {team} in a result that stunned the paddock.",
       "A shock {pos} for {driver_last} and {team} that no one had pencilled in."
     ]
+  },
+  "teamAccompany": {
+    "pointsMaiden": [
+      "It was also the first championship point in {team}'s history as a constructor.",
+      "The result marked {team}'s first ever scoring finish in Formula 1.",
+      "The race also gave {team} their maiden championship point."
+    ],
+    "pointsNth": [
+      "It was also {team}'s {nth} point as a constructor.",
+      "The result brought {team}'s all-time points tally to {n} in the championship.",
+      "The race also marked {team}'s {nth} career point as a Formula 1 constructor."
+    ],
+    "podiumsMaiden": [
+      "It was also the first podium finish in {team}'s history as a constructor.",
+      "The result marked {team}'s maiden top-three finish in Formula 1.",
+      "The race also delivered {team}'s first ever podium as a constructor."
+    ],
+    "podiumsNth": [
+      "It was also {team}'s {nth} podium as a constructor.",
+      "The result brought {team}'s all-time podium count to {n}.",
+      "The race also marked {team}'s {nth} career podium in Formula 1."
+    ],
+    "winsMaiden": [
+      "It was also the first race victory in {team}'s history as a constructor.",
+      "The result marked {team}'s maiden win in Formula 1.",
+      "The race also delivered {team}'s first ever victory as a constructor."
+    ],
+    "winsNth": [
+      "It was also {team}'s {nth} win as a constructor.",
+      "The result brought {team}'s all-time win total to {n} in Formula 1.",
+      "The race also marked {team}'s {nth} career victory as a constructor."
+    ],
+    "polesMaiden": [
+      "It was also the first pole position in {team}'s history as a constructor.",
+      "The result marked {team}'s maiden pole position in Formula 1.",
+      "The race also gave {team} their first ever pole position as a constructor."
+    ],
+    "polesNth": [
+      "It was also {team}'s {nth} pole position as a constructor.",
+      "The result brought {team}'s all-time pole tally to {n} in Formula 1.",
+      "The race also marked {team}'s {nth} career pole as a constructor."
+    ],
+    "startsMaiden": [
+      "It was also {team}'s first ever Grand Prix as a constructor.",
+      "The race marked the beginning of {team}'s life as a Formula 1 constructor.",
+      "The result came on {team}'s debut as a constructor in the championship."
+    ],
+    "startsNth": [
+      "It was also {team}'s {nth} Grand Prix as a constructor.",
+      "The race marked {team}'s {nth} start in Formula 1 as a constructor.",
+      "The result came on {team}'s {nth} appearance as a constructor in the championship."
+    ]
   }
 }

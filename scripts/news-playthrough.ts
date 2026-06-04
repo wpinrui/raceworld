@@ -17,7 +17,7 @@
 
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { NewsArticle, NewsContext, DriverCareer } from '@/lib/news/engine'
+import type { NewsArticle, NewsContext, DriverCareer, TeamCareer } from '@/lib/news/engine'
 import type { RaceResult } from '@/lib/sim/types'
 
 // ---- args -------------------------------------------------------------------
@@ -77,8 +77,22 @@ async function main() {
   // paths. Passed into every NewsContext so career-driven producers (retirement, driver-to-watch)
   // see real numbers — never a guess from age.
   const careers: Record<string, DriverCareer> = {}
+  const teamCareers: Record<string, TeamCareer> = {}
   const seasonsSeen: Record<string, Set<number>> = {}
   const tally = (year: number, results: RaceResult[]) => {
+    const teamsThisRace = new Set<string>()
+    for (const res of results) {
+      const tid = res.teamId
+      let tc = teamCareers[tid]
+      if (!tc) tc = teamCareers[tid] = { teamId: tid, races: 0, wins: 0, podiums: 0, poles: 0, points: 0 }
+      const fp = res.finishPosition
+      tc.points += res.points
+      if (res.gridPosition === 1) tc.poles++
+      if (fp != null && fp === 1) tc.wins++
+      if (fp != null && fp <= 3) tc.podiums++
+      teamsThisRace.add(tid)
+    }
+    for (const tid of teamsThisRace) teamCareers[tid].races++
     for (const res of results) {
       const id = res.driverId
       let c = careers[id]
@@ -106,7 +120,7 @@ async function main() {
       year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
       upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
-      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers,
+      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers, teamCareers,
     }
   }
 

@@ -49,6 +49,7 @@ export interface NewsContext {
                                           // producers that lean on it (retirement, driver-to-watch) degrade
                                           // gracefully when it is absent. starts === 0 (or no entry) means
                                           // the driver has never raced in F1; never infer that from age.
+  teamCareers?: Record<string, TeamCareer>  // constructor career totals per team, for team milestones (optional)
 }
 
 // Cross-season F1 career totals for one driver, accumulated up to (and including) the context's
@@ -66,6 +67,17 @@ export interface DriverCareer {
   titleYears: number[]
   debutYear: number | null
   bestFinish: number | null   // best single-race finish position ever (1 = a win)
+}
+
+// Cross-season constructor career totals for one team, accumulated up to (and including) the
+// context's season. The basis for team milestones (first/Nth point, podium, win, pole, Grand Prix).
+export interface TeamCareer {
+  teamId: string
+  races: number    // distinct Grands Prix entered
+  wins: number     // race wins (per car finishing 1st)
+  podiums: number  // top-three finishes (per car)
+  poles: number    // poles (per car on grid P1)
+  points: number   // cumulative constructors points
 }
 
 export interface NewsArticle {
@@ -412,6 +424,33 @@ export function foldLiveSeason(
   return out
 }
 
+// Extend a team-careers map (archived DB totals) with the live/just-finished season from the store,
+// so the live newsroom sees complete constructor totals for team milestones. Like foldLiveSeason but
+// per team: races counts distinct Grands Prix entered; wins/podiums/poles count per car.
+export function foldLiveSeasonTeams(
+  base: Record<string, TeamCareer>,
+  raceResults: { finishPosition: number | null; gridPosition: number; points: number; teamId: string }[][],
+): Record<string, TeamCareer> {
+  const out: Record<string, TeamCareer> = {}
+  for (const [k, v] of Object.entries(base)) out[k] = { ...v }
+  for (const round of raceResults) {
+    const entered = new Set<string>()
+    for (const res of round) {
+      const id = res.teamId
+      let c = out[id]
+      if (!c) c = out[id] = { teamId: id, races: 0, wins: 0, podiums: 0, poles: 0, points: 0 }
+      const fp = res.finishPosition
+      c.points += res.points
+      if (res.gridPosition === 1) c.poles++
+      if (fp != null && fp === 1) c.wins++
+      if (fp != null && fp <= 3) c.podiums++
+      entered.add(id)
+    }
+    for (const id of entered) out[id].races++
+  }
+  return out
+}
+
 // --- Producers ---------------------------------------------------------------
 
 // TRIGGER: every completed round. ONE consolidated report per race — winner + podium +
@@ -745,6 +784,53 @@ function milestoneCrossed(cat: keyof typeof MILESTONE_STEP, before: number, afte
   return null
 }
 
+// Team (constructor) milestone steps. A team scores far faster than a driver (two cars), so the
+// steps are coarser than the per-driver ones. First ever, then every: 50 Grands Prix, 100 points,
+// 25 podiums, 10 wins, 10 poles. (Tweak these numbers to taste — they are the only knob.)
+const TEAM_MILESTONE_STEP: Record<'starts' | 'points' | 'podiums' | 'wins' | 'poles', number> = {
+  starts: 50, points: 100, podiums: 25, wins: 10, poles: 10,
+}
+function teamMilestoneCrossed(cat: keyof typeof TEAM_MILESTONE_STEP, before: number, after: number): number | null {
+  if (before < 1 && after >= 1) return 1
+  const s = TEAM_MILESTONE_STEP[cat]
+  if (after >= s && Math.floor(after / s) > Math.floor(before / s)) return Math.floor(after / s) * s
+  return null
+}
+
+// A team's constructor career totals as of AFTER round `r` of this season (ctx.teamCareers holds the
+// total INCLUDING the whole completed season, so strip the season and re-add rounds 1..r). `starts`
+// is distinct Grands Prix entered. Null with no team-career record.
+function teamTotalsThroughRound(ctx: NewsContext, teamId: string, r: number): { starts: number; points: number; podiums: number; wins: number; poles: number } | null {
+  const c = ctx.teamCareers?.[teamId]
+  if (!c) return null
+  let sSt = 0, sPt = 0, sPo = 0, sWi = 0, sPl = 0
+  let aSt = 0, aPt = 0, aPo = 0, aWi = 0, aPl = 0
+  for (let k = 1; k <= ctx.completedRounds; k++) {
+    const cars = (ctx.raceResults[k - 1] ?? []).filter((x) => x.teamId === teamId)
+    if (cars.length === 0) continue
+    let pt = 0, po = 0, wi = 0, pl = 0
+    for (const res of cars) { const fp = res.finishPosition; pt += res.points; if (fp != null && fp <= 3) po++; if (fp === 1) wi++; if (res.gridPosition === 1) pl++ }
+    sSt += 1; sPt += pt; sPo += po; sWi += wi; sPl += pl
+    if (k <= r) { aSt += 1; aPt += pt; aPo += po; aWi += wi; aPl += pl }
+  }
+  return { starts: c.races - sSt + aSt, points: c.points - sPt + aPt, podiums: c.podiums - sPo + aPo, wins: c.wins - sWi + aWi, poles: c.poles - sPl + aPl }
+}
+
+// If a team crossed the SAME-category milestone in this race as one of its drivers, return a line
+// noting it (to append to the driver's milestone article); otherwise ''. Same-category only, so a
+// pole pairs with a team pole, never a team points milestone (issue: team milestones).
+function teamAccompanyLine(ctx: NewsContext, teamId: string, cat: 'wins' | 'podiums' | 'poles' | 'points' | 'starts', r: number): string {
+  const before = teamTotalsThroughRound(ctx, teamId, r - 1)
+  const after = teamTotalsThroughRound(ctx, teamId, r)
+  if (!before || !after) return ''
+  const v = teamMilestoneCrossed(cat, before[cat], after[cat])
+  if (v == null) return ''
+  const key = `${cat}${v === 1 ? 'Maiden' : 'Nth'}` as keyof typeof milestoneCopy.teamAccompany
+  const pool = milestoneCopy.teamAccompany[key]
+  if (!pool) return ''
+  return fill(pick(pool, `team-mile-${ctx.year}-${teamId}-${cat}-${v}`), { team: teamName(ctx, teamId), n: v, nth: ordinal(v) })
+}
+
 type MileCat = 'wins' | 'podiums' | 'poles' | 'points' | 'starts'
 
 // Significance ordering across every milestone kind, so the most newsworthy one leads the per-race
@@ -934,6 +1020,13 @@ function milestones(ctx: NewsContext): NewsArticle[] {
       headline = fill(pick(S.headline, `${seed}|h`), s)
       dek = fill(pick(S.dek, `${seed}|d`), s)
       lead = [fill(pick(S.b1, `${seed}|b1`), s), fill(pick(S.b2, `${seed}|b2`), s), texture(seed, S.scene, s)]
+    }
+
+    // If the headline driver milestone also lands a team milestone of the same category this race
+    // (e.g. the driver's first point coincides with the team's 100th), note it in the lead paragraph.
+    if (top.kind === 'career' && lead.length) {
+      const tline = teamAccompanyLine(ctx, top.res.teamId, top.cat, r)
+      if (tline) lead[0] = `${lead[0]} ${tline}`
     }
 
     // Secondary-milestone lines, combining identical career milestones (same category + value) across
