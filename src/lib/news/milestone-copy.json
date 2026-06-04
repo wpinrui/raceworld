@@ -334,7 +334,7 @@
       "{driver} took the first win of {their} Formula 1 career at the {circuit}, a result the record books now hold permanently.",
       "A maiden victory for {driver_last} at the {circuit}, a moment {they} will carry for the rest of {their} career and beyond.",
       "{driver} crossed the line first at the {circuit} to become a Formula 1 race winner for the first time.",
-      "The {circuit} is where {driver_last} became a Grand Prix winner, {pos} at the flag and a career changed by it."
+      "The {circuit} is where {driver_last} became a Grand Prix winner, first across the line and a career changed by it."
     ],
     "b1": [
       "{driver} took the chequered flag at the {circuit} to register the first win of {their} Formula 1 career, a result that felt both earned and overdue in {team_poss} camp by the time the barriers came into view on the final lap.",
