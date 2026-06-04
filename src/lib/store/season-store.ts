@@ -319,7 +319,7 @@ export const useSeasonStore = create<SeasonStore>()(
         if (!pendingNextSeasonState) return
         const leaveIds = new Set(approved.leaves)
         let teams = pendingNextSeasonState.teams.filter((t) => !leaveIds.has(t.id))
-        let drivers = pendingNextSeasonState.drivers.map((d) =>
+        const drivers = pendingNextSeasonState.drivers.map((d) =>
           leaveIds.has(d.teamId) ? { ...d, teamId: '', contractExpiresAfterSeason: year, seasonsSinceF1Seat: 0 } : d,
         )
         const rebrandById = new Map(approved.rebrands.map((r) => [r.id, r]))

@@ -21,7 +21,8 @@ export function RealWorldChanges() {
   const [overridden, setOverridden] = useState<Set<string>>(new Set())
   const toggle = (key: string) => setOverridden((prev) => {
     const next = new Set(prev)
-    next.has(key) ? next.delete(key) : next.add(key)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
     return next
   })
 
