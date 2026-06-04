@@ -3387,6 +3387,10 @@ function agreeArticle(a: NewsArticle): NewsArticle {
   return { ...a, headline: agree1(a.headline), dek: agree1(a.dek), body: agree1(a.body) }
 }
 
+// A short attributed quote from one of the drivers in a story, e.g. "Give me a car that can fight," said Hill.
+// Strip a trailing full stop from the line so it doesn't collide with the closing comma.
+const quoteLine = (pool: string[], seed: string, name: string): string => `"${pick(pool, seed).replace(/\.$/, '')}," said ${lastName(name)}.`
+
 // Round-15 survey of the expiring contracts, graded from the driver's side. Chunked: ONE sentence per
 // verdict names the whole group (with their teams), instead of a paragraph per driver.
 function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
@@ -3400,11 +3404,13 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   // Most newsworthy first: the biggest over- and under-placements lead; well-matched cases sit nearest 0.
   const newsworthiness = (key: Verdict) => (a: ContractWatch, b: ContractWatch) =>
     key === 'could_do_better' ? b.diff - a.diff : key === 'lucky' ? a.diff - b.diff : Math.abs(a.diff) - Math.abs(b.diff)
+  const quoteKey = { could_do_better: 'quote_could_do_better', right_place: 'quote_right_place', lucky: 'quote_lucky' } as const
   const chunk = (key: Verdict) => {
     const list = watch.filter((w) => w.verdict === key).sort(newsworthiness(key))
     if (list.length === 0) return ''
     const names = listJoin(list.map((w) => `${w.driverName} (${w.teamName})`))
-    return fill(pick(c[key], `${seed}|${key}`), { ...hslots, names })
+    const line = fill(pick(c[key], `${seed}|${key}`), { ...hslots, names })
+    return paras(line, quoteLine(c[quoteKey[key]], `${seed}|q-${key}`, list[0].driverName))
   }
   const body = paras(
     fill(pick(c.intro, `${seed}|intro`), hslots),
@@ -3436,8 +3442,8 @@ function renewalsFeature(ctx: NewsContext): NewsArticle[] {
   const expiringNames = listJoin(stillExpiring.map((d) => `${d.name} (${teamName(ctx, d.teamId)})`))
   const body = paras(
     fill(pick(c.intro, `${seed}|intro`), hslots),
-    renewals.length ? fill(pick(c.renewed, `${seed}|renewed`), { ...hslots, names: renewedNames }) : '',
-    stillExpiring.length ? fill(pick(c.expiring, `${seed}|expiring`), { ...hslots, names: expiringNames }) : '',
+    renewals.length ? paras(fill(pick(c.renewed, `${seed}|renewed`), { ...hslots, names: renewedNames }), quoteLine(c.quote_renewed, `${seed}|q-ren`, renewals[0].driverName)) : '',
+    stillExpiring.length ? paras(fill(pick(c.expiring, `${seed}|expiring`), { ...hslots, names: expiringNames }), quoteLine(c.quote_expiring, `${seed}|q-exp`, stillExpiring[0].name)) : '',
   )
   return [agreeArticle({
     id: seed, category: 'silly_season', round: RENEWAL_PIN_ROUND, priority: 36,
@@ -3496,11 +3502,11 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
   const rookies = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore === 0)
 
   const body = paras(
-    marqueePara,
+    marquee ? paras(marqueePara, quoteLine(c.quote_signed, `${seed}|q-sign`, marquee.driverName)) : '',
     otherMoves.length ? fill(pick(c.moves, `${seed}|moves`), { ...hslots, names: listJoin(otherMoves.map((m) => `${m.driverName} (${fromName(m)} to ${m.toTeamName})`)) }) : '',
     upsets.length ? fill(pick(c.upsets, `${seed}|upsets`), { ...hslots, names: listJoin(upsets.map((p) => `${p.driverName} (${p.teamName})`)) }) : '',
     rookies.length ? fill(pick(c.rookies, `${seed}|rookies`), { ...hslots, names: listJoin(rookies.map((m) => `${m.driverName} (${m.toTeamName})`)) }) : '',
-    dropped.length ? fill(pick(c.dropped, `${seed}|dropped`), { ...hslots, names: listJoin(dropped.map((d) => `${d.driverName} (${d.fromTeamName})`)) }) : '',
+    dropped.length ? paras(fill(pick(c.dropped, `${seed}|dropped`), { ...hslots, names: listJoin(dropped.map((d) => `${d.driverName} (${d.fromTeamName})`)) }), quoteLine(c.quote_dropped, `${seed}|q-drop`, dropped[0].driverName)) : '',
   )
   return [agreeArticle({
     id: seed, category: 'silly_season', round: ctx.calendar.length + 1, priority: 85,

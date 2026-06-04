@@ -39,6 +39,33 @@
       "The points owe more to the car than to {names}.",
       "A quick car is doing the talking for {names}.",
       "The seat is overdelivering for {names}."
+    ],
+    "quote_could_do_better": [
+      "Give me a car that can fight and I will show you what I can actually do.",
+      "I am tired of driving around in the midfield when I know I belong at the front.",
+      "The results hide how much I am having to drag this car to where it finishes.",
+      "I need machinery that matches my ambition, and right now it does not.",
+      "People judge you by the car, and mine is not doing me any favours right now.",
+      "I have never worked harder for fewer points and I think I deserve better than this.",
+      "One season in a proper car and the conversations about my talent would change completely."
+    ],
+    "quote_right_place": [
+      "I am settled here, the car suits me, and we are only getting started.",
+      "This team understands how I drive, and that chemistry is not easy to find.",
+      "Everything fits right now, the car, the people, the direction, and I am not in a hurry to change any of it.",
+      "We have built something real here and walking away from that would be a mistake.",
+      "The car does what I ask of it and that trust takes time to build at any team.",
+      "I feel at home in this car and that is rarer than people realise.",
+      "The fit between me and this team is the best I have had in my career."
+    ],
+    "quote_lucky": [
+      "People underrate how hard I work for these results, and I have earned every point.",
+      "The car is quick, yes, but you still have to put it in the right place every single lap.",
+      "Nobody drives a fast car slowly and expects these results, the work goes in every weekend.",
+      "I would rather be in a good car than a bad one, and I make no apology for that.",
+      "A fast car helps, but it does not steer itself, and the details still fall to me.",
+      "Strong machinery gives you the opportunity, it does not convert the opportunity, I do that.",
+      "The car is competitive and so am I, and I do not think one cancels the other out."
     ]
   },
   "renewals": {
@@ -74,6 +101,24 @@
       "Heading to the open market without a deal, {names}.",
       "Still unsigned past the deadline, {names}.",
       "Talks stalled for {names}."
+    ],
+    "quote_renewed": [
+      "Staying was the easy call, this is exactly where I want to be.",
+      "We have unfinished business here and I could not imagine pursuing it anywhere else.",
+      "This team gave me everything I needed to grow and I am not done repaying that.",
+      "I signed before we even really started talking to anyone else, it was that straightforward.",
+      "There is a real project being built here and I want to be part of where it ends up.",
+      "The people, the direction, the car, everything told me to stay and so I stayed.",
+      "Re-signing was not a difficult conversation, we both wanted the same thing."
+    ],
+    "quote_expiring": [
+      "I know my worth, and I am going to find the right seat for the next chapter.",
+      "My future is open and honestly that is an exciting position to be in right now.",
+      "There are options and I am taking the time to evaluate them properly, not rushing anything.",
+      "Going on the market means people have to come to me and I welcome that conversation.",
+      "I have delivered in this sport and the right team will know what they are getting.",
+      "Free agency is not a threat, it is an opportunity, and I intend to use it well.",
+      "The market opens up things that a contract renewal never could, and I am genuinely interested."
     ]
   },
   "offseason": {
@@ -124,6 +169,24 @@
       "Released by their teams, {names}.",
       "Off the grid for the season ahead, {names}.",
       "Still without a drive, {names}."
+    ],
+    "quote_signed": [
+      "This is the move I have wanted for a long time, and I cannot wait to get going.",
+      "Everything I have worked toward points to this moment, and the timing feels right.",
+      "New team, new chapter, and I am walking in with nothing to prove and everything to give.",
+      "The people I spoke to made it clear they believe in me and that belief is mutual.",
+      "I have been watching this team from the outside and now I get to help build it from the inside.",
+      "Landing this seat took a lot of work and I intend to make every lap count from day one.",
+      "This is where I wanted to be and I am not going to waste a single test session getting comfortable."
+    ],
+    "quote_dropped": [
+      "I gave everything I had, and I am not finished with this sport, not by a long way.",
+      "Losing a seat hurts, but it does not define what I am capable of and I know that.",
+      "The door has closed here and that is sport, but I will find the right door and walk through it.",
+      "I am proud of what I delivered in that car and the results speak for anyone willing to look honestly.",
+      "This is a setback, not an ending, and I will be back on a grid because I belong here.",
+      "Plenty of drivers have come back stronger after a year like this and I intend to be one of them.",
+      "The sport owes me nothing and I owe it everything, so I will keep showing up until I get my chance."
     ]
   }
 }
