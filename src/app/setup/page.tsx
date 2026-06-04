@@ -143,7 +143,7 @@ export default function SetupPage() {
     seasonStore.setRealWorldMode(realWorld)
     seasonStore.initSeason(localDrivers, localTeams, startYear)
     useRaceStore.getState().resetSession()
-    router.push('/race')
+    router.push('/home') // land on Home; the Continue CTA drives forward to the opening race
   }
 
   // Surface "Start Season" up in the nav top bar (the only CTA before a season exists). The staged
