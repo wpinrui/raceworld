@@ -3240,6 +3240,7 @@ function recordNews(ctx: NewsContext): NewsArticle[] {
     scope: 'd' | 't',
   ) => {
     if (ids.length === 0) return
+    ids = [...ids].sort() // deterministic order so rank/selection tie-breaks don't depend on DB/insertion order
     for (const { key, leaderFloor, climbFloor } of CAREER) {
       // cumulative live gain per id through each round, then total-through-r = prior + cum[r].
       const cum = new Map<string, number[]>()
@@ -3308,25 +3309,26 @@ function recordNews(ctx: NewsContext): NewsArticle[] {
       ids: string[], metrics: RecordMetric[], baseline: Partial<Record<RecordMetric, SeasonRecordMark>>,
       roundGain: (id: string, round: number, key: RecordMetric) => number, nameOf: (id: string) => string, scope: 'd' | 't',
     ) => {
+      ids = [...ids].sort() // deterministic order so a same-round tie picks the same breaker every time
       for (const key of metrics) {
         const base = baseline[key]
         if (!base) continue // no prior record (e.g. season one) -> nothing to break
-        let recValue = base.value, recHolder = base.holderName, recYear = base.year
+        let recValue = base.value, recHolderName = base.holderName, recHolderId: string | null = null, recYear = base.year
         const cum = new Map<string, number>(ids.map((id) => [id, 0]))
         for (let r = 1; r <= N; r++) {
           let bestId = '', bestVal = -1
           for (const id of ids) { const v = cum.get(id)! + roundGain(id, r, key); cum.set(id, v); if (v > bestVal) { bestVal = v; bestId = id } }
           if (bestVal > recValue) {
-            const breaker = nameOf(bestId)
-            // Only news when someone TAKES the record from another holder, not when the holder extends it.
-            if (breaker !== recHolder) {
+            // Only news when a DIFFERENT entity takes the record, not when the holder extends it. Compare
+            // by id (the archived holder has no live id, so the first live break always fires).
+            if (bestId !== recHolderId) {
               events.push({
                 round: r, sig: 500 + bestVal, type: 'seasonRecord',
-                slots: { name: breaker, metric: LABEL[key], value: bestVal, old: recValue, old_holder: recHolder, old_year: recYear, circuit: circuit(ctx, r) },
+                slots: { name: nameOf(bestId), metric: LABEL[key], value: bestVal, old: recValue, old_holder: recHolderName, old_year: recYear, circuit: circuit(ctx, r) },
                 key: `record-${scope}-season-${key}-${bestId}-${r}`,
               })
             }
-            recValue = bestVal; recHolder = breaker; recYear = ctx.year
+            recValue = bestVal; recHolderName = nameOf(bestId); recHolderId = bestId; recYear = ctx.year
           }
         }
       }
@@ -3348,7 +3350,7 @@ function recordNews(ctx: NewsContext): NewsArticle[] {
   for (const e of events) { const a = byRound.get(e.round) ?? []; a.push(e); byRound.set(e.round, a) }
   const out: NewsArticle[] = []
   for (const [round, evs] of byRound) {
-    evs.sort((a, b) => b.sig - a.sig)
+    evs.sort((a, b) => (b.sig - a.sig) || a.key.localeCompare(b.key)) // stable, deterministic top-2
     for (const e of evs.slice(0, 2)) {
       const c = recordsCopy[e.type]
       const seed = e.key

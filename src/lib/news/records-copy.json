@@ -70,7 +70,7 @@
     ],
     "dek": [
       "{name} has broken the all-time single-season {metric} record, reaching {value} at {circuit}.",
-      "With {value} {metric} in a single campaign, {name} has set a new benchmark at {circuit}, surpassing {old} by {old_holder}.",
+      "With {value} {metric} in a single campaign, {name} has set a new benchmark at {circuit}, surpassing the {old} set by {old_holder} in {old_year}.",
       "The single-season {metric} record is rewritten at {circuit}, with {name} reaching {value}.",
       "{name} has the most {metric} in a single season in championship history, recording {value} at {circuit}."
     ],
