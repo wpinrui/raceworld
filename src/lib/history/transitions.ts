@@ -22,6 +22,22 @@ export interface RealWorldTransition {
   rookieEntries: HistoricalDriver[]
 }
 
+// The unresolved real-world team changes blocking the off-season, or null if there's nothing to gate
+// on (not real-world mode, not at season end, already resolved, no data, or no changes). Shared by the
+// Continue gate and the changes modal so both agree on exactly when to stop.
+export function pendingRealWorldChanges(opts: {
+  realWorldMode: boolean
+  phase: string
+  resolved: boolean
+  year: number
+  teams: Team[] | undefined
+}): RealWorldTransition | null {
+  if (!opts.realWorldMode || opts.phase !== 'end-of-season' || opts.resolved || !opts.teams) return null
+  const tr = realWorldTransition(opts.year, opts.teams)
+  const n = tr.teamJoins.length + tr.teamLeaves.length + tr.teamRebrands.length
+  return tr.hasData && n > 0 ? tr : null
+}
+
 export function realWorldTransition(currentYear: number, currentTeams: Team[]): RealWorldTransition {
   const toYear = currentYear + 1
   const base: RealWorldTransition = { toYear, hasData: false, teamJoins: [], teamLeaves: [], teamRebrands: [], rookieEntries: [] }
