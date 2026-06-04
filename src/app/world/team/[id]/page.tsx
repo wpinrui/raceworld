@@ -75,7 +75,7 @@ export default function TeamPage() {
                       <label className="text-xs text-[#FFFFFF] block mb-1">Car pace</label>
                       <input
                         type="number" min={0} max={100} step={1} value={liveTeam.carPace}
-                        onChange={(e) => updateTeam(id, { carPace: Number(e.target.value) })}
+                        onChange={(e) => { if (e.target.value !== '') updateTeam(id, { carPace: Number(e.target.value) }) }}
                         className={inputClass}
                       />
                     </div>
