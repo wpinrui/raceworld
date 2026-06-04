@@ -25,9 +25,9 @@ export default function RacePage() {
   const router = useRouter()
   const season = useSeasonStore()
   const {
-    raceState, drivers, teams, forms, strategyNoise, godModeDriverId,
-    loadFromSeason, updateDriverForm, setStrategyNoise, setGodModeDriver,
-    initSession, tickLap, setSpeed, setPaused,
+    raceState, drivers, teams, forms, godModeDriverId,
+    loadFromSeason, updateDriverForm, setGodModeDriver,
+    tickLap, setSpeed, setPaused,
   } = useRaceStore()
 
   const phase = raceState?.phase ?? 'pre-qualifying'
@@ -159,10 +159,8 @@ export default function RacePage() {
           {phase === 'pre-qualifying' && (
             <PreQualPanel
               drivers={drivers} teams={teams} forms={forms}
-              strategyNoise={strategyNoise} currentCircuit={currentCircuit}
-              onStrategyNoiseChange={setStrategyNoise}
+              currentCircuit={currentCircuit}
               onFormChange={updateDriverForm}
-              onBegin={initSession}
             />
           )}
           {phase === 'qualifying' && (
@@ -174,7 +172,6 @@ export default function RacePage() {
             <PreRacePanel
               raceState={raceState} drivers={drivers} teams={teams}
               currentCircuit={currentCircuit}
-              onStartRace={() => useRaceStore.setState({ raceState: { ...raceState, phase: 'racing' } })}
             />
           )}
           {(phase === 'racing' || phase === 'finished') && raceState && (

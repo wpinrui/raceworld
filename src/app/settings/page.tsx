@@ -6,6 +6,7 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore, DEFAULT_INTERRUPT_CATEGORIES } from '@/lib/store/settings-store'
 import { NEWS_FILTERS } from '@/lib/news/engine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
+import { actionResetDatabase } from '@/lib/db/actions'
 
 // Player settings for the "Continue" loop: which news interrupts the sim, plus the drivers/teams
 // you follow (any story mentioning them interrupts too). Reached from the top-right overflow menu.
@@ -19,7 +20,14 @@ export default function SettingsPage() {
 
   const [hydrated, setHydrated] = useState(false)
   const [q, setQ] = useState('')
+  const [clearOpen, setClearOpen] = useState(false)
   useEffect(() => setHydrated(true), [])
+
+  async function handleClearSave() {
+    await actionResetDatabase()
+    localStorage.removeItem('raceworld-season')
+    window.location.href = '/setup'
+  }
 
   const gridDrivers = useMemo(
     () => drivers.filter((d) => d.teamId !== '').slice().sort((a, b) => a.name.localeCompare(b.name)),
@@ -163,7 +171,42 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {/* Danger zone */}
+        <section className="rounded-xl bg-[#1E2431] border border-[#DC143C]/40 overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#2A3142]">
+            <h2 className="font-semibold text-sm tracking-wide uppercase text-[#DC143C]">Danger Zone</h2>
+          </div>
+          <div className="p-5 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold text-[#FFFFFF]">Clear save</p>
+              <p className="text-xs text-[#FFFFFF] mt-0.5">Wipes all local save data — season progress, driver stats, and history. Cannot be undone.</p>
+            </div>
+            <button
+              onClick={() => setClearOpen(true)}
+              className="shrink-0 px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors"
+            >
+              Clear Save
+            </button>
+          </div>
+        </section>
       </div>
+
+      {clearOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setClearOpen(false)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Clear Save</h2>
+            </div>
+            <p className="text-sm text-[#FFFFFF] mb-5">This will wipe all local save data — season progress, driver stats, and history. Cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setClearOpen(false)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Cancel</button>
+              <button onClick={handleClearSave} className="px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors">Clear &amp; Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

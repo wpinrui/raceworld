@@ -15,7 +15,6 @@ import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop } from '@/lib/sim/continue-loop'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { advanceOffSeason, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
-import { actionResetDatabase } from '@/lib/db/actions'
 import { actionGetDriverCareers, actionGetTeamCareers } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 import WorldSearch from '@/components/WorldSearch'
@@ -35,11 +34,10 @@ export default function Nav() {
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
   const raceResults = useSeasonStore((s) => s.raceResults)
-  const raceFinished = useRaceStore((s) => s.raceState?.phase === 'finished')
+  const racePhase = useRaceStore((s) => s.raceState?.phase)
 
   const [hydrated, setHydrated] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
   const [restartOpen, setRestartOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [newsStop, setNewsStop] = useState<{ date: string; articles: NewsArticle[] } | null>(null)
@@ -71,10 +69,16 @@ export default function Nav() {
     year,
   }), [drivers, teams, raceResults.length, year])
 
-  async function handleClearSave() {
-    await actionResetDatabase()
-    localStorage.removeItem('raceworld-season')
-    window.location.href = '/setup'
+  // Raceday progression — the single CTA walks pre-qualifying → pre-race → finished.
+  function handleSimQualifying() { useRaceStore.getState().initSession() }
+  function handleStartRace() {
+    const rs = useRaceStore.getState().raceState
+    if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'racing' } })
+  }
+  function handleQuit() {
+    useRaceStore.getState().resetSession()
+    setMenuOpen(false)
+    router.push('/home')
   }
 
   // Advance the clock to the next stop. A news stop opens the interrupt modal; a race stop just
@@ -128,9 +132,11 @@ export default function Nav() {
   const cta = (() => {
     if (!hydrated) return null
     if (matchMode) {
-      return raceFinished
-        ? <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
-        : null
+      if (racePhase === 'qualifying') return <button disabled className={PRIMARY_CTA}>Qualifying…</button>
+      if (racePhase === 'pre-race') return <button onClick={handleStartRace} className={PRIMARY_CTA}>Start Race<ChevronRight size={14} /></button>
+      if (racePhase === 'finished') return <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
+      if (racePhase === 'racing') return null
+      return <button onClick={handleSimQualifying} className={PRIMARY_CTA}>Simulate Qualifying<ChevronRight size={14} /></button>
     }
     if (!seasonActive) return null
     if (offSeason) {
@@ -203,10 +209,12 @@ export default function Nav() {
         {menuOpen && (
           <div className="absolute right-0 top-8 z-50 w-48 rounded-lg bg-[#1E2431] border border-[#2A3142] shadow-xl py-1">
             {matchMode && (
-              <button onClick={() => { setMenuOpen(false); setRestartOpen(true) }} className={`${MENU_ITEM} hover:text-[#00D9FF]`}>Restart Weekend</button>
+              <>
+                <button onClick={() => { setMenuOpen(false); setRestartOpen(true) }} className={`${MENU_ITEM} hover:text-[#00D9FF]`}>Restart Weekend</button>
+                <button onClick={handleQuit} className={`${MENU_ITEM} hover:text-[#DC143C]`}>Quit</button>
+              </>
             )}
             <Link href="/settings" onClick={() => setMenuOpen(false)} className={`${MENU_ITEM} hover:text-[#00D9FF]`}>Settings</Link>
-            <button onClick={() => { setMenuOpen(false); setConfirmOpen(true) }} className={`${MENU_ITEM} hover:text-[#DC143C]`}>Clear Save</button>
           </div>
         )}
       </div>
@@ -257,22 +265,6 @@ export default function Nav() {
         </div>
       )}
 
-      {/* Clear-save confirm */}
-      {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmOpen(false)}>
-          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
-              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Clear Save</h2>
-            </div>
-            <p className="text-sm text-[#FFFFFF] mb-5">This will wipe all local save data — season progress, driver stats, and history. Cannot be undone.</p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setConfirmOpen(false)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Cancel</button>
-              <button onClick={handleClearSave} className="px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors">Clear &amp; Reset</button>
-            </div>
-          </div>
-        </div>
-      )}
     </nav>
   )
 }
