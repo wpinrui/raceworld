@@ -464,5 +464,76 @@
       "Today's race was the {nth} Formula 1 start for each of {names}.",
       "{names} all clocked up {n} career starts on the same afternoon."
     ]
+  },
+  "oneTwo": {
+    "headline": [
+      "{team} sweep the top two at the {circuit}",
+      "{d1_last} and {d2_last} lock out the podium for {team} at the {circuit}",
+      "{team} go one-two at the {circuit} and leave nothing for the rest",
+      "Full house for {team} as {d1_last} leads {d2_last} home at the {circuit}",
+      "{d1_last} wins, {d2_last} second, and {team} take the lot at the {circuit}"
+    ],
+    "dek": [
+      "{team} banked the maximum at the {circuit}, {d1} crossing the line with {d2} tucked right behind for their first one-two of {year}.",
+      "{d1_last} and {d2_last} ran first and second at the {circuit}, giving {team} every constructors' point the race had to offer.",
+      "One-two for {team} at the {circuit}: {d1_last} ahead, {d2_last} behind, and a perfect return to take back into the championship."
+    ],
+    "b1": [
+      "{d1} took the win at the {circuit} with {d2} holding second, {team_poss} first one-two of {year} sealed with a clean sweep under the flag.",
+      "When the race settled, both {team} cars were sitting exactly where the team needed them, {d1_last} in front and {d2_last} a close shadow in second.",
+      "{team} sent two cars to the front of the {circuit} and brought both home, {d1_last} winning and {d2_last} making it a one-two that rivals will not soon shrug off.",
+      "There was nothing frantic about it; {d1_last} led, {d2_last} tracked, and by the flag {team} had a one-two that felt almost inevitable.",
+      "Not a single point slipped through the net at the {circuit}: {d1_last} first, {d2_last} second, and {team} with the cleanest possible result."
+    ],
+    "b2": [
+      "No rival could match {team_poss} output at the {circuit}, and the constructors' gap will look very different by morning.",
+      "A one-two does not just win a race, it stretches a championship lead in ways a solo victory never can, and {team} know exactly what they have done.",
+      "The weekend sent a message that {team} are dangerous across both cars, not just one, and the rest of the field heard it.",
+      "For {team_poss} rivals, the hardest number to look at will not be the race result but what it does to the constructors' standings.",
+      "The first one-two of {year} changes the tone inside that garage, and every team watching from the wall at the {circuit} knows it."
+    ],
+    "line": [
+      "{team} completed a one-two as well, {d1_last} ahead of {d2_last}.",
+      "{d1_last} and {d2_last} ran one-two for {team} into the flag.",
+      "{team} locked out the top two as well, {d1_last} ahead of {d2_last}."
+    ]
+  },
+  "surprise": {
+    "headline": [
+      "{driver_last} puts {team} on the podium at the {circuit}",
+      "Nobody saw it coming but {driver_last} is {pos} at the {circuit}",
+      "{team} crash the front row at the {circuit} and walk away with a podium",
+      "A {pos} for {driver_last} that the {circuit} will not forget in a hurry",
+      "{driver_last} delivers the {circuit} its shock result of {year}"
+    ],
+    "dek": [
+      "{driver} finished {pos} at the {circuit}, a result that had nothing to do with expectation and everything to do with execution.",
+      "The {team} car was never meant to be on that podium at the {circuit}, and yet {driver_last} was standing on it.",
+      "{driver_last} took {pos} at the {circuit} in the kind of afternoon that reminds everyone why {they} still bother to race."
+    ],
+    "b1": [
+      "{driver} came home {pos} at the {circuit}, a result that landed in the paddock like a stone through glass.",
+      "On paper {team} had no route to the podium at the {circuit}; {driver_last} apparently did not read the paper.",
+      "The gap between a {team} car and the front-runners is usually counted in seconds, not positions, yet {driver_last} was on the podium at the {circuit} when it mattered.",
+      "Nothing in qualifying, nothing in the form guide, nothing in the season to that point hinted that {driver_last} was about to take {pos} at the {circuit}.",
+      "{driver_last} absorbed pressure, managed traffic, and crossed the line {pos} for {team}, a finish that will outlast this weekend in the telling."
+    ],
+    "b2": [
+      "{they_cap} nursed the tyres through a phase when those around {them} were gambling on strategy, and the patience paid in full.",
+      "The window was tight and it needed a clean stop and cooler nerves than the situation deserved; {driver_last} supplied both.",
+      "When a safety car scrambled the field, {driver_last} was in exactly the right place to profit, and did not leave a single metre of track on the table.",
+      "{driver_poss} mirrors filled with a quicker car in the final laps and {they} held the gap anyway, tyre management that {team_poss} rivals will study for some time.",
+      "The podium required {driver_last} to be right on every call, and {they} were, which is the part that makes the {pos} at the {circuit} stick."
+    ],
+    "scene": [
+      "Down the {team} pit wall there was a moment where no one spoke; the engineers just watched the timing screen as if daring it to change.",
+      "{driver_last} stayed matter-of-fact on the radio throughout, but the crew chief's voice cracked slightly giving the final lap call.",
+      "In parc ferme {driver_last} climbed out slowly, looked up at the board, and laughed once, short and disbelieving.",
+      "The {team} mechanics had grouped around the monitor a dozen laps from the end, and by the flag they were too loud to hear each other."
+    ],
+    "line": [
+      "{driver_last} took {pos} for {team} in a result that stunned the paddock.",
+      "A shock {pos} for {driver_last} and {team} that no one had pencilled in."
+    ]
   }
 }

@@ -28,6 +28,8 @@ import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/medi
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
 import milestoneCopy from './milestone-copy.json'
+import titleCopy from './titlescenario-copy.json'
+import sillyCopy from './sillyseason-copy.json'
 
 export interface NewsContext {
   year: number
@@ -921,71 +923,17 @@ function milestones(ctx: NewsContext): NewsArticle[] {
       lead = [fill(pick(C.b1, `${seed}|b1`), s), fill(pick(C.b2, `${seed}|b2`), s), texture(`${seed}|q`, C.q, s, 80)]
     } else if (top.kind === 'onetwo') {
       const s = { team: p1.teamName, team_poss: poss(p1.teamName), d1: p1.driverName, d1_last: lastName(p1.driverName), d2: p2.driverName, d2_last: lastName(p2.driverName), circuit: circuitName, year: ctx.year }
-      headline = fill(pick([
-        '{team} complete a one-two at the {circuit}',
-        '{d1_last} leads {d2_last} home as {team} claim a first {year} one-two',
-        'Maximum haul for {team} as {d1_last} and {d2_last} go one-two at the {circuit}',
-        '{team} dominate the {circuit} with a first one-two of {year}',
-        '{d1_last} and {d2_last} deliver {team_poss} perfect afternoon at the {circuit}',
-      ], `${seed}|h`), s)
-      dek = fill(pick([
-        '{team} swept to a first one-two of {year} at the {circuit}, {d1} ahead of {d2} for the maximum constructors\' haul.',
-        'First and second for {team} at the {circuit}, {d1_last} and {d2_last} taking every point on offer.',
-        '{team} collected the maximum return from a single race at the {circuit}, {d1_last} first and {d2_last} second.',
-      ], `${seed}|d`), s)
-      lead = [
-        fill(pick([
-          '{d1} crossed the line first at the {circuit}, {d2} following home to give {team} a first one-two of their {year} campaign.',
-          'Both {team} cars were at the front when it counted at the {circuit}, {d1_last} winning with {d2_last} right behind in second.',
-          'A one-two is the maximum constructors\' haul a team can take from any race, and {team} claimed it in full at the {circuit}.',
-          '{team} had {d1_last} first and {d2_last} second at the flag, a clean sweep that left nothing on the table.',
-          'There is nothing more a team can ask for than both cars on the top two steps, and {team} delivered exactly that at the {circuit}.',
-        ], `${seed}|b1`), s),
-        fill(pick([
-          'For {team_poss} constructors\' ambitions, a one-two is as good as a weekend gets, and no rival left the {circuit} with a comparable haul.',
-          'Every point matters in the constructors\' fight, and {team} made sure not one was wasted at the {circuit}.',
-          'Having both drivers at the front forces a conversation no rival wants, that {team} are not just quick but consistent across both cars.',
-          'The result strengthens {team_poss} position in a way a single win cannot, two cars scoring heavily shifting the picture.',
-          'The significance of a first one-two of {year} runs beyond the weekend, setting an expectation in the garage and a warning to every rival.',
-        ], `${seed}|b2`), s),
-      ]
+      const O = milestoneCopy.oneTwo
+      headline = fill(pick(O.headline, `${seed}|h`), s)
+      dek = fill(pick(O.dek, `${seed}|d`), s)
+      lead = [fill(pick(O.b1, `${seed}|b1`), s), fill(pick(O.b2, `${seed}|b2`), s)]
     } else {
       const d = top.res
       const s = { driver: d.driverName, driver_last: lastName(d.driverName), driver_poss: poss(lastName(d.driverName)), team: d.teamName, team_poss: poss(d.teamName), circuit: circuitName, pos: ordinal(d.finishPosition ?? 0), year: ctx.year, ...pronouns(ctx.drivers.find((dd) => dd.id === d.driverId)?.gender) }
-      headline = fill(pick([
-        '{driver_last} stuns the paddock with {pos} at the {circuit}',
-        'Against the odds, {driver_last} grabs {pos} at the {circuit}',
-        '{team} gatecrash the podium at the {circuit} with {driver_last} {pos}',
-        'A shock {pos} for {driver_last} and {team} at the {circuit}',
-        '{driver_last} drags {team} onto the podium at the {circuit}',
-      ], `${seed}|h`), s)
-      dek = fill(pick([
-        '{driver} climbed to {pos} at the {circuit}, an extraordinary result for a {team} car that had no business on the podium.',
-        'Nobody predicted it, but {driver_last} and {team} left the {circuit} with {pos}.',
-        'A {pos} for {driver_last} at the {circuit} is the story of the weekend, a flawless day taken when the chance came.',
-      ], `${seed}|d`), s)
-      lead = [
-        fill(pick([
-          '{driver} finished {pos} at the {circuit}, a result that stopped the paddock in its tracks.',
-          'The {team} car does not trade at the front, which makes {driver_poss} {pos} at the {circuit} all the more remarkable.',
-          '{driver_last} stayed disciplined on a chaotic afternoon and came away with {pos} for {team}.',
-          'Nothing in the form guide pointed to a {team} car on the podium at the {circuit}, yet there was {driver_last} in {pos} at the flag.',
-          '{driver_last} turned {pos} into a podium few fancied a {team} car could reach at the {circuit}.',
-        ], `${seed}|b1`), s),
-        fill(pick([
-          'A well-timed stop gave {driver_last} the track position to make it stick, and {they} managed it home with composure.',
-          'A safety car reshuffled the order, and when it settled {driver_last} was in a position to fight, and did not waste it.',
-          '{they_cap} had a faster car in the mirrors late on and held it off with tyre management {team_poss} rivals will respect.',
-          'The podium did not fall into {driver_poss} lap; {they} held the place in traffic and looked after the tyres when others could not.',
-          'For {team}, a podium is a points return that can reshape a season, and {pos} at the {circuit} is a result no one will dismiss.',
-        ], `${seed}|b2`), s),
-        texture(seed, [
-          'The {team} mechanics watched the screens with the wide-eyed look of people who had done the maths and still could not quite believe it.',
-          '{driver_last} kept {their} voice level on the radio, but the replies from the wall grew louder with every lap that ticked away.',
-          'In parc ferme {driver_last} stepped out and stood still for a moment, as if waiting for someone to say it was not real.',
-          'A {team} crew that had come in hoping for solid points found themselves celebrating a podium at the flag.',
-        ], s),
-      ]
+      const S = milestoneCopy.surprise
+      headline = fill(pick(S.headline, `${seed}|h`), s)
+      dek = fill(pick(S.dek, `${seed}|d`), s)
+      lead = [fill(pick(S.b1, `${seed}|b1`), s), fill(pick(S.b2, `${seed}|b2`), s), texture(seed, S.scene, s)]
     }
 
     // Secondary-milestone lines, combining identical career milestones (same category + value) across
@@ -1001,9 +949,9 @@ function milestones(ctx: NewsContext): NewsArticle[] {
         const members = rest.filter((m): m is Career => m.kind === 'career' && m.cat === e.cat && m.value === e.value)
         lines.push(members.length > 1 ? combinedLine(ctx, members, e.cat, e.value) : milestoneLine(ctx, e.res, e.cat, e.value))
       } else if (e.kind === 'onetwo') {
-        lines.push(fill(pick(['{team} completed a one-two, {d1_last} leading {d2_last} home.', 'A {team} one-two as well, {d1_last} ahead of {d2_last}.'], `${seed}|otl`), { team: p1.teamName, d1_last: lastName(p1.driverName), d2_last: lastName(p2.driverName) }))
+        lines.push(fill(pick(milestoneCopy.oneTwo.line, `${seed}|otl`), { team: p1.teamName, d1_last: lastName(p1.driverName), d2_last: lastName(p2.driverName) }))
       } else {
-        lines.push(fill(pick(['{driver_last} took a surprise podium for {team}, finishing {pos}.', 'A shock {pos} for {driver_last} and {team}, too.'], `${seed}|spl-${e.res.driverId}`), { driver_last: lastName(e.res.driverName), team: e.res.teamName, pos: ordinal(e.res.finishPosition ?? 0) }))
+        lines.push(fill(pick(milestoneCopy.surprise.line, `${seed}|spl-${e.res.driverId}`), { driver_last: lastName(e.res.driverName), team: e.res.teamName, pos: ordinal(e.res.finishPosition ?? 0) }))
       }
     }
     const priority = top.kind === 'onetwo' ? 60 : top.kind === 'surprise' ? 55
@@ -1376,31 +1324,16 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
         rem, races_left: racesLeft, net_needed: diffNeeded + 1, surv_margin: -diffNeeded, rival_cap: rivalCapIfOneTwo,
       }
       // The points swing the lead team needs (or, when the lead is huge, what would keep it open).
-      const marginText = diffNeeded >= 0
-        ? fill(pick(['It comes down to the swing: {lead_team} clinch by outscoring {rival_team} by {net_needed} points at the {circuit}.', '{lead_team} need to outscore {rival_team} by {net_needed} points at the {circuit} to settle it.'], `${seed}|m`), slots)
-        : fill(pick(['Such is the lead that only {rival_team} outscoring {lead_team} by more than {surv_margin} points would keep the title open.', '{lead_team} are champions barring {rival_team} outscoring them by more than {surv_margin} points.'], `${seed}|m`), slots)
-      // The one-two scenario: does locking out the top two settle it outright?
-      const scenarioText = oneTwoGuarantees
-        ? fill(pick(['A one-two at the {circuit} would settle it whatever {rival_team} manage.', 'Lock out the top two and the crown is {lead_team}\'s regardless of {rival_team}.'], `${seed}|sc`), slots)
-        : fill(pick(['Even a one-two would need {rival_team} held to {rival_cap} points or fewer across their two cars.', 'A one-two clinches only if {rival_team} are limited to {rival_cap} points or fewer on the day.'], `${seed}|sc`), slots)
-      const closeText = fill(pick(['Fall short, and the title rolls on to the {next_circuit}.', 'Anything less, and it goes to the {next_circuit}.'], `${seed}|cl`), slots)
+      const W = titleCopy.wccDecider
+      const marginText = fill(pick(diffNeeded >= 0 ? W.marginPos : W.marginNeg, `${seed}|m`), slots)
+      const scenarioText = fill(pick(oneTwoGuarantees ? W.scenarioGuaranteed : W.scenarioCap, `${seed}|sc`), slots)
+      const closeText = fill(pick(W.close, `${seed}|cl`), slots)
       out.push({
         id: seed, category: 'championship_state', round: r, priority: 84,
-        headline: fill(pick([
-          'How {lead_team} can clinch the constructors title at the {circuit}',
-          'What {lead_team} need to seal the constructors crown at the {circuit}',
-          '{lead_team} can wrap up the constructors title at the {circuit}',
-          'Constructors crown within reach for {lead_team} at the {circuit}',
-        ], `${seed}|h`), slots),
-        dek: fill(pick([
-          '{lead_team} can seal the {year} constructors title at the {circuit}, with {races_left} to spare.',
-          'The constructors permutations for {lead_team} at the {circuit}.',
-          '{lead_team} have a shot at the {year} teams crown at the {circuit}.',
-        ], `${seed}|d`), slots),
+        headline: fill(pick(W.headline, `${seed}|h`), slots),
+        dek: fill(pick(W.dek, `${seed}|d`), slots),
         body: paras(
-          compose(`${seed}:p1`, slots,
-            ['{lead_team} can be crowned {year} Constructors Champions at the {circuit}.', 'The {year} teams title could be {lead_team}\'s by the end of the {circuit}.'],
-            ['It would come with {races_left} to spare.', '{lead_team} carry a {cg}-point lead over {rival_team} into the weekend.']),
+          compose(`${seed}:p1`, slots, W.p1a, W.p1b),
           marginText,
           scenarioText,
           closeText,
@@ -1424,30 +1357,19 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
           circuit: circuit(ctx, fr), year: ctx.year, gap: G, gap_pts: plural(G, 'point'), need: G + 1, need_pts: plural(G + 1, 'point'),
           ...pronouns(ctx.drivers.find((d) => d.id === ds[0].driverId)?.gender),
         }
+        const D = titleCopy.finaleDrv
         const body = G === 0
-          ? paras(
-              fill(pick(['It all comes down to the {circuit}, with the {year} drivers title still to settle.', 'The {year} title goes to the final round at the {circuit}.'], `${seed}|p1`), slots),
-              fill(pick(['{leader_last} and {s_last} arrive level on points, so the crown goes to whichever of them finishes ahead at the {circuit}.', 'Nothing separates {leader_last} and {s_last}, and whoever comes out in front at the {circuit} is {year} World Champion.'], `${seed}|m`), slots),
-            )
+          ? paras(fill(pick(D.p1Zero, `${seed}|p1`), slots), fill(pick(D.mZero, `${seed}|m`), slots))
           : paras(
-              fill(pick(['It all comes down to the {circuit}, where {leader_last} can be crowned {year} World Champion.', 'The {year} drivers title goes to the final round, {leader_last} holding the edge over {s_last}.'], `${seed}|p1`), slots),
-              fill(pick(['{leader_last} leads {s_last} by {gap} {gap_pts} and is champion unless {s_last} outscores {them} by {need} {need_pts} at the {circuit}.', 'With a {gap}-{gap_pts} cushion, {leader_last} need only stay within {gap} {gap_pts} of {s_last} to seal the {year} crown.'], `${seed}|m`), slots),
-              fill(pick(['Win the {circuit}, and the title is {leader_last}\'s whatever {s_last} does.', 'A victory makes {leader_last} champion regardless of {s_last}.'], `${seed}|w`), slots),
-              fill(pick(['{s_last} must outscore {leader_last} by {need} {need_pts} to snatch it, realistically a win with {leader_last} well down the order.', 'For {s_last}, only a swing of {need} {need_pts} over {leader_last} turns the title around.'], `${seed}|riv`), slots),
+              fill(pick(D.p1Lead, `${seed}|p1`), slots),
+              fill(pick(D.mLead, `${seed}|m`), slots),
+              fill(pick(D.win, `${seed}|w`), slots),
+              fill(pick(D.riv, `${seed}|riv`), slots),
             )
         out.push({
           id: seed, category: 'championship_state', round: fr, priority: 92,
-          headline: fill(pick([
-            'It all comes down to the {circuit} for the {year} title',
-            '{leader_last} or {s_last} for the {year} crown at the {circuit}',
-            'The {year} title goes to the wire at the {circuit}',
-            'Everything to play for as {leader_last} leads {s_last} into the finale',
-          ], `${seed}|h`), slots),
-          dek: fill(pick([
-            'The {year} drivers title will be settled at the {circuit}.',
-            '{leader_last} and {s_last} take the {year} fight to the final round.',
-            'What each of {leader_last} and {s_last} needs at the {circuit}.',
-          ], `${seed}|d`), slots),
+          headline: fill(pick(D.headline, `${seed}|h`), slots),
+          dek: fill(pick(D.dek, `${seed}|d`), slots),
           body,
         })
       }
@@ -1462,28 +1384,18 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
           lead_team: csF[0].teamName, rival_team: csF[1].teamName, circuit: circuit(ctx, fr), year: ctx.year,
           cg: CG, cg_pts: plural(CG, 'point'), need: CG + 1, need_pts: plural(CG + 1, 'point'),
         }
+        const W = titleCopy.finaleWcc
         const body = CG === 0
-          ? paras(
-              fill(pick(['The {year} constructors title comes down to the {circuit}.', 'It is all square at the top of the constructors going into the {circuit}.'], `${seed}|p1`), slots),
-              fill(pick(['{lead_team} and {rival_team} are level, so the team that outscores the other at the {circuit} takes the {year} crown.', 'Nothing separates {lead_team} and {rival_team}, and the {year} title goes to whichever outscores the other at the {circuit}.'], `${seed}|m`), slots),
-            )
+          ? paras(fill(pick(W.p1Zero, `${seed}|p1`), slots), fill(pick(W.mZero, `${seed}|m`), slots))
           : paras(
-              fill(pick(['The {year} constructors title goes to the {circuit}, {lead_team} holding the edge over {rival_team}.', 'It comes down to the {circuit}, where {lead_team} can seal the {year} constructors crown.'], `${seed}|p1`), slots),
-              fill(pick(['{lead_team} lead {rival_team} by {cg} {cg_pts} and are champions unless {rival_team} outscore them by {need} {need_pts} at the {circuit}.', 'A {cg}-{cg_pts} lead means {lead_team} need only stay within {cg} {cg_pts} of {rival_team} to take the {year} crown.'], `${seed}|m`), slots),
-              fill(pick(['A one-two would settle it for {lead_team} whatever {rival_team} do.', 'Lock out the top two and the title is {lead_team}\'s regardless.'], `${seed}|w`), slots),
+              fill(pick(W.p1Lead, `${seed}|p1`), slots),
+              fill(pick(W.mLead, `${seed}|m`), slots),
+              fill(pick(W.win, `${seed}|w`), slots),
             )
         out.push({
           id: seed, category: 'championship_state', round: fr, priority: 89,
-          headline: fill(pick([
-            'The {year} constructors title goes to the wire at the {circuit}',
-            '{lead_team} or {rival_team} for the {year} constructors crown',
-            'Everything on the line for {lead_team} and {rival_team} at the finale',
-            'The {year} teams title comes down to the {circuit}',
-          ], `${seed}|h`), slots),
-          dek: fill(pick([
-            'The {year} constructors title will be settled at the {circuit}.',
-            '{lead_team} and {rival_team} take the teams fight to the final round.',
-          ], `${seed}|d`), slots),
+          headline: fill(pick(W.headline, `${seed}|h`), slots),
+          dek: fill(pick(W.dek, `${seed}|d`), slots),
           body,
         })
       }
@@ -2287,7 +2199,7 @@ function market(ctx: NewsContext): NewsArticle[] {
   }
   for (const d of eos.droppedDrivers ?? []) {
     const seed = `drop-${d.driverId}-${eos.seasonYear}`
-    const slots = { driver: d.driverName, driver_last: lastName(d.driverName), driver_poss: poss(lastName(d.driverName)), team: d.fromTeamName, team_poss: poss(d.fromTeamName), next: eos.seasonYear + 1, ...pronouns(ctx.drivers.find((x) => x.id === d.driverId)?.gender) }
+    const slots = { driver: d.driverName, driver_last: lastName(d.driverName), driver_poss: poss(lastName(d.driverName)), team: d.fromTeamName, team_poss: poss(d.fromTeamName), team_art: /^[aeiou]/i.test(d.fromTeamName) ? 'an' : 'a', next: eos.seasonYear + 1, ...pronouns(ctx.drivers.find((x) => x.id === d.driverId)?.gender) }
     out.push({
       id: seed, category: 'driver_exit', round: r, priority: 55,
       headline: fill(pick(['{team} drop {driver} ahead of {next}', '{driver} loses {their} {team} seat for {next}', '{team} move on from {driver} for {next}', '{driver} out as {team} overhaul the {next} line-up', '{driver} confirmed out at {team} for {next}'], `${seed}|h`), slots),
@@ -2296,7 +2208,7 @@ function market(ctx: NewsContext): NewsArticle[] {
         fill(pick([
           '{team} have told {driver} {they} will not be part of the squad for {next}, ending {their} tenure at the team.',
           '{driver} has lost {their} race seat at {team} for {next}, the team confirming the split in a brief statement.',
-          'The {next} grid will not include {driver} in a {team} car after the team confirmed the decision to part ways.',
+          'The {next} grid will not include {driver} in {team_art} {team} car after the team confirmed the decision to part ways.',
           '{driver_poss} seat at {team} has gone for {next}, making {them} one of the most prominent free agents on the market.',
         ], `${seed}|b1`), slots),
         fill(pick([
@@ -2523,47 +2435,25 @@ function sillySeason(ctx: NewsContext): NewsArticle[] {
       // One grounded paragraph per rumour: the link, its real direction, the points (if notable),
       // the appeal/status, and the contract situation.
       const para = compose(`${mseed}:line`, slots,
-        ['{driver} is linked with {to}.', '{to} are said to admire {driver}.', 'Talk of a {driver} move to {to} is doing the rounds.', 'A {driver} switch from {from} to {to} is being whispered.'],
-        direction === 'up'
-          ? ['It would be a step up, {from} in {from_pos} to {to} in {to_pos}.', 'On the table is a move up the order, {from_pos} to {to_pos}.']
-          : direction === 'down'
-          ? ['Curiously, it would mean a step down, {from} in {from_pos} to {to} in {to_pos}.', 'It would be a slide from {from_pos} to {to_pos}, which raises eyebrows.']
-          : direction === 'level'
-          ? ['It would be a sideways move, {from} ({from_pos}) and {to} ({to_pos}) near-level.', 'There is little between {from} ({from_pos}) and {to} ({to_pos}) in the order.']
-          : [''],
-        notablePoints
-          ? ['{driver_last} has {driver_points} points to show for the year.', 'A return of {driver_points} points has not gone unnoticed.']
-          : [''],
-        ['{to} would value {driver_last}\'s {appeal}.', 'For {to}, it would add {status}.', 'The fit makes a certain sense on paper.'],
-        outOfContract
-          ? ['Crucially, {driver_last}\'s deal is up at season\'s end, which only adds fuel.', 'Out of contract soon, {driver_last} is free to listen to offers.']
-          : ['But {driver_last} is tied to {from} beyond this season.', '{from} are under no pressure to sell.'])
+        sillyCopy.link,
+        direction === 'up' ? sillyCopy.dirUp : direction === 'down' ? sillyCopy.dirDown : direction === 'level' ? sillyCopy.dirLevel : [''],
+        notablePoints ? sillyCopy.points : [''],
+        sillyCopy.appealStatus,
+        outOfContract ? sillyCopy.contractUp : sillyCopy.contractTied)
       // A media-pen quote per rumour, fired often (the newsroom wants more voices, not fewer).
-      const q = texture(`${mseed}|pen`, ['Asked directly, {driver_last} batted it away in the media pen.', '"My focus is on the racing here," {driver_last} said when pressed.', '"I am happy where I am," said {driver_last}, giving little away.', '"You know I cannot talk about that," {driver_last} said with a grin.'], slots, 45)
+      const q = texture(`${mseed}|pen`, sillyCopy.pen, slots, 45)
       return q ? `${para} ${q}` : para
     })
     const top = ordered[0]
     const rslots = { window, round: r, n: ordered.length, moves_word: plural(ordered.length, 'move'), top: top.driverName, top_last: lastName(top.driverName) }
     out.push({
       id: seed, category: 'silly_season', round: r, priority: 30,
-      headline: fill(pick([
-        'The driver market {window}', 'Silly season stirs into life {window}', 'The seats in play {window}',
-        'Who is going where {window}', 'The rumours doing the paddock rounds {window}',
-      ], `${seed}|h`), rslots),
-      dek: fill(pick([
-        '{n} {moves_word} are lighting up the paddock {window}.', 'From {top_last} down, here are the rumours worth tracking {window}.',
-        'The rumour mill is busy {window}, with {n} {moves_word} in the air.',
-      ], `${seed}|d`), rslots),
+      headline: fill(pick(sillyCopy.headline, `${seed}|h`), rslots),
+      dek: fill(pick(sillyCopy.dek, `${seed}|d`), rslots),
       body: paras(
-        fill(pick([
-          'The paddock rumour mill is running hot {window}, with {n} {moves_word} worth taking seriously.',
-          'There is plenty to chew on in the driver market {window}, and {top} leads the talk.',
-        ], `${seed}|intro`), rslots),
+        fill(pick(sillyCopy.intro, `${seed}|intro`), rslots),
         ...moveParas,
-        fill(pick([
-          'Nothing is signed, of course, and a single result can reopen a seat thought closed.',
-          'For now it is all talk, but silly season has a way of turning whispers into contracts.',
-        ], `${seed}|close`), rslots),
+        fill(pick(sillyCopy.close, `${seed}|close`), rslots),
       ),
     })
   }
@@ -2974,6 +2864,7 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
     }
     const slots: Record<string, string | number> = {
       driver: fa.name, driver_last: lastName(fa.name), age: fa.age, next: ctx.year + 1, to: toTeam,
+      to_art: /^[aeiou]/i.test(toTeam) ? 'An' : 'A',
       starts: c?.starts ?? 0, starts_word: plural(c?.starts ?? 0, 'start'),
       honours: honourBits.length ? listJoin(honourBits) : '',
       pot: fa.peakPotential >= 88 ? 'one of the hottest properties in the junior ranks' : fa.peakPotential >= 80 ? 'a genuine prospect' : 'an intriguing talent',
@@ -2981,8 +2872,8 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
     }
     const marketLine = toTeam
       ? experienced
-        ? fill(pick(['There is a real chance {driver_last} is back on the grid with {to} for {next}.', 'A {to} seat for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
-        : fill(pick(['There is a real chance {driver_last} makes {their} F1 debut with {to} for {next}.', 'A {to} seat for {next} could hand {driver_last} a first F1 drive.', 'A maiden F1 seat with {to} for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
+        ? fill(pick(['There is a real chance {driver_last} is back on the grid with {to} for {next}.', '{to_art} {to} seat for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
+        : fill(pick(['There is a real chance {driver_last} makes {their} F1 debut with {to} for {next}.', '{to_art} {to} seat for {next} could hand {driver_last} a first F1 drive.', 'A maiden F1 seat with {to} for {next} looks a genuine possibility.'], `${seed}|mkt`), slots)
       : experienced
       ? fill(pick(['For now the seats look full, and a return may have to wait.', 'As things stand, a route back onto the grid looks hard to find.'], `${seed}|mkt`), slots)
       : fill(pick(['For now the seats look full, and a debut may have to wait.', 'As things stand, a first F1 seat looks some way off.'], `${seed}|mkt`), slots)

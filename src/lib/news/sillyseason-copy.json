@@ -1,0 +1,80 @@
+{
+  "headline": [
+    "The driver market stirs {window}",
+    "Silly season finds its legs {window}",
+    "The seats drawing attention {window}",
+    "Paddock whispers grow louder {window}",
+    "The rumours reshaping the grid {window}"
+  ],
+  "dek": [
+    "{n} {moves_word} are commanding attention in the paddock {window}.",
+    "{top_last} heads a list of {n} {moves_word} worth following {window}.",
+    "The market is moving {window}, and {n} {moves_word} are at the centre of it."
+  ],
+  "intro": [
+    "The paddock grapevine rarely quiets {window}, and right now {n} {moves_word} are demanding attention.",
+    "Driver talk has sharpened {window}, with {n} {moves_word} circulating and {top} attracting the loudest noise.",
+    "Silly season rarely waits for an invitation, and {window} it has arrived in full: {n} {moves_word} are in genuine circulation.",
+    "The market has teeth {window}, and {top} is the name that keeps surfacing above the rest."
+  ],
+  "close": [
+    "None of it is signed, and a single strong result, or a poor one, can unseat what looked settled.",
+    "The rumour mill turns faster than the contract pen, and plenty will change before ink dries.",
+    "Paddock talk is cheap, but it rarely emerges from nothing; at least some of this will land.",
+    "Everything here is smoke for now, though silly season has a reliable habit of producing fire."
+  ],
+  "link": [
+    "{driver} has emerged as a target for {to}.",
+    "Sources inside {to} describe {driver} as a genuine option.",
+    "A move linking {driver} with {to} has been making the rounds for weeks.",
+    "Speculation over a {driver} departure from {from} to {to} has reached credible ears."
+  ],
+  "dirUp": [
+    "The trajectory would be sharply upward: {from} currently sit {from_pos} while {to} occupy {to_pos}.",
+    "In constructors terms it is a clear promotion, {from_pos} at {from} to {to_pos} at {to}.",
+    "Few would dispute it represents a step forward, {from} are {from_pos}, {to} are {to_pos}.",
+    "The gap between {from_pos} and {to_pos} in the standings tells the story of how significant the move would be."
+  ],
+  "dirDown": [
+    "It would represent a rare slide down the order: {from} in {from_pos}, {to} in {to_pos}.",
+    "Eyebrows have been raised because {to} are {to_pos}, behind {from} in {from_pos}.",
+    "The move would be a step backward by the constructors table, {from_pos} to {to_pos}, which demands explanation.",
+    "Strange optics attach to this one: {from} sit {from_pos}, {to} sit {to_pos}."
+  ],
+  "dirLevel": [
+    "There is little daylight in the standings: {from} are {from_pos}, {to} are {to_pos}.",
+    "It would amount to a lateral shift, {from} ({from_pos}) and {to} ({to_pos}) broadly equivalent.",
+    "The constructors table offers no obvious motive; {from} and {to} are {from_pos} and {to_pos} respectively.",
+    "As sideways moves go, the gap between {from_pos} and {to_pos} leaves the question of motivation open."
+  ],
+  "points": [
+    "{driver_last}'s {driver_points} points this year provide hard evidence to underpin the interest.",
+    "A tally of {driver_points} points has done the reputation no harm.",
+    "Put plainly, {driver_points} points is the number that has put {driver_last} on shortlists.",
+    "The ledger reads {driver_points} points, and that figure is doing the work in these conversations."
+  ],
+  "appealStatus": [
+    "{to} see {driver_last}'s {appeal} as precisely what the setup demands.",
+    "The attraction for {to} is clear: {driver_last} would add {status} to a lineup that needs it.",
+    "What {to} are buying, if this goes through, is {driver_last}'s {appeal}, and it fits.",
+    "Inside {to}, the argument centres on {status}, something the current roster cannot supply."
+  ],
+  "contractUp": [
+    "The timing matters: {driver_last} reaches the end of the current deal at the season's close, which concentrates minds.",
+    "Leverage sits with {driver_last} here, out of contract at year's end, the choice is entirely open.",
+    "With {driver_last}'s deal expiring, {from} face a decision, and rivals know the window is real.",
+    "Running down to a contract expiry gives {driver_last} room to listen, and several teams are aware of it."
+  ],
+  "contractTied": [
+    "The complication is contractual: {driver_last} remains bound to {from} beyond this season.",
+    "{from} hold the paper here, and they are not understood to be actively shopping {driver_last}.",
+    "Any deal would require {from}'s cooperation, {driver_last} is not a free agent yet.",
+    "Getting this done means persuading {from} to release {driver_last} early, which is no small ask."
+  ],
+  "pen": [
+    "Put to {driver_last} in the media pen, the response was a deflection dressed as an answer.",
+    "\"At this point in the season my head is completely on the job here,\" {driver_last} said, smiling through the question.",
+    "\"I have a car to focus on, that is genuinely all I can tell you,\" {driver_last} said, holding the line.",
+    "When the question landed, {driver_last} acknowledged it with a shrug and gave nothing back."
+  ]
+}

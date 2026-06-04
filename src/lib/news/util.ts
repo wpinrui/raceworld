@@ -24,9 +24,19 @@ export function chance(seed: string, pct: number): boolean {
 
 // Substitute {slot} tokens. Missing slots render empty.
 export function fill(tmpl: string, slots: Record<string, string | number>): string {
-  return tmpl.replace(/\{(\w+)\}/g, (_, k) => {
-    const v = slots[k]
-    return v == null ? '' : String(v)
+  const valOf = (k: string) => { const v = slots[k]; return v == null ? '' : String(v) }
+  // A substituted value reads with a vowel sound if it starts with a vowel (proper nouns: Audi,
+  // Alpine, Antonelli) or with an ordinal/number that sounds vowel-initial (8th, 11th, 18th, 80th).
+  // English oddities like "a European" never appear as token values, so the letter test is safe.
+  const vowelSound = (s: string) => /^[aeiou]/i.test(s) || /^(8|11|18)/.test(s)
+  // Substitute {token}s. When a token is immediately preceded by the indefinite article ("a"/"an",
+  // any case), correct the article to agree with the value, so "a {team}" becomes "an Audi" etc.
+  return tmpl.replace(/\b([Aa])n? (\{(\w+)\})|\{(\w+)\}/g, (_m, art, _tok, k1, k2) => {
+    if (art === undefined) return valOf(k2)
+    const val = valOf(k1)
+    const an = vowelSound(val)
+    const article = art === 'A' ? (an ? 'An' : 'A') : (an ? 'an' : 'a')
+    return `${article} ${val}`
   })
 }
 
