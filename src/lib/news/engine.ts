@@ -2431,7 +2431,10 @@ function market(ctx: NewsContext): NewsArticle[] {
 // season-to-date with a seeded -10..+10 error applied to each driver's media rating, then
 // report the non-trivial moves it spits out as paddock speculation.
 function sillySeason(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.live || ctx.endOfSeason || ctx.completedRounds < 2 || ctx.teams.length === 0) return []
+  // The rumour windows are all mid-season (rounds N/2, 3N/4, N-1), so they belong in the season's
+  // permanent record. Don't gate on endOfSeason — otherwise the whole season's silly-season feed is
+  // erased the instant the final race resolves and the newsroom regenerates with endOfSeason set.
+  if (!ctx.live || ctx.completedRounds < 2 || ctx.teams.length === 0) return []
   const N = ctx.calendar.length
   const windows = [...new Set([Math.round(N / 2), Math.round((3 * N) / 4), N - 1])].filter((r) => r >= 2 && r <= ctx.completedRounds)
   const out: NewsArticle[] = []
@@ -2917,7 +2920,9 @@ function analysis(ctx: NewsContext): NewsArticle[] {
 // career record. Either way it closes on the actual market projection (seeded ±10 media error) for
 // whether a return looks likely.
 function driverToWatch(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.live || ctx.endOfSeason) return []
+  // Fires every 4th round (mid-season), so like silly-season it belongs in the season's permanent
+  // record. Don't gate on endOfSeason or the retrospective loses the whole season's market narrative.
+  if (!ctx.live) return []
   const freeAgents = ctx.drivers.filter((d) => d.teamId === '')
   if (freeAgents.length === 0 || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []

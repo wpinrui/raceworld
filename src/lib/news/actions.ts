@@ -9,9 +9,10 @@
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
   getDriverCareersUpToYear, getTeamCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
+  saveSeasonNews, getSeasonNews,
   type DbRaceResult,
 } from '@/lib/db/queries'
-import { generateNews, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer } from './engine'
+import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer } from './engine'
 import type { Driver, Team, RaceResult, Circuit, EndOfSeasonSummary } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 
@@ -156,27 +157,39 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
     sundayOfYear: calendar2026.find((c) => c.id === race.circuit_id)?.sundayOfYear ?? 0,
   }))
 
-  const ctx: NewsContext = {
-    year,
-    phase: 'idle',
-    completedRounds: raceResults.length,
-    drivers: [...driverMap.values()],
-    teams: [...teamMap.values()],
-    raceResults,
-    upgradeEvents: [],
-    constructorHistory: [],
-    // Synthesized purely to carry grid changes (arrivals/farewells) reconstructed from the DB;
-    // its market arrays are empty, so market() emits only the team_entry/team_exit announcements.
-    endOfSeason: gridChangeSummary(year, new Map([...teamMap].map(([id, t]) => [id, t.name]))),
-    calendar,
-    live: false,
-    careers: buildCareers(year),
-    teamCareers: buildTeamCareers(year),
-  }
+  // Prefer the feed snapshotted when the season archived (carries the live-only producers, e.g.
+  // silly-season and driver-to-watch, that can't be rebuilt from results). Fall back to regenerating
+  // from results for seasons archived before snapshots existed.
+  const snapshot = getSeasonNews(seasonId)
+  const articles: NewsArticle[] = snapshot
+    ? (JSON.parse(snapshot) as NewsArticle[])
+    : generateNews({
+        year,
+        phase: 'idle',
+        completedRounds: raceResults.length,
+        drivers: [...driverMap.values()],
+        teams: [...teamMap.values()],
+        raceResults,
+        upgradeEvents: [],
+        constructorHistory: [],
+        // Synthesized purely to carry grid changes (arrivals/farewells) reconstructed from the DB;
+        // its market arrays are empty, so market() emits only the team_entry/team_exit announcements.
+        endOfSeason: gridChangeSummary(year, new Map([...teamMap].map(([id, t]) => [id, t.name]))),
+        calendar,
+        live: false,
+        careers: buildCareers(year),
+        teamCareers: buildTeamCareers(year),
+      })
   return {
-    articles: generateNews(ctx),
+    articles,
     drivers: [...driverMap.values()].map((d) => ({ id: d.id, name: d.name })),
     teams: [...teamMap.values()].map((t) => ({ id: t.id, name: t.name })),
     circuits: races.map((race) => ({ name: race.circuit_name.replace(/\bGP\b/, 'Grand Prix'), round: race.round })),
   }
+}
+
+// Persist the complete live news feed for a season at archive time. Generated client-side (the live
+// producers need the store's full driver attributes), passed here as a JSON array of articles.
+export async function actionSaveSeasonNews(seasonId: number, articlesJson: string): Promise<void> {
+  saveSeasonNews(seasonId, articlesJson)
 }
