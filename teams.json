@@ -1,0 +1,3716 @@
+{
+  "1996": [
+    {
+      "id": "williams",
+      "name": "Williams-Renault",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Damon Hill",
+        "Jacques Villeneuve"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Eddie Irvine"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Benetton-Renault",
+      "shortName": "BEN",
+      "nationality": "Italy",
+      "color": "#1E8C5A",
+      "lineup": [
+        "Jean Alesi",
+        "Gerhard Berger"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#D50000",
+      "lineup": [
+        "Mika Häkkinen",
+        "David Coulthard"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Peugeot",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Rubens Barrichello",
+        "Martin Brundle"
+      ]
+    },
+    {
+      "id": "prost",
+      "name": "Ligier-Mugen-Honda",
+      "shortName": "LIG",
+      "nationality": "France",
+      "color": "#0033A0",
+      "lineup": [
+        "Olivier Panis",
+        "Pedro Diniz"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ford",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Johnny Herbert",
+        "Heinz-Harald Frentzen"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Tyrrell-Yamaha",
+      "shortName": "TYR",
+      "nationality": "United Kingdom",
+      "color": "#1B3D6E",
+      "lineup": [
+        "Ukyo Katayama",
+        "Mika Salo"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Footwork-Hart",
+      "shortName": "FOO",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Ricardo Rosset",
+        "Jos Verstappen"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Ford",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Pedro Lamy",
+        "Giancarlo Fisichella"
+      ]
+    },
+    {
+      "id": "forti",
+      "name": "Forti-Ford",
+      "shortName": "FOR",
+      "nationality": "Italy",
+      "color": "#FFC000",
+      "lineup": [
+        "Luca Badoer",
+        "Andrea Montermini"
+      ]
+    }
+  ],
+  "1997": [
+    {
+      "id": "williams",
+      "name": "Williams-Renault",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Jacques Villeneuve",
+        "Heinz-Harald Frentzen"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Eddie Irvine"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Benetton-Renault",
+      "shortName": "BEN",
+      "nationality": "Italy",
+      "color": "#1E8C5A",
+      "lineup": [
+        "Jean Alesi",
+        "Gerhard Berger"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Mika Häkkinen",
+        "David Coulthard"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Peugeot",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Ralf Schumacher",
+        "Giancarlo Fisichella"
+      ]
+    },
+    {
+      "id": "prost",
+      "name": "Prost-Mugen-Honda",
+      "shortName": "PRO",
+      "nationality": "France",
+      "color": "#0033A0",
+      "lineup": [
+        "Olivier Panis",
+        "Shinji Nakano"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Johnny Herbert",
+        "Gianni Morbidelli"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Arrows-Yamaha",
+      "shortName": "ARR",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Damon Hill",
+        "Pedro Diniz"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Stewart-Ford",
+      "shortName": "STE",
+      "nationality": "United Kingdom",
+      "color": "#1D3557",
+      "lineup": [
+        "Rubens Barrichello",
+        "Jan Magnussen"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Tyrrell-Ford",
+      "shortName": "TYR",
+      "nationality": "United Kingdom",
+      "color": "#1B3D6E",
+      "lineup": [
+        "Jos Verstappen",
+        "Mika Salo"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Hart",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Ukyo Katayama",
+        "Tarso Marques"
+      ]
+    },
+    {
+      "id": "lola",
+      "name": "Lola-Ford",
+      "shortName": "LOL",
+      "nationality": "United Kingdom",
+      "color": "#D40000",
+      "lineup": [
+        "Vincenzo Sospiri",
+        "Ricardo Rosset"
+      ]
+    }
+  ],
+  "1998": [
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Mika Häkkinen",
+        "David Coulthard"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Eddie Irvine"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mecachrome",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Jacques Villeneuve",
+        "Heinz-Harald Frentzen"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Mugen-Honda",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Damon Hill",
+        "Ralf Schumacher"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Benetton-Playlife",
+      "shortName": "BEN",
+      "nationality": "Italy",
+      "color": "#1E8C5A",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Alexander Wurz"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Jean Alesi",
+        "Johnny Herbert"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Arrows",
+      "shortName": "ARR",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Pedro Diniz",
+        "Mika Salo"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Stewart-Ford",
+      "shortName": "STE",
+      "nationality": "United Kingdom",
+      "color": "#1D3557",
+      "lineup": [
+        "Rubens Barrichello",
+        "Jos Verstappen"
+      ]
+    },
+    {
+      "id": "prost",
+      "name": "Prost-Peugeot",
+      "shortName": "PRO",
+      "nationality": "France",
+      "color": "#0033A0",
+      "lineup": [
+        "Olivier Panis",
+        "Jarno Trulli"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Tyrrell-Ford",
+      "shortName": "TYR",
+      "nationality": "United Kingdom",
+      "color": "#1B3D6E",
+      "lineup": [
+        "Ricardo Rosset",
+        "Toranosuke Takagi"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Ford",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Shinji Nakano",
+        "Esteban Tuero"
+      ]
+    }
+  ],
+  "1999": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Eddie Irvine"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Mika Häkkinen",
+        "David Coulthard"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Mugen-Honda",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Heinz-Harald Frentzen",
+        "Damon Hill"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Stewart-Ford",
+      "shortName": "STE",
+      "nationality": "United Kingdom",
+      "color": "#1D3557",
+      "lineup": [
+        "Rubens Barrichello",
+        "Johnny Herbert"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Supertec",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Ralf Schumacher",
+        "Alessandro Zanardi"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Benetton-Playlife",
+      "shortName": "BEN",
+      "nationality": "Italy",
+      "color": "#1E8C5A",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Alexander Wurz"
+      ]
+    },
+    {
+      "id": "prost",
+      "name": "Prost-Peugeot",
+      "shortName": "PRO",
+      "nationality": "France",
+      "color": "#0033A0",
+      "lineup": [
+        "Olivier Panis",
+        "Jarno Trulli"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Jean Alesi",
+        "Pedro Diniz"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Ford",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Luca Badoer",
+        "Marc Gené"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Arrows",
+      "shortName": "ARR",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Pedro de la Rosa",
+        "Toranosuke Takagi"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Supertec",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Jacques Villeneuve",
+        "Ricardo Zonta"
+      ]
+    }
+  ],
+  "2000": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Mika Häkkinen",
+        "David Coulthard"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-BMW",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Ralf Schumacher",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Benetton-Playlife",
+      "shortName": "BEN",
+      "nationality": "Italy",
+      "color": "#1E8C5A",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Alexander Wurz"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Honda",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Jacques Villeneuve",
+        "Ricardo Zonta"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Mugen-Honda",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Heinz-Harald Frentzen",
+        "Jarno Trulli"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Arrows-Supertec",
+      "shortName": "ARR",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Pedro de la Rosa",
+        "Jos Verstappen"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Pedro Diniz",
+        "Mika Salo"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Jaguar-Cosworth",
+      "shortName": "JAG",
+      "nationality": "United Kingdom",
+      "color": "#115740",
+      "lineup": [
+        "Eddie Irvine",
+        "Johnny Herbert"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Fondmetal",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Marc Gené",
+        "Gastón Mazzacane"
+      ]
+    },
+    {
+      "id": "prost",
+      "name": "Prost-Peugeot",
+      "shortName": "PRO",
+      "nationality": "France",
+      "color": "#0033A0",
+      "lineup": [
+        "Jean Alesi",
+        "Nick Heidfeld"
+      ]
+    }
+  ],
+  "2001": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Mika Häkkinen",
+        "David Coulthard"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-BMW",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Ralf Schumacher",
+        "Juan Pablo Montoya"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Nick Heidfeld",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Honda",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Jarno Trulli",
+        "Heinz-Harald Frentzen"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Honda",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Olivier Panis",
+        "Jacques Villeneuve"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Benetton-Renault",
+      "shortName": "BEN",
+      "nationality": "Italy",
+      "color": "#1E8C5A",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Jaguar-Cosworth",
+      "shortName": "JAG",
+      "nationality": "United Kingdom",
+      "color": "#115740",
+      "lineup": [
+        "Eddie Irvine",
+        "Pedro de la Rosa"
+      ]
+    },
+    {
+      "id": "prost",
+      "name": "Prost-Acer",
+      "shortName": "PRO",
+      "nationality": "France",
+      "color": "#0033A0",
+      "lineup": [
+        "Jean Alesi",
+        "Luciano Burti"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Arrows-Asiatech",
+      "shortName": "ARR",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Jos Verstappen",
+        "Enrique Bernoldi"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-European",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Fernando Alonso",
+        "Tarso Marques"
+      ]
+    }
+  ],
+  "2002": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-BMW",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Ralf Schumacher",
+        "Juan Pablo Montoya"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "David Coulthard",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Jarno Trulli",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Nick Heidfeld",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Honda",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Takuma Sato"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Jaguar-Cosworth",
+      "shortName": "JAG",
+      "nationality": "United Kingdom",
+      "color": "#115740",
+      "lineup": [
+        "Eddie Irvine",
+        "Pedro de la Rosa"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Honda",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Jacques Villeneuve",
+        "Olivier Panis"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Asiatech",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Mark Webber",
+        "Alex Yoong"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Mika Salo",
+        "Allan McNish"
+      ]
+    },
+    {
+      "id": "arrows",
+      "name": "Arrows-Cosworth",
+      "shortName": "ARR",
+      "nationality": "United Kingdom",
+      "color": "#E37222",
+      "lineup": [
+        "Heinz-Harald Frentzen",
+        "Enrique Bernoldi"
+      ]
+    }
+  ],
+  "2003": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-BMW",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Juan Pablo Montoya",
+        "Ralf Schumacher"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "David Coulthard",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Jarno Trulli",
+        "Fernando Alonso"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Honda",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Jenson Button",
+        "Jacques Villeneuve"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Nick Heidfeld",
+        "Heinz-Harald Frentzen"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Jaguar-Cosworth",
+      "shortName": "JAG",
+      "nationality": "United Kingdom",
+      "color": "#115740",
+      "lineup": [
+        "Mark Webber",
+        "Antônio Pizzonia"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Olivier Panis",
+        "Cristiano da Matta"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Ford",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Ralph Firman"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Cosworth",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Jos Verstappen",
+        "Justin Wilson"
+      ]
+    }
+  ],
+  "2004": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Honda",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Jenson Button",
+        "Takuma Sato"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Jarno Trulli",
+        "Fernando Alonso"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-BMW",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Juan Pablo Montoya",
+        "Ralf Schumacher"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "David Coulthard",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Jaguar-Cosworth",
+      "shortName": "JAG",
+      "nationality": "United Kingdom",
+      "color": "#115740",
+      "lineup": [
+        "Mark Webber",
+        "Christian Klien"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Cristiano da Matta",
+        "Olivier Panis"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Ford",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Nick Heidfeld",
+        "Giorgio Pantano"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Cosworth",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Gianmaria Bruni",
+        "Zsolt Baumgartner"
+      ]
+    }
+  ],
+  "2005": [
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Fernando Alonso",
+        "Giancarlo Fisichella"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Juan Pablo Montoya"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Jarno Trulli",
+        "Ralf Schumacher"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-BMW",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Mark Webber",
+        "Nick Heidfeld"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "BAR-Honda",
+      "shortName": "BAR",
+      "nationality": "United Kingdom",
+      "color": "#D52B1E",
+      "lineup": [
+        "Jenson Button",
+        "Takuma Sato"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Cosworth",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "David Coulthard",
+        "Christian Klien"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Petronas",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#C00000",
+      "lineup": [
+        "Jacques Villeneuve",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Jordan-Toyota",
+      "shortName": "JOR",
+      "nationality": "Ireland",
+      "color": "#FFD500",
+      "lineup": [
+        "Tiago Monteiro",
+        "Narain Karthikeyan"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Minardi-Cosworth",
+      "shortName": "MIN",
+      "nationality": "Italy",
+      "color": "#000000",
+      "lineup": [
+        "Christijan Albers",
+        "Patrick Friesacher"
+      ]
+    }
+  ],
+  "2006": [
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Fernando Alonso",
+        "Giancarlo Fisichella"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Michael Schumacher",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Juan Pablo Montoya"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Honda",
+      "shortName": "HON",
+      "nationality": "Japan",
+      "color": "#CE0E2D",
+      "lineup": [
+        "Rubens Barrichello",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "BMW Sauber",
+      "shortName": "BMW",
+      "nationality": "Germany",
+      "color": "#005EB8",
+      "lineup": [
+        "Nick Heidfeld",
+        "Jacques Villeneuve"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Ralf Schumacher",
+        "Jarno Trulli"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Ferrari",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "David Coulthard",
+        "Christian Klien"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Cosworth",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Mark Webber",
+        "Nico Rosberg"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Cosworth",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Vitantonio Liuzzi",
+        "Scott Speed"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "MF1-Toyota",
+      "shortName": "MF1",
+      "nationality": "Russia",
+      "color": "#E2001A",
+      "lineup": [
+        "Tiago Monteiro",
+        "Christijan Albers"
+      ]
+    },
+    {
+      "id": "superaguri",
+      "name": "Super Aguri-Honda",
+      "shortName": "SAF",
+      "nationality": "Japan",
+      "color": "#BC002D",
+      "lineup": [
+        "Takuma Sato",
+        "Sakon Yamamoto"
+      ]
+    }
+  ],
+  "2007": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Felipe Massa",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Fernando Alonso",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "BMW Sauber",
+      "shortName": "BMW",
+      "nationality": "Germany",
+      "color": "#005EB8",
+      "lineup": [
+        "Nick Heidfeld",
+        "Robert Kubica"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Giancarlo Fisichella",
+        "Heikki Kovalainen"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Toyota",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Nico Rosberg",
+        "Alexander Wurz"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "David Coulthard",
+        "Mark Webber"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Ralf Schumacher",
+        "Jarno Trulli"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Vitantonio Liuzzi",
+        "Scott Speed"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Honda",
+      "shortName": "HON",
+      "nationality": "Japan",
+      "color": "#CE0E2D",
+      "lineup": [
+        "Jenson Button",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "superaguri",
+      "name": "Super Aguri-Honda",
+      "shortName": "SAF",
+      "nationality": "Japan",
+      "color": "#BC002D",
+      "lineup": [
+        "Takuma Sato",
+        "Anthony Davidson"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Spyker-Ferrari",
+      "shortName": "SPY",
+      "nationality": "Netherlands",
+      "color": "#FF6600",
+      "lineup": [
+        "Adrian Sutil",
+        "Christijan Albers"
+      ]
+    }
+  ],
+  "2008": [
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Lewis Hamilton",
+        "Heikki Kovalainen"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "BMW Sauber",
+      "shortName": "BMW",
+      "nationality": "Germany",
+      "color": "#005EB8",
+      "lineup": [
+        "Nick Heidfeld",
+        "Robert Kubica"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Fernando Alonso",
+        "Nelson Piquet Jr."
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Jarno Trulli",
+        "Timo Glock"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Sébastien Bourdais",
+        "Sebastian Vettel"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "David Coulthard",
+        "Mark Webber"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Toyota",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Nico Rosberg",
+        "Kazuki Nakajima"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Honda",
+      "shortName": "HON",
+      "nationality": "Japan",
+      "color": "#CE0E2D",
+      "lineup": [
+        "Jenson Button",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Ferrari",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Adrian Sutil",
+        "Giancarlo Fisichella"
+      ]
+    },
+    {
+      "id": "superaguri",
+      "name": "Super Aguri-Honda",
+      "shortName": "SAF",
+      "nationality": "Japan",
+      "color": "#BC002D",
+      "lineup": [
+        "Takuma Sato",
+        "Anthony Davidson"
+      ]
+    }
+  ],
+  "2009": [
+    {
+      "id": "brackley",
+      "name": "Brawn-Mercedes",
+      "shortName": "BRW",
+      "nationality": "United Kingdom",
+      "color": "#B5D200",
+      "lineup": [
+        "Jenson Button",
+        "Rubens Barrichello"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Mark Webber",
+        "Sebastian Vettel"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Lewis Hamilton",
+        "Heikki Kovalainen"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Felipe Massa",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "toyota",
+      "name": "Toyota",
+      "shortName": "TOY",
+      "nationality": "Japan",
+      "color": "#EB0A1E",
+      "lineup": [
+        "Jarno Trulli",
+        "Timo Glock"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "BMW Sauber",
+      "shortName": "BMW",
+      "nationality": "Germany",
+      "color": "#005EB8",
+      "lineup": [
+        "Robert Kubica",
+        "Nick Heidfeld"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Toyota",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Nico Rosberg",
+        "Kazuki Nakajima"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Fernando Alonso",
+        "Nelson Piquet Jr."
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Adrian Sutil",
+        "Giancarlo Fisichella"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Sébastien Buemi",
+        "Sébastien Bourdais"
+      ]
+    }
+  ],
+  "2010": [
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Sebastian Vettel",
+        "Mark Webber"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Jenson Button",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Felipe Massa",
+        "Fernando Alonso"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Michael Schumacher",
+        "Nico Rosberg"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFD800",
+      "lineup": [
+        "Robert Kubica",
+        "Vitaly Petrov"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Cosworth",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Rubens Barrichello",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Adrian Sutil",
+        "Vitantonio Liuzzi"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Kamui Kobayashi",
+        "Pedro de la Rosa"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Sébastien Buemi",
+        "Jaime Alguersuari"
+      ]
+    },
+    {
+      "id": "caterham",
+      "name": "Lotus-Cosworth",
+      "shortName": "LOT",
+      "nationality": "Malaysia",
+      "color": "#00594F",
+      "lineup": [
+        "Jarno Trulli",
+        "Heikki Kovalainen"
+      ]
+    },
+    {
+      "id": "hrt",
+      "name": "HRT-Cosworth",
+      "shortName": "HRT",
+      "nationality": "Spain",
+      "color": "#8B0000",
+      "lineup": [
+        "Bruno Senna",
+        "Karun Chandhok"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "Virgin-Cosworth",
+      "shortName": "VIR",
+      "nationality": "United Kingdom",
+      "color": "#E2001A",
+      "lineup": [
+        "Timo Glock",
+        "Lucas di Grassi"
+      ]
+    }
+  ],
+  "2011": [
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Sebastian Vettel",
+        "Mark Webber"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Lewis Hamilton",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Fernando Alonso",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Michael Schumacher",
+        "Nico Rosberg"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "United Kingdom",
+      "color": "#B8941F",
+      "lineup": [
+        "Vitaly Petrov",
+        "Nick Heidfeld"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Adrian Sutil",
+        "Paul di Resta"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Kamui Kobayashi",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Sébastien Buemi",
+        "Jaime Alguersuari"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Cosworth",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Rubens Barrichello",
+        "Pastor Maldonado"
+      ]
+    },
+    {
+      "id": "caterham",
+      "name": "Lotus-Renault",
+      "shortName": "LOT",
+      "nationality": "Malaysia",
+      "color": "#00594F",
+      "lineup": [
+        "Heikki Kovalainen",
+        "Jarno Trulli"
+      ]
+    },
+    {
+      "id": "hrt",
+      "name": "HRT-Cosworth",
+      "shortName": "HRT",
+      "nationality": "Spain",
+      "color": "#8B0000",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Vitantonio Liuzzi"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "Virgin-Cosworth",
+      "shortName": "VIR",
+      "nationality": "Russia",
+      "color": "#E2001A",
+      "lineup": [
+        "Timo Glock",
+        "Jérôme d'Ambrosio"
+      ]
+    }
+  ],
+  "2012": [
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Sebastian Vettel",
+        "Mark Webber"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Fernando Alonso",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Jenson Button",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Lotus-Renault",
+      "shortName": "LOT",
+      "nationality": "United Kingdom",
+      "color": "#B8941F",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Romain Grosjean"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Michael Schumacher",
+        "Nico Rosberg"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Kamui Kobayashi",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Paul di Resta",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Renault",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Pastor Maldonado",
+        "Bruno Senna"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Jean-Éric Vergne"
+      ]
+    },
+    {
+      "id": "caterham",
+      "name": "Caterham-Renault",
+      "shortName": "CAT",
+      "nationality": "Malaysia",
+      "color": "#00594F",
+      "lineup": [
+        "Heikki Kovalainen",
+        "Vitaly Petrov"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "Marussia-Cosworth",
+      "shortName": "MRU",
+      "nationality": "Russia",
+      "color": "#E2001A",
+      "lineup": [
+        "Timo Glock",
+        "Charles Pic"
+      ]
+    },
+    {
+      "id": "hrt",
+      "name": "HRT-Cosworth",
+      "shortName": "HRT",
+      "nationality": "Spain",
+      "color": "#8B0000",
+      "lineup": [
+        "Pedro de la Rosa",
+        "Narain Karthikeyan"
+      ]
+    }
+  ],
+  "2013": [
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Sebastian Vettel",
+        "Mark Webber"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Nico Rosberg",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Fernando Alonso",
+        "Felipe Massa"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Lotus-Renault",
+      "shortName": "LOT",
+      "nationality": "United Kingdom",
+      "color": "#B8941F",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Romain Grosjean"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Jenson Button",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Paul di Resta",
+        "Adrian Sutil"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Nico Hülkenberg",
+        "Esteban Gutiérrez"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Jean-Éric Vergne",
+        "Daniel Ricciardo"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Renault",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Pastor Maldonado",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "Marussia-Cosworth",
+      "shortName": "MRU",
+      "nationality": "Russia",
+      "color": "#E2001A",
+      "lineup": [
+        "Jules Bianchi",
+        "Max Chilton"
+      ]
+    },
+    {
+      "id": "caterham",
+      "name": "Caterham-Renault",
+      "shortName": "CAT",
+      "nationality": "Malaysia",
+      "color": "#00594F",
+      "lineup": [
+        "Charles Pic",
+        "Giedo van der Garde"
+      ]
+    }
+  ],
+  "2014": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Nico Rosberg",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Sebastian Vettel",
+        "Daniel Ricciardo"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Felipe Massa",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Fernando Alonso",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Jenson Button",
+        "Kevin Magnussen"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Sergio Pérez",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Renault",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Jean-Éric Vergne",
+        "Daniil Kvyat"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Lotus-Renault",
+      "shortName": "LOT",
+      "nationality": "United Kingdom",
+      "color": "#B8941F",
+      "lineup": [
+        "Romain Grosjean",
+        "Pastor Maldonado"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "Marussia-Ferrari",
+      "shortName": "MRU",
+      "nationality": "Russia",
+      "color": "#E2001A",
+      "lineup": [
+        "Jules Bianchi",
+        "Max Chilton"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Adrian Sutil",
+        "Esteban Gutiérrez"
+      ]
+    },
+    {
+      "id": "caterham",
+      "name": "Caterham-Renault",
+      "shortName": "CAT",
+      "nationality": "Malaysia",
+      "color": "#00594F",
+      "lineup": [
+        "Marcus Ericsson",
+        "Kamui Kobayashi"
+      ]
+    }
+  ],
+  "2015": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "Nico Rosberg"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Sebastian Vettel",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Felipe Massa",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Renault",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Daniil Kvyat"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Nico Hülkenberg",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Lotus-Mercedes",
+      "shortName": "LOT",
+      "nationality": "United Kingdom",
+      "color": "#B8941F",
+      "lineup": [
+        "Romain Grosjean",
+        "Pastor Maldonado"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Renault",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Max Verstappen",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Marcus Ericsson",
+        "Felipe Nasr"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Honda",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#C8C8C8",
+      "lineup": [
+        "Fernando Alonso",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "Marussia-Ferrari",
+      "shortName": "MRU",
+      "nationality": "Russia",
+      "color": "#E2001A",
+      "lineup": [
+        "Will Stevens",
+        "Roberto Merhi"
+      ]
+    }
+  ],
+  "2016": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Nico Rosberg",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-TAG Heuer",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Max Verstappen"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Sebastian Vettel",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF6600",
+      "lineup": [
+        "Sergio Pérez",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Felipe Massa",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Honda",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Fernando Alonso",
+        "Jenson Button"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Ferrari",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Carlos Sainz Jr.",
+        "Daniil Kvyat"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Romain Grosjean",
+        "Esteban Gutiérrez"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFF500",
+      "lineup": [
+        "Kevin Magnussen",
+        "Jolyon Palmer"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Marcus Ericsson",
+        "Felipe Nasr"
+      ]
+    },
+    {
+      "id": "manor",
+      "name": "MRT-Mercedes",
+      "shortName": "MRT",
+      "nationality": "United Kingdom",
+      "color": "#E2001A",
+      "lineup": [
+        "Pascal Wehrlein",
+        "Rio Haryanto"
+      ]
+    }
+  ],
+  "2017": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Sebastian Vettel",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-TAG Heuer",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Max Verstappen"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF80C7",
+      "lineup": [
+        "Sergio Pérez",
+        "Esteban Ocon"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Felipe Massa",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFF500",
+      "lineup": [
+        "Nico Hülkenberg",
+        "Jolyon Palmer"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Carlos Sainz Jr.",
+        "Daniil Kvyat"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Romain Grosjean",
+        "Kevin Magnussen"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Honda",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Stoffel Vandoorne",
+        "Fernando Alonso"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#006EB6",
+      "lineup": [
+        "Marcus Ericsson",
+        "Pascal Wehrlein"
+      ]
+    }
+  ],
+  "2018": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Sebastian Vettel",
+        "Kimi Räikkönen"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-TAG Heuer",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Max Verstappen"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFF500",
+      "lineup": [
+        "Nico Hülkenberg",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Romain Grosjean",
+        "Kevin Magnussen"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Renault",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Stoffel Vandoorne",
+        "Fernando Alonso"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India-Mercedes",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF80C7",
+      "lineup": [
+        "Sergio Pérez",
+        "Esteban Ocon"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#9B0000",
+      "lineup": [
+        "Marcus Ericsson",
+        "Charles Leclerc"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Honda",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Pierre Gasly",
+        "Brendon Hartley"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Lance Stroll",
+        "Sergey Sirotkin"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Force India (Sahara)",
+      "shortName": "FOR",
+      "nationality": "India",
+      "color": "#FF80C7",
+      "lineup": [
+        "Sergio Pérez",
+        "Esteban Ocon"
+      ]
+    }
+  ],
+  "2019": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Sebastian Vettel",
+        "Charles Leclerc"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Honda",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Pierre Gasly"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Renault",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Carlos Sainz Jr.",
+        "Lando Norris"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFF500",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Toro Rosso-Honda",
+      "shortName": "STR",
+      "nationality": "Italy",
+      "color": "#0E2A6B",
+      "lineup": [
+        "Daniil Kvyat",
+        "Alexander Albon"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Racing Point-Mercedes",
+      "shortName": "RP",
+      "nationality": "United Kingdom",
+      "color": "#FF80C7",
+      "lineup": [
+        "Sergio Pérez",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Alfa Romeo-Ferrari",
+      "shortName": "ALF",
+      "nationality": "Switzerland",
+      "color": "#900000",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Antonio Giovinazzi"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#C0A062",
+      "lineup": [
+        "Romain Grosjean",
+        "Kevin Magnussen"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "George Russell",
+        "Robert Kubica"
+      ]
+    }
+  ],
+  "2020": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Honda",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Alexander Albon"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Renault",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Carlos Sainz Jr.",
+        "Lando Norris"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Racing Point-Mercedes",
+      "shortName": "RP",
+      "nationality": "United Kingdom",
+      "color": "#FF80C7",
+      "lineup": [
+        "Sergio Pérez",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Renault",
+      "shortName": "REN",
+      "nationality": "France",
+      "color": "#FFF500",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Esteban Ocon"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Sebastian Vettel"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "AlphaTauri-Honda",
+      "shortName": "AT",
+      "nationality": "Italy",
+      "color": "#20394C",
+      "lineup": [
+        "Pierre Gasly",
+        "Daniil Kvyat"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Alfa Romeo-Ferrari",
+      "shortName": "ALF",
+      "nationality": "Switzerland",
+      "color": "#900000",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Antonio Giovinazzi"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Romain Grosjean",
+        "Kevin Magnussen"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "George Russell",
+        "Nicholas Latifi"
+      ]
+    }
+  ],
+  "2021": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Honda",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Lando Norris"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Alpine-Renault",
+      "shortName": "ALP",
+      "nationality": "France",
+      "color": "#0078C1",
+      "lineup": [
+        "Fernando Alonso",
+        "Esteban Ocon"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "AlphaTauri-Honda",
+      "shortName": "AT",
+      "nationality": "Italy",
+      "color": "#20394C",
+      "lineup": [
+        "Pierre Gasly",
+        "Yuki Tsunoda"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Aston Martin-Mercedes",
+      "shortName": "AMR",
+      "nationality": "United Kingdom",
+      "color": "#006F62",
+      "lineup": [
+        "Sebastian Vettel",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "George Russell",
+        "Nicholas Latifi"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Alfa Romeo-Ferrari",
+      "shortName": "ALF",
+      "nationality": "Switzerland",
+      "color": "#900000",
+      "lineup": [
+        "Kimi Räikkönen",
+        "Antonio Giovinazzi"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Nikita Mazepin",
+        "Mick Schumacher"
+      ]
+    }
+  ],
+  "2022": [
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-RBPT",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "George Russell"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Alpine-Renault",
+      "shortName": "ALP",
+      "nationality": "France",
+      "color": "#0078C1",
+      "lineup": [
+        "Fernando Alonso",
+        "Esteban Ocon"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Lando Norris"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Alfa Romeo-Ferrari",
+      "shortName": "ALF",
+      "nationality": "Switzerland",
+      "color": "#900000",
+      "lineup": [
+        "Valtteri Bottas",
+        "Zhou Guanyu"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Aston Martin-Mercedes",
+      "shortName": "AMR",
+      "nationality": "United Kingdom",
+      "color": "#006F62",
+      "lineup": [
+        "Sebastian Vettel",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Kevin Magnussen",
+        "Mick Schumacher"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "AlphaTauri-RBPT",
+      "shortName": "AT",
+      "nationality": "Italy",
+      "color": "#20394C",
+      "lineup": [
+        "Pierre Gasly",
+        "Yuki Tsunoda"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Alexander Albon",
+        "Nicholas Latifi"
+      ]
+    }
+  ],
+  "2023": [
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Honda RBPT",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "George Russell"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Lando Norris",
+        "Oscar Piastri"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Aston Martin-Mercedes",
+      "shortName": "AMR",
+      "nationality": "United Kingdom",
+      "color": "#006F62",
+      "lineup": [
+        "Fernando Alonso",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Alpine-Renault",
+      "shortName": "ALP",
+      "nationality": "France",
+      "color": "#0078C1",
+      "lineup": [
+        "Esteban Ocon",
+        "Pierre Gasly"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Alexander Albon",
+        "Logan Sargeant"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "AlphaTauri-Honda RBPT",
+      "shortName": "AT",
+      "nationality": "Italy",
+      "color": "#20394C",
+      "lineup": [
+        "Yuki Tsunoda",
+        "Nyck de Vries"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Alfa Romeo-Ferrari",
+      "shortName": "ALF",
+      "nationality": "Switzerland",
+      "color": "#900000",
+      "lineup": [
+        "Valtteri Bottas",
+        "Zhou Guanyu"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Kevin Magnussen",
+        "Nico Hülkenberg"
+      ]
+    }
+  ],
+  "2024": [
+    {
+      "id": "mclaren",
+      "name": "McLaren-Mercedes",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Lando Norris",
+        "Oscar Piastri"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull-Honda RBPT",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Sergio Pérez"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Lewis Hamilton",
+        "George Russell"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Aston Martin-Mercedes",
+      "shortName": "AMR",
+      "nationality": "United Kingdom",
+      "color": "#006F62",
+      "lineup": [
+        "Fernando Alonso",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Alpine-Renault",
+      "shortName": "ALP",
+      "nationality": "France",
+      "color": "#0078C1",
+      "lineup": [
+        "Pierre Gasly",
+        "Esteban Ocon"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas-Ferrari",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Kevin Magnussen",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "RB-Honda RBPT",
+      "shortName": "RB",
+      "nationality": "Italy",
+      "color": "#1634CB",
+      "lineup": [
+        "Daniel Ricciardo",
+        "Yuki Tsunoda"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams-Mercedes",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Alexander Albon",
+        "Logan Sargeant"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Kick Sauber-Ferrari",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#00E701",
+      "lineup": [
+        "Zhou Guanyu",
+        "Valtteri Bottas"
+      ]
+    }
+  ],
+  "2025": [
+    {
+      "id": "mclaren",
+      "name": "McLaren",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Lando Norris",
+        "Oscar Piastri"
+      ]
+    },
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "George Russell",
+        "Kimi Antonelli"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull Racing",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Yuki Tsunoda"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Alexander Albon",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Racing Bulls",
+      "shortName": "RB",
+      "nationality": "Italy",
+      "color": "#1634CB",
+      "lineup": [
+        "Isack Hadjar",
+        "Liam Lawson"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Aston Martin",
+      "shortName": "AMR",
+      "nationality": "United Kingdom",
+      "color": "#006F62",
+      "lineup": [
+        "Fernando Alonso",
+        "Lance Stroll"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas F1 Team",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Esteban Ocon",
+        "Oliver Bearman"
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Kick Sauber",
+      "shortName": "SAU",
+      "nationality": "Switzerland",
+      "color": "#00E701",
+      "lineup": [
+        "Nico Hülkenberg",
+        "Gabriel Bortoleto"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Alpine",
+      "shortName": "ALP",
+      "nationality": "France",
+      "color": "#0078C1",
+      "lineup": [
+        "Pierre Gasly",
+        "Franco Colapinto"
+      ]
+    }
+  ],
+  "2026": [
+    {
+      "id": "brackley",
+      "name": "Mercedes",
+      "shortName": "MER",
+      "nationality": "Germany",
+      "color": "#00A19B",
+      "lineup": [
+        "Kimi Antonelli",
+        "George Russell"
+      ]
+    },
+    {
+      "id": "ferrari",
+      "name": "Ferrari",
+      "shortName": "FER",
+      "nationality": "Italy",
+      "color": "#DC0000",
+      "lineup": [
+        "Charles Leclerc",
+        "Lewis Hamilton"
+      ]
+    },
+    {
+      "id": "mclaren",
+      "name": "McLaren",
+      "shortName": "MCL",
+      "nationality": "United Kingdom",
+      "color": "#FF8000",
+      "lineup": [
+        "Lando Norris",
+        "Oscar Piastri"
+      ]
+    },
+    {
+      "id": "miltonkeynes",
+      "name": "Red Bull Racing",
+      "shortName": "RBR",
+      "nationality": "Austria",
+      "color": "#121F45",
+      "lineup": [
+        "Max Verstappen",
+        "Isack Hadjar"
+      ]
+    },
+    {
+      "id": "enstone",
+      "name": "Alpine",
+      "shortName": "ALP",
+      "nationality": "France",
+      "color": "#0078C1",
+      "lineup": [
+        "Pierre Gasly",
+        "Franco Colapinto"
+      ]
+    },
+    {
+      "id": "faenza",
+      "name": "Racing Bulls",
+      "shortName": "RB",
+      "nationality": "Italy",
+      "color": "#1634CB",
+      "lineup": [
+        "Liam Lawson",
+        "Arvid Lindblad"
+      ]
+    },
+    {
+      "id": "haas",
+      "name": "Haas F1 Team",
+      "shortName": "HAA",
+      "nationality": "United States",
+      "color": "#B6BABD",
+      "lineup": [
+        "Esteban Ocon",
+        "Oliver Bearman"
+      ]
+    },
+    {
+      "id": "williams",
+      "name": "Williams",
+      "shortName": "WIL",
+      "nationality": "United Kingdom",
+      "color": "#1A3C8E",
+      "lineup": [
+        "Alexander Albon",
+        "Carlos Sainz Jr."
+      ]
+    },
+    {
+      "id": "hinwil",
+      "name": "Audi",
+      "shortName": "AUD",
+      "nationality": "Germany",
+      "color": "#BB0A30",
+      "lineup": [
+        "Gabriel Bortoleto",
+        "Nico Hülkenberg"
+      ]
+    },
+    {
+      "id": "cadillac",
+      "name": "Cadillac",
+      "shortName": "CAD",
+      "nationality": "United States",
+      "color": "#1B1B1B",
+      "lineup": [
+        "Sergio Pérez",
+        "Valtteri Bottas"
+      ]
+    },
+    {
+      "id": "silverstone",
+      "name": "Aston Martin",
+      "shortName": "AMR",
+      "nationality": "United Kingdom",
+      "color": "#006F62",
+      "lineup": [
+        "Fernando Alonso",
+        "Lance Stroll"
+      ]
+    }
+  ]
+}
