@@ -71,6 +71,7 @@ export interface NewsContext {
                                           // gracefully when it is absent. starts === 0 (or no entry) means
                                           // the driver has never raced in F1; never infer that from age.
   teamCareers?: Record<string, TeamCareer>  // constructor career totals per team, for team milestones (optional)
+  teamDriverTallies?: Record<string, TeamDriverTally[]>  // per-lineage driver tallies (folded live), for {top_driver} (optional)
   // Driver-market beats for the market journalism (all optional — present only on the live context):
   contractWatch?: ContractWatch[]  // round-15 verdicts on expiring contracts (could-do-better/right-place/lucky)
   renewals?: RenewalResult[]       // round-18 in-season contract renewals
@@ -106,6 +107,18 @@ export interface TeamCareer {
   points: number   // cumulative constructors points
   bestConstructorsFinish: number | null // best (lowest) constructors' championship position; null = never classified
   constructorTitles: number              // constructors' championships won
+}
+
+// One driver's tally FOR a given lineage (not their whole career), so the team-transition newsroom can
+// name the lineage's most prolific driver and the span they raced for it. Folded with the live season.
+export interface TeamDriverTally {
+  driverId: string
+  driverName: string
+  wins: number
+  podiums: number
+  points: number
+  firstYear: number
+  lastYear: number
 }
 
 export interface NewsArticle {
@@ -478,6 +491,30 @@ export function foldLiveSeasonTeams(
       entered.add(id)
     }
     for (const id of entered) out[id].races++
+  }
+  return out
+}
+
+// Extend per-lineage driver tallies (archived DB totals, grouped by team id) with the live/just-finished
+// season, so the live newsroom ranks a lineage's most prolific driver including the current year.
+export function foldLiveSeasonTeamDrivers(
+  base: Record<string, TeamDriverTally[]>,
+  year: number,
+  raceResults: { finishPosition: number | null; points: number; teamId: string; driverId: string; driverName: string }[][],
+): Record<string, TeamDriverTally[]> {
+  const out: Record<string, TeamDriverTally[]> = {}
+  for (const [k, v] of Object.entries(base)) out[k] = v.map((t) => ({ ...t }))
+  for (const round of raceResults) {
+    for (const res of round) {
+      const list = out[res.teamId] ?? (out[res.teamId] = [])
+      let t = list.find((x) => x.driverId === res.driverId)
+      if (!t) { t = { driverId: res.driverId, driverName: res.driverName, wins: 0, podiums: 0, points: 0, firstYear: year, lastYear: year }; list.push(t) }
+      t.points += res.points
+      if (res.finishPosition === 1) t.wins++
+      if (res.finishPosition != null && res.finishPosition <= 3) t.podiums++
+      t.firstYear = Math.min(t.firstYear, year)
+      t.lastYear = Math.max(t.lastYear, year)
+    }
   }
   return out
 }
@@ -2519,20 +2556,20 @@ function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: 
   const titles = (tc?.constructorTitles ?? 0) + (ctx.live && eos.constructorChampion === teamId ? 1 : 0)
   const bestFinish = isFinite(bestNum) ? ordinal(bestNum) : 'the midfield'
 
-  // The lineage's drivers from the just-finished season (reliable on both live + replay paths): the
-  // most recent = best placed; the standout = best career record among them.
+  // Most-recent drivers from the just-finished season (for {last_driver} + the seatless count).
   const teamDrivers = driverStandingsAfter(ctx, ctx.completedRounds).filter((s) => s.teamId === teamId)
-  const careerWins = (id: string) => ctx.careers?.[id]?.wins ?? 0
-  const careerPts = (id: string) => ctx.careers?.[id]?.points ?? 0
-  const byCareer = [...teamDrivers].sort((a, b) => careerWins(b.driverId) - careerWins(a.driverId) || careerPts(b.driverId) - careerPts(a.driverId))
-  const top = byCareer[0]
   const last = teamDrivers[0]
-  const cTop = top ? ctx.careers?.[top.driverId] : undefined
-  const feat = cTop && cTop.wins > 0 ? `won ${cTop.wins} ${w(cTop.wins, 'race', 'races')} for the team`
-    : cTop && cTop.podiums > 0 ? `took ${cTop.podiums} ${w(cTop.podiums, 'podium', 'podiums')} in its colours`
+  // The lineage's MOST PROLIFIC driver across its whole history (folded live): by wins, then points.
+  const top = [...(ctx.teamDriverTallies?.[teamId] ?? [])].sort((a, b) => b.wins - a.wins || b.points - a.points)[0]
+  const feat = top && top.wins > 0 ? `won ${top.wins} ${w(top.wins, 'race', 'races')} for the team`
+    : top && top.podiums > 0 ? `took ${top.podiums} ${w(top.podiums, 'podium', 'podiums')} in its colours`
+    : top && top.points > 0 ? `scored ${top.points} ${w(top.points, 'point', 'points')} in its colours`
     : 'flew the flag through the lean years'
-  const quoted = extra.kind === 'departure' ? (last ?? top) : (top ?? last)
-  const pr = pronouns(ctx.drivers.find((d) => d.id === quoted?.driverId)?.gender)
+  const topName = top ? lastName(top.driverName) : (last ? lastName(last.driverName) : 'the team')
+  const lastDriverName = last ? lastName(last.driverName) : (top ? lastName(top.driverName) : 'a departing driver')
+  // Pronouns of the quoted driver (rebrand quote uses the standout; departure uses the most recent).
+  const quotedId = extra.kind === 'departure' ? last?.driverId : top?.driverId
+  const pr = pronouns(ctx.drivers.find((d) => d.id === quotedId)?.gender)
   const seatlessCount = teamDrivers.length
 
   const rec = {
@@ -2545,9 +2582,9 @@ function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: 
     best_finish: bestFinish, prior_best_finish: bestFinish,
     titles, prior_titles: titles,
     name_era: lineageNameEra(teamId, year),
-    top_driver: top ? lastName(top.driverName) : 'the team',
+    top_driver: topName,
     top_driver_feat: feat,
-    last_driver: last ? lastName(last.driverName) : 'a departing driver',
+    last_driver: lastDriverName,
     seatless: w(seatlessCount, 'driver', 'drivers'), seatless_count: seatlessCount,
     final_drivers: teamDrivers.map((d) => lastName(d.driverName)).join(' and '),
     ...pr,

@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type RecordsContext } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
-import { actionGetDriverCareers, actionGetTeamCareers, actionGetSeasonRecords } from '@/lib/news/actions'
+import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex } from '@/components/news/LinkedText'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
@@ -96,10 +96,12 @@ export function HeadlinesPanel() {
   // Prior-season career totals from the archive; the current season is folded in from the store.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
+  const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
   useEffect(() => {
     actionGetDriverCareers(year - 1).then(setCareerBase).catch(() => setCareerBase({}))
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
+    actionGetTeamDriverTallies(year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
   }, [year])
 
@@ -108,12 +110,12 @@ export function HeadlinesPanel() {
     // drift from them (it previously omitted the market beats: contract watch / renewals / draft).
     const ctx = buildLiveNewsContext(
       { year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, seasonContractWatch, seasonRenewals, seasonDraft },
-      careerBase, teamCareerBase, records,
+      careerBase, teamCareerBase, records, teamDriverTallies,
     )
     // The feed is already newest-first (round desc, then priority); show the most recent 20
     // and let the panel scroll.
     return generateNews(ctx).slice(0, 20)
-  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, seasonContractWatch, seasonRenewals, seasonDraft, careerBase, teamCareerBase, records])
+  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, seasonContractWatch, seasonRenewals, seasonDraft, careerBase, teamCareerBase, records, teamDriverTallies])
 
   // Name-to-world-page matcher for hyperlinking the open article (home feed is always the live season).
   const newsIndex = useMemo(() => buildNewsIndex({

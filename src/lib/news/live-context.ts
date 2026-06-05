@@ -1,5 +1,5 @@
 import { calendar2026 } from '@/data/calendar'
-import { foldLiveSeason, foldLiveSeasonTeams, type NewsContext, type DriverCareer, type TeamCareer, type RecordsContext } from './engine'
+import { foldLiveSeason, foldLiveSeasonTeams, foldLiveSeasonTeamDrivers, type NewsContext, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from './engine'
 import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 
@@ -26,6 +26,7 @@ export function buildLiveNewsContext(
   careerBase: Record<string, DriverCareer>,
   teamCareerBase: Record<string, TeamCareer>,
   records?: RecordsContext,
+  teamDriverTalliesBase: Record<string, TeamDriverTally[]> = {},
 ): NewsContext {
   return {
     year: s.year,
@@ -42,6 +43,7 @@ export function buildLiveNewsContext(
     records,
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
     teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
+    teamDriverTallies: foldLiveSeasonTeamDrivers(teamDriverTalliesBase, s.year, s.raceResults),
     contractWatch: s.seasonContractWatch,
     renewals: s.seasonRenewals,
     draft: s.seasonDraft,

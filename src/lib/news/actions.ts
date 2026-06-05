@@ -9,11 +9,11 @@
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
   getDriverCareersUpToYear, getTeamCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
-  getTeamConstructorRecordsUpToYear,
+  getTeamConstructorRecordsUpToYear, getTeamDriverTalliesUpToYear,
   saveSeasonNews, getSeasonNews, getAllDriverSeasonTallies, getAllTeamSeasonTallies,
   type DbRaceResult,
 } from '@/lib/db/queries'
-import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type RecordsContext, type RecordMetric, type SeasonRecordMark } from './engine'
+import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type RecordMetric, type SeasonRecordMark } from './engine'
 import type { Driver, Team, RaceResult, Circuit, EndOfSeasonSummary } from '@/lib/sim/types'
 import { calendar2026 } from '@/data/calendar'
 
@@ -94,6 +94,20 @@ function buildTeamCareers(throughYear: number): Record<string, TeamCareer> {
 
 export async function actionGetTeamCareers(throughYear: number): Promise<Record<string, TeamCareer>> {
   return buildTeamCareers(throughYear)
+}
+
+// Per-lineage driver tallies from the archive up to `throughYear`, grouped by team id, for the
+// {top_driver} slot. The live newsroom folds the current season on top via foldLiveSeasonTeamDrivers.
+function buildTeamDriverTallies(throughYear: number): Record<string, TeamDriverTally[]> {
+  const out: Record<string, TeamDriverTally[]> = {}
+  for (const t of getTeamDriverTalliesUpToYear(throughYear)) {
+    ;(out[t.teamId] ??= []).push({ driverId: t.driverId, driverName: t.driverName, wins: t.wins, podiums: t.podiums, points: t.points, firstYear: t.firstYear, lastYear: t.lastYear })
+  }
+  return out
+}
+
+export async function actionGetTeamDriverTallies(throughYear: number): Promise<Record<string, TeamDriverTally[]>> {
+  return buildTeamDriverTallies(throughYear)
 }
 
 // Prior all-time single-season records (the max per metric across archived seasons, with holder + year)
@@ -226,6 +240,7 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
         live: false,
         careers: buildCareers(year),
         teamCareers: buildTeamCareers(year),
+        teamDriverTallies: buildTeamDriverTallies(year),
       })
   return {
     articles,

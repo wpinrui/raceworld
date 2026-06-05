@@ -30,9 +30,22 @@ const teamCareers = {
   hinwil: { teamId: 'hinwil', races: 500, seasons: 29, wins: 1, podiums: 60, poles: 1, points: 900, bestConstructorsFinish: 2, constructorTitles: 0 },
   toyota: { teamId: 'toyota', races: 140, seasons: 7, wins: 0, podiums: 13, poles: 3, points: 300, bestConstructorsFinish: 4, constructorTitles: 0 },
 }
+// Per-lineage driver tallies (the real {top_driver} source): the standout is NOT a final-season driver,
+// to prove the producer reaches across the whole lineage history.
+const teamDriverTallies = {
+  hinwil: [
+    { driverId: 'raikkonen', driverName: 'Kimi Raikkonen', wins: 1, podiums: 10, points: 200, firstYear: 2001, lastYear: 2001 },
+    { driverId: 'massa', driverName: 'Felipe Massa', wins: 0, podiums: 2, points: 80, firstYear: 2002, lastYear: 2005 },
+    { driverId: 'bottas', driverName: 'Valtteri Bottas', wins: 0, podiums: 0, points: 50, firstYear: 2024, lastYear: 2025 },
+  ],
+  toyota: [
+    { driverId: 'trulli', driverName: 'Jarno Trulli', wins: 0, podiums: 3, points: 160, firstYear: 2004, lastYear: 2009 },
+    { driverId: 'glock', driverName: 'Timo Glock', wins: 0, podiums: 3, points: 150, firstYear: 2008, lastYear: 2009 },
+  ],
+}
 const baseCtx = {
   phase: 'off-season', completedRounds: 24, drivers, raceResults, upgradeEvents: [],
-  constructorHistory: [], calendar: calendar2026, live: true, careers, teamCareers,
+  constructorHistory: [], calendar: calendar2026, live: true, careers, teamCareers, teamDriverTallies,
   teams: [{ id: 'ferrari', name: 'Ferrari' }, { id: 'hinwil', name: 'Sauber' }, { id: 'toyota', name: 'Toyota' }],
 }
 
