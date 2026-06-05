@@ -144,22 +144,17 @@ export function PerformanceView() {
             </div>
           </div>
           <div className="flex-1 min-h-0 flex flex-col rounded-xl bg-[#1E2431] border border-[#2A3142] p-3">
-            <p className="shrink-0 text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5">Over / under-performance · expected finish (from pace) − actual · above 0 = beating the car</p>
             <div className="flex-1 min-h-0">
-              {selected.size === 0 ? (
-                <p className="text-sm text-[#FFFFFF] p-2">Pick teams or drivers above to compare how their results stacked up against the car.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={deltaData} margin={{ top: 6, right: 16, bottom: 4, left: -16 }}>
-                    <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="round" type="number" domain={[1, rounds]} allowDecimals={false} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} />
-                    <YAxis stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} width={32} />
-                    <ReferenceLine y={0} stroke="#6B7280" />
-                    <RTooltip content={<Tip nameOf={nameOf} signed />} />
-                    {[...selected].map((key) => <Line key={key} type="monotone" dataKey={key} stroke={colorOf(key)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />)}
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={deltaData} margin={{ top: 6, right: 16, bottom: 4, left: -16 }}>
+                  <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="round" type="number" domain={[1, rounds]} allowDecimals={false} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} />
+                  <YAxis stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} width={32} />
+                  <ReferenceLine y={0} stroke="#6B7280" />
+                  <RTooltip content={<Tip nameOf={nameOf} signed />} />
+                  {[...selected].map((key) => <Line key={key} type="monotone" dataKey={key} stroke={colorOf(key)} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />)}
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </>
