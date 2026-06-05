@@ -533,6 +533,35 @@ export function foldLiveSeasonTeamDrivers(
 // TRIGGER: every completed round. ONE consolidated report per race — winner + podium +
 // margin, the start (pole / drive of the day), attrition (DNFs), and the title picture.
 // This is the category that fires every race; incident/retirement/championship live inside it.
+// Driver-error crash-out reasons (issue #59). Used in place of the invented mechanical reasons
+// when a DNF's retirementReason is 'driver-error', so a real crash reads as a crash. Same noun-phrase
+// shape as RETIRE_REASONS (each slots in after "with").
+const DRIVER_ERROR_REASONS = [
+  'a spin into the barriers at the exit of a high-speed corner',
+  'a lock-up that beached the car in the gravel',
+  'a first-lap collision of the driver\'s own making',
+  'a misjudgement under braking that ended in the wall',
+  'contact with the barriers after running wide on cold tyres',
+  'a mistake at the chicane that damaged the front wing beyond repair',
+  'a spin on a restart that left the car stranded on the racing line',
+  'a late-braking error that buried the car in the gravel trap',
+  'a loss of control at turn entry that sent the car into the barrier',
+  'a mid-corner slide that the driver could not catch',
+]
+
+// One-sentence mention of a NOTABLE non-DNF consistency mistake (issue #59). Slots: {m_last},
+// {m_loss} (whole seconds), {m_pos} (ordinal finish), {m_team}, plus the driver's pronouns.
+const NOTABLE_MISTAKE_POOL = [
+  '{m_last} lost {m_loss} seconds to a lock-up at the braking zone, eventually salvaging {m_pos} for {m_team}.',
+  'A spin at the exit of the complex cost {m_last} the best part of {m_loss} seconds, though {they} gathered it up and came home {m_pos}.',
+  '{m_last} ran wide on to the kerbs and dropped {m_loss} seconds before rejoining, finishing {m_pos}.',
+  'The recovery drive from {m_last} was necessary after an error mid-race cost {them} {m_loss} seconds and several places, finishing {m_pos}.',
+  '{m_last} overcooked the entry to the hairpin and shed {m_loss} seconds in the gravel, then hauled back to {m_pos}.',
+  'A momentary loss of the rear under braking dropped {m_last} {m_loss} seconds off the pace, and {they} eventually crossed the line {m_pos}.',
+  '{m_last} tagged the inside kerb and spun, gifting {m_loss} seconds to the chasing pack before recovering to {m_pos}.',
+  '{they_cap} will point to {m_loss} seconds dropped in a single off-track moment, but {m_last} did enough to finish {m_pos}.',
+]
+
 function raceReports(ctx: NewsContext): NewsArticle[] {
   const out: NewsArticle[] = []
   const N = ctx.calendar.length
@@ -585,11 +614,16 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     // All genuinely race-ending; assigned deterministically per driver and de-duplicated within a
     // race so the same failure does not appear two or three times in one report.
     const RETIRE_REASONS = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake failure', 'a suspension failure', 'an engine that let go', 'an oil leak', 'terminal floor damage', 'damage from a first-lap clash', 'a high-speed spin into the barriers', 'an electrical failure', 'a wheel-nut problem at a stop']
+    // A driver-error crash-out (issue #59) reads from the crash pool, not an invented mechanical
+    // failure. Falls back to the mechanical pool for everyone else (incl. pre-#59 archived results).
+    const crashedIds = new Set(dnfs.filter((x) => x.retirementReason === 'driver-error' || x.crashed).map((x) => x.driverId))
+    const poolFor = (driverId: string) => (crashedIds.has(driverId) ? DRIVER_ERROR_REASONS : RETIRE_REASONS)
     const usedReasons = new Set<string>()
     const reasonFor = (driverId: string): string => {
-      const seeded = pick(RETIRE_REASONS, `${seed}|why-${driverId}`)
+      const pool = poolFor(driverId)
+      const seeded = pick(pool, `${seed}|why-${driverId}`)
       const chosen = usedReasons.has(seeded)
-        ? (RETIRE_REASONS.filter((rr) => !usedReasons.has(rr))[0] ?? seeded)
+        ? (pool.filter((rr) => !usedReasons.has(rr))[0] ?? seeded)
         : seeded
       usedReasons.add(chosen)
       return chosen
@@ -607,7 +641,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
-      dnf_solo_reason: dnfSolo ? pick(RETIRE_REASONS, `${seed}|why-${dnfSolo.driverId}`) : '',
+      dnf_solo_reason: dnfSolo ? pick(poolFor(dnfSolo.driverId), `${seed}|why-${dnfSolo.driverId}`) : '',
       win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
       next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSoloLaps,
       dnf_solo_phrase: dnfSoloLaps === 0 ? 'before completing a lap' : dnfSoloLaps === 1 ? 'after a single lap' : `after ${dnfSoloLaps} laps`,
@@ -794,6 +828,23 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ]
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
+    // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
+    // gated to genuinely newsworthy moments (a >10s loss, or any mistake by a WDC top-5 driver).
+    // Crash-outs are not eligible here; they are already covered in the attrition paragraph.
+    const wdcTop5 = new Set(afterR.slice(0, 5).map((s) => s.driverId))
+    const topMistake = sorted
+      .filter((x) => !x.dnf && (x.mistakes ?? 0) > 0 && ((x.worstMistakeLoss ?? 0) > 10 || wdcTop5.has(x.driverId)))
+      .sort((a, b) => (b.worstMistakeLoss ?? 0) - (a.worstMistakeLoss ?? 0))[0] ?? null
+    const mistakePara = topMistake
+      ? compose(`${seed}:mistake`, {
+          m_last: lastName(topMistake.driverName),
+          m_loss: Math.round(topMistake.worstMistakeLoss ?? 0),
+          m_pos: ordinal(topMistake.finishPosition ?? 0),
+          m_team: topMistake.teamName,
+          ...pronouns(ctx.drivers.find((d) => d.id === topMistake.driverId)?.gender),
+        }, NOTABLE_MISTAKE_POOL)
+      : ''
+
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
       headline: fill(pick([
@@ -812,7 +863,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner_last} wins the {circuit} and tightens {their} grip on the season.',
         'A composed afternoon from {winner_last} puts {team} on the top step at the {circuit}.',
       ], `${seed}|d`), slots),
-      body: paras(leadPara, startPara, attritionPara, texturePara, champPara, quotePara),
+      body: paras(leadPara, startPara, attritionPara, mistakePara, texturePara, champPara, quotePara),
     })
   }
   return out
