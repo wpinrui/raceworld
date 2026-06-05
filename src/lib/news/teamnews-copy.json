@@ -712,27 +712,27 @@
  },
  "arrival-lola-1997": {
   "h": [
-   "MasterCard-backed Lola arrives underfunded and in immediate crisis",
-   "Lola's F1 entry collapses almost as soon as it begins",
-   "Lola attempts a grid return on a budget that was never going to hold"
+   "Lola to join Formula 1 grid for {next}",
+   "MasterCard Lola confirms {next} Formula 1 entry",
+   "Lola Cars set for Formula 1 return in {next}"
   ],
   "d": [
-   "A celebrated name returns to the grid on a budget that was always too thin for what the team needed.",
-   "Lola's MasterCard-backed F1 attempt arrives with ambition that its finances cannot match.",
-   "The Lola name carries real motorsport heritage, but the entry behind it is structurally underfunded from the start."
+   "Eric Broadley's outfit secures a grid slot for {next}, though the paddock questions whether the budget can sustain a full campaign.",
+   "The MasterCard-backed works team will line up on the {next} grid, with doubts already circling over the depth of its funding.",
+   "Lola Cars is coming to Formula 1 next season, though few in the paddock are convinced the money will hold for a full year."
   ],
   "b": [
    [
-    "Lola Cars, a marque with deep roots in motorsport construction, has secured a Formula 1 entry for {next} with MasterCard as primary backer. The project was assembled quickly, and concerns about the funding base emerged almost immediately as the team sought to finalise its preparations.",
-    "Lola's name is known to every follower of motorsport, but the 1997 project has been built rapidly and the gap between the budget available and what Formula 1 actually costs has been visible from an early stage."
+    "Lola Cars has been granted a Formula 1 entry for {next} under MasterCard title sponsorship, though the programme arrives with the paddock widely unconvinced that the funding, drawn from a consumer cardholder scheme, is sufficient for what a full season in the sport costs.",
+    "The MasterCard Lola works team has secured its place on the {next} Formula 1 grid, bringing Eric Broadley's respected constructor back to the top tier, yet doubts over the budget have followed the announcement from the outset, with the funding structure questioned across the paddock."
    ],
    [
-    "The team joins a grid of {grid_count} constructors. A driver line-up will be confirmed in due course.",
-    "Lola takes its place among {grid_count} constructors on the {next} grid. The question of whether it can sustain the programme through the season is already being asked."
+    "The entry swells the field to {grid_count} constructors for {next}, though the open question hanging over the team is whether a programme pulled forward a year from its original 1998 target, and developed with limited wind-tunnel running, can be sustained through a full campaign.",
+    "With Lola's confirmation, {next} will feature {grid_count} constructors, and the drivers set to lead the effort are yet to be announced; more pressing to many observers is whether the team's finances can stretch across an entire season."
    ],
    [
-    "The team said \"We believe in this project. We are working through the challenges and expect to be ready for the season.\"",
-    "Those behind the entry were measured in their public statements. \"We believe in this project. We are working through the challenges and expect to be ready for the season.\""
+    "\"We believe in this project and in what Lola represents in motorsport,\" the team stated. \"There are challenges ahead and we are working through them, but we fully expect to be on the grid and ready to race.\"",
+    "\"This is a programme we are committed to, and we are taking the steps needed to be prepared for the season,\" the team said. \"We know the questions being asked, and we intend to answer them on track.\""
    ]
   ]
  },
