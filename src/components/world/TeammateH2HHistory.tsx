@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import type { TeammateH2H, H2HRecord } from '@/lib/world/types'
 import { DriverLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 const SELF = '#00D9FF'
 const MATE = '#7C8698'
@@ -38,6 +40,7 @@ function Record({ rec }: { rec: H2HRecord }) {
 }
 
 export function TeammateH2HHistory({ records, driverName }: { records: TeammateH2H[]; driverName: string }) {
+  const card = useLiveDriverCards()
   const [open, setOpen] = useState<Set<string>>(new Set())
   if (records.length === 0) {
     return <p className="px-5 py-4 text-sm text-[#FFFFFF]">No teammate head-to-head yet.</p>
@@ -57,7 +60,7 @@ export function TeammateH2HHistory({ records, driverName }: { records: TeammateH
       {records.map((t) => (
         <div key={t.teammateId} className="rounded-xl bg-[#0F1419] border border-[#2A3142] p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <DriverLink id={t.teammateId} className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{t.teammateName}</DriverLink>
+            <DriverHover id={t.teammateId} card={card}><DriverLink id={t.teammateId} className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{t.teammateName}</DriverLink></DriverHover>
             <span className="text-xs text-[#FFFFFF] tabular-nums">{t.races} {t.races === 1 ? 'race' : 'races'} together</span>
           </div>
           <Record rec={t} />

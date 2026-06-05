@@ -4,6 +4,9 @@ import { Trophy, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import type { EndOfSeasonSummary, Driver, Team, DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import type { DriverCardResolver } from '@/components/news/LinkedText'
 
 interface Props {
   summary: EndOfSeasonSummary
@@ -59,7 +62,7 @@ function ChampionCard({ kind, name, sub }: { kind: string; name: React.ReactNode
   )
 }
 
-function MoverCard({ label, mover, up }: { label: string; mover: Mover | undefined; up: boolean }) {
+function MoverCard({ label, mover, up, card }: { label: string; mover: Mover | undefined; up: boolean; card: DriverCardResolver }) {
   const accent = up ? '#10B981' : '#DC143C'
   const Icon = up ? TrendingUp : TrendingDown
   return (
@@ -70,7 +73,7 @@ function MoverCard({ label, mover, up }: { label: string; mover: Mover | undefin
       </div>
       {mover ? (
         <>
-          <p className="font-semibold text-[#FFFFFF]"><DriverLink id={mover.driverId}>{mover.name}</DriverLink></p>
+          <p className="font-semibold text-[#FFFFFF]"><DriverHover id={mover.driverId} card={card}><DriverLink id={mover.driverId}>{mover.name}</DriverLink></DriverHover></p>
           <p className="text-xs text-[#FFFFFF] flex items-center justify-between">
             <span>{mover.teamName}</span>
             <span className="tabular-nums font-semibold" style={{ color: accent }}>
@@ -86,6 +89,7 @@ function MoverCard({ label, mover, up }: { label: string; mover: Mover | undefin
 }
 
 export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, constructorStandings }: Props) {
+  const card = useLiveDriverCards()
   const champ = driverStandings[0]
   const runnerUp = driverStandings[1]
   const wcc = constructorStandings[0]
@@ -111,7 +115,7 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
         {champ && (
           <ChampionCard
             kind={`${summary.seasonYear} World Champion`}
-            name={<DriverLink id={champ.driverId}>{champ.driverName}</DriverLink>}
+            name={<DriverHover id={champ.driverId} card={card}><DriverLink id={champ.driverId}>{champ.driverName}</DriverLink></DriverHover>}
             sub={`${champ.teamName} · ${champWins} ${champWins === 1 ? 'win' : 'wins'} · ${champ.points} pts`}
           />
         )}
@@ -137,15 +141,15 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
       {/* Season superlatives + standout prospect */}
       {(hasImproved || hasDeclined || oneToWatch) && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {hasImproved && <MoverCard label="Most Improved" mover={mostImproved} up />}
-          {hasDeclined && <MoverCard label="Steepest Decline" mover={steepestDecline} up={false} />}
+          {hasImproved && <MoverCard label="Most Improved" mover={mostImproved} up card={card} />}
+          {hasDeclined && <MoverCard label="Steepest Decline" mover={steepestDecline} up={false} card={card} />}
           {oneToWatch && (
             <div className="rounded-xl bg-[#0F1419] border border-[#2A3142] px-5 py-4">
               <div className="flex items-center gap-2 mb-2">
                 <Star size={15} className="text-[#00D9FF]" />
                 <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">One to Watch</p>
               </div>
-              <p className="font-semibold text-[#FFFFFF]"><DriverLink id={oneToWatch.id}>{oneToWatch.name}</DriverLink></p>
+              <p className="font-semibold text-[#FFFFFF]"><DriverHover id={oneToWatch.id} card={card}><DriverLink id={oneToWatch.id}>{oneToWatch.name}</DriverLink></DriverHover></p>
               <p className="text-xs text-[#FFFFFF] flex items-center justify-between">
                 <span>Free agent · age {oneToWatch.age}</span>
                 <span className="tabular-nums font-semibold text-[#00D9FF]">{oneToWatch.pace} pace</span>
@@ -168,7 +172,7 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
                 <div key={d.driverId} className="flex items-center gap-3 px-4 py-2 border-b border-[#2A3142]/50 last:border-0">
                   <span className="w-5 text-right tabular-nums text-[#FFFFFF] font-semibold">{i + 1}</span>
                   <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-                  <DriverLink id={d.driverId} className="flex-1 text-sm text-[#FFFFFF] font-medium truncate">{d.driverName}</DriverLink>
+                  <DriverHover id={d.driverId} card={card} className="flex-1 truncate min-w-0"><DriverLink id={d.driverId} className="flex-1 text-sm text-[#FFFFFF] font-medium truncate">{d.driverName}</DriverLink></DriverHover>
                   <TeamLink id={d.teamId} className="text-xs text-[#FFFFFF] truncate hidden sm:block">{d.teamName}</TeamLink>
                   <span className="w-14 text-right tabular-nums text-sm text-[#FFFFFF] font-semibold">{d.points}</span>
                 </div>

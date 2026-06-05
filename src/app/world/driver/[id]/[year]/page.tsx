@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useDriverSeason } from '@/lib/world/hooks'
@@ -16,11 +17,12 @@ export default function DriverSeasonPage() {
   const year = Number(yearStr)
   const { detail, loading } = useDriverSeason(id, year)
   const [hydrated, setHydrated] = useState(false)
+  const scrollRef = useScrollRestore<HTMLDivElement>(`driverseason:${id}:${year}:scroll`)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+    <div ref={scrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !detail && <p className="text-sm text-[#FFFFFF]">No data for this season.</p>}

@@ -8,8 +8,11 @@
 
 import React from 'react'
 import { DriverLink, TeamLink, CircuitLink } from '@/components/world/EntityLink'
+import { DriverTooltip } from '@/components/world/DriverTooltip'
 import { lastName } from '@/lib/news/util'
 import { useFollowed } from '@/lib/store/useFollowed'
+import type { Driver, DriverStanding } from '@/lib/sim/types'
+import type { DriverCareer } from '@/lib/news/engine'
 
 // A followed driver/team's name is accented + dotted-underlined wherever it appears in a story.
 const FOLLOW_HL = 'text-[#00D9FF] underline decoration-dotted decoration-[#00D9FF]/60 underline-offset-2'
@@ -80,8 +83,29 @@ export function buildNewsIndex(opts: {
   return { year: opts.year, regex, lookup }
 }
 
+// Resolves a driver id to the data a hover card needs (record + career + this season's standing). Returns
+// null for ids not on the live grid (e.g. archived-season names), so those just render as plain links.
+export type DriverCard = { driver: Driver; year: number; wdcPosition: number | null; wdcPoints?: number; career?: DriverCareer }
+export type DriverCardResolver = (id: string) => DriverCard | null
+
+export function buildDriverCardResolver(opts: {
+  drivers: Driver[]
+  driverStandings: DriverStanding[]
+  year: number
+  careers?: Record<string, DriverCareer>
+}): DriverCardResolver {
+  const byId = new Map(opts.drivers.map((d) => [d.id, d]))
+  const posOf = new Map(opts.driverStandings.map((s, i) => [s.driverId, i + 1]))
+  const ptsOf = new Map(opts.driverStandings.map((s) => [s.driverId, s.points]))
+  return (id) => {
+    const driver = byId.get(id)
+    if (!driver) return null
+    return { driver, year: opts.year, wdcPosition: posOf.get(id) ?? null, wdcPoints: ptsOf.get(id), career: opts.careers?.[id] }
+  }
+}
+
 // Render a single run of text, linking recognised names. Falls back to plain text when no index.
-export function LinkedText({ text, index }: { text: string; index: NewsIndex | null }): React.ReactElement {
+export function LinkedText({ text, index, driverCard }: { text: string; index: NewsIndex | null; driverCard?: DriverCardResolver }): React.ReactElement {
   const followed = useFollowed()
   if (!index || !index.regex || !text) return <>{text}</>
   const out: React.ReactNode[] = []
@@ -91,7 +115,13 @@ export function LinkedText({ text, index }: { text: string; index: NewsIndex | n
     const matched = m[0]
     if (start > last) out.push(text.slice(last, start))
     const t = index.lookup.get(matched)
-    if (t?.kind === 'driver') out.push(<DriverLink key={start} id={t.id} className={followed.drivers.has(t.id) ? FOLLOW_HL : ''}>{matched}</DriverLink>)
+    if (t?.kind === 'driver') {
+      const link = <DriverLink id={t.id} className={followed.drivers.has(t.id) ? FOLLOW_HL : ''}>{matched}</DriverLink>
+      const card = driverCard?.(t.id)
+      out.push(card
+        ? <DriverTooltip key={start} driver={card.driver} year={card.year} wdcPosition={card.wdcPosition} wdcPoints={card.wdcPoints} career={card.career} side="top"><span>{link}</span></DriverTooltip>
+        : <React.Fragment key={start}>{link}</React.Fragment>)
+    }
     else if (t?.kind === 'team') out.push(<TeamLink key={start} id={t.id} className={followed.teams.has(t.id) ? FOLLOW_HL : ''}>{matched}</TeamLink>)
     else if (t?.kind === 'circuit') out.push(<CircuitLink key={start} year={index.year} round={t.round}>{matched}</CircuitLink>)
     else out.push(matched)
@@ -103,11 +133,11 @@ export function LinkedText({ text, index }: { text: string; index: NewsIndex | n
 
 // A body block: blank-line-separated paragraphs, each with names linked. Mirrors the markup the
 // newsroom and home modal previously used for plain bodies.
-export function LinkedParagraphs({ text, index }: { text: string; index: NewsIndex | null }): React.ReactElement {
+export function LinkedParagraphs({ text, index, driverCard }: { text: string; index: NewsIndex | null; driverCard?: DriverCardResolver }): React.ReactElement {
   return (
     <div className="space-y-3 text-sm leading-relaxed text-[#FFFFFF]">
       {text.split(/\n\n+/).map((p, i) => (
-        <p key={i}><LinkedText text={p.trim()} index={index} /></p>
+        <p key={i}><LinkedText text={p.trim()} index={index} driverCard={driverCard} /></p>
       ))}
     </div>
   )

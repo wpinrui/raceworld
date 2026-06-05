@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRetainedState } from '@/lib/ui/retained-state'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendar2026 } from '@/data/calendar'
@@ -9,6 +11,7 @@ import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type Dri
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetAllSeasonNews, actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, type AllSeasonNews } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import EntityFilter, { type EntityValue } from '@/components/news/EntityFilter'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
@@ -31,13 +34,13 @@ export default function NewsroomPage() {
   const followedDriverIds = useSettingsStore((st) => st.followedDriverIds)
   const followedTeamIds = useSettingsStore((st) => st.followedTeamIds)
   const [hydrated, setHydrated] = useState(false)
-  const [filter, setFilter] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const [entity, setEntity] = useState<EntityValue | null>(null)
-  const [following, setFollowing] = useState(false)
-  const [allSeasons, setAllSeasons] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState<number>(s.year)
+  const [filter, setFilter] = useRetainedState<string | null>('newsroom:filter', null)
+  const [query, setQuery] = useRetainedState('newsroom:query', '')
+  const [entity, setEntity] = useRetainedState<EntityValue | null>('newsroom:entity', null)
+  const [following, setFollowing] = useRetainedState('newsroom:following', false)
+  const [allSeasons, setAllSeasons] = useRetainedState('newsroom:allSeasons', false)
+  const [selectedId, setSelectedId] = useRetainedState<string | null>('newsroom:selectedId', null)
+  const [selectedYear, setSelectedYear] = useRetainedState<number>('newsroom:selectedYear', s.year)
   const [archivedYears, setArchivedYears] = useState<number[]>([])
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
   // Roster for the selected archived season, used to hyperlink names in the article text.
@@ -52,14 +55,17 @@ export default function NewsroomPage() {
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
+  const pageScrollRef = useScrollRestore<HTMLDivElement>('newsroom:page')
+  const listScrollRef = useScrollRestore<HTMLDivElement>('newsroom:list')
+  const driverCard = useLiveDriverCards()
   useEffect(() => {
     setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
     if (typeof window !== 'undefined' && window.location.hash.length > 1) {
       const id = decodeURIComponent(window.location.hash.slice(1))
-      if (id) { setSelectedId(id); setFilter(null) }
+      if (id) { setSelectedId(id); setFilter(null); s.markNewsRead(id) }
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Discover which past seasons have news to read.
   useEffect(() => {
@@ -209,7 +215,7 @@ export default function NewsroomPage() {
     }`
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+    <div ref={pageScrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
         <div className="flex items-center justify-between gap-4">
           <h1 className="font-display text-2xl tracking-wider uppercase">Newsroom</h1>
@@ -288,16 +294,16 @@ export default function NewsroomPage() {
                 {shown.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-[#FFFFFF]">No stories match your filters.</p>
                 ) : (
-                  <div className="divide-y divide-[#2A3142] max-h-[70vh] overflow-y-auto">
+                  <div ref={listScrollRef} className="divide-y divide-[#2A3142] max-h-[70vh] overflow-y-auto">
                     {shown.map((a) => {
                       const active = a.id === effectiveId
                       return (
                         <button
                           key={`${a.year}:${a.id}`}
-                          onClick={() => setSelectedId(a.id)}
+                          onClick={() => { setSelectedId(a.id); s.markNewsRead(a.id) }}
                           className={`w-full text-left px-4 py-3 transition-colors ${active ? 'bg-[#0F1419]' : 'hover:bg-[#0F1419]/50'}`}
                         >
-                          <p className="text-sm font-semibold text-[#FFFFFF]">{a.headline}</p>
+                          <p className={`text-sm font-semibold ${s.readNewsIds.includes(a.id) ? 'text-[#9CA3AF]' : 'text-[#FFFFFF]'}`}>{a.headline}</p>
                           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
                             {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
                           </p>
@@ -312,9 +318,9 @@ export default function NewsroomPage() {
               <Panel title={selected ? `${whenLabel(selected, calendar2026.length)} · ${CATEGORY_LABELS[selected.category] ?? selected.category}` : 'Article'} className="lg:col-span-2">
                 {selected ? (
                   <article className="space-y-3">
-                    <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} /></h2>
-                    <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={selected.dek} index={index} /></p>
-                    <LinkedParagraphs text={selected.body} index={index} />
+                    <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} driverCard={driverCard} /></h2>
+                    <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={selected.dek} index={index} driverCard={driverCard} /></p>
+                    <LinkedParagraphs text={selected.body} index={index} driverCard={driverCard} />
                     {selected.entities && (selected.entities.driverIds.length + selected.entities.teamIds.length > 0) && (
                       <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#2A3142]">
                         <span className="text-[10px] uppercase tracking-widest text-[#6B7280] self-center mr-1">Filter</span>

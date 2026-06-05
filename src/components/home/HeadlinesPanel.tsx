@@ -8,7 +8,8 @@ import { Panel } from '@/components/world/ui'
 import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords } from '@/lib/news/actions'
-import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex } from '@/components/news/LinkedText'
+import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex, type DriverCardResolver } from '@/components/news/LinkedText'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
 function roundLabel(round: number, calLen: number): string {
@@ -25,7 +26,7 @@ function whenLabel(a: NewsArticle, calLen: number): string {
 
 // Modal reader for a single headline. Shows the full article and links through to the
 // newsroom (deep-linked via the URL hash, so the news tab opens on this exact story).
-function ArticleModal({ article, index, onClose }: { article: NewsArticle; index: NewsIndex | null; onClose: () => void }) {
+function ArticleModal({ article, index, driverCard, onClose }: { article: NewsArticle; index: NewsIndex | null; driverCard?: DriverCardResolver; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -52,9 +53,9 @@ function ArticleModal({ article, index, onClose }: { article: NewsArticle; index
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-3">
-          <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={article.headline} index={index} /></h2>
-          <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={article.dek} index={index} /></p>
-          <LinkedParagraphs text={article.body} index={index} />
+          <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={article.headline} index={index} driverCard={driverCard} /></h2>
+          <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={article.dek} index={index} driverCard={driverCard} /></p>
+          <LinkedParagraphs text={article.body} index={index} driverCard={driverCard} />
         </div>
 
         <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-[#2A3142]">
@@ -94,6 +95,9 @@ export function HeadlinesPanel() {
   const seasonRenewals = useSeasonStore((s) => s.seasonRenewals)
   const seasonDraft = useSeasonStore((s) => s.seasonDraft)
   const signingDayRevealed = useSeasonStore((s) => s.signingDayRevealed)
+  const markNewsRead = useSeasonStore((s) => s.markNewsRead)
+  const readNewsIds = useSeasonStore((s) => s.readNewsIds)
+  const driverCard = useLiveDriverCards()
   const [openId, setOpenId] = useState<string | null>(null)
   // Prior-season career totals from the archive; the current season is folded in from the store.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -145,10 +149,10 @@ export function HeadlinesPanel() {
             {headlines.map((h) => (
               <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
                 <button
-                  onClick={() => setOpenId(h.id)}
+                  onClick={() => { setOpenId(h.id); markNewsRead(h.id) }}
                   className="w-full text-left px-5 py-2.5 hover:bg-[#0F1419]/50 transition-colors cursor-pointer"
                 >
-                  <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
+                  <span className={`block text-sm leading-snug font-semibold ${readNewsIds.includes(h.id) ? 'text-[#9CA3AF]' : 'text-[#FFFFFF]'}`}>{h.headline}</span>
                   <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
                     {whenLabel(h, calendar2026.length)} · {CATEGORY_LABELS[h.category] ?? h.category}
                   </span>
@@ -159,7 +163,7 @@ export function HeadlinesPanel() {
         )}
       </Panel>
 
-      {open && <ArticleModal article={open} index={newsIndex} onClose={() => setOpenId(null)} />}
+      {open && <ArticleModal article={open} index={newsIndex} driverCard={driverCard} onClose={() => setOpenId(null)} />}
     </>
   )
 }

@@ -2,6 +2,8 @@
 
 import type { RaceResult, Team } from '@/lib/sim/types'
 import { DriverLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 interface Props {
   results: RaceResult[]
@@ -9,6 +11,7 @@ interface Props {
 }
 
 export function PostRacePanel({ results, teams }: Props) {
+  const card = useLiveDriverCards()
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
@@ -36,7 +39,7 @@ export function PostRacePanel({ results, teams }: Props) {
                   <td className="py-1 px-1">
                     <div className="flex items-center gap-1.5">
                       <div className="w-0.5 h-4 rounded-full" style={{ backgroundColor: team?.color ?? '#FFFFFF' }} />
-                      <DriverLink id={r.driverId} className="text-[#FFFFFF] truncate">{r.driverName}</DriverLink>
+                      <DriverHover id={r.driverId} card={card} className="truncate min-w-0"><DriverLink id={r.driverId} className="text-[#FFFFFF] truncate">{r.driverName}</DriverLink></DriverHover>
                     </div>
                   </td>
                   <td className="py-1 px-1 text-right font-bold">

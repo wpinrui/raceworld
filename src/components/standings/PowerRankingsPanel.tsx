@@ -5,6 +5,8 @@ import { Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react'
 import type { Driver, Team, RaceResult, ConstructorStanding, DriverStanding } from '@/lib/sim/types'
 import { computeDriverMediaBreakdowns } from '@/lib/sim/media-scores'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 interface Props {
   drivers: Driver[]
@@ -48,6 +50,7 @@ function Th({ k, label, right, sortKey, sortDir, onSort }: {
 }
 
 export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings, driverStandings }: Props) {
+  const card = useLiveDriverCards()
   const [godMode, setGodMode] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('media')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -134,7 +137,7 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
                 <td className="py-1.5 px-3">
                   <span className="flex items-center gap-2">
                     <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: r.teamColor }} />
-                    <DriverLink id={r.driver.id} className="text-[#FFFFFF] font-medium whitespace-nowrap">{r.driver.name}</DriverLink>
+                    <DriverHover id={r.driver.id} card={card}><DriverLink id={r.driver.id} className="text-[#FFFFFF] font-medium whitespace-nowrap">{r.driver.name}</DriverLink></DriverHover>
                   </span>
                 </td>
                 <td className="py-1.5 px-3 text-[#FFFFFF] whitespace-nowrap">

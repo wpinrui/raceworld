@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { EllipsisVertical, ChevronRight, Play } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { isOffSeason } from '@/lib/sim/types'
@@ -51,6 +52,7 @@ export default function Nav() {
   const [busy, setBusy] = useState(false)
   const [simming, setSimming] = useState(false)
   const [newsStop, setNewsStop] = useState<{ date: string; articles: NewsArticle[] } | null>(null)
+  const driverCard = useLiveDriverCards()
   // The gate is shown whenever there are pending real-world changes, unless the player dismissed it
   // ("Review later"); pressing Continue clears the dismissal so it reappears. Resolving clears the
   // pending set entirely. Derived open state, so no auto-open effect is needed.
@@ -135,7 +137,7 @@ export default function Nav() {
           const s = useSeasonStore.getState()
           const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
           const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
-          if (stop.reason === 'news') { s.setCurrentDate(stop.date); setNewsStop({ date: stop.date, articles: stop.articles }); break }
+          if (stop.reason === 'news') { s.setCurrentDate(stop.date); stop.articles.forEach((a) => s.markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
           if (stop.reason === 'race') {
             if (settings.interruptOnRaceday) { s.setCurrentDate(stop.date); break }
             const before = useSeasonStore.getState().raceResults.length
@@ -327,9 +329,9 @@ export default function Nav() {
               {newsStop.articles.map((a) => (
                 <article key={a.id} className="space-y-2">
                   <p className="text-[10px] uppercase tracking-widest text-[#00D9FF]">{CATEGORY_LABELS[a.category] ?? a.category}</p>
-                  <h2 className="font-display text-lg tracking-wide text-[#FFFFFF]"><LinkedText text={a.headline} index={newsIndex} /></h2>
-                  <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={a.dek} index={newsIndex} /></p>
-                  <LinkedParagraphs text={a.body} index={newsIndex} />
+                  <h2 className="font-display text-lg tracking-wide text-[#FFFFFF]"><LinkedText text={a.headline} index={newsIndex} driverCard={driverCard} /></h2>
+                  <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={a.dek} index={newsIndex} driverCard={driverCard} /></p>
+                  <LinkedParagraphs text={a.body} index={newsIndex} driverCard={driverCard} />
                 </article>
               ))}
             </div>

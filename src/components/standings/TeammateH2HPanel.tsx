@@ -2,6 +2,8 @@
 
 import type { RaceResult, Driver, Team } from '@/lib/sim/types'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 interface Props {
   raceResults: RaceResult[][]
@@ -107,6 +109,7 @@ function Bar({ label, leftText, rightText, leftPct, c1, c2 }: {
 }
 
 export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
+  const card = useLiveDriverCards()
   if (raceResults.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">No races completed yet — head-to-head opens after round one.</p>
   }
@@ -142,11 +145,11 @@ export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
             <div className="flex items-center gap-5 text-xs">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c1 }} />
-                <DriverLink id={a.id} className="text-[#FFFFFF]">{a.name}</DriverLink>
+                <DriverHover id={a.id} card={card}><DriverLink id={a.id} className="text-[#FFFFFF]">{a.name}</DriverLink></DriverHover>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c2 }} />
-                <DriverLink id={b.id} className="text-[#FFFFFF]">{b.name}</DriverLink>
+                <DriverHover id={b.id} card={card}><DriverLink id={b.id} className="text-[#FFFFFF]">{b.name}</DriverLink></DriverHover>
               </span>
             </div>
             <div className="space-y-2">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useRaceClassification } from '@/lib/world/hooks'
@@ -16,13 +17,14 @@ export default function RaceClassificationPage() {
   const round = Number(roundStr)
   const { classification, loading } = useRaceClassification(year, round)
   const [hydrated, setHydrated] = useState(false)
+  const scrollRef = useScrollRestore<HTMLDivElement>(`season:${year}:${round}:scroll`)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   const winnerTime = classification?.rows.find((r) => !r.dnf)?.totalTime ?? null
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+    <div ref={scrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !classification && <p className="text-sm text-[#FFFFFF]">Race not found.</p>}
