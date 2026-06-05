@@ -61,7 +61,7 @@ export default function NewsroomPage() {
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
     if (typeof window !== 'undefined' && window.location.hash.length > 1) {
       const id = decodeURIComponent(window.location.hash.slice(1))
-      if (id) { setSelectedId(id); setFilter(null) }
+      if (id) { setSelectedId(id); setFilter(null); s.markNewsRead(id) }
     }
   }, [])
 
@@ -298,10 +298,10 @@ export default function NewsroomPage() {
                       return (
                         <button
                           key={`${a.year}:${a.id}`}
-                          onClick={() => setSelectedId(a.id)}
+                          onClick={() => { setSelectedId(a.id); s.markNewsRead(a.id) }}
                           className={`w-full text-left px-4 py-3 transition-colors ${active ? 'bg-[#0F1419]' : 'hover:bg-[#0F1419]/50'}`}
                         >
-                          <p className="text-sm font-semibold text-[#FFFFFF]">{a.headline}</p>
+                          <p className={`text-sm font-semibold ${s.readNewsIds.includes(a.id) ? 'text-[#9CA3AF]' : 'text-[#FFFFFF]'}`}>{a.headline}</p>
                           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
                             {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
                           </p>

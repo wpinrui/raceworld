@@ -135,7 +135,7 @@ export default function Nav() {
           const s = useSeasonStore.getState()
           const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
           const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
-          if (stop.reason === 'news') { s.setCurrentDate(stop.date); setNewsStop({ date: stop.date, articles: stop.articles }); break }
+          if (stop.reason === 'news') { s.setCurrentDate(stop.date); stop.articles.forEach((a) => s.markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
           if (stop.reason === 'race') {
             if (settings.interruptOnRaceday) { s.setCurrentDate(stop.date); break }
             const before = useSeasonStore.getState().raceResults.length

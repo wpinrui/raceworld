@@ -248,6 +248,9 @@ interface SeasonStore {
   seasonContractWatch: ContractWatch[]
   // How many Signing Day signings the player has revealed, persisted so revisiting shows the same state.
   signingDayRevealed: number
+  // Ids of news articles the player has opened (read), so the feed can dim them. Persisted across the
+  // playthrough; cleared on a fresh game.
+  readNewsIds: string[]
 
   // Computed
   driverStandings: DriverStanding[]
@@ -282,6 +285,7 @@ interface SeasonStore {
   runPreSeasonTesting: () => void
   setDbSeasonId: (id: number) => void
   setSigningDayRevealed: (n: number) => void
+  markNewsRead: (id: string) => void
   startNewSeason: () => void
   resetToIdle: () => void
   loadConstructorHistory: (history: ConstructorSeasonRecord[]) => void
@@ -314,6 +318,7 @@ export const useSeasonStore = create<SeasonStore>()(
       seasonRenewals: [],
       seasonContractWatch: [],
       signingDayRevealed: 0,
+      readNewsIds: [],
       driverStandings: [],
       constructorStandings: [],
 
@@ -865,6 +870,7 @@ export const useSeasonStore = create<SeasonStore>()(
 
       setDbSeasonId: (id) => set({ dbSeasonId: id }),
       setSigningDayRevealed: (n) => set({ signingDayRevealed: n }),
+      markNewsRead: (id) => set((s) => (s.readNewsIds.includes(id) ? s : { readNewsIds: [...s.readNewsIds, id] })),
 
       startNewSeason: () => {
         const { pendingNextSeasonState, year, constructorHistory } = get()
@@ -957,6 +963,7 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonRenewals: [],
           seasonContractWatch: [],
           signingDayRevealed: 0,
+          readNewsIds: [],
           driverStandings: computeDriverStandings(drivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, drivers, []),
         })
@@ -990,6 +997,7 @@ export const useSeasonStore = create<SeasonStore>()(
         seasonRenewals: state.seasonRenewals,
         seasonContractWatch: state.seasonContractWatch,
         signingDayRevealed: state.signingDayRevealed,
+        readNewsIds: state.readNewsIds,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return

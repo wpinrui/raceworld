@@ -94,6 +94,8 @@ export function HeadlinesPanel() {
   const seasonRenewals = useSeasonStore((s) => s.seasonRenewals)
   const seasonDraft = useSeasonStore((s) => s.seasonDraft)
   const signingDayRevealed = useSeasonStore((s) => s.signingDayRevealed)
+  const markNewsRead = useSeasonStore((s) => s.markNewsRead)
+  const readNewsIds = useSeasonStore((s) => s.readNewsIds)
   const [openId, setOpenId] = useState<string | null>(null)
   // Prior-season career totals from the archive; the current season is folded in from the store.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -145,10 +147,10 @@ export function HeadlinesPanel() {
             {headlines.map((h) => (
               <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
                 <button
-                  onClick={() => setOpenId(h.id)}
+                  onClick={() => { setOpenId(h.id); markNewsRead(h.id) }}
                   className="w-full text-left px-5 py-2.5 hover:bg-[#0F1419]/50 transition-colors cursor-pointer"
                 >
-                  <span className="block text-sm leading-snug font-semibold text-[#FFFFFF]">{h.headline}</span>
+                  <span className={`block text-sm leading-snug font-semibold ${readNewsIds.includes(h.id) ? 'text-[#9CA3AF]' : 'text-[#FFFFFF]'}`}>{h.headline}</span>
                   <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
                     {whenLabel(h, calendar2026.length)} · {CATEGORY_LABELS[h.category] ?? h.category}
                   </span>
