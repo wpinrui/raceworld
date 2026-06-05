@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Pencil, Check, Lock } from 'lucide-react'
+import { Pencil, Check } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import { useDriverCareer, useEntityHonours, useDriverSeason } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -42,6 +42,24 @@ function HeaderStat({ label, value, tier = 3 }: { label: string; value: number; 
       <p className={`${tier === 3 ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-widest text-[#FFFFFF] mt-1`}>{label}</p>
     </div>
   )
+}
+
+// Confidence (0-10) -> a one-word morale band for the at-a-glance label.
+function moraleBand(c: number): string {
+  if (c >= 8.5) return 'Soaring'
+  if (c >= 6.5) return 'Assured'
+  if (c >= 4.5) return 'Steady'
+  if (c >= 2.5) return 'Fragile'
+  return 'Shaken'
+}
+
+// Signed confidence streak -> a terse direction line. |streak| = consecutive same-direction
+// races; sign = over (rising) / under (declining). 0 = no streak yet.
+function confidenceTrend(streak: number): string {
+  const n = Math.abs(streak)
+  if (n === 0) return 'Holding steady.'
+  const races = n === 1 ? 'race' : 'races'
+  return streak > 0 ? `${n} ${races} on the rise.` : `${n} ${races} in decline.`
 }
 
 // Photo URL override with a live preview, so a link the browser cannot load as an image
@@ -357,25 +375,28 @@ export default function DriverPage() {
                     </Panel>
                   )}
 
-                  {/* Confidence — planned mechanic; the slot is reserved at the same size as the season card. */}
-                  {a && (
-                    <Panel title="Confidence" flush fill className="lg:col-span-4">
-                      <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
-                        <div className="text-center">
-                          <p className="text-lg font-bold tabular-nums text-[#6B7280]">—</p>
-                          <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Confidence</p>
+                  {/* Confidence — morale rating biasing race form, vs the teammate each round (#58). */}
+                  {a && (() => {
+                    const conf = liveDriver?.confidence ?? 5
+                    const streak = liveDriver?.confidenceStreak ?? 0
+                    return (
+                      <Panel title="Confidence" flush fill className="lg:col-span-4">
+                        <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
+                          <div className="text-center">
+                            <p className="text-lg font-bold tabular-nums text-[#FFFFFF]">{conf.toFixed(1)}</p>
+                            <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Confidence</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-lg font-bold text-[#FFFFFF]">{moraleBand(conf)}</p>
+                            <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Morale</p>
+                          </div>
                         </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold tabular-nums text-[#6B7280]">—</p>
-                          <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Morale</p>
+                        <div className="px-4 py-3 text-sm text-[#FFFFFF]">
+                          {confidenceTrend(streak)}
                         </div>
-                      </div>
-                      <div className="px-4 py-3 flex items-center gap-2 text-sm text-[#FFFFFF]">
-                        <Lock size={14} className="text-[#6B7280]" />
-                        Coming in a future update.
-                      </div>
-                    </Panel>
-                  )}
+                      </Panel>
+                    )
+                  })()}
 
                   {/* Biography */}
                   <Panel title="Biography" fill className="lg:col-span-4">
