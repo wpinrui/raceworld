@@ -3158,8 +3158,10 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
   const slate = [...freeAgents]
     .sort((a, b) => (scoreOf.get(b.id) ?? 0) - (scoreOf.get(a.id) ?? 0) || a.id.localeCompare(b.id))
     .slice(0, ROUNDS.length)
+  // Fewer than 8 free agents -> fill the LATEST windows (start later in the season), not the earliest.
+  const startAt = ROUNDS.length - slate.length
   for (let i = 0; i < slate.length; i++) {
-    const r = ROUNDS[i]
+    const r = ROUNDS[startAt + i]
     if (r > ctx.completedRounds) continue
     const fa = slate[i]
     const seed = `watch-${ctx.year}-${r}-${fa.id}`
