@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRetainedState } from '@/lib/ui/retained-state'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Pencil, Check, Lock } from 'lucide-react'
@@ -93,14 +94,14 @@ export default function DriverPage() {
   const extendContract = useSeasonStore((s) => s.extendContract)
   const assignDriverToTeam = useSeasonStore((s) => s.assignDriverToTeam)
   const [assignTeam, setAssignTeam] = useState('')
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useRetainedState<Tab>(`driver:${id}:tab`, 'overview')
   // Results tab accordion: which sections are expanded (an open section fills + scrolls internally).
   const [openCareerStats, setOpenCareerStats] = useState(true)
   const [openResults, setOpenResults] = useState(true)
   const [editing, setEditing] = useState(false)
   // Form tab: which season's full-season form to show. Defaults to the driver's most recent season;
   // useDriverSeason transparently builds the live season from the store and fetches archived ones.
-  const [formYear, setFormYear] = useState<number | null>(null)
+  const [formYear, setFormYear] = useRetainedState<number | null>(`driver:${id}:formYear`, null)
   const careerYears = career ? [...new Set(career.seasons.map((s) => s.year))].sort((x, y) => y - x) : []
   const effectiveFormYear = formYear ?? careerYears[0] ?? seasonYear
   const { detail: formDetail, loading: formLoading } = useDriverSeason(id, effectiveFormYear)

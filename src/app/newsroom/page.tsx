@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRetainedState } from '@/lib/ui/retained-state'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendar2026 } from '@/data/calendar'
@@ -31,13 +33,13 @@ export default function NewsroomPage() {
   const followedDriverIds = useSettingsStore((st) => st.followedDriverIds)
   const followedTeamIds = useSettingsStore((st) => st.followedTeamIds)
   const [hydrated, setHydrated] = useState(false)
-  const [filter, setFilter] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const [entity, setEntity] = useState<EntityValue | null>(null)
-  const [following, setFollowing] = useState(false)
-  const [allSeasons, setAllSeasons] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState<number>(s.year)
+  const [filter, setFilter] = useRetainedState<string | null>('newsroom:filter', null)
+  const [query, setQuery] = useRetainedState('newsroom:query', '')
+  const [entity, setEntity] = useRetainedState<EntityValue | null>('newsroom:entity', null)
+  const [following, setFollowing] = useRetainedState('newsroom:following', false)
+  const [allSeasons, setAllSeasons] = useRetainedState('newsroom:allSeasons', false)
+  const [selectedId, setSelectedId] = useRetainedState<string | null>('newsroom:selectedId', null)
+  const [selectedYear, setSelectedYear] = useRetainedState<number>('newsroom:selectedYear', s.year)
   const [archivedYears, setArchivedYears] = useState<number[]>([])
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
   // Roster for the selected archived season, used to hyperlink names in the article text.
@@ -52,6 +54,8 @@ export default function NewsroomPage() {
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
+  const pageScrollRef = useScrollRestore<HTMLDivElement>('newsroom:page')
+  const listScrollRef = useScrollRestore<HTMLDivElement>('newsroom:list')
   useEffect(() => {
     setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
@@ -209,7 +213,7 @@ export default function NewsroomPage() {
     }`
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+    <div ref={pageScrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
         <div className="flex items-center justify-between gap-4">
           <h1 className="font-display text-2xl tracking-wider uppercase">Newsroom</h1>
@@ -288,7 +292,7 @@ export default function NewsroomPage() {
                 {shown.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-[#FFFFFF]">No stories match your filters.</p>
                 ) : (
-                  <div className="divide-y divide-[#2A3142] max-h-[70vh] overflow-y-auto">
+                  <div ref={listScrollRef} className="divide-y divide-[#2A3142] max-h-[70vh] overflow-y-auto">
                     {shown.map((a) => {
                       const active = a.id === effectiveId
                       return (

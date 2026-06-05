@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRetainedState } from '@/lib/ui/retained-state'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Pencil, Check } from 'lucide-react'
@@ -33,16 +35,17 @@ export default function TeamPage() {
   // Only editable while the season is running: upgrades are delivered during races, and
   // startNewSeason re-rolls every dev plan from scratch, so off-season edits wouldn't survive.
   const upgradeEditable = useSeasonStore((s) => !isOffSeason(s.phase))
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useRetainedState<Tab>(`team:${id}:tab`, 'overview')
   const [editing, setEditing] = useState(false)
   const [hydrated, setHydrated] = useState(false)
+  const scrollRef = useScrollRestore<HTMLDivElement>(`team:${id}:scroll`)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   const inputClass = 'w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+    <div ref={scrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-5">
         {loading && <p className="text-sm text-[#FFFFFF] animate-pulse">Loading…</p>}
         {!loading && !career && <p className="text-sm text-[#FFFFFF]">Team not found.</p>}

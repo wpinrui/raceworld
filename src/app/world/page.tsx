@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useWorldOverview } from '@/lib/world/hooks'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
@@ -36,6 +37,7 @@ export default function WorldPage() {
   const season = useSeasonStore()
   const { data, loading } = useWorldOverview()
   const [hydrated, setHydrated] = useState(false)
+  const scrollRef = useScrollRestore<HTMLDivElement>('world:scroll')
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
@@ -50,7 +52,7 @@ export default function WorldPage() {
   const teamColor = (id: string) => season.teams.find((t) => t.id === id)?.color ?? '#6B7280'
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+    <div ref={scrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
       <div className="px-4 py-6 space-y-6">
         {/* Masthead */}
         <div className="rounded-xl bg-[#1E2431] border border-[#00D9FF]/30 p-5">

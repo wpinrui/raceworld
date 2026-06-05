@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRetainedState } from '@/lib/ui/retained-state'
+import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { Trophy } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
@@ -66,15 +68,16 @@ interface ArchivedView {
 
 export default function StandingsPage() {
   const season = useSeasonStore()
-  const [tab, setTab] = useState<Tab>('drivers')
+  const [tab, setTab] = useRetainedState<Tab>('standings:tab', 'drivers')
   const [archivedSeasons, setArchivedSeasons] = useState<DbSeason[]>([])
   const [selectedArchive, setSelectedArchive] = useState<ArchivedView | null>(null)
   const [loadingArchive, setLoadingArchive] = useState(false)
   const [allTimeDrivers, setAllTimeDrivers] = useState<AllTimeDriverStat[]>([])
   const [allTimeTeams, setAllTimeTeams] = useState<AllTimeTeamStat[]>([])
-  const [openDrivers, setOpenDrivers] = useState(true)
-  const [openTeams, setOpenTeams] = useState(true)
+  const [openDrivers, setOpenDrivers] = useRetainedState('standings:openDrivers', true)
+  const [openTeams, setOpenTeams] = useRetainedState('standings:openTeams', true)
   const [hydrated, setHydrated] = useState(false)
+  const scrollRef = useScrollRestore<HTMLDivElement>(`standings:scroll:${tab}`)
 
   // Nationality by id for the all-time flags — archived rows carry no nationality, so resolve from the
   // historical dataset (covers teams/drivers that have since dropped off the grid) and the 2026 grid,
@@ -228,7 +231,7 @@ export default function StandingsPage() {
 
       {/* Content area — fixed app layout: it scrolls, the page never does. The All-Time tab fits the
           viewport via an accordion whose open table scrolls internally. */}
-      <div className={`flex-1 min-h-0 max-w-full px-4 ${tab === 'alltime' ? 'pb-4 flex flex-col' : 'pb-6 overflow-y-auto'}`}>
+      <div ref={scrollRef} className={`flex-1 min-h-0 max-w-full px-4 ${tab === 'alltime' ? 'pb-4 flex flex-col' : 'pb-6 overflow-y-auto'}`}>
 
         {/* Driver standings */}
         {tab === 'drivers' && (
