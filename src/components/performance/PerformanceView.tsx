@@ -163,9 +163,11 @@ export function PerformanceView() {
             {orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => (
               <div key={t.id} className="flex flex-col gap-1 min-w-0">
                 <Chip on={selected.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(selected, setSelected, t.id)} />
-                {(driversByTeam.get(t.id) ?? []).map((d) => (
-                  <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />
-                ))}
+                <div className="grid grid-cols-2 gap-1">
+                  {(driversByTeam.get(t.id) ?? []).map((d) => (
+                    <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
