@@ -41,7 +41,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       drivers: drivers.map((d) => ({ ...d })),
       teams: teams.map((t) => ({ ...t })),
       selectedCircuitId: circuitId,
-      forms: rollForms(drivers.map((d) => d.id)),
+      forms: rollForms(drivers),
       godModeDriverId: stillExists ? godModeDriverId : null,
     })
   },
@@ -92,7 +92,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       drivers: nextDrivers,
       teams: teams ? teams.map((t) => ({ ...t })) : get().teams,
       selectedCircuitId: circuitId ?? get().selectedCircuitId,
-      forms: rollForms(nextDrivers.map((d) => d.id)),
+      forms: rollForms(nextDrivers),
     })
   },
 }))

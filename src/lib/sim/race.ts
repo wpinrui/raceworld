@@ -16,11 +16,15 @@ import { computeLapTime } from './engine'
 import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
 import { sampleNormal } from './rng-utils'
+import { confidenceFormMean } from './race-results'
 
-export function rollForms(driverIds: string[]): Record<string, number> {
+// Roll each driver's pre-race form. The roll mean is set by the driver's confidence
+// (2 + 0.6c, so c=5 -> mean 5), sampled Normal(mean, 1.8) clamped to [0, 10] (issue #58).
+export function rollForms(drivers: Driver[]): Record<string, number> {
   const forms: Record<string, number> = {}
-  for (const id of driverIds) {
-    forms[id] = Math.min(10, Math.max(0, sampleNormal(5, 1.8, Math.random)))
+  for (const driver of drivers) {
+    const mean = confidenceFormMean(driver.confidence)
+    forms[driver.id] = Math.min(10, Math.max(0, sampleNormal(mean, 1.8, Math.random)))
   }
   return forms
 }

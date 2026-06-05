@@ -21,6 +21,7 @@ import { calendar2026 } from '@/data/calendar'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
+import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
 import { runDraft, negotiateRenewals, assessExpiringContracts, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
@@ -554,6 +555,10 @@ export const useSeasonStore = create<SeasonStore>()(
 
         // Driver development applies after each race.
         let { updatedDrivers } = applyRaceProgression(drivers, Math.random)
+
+        // Confidence (morale) updates after each race, off this round's results vs each
+        // driver's teammate. Uses pre-race confidence (progression doesn't touch it).
+        updatedDrivers = applyConfidenceUpdate(updatedDrivers, results)
 
         // Phase 1 of the driver market plays out in-season: a contract watch at round 15, then renewals
         // at round 18. Both compare each expiring driver's grid-wide media standing against their team's
