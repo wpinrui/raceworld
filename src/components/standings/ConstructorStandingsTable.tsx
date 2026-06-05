@@ -4,6 +4,8 @@ import { Star } from 'lucide-react'
 import type { ConstructorStanding, Driver, Team } from '@/lib/sim/types'
 import { ResultCell } from './ResultCell'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useFollowed } from '@/lib/store/useFollowed'
 
 interface Props {
@@ -15,6 +17,7 @@ interface Props {
 }
 
 export function ConstructorStandingsTable({ standings, drivers, teams, totalRounds, completedRounds }: Props) {
+  const card = useLiveDriverCards()
   const followed = useFollowed()
   return (
     <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
@@ -70,7 +73,7 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
                   )}
                   <td className="py-1.5 px-3 text-xs whitespace-nowrap">
                     <span className="inline-flex items-center gap-1">
-                      <DriverLink id={driver.id} className={followed.drivers.has(driver.id) ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}>{driver.name}</DriverLink>
+                      <DriverHover id={driver.id} card={card}><DriverLink id={driver.id} className={followed.drivers.has(driver.id) ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}>{driver.name}</DriverLink></DriverHover>
                       {followed.drivers.has(driver.id) && <Star size={10} className="fill-[#00D9FF] text-[#00D9FF] shrink-0" />}
                     </span>
                   </td>

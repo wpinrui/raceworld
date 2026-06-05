@@ -5,10 +5,13 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 // A single tabbed standings view (Drivers / Constructors) that fills its cell and scrolls internally,
 // so the home screen fits the viewport without the page scrolling.
 export function CompactStandings() {
+  const card = useLiveDriverCards()
   const driverStandings = useSeasonStore((s) => s.driverStandings)
   const constructorStandings = useSeasonStore((s) => s.constructorStandings)
   const teams = useSeasonStore((s) => s.teams)
@@ -46,7 +49,7 @@ export function CompactStandings() {
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="w-5 text-right tabular-nums text-[#FFFFFF]">{i + 1}</span>
                     <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: teamColor(d.teamId) }} />
-                    <DriverLink id={d.driverId} className="text-[#FFFFFF] truncate">{d.driverName}</DriverLink>
+                    <DriverHover id={d.driverId} card={card} className="truncate min-w-0"><DriverLink id={d.driverId} className="text-[#FFFFFF] truncate">{d.driverName}</DriverLink></DriverHover>
                   </span>
                   <span className="tabular-nums font-semibold text-[#FFFFFF] shrink-0">{d.points}</span>
                 </li>

@@ -17,11 +17,11 @@ export default function RaceClassificationPage() {
   const round = Number(roundStr)
   const { classification, loading } = useRaceClassification(year, round)
   const [hydrated, setHydrated] = useState(false)
+  const scrollRef = useScrollRestore<HTMLDivElement>(`season:${year}:${round}:scroll`)
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   const winnerTime = classification?.rows.find((r) => !r.dnf)?.totalTime ?? null
-  const scrollRef = useScrollRestore<HTMLDivElement>(`season:${year}:${round}:scroll`)
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">

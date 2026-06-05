@@ -6,6 +6,8 @@ import { calendar2026 } from '@/data/calendar'
 import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
 import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { positionPalette } from '@/components/world/pills'
 import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
 import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
@@ -144,6 +146,7 @@ function OffSeasonReview() {
 }
 
 export function PunditPredictions() {
+  const card = useLiveDriverCards()
   const phase = useSeasonStore((s) => s.phase)
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
@@ -171,9 +174,11 @@ export function PunditPredictions() {
           <li key={p.driver.id} className="flex items-center gap-3 border-b border-[#2A3142] px-5 py-2 last:border-b-0">
             <span className="w-6 text-sm font-bold tabular-nums text-[#FFFFFF]">P{i + 1}</span>
             <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: p.team.color }} />
-            <DriverLink id={p.driver.id} className="min-w-0 flex-1 truncate text-sm font-semibold text-[#FFFFFF]">
-              {p.driver.name}
-            </DriverLink>
+            <DriverHover id={p.driver.id} card={card} className="min-w-0 flex-1 truncate">
+              <DriverLink id={p.driver.id} className="min-w-0 flex-1 truncate text-sm font-semibold text-[#FFFFFF]">
+                {p.driver.name}
+              </DriverLink>
+            </DriverHover>
             {p.trend !== 0 && (
               <span className={`text-[10px] font-bold tabular-nums ${p.trend > 0 ? 'text-[#10B981]' : 'text-[#DC143C]'}`}>
                 {p.trend > 0 ? `▲${p.trend}` : `▼${-p.trend}`}

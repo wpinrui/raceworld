@@ -4,6 +4,8 @@ import { Star } from 'lucide-react'
 import type { DriverStanding, Team } from '@/lib/sim/types'
 import { ResultCell } from './ResultCell'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useFollowed } from '@/lib/store/useFollowed'
 
 interface Props {
@@ -15,6 +17,7 @@ interface Props {
 
 export function DriverStandingsTable({ standings, teams, totalRounds, completedRounds }: Props) {
   const followed = useFollowed()
+  const card = useLiveDriverCards()
   return (
     <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
       <table className="w-full border-collapse text-sm">
@@ -47,7 +50,7 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
                 <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
                   <div className="flex items-center gap-2">
                     <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
-                    <DriverLink id={standing.driverId} className={`font-semibold whitespace-nowrap ${isFollowed ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{standing.driverName}</DriverLink>
+                    <DriverHover id={standing.driverId} card={card}><DriverLink id={standing.driverId} className={`font-semibold whitespace-nowrap ${isFollowed ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{standing.driverName}</DriverLink></DriverHover>
                     {isFollowed && <Star size={11} className="fill-[#00D9FF] text-[#00D9FF] shrink-0" />}
                   </div>
                 </td>

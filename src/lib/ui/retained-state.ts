@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 // In-session retained UI state. Behaves like useState, but the value is kept in a module-level store
 // keyed by a string, so it SURVIVES the component unmounting and remounting while the player browses
@@ -15,22 +15,23 @@ const store = new Map<string, unknown>()
 export function useRetainedState<T>(key: string, initial: T): [T, (value: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => (store.has(key) ? (store.get(key) as T) : initial))
 
-  // If the key changes while the component stays mounted (e.g. navigating between two driver pages that
-  // share the same route component), swap to the new key's retained value. Setting state during render
-  // is the React-sanctioned way to adjust state when an input changes; it's guarded, so it can't loop.
-  const keyRef = useRef(key)
-  if (keyRef.current !== key) {
-    keyRef.current = key
+  // When the key changes while the component stays mounted (e.g. navigating between two driver pages
+  // that share the route component), swap to the new key's retained value. Tracking the previous key in
+  // STATE and adjusting during render is the React-sanctioned pattern for this; it's guarded, so it
+  // cannot loop.
+  const [prevKey, setPrevKey] = useState(key)
+  if (key !== prevKey) {
+    setPrevKey(key)
     setValue(store.has(key) ? (store.get(key) as T) : initial)
   }
 
   const set = useCallback((next: T | ((prev: T) => T)) => {
     setValue((prev) => {
       const resolved = typeof next === 'function' ? (next as (p: T) => T)(prev) : next
-      store.set(keyRef.current, resolved)
+      store.set(key, resolved)
       return resolved
     })
-  }, [])
+  }, [key])
 
   return [value, set]
 }

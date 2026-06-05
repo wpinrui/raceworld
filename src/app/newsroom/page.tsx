@@ -65,7 +65,7 @@ export default function NewsroomPage() {
       const id = decodeURIComponent(window.location.hash.slice(1))
       if (id) { setSelectedId(id); setFilter(null); s.markNewsRead(id) }
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Discover which past seasons have news to read.
   useEffect(() => {
