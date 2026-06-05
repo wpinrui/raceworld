@@ -59,8 +59,7 @@ export function RealWorldChangesModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-xl">
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
-          <span className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Real-World Changes · {toYear}</span>
-          <span className="text-[10px] uppercase tracking-widest text-[#00D9FF]">Grid update</span>
+          <span className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Upcoming Team Changes for Next Season ({toYear})</span>
         </div>
 
         <div className="flex-1 overflow-y-auto divide-y divide-[#2A3142]">
