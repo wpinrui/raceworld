@@ -52,8 +52,8 @@ export default function HomePage() {
 
           {/* Right: tabbed standings over the car-development chart, each scrolling internally. */}
           <div className="flex flex-col gap-3 min-h-0">
-            <div className="flex-[3] min-h-0"><CompactStandings /></div>
-            <div className="flex-[2] min-h-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden flex flex-col">
+            <div className="flex-[5] min-h-0"><CompactStandings /></div>
+            <div className="flex-[4] min-h-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden flex flex-col">
               <p className="shrink-0 text-[10px] uppercase tracking-widest text-[#FFFFFF] px-5 py-2.5 border-b border-[#2A3142]">Car Development</p>
               <div className="flex-1 min-h-0"><CarDevelopmentChart teams={teams} history={carPaceHistory} /></div>
             </div>
