@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
 import { Panel } from '@/components/world/ui'
-import { generateNews, foldLiveSeason, foldLiveSeasonTeams, CATEGORY_LABELS, type NewsContext, type NewsArticle, type DriverCareer, type TeamCareer, type RecordsContext } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type RecordsContext } from '@/lib/news/engine'
+import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetSeasonRecords } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex } from '@/components/news/LinkedText'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
@@ -88,6 +89,9 @@ export function HeadlinesPanel() {
   const allUpgradeEvents = useSeasonStore((s) => s.allUpgradeEvents)
   const constructorHistory = useSeasonStore((s) => s.constructorHistory)
   const endOfSeasonSummary = useSeasonStore((s) => s.endOfSeasonSummary)
+  const seasonContractWatch = useSeasonStore((s) => s.seasonContractWatch)
+  const seasonRenewals = useSeasonStore((s) => s.seasonRenewals)
+  const seasonDraft = useSeasonStore((s) => s.seasonDraft)
   const [openId, setOpenId] = useState<string | null>(null)
   // Prior-season career totals from the archive; the current season is folded in from the store.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -100,18 +104,16 @@ export function HeadlinesPanel() {
   }, [year])
 
   const headlines = useMemo(() => {
-    const ctx: NewsContext = {
-      year, phase, completedRounds: raceResults.length, drivers, teams, raceResults,
-      upgradeEvents: allUpgradeEvents,
-      constructorHistory, endOfSeason: endOfSeasonSummary, calendar: calendar2026, live: true,
-      records,
-      careers: foldLiveSeason(careerBase, year, raceResults, endOfSeasonSummary?.driverChampion),
-      teamCareers: foldLiveSeasonTeams(teamCareerBase, raceResults),
-    }
+    // Use the SAME shared builder as the newsroom and the Continue loop, so the home feed can never
+    // drift from them (it previously omitted the market beats: contract watch / renewals / draft).
+    const ctx = buildLiveNewsContext(
+      { year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, seasonContractWatch, seasonRenewals, seasonDraft },
+      careerBase, teamCareerBase, records,
+    )
     // The feed is already newest-first (round desc, then priority); show the most recent 20
     // and let the panel scroll.
     return generateNews(ctx).slice(0, 20)
-  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, careerBase, teamCareerBase, records])
+  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, seasonContractWatch, seasonRenewals, seasonDraft, careerBase, teamCareerBase, records])
 
   // Name-to-world-page matcher for hyperlinking the open article (home feed is always the live season).
   const newsIndex = useMemo(() => buildNewsIndex({
@@ -131,11 +133,11 @@ export function HeadlinesPanel() {
 
   return (
     <>
-      <Panel title={title} flush>
+      <Panel title={title} flush fill>
         {headlines.length === 0 ? (
           <p className="px-5 py-3 text-sm text-[#FFFFFF]">No headlines yet. Run a race and the newsroom will fill up.</p>
         ) : (
-          <ul className="max-h-[17.5rem] overflow-y-auto">
+          <ul>
             {headlines.map((h) => (
               <li key={h.id} className="border-b border-[#2A3142] last:border-b-0">
                 <button
