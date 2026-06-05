@@ -67,11 +67,12 @@ export function runQualifying(
   const eliminatedInQ1: string[] = []
   const eliminatedInQ2: string[] = []
 
-  // Determine group sizes
+  // Determine group sizes. Q3 always holds exactly 10. The (totalDrivers - 10) eliminations are split as
+  // evenly as possible between Q1 and Q2 (the canonical even-grid case is (x - 10) / 2 each); Q1 takes the
+  // larger half. Q2's own cut (below) then always reduces the field to 10, whatever the grid size.
   const totalDrivers = drivers.length
-  // Q1: all drivers; eliminate bottom (totalDrivers - 15) to get 15 for Q2
-  // Q2: 15 remaining; eliminate bottom 5 to get 10 for Q3
-  const q1Eliminate = Math.max(0, totalDrivers - 15)
+  const eliminateTotal = Math.max(0, totalDrivers - 10)
+  const q1Eliminate = Math.ceil(eliminateTotal / 2)
 
   // --- Q1 ---
   const q1SessionLaps: QualifyingLap[] = []
