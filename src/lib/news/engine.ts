@@ -2586,7 +2586,7 @@ function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: 
     top_driver_feat: feat,
     last_driver: lastDriverName,
     seatless: w(seatlessCount, 'driver', 'drivers'), seatless_count: seatlessCount,
-    final_drivers: teamDrivers.map((d) => lastName(d.driverName)).join(' and '),
+    final_drivers: listJoin(teamDrivers.map((d) => lastName(d.driverName))),
     ...pr,
   }
   return { next, year, entry_year: next, grid_count: gridCount, ...rec, ...extra }

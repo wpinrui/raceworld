@@ -939,8 +939,8 @@
     "The record across {stint_seasons} {stint_seasons_word} reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}, a best finish of {best_finish}."
    ],
    [
-    "{seatless_count} {seatless} are now without a seat. There will be no farewell season and no rebranded successor, just a quiet exit from the back of the paddock.",
-    "{seatless_count} {seatless} enter the market. The Forti chapter closes without fanfare, a team that kept going longer than its finances could comfortably support."
+    "{final_drivers} are now without a seat. There will be no farewell season and no rebranded successor, just a quiet exit from the back of the paddock.",
+    "{final_drivers} enter the market. The Forti chapter closes without fanfare, a team that kept going longer than its finances could comfortably support."
    ],
    [
     "A figure close to the team reflected \"We gave everything we had every single weekend. I have no regrets, only gratitude to everyone who kept those cars rolling.\"",
@@ -969,8 +969,8 @@
     "The record across {stint_seasons} {stint_seasons_word} reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}. {top_driver} {top_driver_feat} across that brief spell."
    ],
    [
-    "{seatless_count} {seatless} find themselves without a drive. The whole episode lasted barely longer than the runway it needed.",
-    "{seatless_count} {seatless} are now on the market. Of all the short F1 campaigns this one stands out for the speed of its conclusion."
+    "{final_drivers} find themselves without a drive. The whole episode lasted barely longer than the runway it needed.",
+    "{final_drivers} are now on the market. Of all the short F1 campaigns this one stands out for the speed of its conclusion."
    ],
    [
     "Someone close to the project reflected \"The plan was ambitious. Looking back, I can see exactly where the cracks were. We just couldn't see them quickly enough at the time.\"",
@@ -999,8 +999,8 @@
     "The lineage's record from the Ligier origins through the Prost chapter reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word} across {stint_seasons} {stint_seasons_word}. {top_driver} {top_driver_feat}."
    ],
    [
-    "{seatless_count} {seatless} enter the market without a drive. The Prost project was one of Formula 1's more storied attempts to turn a champion's prestige into a lasting team, and it did not survive.",
-    "{seatless_count} {seatless} are searching for seats. The team Prost built on his name and his four titles has not found the footing it needed to last."
+    "{final_drivers} enter the market without a drive. The Prost project was one of Formula 1's more storied attempts to turn a champion's prestige into a lasting team, and it did not survive.",
+    "{final_drivers} are searching for seats. The team Prost built on his name and his four titles has not found the footing it needed to last."
    ],
    [
     "A team member reflected \"Alain gave everything he had trying to keep this alive. We all did. Some projects don't get the ending they deserve, and this was one of them.\"",
@@ -1029,8 +1029,8 @@
     "From Footwork to Arrows, the lineage covered {stint_seasons} {stint_seasons_word} and built a record of {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}, a best finish of {best_finish}. {top_driver} {top_driver_feat}."
    ],
    [
-    "{seatless_count} {seatless} are left looking for seats. The closure leaves behind a team that was, for long stretches of its life, a genuine midfield competitor.",
-    "{seatless_count} {seatless} enter the market. The Arrows name had been on the grid long enough that its absence will be noticed."
+    "{final_drivers} are left looking for seats. The closure leaves behind a team that was, for long stretches of its life, a genuine midfield competitor.",
+    "{final_drivers} enter the market. The Arrows name had been on the grid long enough that its absence will be noticed."
    ],
    [
     "A team member reflected \"This team had real quality in it. Real racers. The money problems were never the fault of the people who showed up every weekend and did the work. That's what I'll carry with me.\"",
@@ -1059,8 +1059,8 @@
     "Across {stint_seasons} {stint_seasons_word} the team built a record of {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}, a best finish of {best_finish}, with {top_driver} the standout."
    ],
    [
-    "{seatless_count} {seatless} are now without a drive. Aguri Suzuki built something that shouldn't have worked on paper, and for a period it did, which is more than most would have managed with the same resources.",
-    "{seatless_count} {seatless} enter the market. Super Aguri's achievement in getting to the grid at all, and sustaining a presence there, was more than many expected."
+    "{final_drivers} are now without a drive. Aguri Suzuki built something that shouldn't have worked on paper, and for a period it did, which is more than most would have managed with the same resources.",
+    "{final_drivers} enter the market. Super Aguri's achievement in getting to the grid at all, and sustaining a presence there, was more than many expected."
    ],
    [
     "A driver from the team reflected \"Aguri-san created something from nothing. We all knew the margins were tight, but nobody ever drove within themselves because of it. That's the culture he built, and I'm proud to have been part of it.\"",
@@ -1088,8 +1088,8 @@
     "The Cologne operation's record across {stint_seasons} {stint_seasons_word} reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}, a best finish of {best_finish}. {top_driver} {top_driver_feat}."
    ],
    [
-    "{seatless_count} {seatless} enter an off-season market that had no warning this many seats would open at once. For the engineers and mechanics in Cologne, there is simply a date on which the garage goes quiet.",
-    "{seatless_count} {seatless} are without drives. The scale of what Toyota built in Cologne means the closure affects more people than the driver count alone suggests."
+    "{final_drivers} enter an off-season market that had no warning this many seats would open at once. For the engineers and mechanics in Cologne, there is simply a date on which the garage goes quiet.",
+    "{final_drivers} are without drives. The scale of what Toyota built in Cologne means the closure affects more people than the driver count alone suggests."
    ],
    [
     "A driver reflected \"I don't think I ever fully appreciated what Toyota had built there until I looked back on it after the call came. The facility, the people, the sheer determination to do it properly. It deserved a different ending.\"",
@@ -1118,8 +1118,8 @@
     "The record across {stint_seasons} {stint_seasons_word} reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}, a best finish of {best_finish}. {top_driver} {top_driver_feat}."
    ],
    [
-    "{seatless_count} {seatless} are searching for seats. Of the three teams that joined the grid together in 2010, HRT lasted the shortest.",
-    "{seatless_count} {seatless} are now without drives. The 2010 intake of three teams loses its first member."
+    "{final_drivers} are searching for seats. Of the three teams that joined the grid together in 2010, HRT lasted the shortest.",
+    "{final_drivers} are now without drives. The 2010 intake of three teams loses its first member."
    ],
    [
     "A driver from the team reflected \"We showed up every week with less than almost anyone else out there. I won't pretend it wasn't hard. But we were there, and that counts for something.\"",
@@ -1148,8 +1148,8 @@
     "The full lineage record across {stint_seasons} {stint_seasons_word} reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word}, a best finish of {best_finish}. {top_driver} {top_driver_feat}."
    ],
    [
-    "{seatless_count} {seatless} are without drives as the market opens. The project Fernandes launched with genuine attachment to the Team Lotus name now closes without one, its cars and equipment to be disposed of by the administrators.",
-    "{seatless_count} {seatless} are searching for seats. The entry list loses a team whose origins carried more weight than its recent years suggested."
+    "{final_drivers} are without drives as the market opens. The project Fernandes launched with genuine attachment to the Team Lotus name now closes without one, its cars and equipment to be disposed of by the administrators.",
+    "{final_drivers} are searching for seats. The entry list loses a team whose origins carried more weight than its recent years suggested."
    ],
    [
     "A team member reflected \"Tony built something real here. The name changed, the backing changed, but the people who came in every day never stopped caring. That part never changed, and I won't forget it.\"",
@@ -1178,8 +1178,8 @@
     "The lineage's record across all its names reads {wins} {wins_word}, {podiums} {podiums_word} and {points} {points_word} from {stint_seasons} {stint_seasons_word}, a best finish of {best_finish}. {top_driver} {top_driver_feat}."
    ],
    [
-    "{seatless_count} {seatless} find themselves without a drive. A Manor spokesperson said that their unraced 2017 machine would have been a rocketship but would now be auctioned off, marking a sad end to a feel-good story.",
-    "{seatless_count} {seatless} are on the market. The 2017 car that never raced will be auctioned, a footnote to a story that deserved a better ending."
+    "{final_drivers} find themselves without a drive. A Manor spokesperson said that their unraced 2017 machine would have been a rocketship but would now be auctioned off, marking a sad end to a feel-good story.",
+    "{final_drivers} are on the market. The 2017 car that never raced will be auctioned, a footnote to a story that deserved a better ending."
    ],
    [
     "Reflecting on the closure, {last_driver} said \"Every Sunday morning I'd walk into that garage and think, we have absolutely no business being here. And then the lights went out and we raced anyway. I'll miss that feeling for the rest of my life.\"",
