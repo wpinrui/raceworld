@@ -122,5 +122,15 @@
     "Contract confirmed. {driver_last} at {team}, {years} years. Multi-year deals at this team have historically run to completion.",
     "{driver} signs with {team} for {years} years. Security for the driver, a settled seat for the team. Straightforward structure.",
     "{years}-year deal for {driver_last} at {team}, coming from {prev}. The term signals {team} see this as a cornerstone signing."
+  ],
+  "resign": [
+    "Confirmed. {driver} re-signs with {team} on a {years}-year deal. Loyalty pays.",
+    "Done. {driver_last} stays at {team}. Was {fa}, but the team moved fast enough to keep them.",
+    "Breaking. {team} retain {driver} for {years} more years. The paddock will have to look elsewhere.",
+    "{driver_last} was {fa} and had options. Chose {team} anyway. That tells you something.",
+    "Re-signed. {driver} commits to {team} for {years} years. Continuity over the winter circus.",
+    "{driver_last}, {fa} this winter, stays put. {team} confirm a new {years}-year deal.",
+    "No move for {driver_last}. {team} tie them down and close out the speculation.",
+    "{driver} was {fa}. {team} knew it, acted on it. {years}-year extension confirmed."
   ]
 }

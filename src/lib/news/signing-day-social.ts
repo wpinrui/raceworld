@@ -58,6 +58,10 @@ export function signingDaySocialPosts(picks: DraftPick[]): SocialPost[] {
     const persona = personaFor(p)
     const meta = copy.personas[persona]
     const seed = `sd-${p.driverId}-${persona}`
-    return { id: seed, handle: meta.handle, name: meta.name, text: sentenceCase(fill(pick(poolFor(persona, p.flavour), seed), slotsFor(p))), pickIndex: i }
+    // A re-signing (out-of-contract driver re-picked by their own team) is not a move: skip the move-framed
+    // flavour pools and use the dedicated "stays put" copy, so it never reads "leaves X and joins X".
+    const isResign = !!p.prevTeamName && p.prevTeamName === p.teamName
+    const poolForPost = isResign ? copy.resign : poolFor(persona, p.flavour)
+    return { id: seed, handle: meta.handle, name: meta.name, text: sentenceCase(fill(pick(poolForPost, seed), slotsFor(p))), pickIndex: i }
   })
 }
