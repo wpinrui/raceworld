@@ -1,6 +1,7 @@
 import type { Driver, Team, TyreState, WeatherPoint } from './types'
 import { getMoistureAtLap } from './weather'
 import { tyreStepsOutOfWindow } from './tyres'
+import { getConsistency } from './progression'
 
 export interface LapInput {
   driver: Driver
@@ -75,8 +76,10 @@ export function computeLapTime(input: LapInput): LapResult {
   }
   const compoundDelta = compoundDeltas[tyre.compound]
 
-  // 12. noise: random float in [0, 0.3]
-  const noise = Math.random() * 0.3
+  // 12. noise: a per-lap time PENALTY scaled by consistency (issue #59). Uniform over
+  //     [0, 1.2 - 0.01*c]: c=90 -> 0-0.30s (the old flat range), c=75 -> 0-0.45s, c=65 -> 0-0.55s.
+  //     Always a slow-down, so low consistency is systematically slower, not just noisier.
+  const noise = Math.random() * (1.2 - 0.01 * getConsistency(driver))
 
   // 13. rawTime
   const flatModifier = circuitFlatModifier
