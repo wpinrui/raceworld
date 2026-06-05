@@ -49,11 +49,13 @@ function fromLabel(p: DraftPick, former: string | undefined): string {
   return `from ${former}`
 }
 
-// A free agent's origin in the contenders list: their last team, "Rookie" (never raced), or "Comeback".
+// A free agent's origin in the contenders list, always a badge: their last team, "Rookie" (never
+// raced), or "Comeback" (raced before, no seat last season).
 function SourceTag({ src }: { src: { team?: string; rookie?: boolean } }) {
-  if (src.team) return <span className="text-[10px] text-[#FFFFFF] truncate shrink-0">{src.team}</span>
-  if (src.rookie) return <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#10B981] text-[#0F1419]">Rookie</span>
-  return <span className="text-[10px] text-[#FFFFFF] shrink-0">Comeback</span>
+  const base = 'text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0'
+  if (src.team) return <span className={`${base} bg-[#2A3142] text-[#FFFFFF]`}>{src.team}</span>
+  if (src.rookie) return <span className={`${base} bg-[#10B981] text-[#0F1419]`}>Rookie</span>
+  return <span className={`${base} bg-[#F59E0B] text-[#0F1419]`}>Comeback</span>
 }
 
 function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
@@ -205,7 +207,6 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                     <div className="flex items-center gap-2.5 px-3 py-1.5">
                       <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
                       <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
-                      {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
                       <SourceTag src={sourceOf(o.driverId)} />
                     </div>
                   )
