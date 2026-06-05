@@ -45,10 +45,11 @@ const primeEndOf = (h: HistoricalDriver) => h.primeEnd ?? DEFAULTS.primeEnd
 function initialContractYears(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  // 0, 1, or 2 — crucially INCLUDING 0 (expires after the first season), so roughly a third of the grid
-  // reaches the market each off-season, the very first one included. Otherwise no deal expires in year one
-  // and silly season / the driver market never fire that season.
-  return h % 3
+  // 0-3 years, weighted to 0-2 (each ~30%) with the occasional 3-year deal (~10%). Crucially this INCLUDES
+  // 0 (expires after the first season), so a chunk of the grid reaches the market each off-season, the very
+  // first one included. Otherwise no deal expires in year one and silly season / the market never fire then.
+  const r = h % 10
+  return r < 9 ? Math.floor(r / 3) : 3
 }
 
 // Project a driver's ratings + age from market entry forward to `targetYear`.
@@ -72,9 +73,9 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
     age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
-    // Seated drivers carry a staggered 0-2 year contract (see initialContractYears) so the market churns
-    // only part of the grid each off-season but ALWAYS has some seats open, the first season included;
-    // free agents are already out of contract (year - 1).
+    // Seated drivers carry a staggered 0-3 year contract, mostly 0-2 (see initialContractYears), so the
+    // market churns only part of the grid each off-season but ALWAYS has some seats open, the first season
+    // included; free agents are already out of contract (year - 1).
     contractExpiresAfterSeason: seated ? year + initialContractYears(h.id) : year - 1,
     seasonsSinceF1Seat: 0,
     debutYear: h.marketEntryYear, // real debut, so the newsroom never calls an established driver a rookie
