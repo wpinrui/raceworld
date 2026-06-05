@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import type { RealWorldTransition } from '@/lib/history/transitions'
-import { NationalityFlag } from '@/components/world/NationalityFlag'
 
 // Season-start gate for real-world team changes (they take effect next season; the news announces them
 // mid-season). Surfaced as an UNDISMISSABLE modal at the season opener: the join/leave/rebrand list must
@@ -25,7 +24,7 @@ export function RealWorldChangesModal({
   const [overridden, setOverridden] = useState<Set<string>>(new Set())
 
   if (!open || !transition) return null
-  const { teamJoins, teamLeaves, teamRebrands, rookieEntries, toYear } = transition
+  const { teamJoins, teamLeaves, teamRebrands, toYear } = transition
   const approved = (key: string) => !overridden.has(key)
   const toggle = (key: string) => setOverridden((prev) => {
     const next = new Set(prev)
@@ -80,18 +79,6 @@ export function RealWorldChangesModal({
               {j.name} enters the grid
             </Row>
           ))}
-          {rookieEntries.length > 0 && (
-            <div className="px-5 py-3">
-              <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5">Entering the driver market</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {rookieEntries.map((d) => (
-                  <span key={d.id} className="inline-flex items-center gap-1.5 text-sm text-[#FFFFFF]">
-                    <NationalityFlag code={d.nationality} />{d.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center justify-end px-5 py-3 border-t border-[#2A3142]">
