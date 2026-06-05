@@ -17,7 +17,9 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 // Expected-value (no-RNG) version of one applyRaceProgression tick for a single driver.
 // Keep the 15 here in step with progression.ts (races-to-potential pacing of the development curve).
 function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number): Stats {
-  const ov = overall(stats)
+  // Mirror the live plateau check: overall includes the driver's (derived) consistency, so the
+  // projection stops developing at the same point applyRaceProgression would (issue #59).
+  const ov = overall({ ...stats, consistency: deriveConsistency(peakPotential) })
   const next = { ...stats }
   if (age < primeEnd) {
     if (ov >= peakPotential) return stats

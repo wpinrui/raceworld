@@ -7,7 +7,8 @@ export function sampleNormal(mean: number, stddev: number, rng: () => number): n
 }
 
 // Exponential distribution via inverse-CDF. Mean is the distribution mean (1/rate);
-// returns a non-negative value with a flat right tail.
+// returns a non-negative value with a flat right tail. Floor the argument away from 0 so an
+// rng() of exactly 1 can't produce log(0) = -Infinity.
 export function sampleExponential(mean: number, rng: () => number): number {
-  return -mean * Math.log(1 - rng())
+  return -mean * Math.log(Math.max(1e-10, 1 - rng()))
 }

@@ -1,6 +1,10 @@
 import type { Driver, DriverProgressionEvent } from './types'
 import { sampleNormal } from './rng-utils'
 
+// The four DEVELOPABLE stats. Consistency (issue #59) is a stable trait, not developed race-to-race,
+// so it stays out of this list. It still counts in overall(), so the plateau check below
+// (overall >= peakPotential) targets the re-weighted overall: a driver's peakPotential is the ceiling
+// on their five-stat overall, and these four grow until that ceiling (with their fixed consistency) is hit.
 type ProgressStat = 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness'
 const STATS: ProgressStat[] = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness']
 

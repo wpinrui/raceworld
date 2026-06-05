@@ -829,17 +829,28 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
     // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
-    // gated to genuinely newsworthy moments (a >10s loss, or any mistake by a WDC top-5 driver).
+    // gated to newsworthy moments — a >10s loss, or a mistake by a WDC top-5 or media top-5 driver.
     // Crash-outs are not eligible here; they are already covered in the attrition paragraph.
     const wdcTop5 = new Set(afterR.slice(0, 5).map((s) => s.driverId))
+    // Media ranking needs full attributes, so it is live-only; archived replays fall back to WDC + >10s.
+    const mediaTop5 = new Set<string>()
+    if (ctx.live) {
+      const cstand = constructorStandingsAfter(ctx, r)
+      const rankInfo = cstand.map((c, i) => ({ teamId: c.teamId, points: c.points, finalPosition: i + 1 }))
+      for (const t of ctx.teams) if (!rankInfo.find((x) => x.teamId === t.id)) rankInfo.push({ teamId: t.id, points: 0, finalPosition: rankInfo.length + 1 })
+      computeDriverMediaScores(ctx.drivers, ctx.teams, ctx.raceResults.slice(0, r), rankInfo, ctx.teams.length)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .forEach((s) => mediaTop5.add(s.driverId))
+    }
     const topMistake = sorted
-      .filter((x) => !x.dnf && (x.mistakes ?? 0) > 0 && ((x.worstMistakeLoss ?? 0) > 10 || wdcTop5.has(x.driverId)))
+      .filter((x) => !x.dnf && (x.mistakes ?? 0) > 0 && ((x.worstMistakeLoss ?? 0) > 10 || wdcTop5.has(x.driverId) || mediaTop5.has(x.driverId)))
       .sort((a, b) => (b.worstMistakeLoss ?? 0) - (a.worstMistakeLoss ?? 0))[0] ?? null
     const mistakePara = topMistake
       ? compose(`${seed}:mistake`, {
           m_last: lastName(topMistake.driverName),
           m_loss: Math.round(topMistake.worstMistakeLoss ?? 0),
-          m_pos: ordinal(topMistake.finishPosition ?? 0),
+          m_pos: ordinal(topMistake.finishPosition ?? 1), // non-DNF always has a position; guard avoids "0th"
           m_team: topMistake.teamName,
           ...pronouns(ctx.drivers.find((d) => d.id === topMistake.driverId)?.gender),
         }, NOTABLE_MISTAKE_POOL)
