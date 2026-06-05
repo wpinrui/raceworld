@@ -94,14 +94,18 @@ async function start() {
     width: 1440,
     height: 900,
     show: false,
+    fullscreen: true, // immersive fullscreen; F11 toggles out (handler below)
     backgroundColor: '#0F1419',
     autoHideMenuBar: true,
     title: 'RaceWorld',
     icon: iconPath,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   })
-  mainWindow.maximize() // open filling the screen (window controls kept; not immersive fullscreen)
   mainWindow.once('ready-to-show', () => mainWindow.show())
+  // F11 toggles fullscreen so the player is never trapped without window controls.
+  mainWindow.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') mainWindow.setFullScreen(!mainWindow.isFullScreen())
+  })
   mainWindow.webContents.on('did-fail-load', (_e, code, desc) => log('did-fail-load', code, desc))
   mainWindow.webContents.setWindowOpenHandler(({ url: u }) => { shell.openExternal(u); return { action: 'deny' } })
   log('window created, loading', url)
