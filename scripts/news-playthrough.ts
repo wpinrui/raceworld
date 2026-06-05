@@ -79,12 +79,13 @@ async function main() {
   const careers: Record<string, DriverCareer> = {}
   const teamCareers: Record<string, TeamCareer> = {}
   const seasonsSeen: Record<string, Set<number>> = {}
+  const teamSeasonsSeen: Record<string, Set<number>> = {}
   const tally = (year: number, results: RaceResult[]) => {
     const teamsThisRace = new Set<string>()
     for (const res of results) {
       const tid = res.teamId
       let tc = teamCareers[tid]
-      if (!tc) tc = teamCareers[tid] = { teamId: tid, races: 0, wins: 0, podiums: 0, poles: 0, points: 0 }
+      if (!tc) { tc = teamCareers[tid] = { teamId: tid, races: 0, seasons: 0, wins: 0, podiums: 0, poles: 0, points: 0, bestConstructorsFinish: null, constructorTitles: 0 }; teamSeasonsSeen[tid] = new Set() }
       const fp = res.finishPosition
       tc.points += res.points
       if (res.gridPosition === 1) tc.poles++
@@ -92,7 +93,10 @@ async function main() {
       if (fp != null && fp <= 3) tc.podiums++
       teamsThisRace.add(tid)
     }
-    for (const tid of teamsThisRace) teamCareers[tid].races++
+    for (const tid of teamsThisRace) {
+      teamCareers[tid].races++
+      if (!teamSeasonsSeen[tid].has(year)) { teamSeasonsSeen[tid].add(year); teamCareers[tid].seasons = teamSeasonsSeen[tid].size }
+    }
     for (const res of results) {
       const id = res.driverId
       let c = careers[id]

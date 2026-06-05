@@ -26,6 +26,7 @@ import { runDraft, negotiateRenewals, assessExpiringContracts, type DraftPick, t
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
+import { realWorldTransition } from '@/lib/history/transitions'
 
 const TOTAL_ROUNDS = calendar2026.length
 // Driver market in-season beats: a contract watch shortly before the window, then renewals.
@@ -616,6 +617,7 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorStandings,
           seasonStartStats,
           pendingGridChanges,
+          realWorldMode,
         } = get()
 
         const totalTeams = teams.length
@@ -678,6 +680,10 @@ export const useSeasonStore = create<SeasonStore>()(
           teamMediaScores = [...teamMediaScores, ...added.map((t) => ({ teamId: t.id, score: 0 }))]
         }
 
+        // The real-world timeline's proposed changes for next year (joins/leaves/rebrands), for the
+        // newsroom. null in fictional/god-mode (where pendingGridChanges drives the grid instead).
+        const rwt = realWorldMode ? realWorldTransition(year, teams) : null
+
         // 4. Build the partial summary; later phases fill in their slices.
         const summary: EndOfSeasonSummary = {
           seasonYear: year,
@@ -695,13 +701,27 @@ export const useSeasonStore = create<SeasonStore>()(
           upgradeEvents: allUpgradeEvents,
           preSeasonTest: null,
           retentionDelta: computeRetentionDeltas(drivers, teams, raceResults),
-          // God-mode grid changes applied above, recorded for the newsroom (arrival + farewell).
-          gridAdditions: additions.map((t) => ({ teamId: t.id, teamName: t.name })),
-          gridRemovals: removals.map((id) => ({
-            teamId: id,
-            teamName: teams.find((t) => t.id === id)?.name ?? id,
-            finalPosition: constructorRankInfo.find((c) => c.teamId === id)?.finalPosition ?? null,
-          })),
+          // Grid changes recorded for the newsroom (arrival + farewell + rebrand), announced at the close
+          // of this season for next year. God-mode changes come from pendingGridChanges; real-world mode
+          // adds the historical joins/leaves/rebrands for the coming year (the proposed timeline, which the
+          // consent flow then applies). The two never coexist (a game is fictional OR real-world).
+          gridAdditions: [
+            ...additions.map((t) => ({ teamId: t.id, teamName: t.name })),
+            ...(rwt?.teamJoins ?? []).map((t) => ({ teamId: t.id, teamName: t.name })),
+          ],
+          gridRemovals: [
+            ...removals.map((id) => ({
+              teamId: id,
+              teamName: teams.find((t) => t.id === id)?.name ?? id,
+              finalPosition: constructorRankInfo.find((c) => c.teamId === id)?.finalPosition ?? null,
+            })),
+            ...(rwt?.teamLeaves ?? []).map((t) => ({
+              teamId: t.id,
+              teamName: t.name,
+              finalPosition: constructorRankInfo.find((c) => c.teamId === t.id)?.finalPosition ?? null,
+            })),
+          ],
+          gridRebrands: (rwt?.teamRebrands ?? []).map((r) => ({ teamId: r.id, fromName: r.from.name, toName: r.to.name })),
         }
 
         // 5. Update constructor history (prepend current season, dedupe, keep ≤55)

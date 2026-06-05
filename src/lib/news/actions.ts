@@ -9,6 +9,7 @@
 import {
   getArchivedSeasons, getArchivedSeasonIdByYear, getRacesForSeason, getResultsForRace,
   getDriverCareersUpToYear, getTeamCareersUpToYear, getAllSeasonChampions, getSeasonTeamIds, getTeamFinalPositionInSeason,
+  getTeamConstructorRecordsUpToYear,
   saveSeasonNews, getSeasonNews, getAllDriverSeasonTallies, getAllTeamSeasonTallies,
   type DbRaceResult,
 } from '@/lib/db/queries'
@@ -27,16 +28,22 @@ function gridChangeSummary(year: number, thisTeams: Map<string, string>): EndOfS
   const nextTeams = new Map(getSeasonTeamIds(nextId).map((t) => [t.teamId, t.teamName]))
   const gridAdditions: { teamId: string; teamName: string }[] = []
   const gridRemovals: { teamId: string; teamName: string; finalPosition: number | null }[] = []
+  const gridRebrands: { teamId: string; fromName: string; toName: string }[] = []
   for (const [id, name] of nextTeams) if (!thisTeams.has(id)) gridAdditions.push({ teamId: id, teamName: name })
-  for (const [id, name] of thisTeams) if (!nextTeams.has(id)) {
-    gridRemovals.push({ teamId: id, teamName: name, finalPosition: seasonId != null ? getTeamFinalPositionInSeason(seasonId, id) : null })
+  for (const [id, name] of thisTeams) {
+    if (!nextTeams.has(id)) {
+      gridRemovals.push({ teamId: id, teamName: name, finalPosition: seasonId != null ? getTeamFinalPositionInSeason(seasonId, id) : null })
+    } else {
+      const toName = nextTeams.get(id)!
+      if (toName !== name) gridRebrands.push({ teamId: id, fromName: name, toName }) // same lineage, new name = rebrand
+    }
   }
-  if (gridAdditions.length === 0 && gridRemovals.length === 0) return null
+  if (gridAdditions.length === 0 && gridRemovals.length === 0 && gridRebrands.length === 0) return null
   return {
     seasonYear: year, driverChampion: '', constructorChampion: '',
     progressionEvents: [], retiredDriverIds: [], carReshuffleOldPaces: {}, carReshuffleNewPaces: {},
     marketMoves: [], droppedDrivers: [], seatContests: [], driverMediaScores: [], teamMediaScores: [],
-    upgradeEvents: [], preSeasonTest: null, gridAdditions, gridRemovals,
+    upgradeEvents: [], preSeasonTest: null, gridAdditions, gridRemovals, gridRebrands,
   }
 }
 
@@ -72,9 +79,15 @@ export async function actionGetDriverCareers(throughYear: number): Promise<Recor
 // Per-team constructor career totals from the archive, up to and including `throughYear`. The basis
 // for team milestones; the live newsroom folds the current season on top via foldLiveSeasonTeams.
 function buildTeamCareers(throughYear: number): Record<string, TeamCareer> {
+  const record = new Map(getTeamConstructorRecordsUpToYear(throughYear).map((r) => [r.teamId, r]))
   const out: Record<string, TeamCareer> = {}
   for (const a of getTeamCareersUpToYear(throughYear)) {
-    out[a.teamId] = { teamId: a.teamId, races: a.races, wins: a.wins, podiums: a.podiums, poles: a.poles, points: a.points }
+    const rec = record.get(a.teamId)
+    out[a.teamId] = {
+      teamId: a.teamId, races: a.races, seasons: a.seasons, wins: a.wins, podiums: a.podiums,
+      poles: a.poles, points: a.points,
+      bestConstructorsFinish: rec?.bestFinish ?? null, constructorTitles: rec?.titles ?? 0,
+    }
   }
   return out
 }
