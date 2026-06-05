@@ -41,12 +41,21 @@ function accentFor(handle: string): string {
   return HANDLE_COLOR[handle]
 }
 
-// The old team, shown only when it adds something: a switch or a re-signing. Empty for rookies (the
-// badge says so) and for drivers who were already free agents (the FA ranking already says so).
-function fromLabel(p: DraftPick): string {
-  if (p.flavour === 'rookie' || !p.prevTeamName) return ''
-  if (p.prevTeamName === p.teamName) return 're-signs'
-  return `from ${p.prevTeamName}`
+// The old team (their last-season team), shown only when it adds something: a switch or a re-signing.
+// Empty for rookies (the badge says so) and drivers with no last-season team (their tag covers it).
+function fromLabel(p: DraftPick, former: string | undefined): string {
+  if (p.flavour === 'rookie' || !former) return ''
+  if (former === p.teamName) return 're-signs'
+  return `from ${former}`
+}
+
+// A free agent's origin in the contenders list, always a badge: their last team, "Rookie" (never
+// raced), or "Comeback" (raced before, no seat last season).
+function SourceTag({ src }: { src: { team?: string; rookie?: boolean } }) {
+  const base = 'text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0'
+  if (src.team) return <span className={`${base} bg-[#2A3142] text-[#FFFFFF]`}>{src.team}</span>
+  if (src.rookie) return <span className={`${base} bg-[#10B981] text-[#0F1419]`}>Rookie</span>
+  return <span className={`${base} bg-[#F59E0B] text-[#0F1419]`}>Comeback</span>
 }
 
 function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
@@ -102,6 +111,14 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   for (const d of drivers) driverById.set(d.id, d) // this-season record wins, matching the WDC year
   const wdcPosOf = new Map(driverStandings.map((s, i) => [s.driverId, i + 1]))
   const wdcPtsOf = new Map(driverStandings.map((s) => [s.driverId, s.points]))
+  // Where a driver comes from, from reliable sources (the just-ended classification + career totals),
+  // not the draft pool's teamId (which is blank for an expiring driver). Last team / Rookie / Comeback.
+  const formerTeamOf = new Map(driverStandings.map((s) => [s.driverId, s.teamName]))
+  const sourceOf = (id: string): { team?: string; rookie?: boolean; comeback?: boolean } => {
+    const team = formerTeamOf.get(id)
+    if (team) return { team }
+    return (careers[id]?.starts ?? 0) > 0 ? { comeback: true } : { rookie: true }
+  }
 
   const wccBadge = (teamId: string): { pos: number; tip: string } => {
     const pos = finishOf.get(teamId)
@@ -145,6 +162,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
               const nameEl = d
                 ? <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(p.driverId) ?? null} wdcPoints={wdcPtsOf.get(p.driverId)} career={careers[p.driverId]} side="right"><span className="truncate shrink-0">{nameLink}</span></DriverTooltip>
                 : <span className="truncate shrink-0">{nameLink}</span>
+              const fromText = fromLabel(p, formerTeamOf.get(p.driverId))
               return (
                 <div
                   key={`${p.teamId}-${i}`}
@@ -162,7 +180,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                       <Tooltip content={`${faLabel(p.faRank)} free agent of ${year}`}>
                         <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{faLabel(p.faRank)}</span>
                       </Tooltip>
-                      {fromLabel(p) && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromLabel(p)}</span>}
+                      {fromText && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromText}</span>}
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (
@@ -190,7 +208,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                     <div className="flex items-center gap-2.5 px-3 py-1.5">
                       <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
                       <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
-                      {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
+                      <SourceTag src={sourceOf(o.driverId)} />
                     </div>
                   )
                   return d
