@@ -1,6 +1,13 @@
 import type { Driver, Gender } from './types'
 import { sampleNormal } from './rng-utils'
+import { deriveConsistency } from './progression'
 import { FAKER_LOCALES, FAKER_LOCALE_CODES } from '@/data/driver-name-pool'
+
+// Consistency for a generated driver: anchored to peakPotential, with a little noise for variety,
+// clamped to the grid band [55, 95] (issue #59).
+function genConsistency(peakPotential: number, rng: () => number): number {
+  return Math.max(55, Math.min(95, Math.round(sampleNormal(deriveConsistency(peakPotential), 4, rng))))
+}
 
 let generatedCounter = 0
 let rookieCounter = 0
@@ -62,6 +69,7 @@ export function generateFreeAgentPool(
       wetWeatherPace: stat(),
       overtaking: stat(),
       smoothness: stat(),
+      consistency: genConsistency(peakPotential, rng),
       age,
       peakPotential,
       primeEnd,
@@ -78,6 +86,7 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
   rookieCounter++
   const stat = () => Math.max(55, Math.min(78, Math.round(sampleNormal(68, 5, rng))))
   const { name, nationality, gender } = pickName(new Set())
+  const peakPotential = Math.max(72, Math.min(92, Math.round(sampleNormal(82, 6, rng))))
   return {
     id: `rookie-${teamId}-${newYear}-${rookieCounter}-${idSuffix()}`,
     name,
@@ -88,8 +97,9 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
     wetWeatherPace: stat(),
     overtaking: stat(),
     smoothness: stat(),
+    consistency: genConsistency(peakPotential, rng),
     age: 19 + Math.floor(rng() * 3),
-    peakPotential: Math.max(72, Math.min(92, Math.round(sampleNormal(82, 6, rng)))),
+    peakPotential,
     primeEnd: 29 + Math.floor(rng() * 3),
     narrativeModifier: 0,
     contractExpiresAfterSeason: newYear,

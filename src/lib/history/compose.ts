@@ -1,5 +1,5 @@
 import type { Driver, Team } from '@/lib/sim/types'
-import { overall } from '@/lib/sim/progression'
+import { overall, deriveConsistency } from '@/lib/sim/progression'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
 import type { HistoricalDriver } from '@/data/history/types'
@@ -72,6 +72,7 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
   return {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
+    consistency: deriveConsistency(peakOf(h)),
     age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
     // Seated drivers carry a staggered 0-3 year contract, mostly 0-2 (see initialContractYears), so the
     // market churns only part of the grid each off-season but ALWAYS has some seats open, the first season

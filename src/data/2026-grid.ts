@@ -1,4 +1,5 @@
 import { Driver, Team } from '@/lib/sim/types'
+import { deriveConsistency } from '@/lib/sim/progression'
 
 // Car pace order based on 2025 constructors standings
 export const teams2026: Team[] = [
@@ -15,7 +16,9 @@ export const teams2026: Team[] = [
   { id: 'cadillac', name: 'Cadillac', shortName: 'CAD', nationality: 'US', color: '#74797F', carPace: 25 }, // 11th
 ]
 
-export const drivers2026: Driver[] = [
+// Consistency isn't hand-authored per driver; it's derived deterministically from each driver's
+// peakPotential at module load (issue #59), so the real grid's elite drivers are the consistent ones.
+const drivers2026Raw: Driver[] = [
   // McLaren
   {
     id: 'lando-norris',
@@ -258,3 +261,8 @@ export const drivers2026: Driver[] = [
     contractExpiresAfterSeason: 2027,
   },
 ]
+
+export const drivers2026: Driver[] = drivers2026Raw.map((d) => ({
+  ...d,
+  consistency: d.consistency ?? deriveConsistency(d.peakPotential),
+}))
