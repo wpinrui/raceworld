@@ -3137,14 +3137,33 @@ function analysis(ctx: NewsContext): NewsArticle[] {
 // career record. Either way it closes on the actual market projection (seeded ±10 media error) for
 // whether a return looks likely.
 function driverToWatch(ctx: NewsContext): NewsArticle[] {
-  // Fires every 4th round (mid-season), so like silly-season it belongs in the season's permanent
-  // record. Don't gate on endOfSeason or the retrospective loses the whole season's market narrative.
+  // Fires on a fixed 8-window schedule weighted to the season's end; like silly-season it belongs in the
+  // season's permanent record (don't gate on endOfSeason or the retrospective loses the market narrative).
   if (!ctx.live) return []
   const freeAgents = ctx.drivers.filter((d) => d.teamId === '')
   if (freeAgents.length === 0 || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
-  for (let r = 4; r <= ctx.completedRounds; r += 4) {
-    const fa = pick(freeAgents, `watch-${ctx.year}-${r}`)
+  const ROUNDS = [7, 12, 16, 19, 21, 22, 23, 24]
+  if (ctx.completedRounds < ROUNDS[0]) return out
+  // Lock the slate by R7: the top free agents by market perception (driver media score), one per window,
+  // each covered exactly once. The ranking is snapshotted as of R7 so the covered set never drifts as the
+  // season runs on; which top free agent lands which window does not matter.
+  const rankRound = Math.min(7, ctx.completedRounds)
+  const rankResults = ctx.raceResults.slice(0, rankRound)
+  const rankStand = constructorStandingsAfter(ctx, rankRound)
+  const rankInfo7 = rankStand.map((cs, i) => ({ teamId: cs.teamId, points: cs.points, finalPosition: i + 1 }))
+  for (const t of ctx.teams) if (!rankInfo7.find((x) => x.teamId === t.id)) rankInfo7.push({ teamId: t.id, points: 0, finalPosition: rankInfo7.length + 1 })
+  const perception = computeDriverMediaScores(ctx.drivers, ctx.teams, rankResults, rankInfo7, ctx.teams.length)
+  const scoreOf = new Map(perception.map((s) => [s.driverId, s.score]))
+  const slate = [...freeAgents]
+    .sort((a, b) => (scoreOf.get(b.id) ?? 0) - (scoreOf.get(a.id) ?? 0) || a.id.localeCompare(b.id))
+    .slice(0, ROUNDS.length)
+  // Fewer than 8 free agents -> fill the LATEST windows (start later in the season), not the earliest.
+  const startAt = ROUNDS.length - slate.length
+  for (let i = 0; i < slate.length; i++) {
+    const r = ROUNDS[startAt + i]
+    if (r > ctx.completedRounds) continue
+    const fa = slate[i]
     const seed = `watch-${ctx.year}-${r}-${fa.id}`
     const c = careerOf(ctx, fa.id)
     const experienced = (c?.starts ?? 0) > 0
