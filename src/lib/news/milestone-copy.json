@@ -252,72 +252,72 @@
   "milestoneLine": {
     "wins": {
       "maiden": [
-        "{driver_last} took the first win of {their} career, a moment the record books will carry permanently.",
-        "A maiden Formula 1 victory for {driver_last}, who crossed the line first for the first time.",
-        "{driver_last} became a Grand Prix winner, adding {their} name to the list only race winners hold.",
-        "{driver_last} broke through for a first career victory, the one finish that cannot be repeated."
+        "{driver_last} took {their} first Formula 1 victory.",
+        "{driver_last} won for the first time in Formula 1.",
+        "{driver_last} claimed {their} maiden Grand Prix win.",
+        "{driver_last} recorded {their} first career win."
       ],
       "nth": [
-        "{driver_last} brought up {n} career wins, a number that puts {them} among the sport's habitual frontrunners.",
-        "Win number {n} for {driver_last}, added to a tally built without shortcuts.",
-        "{driver_last} reached {n} victories, crossing a marker only the consistently quick ever reach.",
-        "{driver_last} took {their} {nth} win, extending a record that the rest of the grid measures itself against."
+        "{driver_last} claimed win number {n}.",
+        "{driver_last} took {their} {nth} career victory.",
+        "{driver_last} recorded win number {n}.",
+        "{driver_last} reached {n} career wins."
       ]
     },
     "podiums": {
       "maiden": [
-        "{driver_last} stood on the podium for the first time, finishing {pos} in a result {they} will not forget.",
-        "A maiden rostrum for {driver_last}, who came home {pos} to claim a first career podium.",
-        "{driver_last} broke into the top three for the first time, {pos} at the flag.",
-        "{pos} and a first podium: {driver_last} earned a place on the rostrum for the first time in {their} career."
+        "{pos} gave {driver_last} {their} first career podium.",
+        "{driver_last} stood on the podium for the first time in Formula 1.",
+        "{pos} earned {driver_last} {their} maiden Formula 1 podium.",
+        "{driver_last} claimed {their} first career podium."
       ],
       "nth": [
-        "{driver_last} reached {n} career podiums with {pos}, a tally only the reliably quick accumulate.",
-        "Podium number {n} for {driver_last}, who finished {pos} to extend a record built race by race.",
-        "{pos} took {driver_last} to {n} career podiums, adding to a total that does not happen by chance.",
-        "{driver_last} extended {their} podium count to {n} with {pos}, another entry for a driver at home near the front."
+        "{pos} took {driver_last} to {n} career podiums.",
+        "{driver_last} reached {n} career podiums.",
+        "{pos} was {driver_last}'s {nth} career podium.",
+        "{driver_last} stood on the podium for the {nth} time in {their} career."
       ]
     },
     "poles": {
       "maiden": [
-        "{driver_last} claimed a maiden pole position, going quickest in qualifying for the first time in {their} career.",
-        "A first career pole for {driver_last}, who put {their} name at the top of the timesheet.",
-        "{driver_last} took pole for the first time, a statement of raw one-lap speed at the right moment.",
-        "{driver_last} qualified on pole in {their} first-ever pole position, the fastest through qualifying."
+        "{driver_last} qualified on pole for the first time in Formula 1.",
+        "{driver_last} took {their} maiden pole position.",
+        "{driver_last} claimed {their} first career pole.",
+        "{driver_last} started from pole for the first time."
       ],
       "nth": [
-        "{driver_last} recorded {n} career poles, extending a qualifying record built on pace rather than circumstance.",
-        "Pole number {n} for {driver_last}, who keeps finding the fastest lap when Saturday comes around.",
-        "{driver_last} took {their} {nth} career pole, another name at the top of the sheet and another number for the record.",
-        "{n} career poles for {driver_last}, added to with another fastest qualifying lap that the rest could not match."
+        "{driver_last} took {their} {nth} career pole.",
+        "{driver_last} claimed pole position number {n}.",
+        "{driver_last} reached {n} career poles.",
+        "{driver_last} qualified on pole for the {nth} time in {their} career."
       ]
     },
     "points": {
       "maiden": [
-        "{driver_last} scored in Formula 1 for the first time, finishing {pos} to open {their} career points account.",
-        "A first championship points finish for {driver_last}, who came home {pos}.",
-        "{driver_last} got off the mark in the championship with {pos}, scoring for the very first time.",
-        "{pos} and a first career points haul for {driver_last}, who put {their} name on the scoreboard at last."
+        "{pos} earned {driver_last} {their} first career points.",
+        "{driver_last} scored Formula 1 points for the first time.",
+        "{pos} gave {driver_last} {their} first points finish.",
+        "{driver_last} got off the mark with {their} first career points."
       ],
       "nth": [
-        "{driver_last} moved past {n} career points, a milestone reached through consistency rather than fortune.",
-        "The {nth} career points total for {driver_last} passed {n}, a figure that reflects race after race of delivery.",
-        "{driver_last} passed {n} career points, adding to a tally only the durable and the quick ever build.",
-        "{n} career points for {driver_last}, reached through finishes that were earned rather than inherited."
+        "{driver_last} passed {n} career points.",
+        "{driver_last} moved past {n} points in {their} career.",
+        "{pos} took {driver_last} past {n} career points.",
+        "{driver_last} surpassed {n} career championship points."
       ]
     },
     "starts": {
       "maiden": [
-        "{driver_last} made {their} Formula 1 debut, joining the grid for the first time.",
-        "A first Grand Prix start for {driver_last}, who lined up on the Formula 1 grid as a rookie.",
-        "{driver_last} started a Formula 1 race for the first time, a milestone only a debut can deliver.",
-        "{driver_last} was on the Formula 1 grid for the first time, the career start that everything else follows from."
+        "{driver_last} made {their} Formula 1 debut.",
+        "{driver_last} started {their} first Grand Prix.",
+        "{driver_last} took the grid for the first time in Formula 1.",
+        "{driver_last} made {their} first career Grand Prix start."
       ],
       "nth": [
-        "{driver_last} reached {n} Grand Prix starts, a total that speaks to staying power in the most competitive field in motorsport.",
-        "Start number {n} for {driver_last}, who lines up on a Formula 1 grid for the {nth} time.",
-        "{driver_last} marked {n} career starts, a number only reached by those who give the sport no reason to remove them.",
-        "{n} Formula 1 starts for {driver_last}, accumulated over a career that keeps going while others have faded."
+        "{driver_last} made {their} {nth} Grand Prix start.",
+        "{driver_last} reached {n} Grand Prix starts.",
+        "{driver_last} lined up on the grid for the {nth} time.",
+        "{driver_last} started Grand Prix number {n}."
       ]
     }
   },

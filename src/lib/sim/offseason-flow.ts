@@ -40,7 +40,7 @@ export async function advanceOffSeason(): Promise<string> {
           year: s.year, phase: s.phase, raceResults: s.raceResults, drivers: s.drivers, teams: s.teams,
           allUpgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
           endOfSeasonSummary: s.endOfSeasonSummary, approvedSeasonChanges: s.approvedSeasonChanges,
-          seasonContractWatch: s.seasonContractWatch, seasonRenewals: s.seasonRenewals, seasonDraft: s.seasonDraft,
+          seasonContractWatch: s.seasonContractWatch, seasonRenewals: s.seasonRenewals, seasonDraft: s.seasonDraft, signingDayRevealed: s.signingDayRevealed,
         }, careerBase, teamCareerBase, records, teamDriverTalliesBase))
         await actionSaveSeasonNews(s.dbSeasonId, JSON.stringify(articles))
 

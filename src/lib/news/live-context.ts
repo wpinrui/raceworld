@@ -25,6 +25,7 @@ export interface LiveSeasonSlice {
   seasonContractWatch?: ContractWatch[]
   seasonRenewals?: RenewalResult[]
   seasonDraft?: DraftPick[]
+  signingDayRevealed?: number
 }
 
 export function buildLiveNewsContext(
@@ -65,5 +66,6 @@ export function buildLiveNewsContext(
     contractWatch: s.seasonContractWatch,
     renewals: s.seasonRenewals,
     draft: s.seasonDraft,
+    signingDayRevealed: s.signingDayRevealed,
   }
 }

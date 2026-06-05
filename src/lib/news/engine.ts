@@ -84,6 +84,7 @@ export interface NewsContext {
   contractWatch?: ContractWatch[]  // round-15 verdicts on expiring contracts (could-do-better/right-place/lucky)
   renewals?: RenewalResult[]       // round-18 in-season contract renewals
   draft?: DraftPick[]              // end-of-season Signing Day picks (ordered, best seat first)
+  signingDayRevealed?: number      // signings the player has revealed on the Signing Day board (gates the recap)
 }
 
 // Cross-season F1 career totals for one driver, accumulated up to (and including) the context's
@@ -3695,11 +3696,24 @@ function renewalsFeature(ctx: NewsContext): NewsArticle[] {
 function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
   const eos = ctx.endOfSeason
   if (!eos) return []
-  const moves = eos.marketMoves ?? []
-  const realMoves = moves.filter((m) => m.fromTeamId && m.fromTeamId !== m.toTeamId && m.mediaScore > 0)
-  const dropped = eos.droppedDrivers ?? []
   const draft = ctx.draft ?? []
-  if (realMoves.length === 0 && dropped.length === 0 && draft.length === 0) return []
+
+  // The market recap waits until Signing Day is settled: either the player has revealed every signing
+  // on the Signing Day board, or the off-season has advanced past that stage (contract-negotiations).
+  const revealed = ctx.signingDayRevealed ?? 0
+  const signingDayDone = ctx.phase === 'driver-retirements' || ctx.phase === 'pre-season-testing'
+    || (ctx.phase === 'contract-negotiations' && draft.length > 0 && revealed >= draft.length)
+  if (!signingDayDone) return []
+
+  const moves = eos.marketMoves ?? []
+  // Every genuine transfer is listed; media only decides which is the marquee.
+  const realMoves = moves.filter((m) => m.fromTeamId && m.fromTeamId !== m.toTeamId)
+  // Teamless drivers who signed, split into established free agents (a media profile) and debut rookies.
+  const freeAgents = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore > 0)
+  const rookies = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore === 0)
+  const upsets = draft.filter((p) => p.flavour === 'upset')
+  const dropped = eos.droppedDrivers ?? []
+  if (!realMoves.length && !freeAgents.length && !rookies.length && !upsets.length && !dropped.length) return []
   const c = marketFeatureCopy.offseason
   const year = eos.seasonYear
   const next = year + 1
@@ -3735,12 +3749,11 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
       })
     : ''
   const otherMoves = realMoves.filter((m) => m.driverId !== marquee?.driverId)
-  const upsets = draft.filter((p) => p.flavour === 'upset')
-  const rookies = moves.filter((m) => m.fromTeamId == null && !m.isResignation && m.mediaScore === 0)
 
   const body = paras(
     marquee ? paras(marqueePara, quoteLine(c.quote_signed, `${seed}|q-sign`, marquee.driverName)) : '',
     otherMoves.length ? fill(pick(c.moves, `${seed}|moves`), { ...hslots, names: listJoin(otherMoves.map((m) => `${m.driverName} (${fromName(m)} to ${m.toTeamName})`)) }) : '',
+    freeAgents.length ? fill(pick(c.free_agents, `${seed}|fa`), { ...hslots, names: listJoin(freeAgents.map((m) => `${m.driverName} (${m.toTeamName})`)) }) : '',
     upsets.length ? fill(pick(c.upsets, `${seed}|upsets`), { ...hslots, names: listJoin(upsets.map((p) => `${p.driverName} (${p.teamName})`)) }) : '',
     rookies.length ? fill(pick(c.rookies, `${seed}|rookies`), { ...hslots, names: listJoin(rookies.map((m) => `${m.driverName} (${m.toTeamName})`)) }) : '',
     dropped.length ? paras(fill(pick(c.dropped, `${seed}|dropped`), { ...hslots, names: listJoin(dropped.map((d) => `${d.driverName} (${d.fromTeamName})`)) }), quoteLine(c.quote_dropped, `${seed}|q-drop`, dropped[0].driverName)) : '',

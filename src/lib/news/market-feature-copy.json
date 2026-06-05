@@ -163,6 +163,13 @@
       "{names} secured a debut season after claiming their first grid spot.",
       "{names} signed a full-time contract and joined the grid for the year ahead."
     ],
+    "free_agents": [
+      "{names} secured drives for the coming season after a spell on the sidelines.",
+      "{names} returned to the grid after finding seats during the off-season.",
+      "{names} signed from free agency to earn places on the starting grid.",
+      "{names} ended their time without a seat, each confirming a drive for the new campaign.",
+      "{names} found a way back onto the grid after periods without a competitive programme."
+    ],
     "dropped": [
       "{names} lost out on a seat for the new season.",
       "{names} departed without a contract for the year ahead.",
