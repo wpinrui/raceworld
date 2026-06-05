@@ -190,6 +190,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                     <div className="flex items-center gap-2.5 px-3 py-1.5">
                       <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
                       <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
+                      <span className="text-[10px] text-[#FFFFFF] truncate shrink-0">{o.prevTeamName || 'free agent'}</span>
                       {i === 0 && <span className="text-[9px] font-bold uppercase tracking-wide text-[#00D9FF] shrink-0">Favourite</span>}
                     </div>
                   )
