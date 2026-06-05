@@ -505,12 +505,13 @@ export function getDriverCareersUpToYear(year: number): DbDriverCareerAgg[] {
 // Per-CONSTRUCTOR career aggregates from archived seasons up to and including `year`, for team
 // milestones. `races` is distinct Grands Prix entered; wins/podiums/poles count per car.
 export interface DbTeamCareerAgg {
-  teamId: string; races: number; wins: number; podiums: number; poles: number; points: number
+  teamId: string; races: number; seasons: number; wins: number; podiums: number; poles: number; points: number
 }
 export function getTeamCareersUpToYear(year: number): DbTeamCareerAgg[] {
   return getDb().prepare(`
     SELECT rr.team_id AS teamId,
       COUNT(DISTINCT r.id) AS races,
+      COUNT(DISTINCT s.id) AS seasons,
       SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
       SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
       SUM(CASE WHEN rr.grid_position = 1 THEN 1 ELSE 0 END) AS poles,
@@ -521,6 +522,43 @@ export function getTeamCareersUpToYear(year: number): DbTeamCareerAgg[] {
     WHERE s.status = 'archived' AND s.year <= ?
     GROUP BY rr.team_id
   `).all(year) as DbTeamCareerAgg[]
+}
+
+// Per-(team, driver) tallies archived up to `year`, grouped by team in JS, so the team-transition
+// newsroom can name a lineage's most prolific driver and summarise their feat. The live season is
+// folded on top by foldLiveSeasonTeamDrivers for the live path.
+export interface DbTeamDriverTally {
+  teamId: string; driverId: string; driverName: string
+  wins: number; podiums: number; points: number; firstYear: number; lastYear: number
+}
+export function getTeamDriverTalliesUpToYear(year: number): DbTeamDriverTally[] {
+  return getDb().prepare(`
+    SELECT rr.team_id AS teamId, rr.driver_id AS driverId, MAX(rr.driver_name) AS driverName,
+      SUM(CASE WHEN rr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+      SUM(CASE WHEN rr.finish_position IN (1,2,3) THEN 1 ELSE 0 END) AS podiums,
+      SUM(rr.points) AS points,
+      MIN(s.year) AS firstYear, MAX(s.year) AS lastYear
+    FROM race_results rr
+    JOIN races r ON r.id = rr.race_id
+    JOIN seasons s ON s.id = r.season_id
+    WHERE s.status = 'archived' AND s.year <= ?
+    GROUP BY rr.team_id, rr.driver_id
+  `).all(year) as DbTeamDriverTally[]
+}
+
+// Per-constructor best championship finish + title count from the stored constructor standings,
+// archived up to `year`. Keyed by team id for the team-transition newsroom.
+export interface DbTeamConstructorRecord { teamId: string; bestFinish: number | null; titles: number }
+export function getTeamConstructorRecordsUpToYear(year: number): DbTeamConstructorRecord[] {
+  return getDb().prepare(`
+    SELECT scs.team_id AS teamId,
+      MIN(scs.final_position) AS bestFinish,
+      SUM(CASE WHEN scs.final_position = 1 THEN 1 ELSE 0 END) AS titles
+    FROM season_constructor_standings scs
+    JOIN seasons s ON s.id = scs.season_id
+    WHERE s.status = 'archived' AND s.year <= ?
+    GROUP BY scs.team_id
+  `).all(year) as DbTeamConstructorRecord[]
 }
 
 export interface DbTeamCareerRow {

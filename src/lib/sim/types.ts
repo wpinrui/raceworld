@@ -341,4 +341,7 @@ export interface EndOfSeasonSummary {
   // Optional for backward-compatible saves. finalPosition is the leaver's last championship place.
   gridAdditions?: { teamId: string; teamName: string }[]
   gridRemovals?: { teamId: string; teamName: string; finalPosition: number | null }[]
+  // A lineage that kept its id but changed name next season (e.g. Sauber -> Audi): announced as a
+  // rebrand at the close of the current season. Same shape for live + archived-replay paths.
+  gridRebrands?: { teamId: string; fromName: string; toName: string }[]
 }

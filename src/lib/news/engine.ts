@@ -34,6 +34,8 @@ import titleCopy from './titlescenario-copy.json'
 import recordsCopy from './records-copy.json'
 import sillyCopy from './sillyseason-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
+import teamnewsCopy from './teamnews-copy.json'
+import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
 // Records-journalism context: prior all-time single-season records (one mark per metric, from archived
@@ -69,6 +71,7 @@ export interface NewsContext {
                                           // gracefully when it is absent. starts === 0 (or no entry) means
                                           // the driver has never raced in F1; never infer that from age.
   teamCareers?: Record<string, TeamCareer>  // constructor career totals per team, for team milestones (optional)
+  teamDriverTallies?: Record<string, TeamDriverTally[]>  // per-lineage driver tallies (folded live), for {top_driver} (optional)
   // Driver-market beats for the market journalism (all optional — present only on the live context):
   contractWatch?: ContractWatch[]  // round-15 verdicts on expiring contracts (could-do-better/right-place/lucky)
   renewals?: RenewalResult[]       // round-18 in-season contract renewals
@@ -97,10 +100,25 @@ export interface DriverCareer {
 export interface TeamCareer {
   teamId: string
   races: number    // distinct Grands Prix entered
+  seasons: number  // distinct seasons entered (archived base; the live season is added in the slot builder)
   wins: number     // race wins (per car finishing 1st)
   podiums: number  // top-three finishes (per car)
   poles: number    // poles (per car on grid P1)
   points: number   // cumulative constructors points
+  bestConstructorsFinish: number | null // best (lowest) constructors' championship position; null = never classified
+  constructorTitles: number              // constructors' championships won
+}
+
+// One driver's tally FOR a given lineage (not their whole career), so the team-transition newsroom can
+// name the lineage's most prolific driver and the span they raced for it. Folded with the live season.
+export interface TeamDriverTally {
+  driverId: string
+  driverName: string
+  wins: number
+  podiums: number
+  points: number
+  firstYear: number
+  lastYear: number
 }
 
 export interface NewsArticle {
@@ -464,7 +482,7 @@ export function foldLiveSeasonTeams(
     for (const res of round) {
       const id = res.teamId
       let c = out[id]
-      if (!c) c = out[id] = { teamId: id, races: 0, wins: 0, podiums: 0, poles: 0, points: 0 }
+      if (!c) c = out[id] = { teamId: id, races: 0, seasons: 0, wins: 0, podiums: 0, poles: 0, points: 0, bestConstructorsFinish: null, constructorTitles: 0 }
       const fp = res.finishPosition
       c.points += res.points
       if (res.gridPosition === 1) c.poles++
@@ -473,6 +491,30 @@ export function foldLiveSeasonTeams(
       entered.add(id)
     }
     for (const id of entered) out[id].races++
+  }
+  return out
+}
+
+// Extend per-lineage driver tallies (archived DB totals, grouped by team id) with the live/just-finished
+// season, so the live newsroom ranks a lineage's most prolific driver including the current year.
+export function foldLiveSeasonTeamDrivers(
+  base: Record<string, TeamDriverTally[]>,
+  year: number,
+  raceResults: { finishPosition: number | null; points: number; teamId: string; driverId: string; driverName: string }[][],
+): Record<string, TeamDriverTally[]> {
+  const out: Record<string, TeamDriverTally[]> = {}
+  for (const [k, v] of Object.entries(base)) out[k] = v.map((t) => ({ ...t }))
+  for (const round of raceResults) {
+    for (const res of round) {
+      const list = out[res.teamId] ?? (out[res.teamId] = [])
+      let t = list.find((x) => x.driverId === res.driverId)
+      if (!t) { t = { driverId: res.driverId, driverName: res.driverName, wins: 0, podiums: 0, points: 0, firstYear: year, lastYear: year }; list.push(t) }
+      t.points += res.points
+      if (res.finishPosition === 1) t.wins++
+      if (res.finishPosition != null && res.finishPosition <= 3) t.podiums++
+      t.firstYear = Math.min(t.firstYear, year)
+      t.lastYear = Math.max(t.lastYear, year)
+    }
   }
   return out
 }
@@ -2435,6 +2477,7 @@ function market(ctx: NewsContext): NewsArticle[] {
   // unfalsifiable colour (we model none of the backers/bases/staff).
   const nextCount = ctx.teams.length - (eos.gridRemovals?.length ?? 0) + (eos.gridAdditions?.length ?? 0)
   for (const add of eos.gridAdditions ?? []) {
+    if (TEAMNEWS[`arrival-${add.teamId}-${eos.seasonYear + 1}`]) continue // bespoke arrival handled by teamTransitions()
     const seed = `entry-${add.teamId}-${eos.seasonYear}`
     const slots = { team: add.teamName, next: eos.seasonYear + 1, count: nextCount }
     out.push({
@@ -2452,6 +2495,7 @@ function market(ctx: NewsContext): NewsArticle[] {
     })
   }
   for (const rem of eos.gridRemovals ?? []) {
+    if (TEAMNEWS[`departure-${rem.teamId}-${eos.seasonYear}`]) continue // bespoke departure handled by teamTransitions()
     const seed = `exit-${rem.teamId}-${eos.seasonYear}`
     const slots = { team: rem.teamName, team_poss: poss(rem.teamName), year: eos.seasonYear, next: eos.seasonYear + 1, final_pos: rem.finalPosition ? ordinal(rem.finalPosition) : '' }
     const posLine = rem.finalPosition
@@ -2467,6 +2511,134 @@ function market(ctx: NewsContext): NewsArticle[] {
         fill(pick(['A team spokesperson thanked "everyone who made the journey possible."', 'Formula 1 wished the team "the very best for the future."'], `${seed}|q`), slots),
       ),
     })
+  }
+  return out
+}
+
+// ---- Team transition newsroom (rebrand / arrival / departure) ----------------------------------
+// Bespoke, historically-grounded copy for known lineage transitions (keyed by lineage id + the year
+// the change takes effect, in teamnews-copy.json), blending the real-world why with the game-world
+// record. Generic team_entry/team_exit copy in market() covers god-mode/fictional changes that have
+// no bespoke key. Fires in the prior season's off-season (round = calendar.length + 1).
+const TEAMNEWS = teamnewsCopy as Record<string, { h: string[]; d: string[]; b: string[][] }>
+
+// The lineage's distinct names in chronological order, as prose ("as Lotus and then Caterham").
+function lineageNameEra(teamId: string, throughYear: number): string {
+  const names: string[] = []
+  for (const g of historicalGrids) {
+    if (g.year > throughYear) continue
+    const t = g.teams.find((x) => x.id === teamId)
+    if (t && names[names.length - 1] !== t.name) names.push(t.name)
+  }
+  if (names.length === 0) return ''
+  if (names.length === 1) return `as ${names[0]}`
+  return `as ${names.slice(0, -1).join(', ')} and then ${names[names.length - 1]}`
+}
+
+// Facts for a transitioning lineage: its game-world record (folded live for wins/podiums/points; the
+// just-finished season is added to seasons/best-finish/titles only on the live path, where the
+// archived base stops at year-1), plus the era's standout + most recent drivers and the seatless count.
+// teamId '' (the grid-grows piece) just returns the shared slots.
+function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: string, extra: Record<string, string | number>): Record<string, string | number> {
+  const year = eos.seasonYear
+  const next = year + 1
+  const gridCount = ctx.teams.length - (eos.gridRemovals?.length ?? 0) + (eos.gridAdditions?.length ?? 0)
+  const w = (n: number, s: string, p: string) => (n === 1 ? s : p)
+
+  const tc = ctx.teamCareers?.[teamId]
+  const wins = tc?.wins ?? 0, podiums = tc?.podiums ?? 0, poles = tc?.poles ?? 0, points = tc?.points ?? 0
+  const cstand = constructorStandingsAfter(ctx, ctx.calendar.length)
+  const liveIdx = cstand.findIndex((c) => c.teamId === teamId)
+  const liveFinal = liveIdx >= 0 ? liveIdx + 1 : Infinity
+  const adj = ctx.live ? 1 : 0 // the just-finished season isn't yet in the archived seasons/best/titles base
+  const seasons = (tc?.seasons ?? 0) + adj
+  const bestNum = ctx.live ? Math.min(tc?.bestConstructorsFinish ?? Infinity, liveFinal) : (tc?.bestConstructorsFinish ?? Infinity)
+  const titles = (tc?.constructorTitles ?? 0) + (ctx.live && eos.constructorChampion === teamId ? 1 : 0)
+  const bestFinish = isFinite(bestNum) ? ordinal(bestNum) : 'the midfield'
+
+  // Most-recent drivers from the just-finished season (for {last_driver} + the seatless count).
+  const teamDrivers = driverStandingsAfter(ctx, ctx.completedRounds).filter((s) => s.teamId === teamId)
+  const last = teamDrivers[0]
+  // The lineage's MOST PROLIFIC driver across its whole history (folded live): by wins, then points.
+  const top = [...(ctx.teamDriverTallies?.[teamId] ?? [])].sort((a, b) => b.wins - a.wins || b.points - a.points)[0]
+  const feat = top && top.wins > 0 ? `won ${top.wins} ${w(top.wins, 'race', 'races')} for the team`
+    : top && top.podiums > 0 ? `took ${top.podiums} ${w(top.podiums, 'podium', 'podiums')} in its colours`
+    : top && top.points > 0 ? `scored ${top.points} ${w(top.points, 'point', 'points')} in its colours`
+    : 'flew the flag through the lean years'
+  const topName = top ? lastName(top.driverName) : (last ? lastName(last.driverName) : 'the team')
+  const lastDriverName = last ? lastName(last.driverName) : (top ? lastName(top.driverName) : 'a departing driver')
+  // Pronouns of the quoted driver (rebrand quote uses the standout; departure uses the most recent).
+  const quotedId = extra.kind === 'departure' ? last?.driverId : top?.driverId
+  const pr = pronouns(ctx.drivers.find((d) => d.id === quotedId)?.gender)
+  const seatlessCount = teamDrivers.length
+
+  const rec = {
+    seasons, prior_seasons: seasons, stint_seasons: seasons,
+    seasons_word: w(seasons, 'season', 'seasons'), prior_seasons_word: w(seasons, 'season', 'seasons'), stint_seasons_word: w(seasons, 'season', 'seasons'),
+    wins, prior_wins: wins, wins_word: w(wins, 'win', 'wins'), prior_wins_word: w(wins, 'win', 'wins'),
+    podiums, prior_podiums: podiums, podiums_word: w(podiums, 'podium', 'podiums'), prior_podiums_word: w(podiums, 'podium', 'podiums'),
+    poles, prior_poles: poles,
+    points, prior_points: points, points_word: w(points, 'point', 'points'), prior_points_word: w(points, 'point', 'points'),
+    best_finish: bestFinish, prior_best_finish: bestFinish,
+    titles, prior_titles: titles,
+    name_era: lineageNameEra(teamId, year),
+    top_driver: topName,
+    top_driver_feat: feat,
+    last_driver: lastDriverName,
+    seatless: w(seatlessCount, 'driver', 'drivers'), seatless_count: seatlessCount,
+    final_drivers: teamDrivers.map((d) => lastName(d.driverName)).join(' and '),
+    ...pr,
+  }
+  return { next, year, entry_year: next, grid_count: gridCount, ...rec, ...extra }
+}
+
+function renderTeamArticle(key: string, category: string, r: number, priority: number, copy: { h: string[]; d: string[]; b: string[][] }, slots: Record<string, string | number>): NewsArticle {
+  return {
+    id: key, category, round: r, priority,
+    headline: fill(pick(copy.h, `${key}|h`), slots),
+    dek: fill(pick(copy.d, `${key}|d`), slots),
+    body: paras(...copy.b.map((pool, i) => fill(pick(pool, `${key}|b${i}`), slots))),
+  }
+}
+
+function teamTransitions(ctx: NewsContext): NewsArticle[] {
+  const eos = ctx.endOfSeason
+  if (!eos) return []
+  const out: NewsArticle[] = []
+  const r = ctx.calendar.length + 1
+  const next = eos.seasonYear + 1
+
+  for (const rb of eos.gridRebrands ?? []) {
+    const key = `rebrand-${rb.teamId}-${next}`
+    const slots = teamTransitionSlots(ctx, eos, rb.teamId, { kind: 'rebrand', team: rb.toName, team_old: rb.fromName, team_new: rb.toName })
+    const copy = TEAMNEWS[key]
+    if (copy) { out.push(renderTeamArticle(key, 'team_rebrand', r, 72, copy, slots)); continue }
+    out.push({
+      id: key, category: 'team_rebrand', round: r, priority: 72,
+      headline: fill(pick(['{team_old} to race as {team_new} from {next}', '{team_old} rebrands as {team_new}'], `${key}|h`), slots),
+      dek: fill('{team_old} will compete under a new name, {team_new}, from {next}.', slots),
+      body: paras(
+        fill('{team_old} will race as {team_new} from {next}, the latest chapter for an established entry on the grid.', slots),
+        fill('The operation, its base and its people carry over under the new identity.', slots),
+      ),
+    })
+  }
+
+  const ggKey = `grid-grows-${next}`
+  if ((eos.gridAdditions?.length ?? 0) >= 3 && TEAMNEWS[ggKey]) {
+    out.push(renderTeamArticle(ggKey, 'team_entry', r, 74, TEAMNEWS[ggKey], teamTransitionSlots(ctx, eos, '', { kind: 'grid' })))
+  }
+  for (const add of eos.gridAdditions ?? []) {
+    const key = `arrival-${add.teamId}-${next}`
+    const copy = TEAMNEWS[key]
+    if (!copy) continue // generic team_entry handled in market()
+    out.push(renderTeamArticle(key, 'team_entry', r, 70, copy, teamTransitionSlots(ctx, eos, add.teamId, { kind: 'arrival', team: add.teamName })))
+  }
+  for (const rem of eos.gridRemovals ?? []) {
+    const key = `departure-${rem.teamId}-${eos.seasonYear}`
+    const copy = TEAMNEWS[key]
+    if (!copy) continue // generic team_exit handled in market()
+    out.push(renderTeamArticle(key, 'team_exit', r, 68, copy, teamTransitionSlots(ctx, eos, rem.teamId, { kind: 'departure', team: rem.teamName })))
   }
   return out
 }
@@ -3134,8 +3306,7 @@ const CATEGORY_DAY_OFFSET: Record<string, number> = {
   driver_signing: 14,     // off-season market, anchored to the finale
   driver_exit: 14,
   career_retirement: 7,
-  team_entry: 21,
-  team_exit: 21,
+  team_entry: 21, team_exit: 21, team_rebrand: 21,
 }
 
 function raceDayOf(ctx: NewsContext, round: number): Date {
@@ -3531,6 +3702,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...sillySeason(ctx),
     ...previews(ctx),
     ...market(ctx),
+    ...teamTransitions(ctx),
     ...driverToWatch(ctx),
     ...midSeasonSwaps(ctx),
     ...recordNews(ctx),
@@ -3555,7 +3727,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   car_launch_livery: 'Launch', rookie_debut: 'Rookie', driver_signing: 'Transfer',
   driver_exit: 'Transfer', career_retirement: 'Retirement', silly_season: 'Silly season',
   analysis_opinion: 'Analysis', driver_to_watch: 'Driver watch',
-  team_entry: 'New team', team_exit: 'Team exit', mid_season_swap: 'Driver change',
+  team_entry: 'New team', team_exit: 'Team exit', team_rebrand: 'Rebrand', mid_season_swap: 'Driver change',
   record: 'Record',
 }
 
@@ -3576,7 +3748,7 @@ export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
   { label: 'Silly season', categories: ['silly_season'] },
   { label: 'Analysis', categories: ['analysis_opinion'] },
   { label: 'Driver watch', categories: ['driver_to_watch'] },
-  { label: 'Grid change', categories: ['team_entry', 'team_exit'] },
+  { label: 'Grid change', categories: ['team_entry', 'team_exit', 'team_rebrand'] },
   { label: 'Driver change', categories: ['mid_season_swap'] },
   { label: 'Record', categories: ['record'] },
 ]
