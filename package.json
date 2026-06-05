@@ -54,14 +54,16 @@
       {
         "from": ".next/standalone",
         "to": "standalone"
-      }
+      },
+      "racing-car.png"
     ],
     "directories": {
       "output": "dist-desktop"
     },
     "npmRebuild": false,
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "icon": "racing-car.png"
     },
     "portable": {
       "artifactName": "RaceWorld-${version}-portable.exe"

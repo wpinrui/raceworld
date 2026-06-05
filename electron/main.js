@@ -64,6 +64,9 @@ async function start() {
   const url = `http://127.0.0.1:${port}`
   await waitForServer(url)
 
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'racing-car.png')
+    : path.join(__dirname, '..', 'racing-car.png')
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -71,8 +74,10 @@ async function start() {
     backgroundColor: '#0F1419',
     autoHideMenuBar: true,
     title: 'RaceWorld',
+    icon: iconPath,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   })
+  mainWindow.maximize() // open filling the screen (window controls kept; not immersive fullscreen)
   mainWindow.once('ready-to-show', () => mainWindow.show())
   // Open any target=_blank / external links in the system browser, not a new Electron window.
   mainWindow.webContents.setWindowOpenHandler(({ url: u }) => { shell.openExternal(u); return { action: 'deny' } })
