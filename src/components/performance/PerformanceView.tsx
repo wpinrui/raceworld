@@ -161,7 +161,7 @@ export function PerformanceView() {
         <>
           <div className="shrink-0 max-h-40 overflow-y-auto flex flex-wrap gap-2">
             {orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => (
-              <div key={t.id} className="rounded-lg bg-[#0F1419]/40 p-2 flex flex-col gap-1.5">
+              <div key={t.id} className="rounded-lg bg-[#0F1419]/40 p-1.5 flex flex-col gap-1.5">
                 <Chip on={selected.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(selected, setSelected, t.id)} />
                 <div className="flex flex-wrap gap-1.5">
                   {(driversByTeam.get(t.id) ?? []).map((d) => (
