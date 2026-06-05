@@ -106,10 +106,19 @@ export function PerformanceView() {
   const maxFinish = Math.max(2, ...teamFinishRows.flatMap((r) => teams.map((t) => r[t.id]).filter((v) => v != null)))
   const visibleTeams = orderedTeams.filter((t) => !hidden.has(t.id))
 
+  // Select all / none, operating on whichever view is active: show/hide every team (Pace & results) or
+  // select/clear every team and driver (Over / under).
+  const deltaKeys = [...orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => t.id), ...drivers.map((d) => d.driverId)]
+  const allOn = sub === 'delta' ? deltaKeys.length > 0 && deltaKeys.every((k) => selected.has(k)) : hidden.size === 0
+  const toggleAll = () => {
+    if (sub === 'delta') setSelected(allOn ? new Set() : new Set(deltaKeys))
+    else setHidden(allOn ? new Set(orderedTeams.map((t) => t.id)) : new Set())
+  }
+
   return (
     <div className="h-full flex flex-col gap-3">
-      {/* Sub-tabs */}
-      <div className="shrink-0 flex gap-1.5">
+      {/* Sub-tabs, with a select all/none toggle right-aligned. */}
+      <div className="shrink-0 flex items-center gap-1.5">
         {([['pace', 'Pace & results'], ['delta', 'Over / under']] as const).map(([key, label]) => (
           <button
             key={key}
@@ -119,6 +128,12 @@ export function PerformanceView() {
             {label}
           </button>
         ))}
+        <button
+          onClick={toggleAll}
+          className="ml-auto px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+        >
+          {allOn ? 'Select none' : 'Select all'}
+        </button>
       </div>
 
       {sub === 'pace' ? (
