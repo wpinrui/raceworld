@@ -44,7 +44,6 @@ export default function Nav() {
   const setupCta = useSetupCta((s) => s.cta)
   const realWorldMode = useSeasonStore((s) => s.realWorldMode)
   const realWorldChangesResolved = useSeasonStore((s) => s.realWorldChangesResolved)
-  const pendingNextSeasonState = useSeasonStore((s) => s.pendingNextSeasonState)
 
   const [hydrated, setHydrated] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -55,7 +54,6 @@ export default function Nav() {
   // The gate is shown whenever there are pending real-world changes, unless the player dismissed it
   // ("Review later"); pressing Continue clears the dismissal so it reappears. Resolving clears the
   // pending set entirely. Derived open state, so no auto-open effect is needed.
-  const [rwDismissed, setRwDismissed] = useState(false)
   // Prior-season career totals (the current season folds in from the store), so milestone /
   // retirement interrupts see real records. Fetched once, like the newsroom.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -96,8 +94,8 @@ export default function Nav() {
   // Real-world team changes that must be acted on before the off-season can advance (null = nothing
   // to gate on). Drives both the auto-opening modal and the Continue gate below.
   const pendingRW = useMemo(
-    () => pendingRealWorldChanges({ realWorldMode, phase, resolved: realWorldChangesResolved, year, teams: pendingNextSeasonState?.teams }),
-    [realWorldMode, phase, realWorldChangesResolved, year, pendingNextSeasonState],
+    () => pendingRealWorldChanges({ realWorldMode, phase, resolved: realWorldChangesResolved, year, teams, completedRounds }),
+    [realWorldMode, phase, realWorldChangesResolved, year, teams, completedRounds],
   )
 
   // Raceday progression — the single CTA walks pre-qualifying → pre-race → finished.
@@ -128,14 +126,8 @@ export default function Nav() {
     setBusy(true)
     try {
       if (isOffSeason(useSeasonStore.getState().phase)) {
-        // Gate: don't advance the off-season while a real-world season's grid changes are unresolved.
-        // Surface them instead — the player must Apply (with any overrides) before progressing.
-        // Recomputed from fresh getState() (not the `pendingRW` memo) to avoid acting on stale state.
-        const st = useSeasonStore.getState()
-        if (pendingRealWorldChanges({ realWorldMode: st.realWorldMode, phase: st.phase, resolved: st.realWorldChangesResolved, year: st.year, teams: st.pendingNextSeasonState?.teams })) {
-          setRwDismissed(false) // un-dismiss so the gate reappears
-          return
-        }
+        // Real-world team changes are now decided at the START of the season (announced mid-season, applied
+        // at the rollover), so the off-season no longer gates on them — it just advances.
         await advanceOffSeason()
       } else {
         const settings = useSettingsStore.getState()
@@ -224,7 +216,7 @@ export default function Nav() {
     if (atRaceday && interruptOnRaceday) return () => router.push('/race')
     return busy ? null : handleContinue
   }
-  const ctaBlocked = newsStop != null || restartOpen || menuOpen || (!!pendingRW && !rwDismissed)
+  const ctaBlocked = newsStop != null || restartOpen || menuOpen || !!pendingRW
   const ctaActionRef = useRef<(() => void) | null>(null)
   // Keep the ref pointed at the current action after each render (not during it).
   useEffect(() => { ctaActionRef.current = ctaBlocked ? null : primaryCtaAction() })
@@ -322,7 +314,7 @@ export default function Nav() {
       {cta}
 
       {/* News interrupt modal */}
-      <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW && !rwDismissed} transition={pendingRW} onClose={() => setRwDismissed(true)} />
+      <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW} transition={pendingRW} />
 
       {newsStop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setNewsStop(null)}>

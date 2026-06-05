@@ -15,6 +15,12 @@ export interface LiveSeasonSlice {
   allUpgradeEvents: DevUpgradeEvent[]
   constructorHistory: ConstructorSeasonRecord[]
   endOfSeasonSummary: EndOfSeasonSummary | null
+  // Real-world changes approved at this season's start (for the mid-season transition newsroom). Optional.
+  approvedSeasonChanges?: {
+    joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
+    leaves: string[]
+    rebrands: { id: string; name: string; shortName: string; color: string; nationality: string }[]
+  } | null
   // Driver-market beats (named to match the store state so callers can pass it straight through).
   seasonContractWatch?: ContractWatch[]
   seasonRenewals?: RenewalResult[]
@@ -28,6 +34,17 @@ export function buildLiveNewsContext(
   records?: RecordsContext,
   teamDriverTalliesBase: Record<string, TeamDriverTally[]> = {},
 ): NewsContext {
+  // Map the approved real-world changes (which carry the NEW identity) to the newsroom shape, pulling each
+  // team's CURRENT name from the live grid for a rebrand's "from".
+  const ch = s.approvedSeasonChanges
+  const nameOf = new Map(s.teams.map((t) => [t.id, t.name]))
+  const nextSeasonChanges = ch
+    ? {
+        rebrands: ch.rebrands.map((r) => ({ teamId: r.id, fromName: nameOf.get(r.id) ?? r.id, toName: r.name })),
+        additions: ch.joins.map((j) => ({ teamId: j.id, teamName: j.name })),
+        removals: ch.leaves.map((id) => ({ teamId: id, teamName: nameOf.get(id) ?? id, finalPosition: null })),
+      }
+    : undefined
   return {
     year: s.year,
     phase: s.phase,
@@ -44,6 +61,7 @@ export function buildLiveNewsContext(
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
     teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
     teamDriverTallies: foldLiveSeasonTeamDrivers(teamDriverTalliesBase, s.year, s.raceResults),
+    nextSeasonChanges,
     contractWatch: s.seasonContractWatch,
     renewals: s.seasonRenewals,
     draft: s.seasonDraft,
