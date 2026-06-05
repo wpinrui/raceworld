@@ -15,7 +15,8 @@ export function confidenceFormMean(confidence: number | undefined): number {
 // new drivers array — drivers who didn't race (or have no teammate) are returned unchanged.
 export function applyConfidenceUpdate(drivers: Driver[], results: RaceResult[]): Driver[] {
   const resultById = new Map(results.map((r) => [r.driverId, r]))
-  // Group classified results by team so each driver's single teammate is findable.
+  // Group all results (including DNFs) by team so each driver's single teammate is
+  // findable — the teammate-DNF branch below needs the retired teammate's row too.
   const byTeam = new Map<string, RaceResult[]>()
   for (const r of results) {
     if (!r.teamId) continue
