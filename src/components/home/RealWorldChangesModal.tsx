@@ -94,9 +94,8 @@ export function RealWorldChangesModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-[#2A3142]">
-          <span className="text-xs text-[#FFFFFF]">Unchecked changes are overridden (the grid keeps them as-is).</span>
-          <button onClick={apply} className={`${PRIMARY} shrink-0`}>Apply changes</button>
+        <div className="flex items-center justify-end px-5 py-3 border-t border-[#2A3142]">
+          <button onClick={apply} className={PRIMARY}>Apply changes</button>
         </div>
       </div>
     </div>
