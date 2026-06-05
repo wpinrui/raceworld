@@ -96,6 +96,10 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const complete = !onClock
   const posts = signingDaySocialPosts(picks).filter((p) => p.pickIndex < revealed).sort((a, b) => b.pickIndex - a.pickIndex)
 
+  // Free-agent rank is fixed for the window: the first seat's contender list is the full pool in ranked
+  // order, so each driver keeps their original rank on the board even after higher names sign off the list.
+  const faRankOf = new Map((picks[0]?.odds ?? []).map((o, i) => [o.driverId, i + 1]))
+
   // Each team's constructors'-championship standing for the badge. Established teams take their just-ended
   // finish; new teams (no finish) slot in below the field, projected to finish in the season ahead.
   const finishOf = new Map(standings.map((cs, i) => [cs.teamId, i + 1]))
@@ -206,7 +210,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                   const d = driverById.get(o.driverId)
                   const row = (
                     <div className="flex items-center gap-2.5 px-3 py-1.5">
-                      <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{i + 1}</span>
+                      <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{faRankOf.get(o.driverId) ?? i + 1}</span>
                       <DriverLink id={o.driverId} className="text-sm text-[#FFFFFF] truncate flex-1">{o.driverName}</DriverLink>
                       <SourceTag src={sourceOf(o.driverId)} />
                     </div>
