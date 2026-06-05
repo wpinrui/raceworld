@@ -159,11 +159,11 @@ export function PerformanceView() {
         </>
       ) : (
         <>
-          <div className="shrink-0 max-h-40 overflow-y-auto flex flex-wrap gap-2">
+          <div className="shrink-0 max-h-40 overflow-y-auto flex flex-wrap gap-x-5 gap-y-1.5">
             {orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => (
-              <div key={t.id} className="rounded-lg bg-[#0F1419]/40 p-1.5 flex flex-col gap-1.5">
+              <div key={t.id} className="flex flex-col gap-1">
                 <Chip on={selected.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(selected, setSelected, t.id)} />
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                   {(driversByTeam.get(t.id) ?? []).map((d) => (
                     <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />
                   ))}
