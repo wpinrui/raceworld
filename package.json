@@ -51,12 +51,9 @@
       "electron/**/*"
     ],
     "extraResources": [
-      {
-        "from": ".next/standalone",
-        "to": "standalone"
-      },
       "racing-car.png"
     ],
+    "afterPack": "electron/after-pack.cjs",
     "directories": {
       "output": "dist-desktop"
     },
