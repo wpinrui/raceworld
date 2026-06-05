@@ -55,6 +55,16 @@ export const PALETTE: Record<string, string> = {
   Cadillac: '#C99A2E',       // Cadillac crest gold (visible, distinct on the 2026 grid)
 }
 
+// Per-season overrides (keyed by `${year}:${name}`) for era-specific liveries that win over the marque
+// default. Use sparingly, only when a team's era livery is iconic enough to deserve its own colour.
+export const OVERRIDES: Record<string, string> = {
+  '2024:Sauber': '#00E701', // Kick Sauber fluoro green
+  '2025:Sauber': '#00E701', // Kick Sauber fluoro green
+}
+
+export const colourFor = (year: number, name: string): string | undefined =>
+  OVERRIDES[`${year}:${name}`] ?? PALETTE[name]
+
 // Perceptual-ish distance (redmean weighting). 0 = identical; ~764 max.
 function dist(a: string, b: string): number {
   const ca = parseInt(a.slice(1), 16), cb = parseInt(b.slice(1), 16)
@@ -69,7 +79,7 @@ const THRESH = 90 // below this, two swatches read as the same colour
 let missing = 0
 let clashes = 0
 for (const g of historicalGrids) {
-  const cols = g.teams.map((t) => ({ name: t.name, c: PALETTE[t.name] }))
+  const cols = g.teams.map((t) => ({ name: t.name, c: colourFor(g.year, t.name) }))
   for (const t of cols) if (!t.c) { console.log(`MISSING palette for ${t.name} (${g.year})`); missing++ }
   for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
     if (!cols[i].c || !cols[j].c) continue

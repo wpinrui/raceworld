@@ -1112,7 +1112,7 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { id: 'haas', name: "Haas", shortName: 'HAA', nationality: 'US', color: '#B6BABD' },
       { id: 'faenza', name: "Racing Bulls", shortName: 'RB', nationality: 'IT', color: '#1634CB' },
       { id: 'williams', name: "Williams", shortName: 'WIL', nationality: 'GB', color: '#1A3C8E' },
-      { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#7A1228' },
+      { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#00E701' },
     ],
     lineup: [
       { driverId: 'lando-norris', teamId: 'mclaren' },
@@ -1148,7 +1148,7 @@ export const historicalGrids: HistoricalSeasonGrid[] = [
       { id: 'faenza', name: "Racing Bulls", shortName: 'RB', nationality: 'IT', color: '#1634CB' },
       { id: 'silverstone', name: "Aston Martin", shortName: 'AMR', nationality: 'GB', color: '#1E5B45' },
       { id: 'haas', name: "Haas", shortName: 'HAA', nationality: 'US', color: '#B6BABD' },
-      { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#7A1228' },
+      { id: 'hinwil', name: "Sauber", shortName: 'SAU', nationality: 'CH', color: '#00E701' },
       { id: 'enstone', name: "Alpine", shortName: 'ALP', nationality: 'FR', color: '#2293D6' },
     ],
     lineup: [
