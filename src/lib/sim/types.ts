@@ -19,6 +19,13 @@ export interface Driver {
   primeEnd: number       // age at which decline starts
   narrativeModifier: number // -20 to +20
   contractExpiresAfterSeason: number
+  // Morale rating in [0, 10] that biases the per-race form roll (issue #58). Starts at 5,
+  // persists across seasons. Rises/falls each race on how the driver does versus their teammate.
+  // Optional for backward-compatible saves: absent reads as 5 (see CONFIDENCE_DEFAULT).
+  confidence?: number
+  // Signed streak counter: |value| = consecutive same-direction races, sign = direction
+  // (+ overperform, - underperform), 0 = fresh. Amplifies repeated swings (step = 0.5 * |streak|).
+  confidenceStreak?: number
   seasonsSinceF1Seat?: number // consecutive seasons without an F1 seat; removed from the market at 5
   photoUrl?: string      // god-mode override; when set, used instead of any real photo or the generated avatar
   debutYear?: number     // real-world debut season (historical mode); lets the newsroom tell a true

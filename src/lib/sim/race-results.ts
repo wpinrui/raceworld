@@ -1,6 +1,73 @@
 import type { RaceState, Driver, Team, RaceResult } from './types'
 import { getPoints } from './points'
 
+// Default confidence for drivers without a stored value (new drivers / pre-#58 saves).
+export const CONFIDENCE_DEFAULT = 5
+
+// Form-roll mean for a given confidence: c=0 -> 2, c=5 -> 5, c=10 -> 8 (issue #58).
+export function confidenceFormMean(confidence: number | undefined): number {
+  return 2 + 0.6 * (confidence ?? CONFIDENCE_DEFAULT)
+}
+
+// Per-race confidence update (issue #58). Run once after a race's results finalize, for
+// every driver. Confidence rises/falls on how a driver finishes versus their teammate
+// across qualifying + race; a signed streak counter amplifies repeated swings. Returns a
+// new drivers array — drivers who didn't race (or have no teammate) are returned unchanged.
+export function applyConfidenceUpdate(drivers: Driver[], results: RaceResult[]): Driver[] {
+  const resultById = new Map(results.map((r) => [r.driverId, r]))
+  // Group classified results by team so each driver's single teammate is findable.
+  const byTeam = new Map<string, RaceResult[]>()
+  for (const r of results) {
+    if (!r.teamId) continue
+    const list = byTeam.get(r.teamId)
+    if (list) list.push(r)
+    else byTeam.set(r.teamId, [r])
+  }
+
+  return drivers.map((driver) => {
+    const me = resultById.get(driver.id)
+    if (!me || !me.teamId) return driver // didn't race this round -> no change
+    const teammates = (byTeam.get(me.teamId) ?? []).filter((r) => r.driverId !== driver.id)
+    if (teammates.length !== 1) return driver // single-car entry / no teammate -> no change
+    const mate = teammates[0]
+
+    const c = driver.confidence ?? CONFIDENCE_DEFAULT
+    const streak = driver.confidenceStreak ?? 0
+
+    // Over/underperformance this race. A DNF is always an underperformance; if only the
+    // teammate DNFs, the classified driver overperforms; otherwise compare the margin.
+    let over: boolean
+    if (me.dnf) {
+      over = false
+    } else if (mate.dnf) {
+      over = true
+    } else {
+      // Positions gained on the teammate across qualifying + race (lower position = better).
+      const margin =
+        (mate.gridPosition - me.gridPosition) +
+        ((mate.finishPosition ?? 0) - (me.finishPosition ?? 0))
+      // The (c - 5) bar makes high confidence hard to hold and low confidence recoverable.
+      over = margin >= c - 5
+    }
+
+    // Extend the streak if same direction, else reset it to a length-1 streak the new way.
+    const dir = over ? 1 : -1
+    const nextStreak = Math.sign(streak) === dir ? streak + dir : dir
+    const n = Math.abs(nextStreak)
+
+    // Cliff: underperforming from a perfect 10 (DNF included) drops straight to 0; otherwise
+    // step by 0.5 * n in the streak's direction. Clamp to [0, 10].
+    let nextC: number
+    if (!over && c >= 10) {
+      nextC = 0
+    } else {
+      nextC = Math.min(10, Math.max(0, c + dir * 0.5 * n))
+    }
+
+    return { ...driver, confidence: nextC, confidenceStreak: nextStreak }
+  })
+}
+
 // Build the persisted RaceResult[] from a finished race state. Shared by the live
 // race screen and the headless "simulate ahead" path so both produce identical rows.
 export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams: Team[]): RaceResult[] {
