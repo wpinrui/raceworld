@@ -7,6 +7,17 @@ import { buildPerformanceData } from '@/lib/world/performance'
 
 type Sub = 'pace' | 'delta'
 
+// Brighten a hex colour by a percentage, so a team's drivers read as lighter shades of the team colour.
+function lighten(hex: string, pct: number): string {
+  const m = hex.replace('#', '')
+  const n = parseInt(m.length === 3 ? m.split('').map((c) => c + c).join('') : m, 16)
+  const f = 1 + pct
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * f))
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * f))
+  const b = Math.min(255, Math.round((n & 255) * f))
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
+
 function Chip({ on, color, label, onClick }: { on: boolean; color: string; label: string; onClick: () => void }) {
   return (
     <button
@@ -56,7 +67,23 @@ export function PerformanceView() {
     return [...teams].sort((a, b) => (latest[b.id] ?? 0) - (latest[a.id] ?? 0))
   }, [teams, carPaceHistory])
 
-  const colorOf = (key: string): string => teamById.get(key)?.color ?? teamById.get(driverById.get(key)?.teamId ?? '')?.color ?? '#8892A6'
+  // Drivers grouped under their team, each shaded a step brighter than the team (1st +10%, 2nd +20%…),
+  // so a team's line and its drivers' lines are all distinguishable.
+  const driversByTeam = useMemo(() => {
+    const m = new Map<string, typeof drivers>()
+    for (const d of drivers) { const a = m.get(d.teamId) ?? []; a.push(d); m.set(d.teamId, a) }
+    return m
+  }, [drivers])
+  const driverShade = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const [teamId, ds] of driversByTeam) {
+      const base = teamById.get(teamId)?.color ?? '#8892A6'
+      ds.forEach((d, i) => m.set(d.driverId, lighten(base, 0.1 * (i + 1))))
+    }
+    return m
+  }, [driversByTeam, teamById])
+
+  const colorOf = (key: string): string => teamById.get(key)?.color ?? driverShade.get(key) ?? '#8892A6'
   const nameOf = (key: string): string => teamById.get(key)?.name ?? driverById.get(key)?.driverName ?? key
 
   // Merge team + driver deltas by round (their ids never collide), for the over/under chart.
@@ -98,7 +125,7 @@ export function PerformanceView() {
       {sub === 'pace' ? (
         <>
           <div className="shrink-0 flex flex-wrap gap-1.5">
-            {orderedTeams.map((t) => <Chip key={t.id} on={!hidden.has(t.id)} color={t.color} label={t.shortName} onClick={() => toggle(hidden, setHidden, t.id)} />)}
+            {orderedTeams.map((t) => <Chip key={t.id} on={!hidden.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(hidden, setHidden, t.id)} />)}
           </div>
           {/* Top: car pace over the season */}
           <div className="flex-1 min-h-0 flex flex-col rounded-xl bg-[#1E2431] border border-[#2A3142] p-3">
@@ -133,15 +160,17 @@ export function PerformanceView() {
         </>
       ) : (
         <>
-          <div className="shrink-0 space-y-1.5 max-h-32 overflow-y-auto">
-            <div className="flex flex-wrap gap-1.5">
-              <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF] self-center mr-1">Teams</span>
-              {orderedTeams.map((t) => <Chip key={t.id} on={selected.has(t.id)} color={t.color} label={t.shortName} onClick={() => toggle(selected, setSelected, t.id)} />)}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF] self-center mr-1">Drivers</span>
-              {drivers.map((d) => <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />)}
-            </div>
+          <div className="shrink-0 max-h-40 overflow-y-auto flex flex-wrap gap-2">
+            {orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => (
+              <div key={t.id} className="rounded-lg border border-[#2A3142] bg-[#0F1419]/40 p-2 flex flex-col gap-1.5">
+                <Chip on={selected.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(selected, setSelected, t.id)} />
+                <div className="flex flex-wrap gap-1.5">
+                  {(driversByTeam.get(t.id) ?? []).map((d) => (
+                    <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="flex-1 min-h-0 flex flex-col rounded-xl bg-[#1E2431] border border-[#2A3142] p-3">
             <div className="flex-1 min-h-0">
