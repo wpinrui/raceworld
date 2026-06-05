@@ -247,6 +247,7 @@ export default function Nav() {
         { href: '/home', label: 'HOME' },
         { href: '/setup', label: 'MARKET' },
         { href: '/standings', label: 'STANDINGS' },
+        { href: '/performance', label: 'PERFORMANCE' },
         { href: '/world', label: 'WORLD' },
         { href: '/newsroom', label: 'NEWS' },
       ]
