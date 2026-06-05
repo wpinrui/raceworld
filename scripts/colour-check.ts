@@ -12,7 +12,7 @@ export const PALETTE: Record<string, string> = {
   Mercedes: '#00D2BE',       // petronas teal
   'Red Bull': '#0E1C5C',     // deep navy (clear of Williams navy + black)
   Renault: '#FFD800',        // Renault yellow
-  Alpine: '#2293D6',         // Alpine blue
+  Alpine: '#FF73B3',         // BWT pink
   'Aston Martin': '#1E5B45', // British racing green
   Haas: '#B6BABD',           // grey/white
   Jordan: '#C99A1A',         // Jordan bronze-gold (clear of papaya + Renault yellow)
