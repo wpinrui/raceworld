@@ -26,7 +26,6 @@ import { runDraft, negotiateRenewals, assessExpiringContracts, type DraftPick, t
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
-import { realWorldTransition } from '@/lib/history/transitions'
 
 const TOTAL_ROUNDS = calendar2026.length
 // Driver market in-season beats: a contract watch shortly before the window, then renewals.
@@ -214,10 +213,16 @@ interface SeasonStore {
   // When true, the season was started from the historical timeline: the market draws real free
   // agents (until the dataset runs out) and season-ends apply real team changes (with consent).
   realWorldMode: boolean
-  // End-of-season gate: true once the player has acted on that season's real-world team changes
-  // (Apply, with whatever overrides). Blocks the off-season from advancing until then. Reset each
-  // time a season concludes.
+  // Start-of-season gate: true once the player has acted on the team changes taking effect NEXT season
+  // (Apply, with whatever overrides). Surfaced when a season begins; reset each time a season starts.
   realWorldChangesResolved: boolean
+  // The approved next-season transition (decided at THIS season's start): the news announces it mid-season
+  // and runEndOfSeason applies it to next year's grid at the rollover. null = none decided / fictional mode.
+  approvedSeasonChanges: {
+    joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
+    leaves: string[]
+    rebrands: { id: string; name: string; shortName: string; color: string; nationality: string }[]
+  } | null
   raceResults: RaceResult[][]  // [round-1]
   dbSeasonId: number | null
 
@@ -293,6 +298,7 @@ export const useSeasonStore = create<SeasonStore>()(
       currentDate: seasonStartDate(2026),
       realWorldMode: false,
       realWorldChangesResolved: false,
+      approvedSeasonChanges: null,
       raceResults: [],
       dbSeasonId: null,
       devPlans: [],
@@ -347,6 +353,9 @@ export const useSeasonStore = create<SeasonStore>()(
           seasonRenewals: [],
           seasonContractWatch: [],
           signingDayRevealed: 0,
+          // Fresh season: re-arm the start-of-season real-world gate (decide next year's changes now).
+          realWorldChangesResolved: false,
+          approvedSeasonChanges: null,
           driverStandings: computeDriverStandings(allDrivers, teams, []),
           constructorStandings: computeConstructorStandings(teams, allDrivers, []),
         })
@@ -381,25 +390,11 @@ export const useSeasonStore = create<SeasonStore>()(
       // endSeason into pendingNextSeasonState), BEFORE contract negotiations fill the seats. Leaving
       // teams free their drivers into the market; joiners enter at the back; rebrands swap identity.
       // Idempotent: a change already reflected in the grid simply isn't offered again.
+      // Decided at the START of the season for NEXT season: just record the approved subset and clear the
+      // gate. The grid mutation happens at the rollover (runEndOfSeason), so the end-of-season market fills
+      // seats against the confirmed roster, and the mid-season news announces these same changes.
       applyRealWorldChanges: (approved) => {
-        const { pendingNextSeasonState, year } = get()
-        if (!pendingNextSeasonState) return
-        const leaveIds = new Set(approved.leaves)
-        let teams = pendingNextSeasonState.teams.filter((t) => !leaveIds.has(t.id))
-        const drivers = pendingNextSeasonState.drivers.map((d) =>
-          leaveIds.has(d.teamId) ? { ...d, teamId: '', contractExpiresAfterSeason: year, seasonsSinceF1Seat: 0 } : d,
-        )
-        const rebrandById = new Map(approved.rebrands.map((r) => [r.id, r]))
-        teams = teams.map((t) => {
-          const r = rebrandById.get(t.id)
-          return r ? { ...t, name: r.name, shortName: r.shortName, color: r.color, nationality: r.nationality } : t
-        })
-        const lowest = teams.reduce((m, t) => Math.min(m, t.carPace), 75)
-        approved.joins.forEach((j, i) => {
-          if (teams.some((t) => t.id === j.id)) return // already applied; don't add a duplicate
-          teams.push({ id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) })
-        })
-        set({ pendingNextSeasonState: { drivers, teams }, realWorldChangesResolved: true })
+        set({ approvedSeasonChanges: approved, realWorldChangesResolved: true })
       },
 
       // God-mode edit of a single driver (e.g. from the world driver page).
@@ -617,7 +612,7 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorStandings,
           seasonStartStats,
           pendingGridChanges,
-          realWorldMode,
+          approvedSeasonChanges,
         } = get()
 
         const totalTeams = teams.length
@@ -680,9 +675,27 @@ export const useSeasonStore = create<SeasonStore>()(
           teamMediaScores = [...teamMediaScores, ...added.map((t) => ({ teamId: t.id, score: 0 }))]
         }
 
-        // The real-world timeline's proposed changes for next year (joins/leaves/rebrands), for the
-        // newsroom. null in fictional/god-mode (where pendingGridChanges drives the grid instead).
-        const rwt = realWorldMode ? realWorldTransition(year, teams) : null
+        // Real-world transitions APPROVED at the start of this season (and already announced mid-season by
+        // the newsroom) now take effect on next year's grid. Applying them here, before the end-of-season
+        // market runs, means seats are filled against the confirmed roster.
+        if (approvedSeasonChanges) {
+          const leaveIds = new Set(approvedSeasonChanges.leaves)
+          nextTeams = nextTeams.filter((t) => !leaveIds.has(t.id))
+          nextDrivers = nextDrivers.map((d) =>
+            leaveIds.has(d.teamId) ? { ...d, teamId: '', contractExpiresAfterSeason: year, seasonsSinceF1Seat: 0 } : d,
+          )
+          const rebrandById = new Map(approvedSeasonChanges.rebrands.map((r) => [r.id, r]))
+          nextTeams = nextTeams.map((t) => {
+            const r = rebrandById.get(t.id)
+            return r ? { ...t, name: r.name, shortName: r.shortName, color: r.color, nationality: r.nationality } : t
+          })
+          const lowest = nextTeams.reduce((m, t) => Math.min(m, t.carPace), 75)
+          approvedSeasonChanges.joins.forEach((j, i) => {
+            if (nextTeams.some((t) => t.id === j.id)) return
+            nextTeams = [...nextTeams, { id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) }]
+            teamMediaScores = [...teamMediaScores, { teamId: j.id, score: 0 }]
+          })
+        }
 
         // 4. Build the partial summary; later phases fill in their slices.
         const summary: EndOfSeasonSummary = {
@@ -701,27 +714,15 @@ export const useSeasonStore = create<SeasonStore>()(
           upgradeEvents: allUpgradeEvents,
           preSeasonTest: null,
           retentionDelta: computeRetentionDeltas(drivers, teams, raceResults),
-          // Grid changes recorded for the newsroom (arrival + farewell + rebrand), announced at the close
-          // of this season for next year. God-mode changes come from pendingGridChanges; real-world mode
-          // adds the historical joins/leaves/rebrands for the coming year (the proposed timeline, which the
-          // consent flow then applies). The two never coexist (a game is fictional OR real-world).
-          gridAdditions: [
-            ...additions.map((t) => ({ teamId: t.id, teamName: t.name })),
-            ...(rwt?.teamJoins ?? []).map((t) => ({ teamId: t.id, teamName: t.name })),
-          ],
-          gridRemovals: [
-            ...removals.map((id) => ({
-              teamId: id,
-              teamName: teams.find((t) => t.id === id)?.name ?? id,
-              finalPosition: constructorRankInfo.find((c) => c.teamId === id)?.finalPosition ?? null,
-            })),
-            ...(rwt?.teamLeaves ?? []).map((t) => ({
-              teamId: t.id,
-              teamName: t.name,
-              finalPosition: constructorRankInfo.find((c) => c.teamId === t.id)?.finalPosition ?? null,
-            })),
-          ],
-          gridRebrands: (rwt?.teamRebrands ?? []).map((r) => ({ teamId: r.id, fromName: r.from.name, toName: r.to.name })),
+          // God-mode (fictional) grid changes taking effect next season, for the generic off-season
+          // newsroom. Real-world transitions are handled separately (approved at season start, announced
+          // mid-season, applied to nextTeams above), so they do NOT go through the summary.
+          gridAdditions: additions.map((t) => ({ teamId: t.id, teamName: t.name })),
+          gridRemovals: removals.map((id) => ({
+            teamId: id,
+            teamName: teams.find((t) => t.id === id)?.name ?? id,
+            finalPosition: constructorRankInfo.find((c) => c.teamId === id)?.finalPosition ?? null,
+          })),
         }
 
         // 5. Update constructor history (prepend current season, dedupe, keep ≤55)
@@ -747,7 +748,6 @@ export const useSeasonStore = create<SeasonStore>()(
           constructorHistory: updatedHistory,
           pendingNextSeasonState: { drivers: nextDrivers, teams: nextTeams },
           pendingGridChanges: { additions: [], removals: [] },
-          realWorldChangesResolved: false, // new season's changes need acting on before the off-season advances
         })
       },
 

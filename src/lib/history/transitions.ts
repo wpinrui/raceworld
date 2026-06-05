@@ -31,8 +31,12 @@ export function pendingRealWorldChanges(opts: {
   resolved: boolean
   year: number
   teams: Team[] | undefined
+  completedRounds: number
 }): RealWorldTransition | null {
-  if (!opts.realWorldMode || opts.phase !== 'end-of-season' || opts.resolved || !opts.teams) return null
+  // Decided at the START of the season (so the news can announce it mid-season and it takes effect next
+  // year): surface only at the season opener (pre-race, no rounds run) until the player has acted on it.
+  if (!opts.realWorldMode || opts.resolved || !opts.teams) return null
+  if (opts.phase !== 'pre-race' || opts.completedRounds !== 0) return null
   const tr = realWorldTransition(opts.year, opts.teams)
   const n = tr.teamJoins.length + tr.teamLeaves.length + tr.teamRebrands.length
   return tr.hasData && n > 0 ? tr : null

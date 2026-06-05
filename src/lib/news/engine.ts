@@ -72,6 +72,14 @@ export interface NewsContext {
                                           // the driver has never raced in F1; never infer that from age.
   teamCareers?: Record<string, TeamCareer>  // constructor career totals per team, for team milestones (optional)
   teamDriverTallies?: Record<string, TeamDriverTally[]>  // per-lineage driver tallies (folded live), for {top_driver} (optional)
+  // Real-world team changes taking effect NEXT season, decided at THIS season's start. The team-transition
+  // producer announces them ~4/5 through the season. (Live: the approved set from the store. Archived: the
+  // season -> next-season roster diff.) Distinct from endOfSeason.gridAdditions/Removals (god-mode, off-season).
+  nextSeasonChanges?: {
+    rebrands: { teamId: string; fromName: string; toName: string }[]
+    additions: { teamId: string; teamName: string }[]
+    removals: { teamId: string; teamName: string; finalPosition: number | null }[]
+  }
   // Driver-market beats for the market journalism (all optional — present only on the live context):
   contractWatch?: ContractWatch[]  // round-15 verdicts on expiring contracts (could-do-better/right-place/lucky)
   renewals?: RenewalResult[]       // round-18 in-season contract renewals
@@ -2539,24 +2547,23 @@ function lineageNameEra(teamId: string, throughYear: number): string {
 // just-finished season is added to seasons/best-finish/titles only on the live path, where the
 // archived base stops at year-1), plus the era's standout + most recent drivers and the seatless count.
 // teamId '' (the grid-grows piece) just returns the shared slots.
-function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: string, extra: Record<string, string | number>): Record<string, string | number> {
-  const year = eos.seasonYear
+function teamTransitionSlots(ctx: NewsContext, teamId: string, extra: Record<string, string | number>): Record<string, string | number> {
+  const year = ctx.year
   const next = year + 1
-  const gridCount = ctx.teams.length - (eos.gridRemovals?.length ?? 0) + (eos.gridAdditions?.length ?? 0)
+  const ch = ctx.nextSeasonChanges
+  const gridCount = ctx.teams.length - (ch?.removals.length ?? 0) + (ch?.additions.length ?? 0)
   const w = (n: number, s: string, p: string) => (n === 1 ? s : p)
 
   const tc = ctx.teamCareers?.[teamId]
   const wins = tc?.wins ?? 0, podiums = tc?.podiums ?? 0, poles = tc?.poles ?? 0, points = tc?.points ?? 0
-  const cstand = constructorStandingsAfter(ctx, ctx.calendar.length)
-  const liveIdx = cstand.findIndex((c) => c.teamId === teamId)
-  const liveFinal = liveIdx >= 0 ? liveIdx + 1 : Infinity
-  const adj = ctx.live ? 1 : 0 // the just-finished season isn't yet in the archived seasons/best/titles base
-  const seasons = (tc?.seasons ?? 0) + adj
-  const bestNum = ctx.live ? Math.min(tc?.bestConstructorsFinish ?? Infinity, liveFinal) : (tc?.bestConstructorsFinish ?? Infinity)
-  const titles = (tc?.constructorTitles ?? 0) + (ctx.live && eos.constructorChampion === teamId ? 1 : 0)
-  const bestFinish = isFinite(bestNum) ? ordinal(bestNum) : 'the midfield'
+  // The article lands mid-season, so the record reads "through the season so far": wins/podiums/points
+  // fold in the in-progress year and the season count includes it, but best-finish/titles use only
+  // completed seasons (this year's standing isn't settled yet).
+  const seasons = (tc?.seasons ?? 0) + (ctx.live ? 1 : 0)
+  const bestFinish = tc?.bestConstructorsFinish != null ? ordinal(tc.bestConstructorsFinish) : 'the midfield'
+  const titles = tc?.constructorTitles ?? 0
 
-  // Most-recent drivers from the just-finished season (for {last_driver} + the seatless count).
+  // Current drivers (for {last_driver} + the seatless count): they go to the market when the team goes.
   const teamDrivers = driverStandingsAfter(ctx, ctx.completedRounds).filter((s) => s.teamId === teamId)
   const last = teamDrivers[0]
   // The lineage's MOST PROLIFIC driver across its whole history (folded live): by wins, then points.
@@ -2602,15 +2609,17 @@ function renderTeamArticle(key: string, category: string, r: number, priority: n
 }
 
 function teamTransitions(ctx: NewsContext): NewsArticle[] {
-  const eos = ctx.endOfSeason
-  if (!eos) return []
+  const ch = ctx.nextSeasonChanges
+  if (!ch) return []
   const out: NewsArticle[] = []
-  const r = ctx.calendar.length + 1
-  const next = eos.seasonYear + 1
+  const next = ctx.year + 1
+  // Decided at the season's start, announced ~4/5 of the way through it; the change takes effect next year.
+  const r = Math.max(1, Math.round((ctx.calendar.length * 4) / 5))
+  if (ctx.completedRounds < r) return [] // not reached yet (live); archived seasons are complete
 
-  for (const rb of eos.gridRebrands ?? []) {
+  for (const rb of ch.rebrands) {
     const key = `rebrand-${rb.teamId}-${next}`
-    const slots = teamTransitionSlots(ctx, eos, rb.teamId, { kind: 'rebrand', team: rb.toName, team_old: rb.fromName, team_new: rb.toName })
+    const slots = teamTransitionSlots(ctx, rb.teamId, { kind: 'rebrand', team: rb.toName, team_old: rb.fromName, team_new: rb.toName })
     const copy = TEAMNEWS[key]
     if (copy) { out.push(renderTeamArticle(key, 'team_rebrand', r, 72, copy, slots)); continue }
     out.push({
@@ -2625,20 +2634,20 @@ function teamTransitions(ctx: NewsContext): NewsArticle[] {
   }
 
   const ggKey = `grid-grows-${next}`
-  if ((eos.gridAdditions?.length ?? 0) >= 3 && TEAMNEWS[ggKey]) {
-    out.push(renderTeamArticle(ggKey, 'team_entry', r, 74, TEAMNEWS[ggKey], teamTransitionSlots(ctx, eos, '', { kind: 'grid' })))
+  if (ch.additions.length >= 3 && TEAMNEWS[ggKey]) {
+    out.push(renderTeamArticle(ggKey, 'team_entry', r, 74, TEAMNEWS[ggKey], teamTransitionSlots(ctx, '', { kind: 'grid' })))
   }
-  for (const add of eos.gridAdditions ?? []) {
+  for (const add of ch.additions) {
     const key = `arrival-${add.teamId}-${next}`
     const copy = TEAMNEWS[key]
     if (!copy) continue // generic team_entry handled in market()
-    out.push(renderTeamArticle(key, 'team_entry', r, 70, copy, teamTransitionSlots(ctx, eos, add.teamId, { kind: 'arrival', team: add.teamName })))
+    out.push(renderTeamArticle(key, 'team_entry', r, 70, copy, teamTransitionSlots(ctx, add.teamId, { kind: 'arrival', team: add.teamName })))
   }
-  for (const rem of eos.gridRemovals ?? []) {
-    const key = `departure-${rem.teamId}-${eos.seasonYear}`
+  for (const rem of ch.removals) {
+    const key = `departure-${rem.teamId}-${ctx.year}`
     const copy = TEAMNEWS[key]
     if (!copy) continue // generic team_exit handled in market()
-    out.push(renderTeamArticle(key, 'team_exit', r, 68, copy, teamTransitionSlots(ctx, eos, rem.teamId, { kind: 'departure', team: rem.teamName })))
+    out.push(renderTeamArticle(key, 'team_exit', r, 68, copy, teamTransitionSlots(ctx, rem.teamId, { kind: 'departure', team: rem.teamName })))
   }
   return out
 }
