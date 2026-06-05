@@ -162,6 +162,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
               const nameEl = d
                 ? <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(p.driverId) ?? null} wdcPoints={wdcPtsOf.get(p.driverId)} career={careers[p.driverId]} side="right"><span className="truncate shrink-0">{nameLink}</span></DriverTooltip>
                 : <span className="truncate shrink-0">{nameLink}</span>
+              const fromText = fromLabel(p, formerTeamOf.get(p.driverId))
               return (
                 <div
                   key={`${p.teamId}-${i}`}
@@ -179,7 +180,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                       <Tooltip content={`${faLabel(p.faRank)} free agent of ${year}`}>
                         <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{faLabel(p.faRank)}</span>
                       </Tooltip>
-                      {fromLabel(p, formerTeamOf.get(p.driverId)) && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromLabel(p, formerTeamOf.get(p.driverId))}</span>}
+                      {fromText && <span className="text-[10px] text-[#FFFFFF] truncate hidden sm:inline">{fromText}</span>}
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (

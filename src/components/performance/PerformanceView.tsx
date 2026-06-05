@@ -103,7 +103,7 @@ export function PerformanceView() {
     return <p className="text-sm text-[#FFFFFF]">Run some races and this will fill in.</p>
   }
 
-  const maxFinish = Math.max(2, ...teamFinishRows.flatMap((r) => teams.map((t) => (r[t.id] as number) ?? 0)))
+  const maxFinish = Math.max(2, ...teamFinishRows.flatMap((r) => teams.map((t) => r[t.id]).filter((v) => v != null)))
   const visibleTeams = orderedTeams.filter((t) => !hidden.has(t.id))
 
   return (

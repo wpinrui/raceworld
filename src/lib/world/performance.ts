@@ -24,7 +24,10 @@ export function buildPerformanceData(
   teams: Team[],
 ): PerformanceData {
   const start = carPaceHistory.find((h) => h.round === 0)
-  const paceAt = (round: number, teamId: string): number => (carPaceHistory.find((h) => h.round === round) ?? start)?.paces[teamId] ?? 0
+  // The car that RACED round r is the pre-race car: this round's upgrade lands after the race, so the
+  // relevant pace is the prior snapshot (round 0 for round 1). Using round r's snapshot would credit a
+  // team with an upgrade it didn't yet have during the race.
+  const racePace = (round: number, teamId: string): number => (carPaceHistory.find((h) => h.round === round - 1) ?? start)?.paces[teamId] ?? 0
 
   const paceRows: Row[] = [...carPaceHistory].sort((a, b) => a.round - b.round).map((s) => ({ round: s.round, ...s.paces }))
 
@@ -40,9 +43,12 @@ export function buildPerformanceData(
     rounds = r
     const racers = round.filter((res) => res.teamId !== '')
 
-    // Expected position = field rank by car pace that round (1 = fastest car).
-    const expected = new Map<string, number>()
-    ;[...racers].sort((a, b) => paceAt(r, b.teamId) - paceAt(r, a.teamId)).forEach((res, idx) => expected.set(res.driverId, idx + 1))
+    // Rank teams by the pace they raced on; a team's two cars "should" finish around 2*rank-0.5 (the
+    // midpoint of its grid slots). Both team-mates share this baseline, so a driver's delta reflects how
+    // they did against the car rather than an arbitrary split within the pair.
+    const teamRank = new Map<string, number>()
+    ;[...new Set(racers.map((res) => res.teamId))].sort((a, b) => racePace(r, b) - racePace(r, a)).forEach((teamId, idx) => teamRank.set(teamId, idx + 1))
+    const expectedOf = (teamId: string): number => 2 * (teamRank.get(teamId) ?? teams.length) - 0.5
 
     const teamBest = new Map<string, number>()
     const teamDeltas = new Map<string, number[]>()
@@ -52,9 +58,7 @@ export function buildPerformanceData(
       driverSeen.set(res.driverId, { driverId: res.driverId, driverName: res.driverName, teamId: res.teamId })
       if (res.dnf || res.finishPosition == null) continue
       teamBest.set(res.teamId, Math.min(teamBest.get(res.teamId) ?? Infinity, res.finishPosition))
-      const exp = expected.get(res.driverId)
-      if (exp == null) continue
-      const delta = exp - res.finishPosition
+      const delta = Math.round((expectedOf(res.teamId) - res.finishPosition) * 10) / 10
       dRow[res.driverId] = delta
       const arr = teamDeltas.get(res.teamId) ?? []
       arr.push(delta)

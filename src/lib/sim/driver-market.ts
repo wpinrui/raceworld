@@ -128,7 +128,7 @@ export function assessExpiringContracts(opts: {
 export type DraftFlavour = 'statement' | 'upset' | 'rookie' | 'veteran_short' | 'chalk'
 
 export interface DraftSeat { teamId: string; teamName: string; teamColor: string }
-export interface DraftOdds { driverId: string; driverName: string; pct: number; rank: number; prevTeamName: string } // rank = free-agent ranking (1 = best); prevTeamName = team left ('' = none)
+export interface DraftOdds { driverId: string; driverName: string; pct: number }
 export interface DraftPick {
   teamId: string
   teamName: string
@@ -201,8 +201,8 @@ export function runDraft(opts: {
     const pickPct = probs[idx] * 100
     const realizedProb = (survival.get(driver.id) ?? 1) * probs[idx]
     const years = draftYears(realizedProb, rng)
-    // All remaining free agents, in order (not just the favourites), each tagged with the team they left.
-    const odds: DraftOdds[] = remaining.map((d, i) => ({ driverId: d.id, driverName: d.name, pct: Math.round(probs[i] * 1000) / 10, rank: poolRank.get(d.id) ?? i + 1, prevTeamName: d.teamId !== '' ? (teamName.get(d.teamId) ?? '') : '' }))
+    // All remaining free agents, in order (not just the favourites).
+    const odds: DraftOdds[] = remaining.map((d, i) => ({ driverId: d.id, driverName: d.name, pct: Math.round(probs[i] * 1000) / 10 }))
 
     picks.push({
       teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
