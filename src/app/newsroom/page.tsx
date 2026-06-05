@@ -11,6 +11,7 @@ import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type Dri
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetAllSeasonNews, actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, type AllSeasonNews } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import EntityFilter, { type EntityValue } from '@/components/news/EntityFilter'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 
@@ -56,6 +57,7 @@ export default function NewsroomPage() {
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
   const pageScrollRef = useScrollRestore<HTMLDivElement>('newsroom:page')
   const listScrollRef = useScrollRestore<HTMLDivElement>('newsroom:list')
+  const driverCard = useLiveDriverCards()
   useEffect(() => {
     setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
@@ -316,9 +318,9 @@ export default function NewsroomPage() {
               <Panel title={selected ? `${whenLabel(selected, calendar2026.length)} · ${CATEGORY_LABELS[selected.category] ?? selected.category}` : 'Article'} className="lg:col-span-2">
                 {selected ? (
                   <article className="space-y-3">
-                    <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} /></h2>
-                    <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={selected.dek} index={index} /></p>
-                    <LinkedParagraphs text={selected.body} index={index} />
+                    <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} driverCard={driverCard} /></h2>
+                    <p className="text-sm italic text-[#FFFFFF]"><LinkedText text={selected.dek} index={index} driverCard={driverCard} /></p>
+                    <LinkedParagraphs text={selected.body} index={index} driverCard={driverCard} />
                     {selected.entities && (selected.entities.driverIds.length + selected.entities.teamIds.length > 0) && (
                       <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#2A3142]">
                         <span className="text-[10px] uppercase tracking-widest text-[#6B7280] self-center mr-1">Filter</span>
