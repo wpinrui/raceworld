@@ -14,7 +14,7 @@ export const PALETTE: Record<string, string> = {
   Renault: '#FFD800',        // Renault yellow
   Alpine: '#FF73B3',         // BWT pink
   'Aston Martin': '#1E5B45', // British racing green
-  Haas: '#B6BABD',           // grey/white
+  Haas: '#E4E7EB',           // near-white (Haas white livery)
   Jordan: '#C99A1A',         // Jordan bronze-gold (clear of papaya + Renault yellow)
   Benetton: '#00A650',       // Benetton green
   Sauber: '#7A1228',         // Sauber burgundy (early red, clear of Ferrari + the green cluster)
@@ -25,7 +25,7 @@ export const PALETTE: Record<string, string> = {
   Honda: '#6E2C91',          // distinct (kept clear of the red cluster)
   BAR: '#C2007A',            // 555 cerise
   'Toro Rosso': '#3F9BE0',   // bright blue (clear of BMW blue + the navies)
-  AlphaTauri: '#8693A8',     // light slate (clear of Williams navy)
+  AlphaTauri: '#9788AE',     // purplish slate (clear of Williams navy)
   'Racing Bulls': '#1634CB', // bright blue
   'Force India': '#FF73B3',  // BWT pink
   'Racing Point': '#FF73B3', // BWT pink
