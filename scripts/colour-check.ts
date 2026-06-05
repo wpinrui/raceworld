@@ -91,9 +91,10 @@ for (const g of historicalGrids) {
   const cols = g.teams.map((t) => ({ name: t.name, c: colourFor(g.year, t.name) }))
   for (const t of cols) if (!t.c) { console.log(`MISSING palette for ${t.name} (${g.year})`); missing++ }
   for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
-    if (!cols[i].c || !cols[j].c) continue
-    const d = dist(cols[i].c, cols[j].c)
-    if (d < THRESH) { console.log(`CLASH ${g.year}: ${cols[i].name} ${cols[i].c} vs ${cols[j].name} ${cols[j].c}  (d=${d.toFixed(0)})`); clashes++ }
+    const ci = cols[i].c, cj = cols[j].c
+    if (!ci || !cj) continue
+    const d = dist(ci, cj)
+    if (d < THRESH) { console.log(`CLASH ${g.year}: ${cols[i].name} ${ci} vs ${cols[j].name} ${cj}  (d=${d.toFixed(0)})`); clashes++ }
   }
 }
 console.log(`\n${missing} missing, ${clashes} clashes (threshold ${THRESH})`)
