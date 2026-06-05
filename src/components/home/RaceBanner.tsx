@@ -114,8 +114,14 @@ export function RaceBanner({ simming, onSimTo }: Props) {
       <div ref={scrollRef} className="flex gap-2 overflow-x-auto px-5 py-4">
         {calendar2026.map((c, idx) => {
           const round = idx + 1
-          const completed = round < currentRound
-          const current = round === currentRound
+          // A finished race shows its podium. currentRound stays pinned at the final round
+          // through the off-season (advanceRound rolls straight into endSeason without
+          // incrementing it), so for the closing race `round < currentRound` is never true —
+          // fall back to "has results" so it flips to its podium once the season ends. And no
+          // race is the live "current" one during the off-season.
+          const hasResults = (raceResults[round - 1]?.length ?? 0) > 0
+          const completed = round < currentRound || (hasResults && isOffSeason(phase))
+          const current = round === currentRound && !isOffSeason(phase)
           const flag = (
             <ReactCountryFlag countryCode={c.country} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
           )
