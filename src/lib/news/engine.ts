@@ -2564,7 +2564,7 @@ function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: 
   const feat = top && top.wins > 0 ? `won ${top.wins} ${w(top.wins, 'race', 'races')} for the team`
     : top && top.podiums > 0 ? `took ${top.podiums} ${w(top.podiums, 'podium', 'podiums')} in its colours`
     : top && top.points > 0 ? `scored ${top.points} ${w(top.points, 'point', 'points')} in its colours`
-    : 'flew the flag through the lean years'
+    : 'made the most of difficult machinery'
   const topName = top ? lastName(top.driverName) : (last ? lastName(last.driverName) : 'the team')
   const lastDriverName = last ? lastName(last.driverName) : (top ? lastName(top.driverName) : 'a departing driver')
   // Pronouns of the quoted driver (rebrand quote uses the standout; departure uses the most recent).
@@ -2586,7 +2586,7 @@ function teamTransitionSlots(ctx: NewsContext, eos: EndOfSeasonSummary, teamId: 
     top_driver_feat: feat,
     last_driver: lastDriverName,
     seatless: w(seatlessCount, 'driver', 'drivers'), seatless_count: seatlessCount,
-    final_drivers: teamDrivers.map((d) => lastName(d.driverName)).join(' and '),
+    final_drivers: listJoin(teamDrivers.map((d) => lastName(d.driverName))),
     ...pr,
   }
   return { next, year, entry_year: next, grid_count: gridCount, ...rec, ...extra }
