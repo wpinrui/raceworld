@@ -23,7 +23,7 @@ export const PALETTE: Record<string, string> = {
   Jaguar: '#0B5E33',         // British racing green (darker)
   Toyota: '#E5446E',         // pinkish red (clear of Ferrari)
   Honda: '#6E2C91',          // distinct (kept clear of the red cluster)
-  BAR: '#C2007A',            // 555 cerise
+  BAR: '#F4F6F8',            // white (Lucky Strike)
   'Toro Rosso': '#3F9BE0',   // bright blue (clear of BMW blue + the navies)
   AlphaTauri: '#9788AE',     // purplish slate (clear of Williams navy)
   'Racing Bulls': '#1634CB', // bright blue
