@@ -21,10 +21,10 @@ function Chip({ on, color, label, onClick }: { on: boolean; color: string; label
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors text-[#FFFFFF] ${on ? 'bg-[#FFFFFF]/10 border-[#FFFFFF]/55' : 'bg-transparent border-[#3A4252]'}`}
+      className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors text-[#FFFFFF] max-w-full min-w-0 ${on ? 'bg-[#FFFFFF]/10 border-[#FFFFFF]/55' : 'bg-transparent border-[#3A4252]'}`}
     >
-      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color, opacity: on ? 1 : 0.5 }} />
-      {label}
+      <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color, opacity: on ? 1 : 0.5 }} />
+      <span className="truncate">{label}</span>
     </button>
   )
 }
@@ -159,15 +159,13 @@ export function PerformanceView() {
         </>
       ) : (
         <>
-          <div className="shrink-0 max-h-40 overflow-y-auto flex flex-wrap gap-x-5 gap-y-1.5">
+          <div className="shrink-0 max-h-44 overflow-y-auto grid grid-cols-5 gap-x-3 gap-y-2">
             {orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => (
-              <div key={t.id} className="flex flex-col gap-1">
+              <div key={t.id} className="flex flex-col gap-1 min-w-0">
                 <Chip on={selected.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(selected, setSelected, t.id)} />
-                <div className="flex flex-wrap gap-1">
-                  {(driversByTeam.get(t.id) ?? []).map((d) => (
-                    <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />
-                  ))}
-                </div>
+                {(driversByTeam.get(t.id) ?? []).map((d) => (
+                  <Chip key={d.driverId} on={selected.has(d.driverId)} color={colorOf(d.driverId)} label={d.driverName} onClick={() => toggle(selected, setSelected, d.driverId)} />
+                ))}
               </div>
             ))}
           </div>
