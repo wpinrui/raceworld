@@ -3136,6 +3136,35 @@ function analysis(ctx: NewsContext): NewsArticle[] {
 // potential — nothing to contradict); > 0 means an experienced free agent, where we cite the real
 // career record. Either way it closes on the actual market projection (seeded ±10 media error) for
 // whether a return looks likely.
+// Stature-scaled career summary for a comeback veteran on the market (driver-to-watch). Real stats only;
+// the producer picks the tier from the driver's career record so a former champion reads bigger than a
+// journeyman. Slots are filled from DriverCareer.
+const VETERAN_CAREER: Record<string, string[]> = {
+  champion: [
+    '{champ_label} with the {title_years} {titles_word} to {their} name, {driver_last} accumulated {wins} {wins_word} and {poles} {poles_word} across {seasons} {seasons_word} at the top level.',
+    '{driver_last} is {champ_label}, the {title_years} {titles_word} backed by {wins} {wins_word} and {poles} {poles_word} in {seasons} {seasons_word} of top-flight racing.',
+  ],
+  winner: [
+    '{driver_last} has taken {wins} {wins_word} and {podiums} {podiums_word} from {starts} {starts_word}, with {poles} {poles_word} underlining {their} one-lap speed.',
+    'Over {starts} {starts_word} {driver_last} has earned {wins} {wins_word}, {poles} {poles_word} and {podiums} {podiums_word}, a record that speaks for itself.',
+  ],
+  podium: [
+    '{driver_last} has stood on the podium {podiums} {podiums_word} across {seasons} {seasons_word}, {their} best result a {best_finish} that showed what {they} can do on the right day.',
+    'Quick when the car allowed it, {driver_last} collected {podiums} {podiums_word} and {points} {points_word} over {seasons} {seasons_word}, with a best finish of {best_finish}.',
+    'Across {seasons} {seasons_word} {driver_last} banked {podiums} {podiums_word} and a best result of {best_finish}, never quite finding the package to convert pace into a win.',
+  ],
+  points: [
+    'Over {seasons} {seasons_word} and {starts} {starts_word}, {driver_last} scored {points} {points_word} with a personal best of {best_finish}, a consistent operator who rarely threw away what the car could give.',
+    '{driver_last} brought home {points} {points_word} across {starts} {starts_word}, a best finish of {best_finish} the highlight of {seasons} {seasons_word} in the championship.',
+    'A steady hand over {seasons} {seasons_word}, {driver_last} accumulated {points} {points_word} from {starts} {starts_word}, {their} best result a {best_finish}.',
+  ],
+  journeyman: [
+    'Racing since {debut_year}, {driver_last} has {starts} {starts_word} across {seasons} {seasons_word} of top-flight experience, a known quantity whose racecraft has outlasted teams that once doubted it.',
+    '{driver_last} brings {starts} {starts_word} and {seasons} {seasons_word} of hard-won experience to the table, having been a fixture in the paddock since {debut_year}.',
+    'Since {debut_year}, {driver_last} has completed {starts} {starts_word} across {seasons} {seasons_word}, race-hardened, well-regarded in engineering circles, and still pushing for a seat.',
+  ],
+}
+
 function driverToWatch(ctx: NewsContext): NewsArticle[] {
   // Fires on a fixed 8-window schedule weighted to the season's end; like silly-season it belongs in the
   // season's permanent record (don't gate on endOfSeason or the retrospective loses the market narrative).
@@ -3185,18 +3214,28 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
       if (mv) toTeam = mv.toTeamName
     } catch { /* projection failed → treat as no opening */ }
 
-    // Experienced-career honours, only what is real.
-    const honourBits: string[] = []
-    if (c) {
-      if (c.titles > 0) honourBits.push(c.titles === 1 ? `a former World Champion` : `a ${c.titles}-time World Champion`)
-      if (c.wins > 0) honourBits.push(`${c.wins} ${plural(c.wins, 'win')}`)
-      else if (c.podiums > 0) honourBits.push(`${c.podiums} ${plural(c.podiums, 'podium')}`)
-    }
+    // Career stature, picked from the real record, scales the comeback-veteran summary (champion >
+    // race-winner > podium finisher > points scorer > journeyman). Only real career facts feed the slots.
+    const tier = !c ? 'journeyman'
+      : c.titles > 0 ? 'champion'
+      : c.wins > 0 ? 'winner'
+      : c.podiums > 0 ? 'podium'
+      : c.points > 0 ? 'points'
+      : 'journeyman'
     const slots: Record<string, string | number> = {
       driver: fa.name, driver_last: lastName(fa.name), age: fa.age, next: ctx.year + 1, to: toTeam,
       to_art: /^[aeiou]/i.test(toTeam) ? 'An' : 'A',
       starts: c?.starts ?? 0, starts_word: plural(c?.starts ?? 0, 'start'),
-      honours: honourBits.length ? listJoin(honourBits) : '',
+      seasons: c?.seasons ?? 0, seasons_word: plural(c?.seasons ?? 0, 'season'),
+      wins: c?.wins ?? 0, wins_word: plural(c?.wins ?? 0, 'win'),
+      poles: c?.poles ?? 0, poles_word: plural(c?.poles ?? 0, 'pole'),
+      podiums: c?.podiums ?? 0, podiums_word: plural(c?.podiums ?? 0, 'podium'),
+      points: c?.points ?? 0, points_word: plural(c?.points ?? 0, 'point'),
+      titles: c?.titles ?? 0, titles_word: plural(c?.titles ?? 0, 'title'),
+      title_years: c?.titleYears.length ? listJoin(c.titleYears.map(String)) : '',
+      champ_label: (c?.titles ?? 0) === 1 ? 'a former World Champion' : `a ${c?.titles ?? 0}-time World Champion`,
+      best_finish: c?.bestFinish ? ordinal(c.bestFinish) : '',
+      debut_year: c?.debutYear ?? '',
       pot: fa.peakPotential >= 88 ? 'one of the hottest properties in the junior ranks' : fa.peakPotential >= 80 ? 'a genuine prospect' : 'an intriguing talent',
       ...pronouns(fa.gender),
     }
@@ -3209,16 +3248,14 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
       : fill(pick(['For now the seats look full, and a debut may have to wait.', 'As things stand, a first F1 seat looks some way off.'], `${seed}|mkt`), slots)
 
     if (experienced) {
-      const recordLine = honourBits.length
-        ? fill(pick(['Across {starts} {starts_word}, {driver_last} brings {honours} to the table.', 'A record of {starts} {starts_word} and {honours} is not one to overlook.'], `${seed}|rec`), slots)
-        : fill(pick(['{starts} {starts_word} of experience count for something, even without the silverware.', 'No podiums in {starts} {starts_word}, but a known quantity all the same.'], `${seed}|rec`), slots)
+      const careerLine = fill(pick(VETERAN_CAREER[tier] ?? VETERAN_CAREER.journeyman, `${seed}|rec`), slots)
       out.push({
         id: seed, category: 'driver_to_watch', round: r, priority: 33,
         headline: fill(pick(['Where next for {driver}?', '{driver} eyes a way back', 'A familiar name on the market in {driver}', 'Could {driver} return to the grid?'], `${seed}|h`), slots),
         dek: fill(pick(['{driver} is between seats and weighing the options.', 'Out of a drive for now, {driver_last} is not done yet.', 'A familiar face is on the market.'], `${seed}|d`), slots),
         body: paras(
           fill(pick(['{driver}, {age}, finds {themself} without a seat, a familiar face still chasing a way back.', 'At {age}, {driver} is on the market, and not short of suitors.'], `${seed}|p1`), slots),
-          recordLine,
+          careerLine,
           fill(pick(['"I am not done in this sport," {driver_last} said.', '"Do not write me off," said {driver_last}. "I will be back."'], `${seed}|q`), slots),
           marketLine,
         ),
