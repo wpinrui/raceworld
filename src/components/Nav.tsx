@@ -54,7 +54,6 @@ export default function Nav() {
   // The gate is shown whenever there are pending real-world changes, unless the player dismissed it
   // ("Review later"); pressing Continue clears the dismissal so it reappears. Resolving clears the
   // pending set entirely. Derived open state, so no auto-open effect is needed.
-  const [rwDismissed, setRwDismissed] = useState(false)
   // Prior-season career totals (the current season folds in from the store), so milestone /
   // retirement interrupts see real records. Fetched once, like the newsroom.
   const [careerBase, setCareerBase] = useState<Record<string, DriverCareer>>({})
@@ -217,7 +216,7 @@ export default function Nav() {
     if (atRaceday && interruptOnRaceday) return () => router.push('/race')
     return busy ? null : handleContinue
   }
-  const ctaBlocked = newsStop != null || restartOpen || menuOpen || (!!pendingRW && !rwDismissed)
+  const ctaBlocked = newsStop != null || restartOpen || menuOpen || !!pendingRW
   const ctaActionRef = useRef<(() => void) | null>(null)
   // Keep the ref pointed at the current action after each render (not during it).
   useEffect(() => { ctaActionRef.current = ctaBlocked ? null : primaryCtaAction() })
@@ -315,7 +314,7 @@ export default function Nav() {
       {cta}
 
       {/* News interrupt modal */}
-      <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW && !rwDismissed} transition={pendingRW} onClose={() => setRwDismissed(true)} />
+      <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW} transition={pendingRW} />
 
       {newsStop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setNewsStop(null)}>

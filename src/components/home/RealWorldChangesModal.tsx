@@ -5,22 +5,19 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import type { RealWorldTransition } from '@/lib/history/transitions'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 
-// Season-end gate for real-world team changes. Surfaced as a modal the off-season can't advance past
-// (see the Continue gate in Nav) so the join/leave/rebrand list is impossible to sim through. Each
-// change is approved by default; uncheck to override (keep the team as-is). Applying writes the
-// approved subset into the next-season grid and marks the changes resolved; the market then fills the
-// new/opened seats. `transition` is the pending change set (null when there's nothing to gate on).
+// Season-start gate for real-world team changes (they take effect next season; the news announces them
+// mid-season). Surfaced as an UNDISMISSABLE modal at the season opener: the join/leave/rebrand list must
+// be acted on, there is no skipping it. Each change is approved by default; uncheck to override (keep the
+// team as-is). Applying writes the approved subset and marks the changes resolved, which closes the modal.
+// `transition` is the pending change set (null when there's nothing to act on).
 const PRIMARY = 'px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-bold uppercase tracking-wide hover:bg-[#009CB8] transition-colors'
-const SECONDARY = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors'
 
 export function RealWorldChangesModal({
   open,
   transition,
-  onClose,
 }: {
   open: boolean
   transition: RealWorldTransition | null
-  onClose: () => void
 }) {
   const applyRealWorldChanges = useSeasonStore((s) => s.applyRealWorldChanges)
   // A change is approved unless its key is in here. The modal is remounted per season (keyed on the
@@ -60,8 +57,8 @@ export function RealWorldChangesModal({
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-xl">
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
           <span className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Real-World Changes · {toYear}</span>
           <span className="text-[10px] uppercase tracking-widest text-[#00D9FF]">Grid update</span>
@@ -99,10 +96,7 @@ export function RealWorldChangesModal({
 
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-[#2A3142]">
           <span className="text-xs text-[#FFFFFF]">Unchecked changes are overridden (the grid keeps them as-is).</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={onClose} className={SECONDARY}>Review later</button>
-            <button onClick={apply} className={PRIMARY}>Apply changes</button>
-          </div>
+          <button onClick={apply} className={`${PRIMARY} shrink-0`}>Apply changes</button>
         </div>
       </div>
     </div>
