@@ -12,7 +12,7 @@ export const teams2026: Team[] = [
   { id: 'williams', name: 'Williams', shortName: 'WIL', nationality: 'GB', color: '#1A3C8E', carPace: 40 }, // 8th
   { id: 'audi', name: 'Audi', shortName: 'AUD', nationality: 'DE', color: '#8C1C3A', carPace: 35 }, // 9th
   { id: 'astonmartin', name: 'Aston Martin', shortName: 'AMR', nationality: 'GB', color: '#1E5B45', carPace: 30 }, // 10th
-  { id: 'cadillac', name: 'Cadillac', shortName: 'CAD', nationality: 'US', color: '#C99A2E', carPace: 25 }, // 11th
+  { id: 'cadillac', name: 'Cadillac', shortName: 'CAD', nationality: 'US', color: '#74797F', carPace: 25 }, // 11th
 ]
 
 export const drivers2026: Driver[] = [

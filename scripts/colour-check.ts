@@ -18,10 +18,10 @@ export const PALETTE: Record<string, string> = {
   Jordan: '#C99A1A',         // Jordan bronze-gold (clear of papaya + Renault yellow)
   Benetton: '#00A650',       // Benetton green
   Sauber: '#7A1228',         // Sauber burgundy (early red, clear of Ferrari + the green cluster)
-  'BMW Sauber': '#005EB8',   // BMW blue
+  'BMW Sauber': '#F4F6F8',   // white (BMW Sauber 2006-09 ran white)
   'Alfa Romeo': '#8B1A1A',   // Alfa rosso (dark)
   Jaguar: '#0B5E33',         // British racing green (darker)
-  Toyota: '#C3C8CC',         // Toyota white/silver
+  Toyota: '#E5446E',         // pinkish red (clear of Ferrari)
   Honda: '#6E2C91',          // distinct (kept clear of the red cluster)
   BAR: '#C2007A',            // 555 cerise
   'Toro Rosso': '#3F9BE0',   // bright blue (clear of BMW blue + the navies)
@@ -29,7 +29,7 @@ export const PALETTE: Record<string, string> = {
   'Racing Bulls': '#1634CB', // bright blue
   'Force India': '#FF73B3',  // BWT pink
   'Racing Point': '#FF73B3', // BWT pink
-  Lotus: '#C8A100',          // JPS black & gold -> gold
+  Lotus: '#9A7A00',          // Lotus F1 (Enstone) dark dirty yellow (2012-15)
   Caterham: '#0E7A47',       // Caterham green
   // Earlier / shorter-lived marques
   Ligier: '#3A6FE0',         // Gitanes royal blue (clear of Williams navy)
@@ -44,26 +44,35 @@ export const PALETTE: Record<string, string> = {
   // 2000s/2010s newcomers
   Spyker: '#C46210',         // burnt orange (Spyker)
   Midland: '#D63A1F',        // red-orange
-  'Super Aguri': '#0E8C7A',  // teal (clear of Honda purple)
+  'Super Aguri': '#8B1A1A',  // dark red (matches the Sauber/Alfa lineage red; never coexists)
   Virgin: '#C81E5B',         // crimson
   Marussia: '#C81E5B',       // crimson (same lineage)
-  Manor: '#C81E5B',          // crimson (same lineage)
+  Manor: '#E5431E',          // vermillion orange
   HRT: '#8A8F94',            // grey (plain backmarker, clear of the red cluster)
   Brawn: '#B5D200',          // Brawn fluoro lime/white
   // 2026 newcomers
   Audi: '#8C1C3A',           // dark carmine (clear of Ferrari)
-  Cadillac: '#C99A2E',       // Cadillac crest gold (visible, distinct on the 2026 grid)
+  Cadillac: '#74797F',       // medium-dark grey (darker than Haas)
 }
 
-// Per-season overrides (keyed by `${year}:${name}`) for era-specific liveries that win over the marque
-// default. Use sparingly, only when a team's era livery is iconic enough to deserve its own colour.
-export const OVERRIDES: Record<string, string> = {
-  '2024:Sauber': '#00E701', // Kick Sauber fluoro green
-  '2025:Sauber': '#00E701', // Kick Sauber fluoro green
-}
+// Per-era overrides: an era-specific livery that beats the marque default over an inclusive [from,to]
+// year range. Used where a team's real livery for a stretch is iconic enough to deserve its own colour.
+export const OVERRIDE_RULES: { name: string; from: number; to: number; color: string; note: string }[] = [
+  { name: 'Lotus',       from: 2010, to: 2011, color: '#0E7A47', note: 'Team Lotus (Caterham lineage), follows the Caterham green' },
+  { name: 'McLaren',     from: 2007, to: 2016, color: '#64686E', note: 'titanium grey era (papaya 1996-2006 and from 2017)' },
+  { name: 'Force India', from: 2009, to: 2013, color: '#FF9933', note: 'Indian flag saffron' },
+  { name: 'Haas',        from: 2019, to: 2019, color: '#1E1E1E', note: 'Rich Energy black livery' },
+  { name: 'Sauber',      from: 1996, to: 2005, color: '#00D2BE', note: 'Petronas era, Mercedes cyan' },
+  { name: 'Sauber',      from: 2010, to: 2012, color: '#F4F6F8', note: 'white era (with BMW Sauber 2006-09)' },
+  { name: 'Sauber',      from: 2013, to: 2014, color: '#3C3F44', note: 'grey era, darker than McLaren grey' },
+  { name: 'Sauber',      from: 2015, to: 2017, color: '#0000AA', note: 'blue era (Banco do Brasil), classic BSOD blue' },
+  { name: 'Sauber',      from: 2024, to: 2025, color: '#00E701', note: 'Kick Sauber fluoro green' },
+]
 
-export const colourFor = (year: number, name: string): string | undefined =>
-  OVERRIDES[`${year}:${name}`] ?? PALETTE[name]
+export const colourFor = (year: number, name: string): string | undefined => {
+  for (const r of OVERRIDE_RULES) if (r.name === name && year >= r.from && year <= r.to) return r.color
+  return PALETTE[name]
+}
 
 // Perceptual-ish distance (redmean weighting). 0 = identical; ~764 max.
 function dist(a: string, b: string): number {
