@@ -7,14 +7,13 @@ import { buildPerformanceData } from '@/lib/world/performance'
 
 type Sub = 'pace' | 'delta'
 
-// Brighten a hex colour by a percentage, so a team's drivers read as lighter shades of the team colour.
+// Lighten a hex colour by mixing it toward white by `pct`, so a team's drivers read as visibly lighter
+// shades of the team colour (mixing toward white shifts even saturated/bright colours, unlike scaling).
 function lighten(hex: string, pct: number): string {
   const m = hex.replace('#', '')
   const n = parseInt(m.length === 3 ? m.split('').map((c) => c + c).join('') : m, 16)
-  const f = 1 + pct
-  const r = Math.min(255, Math.round(((n >> 16) & 255) * f))
-  const g = Math.min(255, Math.round(((n >> 8) & 255) * f))
-  const b = Math.min(255, Math.round((n & 255) * f))
+  const mix = (c: number) => Math.round(c + (255 - c) * pct)
+  const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255)
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
 }
 
@@ -22,9 +21,9 @@ function Chip({ on, color, label, onClick }: { on: boolean; color: string; label
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors ${on ? 'border-[#303848] text-[#FFFFFF]' : 'border-[#2A3142] text-[#6B7280]'}`}
+      className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-colors text-[#FFFFFF] ${on ? 'bg-[#FFFFFF]/10 border-[#FFFFFF]/55' : 'bg-transparent border-[#3A4252]'}`}
     >
-      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: on ? color : '#3A4252' }} />
+      <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color, opacity: on ? 1 : 0.5 }} />
       {label}
     </button>
   )
@@ -78,7 +77,7 @@ export function PerformanceView() {
     const m = new Map<string, string>()
     for (const [teamId, ds] of driversByTeam) {
       const base = teamById.get(teamId)?.color ?? '#8892A6'
-      ds.forEach((d, i) => m.set(d.driverId, lighten(base, 0.1 * (i + 1))))
+      ds.forEach((d, i) => m.set(d.driverId, lighten(base, 0.3 * (i + 1))))
     }
     return m
   }, [driversByTeam, teamById])
@@ -162,7 +161,7 @@ export function PerformanceView() {
         <>
           <div className="shrink-0 max-h-40 overflow-y-auto flex flex-wrap gap-2">
             {orderedTeams.filter((t) => (driversByTeam.get(t.id)?.length ?? 0) > 0).map((t) => (
-              <div key={t.id} className="rounded-lg border border-[#2A3142] bg-[#0F1419]/40 p-2 flex flex-col gap-1.5">
+              <div key={t.id} className="rounded-lg bg-[#0F1419]/40 p-2 flex flex-col gap-1.5">
                 <Chip on={selected.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(selected, setSelected, t.id)} />
                 <div className="flex flex-wrap gap-1.5">
                   {(driversByTeam.get(t.id) ?? []).map((d) => (
