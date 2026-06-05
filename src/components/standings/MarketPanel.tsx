@@ -3,6 +3,9 @@
 import { ArrowRight } from 'lucide-react'
 import type { EndOfSeasonSummary, Team } from '@/lib/sim/types'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import type { DriverCardResolver } from '@/components/news/LinkedText'
 
 interface Props {
   summary: EndOfSeasonSummary
@@ -20,14 +23,14 @@ function TeamPill({ id, name, color }: { id: string; name: string; color?: strin
 
 const Arrow = () => <ArrowRight size={13} className="text-[#FFFFFF] shrink-0" />
 
-function MoveRow({ driverId, driverName, badge, movement, contract, media }: {
-  driverId: string; driverName: string; badge?: boolean
+function MoveRow({ driverId, driverName, card, badge, movement, contract, media }: {
+  driverId: string; driverName: string; card: DriverCardResolver; badge?: boolean
   movement: React.ReactNode; contract?: React.ReactNode; media: string
 }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#0F1419]/60">
       <span className="w-40 shrink-0 flex items-center gap-1.5 min-w-0">
-        <DriverLink id={driverId} className="text-[#FFFFFF] font-medium truncate">{driverName}</DriverLink>
+        <DriverHover id={driverId} card={card} className="truncate min-w-0"><DriverLink id={driverId} className="text-[#FFFFFF] font-medium truncate">{driverName}</DriverLink></DriverHover>
         {badge && <span className="text-[9px] font-bold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] rounded px-1 py-0.5 shrink-0">New</span>}
       </span>
       <span className="flex-1 flex items-center gap-2 text-xs min-w-0">{movement}</span>
@@ -49,6 +52,7 @@ function Section({ title, count, tone, children }: { title: string; count: numbe
 }
 
 export function MarketPanel({ summary, teams }: Props) {
+  const card = useLiveDriverCards()
   const color = (id: string) => teams.find((t) => t.id === id)?.color
   const sorted = [...summary.marketMoves].sort((a, b) => b.mediaScore - a.mediaScore)
   const realMoves = sorted.filter((m) => !m.isResignation)
@@ -71,6 +75,7 @@ export function MarketPanel({ summary, teams }: Props) {
                   key={m.driverId}
                   driverId={m.driverId}
                   driverName={m.driverName}
+                  card={card}
                   badge={isRookie}
                   movement={
                     <>
@@ -95,6 +100,7 @@ export function MarketPanel({ summary, teams }: Props) {
               key={m.driverId}
               driverId={m.driverId}
               driverName={m.driverName}
+              card={card}
               movement={<TeamPill id={m.toTeamId} name={m.toTeamName} color={color(m.toTeamId)} />}
               contract={`${m.contractLength}yr · ${m.contractExpiresAfterSeason}`}
               media={m.mediaScore.toFixed(1)}
@@ -109,6 +115,7 @@ export function MarketPanel({ summary, teams }: Props) {
             <MoveRow
               key={d.driverId}
               driverId={d.driverId}
+              card={card}
               driverName={d.driverName}
               movement={
                 <>

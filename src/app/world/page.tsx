@@ -6,6 +6,8 @@ import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useWorldOverview } from '@/lib/world/hooks'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import type { LeaderboardEntry } from '@/lib/world/types'
 
 function LeaderList({ title, kind, entries, suffix }: { title: string; kind: 'driver' | 'team'; entries: LeaderboardEntry[]; suffix?: string }) {
@@ -38,6 +40,7 @@ export default function WorldPage() {
   const { data, loading } = useWorldOverview()
   const [hydrated, setHydrated] = useState(false)
   const scrollRef = useScrollRestore<HTMLDivElement>('world:scroll')
+  const card = useLiveDriverCards()
   useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
@@ -62,7 +65,7 @@ export default function WorldPage() {
           </div>
           <p className="text-sm text-[#FFFFFF] ml-3.5">
             Season {season.year}
-            {champDriver && <> · leading: <DriverLink id={champDriver.driverId} className="text-[#00D9FF] font-semibold">{champDriver.driverName}</DriverLink> ({champDriver.points} pts)</>}
+            {champDriver && <> · leading: <DriverHover id={champDriver.driverId} card={card}><DriverLink id={champDriver.driverId} className="text-[#00D9FF] font-semibold">{champDriver.driverName}</DriverLink></DriverHover> ({champDriver.points} pts)</>}
             {champConstructor && <> · <TeamLink id={champConstructor.teamId} className="font-semibold">{champConstructor.teamName}</TeamLink></>}
           </p>
         </div>
@@ -80,7 +83,7 @@ export default function WorldPage() {
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="w-4 text-right tabular-nums text-[#FFFFFF]">{i + 1}</span>
                     <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: teamColor(d.teamId) }} />
-                    <DriverLink id={d.driverId} className="text-[#FFFFFF] truncate">{d.driverName}</DriverLink>
+                    <DriverHover id={d.driverId} card={card} className="truncate min-w-0"><DriverLink id={d.driverId} className="text-[#FFFFFF] truncate">{d.driverName}</DriverLink></DriverHover>
                   </span>
                   <span className="tabular-nums font-semibold text-[#FFFFFF] shrink-0">{d.points}</span>
                 </li>
@@ -127,7 +130,7 @@ export default function WorldPage() {
                       <td className="py-2 px-5 tabular-nums text-[#FFFFFF]">{c.year}</td>
                       <td className="py-2 px-3 text-[#FFFFFF]">
                         {c.driverChampionId
-                          ? <><DriverLink id={c.driverChampionId} className="font-semibold text-[#FFFFFF]">{c.driverChampionName}</DriverLink>
+                          ? <><DriverHover id={c.driverChampionId} card={card}><DriverLink id={c.driverChampionId} className="font-semibold text-[#FFFFFF]">{c.driverChampionName}</DriverLink></DriverHover>
                               {c.driverChampionTeamId && <span className="text-[#FFFFFF]"> · <TeamLink id={c.driverChampionTeamId} className="text-[#FFFFFF]">{season.teams.find((t) => t.id === c.driverChampionTeamId)?.name ?? c.driverChampionTeamId}</TeamLink></span>}</>
                           : '—'}
                       </td>

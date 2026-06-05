@@ -5,6 +5,8 @@ import { ChevronUp, ChevronDown } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, Circuit } from '@/lib/sim/types'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
+import { DriverHover } from '@/components/world/DriverHover'
+import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 interface Props {
   drivers: Driver[]
@@ -86,6 +88,7 @@ function Th({ col, children, right, activeSortKey, sortDir, onSort }: ThProps) {
 export function PreQualPanel({
   drivers, teams, forms, currentCircuit, onFormChange,
 }: Props) {
+  const card = useLiveDriverCards()
   const [sortKey, setSortKey] = useState<SortKey>('car')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -144,7 +147,7 @@ export function PreQualPanel({
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />
                       <ReactCountryFlag countryCode={d.nationality || 'GB'} svg style={{ width: '1.1em', height: '1.1em', borderRadius: '2px', flexShrink: 0 }} />
-                      <DriverLink id={d.id} className="text-sm font-medium text-[#FFFFFF]">{d.name}</DriverLink>
+                      <DriverHover id={d.id} card={card}><DriverLink id={d.id} className="text-sm font-medium text-[#FFFFFF]">{d.name}</DriverLink></DriverHover>
                     </div>
                   </td>
                   <td className="py-1 px-2 text-sm text-[#FFFFFF]"><TeamLink id={d.teamId} className="text-[#FFFFFF]">{team?.name ?? '—'}</TeamLink></td>
