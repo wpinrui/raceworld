@@ -76,7 +76,7 @@ export default function DriverSeasonPage() {
                           <Link href={`/world/season/${detail.year}/${r.round}`} className="text-[#FFFFFF] hover:text-[#00D9FF]">{r.circuitName}</Link>
                         </td>
                         <td className="py-1.5 px-2 text-center tabular-nums text-[#FFFFFF]">{r.gridPosition}</td>
-                        <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.dnf ? null : r.finishPosition} /></span></td>
+                        <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.dnf ? null : r.finishPosition} year={detail.year} /></span></td>
                         <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{formatLapTime(r.q1)}</td>
                         <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{formatLapTime(r.q2)}</td>
                         <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{formatLapTime(r.q3)}</td>

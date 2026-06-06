@@ -25,6 +25,7 @@ import type {
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
+import { hasFastestLapPoint } from '@/lib/sim/points'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
@@ -1449,18 +1450,22 @@ function championship(ctx: NewsContext): NewsArticle[] {
 // TRIGGER: going into a round, a title (drivers and/or constructors) can be mathematically
 // clinched there. Lays out exactly what must happen, RaceFans-style. The two championships are
 // checked INDEPENDENTLY — they can fall at completely different races, and each gets its own
-// piece. This sim awards no fastest-lap point and runs no sprints, so a win is a flat 25 and
-// the constructors maximum is 43 (25+18), making the maths exact.
+// piece. No sprints here, so the per-race maximum is a win (25) plus, in the 2019-2024 era only,
+// the fastest-lap point (issue #63): driver max 26, constructors max 44 (25+18+1). Pre-2019 the
+// +0 keeps the old flat-25 maths identical.
 function titleScenario(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
   const upTo = ctx.endOfSeason ? ctx.completedRounds : Math.min(ctx.completedRounds + 1, N)
   const F1 = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
+  const fl = hasFastestLapPoint(ctx.year) ? 1 : 0   // FL point exists only 2019-2024 (issue #63)
+  const drvMax = 25 + fl                            // most a driver can take in one race
+  const wccMax = CONSTRUCTOR_MAX_PER_RACE + fl      // most a constructor can take in one race
   // Best (lowest-number) finish a rival may take while the leader still clinches (points < A).
   const clinchPos = (A: number) => { for (let p = 1; p <= 10; p++) if (F1[p - 1] < A) return p; return 11 }
   // Can each title be clinched at round rr (and is it not already won)?
-  const drvCanClinch = (rr: number) => { const d = driverStandingsAfter(ctx, rr - 1); if (d.length < 2) return false; const a = (d[0].points - d[1].points) + 25 - (N - rr) * 25; return a > 0 && a <= 50 }
-  const wccCanClinch = (rr: number) => { const c = constructorStandingsAfter(ctx, rr - 1); if (c.length < 2) return false; const a = (c[0].points - c[1].points) + CONSTRUCTOR_MAX_PER_RACE - (N - rr) * CONSTRUCTOR_MAX_PER_RACE; return a > 0 && a <= 2 * CONSTRUCTOR_MAX_PER_RACE }
+  const drvCanClinch = (rr: number) => { const d = driverStandingsAfter(ctx, rr - 1); if (d.length < 2) return false; const a = (d[0].points - d[1].points) + drvMax - (N - rr) * drvMax; return a > 0 && a <= 2 * drvMax }
+  const wccCanClinch = (rr: number) => { const c = constructorStandingsAfter(ctx, rr - 1); if (c.length < 2) return false; const a = (c[0].points - c[1].points) + wccMax - (N - rr) * wccMax; return a > 0 && a <= 2 * wccMax }
 
   for (let r = 2; r <= upTo; r++) {
     const rem = N - r // races AFTER round r
@@ -1475,7 +1480,7 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
       const G = L.points - S.points
       // Points swing the leader needs over the nearest rival to clinch (negative = can even
       // lose ground and still clinch). This covers EVERY result combination, not just a win.
-      const clinchMargin = rem * 25 - G + 1
+      const clinchMargin = rem * drvMax - G + 1
       // Worst finish that still clinches if the rival scores nothing (lowest points >= margin).
       let worstPos = 1
       for (let p = 10; p >= 1; p--) { if (F1[p - 1] >= clinchMargin) { worstPos = p; break } }
@@ -1484,8 +1489,8 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
       // vacuous, since a rival cannot beat a winning leader anyway.
       const conds: string[] = []
       for (const j of ds.slice(1)) {
-        if (j.points + (rem + 1) * 25 < L.points) continue // out of mathematical contention
-        const A = (L.points + 25) - j.points - rem * 25
+        if (j.points + (rem + 1) * drvMax < L.points) continue // out of mathematical contention
+        const A = (L.points + 25) - j.points - rem * drvMax
         if (A > 18) continue // even at 2nd this rival cannot deny a winning leader
         const pos = clinchPos(A)
         conds.push(pos >= 11 ? `${lastName(j.driverName)} finishes outside the points` : `${lastName(j.driverName)} finishes no higher than ${ordinal(pos)}`)
