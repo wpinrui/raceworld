@@ -533,32 +533,36 @@ export function foldLiveSeasonTeamDrivers(
 // TRIGGER: every completed round. ONE consolidated report per race — winner + podium +
 // margin, the start (pole / drive of the day), attrition (DNFs), and the title picture.
 // This is the category that fires every race; incident/retirement/championship live inside it.
-// Driver-error crash-out reasons (issue #59). Used in place of the invented mechanical reasons
-// when a DNF's retirementReason is 'driver-error', so a real crash reads as a crash. Same noun-phrase
-// shape as RETIRE_REASONS (each slots in after "with").
-const DRIVER_ERROR_REASONS = [
+// Crash phrasings for a 'collision-damage' DNF (issue #61) — covers both solo driver errors (#59)
+// and wheel-to-wheel overtake collisions (#60), now lumped under one reason. Each slots after "with".
+const CRASH_REASONS = [
   'a spin into the barriers at the exit of a high-speed corner',
   'a lock-up that beached the car in the gravel',
-  'a first-lap collision of the driver\'s own making',
   'a misjudgement under braking that ended in the wall',
-  'contact with the barriers after running wide on cold tyres',
-  'a mistake at the chicane that damaged the front wing beyond repair',
-  'a spin on a restart that left the car stranded on the racing line',
-  'a late-braking error that buried the car in the gravel trap',
-  'a loss of control at turn entry that sent the car into the barrier',
-  'a mid-corner slide that the driver could not catch',
-]
-
-// Overtake-collision reasons (issue #60). Used when a DNF's retirementReason is 'collision' — a
-// wheel-to-wheel incident, not a solo error. Neutral about blame (one or both cars may be out).
-const COLLISION_REASONS = [
   'a collision with the car ahead while fighting for position',
   'contact between the two cars in a wheel-to-wheel battle',
   'a clash with a rival during an overtake attempt',
-  'an incident in the braking zone as the pass went wrong',
-  'contact going side-by-side through the corner',
+  'a loss of control at turn entry that sent the car into the barrier',
   'a coming-together with the car in front',
+  'a mid-corner slide that the driver could not catch',
 ]
+
+// Phrasings for each stored technical-failure type (issue #61) — the news reads the real reason
+// rather than inventing one. Keyed by RetirementReason's technical members.
+const TECHNICAL_REASONS: Record<string, string[]> = {
+  engine: ['an engine failure', 'a blown engine', 'a power-unit failure', 'a sudden loss of power'],
+  gearbox: ['a gearbox failure', 'a transmission problem', 'a jammed gearbox'],
+  hydraulics: ['a hydraulics failure', 'a loss of hydraulic pressure', 'a hydraulics leak'],
+  electrical: ['an electrical failure', 'an electronics problem', 'an electrical gremlin'],
+  suspension: ['a suspension failure', 'a broken suspension', 'terminal suspension damage'],
+  brakes: ['brake failure', 'a brake problem', 'brakes that faded away'],
+  clutch: ['a clutch failure', 'a clutch problem', 'a slipping clutch'],
+  overheating: ['an overheating engine', 'cooling problems', 'a temperature that ran away'],
+}
+
+// Fallback for a DNF with no stored reason (e.g. a season archived before reasons were tracked and
+// regenerated from results rather than replayed). Generic, race-ending mechanical causes.
+const GENERIC_MECHANICAL = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake failure', 'a suspension failure', 'an electrical failure']
 
 // One-sentence mention of a NOTABLE non-DNF consistency mistake (issue #59). Slots: {m_last},
 // {m_loss} (whole seconds), {m_pos} (ordinal finish), {m_team}, plus the driver's pronouns.
@@ -621,27 +625,26 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
 
     const circuitName = circuit(ctx, r)
     const seed = `report-${ctx.year}-${r}`
-    // Invented, unfalsifiable retirement causes (the sim tracks only the DNF flag, not the reason).
-    // All genuinely race-ending; assigned deterministically per driver and de-duplicated within a
-    // race so the same failure does not appear two or three times in one report.
-    const RETIRE_REASONS = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake failure', 'a suspension failure', 'an engine that let go', 'an oil leak', 'terminal floor damage', 'damage from a first-lap clash', 'a high-speed spin into the barriers', 'an electrical failure', 'a wheel-nut problem at a stop']
-    // A driver-error crash-out (issue #59) reads from the crash pool, not an invented mechanical
-    // failure. Falls back to the mechanical pool for everyone else (incl. pre-#59 archived results).
-    const crashedIds = new Set(dnfs.filter((x) => x.retirementReason === 'driver-error' || x.crashed).map((x) => x.driverId))
-    const collisionIds = new Set(dnfs.filter((x) => x.retirementReason === 'collision').map((x) => x.driverId))
-    const poolFor = (driverId: string) =>
-      collisionIds.has(driverId) ? COLLISION_REASONS : crashedIds.has(driverId) ? DRIVER_ERROR_REASONS : RETIRE_REASONS
+    // Read the stored retirementReason (issue #61): collision-damage → a crash phrase, a technical
+    // type → its own phrasings, absent → a generic mechanical fallback. De-duplicated within a race
+    // so the same phrasing doesn't appear twice in one report.
+    const poolFor = (x: RaceResult): string[] => {
+      const r = x.retirementReason
+      if (r === 'collision-damage' || x.crashed) return CRASH_REASONS
+      if (r && TECHNICAL_REASONS[r]) return TECHNICAL_REASONS[r]
+      return GENERIC_MECHANICAL
+    }
     const usedReasons = new Set<string>()
-    const reasonFor = (driverId: string): string => {
-      const pool = poolFor(driverId)
-      const seeded = pick(pool, `${seed}|why-${driverId}`)
+    const reasonFor = (x: RaceResult): string => {
+      const pool = poolFor(x)
+      const seeded = pick(pool, `${seed}|why-${x.driverId}`)
       const chosen = usedReasons.has(seeded)
         ? (pool.filter((rr) => !usedReasons.has(rr))[0] ?? seeded)
         : seeded
       usedReasons.add(chosen)
       return chosen
     }
-    const dnfReasoned = listJoin(dnfs.map((x) => `${lastName(x.driverName)} with ${reasonFor(x.driverId)}`))
+    const dnfReasoned = listJoin(dnfs.map((x) => `${lastName(x.driverName)} with ${reasonFor(x)}`))
     const dnfSoloLaps = dnfSolo?.lapsCompleted ?? 0
     const poleRunnerUp = results.find((x) => x.gridPosition === 2)
     const slots: Record<string, string | number> = {
@@ -654,7 +657,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
-      dnf_solo_reason: dnfSolo ? pick(poolFor(dnfSolo.driverId), `${seed}|why-${dnfSolo.driverId}`) : '',
+      dnf_solo_reason: dnfSolo ? pick(poolFor(dnfSolo), `${seed}|why-${dnfSolo.driverId}`) : '',
       win_ord: ordinal(winnerWins), pole_margin: pMargin ?? '', strategy: strat ?? '', start_tyre: startTyre ?? '',
       next_circuit: nextName ?? '', dnf_solo: dnfSolo?.driverName ?? '', dnf_solo_laps: dnfSoloLaps,
       dnf_solo_phrase: dnfSoloLaps === 0 ? 'before completing a lap' : dnfSoloLaps === 1 ? 'after a single lap' : `after ${dnfSoloLaps} laps`,

@@ -3,6 +3,7 @@ import type { Driver, Team, RaceState, GodModeAction, SimSpeed } from '@/lib/sim
 import { calendar2026 } from '@/data/calendar'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
+import { useSeasonStore } from './season-store'
 
 interface RaceStore {
   raceState: RaceState | null
@@ -70,7 +71,8 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     if (!raceState || raceState.phase !== 'racing') return
     const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
     if (!circuit) return
-    set({ raceState: simulateLap(raceState, drivers, teams, circuit, godModeActions) })
+    const year = useSeasonStore.getState().year
+    set({ raceState: simulateLap(raceState, drivers, teams, circuit, year, godModeActions) })
   },
 
   setSpeed: (speed) => {

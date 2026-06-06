@@ -2,10 +2,14 @@ export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
 export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
 
-// Why a car retired. 'driver-error' = a consistency mistake that ended the race (issue #59);
-// 'mechanical' = the existing per-lap reliability failure. The retirement-reason issue may extend
-// this (e.g. collisions); consumers should treat unknown values gracefully.
-export type RetirementReason = 'driver-error' | 'mechanical' | 'collision'
+// A specific technical/mechanical failure (issue #61). Picked uniformly on a technical DNF.
+export type TechnicalFailure =
+  | 'engine' | 'gearbox' | 'hydraulics' | 'electrical' | 'suspension' | 'brakes' | 'clutch' | 'overheating'
+
+// Why a car retired (issue #61), stored on the result instead of invented later. 'collision-damage'
+// covers ALL crashes (consistency mistakes #59 + overtake collisions #60); the rest are technical
+// failures whose per-lap rate varies by era (see reliability.ts).
+export type RetirementReason = 'collision-damage' | TechnicalFailure
 
 export type Gender = 'male' | 'female'
 

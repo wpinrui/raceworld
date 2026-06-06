@@ -17,6 +17,7 @@ import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
 import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
+import { perLapTechnicalDNF, sampleTechnicalFailure } from './reliability'
 
 // Roll each driver's pre-race form. The roll mean is set by the driver's confidence
 // (2 + 0.6c, so c=5 -> mean 5), sampled Normal(mean, 1.8) clamped to [0, 10] (issue #58).
@@ -121,6 +122,7 @@ export function simulateLap(
   drivers: Driver[],
   teams: Team[],
   circuit: Circuit,
+  year: number,
   godModeActions?: GodModeAction[],
 ): RaceState {
   const driverMap = new Map<string, Driver>(drivers.map((d) => [d.id, d]))
@@ -151,7 +153,7 @@ export function simulateLap(
             ...updated,
             retired: true,
             retirementLap: state.currentLap,
-            retirementReason: 'mechanical',
+            retirementReason: sampleTechnicalFailure(),
           }
         } else if (action.type === 'set-form' && action.value !== undefined) {
           updated = { ...updated, form: action.value }
@@ -167,6 +169,9 @@ export function simulateLap(
   const prevMoisture = getMoistureAtLap(state.weather, Math.max(1, state.currentLap - 1))
   const currentMoisture = getMoistureAtLap(state.weather, state.currentLap)
 
+  // Per-lap technical-failure chance for this race — flat across cars, varying only by era (issue #61).
+  const techDNFPerLap = perLapTechnicalDNF(year, state.totalLaps)
+
   // Track lap times this lap for gap logic
   const lapTimesThisLap = new Map<string, number>()
 
@@ -178,13 +183,13 @@ export function simulateLap(
   for (const ds of sortedByPosition) {
     let current = { ...updatedStates.get(ds.driverId)!, currentTyre: { ...updatedStates.get(ds.driverId)!.currentTyre } }
 
-    // 2a. Natural retirement (0.2% per lap) — a mechanical failure, distinct from a driver mistake.
-    if (!current.retired && Math.random() < 0.002) {
+    // 2a. Technical failure (issue #61) — era-scaled per-lap chance, a specific failure type.
+    if (!current.retired && Math.random() < techDNFPerLap) {
       current = {
         ...current,
         retired: true,
         retirementLap: state.currentLap,
-        retirementReason: 'mechanical',
+        retirementReason: sampleTechnicalFailure(),
       }
       updatedStates.set(current.driverId, current)
       continue
@@ -201,7 +206,7 @@ export function simulateLap(
     const team = teamMap.get(driver.teamId)!
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
-    // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (driver-error DNF),
+    // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (collision-damage DNF),
     // else a one-lap time loss of 2 + Exp(mean 3) s clamped to [2, 25].
     let mistakeTimeLoss = 0
     const consistency = driver.consistency
@@ -212,7 +217,7 @@ export function simulateLap(
           ...current,
           retired: true,
           retirementLap: state.currentLap,
-          retirementReason: 'driver-error',
+          retirementReason: 'collision-damage',
         }
         updatedStates.set(current.driverId, current)
         continue
@@ -313,11 +318,11 @@ export function simulateLap(
       if (lapResult.crash.defender) {
         const ahead = updatedStates.get(carAheadState.driverId)
         if (ahead && !ahead.retired) {
-          updatedStates.set(carAheadState.driverId, { ...ahead, retired: true, retirementLap: state.currentLap, retirementReason: 'collision' })
+          updatedStates.set(carAheadState.driverId, { ...ahead, retired: true, retirementLap: state.currentLap, retirementReason: 'collision-damage' })
         }
       }
       if (lapResult.crash.attacker) {
-        current = { ...current, retired: true, retirementLap: state.currentLap, retirementReason: 'collision' }
+        current = { ...current, retired: true, retirementLap: state.currentLap, retirementReason: 'collision-damage' }
         updatedStates.set(current.driverId, current)
         continue // attacker is out — skip the rest of this lap's processing
       }
