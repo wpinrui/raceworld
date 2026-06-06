@@ -95,10 +95,10 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
         dnf: ds.retired, stints,
         q1Time: qr?.q1Time ?? null, q2Time: qr?.q2Time ?? null, q3Time: qr?.q3Time ?? null,
         // Consistency-mistake stats (issue #59): count, worst single time loss, and whether the
-        // DNF was a driver-error crash. retirementReason is null while classified.
+        // DNF was a crash. retirementReason is null while classified.
         mistakes: ds.mistakeCount,
         worstMistakeLoss: ds.worstMistakeLoss,
-        crashed: ds.retired && ds.retirementReason === 'driver-error',
+        crashed: ds.retired && ds.retirementReason === 'collision-damage',
         retirementReason: ds.retired ? ds.retirementReason : null,
       } satisfies RaceResult
     })
