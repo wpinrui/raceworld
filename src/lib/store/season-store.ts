@@ -989,6 +989,11 @@ export const useSeasonStore = create<SeasonStore>()(
         currentDate: state.currentDate,
         realWorldMode: state.realWorldMode,
         realWorldChangesResolved: state.realWorldChangesResolved,
+        // MUST persist alongside `resolved`: it holds WHAT was approved at the season opener and is
+        // applied at the season-end rollover. Persisting `resolved` without this dropped the approved
+        // change on any reload, so the rollover skipped it and the rebrand re-fired (mis-keyed) a year
+        // late with generic copy instead of the authored real-world prose (issue: Ligier->Prost).
+        approvedSeasonChanges: state.approvedSeasonChanges,
         raceResults: state.raceResults,
         dbSeasonId: state.dbSeasonId,
         devPlans: state.devPlans,
