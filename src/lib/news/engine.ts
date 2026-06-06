@@ -732,7 +732,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'The opening lap sorted the order, and {winner_last} emerged ideally placed to control what followed.',
           '{winner_last} stayed out of trouble at the start and built the drive from there, letting the stops do the rest.',
         ]
-    const moverPool = moverGain >= 4 && mover && (mover.finishPosition ?? 99) <= 10
+    const moverPool = moverGain >= 4 && mover && getPoints(mover.finishPosition ?? 99, ctx.year) > 0
       ? [
           '{mover} produced the drive of the afternoon, charging from {mover_from} into the points in {mover_to}.',
           'The standout recovery came from {mover}, who advanced {mover_gain} places to finish {mover_to}.',
@@ -1458,10 +1458,12 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
   // the "finishes no higher than Pth" / "clinches with a Pth or better" prose so it's correct for
   // top-6 (1996-2002) and top-8 (2003-2009) replays, not just the modern top-10 table.
   const F1 = Array.from({ length: 10 }, (_, i) => getPoints(i + 1, ctx.year))
+  const lastScoring = F1.filter((p) => p > 0).length // last points-paying position this era (6/8/10)
   const drvMax = driverMaxPerRace(ctx.year)         // most a driver can take in one race (FL-aware)
   const wccMax = constructorMaxPerRace(ctx.year)    // most a constructor can take in one race (FL-aware)
-  // Best (lowest-number) finish a rival may take while the leader still clinches (points < A).
-  const clinchPos = (A: number) => { for (let p = 1; p <= 10; p++) if (F1[p - 1] < A) return p; return 11 }
+  // Best (lowest-number) finish a rival may take while the leader still clinches (points < A). Returns
+  // lastScoring+1 = "outside the points" when even the last scoring position would still reach A.
+  const clinchPos = (A: number) => { for (let p = 1; p <= lastScoring; p++) if (F1[p - 1] < A) return p; return lastScoring + 1 }
   // Can each title be clinched at round rr (and is it not already won)?
   const drvCanClinch = (rr: number) => { const d = driverStandingsAfter(ctx, rr - 1); if (d.length < 2) return false; const a = (d[0].points - d[1].points) + drvMax - (N - rr) * drvMax; return a > 0 && a <= 2 * drvMax }
   const wccCanClinch = (rr: number) => { const c = constructorStandingsAfter(ctx, rr - 1); if (c.length < 2) return false; const a = (c[0].points - c[1].points) + wccMax - (N - rr) * wccMax; return a > 0 && a <= 2 * wccMax }
@@ -1492,7 +1494,7 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
         const A = (L.points + F1[0]) - j.points - rem * drvMax // F1[0] = a win under this era
         if (A > F1[1]) continue // even at 2nd (era points) this rival cannot deny a winning leader
         const pos = clinchPos(A)
-        conds.push(pos >= 11 ? `${lastName(j.driverName)} finishes outside the points` : `${lastName(j.driverName)} finishes no higher than ${ordinal(pos)}`)
+        conds.push(pos > lastScoring ? `${lastName(j.driverName)} finishes outside the points` : `${lastName(j.driverName)} finishes no higher than ${ordinal(pos)}`)
       }
       let streak = 0
       for (let k = r - 1; k >= 1; k--) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1); if (w && w.driverId === L.driverId) streak++; else break }
@@ -1894,7 +1896,7 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
   if (streak >= 2) pool = ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
   else if (maiden) pool = ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
   else if (horror) pool = ['{horror_who} endured a rare off-day last time out, {horror_what} at the {prev_circuit}, and badly needs a response.', 'All eyes are on {horror_who} after {horror_what} last time, a dent in the title bid.']
-  else if (gain >= 6 && mover && (mover.finishPosition ?? 99) <= 10) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to} and into the points, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to a points finish in {mover_to}.']
+  else if (gain >= 6 && mover && getPoints(mover.finishPosition ?? 99, ctx.year) > 0) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to} and into the points, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to a points finish in {mover_to}.']
   else if (firstPts) pool = ['{first_pts} finally opened the account at the {prev_circuit} last time, and will look to build on it.', 'A first points finish for {first_pts} last time out was a long time coming.']
   else if (faller) pool = ['{faller} retired at the {prev_circuit} last time and will be desperate for a bounce-back.', 'A bounce-back is the order of the day for {faller} after retiring last time.']
   else if (upg) pool = ['Whether {upg_team_poss} recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team_poss} new parts make a difference.']
