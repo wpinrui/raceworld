@@ -16,6 +16,7 @@ import type { TechnicalFailure } from './types'
 //   intro + a smaller mid-2000s bump. Anchors it produces: '96 ~0.27, '00 ~0.19, '05 ~0.14,
 //   '10 ~0.078, '14 ~0.12 (spike), '16 ~0.074, '20 ~0.042, '24 ~0.036, '26 ~0.034.
 export function perRaceTechnicalDNF(year: number): number {
+  if (!Number.isFinite(year)) year = 2026 // defensive: never let a bad year NaN-out the whole curve
   const base = 0.025 + 0.25 * Math.exp(-(year - 1996) / 9)
   const turboHybrid2014 = 0.06 * Math.exp(-(((year - 2014) / 2) ** 2)) // V6 turbo intro fragility
   const midV10 = 0.02 * Math.exp(-(((year - 2005) / 2.5) ** 2))        // smaller late-V10 dip

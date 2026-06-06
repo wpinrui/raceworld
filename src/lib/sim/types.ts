@@ -197,7 +197,7 @@ export interface RaceResult {
   q2Time: number | null
   q3Time: number | null
   // Consistency mistakes this race (issue #59). Optional: archived results predating the field
-  // (and the DB-replay path) omit them. `crashed` = the DNF was a driver-error crash-out.
+  // (and the DB-replay path) omit them. `crashed` = the DNF was a crash (retirementReason 'collision-damage').
   mistakes?: number
   worstMistakeLoss?: number              // largest single time loss (s) from a mistake, 0 if none
   crashed?: boolean

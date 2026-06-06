@@ -313,7 +313,7 @@ export function simulateLap(
     const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
     lapTimesThisLap.set(current.driverId, finalLapTime)
 
-    // 2f. Overtake collision (issue #60): retire whoever the crash took out, reason 'collision'.
+    // 2f. Overtake collision (issue #60): retire whoever the crash took out, reason 'collision-damage'.
     if (lapResult.crash?.happened && carAheadState) {
       if (lapResult.crash.defender) {
         const ahead = updatedStates.get(carAheadState.driverId)
