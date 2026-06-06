@@ -22,6 +22,7 @@ export function makeDefaultDriver(teamId: string): Driver {
     wetWeatherPace: 70,
     overtaking: 70,
     smoothness: 70,
+    consistency: 70,
     age: 25,
     peakPotential: 80,
     primeEnd: 32,

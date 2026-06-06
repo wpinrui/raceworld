@@ -2,15 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Upload, Download, Plus, RotateCcw, ChevronRight } from 'lucide-react'
+import { Upload, Download, Plus, ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
-import { drivers2026, teams2026 } from '@/data/2026-grid'
 import type { Driver, Team } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
 import { TeamLink } from '@/components/world/EntityLink'
-import { composeSeason, historyYears } from '@/lib/history/compose'
+import { composeSeason, historyYears, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { useSetupCta } from '@/lib/store/setup-cta'
 
 function slugify(s: string): string {
@@ -31,8 +30,8 @@ export default function SetupPage() {
   const [newTeamName, setNewTeamName] = useState('')
   const [newTeamShort, setNewTeamShort] = useState('')
   const [newTeamColor, setNewTeamColor] = useState('#888888')
-  // Historical start: which year to pre-populate, and whether real-world changes apply each season-end.
-  const [startYear, setStartYear] = useState(2026)
+  // Which season to start from, and whether real-world changes apply each season-end.
+  const [startYear, setStartYear] = useState(DEFAULT_START_YEAR)
   const [realWorld, setRealWorld] = useState(false)
 
   useEffect(() => {
@@ -41,18 +40,16 @@ export default function SetupPage() {
     setLocalTeams(seasonStore.teams.map((t) => ({ ...t })))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handlePrePopulate() {
-    if (startYear === 2026) {
-      setLocalDrivers(drivers2026.map((d) => ({ ...d })))
-      setLocalTeams(teams2026.map((t) => ({ ...t })))
-      setRealWorld(false)
-    } else {
-      const composed = composeSeason(startYear)
-      if (!composed) { setImportError(`No historical data for ${startYear}`); return }
-      setLocalDrivers(composed.drivers)
-      setLocalTeams(composed.teams)
-      setRealWorld(true) // historical starts default to applying real-world changes; toggle off to opt out
-    }
+  // Selecting a year pre-populates that season's grid immediately — every year goes through the same
+  // composeSeason() path (the latest year is just the default). Real-world changes default on for any
+  // past season (there's a future to track) and off for the latest (nothing ahead of it); user can toggle.
+  function selectYear(year: number) {
+    setStartYear(year)
+    const composed = composeSeason(year)
+    if (!composed) { setImportError(`No historical data for ${year}`); return }
+    setLocalDrivers(composed.drivers)
+    setLocalTeams(composed.teams)
+    setRealWorld(year < DEFAULT_START_YEAR)
     setImportError(null)
   }
 
@@ -77,7 +74,14 @@ export default function SetupPage() {
         const parsed = JSON.parse(ev.target?.result as string)
         if (!Array.isArray(parsed.drivers) || !Array.isArray(parsed.teams))
           throw new Error('JSON must have "drivers" and "teams" arrays')
-        setLocalDrivers(parsed.drivers as Driver[])
+        // Default any missing/non-finite rating so an imported or hand-authored grid can't poison the
+        // sim with NaN (every rating is required and feeds lap times / overall / the mistake roll).
+        const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+        setLocalDrivers((parsed.drivers as Driver[]).map((d) => ({
+          ...d,
+          pace: num(d.pace, 70), wetWeatherPace: num(d.wetWeatherPace, 70),
+          overtaking: num(d.overtaking, 70), smoothness: num(d.smoothness, 70), consistency: num(d.consistency, 70),
+        })))
         setLocalTeams(parsed.teams as Team[])
       } catch (err) {
         setImportError(err instanceof Error ? err.message : 'Invalid JSON file')
@@ -194,16 +198,13 @@ export default function SetupPage() {
               <>
                 {isFreshGame && (
                   <>
-                    <select value={startYear} onChange={(e) => setStartYear(Number(e.target.value))}
+                    <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
                       className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
-                      <option value={2026}>2026 (default grid)</option>
-                      {historyYears().filter((y) => y !== 2026).map((y) => <option key={y} value={y}>{y}</option>)}
+                      {historyYears().slice().reverse().map((y) => (
+                        <option key={y} value={y}>{y}{y === DEFAULT_START_YEAR ? ' (default)' : ''}</option>
+                      ))}
                     </select>
-                    <button onClick={handlePrePopulate}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
-                      <RotateCcw size={13} /> Pre-populate {startYear}
-                    </button>
-                    {startYear !== 2026 && (
+                    {startYear !== DEFAULT_START_YEAR && (
                       <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
                         <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
                         Real-world changes

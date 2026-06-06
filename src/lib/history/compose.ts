@@ -10,13 +10,15 @@ import type { HistoricalDriver } from '@/data/history/types'
 // composes the same grid. From the start year on, the live engine takes over and history diverges.
 
 const RACES_PER_SEASON = 22 // rough average 1996-2026; only used to pace the deterministic projection
-type Stats = { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }
-const STAT_KEYS: (keyof Stats)[] = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness']
+type Stats = { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number; consistency: number }
+const STAT_KEYS: (keyof Stats)[] = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness', 'consistency']
 const round1 = (n: number) => Math.round(n * 10) / 10
 
 // Expected-value (no-RNG) version of one applyRaceProgression tick for a single driver.
 // Keep the 15 here in step with progression.ts (races-to-potential pacing of the development curve).
 function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number): Stats {
+  // Mirror the live plateau check: all five rated stats (consistency included) grow until overall
+  // reaches peakPotential, the same point applyRaceProgression would stop (issue #59).
   const ov = overall(stats)
   const next = { ...stats }
   if (age < primeEnd) {
@@ -35,7 +37,7 @@ function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: nu
 
 // Neutral placeholders for any rating not yet signed off, so bios can be encoded before the ratings
 // pass. A driver with no ratings projects as a generic midfielder.
-const DEFAULTS = { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70, peakPotential: 78, primeEnd: 31, narrativeModifier: 0 }
+const DEFAULTS = { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70, consistency: 70, peakPotential: 78, primeEnd: 31, narrativeModifier: 0 }
 const peakOf = (h: HistoricalDriver) => h.peakPotential ?? DEFAULTS.peakPotential
 const primeEndOf = (h: HistoricalDriver) => h.primeEnd ?? DEFAULTS.primeEnd
 
@@ -57,6 +59,7 @@ export function projectToYear(h: HistoricalDriver, targetYear: number): { stats:
   let stats: Stats = {
     pace: h.pace ?? DEFAULTS.pace, wetWeatherPace: h.wetWeatherPace ?? DEFAULTS.wetWeatherPace,
     overtaking: h.overtaking ?? DEFAULTS.overtaking, smoothness: h.smoothness ?? DEFAULTS.smoothness,
+    consistency: h.consistency ?? DEFAULTS.consistency,
   }
   let age = h.ageAtEntry
   for (let y = h.marketEntryYear; y < targetYear; y++) {
@@ -72,6 +75,7 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
   return {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
+    consistency: stats.consistency,
     age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
     // Seated drivers carry a staggered 0-3 year contract, mostly 0-2 (see initialContractYears), so the
     // market churns only part of the grid each off-season but ALWAYS has some seats open, the first season
@@ -89,6 +93,16 @@ function carPaceForRank(rank: number): number {
 
 export function historyYears(): number[] {
   return historicalGrids.map((g) => g.year).sort((a, b) => a - b)
+}
+
+// The default new-game start year: the most recent season with real-world data. Nothing is special
+// about any single year — add a later grid and this moves forward on its own.
+export const DEFAULT_START_YEAR = Math.max(...historicalGrids.map((g) => g.year))
+
+// The default new-game grid: the latest season, composed from the timeline via the same path as any
+// other year (replaces the old bespoke 2026-grid.ts).
+export function composeDefaultSeason(): { drivers: Driver[]; teams: Team[] } {
+  return composeSeason(DEFAULT_START_YEAR)!
 }
 
 export function hasHistoryYear(year: number): boolean {

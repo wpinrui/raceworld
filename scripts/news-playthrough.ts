@@ -60,7 +60,7 @@ async function main() {
   const { useSeasonStore } = await import('@/lib/store/season-store')
   const { useRaceStore } = await import('@/lib/store/race-store')
   const { calendar2026 } = await import('@/data/calendar')
-  const { drivers2026, teams2026 } = await import('@/data/2026-grid')
+  const { composeSeason } = await import('@/lib/history/compose')
   const { buildRaceResults } = await import('@/lib/sim/race-results')
   const { isOffSeason } = await import('@/lib/sim/types')
   const { generateNews, CATEGORY_LABELS } = await import('@/lib/news/engine')
@@ -174,7 +174,9 @@ async function main() {
 
   for (let si = 0; si < SEASONS; si++) {
     if (si === 0) {
-      season().initSeason(drivers2026, teams2026, START_YEAR)
+      const composed = composeSeason(START_YEAR)
+      if (!composed) throw new Error(`No historical data for ${START_YEAR}`)
+      season().initSeason(composed.drivers, composed.teams, START_YEAR)
     } else {
       // Roll the previous season over into the next one.
       season().runPreSeasonTesting()

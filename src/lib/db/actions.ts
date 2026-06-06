@@ -152,7 +152,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
     year: r.year, round: r.round,
     pace: r.pace, wetWeatherPace: r.wet_weather_pace,
     overtaking: r.overtaking, smoothness: r.smoothness,
-    overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace })),
+    overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace, consistency: r.consistency })),
   }))
   // Most recent archived races with a recorded form, returned oldest -> newest so the
   // live current season (appended in the merge) continues the chronology.

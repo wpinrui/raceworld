@@ -62,6 +62,7 @@ export function generateFreeAgentPool(
       wetWeatherPace: stat(),
       overtaking: stat(),
       smoothness: stat(),
+      consistency: stat(),
       age,
       peakPotential,
       primeEnd,
@@ -78,6 +79,7 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
   rookieCounter++
   const stat = () => Math.max(55, Math.min(78, Math.round(sampleNormal(68, 5, rng))))
   const { name, nationality, gender } = pickName(new Set())
+  const peakPotential = Math.max(72, Math.min(92, Math.round(sampleNormal(82, 6, rng))))
   return {
     id: `rookie-${teamId}-${newYear}-${rookieCounter}-${idSuffix()}`,
     name,
@@ -88,8 +90,9 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
     wetWeatherPace: stat(),
     overtaking: stat(),
     smoothness: stat(),
+    consistency: stat(),
     age: 19 + Math.floor(rng() * 3),
-    peakPotential: Math.max(72, Math.min(92, Math.round(sampleNormal(82, 6, rng)))),
+    peakPotential,
     primeEnd: 29 + Math.floor(rng() * 3),
     narrativeModifier: 0,
     contractExpiresAfterSeason: newYear,

@@ -15,7 +15,7 @@ import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
-import { sampleNormal } from './rng-utils'
+import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
 
 // Roll each driver's pre-race form. The roll mean is set by the driver's confidence
@@ -85,6 +85,9 @@ export function initRaceState(
       form: forms[driver.id] ?? 5,
       retired: false,
       retirementLap: null,
+      retirementReason: null,
+      mistakeCount: 0,
+      worstMistakeLoss: 0,
       lastPitLap: 0,
       pitStops: 0,
       stintHistory: [],
@@ -148,6 +151,7 @@ export function simulateLap(
             ...updated,
             retired: true,
             retirementLap: state.currentLap,
+            retirementReason: 'mechanical',
           }
         } else if (action.type === 'set-form' && action.value !== undefined) {
           updated = { ...updated, form: action.value }
@@ -174,12 +178,13 @@ export function simulateLap(
   for (const ds of sortedByPosition) {
     let current = { ...updatedStates.get(ds.driverId)!, currentTyre: { ...updatedStates.get(ds.driverId)!.currentTyre } }
 
-    // 2a. Natural retirement (0.2% per lap)
+    // 2a. Natural retirement (0.2% per lap) — a mechanical failure, distinct from a driver mistake.
     if (!current.retired && Math.random() < 0.002) {
       current = {
         ...current,
         retired: true,
         retirementLap: state.currentLap,
+        retirementReason: 'mechanical',
       }
       updatedStates.set(current.driverId, current)
       continue
@@ -194,6 +199,27 @@ export function simulateLap(
     // Resolve driver/team early — needed for pit AI and lap time
     const driver = driverMap.get(current.driverId)!
     const team = teamMap.get(driver.teamId)!
+
+    // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
+    // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (driver-error DNF),
+    // else a one-lap time loss of 2 + Exp(mean 3) s clamped to [2, 25].
+    let mistakeTimeLoss = 0
+    const consistency = driver.consistency
+    if (Math.random() < 1.3e-5 * (100 - consistency) ** 2) {
+      current = { ...current, mistakeCount: current.mistakeCount + 1 }
+      if (Math.random() < 0.2) {
+        current = {
+          ...current,
+          retired: true,
+          retirementLap: state.currentLap,
+          retirementReason: 'driver-error',
+        }
+        updatedStates.set(current.driverId, current)
+        continue
+      }
+      mistakeTimeLoss = Math.min(25, Math.max(2, 2 + sampleExponential(3, Math.random)))
+      current = { ...current, worstMistakeLoss: Math.max(current.worstMistakeLoss, mistakeTimeLoss) }
+    }
 
     // 2c. Re-solve strategy this lap (adapts to weather changes, actual wear, etc.)
     const assumptions = state.teamAssumptions[team.id]
@@ -278,7 +304,7 @@ export function simulateLap(
       circuitFlatModifier: circuit.flatModifier,
     })
 
-    const finalLapTime = lapResult.lapTime + pitPenalty
+    const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
     lapTimesThisLap.set(current.driverId, finalLapTime)
 
     // 2f. If overtook: swap positions with car ahead

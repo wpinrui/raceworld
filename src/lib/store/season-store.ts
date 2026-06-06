@@ -16,7 +16,7 @@ import type {
   MarketMove,
   DroppedDriver,
 } from '@/lib/sim/types'
-import { drivers2026, teams2026 } from '@/data/2026-grid'
+import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendar2026 } from '@/data/calendar'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
@@ -28,6 +28,8 @@ import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
 
+// Default new-game grid: the latest season composed from the historical timeline (no bespoke grid).
+const DEFAULT_GRID = composeDefaultSeason()
 const TOTAL_ROUNDS = calendar2026.length
 // Driver market in-season beats: a contract watch shortly before the window, then renewals.
 const WATCH_ROUND = 15
@@ -296,11 +298,11 @@ export const useSeasonStore = create<SeasonStore>()(
   persist(
     (set, get) => ({
       phase: 'idle',
-      year: 2026,
-      drivers: drivers2026.map((d) => ({ ...d })),
-      teams: teams2026.map((t) => ({ ...t })),
+      year: DEFAULT_START_YEAR,
+      drivers: DEFAULT_GRID.drivers.map((d) => ({ ...d })),
+      teams: DEFAULT_GRID.teams.map((t) => ({ ...t })),
       currentRound: 1,
-      currentDate: seasonStartDate(2026),
+      currentDate: seasonStartDate(DEFAULT_START_YEAR),
       realWorldMode: false,
       realWorldChangesResolved: false,
       approvedSeasonChanges: null,

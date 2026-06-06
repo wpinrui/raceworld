@@ -1,16 +1,36 @@
 import type { Driver, DriverProgressionEvent } from './types'
 import { sampleNormal } from './rng-utils'
 
-type ProgressStat = 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness'
-const STATS: ProgressStat[] = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness']
+// The DEVELOPABLE stats — all five rated attributes grow toward peakPotential and decline past prime.
+// Consistency develops like any other rating (issue #59); the plateau check (overall >= peakPotential)
+// targets the re-weighted five-stat overall.
+type ProgressStat = 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness' | 'consistency'
+const STATS: ProgressStat[] = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness', 'consistency']
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-// Cosmetic overall used to test whether a driver has reached their potential.
-export function overall(d: Pick<Driver, 'pace' | 'smoothness' | 'overtaking' | 'wetWeatherPace'>): number {
-  return 0.6 * d.pace + 0.2 * d.smoothness + 0.1 * d.overtaking + 0.1 * d.wetWeatherPace
+// Overall rating weights across the five rated attributes (issue #59). Sum = 1.0.
+export const OVERALL_WEIGHTS = {
+  pace: 0.5,
+  consistency: 0.18,
+  overtaking: 0.15,
+  wetWeatherPace: 0.1,
+  smoothness: 0.07,
+} as const
+
+// Cosmetic overall used to test whether a driver has reached their potential and for display.
+export function overall(
+  d: Pick<Driver, 'pace' | 'smoothness' | 'overtaking' | 'wetWeatherPace' | 'consistency'>,
+): number {
+  return (
+    OVERALL_WEIGHTS.pace * d.pace +
+    OVERALL_WEIGHTS.consistency * d.consistency +
+    OVERALL_WEIGHTS.overtaking * d.overtaking +
+    OVERALL_WEIGHTS.wetWeatherPace * d.wetWeatherPace +
+    OVERALL_WEIGHTS.smoothness * d.smoothness
+  )
 }
 
 // Driver development applies AFTER EACH RACE (GDD §Driver progression curve).

@@ -37,15 +37,16 @@ function liveTeammateH2H(driverId: string, store: LiveStore) {
   return aggregateTeammateH2H(rows)
 }
 
-// The current (unarchived) season's attribute timeline from the live store.
-function liveRatingsHistory(driverId: string, year: number, statHistory: Record<string, StatPoint[]>): RatingsPoint[] {
+// The current (unarchived) season's attribute timeline from the live store. StatPoint snapshots
+// don't carry consistency (a stable trait), so the live driver's value is injected for the overall.
+function liveRatingsHistory(driverId: string, year: number, statHistory: Record<string, StatPoint[]>, consistency: number): RatingsPoint[] {
   const series = statHistory[driverId] ?? []
   return [...series]
     .sort((a, b) => a.round - b.round)
     .map((p) => ({
       year, round: p.round,
       pace: p.pace, wetWeatherPace: p.wetWeatherPace, overtaking: p.overtaking, smoothness: p.smoothness,
-      overall: Math.round(overall(p)),
+      overall: Math.round(overall({ ...p, consistency })),
     }))
 }
 
@@ -157,8 +158,10 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
       seasons: db.totals.seasons + (racing ? 1 : 0),
     },
     seasons: liveSeason ? [liveSeason, ...db.seasons] : db.seasons,
+    // Archived points already carry overall computed from their stored consistency (actions.ts);
+    // live points use the live driver's consistency (stable over a career). No re-derivation.
     ratingsHistory: racing
-      ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory)]
+      ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory, live.consistency)]
       : db.ratingsHistory,
     recentForm: racing
       ? [...db.recentForm, ...liveDriverResults(db.driverId, store.raceResults, store.calendar).map((r) => ({

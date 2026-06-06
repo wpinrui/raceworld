@@ -15,7 +15,7 @@ ok('renewal 40pt = 0', renewalChance(40) === 0)
 // 2) Geometric normalization: probabilities sum to 1 for a finite pool (checked via a 1-seat draft).
 const mkDriver = (i: number, age = 27): Driver => ({
   id: `d${i}`, name: `Driver ${i}`, teamId: '', nationality: 'GB', gender: 'male',
-  pace: 90 - i, wetWeatherPace: 80, overtaking: 80, smoothness: 80, age, peakPotential: 90, primeEnd: 32,
+  pace: 90 - i, wetWeatherPace: 80, overtaking: 80, smoothness: 80, consistency: 80, age, peakPotential: 90, primeEnd: 32,
   narrativeModifier: 0, contractExpiresAfterSeason: 2025, seasonsSinceF1Seat: 0,
 })
 const teams: Team[] = []

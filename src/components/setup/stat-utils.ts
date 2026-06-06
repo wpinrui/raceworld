@@ -1,8 +1,11 @@
-export const STAT_KEYS = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const
+import { overall } from '@/lib/sim/progression'
+
+export const STAT_KEYS = ['pace', 'consistency', 'wetWeatherPace', 'overtaking', 'smoothness'] as const
 export type StatKey = (typeof STAT_KEYS)[number]
 
 export const STAT_LABELS: Record<StatKey, string> = {
   pace: 'Pace',
+  consistency: 'Consistency',
   wetWeatherPace: 'Wet',
   overtaking: 'Overtaking',
   smoothness: 'Smoothness',
@@ -21,6 +24,6 @@ export function statColor(value: number): string {
   return `hsl(${Math.round(t * HUE_GREEN)}, 85%, 58%)`
 }
 
-export function computeOverall(d: { pace: number; smoothness: number; overtaking: number; wetWeatherPace: number }): number {
-  return Math.round(0.6 * d.pace + 0.2 * d.smoothness + 0.1 * d.overtaking + 0.1 * d.wetWeatherPace)
+export function computeOverall(d: { pace: number; smoothness: number; overtaking: number; wetWeatherPace: number; consistency: number }): number {
+  return Math.round(overall(d))
 }

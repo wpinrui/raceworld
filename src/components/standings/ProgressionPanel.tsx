@@ -12,6 +12,7 @@ const STAT_LABEL: Record<string, string> = {
   wetWeatherPace: 'Wet',
   overtaking: 'OVT',
   smoothness: 'SMO',
+  consistency: 'CON',
 }
 
 export function ProgressionPanel({ summary, drivers }: Props) {

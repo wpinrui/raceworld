@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS driver_race_attributes (
   wet_weather_pace REAL NOT NULL,
   overtaking REAL NOT NULL,
   smoothness REAL NOT NULL,
+  consistency REAL NOT NULL,
   UNIQUE(season_id, round, driver_id)
 );
 

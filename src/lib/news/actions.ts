@@ -171,7 +171,7 @@ function toRaceResult(r: DbRaceResult): RaceResult {
 function stubDriver(id: string, name: string, teamId: string): Driver {
   return {
     id, name, teamId, nationality: '', gender: 'male',
-    pace: 0, wetWeatherPace: 0, overtaking: 0, smoothness: 0,
+    pace: 0, wetWeatherPace: 0, overtaking: 0, smoothness: 0, consistency: 0,
     age: 0, peakPotential: 0, primeEnd: 0, narrativeModifier: 0,
     contractExpiresAfterSeason: 9999,
   }
