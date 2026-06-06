@@ -549,6 +549,17 @@ const DRIVER_ERROR_REASONS = [
   'a mid-corner slide that the driver could not catch',
 ]
 
+// Overtake-collision reasons (issue #60). Used when a DNF's retirementReason is 'collision' — a
+// wheel-to-wheel incident, not a solo error. Neutral about blame (one or both cars may be out).
+const COLLISION_REASONS = [
+  'a collision with the car ahead while fighting for position',
+  'contact between the two cars in a wheel-to-wheel battle',
+  'a clash with a rival during an overtake attempt',
+  'an incident in the braking zone as the pass went wrong',
+  'contact going side-by-side through the corner',
+  'a coming-together with the car in front',
+]
+
 // One-sentence mention of a NOTABLE non-DNF consistency mistake (issue #59). Slots: {m_last},
 // {m_loss} (whole seconds), {m_pos} (ordinal finish), {m_team}, plus the driver's pronouns.
 const NOTABLE_MISTAKE_POOL = [
@@ -617,7 +628,9 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     // A driver-error crash-out (issue #59) reads from the crash pool, not an invented mechanical
     // failure. Falls back to the mechanical pool for everyone else (incl. pre-#59 archived results).
     const crashedIds = new Set(dnfs.filter((x) => x.retirementReason === 'driver-error' || x.crashed).map((x) => x.driverId))
-    const poolFor = (driverId: string) => (crashedIds.has(driverId) ? DRIVER_ERROR_REASONS : RETIRE_REASONS)
+    const collisionIds = new Set(dnfs.filter((x) => x.retirementReason === 'collision').map((x) => x.driverId))
+    const poolFor = (driverId: string) =>
+      collisionIds.has(driverId) ? COLLISION_REASONS : crashedIds.has(driverId) ? DRIVER_ERROR_REASONS : RETIRE_REASONS
     const usedReasons = new Set<string>()
     const reasonFor = (driverId: string): string => {
       const pool = poolFor(driverId)
