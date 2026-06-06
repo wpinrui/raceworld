@@ -74,7 +74,14 @@ export default function SetupPage() {
         const parsed = JSON.parse(ev.target?.result as string)
         if (!Array.isArray(parsed.drivers) || !Array.isArray(parsed.teams))
           throw new Error('JSON must have "drivers" and "teams" arrays')
-        setLocalDrivers(parsed.drivers as Driver[])
+        // Default any missing/non-finite rating so an imported or hand-authored grid can't poison the
+        // sim with NaN (every rating is required and feeds lap times / overall / the mistake roll).
+        const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+        setLocalDrivers((parsed.drivers as Driver[]).map((d) => ({
+          ...d,
+          pace: num(d.pace, 70), wetWeatherPace: num(d.wetWeatherPace, 70),
+          overtaking: num(d.overtaking, 70), smoothness: num(d.smoothness, 70), consistency: num(d.consistency, 70),
+        })))
         setLocalTeams(parsed.teams as Team[])
       } catch (err) {
         setImportError(err instanceof Error ? err.message : 'Invalid JSON file')
