@@ -302,12 +302,28 @@ export function simulateLap(
       gapToCarAhead,
       carAheadLapTime,
       circuitFlatModifier: circuit.flatModifier,
+      defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
     })
 
     const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
     lapTimesThisLap.set(current.driverId, finalLapTime)
 
-    // 2f. If overtook: swap positions with car ahead
+    // 2f. Overtake collision (issue #60): retire whoever the crash took out, reason 'collision'.
+    if (lapResult.crash?.happened && carAheadState) {
+      if (lapResult.crash.defender) {
+        const ahead = updatedStates.get(carAheadState.driverId)
+        if (ahead && !ahead.retired) {
+          updatedStates.set(carAheadState.driverId, { ...ahead, retired: true, retirementLap: state.currentLap, retirementReason: 'collision' })
+        }
+      }
+      if (lapResult.crash.attacker) {
+        current = { ...current, retired: true, retirementLap: state.currentLap, retirementReason: 'collision' }
+        updatedStates.set(current.driverId, current)
+        continue // attacker is out — skip the rest of this lap's processing
+      }
+    }
+
+    // 2g. If overtook: swap positions with car ahead
     if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
       updatedStates.set(carAheadState.driverId, {
@@ -317,23 +333,23 @@ export function simulateLap(
       current = { ...current, position: aheadUpdated.position }
     }
 
-    // 2g. Degrade tyre
+    // 2h. Degrade tyre
     const newCondition = degradeTyre(current.currentTyre)
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },
     }
 
-    // 2h. Decrement fuelLaps
+    // 2i. Decrement fuelLaps
     current = { ...current, fuelLaps: Math.max(0, current.fuelLaps - 1) }
 
-    // 2i. Accumulate totalTime
+    // 2j. Accumulate totalTime
     current = { ...current, totalTime: current.totalTime + finalLapTime }
 
-    // 2j. Increment stintLap (unless we just pitted, stintLap was set to 0 above)
+    // 2k. Increment stintLap (unless we just pitted, stintLap was set to 0 above)
     current = { ...current, stintLap: current.stintLap + 1 }
 
-    // 2k. Append lapTime
+    // 2l. Append lapTime
     current = { ...current, lapTimes: [...current.lapTimes, finalLapTime] }
 
     // Pit lap belongs to the old stint (already counted via +1 in history).

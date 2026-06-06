@@ -13,11 +13,14 @@ export interface LapInput {
   gapToCarAhead: number       // Infinity if leading
   carAheadLapTime: number | null
   circuitFlatModifier: number
+  defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
 }
 
 export interface LapResult {
   lapTime: number
   overtook: boolean
+  // A contested-overtake collision (issue #60). attacker/defender flag who retires (33/33/33).
+  crash?: { happened: boolean; attacker: boolean; defender: boolean }
 }
 
 export function computeLapTime(input: LapInput): LapResult {
@@ -115,8 +118,25 @@ export function computeLapTime(input: LapInput): LapResult {
     }
   }
 
-  // gap <= 1
+  // gap <= 1: a contested overtake attempt.
   if (rawTime < carAheadLapTime) {
+    // Crash roll (issue #60), driven purely by BOTH drivers' consistency (not overtaking). Either
+    // unsafe driver can cause it; it's only clean when both are: P = f(a) + f(d) - f(a)·f(d), with
+    // f(c) = k·(100 - c)². k=2e-6 calibrated by headless measurement to ~1 / 0.5 / 0.1 overtake
+    // crash-outs per 24-race season at consistency 65 / 75 / 90 (the sim produces ~150 contested
+    // attempts per driver-season, so the per-attempt rate is small and the (100-c)² keeps the tiers
+    // ~12:6:1, close to the budget's 10:5:1).
+    if (input.defenderDriver) {
+      const k = 0.000002
+      const f = (c: number) => k * (100 - c) ** 2
+      const fa = f(driver.consistency)
+      const fd = f(input.defenderDriver.consistency)
+      if (Math.random() < fa + fd - fa * fd) {
+        // Equal thirds: attacker out / defender out / both out.
+        const r = Math.random()
+        return { lapTime: rawTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 } }
+      }
+    }
     const prob = ((1 - gapToCarAhead) + driver.overtaking / 100) / 2
     const overtook = Math.random() < prob
     if (overtook) {
