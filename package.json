@@ -2,6 +2,7 @@
   "name": "raceworld",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +10,8 @@
     "lint": "eslint",
     "db:init": "node -e \"require('./src/lib/db/client').getDb()\"",
     "news:play": "tsx scripts/news-playthrough.ts",
-    "history:check": "tsx scripts/history-check.ts"
+    "history:check": "tsx scripts/history-check.ts",
+    "desktop": "node scripts/build-desktop.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
@@ -27,15 +29,41 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.wpinrui.raceworld",
+    "productName": "RaceWorld",
+    "asar": true,
+    "files": [
+      "electron/**/*"
+    ],
+    "extraResources": [
+      "racing-car.png"
+    ],
+    "afterPack": "electron/after-pack.cjs",
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "npmRebuild": false,
+    "win": {
+      "target": "portable",
+      "icon": "racing-car.png"
+    },
+    "portable": {
+      "artifactName": "RaceWorld-${version}-portable.exe"
+    }
   }
 }
