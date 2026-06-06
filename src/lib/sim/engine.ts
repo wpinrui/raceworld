@@ -125,7 +125,8 @@ export function computeLapTime(input: LapInput): LapResult {
   // gap <= 1: contested overtake (issue #60 — overtake crashes driven by consistency)
   if (rawTime < carAheadLapTime) {
     // Incident probability depends on both drivers' consistency. P(incident) = f(c_a) + f(c_d) - f(c_a)*f(c_d),
-    // where f(c) = k * (100 - c)^2. Calibrated k=0.00012 for per-season budget: c=65→~1, c=75→~0.5, c=90→~0.1.
+    // where f(c) = k * (100 - c)^2. Calibrated k=0.00012: per-season overtake crash budget is
+    // c=65→~1 crash, c=75→~0.5, c=90→~0.1 (assumes ~10 contested attempts per driver-season).
     let crashHappened = false
     let crashAttacker = false
     let crashDefender = false
@@ -141,11 +142,11 @@ export function computeLapTime(input: LapInput): LapResult {
 
       if (Math.random() < incidentProb) {
         crashHappened = true
-        // Split outcome: 33% attacker out, 33% defender out, 33% both out
+        // Split outcome: equal thirds (attacker out / defender out / both out)
         const outcome = Math.random()
-        if (outcome < 0.33) {
+        if (outcome < 1 / 3) {
           crashAttacker = true
-        } else if (outcome < 0.66) {
+        } else if (outcome < 2 / 3) {
           crashDefender = true
         } else {
           crashAttacker = true

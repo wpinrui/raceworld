@@ -288,7 +288,7 @@ export function simulateLap(
       carAheadLapTime = lapTimesThisLap.get(carAheadState.driverId) ?? null
     }
 
-    // 2e. Compute lap time — track compatibility shifts the car's pace for this
+    // 2f. Compute lap time — track compatibility shifts the car's pace for this
     // race (compat 5 = neutral; every point above/below adds to car pace).
     const compat = state.trackCompat?.[team.id] ?? 5
     const raceTeam = compat === 5 ? team : { ...team, carPace: team.carPace + (compat - 5) }
@@ -310,7 +310,7 @@ export function simulateLap(
     const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
     lapTimesThisLap.set(current.driverId, finalLapTime)
 
-    // 2f. Handle overtake crash (issue #60): if contested overtake ended in a collision, retire driver(s).
+    // 2g. Handle overtake crash (issue #60): if contested overtake ended in a collision, retire driver(s).
     if (lapResult.crash?.happened && carAheadState) {
       if (lapResult.crash.attacker) {
         current = {
@@ -322,13 +322,16 @@ export function simulateLap(
         updatedStates.set(current.driverId, current)
       }
       if (lapResult.crash.defender) {
-        const aheadUpdated = updatedStates.get(carAheadState.driverId)!
-        updatedStates.set(carAheadState.driverId, {
-          ...aheadUpdated,
-          retired: true,
-          retirementLap: state.currentLap,
-          retirementReason: 'collision',
-        })
+        const aheadUpdated = updatedStates.get(carAheadState.driverId)
+        // Only retire defender if not already retired (guards against cascade retirements)
+        if (aheadUpdated && !aheadUpdated.retired) {
+          updatedStates.set(carAheadState.driverId, {
+            ...aheadUpdated,
+            retired: true,
+            retirementLap: state.currentLap,
+            retirementReason: 'collision',
+          })
+        }
       }
       // If attacker retired, skip the rest of the lap logic
       if (lapResult.crash.attacker) {
@@ -336,7 +339,7 @@ export function simulateLap(
       }
     }
 
-    // 2g. If overtook: swap positions with car ahead
+    // 2h. If overtook: swap positions with car ahead
     if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
       updatedStates.set(carAheadState.driverId, {
@@ -346,7 +349,7 @@ export function simulateLap(
       current = { ...current, position: aheadUpdated.position }
     }
 
-    // 2h. Degrade tyre
+    // 2i. Degrade tyre
     const newCondition = degradeTyre(current.currentTyre)
     current = {
       ...current,

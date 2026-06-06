@@ -549,11 +549,11 @@ const DRIVER_ERROR_REASONS = [
   'a mid-corner slide that the driver could not catch',
 ]
 
-// Overtake collision reasons (issue #60). Describes multi-car incidents during contested passes.
+// Overtake collision reasons (issue #60). Describes incidents during contested passes.
+// Phrases are neutral about the outcome (may affect one or both drivers).
 const COLLISION_REASONS = [
   'a collision with the car ahead during an overtake attempt',
   'contact between the two cars fighting for position',
-  'a touch between competitors that ended both their races',
   'a clash between rivals battling for position',
   'an incident when overtaking went wrong',
   'contact during a contested pass',
