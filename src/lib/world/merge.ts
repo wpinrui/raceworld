@@ -4,7 +4,7 @@
 
 import type { Driver, Team, DriverStanding, ConstructorStanding, RaceResult, Circuit } from '@/lib/sim/types'
 import type { StatPoint } from '@/lib/store/season-store'
-import { overall } from '@/lib/sim/progression'
+import { overall, getConsistency } from '@/lib/sim/progression'
 import type { Feat } from '@/lib/stats/types'
 import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow, RatingsPoint } from './types'
 import { aggregateTeammateH2H, combineTeammateH2H, type H2HRaceRow } from './h2h'
@@ -157,9 +157,14 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
       seasons: db.totals.seasons + (racing ? 1 : 0),
     },
     seasons: liveSeason ? [liveSeason, ...db.seasons] : db.seasons,
-    ratingsHistory: racing
+    // Consistency is a stable trait the per-round snapshots don't store (live StatPoint + the DB
+    // attribute table predate it), so both archived and live ratings points compute `overall` with the
+    // neutral default. Re-apply the driver's current consistency across the whole timeline so the chart's
+    // overall matches the header (valid because consistency does not change over a career; issue #59).
+    ratingsHistory: (racing
       ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory)]
-      : db.ratingsHistory,
+      : db.ratingsHistory
+    ).map((p) => ({ ...p, overall: Math.round(overall({ ...p, consistency: getConsistency(live) })) })),
     recentForm: racing
       ? [...db.recentForm, ...liveDriverResults(db.driverId, store.raceResults, store.calendar).map((r) => ({
           year: store.year, round: r.round, circuitName: r.circuitName,

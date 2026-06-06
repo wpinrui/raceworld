@@ -2,6 +2,11 @@ export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
 export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
 
+// Why a car retired. 'driver-error' = a consistency mistake that ended the race (issue #59);
+// 'mechanical' = the existing per-lap reliability failure. The retirement-reason issue may extend
+// this (e.g. collisions); consumers should treat unknown values gracefully.
+export type RetirementReason = 'driver-error' | 'mechanical'
+
 export type Gender = 'male' | 'female'
 
 export interface Driver {
@@ -13,7 +18,12 @@ export interface Driver {
   pace: number           // 0-100
   wetWeatherPace: number // 0-100
   overtaking: number     // 0-100
-  smoothness: number     // 0-100
+  smoothness: number     // 0-100 (tyre life only)
+  // Race-craft consistency 0-100 (issue #59): scales per-lap noise and the mistake rate.
+  // Distinct from smoothness. Correlated with quality (anchors low~65 / avg~75 / elite~90).
+  // Optional for backward-compatible saves: absent reads as the derived/neutral default
+  // (see getConsistency / overall in progression.ts).
+  consistency?: number
   age: number
   peakPotential: number
   primeEnd: number       // age at which decline starts
@@ -70,6 +80,9 @@ export interface DriverRaceState {
   form: number           // 0-10
   retired: boolean
   retirementLap: number | null
+  retirementReason: RetirementReason | null  // set when retired; null while running
+  mistakeCount: number                       // consistency mistakes made this race (incl. a crash)
+  worstMistakeLoss: number                   // largest single mistake time loss (s) this race; 0 if none
   lastPitLap: number
   pitStops: number
   stintHistory: Array<{ compound: TyreCompound; laps: number }>
@@ -180,6 +193,12 @@ export interface RaceResult {
   q1Time: number | null
   q2Time: number | null
   q3Time: number | null
+  // Consistency mistakes this race (issue #59). Optional: archived results predating the field
+  // (and the DB-replay path) omit them. `crashed` = the DNF was a driver-error crash-out.
+  mistakes?: number
+  worstMistakeLoss?: number              // largest single time loss (s) from a mistake, 0 if none
+  crashed?: boolean
+  retirementReason?: RetirementReason | null
 }
 
 export interface DriverStanding {

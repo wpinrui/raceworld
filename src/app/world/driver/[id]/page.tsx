@@ -28,7 +28,7 @@ import { RecentFormCard } from '@/components/world/RecentFormCard'
 import { SeasonFormChart } from '@/components/world/SeasonFormChart'
 import { buildDriverBio } from '@/lib/world/bio'
 import { buildMilestones } from '@/lib/world/milestones'
-import { overall } from '@/lib/sim/progression'
+import { overall, getConsistency } from '@/lib/sim/progression'
 
 type Tab = 'overview' | 'development' | 'results' | 'milestones' | 'form' | 'h2h'
 
@@ -283,7 +283,7 @@ export default function DriverPage() {
                             <PhotoField value={liveDriver.photoUrl} onChange={(v) => updateDriver(id, { photoUrl: v })} inputClass={inputClass} />
                             <div className="space-y-2.5">
                               {STAT_KEYS.map((k) => (
-                                <StatSlider key={k} label={STAT_LABELS[k]} value={liveDriver[k]} onChange={(v) => updateDriver(id, { [k]: v })} />
+                                <StatSlider key={k} label={STAT_LABELS[k]} value={liveDriver[k] ?? getConsistency(liveDriver)} onChange={(v) => updateDriver(id, { [k]: v })} />
                               ))}
                               <div className="flex items-center gap-3">
                                 <span className="text-xs text-[#FFFFFF] w-20 shrink-0">Narrative</span>

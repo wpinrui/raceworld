@@ -1,5 +1,5 @@
 import type { Driver, Team } from '@/lib/sim/types'
-import { overall } from '@/lib/sim/progression'
+import { overall, deriveConsistency } from '@/lib/sim/progression'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
 import type { HistoricalDriver } from '@/data/history/types'
@@ -17,7 +17,9 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 // Expected-value (no-RNG) version of one applyRaceProgression tick for a single driver.
 // Keep the 15 here in step with progression.ts (races-to-potential pacing of the development curve).
 function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number): Stats {
-  const ov = overall(stats)
+  // Mirror the live plateau check: overall includes the driver's (derived) consistency, so the
+  // projection stops developing at the same point applyRaceProgression would (issue #59).
+  const ov = overall({ ...stats, consistency: deriveConsistency(peakPotential) })
   const next = { ...stats }
   if (age < primeEnd) {
     if (ov >= peakPotential) return stats
@@ -72,6 +74,7 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
   return {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
+    consistency: deriveConsistency(peakOf(h)),
     age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
     // Seated drivers carry a staggered 0-3 year contract, mostly 0-2 (see initialContractYears), so the
     // market churns only part of the grid each off-season but ALWAYS has some seats open, the first season
