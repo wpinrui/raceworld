@@ -14,11 +14,17 @@ export interface LapInput {
   gapToCarAhead: number       // Infinity if leading
   carAheadLapTime: number | null
   circuitFlatModifier: number
+  defenderDriver?: Driver     // car ahead (for overtake crash logic, issue #60)
 }
 
 export interface LapResult {
   lapTime: number
   overtook: boolean
+  crash?: {
+    happened: boolean
+    attacker: boolean           // attacker retires
+    defender: boolean           // defender retires
+  }
 }
 
 export function computeLapTime(input: LapInput): LapResult {
@@ -116,8 +122,44 @@ export function computeLapTime(input: LapInput): LapResult {
     }
   }
 
-  // gap <= 1
+  // gap <= 1: contested overtake (issue #60 — overtake crashes driven by consistency)
   if (rawTime < carAheadLapTime) {
+    // Incident probability depends on both drivers' consistency. P(incident) = f(c_a) + f(c_d) - f(c_a)*f(c_d),
+    // where f(c) = k * (100 - c)^2. Calibrated k=0.00012 for per-season budget: c=65→~1, c=75→~0.5, c=90→~0.1.
+    let crashHappened = false
+    let crashAttacker = false
+    let crashDefender = false
+
+    if (input.defenderDriver) {
+      const k = 0.00012
+      const attackerConsistency = getConsistency(driver)
+      const defenderConsistency = getConsistency(input.defenderDriver)
+      const f = (c: number) => k * (100 - c) ** 2
+      const fA = f(attackerConsistency)
+      const fD = f(defenderConsistency)
+      const incidentProb = fA + fD - fA * fD
+
+      if (Math.random() < incidentProb) {
+        crashHappened = true
+        // Split outcome: 33% attacker out, 33% defender out, 33% both out
+        const outcome = Math.random()
+        if (outcome < 0.33) {
+          crashAttacker = true
+        } else if (outcome < 0.66) {
+          crashDefender = true
+        } else {
+          crashAttacker = true
+          crashDefender = true
+        }
+      }
+    }
+
+    // If crash happens, return immediately (don't attempt overtake, don't clamp time)
+    if (crashHappened) {
+      return { lapTime: rawTime, overtook: false, crash: { happened: true, attacker: crashAttacker, defender: crashDefender } }
+    }
+
+    // No crash: roll for normal overtake success
     const prob = ((1 - gapToCarAhead) + driver.overtaking / 100) / 2
     const overtook = Math.random() < prob
     if (overtook) {

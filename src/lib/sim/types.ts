@@ -3,9 +3,9 @@ export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' 
 export type SimSpeed = 1 | 2 | 3 | 4
 
 // Why a car retired. 'driver-error' = a consistency mistake that ended the race (issue #59);
-// 'mechanical' = the existing per-lap reliability failure. The retirement-reason issue may extend
-// this (e.g. collisions); consumers should treat unknown values gracefully.
-export type RetirementReason = 'driver-error' | 'mechanical'
+// 'mechanical' = the existing per-lap reliability failure; 'collision' = overtake crash (issue #60).
+// Consumers should treat unknown values gracefully.
+export type RetirementReason = 'driver-error' | 'mechanical' | 'collision'
 
 export type Gender = 'male' | 'female'
 

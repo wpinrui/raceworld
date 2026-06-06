@@ -549,6 +549,18 @@ const DRIVER_ERROR_REASONS = [
   'a mid-corner slide that the driver could not catch',
 ]
 
+// Overtake collision reasons (issue #60). Describes multi-car incidents during contested passes.
+const COLLISION_REASONS = [
+  'a collision with the car ahead during an overtake attempt',
+  'contact between the two cars fighting for position',
+  'a touch between competitors that ended both their races',
+  'a clash between rivals battling for position',
+  'an incident when overtaking went wrong',
+  'contact during a contested pass',
+  'a collision in the fight for position',
+  'an accident during an overtake attempt',
+]
+
 // One-sentence mention of a NOTABLE non-DNF consistency mistake (issue #59). Slots: {m_last},
 // {m_loss} (whole seconds), {m_pos} (ordinal finish), {m_team}, plus the driver's pronouns.
 const NOTABLE_MISTAKE_POOL = [
@@ -614,10 +626,15 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     // All genuinely race-ending; assigned deterministically per driver and de-duplicated within a
     // race so the same failure does not appear two or three times in one report.
     const RETIRE_REASONS = ['a power-unit failure', 'a hydraulics leak', 'a gearbox problem', 'brake failure', 'a suspension failure', 'an engine that let go', 'an oil leak', 'terminal floor damage', 'damage from a first-lap clash', 'a high-speed spin into the barriers', 'an electrical failure', 'a wheel-nut problem at a stop']
-    // A driver-error crash-out (issue #59) reads from the crash pool, not an invented mechanical
-    // failure. Falls back to the mechanical pool for everyone else (incl. pre-#59 archived results).
-    const crashedIds = new Set(dnfs.filter((x) => x.retirementReason === 'driver-error' || x.crashed).map((x) => x.driverId))
-    const poolFor = (driverId: string) => (crashedIds.has(driverId) ? DRIVER_ERROR_REASONS : RETIRE_REASONS)
+    // Track retirement reasons to pick the right text pool (issue #59, #60).
+    // 'driver-error' = consistency crash, 'collision' = overtake incident, mechanical = invented failure.
+    const driverErrorIds = new Set(dnfs.filter((x) => x.retirementReason === 'driver-error' || x.crashed).map((x) => x.driverId))
+    const collisionIds = new Set(dnfs.filter((x) => x.retirementReason === 'collision').map((x) => x.driverId))
+    const poolFor = (driverId: string) => {
+      if (collisionIds.has(driverId)) return COLLISION_REASONS
+      if (driverErrorIds.has(driverId)) return DRIVER_ERROR_REASONS
+      return RETIRE_REASONS
+    }
     const usedReasons = new Set<string>()
     const reasonFor = (driverId: string): string => {
       const pool = poolFor(driverId)
