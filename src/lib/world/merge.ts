@@ -5,6 +5,7 @@
 import type { Driver, Team, DriverStanding, ConstructorStanding, RaceResult, Circuit } from '@/lib/sim/types'
 import type { StatPoint } from '@/lib/store/season-store'
 import { overall } from '@/lib/sim/progression'
+import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
 import type { Feat } from '@/lib/stats/types'
 import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow, RatingsPoint } from './types'
 import { aggregateTeammateH2H, combineTeammateH2H, type H2HRaceRow } from './h2h'
@@ -98,11 +99,9 @@ function liveDriverResults(driverId: string, raceResults: RaceResult[][], calend
   return out
 }
 
-// A title counts the moment it's mathematically secured (or the season has ended),
-// not only once the season is archived. Max points a rival can still take: 25/race for
-// a driver, 25+18=43/race for a constructor (both cars).
-const DRIVER_MAX_PER_RACE = 25
-const CONSTRUCTOR_MAX_PER_RACE = 43
+// A title counts the moment it's mathematically secured (or the season has ended), not only once the
+// season is archived. The max a rival can still take per race is era-dependent (issue #63): a win
+// (driver 25 / constructor 43) plus the fastest-lap point in 2019-2024.
 
 export function clinchedDriverChampion(store: LiveStore): string | null {
   const ds = store.driverStandings
@@ -110,7 +109,7 @@ export function clinchedDriverChampion(store: LiveStore): string | null {
   const remaining = store.calendar.length - store.raceResults.length
   if (remaining <= 0) return ds[0].driverId // season over — the leader is champion
   const gap = ds[0].points - (ds[1]?.points ?? 0)
-  return gap > remaining * DRIVER_MAX_PER_RACE ? ds[0].driverId : null
+  return gap > remaining * driverMaxPerRace(store.year) ? ds[0].driverId : null
 }
 
 export function clinchedConstructorChampion(store: LiveStore): string | null {
@@ -119,7 +118,7 @@ export function clinchedConstructorChampion(store: LiveStore): string | null {
   const remaining = store.calendar.length - store.raceResults.length
   if (remaining <= 0) return cs[0].teamId
   const gap = cs[0].points - (cs[1]?.points ?? 0)
-  return gap > remaining * CONSTRUCTOR_MAX_PER_RACE ? cs[0].teamId : null
+  return gap > remaining * constructorMaxPerRace(store.year) ? cs[0].teamId : null
 }
 
 export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCareer {

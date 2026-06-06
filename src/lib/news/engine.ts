@@ -25,7 +25,7 @@ import type {
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
-import { hasFastestLapPoint } from '@/lib/sim/points'
+import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
@@ -143,9 +143,6 @@ export interface NewsArticle {
   date?: string      // ISO 'YYYY-MM-DD' the story drops on, derived from round + category + calendar
   entities?: { driverIds: string[]; teamIds: string[]; circuitId?: string } // who/what it mentions (for name-follow + linking)
 }
-
-const DRIVER_MAX_PER_RACE = 25
-const CONSTRUCTOR_MAX_PER_RACE = 43
 
 // Join composed paragraphs, dropping any that collapsed to empty.
 function paras(...parts: string[]): string {
@@ -611,7 +608,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const leadChanged = !!leader && !!prevLeaderId && leader.driverId !== prevLeaderId
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
-    const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * DRIVER_MAX_PER_RACE
+    const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
 
     // Safe, specific colour.
     const winnerHome = isHomeRace(ctx, p1.driverId, r)
@@ -1336,7 +1333,7 @@ function championship(ctx: NewsContext): NewsArticle[] {
     if (s.length < 1) continue
     const gap = s[0].points - (s[1]?.points ?? 0)
     const remaining = N - r
-    const clinched = remaining <= 0 || (s.length >= 2 && gap > remaining * DRIVER_MAX_PER_RACE)
+    const clinched = remaining <= 0 || (s.length >= 2 && gap > remaining * driverMaxPerRace(ctx.year))
     if (!clinched) continue
     const champ = s[0]
     const earlyClinch = remaining > 0 // secured with rounds to spare, vs decided at the finale
@@ -1397,7 +1394,7 @@ function championship(ctx: NewsContext): NewsArticle[] {
     if (s.length < 1) continue
     const gap = s[0].points - (s[1]?.points ?? 0)
     const remaining = N - r
-    const clinched = remaining <= 0 || (s.length >= 2 && gap > remaining * CONSTRUCTOR_MAX_PER_RACE)
+    const clinched = remaining <= 0 || (s.length >= 2 && gap > remaining * constructorMaxPerRace(ctx.year))
     if (!clinched) continue
     const earlyClinch = remaining > 0
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
@@ -1458,9 +1455,8 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
   const out: NewsArticle[] = []
   const upTo = ctx.endOfSeason ? ctx.completedRounds : Math.min(ctx.completedRounds + 1, N)
   const F1 = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
-  const fl = hasFastestLapPoint(ctx.year) ? 1 : 0   // FL point exists only 2019-2024 (issue #63)
-  const drvMax = 25 + fl                            // most a driver can take in one race
-  const wccMax = CONSTRUCTOR_MAX_PER_RACE + fl      // most a constructor can take in one race
+  const drvMax = driverMaxPerRace(ctx.year)         // most a driver can take in one race (FL-aware)
+  const wccMax = constructorMaxPerRace(ctx.year)    // most a constructor can take in one race (FL-aware)
   // Best (lowest-number) finish a rival may take while the leader still clinches (points < A).
   const clinchPos = (A: number) => { for (let p = 1; p <= 10; p++) if (F1[p - 1] < A) return p; return 11 }
   // Can each title be clinched at round rr (and is it not already won)?
@@ -1551,7 +1547,7 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
     const cs = constructorStandingsAfter(ctx, r - 1)
     if (cs.length >= 2 && wccCanClinch(r)) {
       const CG = cs[0].points - cs[1].points
-      const diffNeeded = rem * CONSTRUCTOR_MAX_PER_RACE - CG // net swing the lead team needs this race
+      const diffNeeded = rem * wccMax - CG // net swing the lead team needs this race
       // A team's maximum from one race is a 1-2 (43); behind a rival's 1-2 the chaser can do no
       // better than 3rd and 4th (27), so a 1-2 nets at least 16 on the rival. That is the test for
       // whether locking out the top two guarantees the title regardless of the rival's result.
@@ -1618,7 +1614,7 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
     const csF = constructorStandingsAfter(ctx, fr - 1)
     if (csF.length >= 2) {
       const CG = csF[0].points - csF[1].points
-      if (CG >= 0 && CG <= CONSTRUCTOR_MAX_PER_RACE) {
+      if (CG >= 0 && CG <= constructorMaxPerRace(ctx.year)) {
         const seed = `finale-wcc-${ctx.year}`
         const slots: Record<string, string | number> = {
           lead_team: csF[0].teamName, rival_team: csF[1].teamName, circuit: circuit(ctx, fr), year: ctx.year,
@@ -1657,7 +1653,7 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const gap = s[0].points - s[1].points
     const remaining = N - r
     if (remaining <= 0) continue
-    if (gap > remaining * DRIVER_MAX_PER_RACE || gap > 40) continue
+    if (gap > remaining * driverMaxPerRace(ctx.year) || gap > 40) continue
     const seed = `fight-${ctx.year}-${r}`
     if (!chance(seed, 60)) continue
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
@@ -1682,7 +1678,7 @@ function titleFight(ctx: NewsContext): NewsArticle[] {
     const slots = {
       leader: s[0].driverName, second: s[1].driverName, leader_last: lastName(s[0].driverName), second_last: lastName(s[1].driverName),
       leader_poss: poss(lastName(s[0].driverName)), second_poss: poss(lastName(s[1].driverName)),
-      gap, gap_pts: plural(gap, 'point'), remaining, races_left: racesLeft, round: r, max_pts: remaining * DRIVER_MAX_PER_RACE,
+      gap, gap_pts: plural(gap, 'point'), remaining, races_left: racesLeft, round: r, max_pts: remaining * driverMaxPerRace(ctx.year),
       w_leader_last: lastName(winsLeaderName), w_leader_poss: poss(lastName(winsLeaderName)), w_hi: Math.max(s[0].wins, s[1].wins), w_lo: Math.min(s[0].wins, s[1].wins),
       hh_phrase: hhPhrase, mom_last: momLast, mom_other: momOther, mom_hi: Math.max(pl, ps), mom_lo: Math.min(pl, ps),
     }
@@ -1951,7 +1947,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
     // Occasional qualitative descriptor for the gap, by how it compares to the points still on
     // offer. Gated so it is not slapped on every preview; a bare number is often plenty.
-    const availLeft = remaining * DRIVER_MAX_PER_RACE
+    const availLeft = remaining * driverMaxPerRace(ctx.year)
     const ratio = leadGap > 0 && availLeft > 0 ? leadGap / availLeft : 0
     // "slender/narrow/wafer-thin" is reserved for a genuinely small absolute gap (a couple of
     // results), not just a small ratio early in a long season where 10+ points is still real.
