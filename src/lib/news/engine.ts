@@ -1516,7 +1516,7 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
       // The full swing (covers finishing other than first) and the flip side into the next race.
       const swingText = clinchMargin <= 0
         ? fill(pick(['Such is the lead that {leader_last} is champion at the {circuit} unless {s_last} outscores them by {surv} {surv_pts}.', '{leader_last} clinches barring {s_last} outscoring them by {surv} {surv_pts}.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Only that keeps the fight alive into the {next_circuit}.', 'Anything short of that and it is done.'], `${seed}|sw2`), slots)
-        : clinchMargin <= 18
+        : clinchMargin <= F1[1]
         ? fill(pick(['{leader_last} need not even win: outscoring {s_last} by {clinch_margin} {margin_pts} is enough, so even {worst_pos} would do should {s_last} draw a blank.', 'A win is not essential, with {leader_last} clinching by outscoring {s_last} by {clinch_margin} {margin_pts}; even {worst_pos} settles it if {s_last} fails to score.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Anything less, and the title race goes on to the {next_circuit}.', 'Short of that swing, the championship heads to the {next_circuit}.'], `${seed}|sw2`), slots)
         : fill(pick(['Only a win will do, and even then {leader_last} must outscore {s_last} by {clinch_margin} {margin_pts} to settle it.', 'Nothing short of victory can clinch it here, with {leader_last} needing to outscore {s_last} by {clinch_margin} {margin_pts}.'], `${seed}|sw`), slots) + ' ' + fill(pick(['Fail to manage it, and the title goes to the {next_circuit}.', 'If not, the championship rolls on to the {next_circuit}.'], `${seed}|sw2`), slots)
       out.push({
@@ -1589,7 +1589,7 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
     const ds = driverStandingsAfter(ctx, fr - 1)
     if (ds.length >= 2) {
       const G = ds[0].points - ds[1].points
-      if (G >= 0 && G <= 25) { // alive: one race can still change hands at the top
+      if (G >= 0 && G <= driverMaxPerRace(ctx.year)) { // alive: one race can still change hands at the top
         const seed = `finale-drv-${ctx.year}`
         const slots: Record<string, string | number> = {
           leader: ds[0].driverName, leader_last: lastName(ds[0].driverName), s: ds[1].driverName, s_last: lastName(ds[1].driverName),

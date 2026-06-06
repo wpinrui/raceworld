@@ -35,12 +35,13 @@ export function hasFastestLapPoint(year: number): boolean {
   return eraFor(year).fastestLapPoint
 }
 
-// Most championship points one entry can take in a single race under `year`'s system — a win (25)
-// plus the fastest-lap point where it exists. Used by every clinch / "uncatchable" calculation so
-// none of them over-claims a settled title in an FL era. (Base 25 / 43 match the pre-FL maxima.)
+// Most championship points one entry can take in a single race under `year`'s ERA system: a win for
+// a driver, a 1-2 for a constructor, plus the fastest-lap point where it exists. Used by every clinch
+// / "uncatchable" calculation, so they stay correct across all eras — a 1998 win is 10, not 25 — and
+// never over-claim (FL eras) or under-claim (pre-2010) a settled title.
 export function driverMaxPerRace(year: number): number {
-  return 25 + (hasFastestLapPoint(year) ? 1 : 0)
+  return getPoints(1, year) + (hasFastestLapPoint(year) ? 1 : 0)
 }
 export function constructorMaxPerRace(year: number): number {
-  return 43 + (hasFastestLapPoint(year) ? 1 : 0) // 25 + 18 for two cars, + FL on one of them
+  return getPoints(1, year) + getPoints(2, year) + (hasFastestLapPoint(year) ? 1 : 0)
 }
