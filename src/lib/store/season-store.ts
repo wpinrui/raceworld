@@ -961,6 +961,7 @@ export const useSeasonStore = create<SeasonStore>()(
           dbSeasonId: null,
           allUpgradeEvents: [],
           realWorldChangesResolved: false,
+          approvedSeasonChanges: null, // reset with `resolved` — the pair is always cleared together
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
           // Season-scoped per-round history is cleared too, matching raceResults/allUpgradeEvents.
