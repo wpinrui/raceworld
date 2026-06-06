@@ -28,7 +28,7 @@ export async function commitCurrentRace(): Promise<boolean> {
   // Post-race attribute snapshots for the career ratings-progression chart.
   const snapshots = useSeasonStore.getState().drivers
     .filter((d) => d.teamId !== '')
-    .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }))
+    .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness, peakPotential: d.peakPotential }))
   await actionFlushRaceResult(dbSeasonId, round, circuit.id, circuit.name, results, snapshots)
 
   useSeasonStore.getState().advanceRound()

@@ -168,6 +168,7 @@ export interface DriverAttributeSnapshot {
   wetWeatherPace: number
   overtaking: number
   smoothness: number
+  peakPotential: number
 }
 
 // Persist each driver's post-race attributes for the round. Idempotent per
@@ -179,14 +180,14 @@ export function insertDriverRaceAttributes(
 ): void {
   const db = getDb()
   const stmt = db.prepare(`
-    INSERT INTO driver_race_attributes (season_id, round, driver_id, pace, wet_weather_pace, overtaking, smoothness)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO driver_race_attributes (season_id, round, driver_id, pace, wet_weather_pace, overtaking, smoothness, peak_potential)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(season_id, round, driver_id) DO UPDATE SET
       pace = excluded.pace, wet_weather_pace = excluded.wet_weather_pace,
-      overtaking = excluded.overtaking, smoothness = excluded.smoothness
+      overtaking = excluded.overtaking, smoothness = excluded.smoothness, peak_potential = excluded.peak_potential
   `)
   const insertMany = db.transaction((rows: DriverAttributeSnapshot[]) => {
-    for (const s of rows) stmt.run(seasonId, round, s.driverId, s.pace, s.wetWeatherPace, s.overtaking, s.smoothness)
+    for (const s of rows) stmt.run(seasonId, round, s.driverId, s.pace, s.wetWeatherPace, s.overtaking, s.smoothness, s.peakPotential)
   })
   insertMany(snapshots)
 }
@@ -198,6 +199,7 @@ export interface DbRatingsPointRow {
   wet_weather_pace: number
   overtaking: number
   smoothness: number
+  peak_potential: number | null
 }
 
 // A driver's attribute timeline across all archived seasons, ordered chronologically.
@@ -205,7 +207,7 @@ export function getDriverRatingsHistory(driverId: string): DbRatingsPointRow[] {
   return getDb().prepare(`
     SELECT s.year AS year, dra.round AS round,
       dra.pace AS pace, dra.wet_weather_pace AS wet_weather_pace,
-      dra.overtaking AS overtaking, dra.smoothness AS smoothness
+      dra.overtaking AS overtaking, dra.smoothness AS smoothness, dra.peak_potential AS peak_potential
     FROM driver_race_attributes dra
     JOIN seasons s ON s.id = dra.season_id
     WHERE dra.driver_id = ? AND s.status = 'archived'
