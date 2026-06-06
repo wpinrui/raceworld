@@ -55,7 +55,7 @@ export function buildMilestones(career: DriverCareer): MilestoneEvent[] {
     s.results.forEach((finish, i) => {
       const round = i + 1
       emit('starts', total.starts, total.starts + 1, s.year, round); total.starts += 1
-      const pts = getPoints(finish)
+      const pts = getPoints(finish, s.year)
       emit('points', total.points, total.points + pts, s.year, round); total.points += pts
       if (finish != null && finish <= 3) { emit('podiums', total.podiums, total.podiums + 1, s.year, round); total.podiums += 1 }
       if (finish === 1) { emit('wins', total.wins, total.wins + 1, s.year, round); total.wins += 1 }

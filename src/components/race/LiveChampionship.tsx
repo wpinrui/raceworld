@@ -11,6 +11,7 @@ interface Props {
   teams: Team[]
   baselineDrivers: DriverStanding[]
   baselineConstructors: ConstructorStanding[]
+  year: number // selects the era points table for the live projection (issue #63)
 }
 
 interface LiveRow {
@@ -27,7 +28,7 @@ function DeltaArrow({ delta }: { delta: number }) {
   return <span className="text-[#FFFFFF]"><Minus size={12} /></span>
 }
 
-export function LiveChampionship({ states, drivers, teams, baselineDrivers, baselineConstructors }: Props) {
+export function LiveChampionship({ states, drivers, teams, baselineDrivers, baselineConstructors, year }: Props) {
   const [tab, setTab] = useState<'drivers' | 'constructors'>('drivers')
 
   const posById = new Map<string, number | null>()
@@ -42,7 +43,7 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
       id: d.driverId,
       label: d.driverName,
       color: teamMap.get(d.teamId)?.color ?? '#FFFFFF',
-      livePoints: d.points + getPoints(posById.get(d.driverId) ?? null),
+      livePoints: d.points + getPoints(posById.get(d.driverId) ?? null, year),
       baselineRank: driverBaselineRank.get(d.driverId) ?? 0,
     }))
     .sort((a, b) => b.livePoints - a.livePoints || a.baselineRank - b.baselineRank)
@@ -53,7 +54,7 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
   for (const c of baselineConstructors) teamLivePoints.set(c.teamId, c.points)
   for (const d of drivers) {
     if (d.teamId === '') continue
-    const add = getPoints(posById.get(d.id) ?? null)
+    const add = getPoints(posById.get(d.id) ?? null, year)
     if (add) teamLivePoints.set(d.teamId, (teamLivePoints.get(d.teamId) ?? 0) + add)
   }
   const ctorBaselineRank = new Map(baselineConstructors.map((c, i) => [c.teamId, i]))

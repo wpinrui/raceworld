@@ -17,7 +17,7 @@ export async function commitCurrentRace(): Promise<boolean> {
   const circuit = calendar2026[round - 1]
   if (!circuit) return false
 
-  const results = buildRaceResults(rs, race.drivers, race.teams)
+  const results = buildRaceResults(rs, race.drivers, race.teams, season.year)
   season.recordRaceResult(results)
 
   let dbSeasonId = useSeasonStore.getState().dbSeasonId
