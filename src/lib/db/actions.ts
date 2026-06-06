@@ -41,7 +41,7 @@ import {
   type AllTimeDriverStat,
   type AllTimeTeamStat,
 } from './queries'
-import { overall } from '@/lib/sim/progression'
+import { overall, deriveConsistency } from '@/lib/sim/progression'
 import { aggregateTeammateH2H, type H2HRaceRow } from '@/lib/world/h2h'
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import type {
@@ -148,12 +148,15 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
       inProgress: false,
     }
   })
-  const ratingsHistory: RatingsPoint[] = getDriverRatingsHistory(driverId).map((r) => ({
-    year: r.year, round: r.round,
-    pace: r.pace, wetWeatherPace: r.wet_weather_pace,
-    overtaking: r.overtaking, smoothness: r.smoothness,
-    overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace })),
-  }))
+  const ratingsHistory: RatingsPoint[] = getDriverRatingsHistory(driverId).map((r) => {
+    const consistency = r.peak_potential != null ? deriveConsistency(r.peak_potential) : 75
+    return {
+      year: r.year, round: r.round,
+      pace: r.pace, wetWeatherPace: r.wet_weather_pace,
+      overtaking: r.overtaking, smoothness: r.smoothness,
+      overall: Math.round(overall({ pace: r.pace, smoothness: r.smoothness, overtaking: r.overtaking, wetWeatherPace: r.wet_weather_pace, consistency })),
+    }
+  })
   // Most recent archived races with a recorded form, returned oldest -> newest so the
   // live current season (appended in the merge) continues the chronology.
   const recentForm = getDriverRecentForm(driverId, 12).reverse().map((r) => ({
