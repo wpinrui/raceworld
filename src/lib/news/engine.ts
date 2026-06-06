@@ -25,7 +25,7 @@ import type {
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
-import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
+import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
@@ -1454,7 +1454,10 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
   const upTo = ctx.endOfSeason ? ctx.completedRounds : Math.min(ctx.completedRounds + 1, N)
-  const F1 = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
+  // Position points under THIS season's era system (issue #63) — 0 for non-scoring slots. Drives all
+  // the "finishes no higher than Pth" / "clinches with a Pth or better" prose so it's correct for
+  // top-6 (1996-2002) and top-8 (2003-2009) replays, not just the modern top-10 table.
+  const F1 = Array.from({ length: 10 }, (_, i) => getPoints(i + 1, ctx.year))
   const drvMax = driverMaxPerRace(ctx.year)         // most a driver can take in one race (FL-aware)
   const wccMax = constructorMaxPerRace(ctx.year)    // most a constructor can take in one race (FL-aware)
   // Best (lowest-number) finish a rival may take while the leader still clinches (points < A).
@@ -1486,8 +1489,8 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
       const conds: string[] = []
       for (const j of ds.slice(1)) {
         if (j.points + (rem + 1) * drvMax < L.points) continue // out of mathematical contention
-        const A = (L.points + 25) - j.points - rem * drvMax
-        if (A > 18) continue // even at 2nd this rival cannot deny a winning leader
+        const A = (L.points + F1[0]) - j.points - rem * drvMax // F1[0] = a win under this era
+        if (A > F1[1]) continue // even at 2nd (era points) this rival cannot deny a winning leader
         const pos = clinchPos(A)
         conds.push(pos >= 11 ? `${lastName(j.driverName)} finishes outside the points` : `${lastName(j.driverName)} finishes no higher than ${ordinal(pos)}`)
       }
