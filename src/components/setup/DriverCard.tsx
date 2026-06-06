@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Trash2, ChevronDown } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team } from '@/lib/sim/types'
-import { getConsistency } from '@/lib/sim/progression'
 import { STAT_KEYS, STAT_LABELS, computeOverall } from './stat-utils'
 import { DriverLink } from '@/components/world/EntityLink'
 import { OverallRing } from './OverallRing'
@@ -23,7 +22,7 @@ export function makeDefaultDriver(teamId: string): Driver {
     wetWeatherPace: 70,
     overtaking: 70,
     smoothness: 70,
-    consistency: 75,
+    consistency: 70,
     age: 25,
     peakPotential: 80,
     primeEnd: 32,
@@ -80,7 +79,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
         {/* Stat bars */}
         <div className="space-y-2">
           {STAT_KEYS.map((k) => (
-            <StatBar key={k} label={STAT_LABELS[k]} value={driver[k] ?? getConsistency(driver)} />
+            <StatBar key={k} label={STAT_LABELS[k]} value={driver[k]} />
           ))}
         </div>
       </div>
@@ -129,7 +128,7 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
               <StatSlider
                 key={k}
                 label={STAT_LABELS[k]}
-                value={driver[k] ?? getConsistency(driver)}
+                value={driver[k]}
                 onChange={(v) => onUpdate({ [k]: v })}
               />
             ))}

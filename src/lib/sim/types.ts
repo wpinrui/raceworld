@@ -20,10 +20,9 @@ export interface Driver {
   overtaking: number     // 0-100
   smoothness: number     // 0-100 (tyre life only)
   // Race-craft consistency 0-100 (issue #59): scales per-lap noise and the mistake rate.
-  // Distinct from smoothness. Correlated with quality (anchors low~65 / avg~75 / elite~90).
-  // Optional for backward-compatible saves: absent reads as the derived/neutral default
-  // (see getConsistency / overall in progression.ts).
-  consistency?: number
+  // Distinct from smoothness. A rating like any other — authored/generated at entry level, then it
+  // develops and declines through the same progression curve as pace/wet/overtaking/smoothness.
+  consistency: number
   age: number
   peakPotential: number
   primeEnd: number       // age at which decline starts
@@ -263,7 +262,7 @@ export interface ConstructorSeasonRecord {
 export interface DriverProgressionEvent {
   driverId: string
   driverName: string
-  stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness'
+  stat: 'pace' | 'wetWeatherPace' | 'overtaking' | 'smoothness' | 'consistency'
   before: number
   after: number
   direction: 'improved' | 'declined' | 'unchanged'

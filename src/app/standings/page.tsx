@@ -6,7 +6,6 @@ import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { Trophy } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendar2026 } from '@/data/calendar'
-import { drivers2026, teams2026 } from '@/data/2026-grid'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
 import { TeammateH2HPanel } from '@/components/standings/TeammateH2HPanel'
@@ -19,6 +18,7 @@ import type { DbSeason, AllTimeDriverStat, AllTimeTeamStat } from '@/lib/db/quer
 import { foldLiveDriverStats, foldLiveTeamStats } from '@/lib/world/alltime'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
+import { composeDefaultSeason } from '@/lib/history/compose'
 
 type Tab = 'drivers' | 'constructors' | 'h2h' | 'power' | 'alltime'
 
@@ -80,22 +80,23 @@ export default function StandingsPage() {
   const scrollRef = useScrollRestore<HTMLDivElement>(`standings:scroll:${tab}`)
 
   // Nationality by id for the all-time flags — archived rows carry no nationality, so resolve from the
-  // historical dataset (covers teams/drivers that have since dropped off the grid) and the 2026 grid,
-  // with the live store last (most current). Anything unknown falls back to rest-of-world.
+  // historical dataset (covers teams/drivers that have since dropped off the grid) and the composed
+  // default grid, with the live store last (most current). Anything unknown falls back to rest-of-world.
+  const defaultGrid = useMemo(() => composeDefaultSeason(), [])
   const driverNation = useMemo(() => {
     const m = new Map<string, string>()
     for (const d of historicalDrivers) m.set(d.id, d.nationality)
-    for (const d of drivers2026) m.set(d.id, d.nationality)
+    for (const d of defaultGrid.drivers) m.set(d.id, d.nationality)
     for (const d of season.drivers) if (d.nationality) m.set(d.id, d.nationality)
     return m
-  }, [season.drivers])
+  }, [season.drivers, defaultGrid])
   const teamNation = useMemo(() => {
     const m = new Map<string, string>()
     for (const g of historicalGrids) for (const t of g.teams) m.set(t.id, t.nationality)
-    for (const t of teams2026) m.set(t.id, t.nationality)
+    for (const t of defaultGrid.teams) m.set(t.id, t.nationality)
     for (const t of season.teams) if (t.nationality) m.set(t.id, t.nationality)
     return m
-  }, [season.teams])
+  }, [season.teams, defaultGrid])
 
   // Fold the in-progress season's tallies into the archived all-time rows so the tables count it too.
   const liveForAllTime = useMemo(() => {

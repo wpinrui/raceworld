@@ -17,7 +17,6 @@ import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
 import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
-import { getConsistency } from './progression'
 
 // Roll each driver's pre-race form. The roll mean is set by the driver's confidence
 // (2 + 0.6c, so c=5 -> mean 5), sampled Normal(mean, 1.8) clamped to [0, 10] (issue #58).
@@ -205,7 +204,7 @@ export function simulateLap(
     // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (driver-error DNF),
     // else a one-lap time loss of 2 + Exp(mean 3) s clamped to [2, 25].
     let mistakeTimeLoss = 0
-    const consistency = getConsistency(driver)
+    const consistency = driver.consistency
     if (Math.random() < 1.3e-5 * (100 - consistency) ** 2) {
       current = { ...current, mistakeCount: current.mistakeCount + 1 }
       if (Math.random() < 0.2) {

@@ -24,6 +24,6 @@ export function statColor(value: number): string {
   return `hsl(${Math.round(t * HUE_GREEN)}, 85%, 58%)`
 }
 
-export function computeOverall(d: { pace: number; smoothness: number; overtaking: number; wetWeatherPace: number; consistency?: number }): number {
+export function computeOverall(d: { pace: number; smoothness: number; overtaking: number; wetWeatherPace: number; consistency: number }): number {
   return Math.round(overall(d))
 }

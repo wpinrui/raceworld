@@ -1,13 +1,6 @@
 import type { Driver, Gender } from './types'
 import { sampleNormal } from './rng-utils'
-import { deriveConsistency } from './progression'
 import { FAKER_LOCALES, FAKER_LOCALE_CODES } from '@/data/driver-name-pool'
-
-// Consistency for a generated driver: anchored to peakPotential, with a little noise for variety,
-// clamped to the grid band [55, 95] (issue #59).
-function genConsistency(peakPotential: number, rng: () => number): number {
-  return Math.max(55, Math.min(95, Math.round(sampleNormal(deriveConsistency(peakPotential), 4, rng))))
-}
 
 let generatedCounter = 0
 let rookieCounter = 0
@@ -69,7 +62,7 @@ export function generateFreeAgentPool(
       wetWeatherPace: stat(),
       overtaking: stat(),
       smoothness: stat(),
-      consistency: genConsistency(peakPotential, rng),
+      consistency: stat(),
       age,
       peakPotential,
       primeEnd,
@@ -97,7 +90,7 @@ export function generateRookie(teamId: string, newYear: number, rng: () => numbe
     wetWeatherPace: stat(),
     overtaking: stat(),
     smoothness: stat(),
-    consistency: genConsistency(peakPotential, rng),
+    consistency: stat(),
     age: 19 + Math.floor(rng() * 3),
     peakPotential,
     primeEnd: 29 + Math.floor(rng() * 3),

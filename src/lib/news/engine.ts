@@ -829,22 +829,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
     // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
-    // gated to newsworthy moments — a >10s loss, or a mistake by a WDC top-5 or media top-5 driver.
-    // Crash-outs are not eligible here; they are already covered in the attrition paragraph.
-    const wdcTop5 = new Set(afterR.slice(0, 5).map((s) => s.driverId))
-    // Media ranking needs full attributes, so it is live-only; archived replays fall back to WDC + >10s.
-    const mediaTop5 = new Set<string>()
-    if (ctx.live) {
-      const cstand = constructorStandingsAfter(ctx, r)
-      const rankInfo = cstand.map((c, i) => ({ teamId: c.teamId, points: c.points, finalPosition: i + 1 }))
-      for (const t of ctx.teams) if (!rankInfo.find((x) => x.teamId === t.id)) rankInfo.push({ teamId: t.id, points: 0, finalPosition: rankInfo.length + 1 })
-      computeDriverMediaScores(ctx.drivers, ctx.teams, ctx.raceResults.slice(0, r), rankInfo, ctx.teams.length)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .forEach((s) => mediaTop5.add(s.driverId))
-    }
+    // gated to a newsworthy magnitude — a wobble of 5 seconds or more. Crash-outs are not eligible
+    // here; they are already covered in the attrition paragraph.
     const topMistake = sorted
-      .filter((x) => !x.dnf && (x.mistakes ?? 0) > 0 && ((x.worstMistakeLoss ?? 0) > 10 || wdcTop5.has(x.driverId) || mediaTop5.has(x.driverId)))
+      .filter((x) => !x.dnf && (x.mistakes ?? 0) > 0 && (x.worstMistakeLoss ?? 0) >= 5)
       .sort((a, b) => (b.worstMistakeLoss ?? 0) - (a.worstMistakeLoss ?? 0))[0] ?? null
     const mistakePara = topMistake
       ? compose(`${seed}:mistake`, {

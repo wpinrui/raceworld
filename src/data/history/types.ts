@@ -20,6 +20,7 @@ export interface HistoricalDriver {
   wetWeatherPace?: number
   overtaking?: number
   smoothness?: number
+  consistency?: number       // race-craft consistency (issue #59): lap-noise + mistake-rate scaler
   peakPotential?: number     // overall ceiling reached before prime ends
   narrativeModifier?: number // -20..+20 media halo/deficit at entry
 }

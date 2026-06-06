@@ -7,6 +7,7 @@ import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import type { DriverCardResolver } from '@/components/news/LinkedText'
+import { OVERALL_WEIGHTS } from '@/lib/sim/progression'
 
 interface Props {
   summary: EndOfSeasonSummary
@@ -16,14 +17,9 @@ interface Props {
   constructorStandings: ConstructorStanding[]
 }
 
-// Overall weighting (GDD §Driver progression curve) — used to turn per-stat
-// changes into a single "how much did this driver move" number.
-const STAT_WEIGHT: Record<string, number> = {
-  pace: 0.6,
-  smoothness: 0.2,
-  overtaking: 0.1,
-  wetWeatherPace: 0.1,
-}
+// Turn per-stat changes into a single "how much did this driver move" number, using the same
+// overall weighting as progression.ts (single source, so consistency is included automatically).
+const STAT_WEIGHT: Record<string, number> = OVERALL_WEIGHTS
 
 interface Mover {
   driverId: string
