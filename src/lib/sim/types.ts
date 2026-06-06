@@ -202,6 +202,7 @@ export interface RaceResult {
   worstMistakeLoss?: number              // largest single time loss (s) from a mistake, 0 if none
   crashed?: boolean
   retirementReason?: RetirementReason | null
+  fastestLap?: boolean                   // set on the driver who set the race's fastest lap (issue #63)
 }
 
 export interface DriverStanding {

@@ -64,7 +64,7 @@ export default function RaceClassificationPage() {
                   <tbody>
                     {classification.rows.map((r) => (
                       <tr key={r.driverId} className="border-b border-[#2A3142]/50">
-                        <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.dnf ? null : r.finishPosition} /></span></td>
+                        <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.dnf ? null : r.finishPosition} year={year} /></span></td>
                         <td className="py-1.5 px-3"><DriverLink id={r.driverId} className="text-[#FFFFFF] font-medium">{r.driverName}</DriverLink></td>
                         <td className="py-1.5 px-3"><TeamLink id={r.teamId} className="text-[#FFFFFF]">{r.teamName}</TeamLink></td>
                         <td className="py-1.5 px-2 text-center tabular-nums text-[#FFFFFF]">{r.gridPosition}</td>

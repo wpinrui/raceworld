@@ -1,5 +1,6 @@
-// Pill colours follow the shared result scheme: winner / runner-up / 3rd /
-// top-10 / outside = gold / grey / burnt-orange / green / blue (matches ResultChip).
+// Championship-RANK pill colours: winner / runner-up / 3rd / top-10 / outside =
+// gold / grey / burnt-orange / green / blue. The green tier here is a fixed top-10 rank band
+// (a championship-standing position), distinct from ResultChip's era-aware race points-finish green.
 export function positionPalette(position: number): { bg: string; fg: string } {
   if (position === 1) return { bg: '#D4AC00', fg: '#0F1419' }
   if (position === 2) return { bg: '#9E9E9E', fg: '#0F1419' }

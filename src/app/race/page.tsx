@@ -138,7 +138,7 @@ export default function RacePage() {
 
   function computeResults(): RaceResult[] {
     if (!raceState) return []
-    return buildRaceResults(raceState, drivers, teams)
+    return buildRaceResults(raceState, drivers, teams, season.year)
   }
 
   if (!hydrated) return null
@@ -203,6 +203,7 @@ export default function RacePage() {
                     teams={teams}
                     baselineDrivers={season.driverStandings}
                     baselineConstructors={season.constructorStandings}
+                    year={season.year}
                   />
                 </div>
               </div>

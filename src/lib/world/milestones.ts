@@ -52,14 +52,21 @@ export function buildMilestones(career: DriverCareer): MilestoneEvent[] {
   }
 
   for (const s of seasons) {
+    let seasonBase = 0
     s.results.forEach((finish, i) => {
       const round = i + 1
       emit('starts', total.starts, total.starts + 1, s.year, round); total.starts += 1
-      const pts = getPoints(finish)
+      const pts = getPoints(finish, s.year)
+      seasonBase += pts
       emit('points', total.points, total.points + pts, s.year, round); total.points += pts
       if (finish != null && finish <= 3) { emit('podiums', total.podiums, total.podiums + 1, s.year, round); total.podiums += 1 }
       if (finish === 1) { emit('wins', total.wins, total.wins + 1, s.year, round); total.wins += 1 }
     })
+    // Fastest-lap points (issue #63) can't be reconstructed from finish position, so the per-round
+    // sum above understates the season by the FL bonus. Credit the difference vs the season's official
+    // total at season's end, so the career-points milestones never lag the displayed career total.
+    const flBonus = Math.max(0, Math.round(s.points - seasonBase))
+    if (flBonus > 0) { emit('points', total.points, total.points + flBonus, s.year, null); total.points += flBonus }
     // Poles are season-attributed (the DTO has no per-round grid), so a season's poles land at round null.
     emit('poles', total.poles, total.poles + s.poles, s.year, null); total.poles += s.poles
     // A title counts once finished or mathematically clinched; mid-season P1 that isn't yet secured is

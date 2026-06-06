@@ -13,9 +13,10 @@ interface Props {
   teams: Team[]
   totalRounds: number
   completedRounds: number
+  year: number // era points system for the result-cell colouring (issue #63)
 }
 
-export function DriverStandingsTable({ standings, teams, totalRounds, completedRounds }: Props) {
+export function DriverStandingsTable({ standings, teams, totalRounds, completedRounds, year }: Props) {
   const followed = useFollowed()
   const card = useLiveDriverCards()
   return (
@@ -57,7 +58,7 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
                 <td className="py-1.5 px-3 text-[#FFFFFF] text-xs"><TeamLink id={standing.teamId}>{standing.teamName}</TeamLink></td>
                 {Array.from({ length: totalRounds }, (_, i) => (
                   i < completedRounds
-                    ? <ResultCell key={i} position={standing.results[i] ?? null} />
+                    ? <ResultCell key={i} position={standing.results[i] ?? null} year={year} />
                     : <td key={i} className="px-0.5 py-0.5"><div className="w-8 h-7" /></td>
                 ))}
                 <td className="py-1.5 px-3 text-right font-bold text-[#FFFFFF]">{standing.points}</td>

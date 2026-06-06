@@ -211,7 +211,7 @@ async function main() {
       const finished = useRaceStore.getState().raceState
       if (!finished) break
 
-      const results = buildRaceResults(finished, grid, s.teams)
+      const results = buildRaceResults(finished, grid, s.teams, year)
       season().recordRaceResult(results) // applies progression + upgrades, writes the round
       tally(year, results) // accumulate career totals through this round (before we capture)
       // Capture now, while endOfSeason is still null, so the producers gated on an in-progress

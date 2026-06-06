@@ -241,6 +241,7 @@ export default function StandingsPage() {
             teams={season.teams}
             totalRounds={totalRounds}
             completedRounds={completedRounds}
+            year={displayYear}
           />
         )}
 
@@ -252,6 +253,7 @@ export default function StandingsPage() {
             teams={season.teams}
             totalRounds={totalRounds}
             completedRounds={completedRounds}
+            year={displayYear}
           />
         )}
 

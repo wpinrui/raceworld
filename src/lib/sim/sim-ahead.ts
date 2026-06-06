@@ -36,7 +36,7 @@ export async function simulateUntilRound(targetRound: number, onRace?: (round: n
     const finished = useRaceStore.getState().raceState
     if (!finished) break
 
-    const results = buildRaceResults(finished, grid, season.teams)
+    const results = buildRaceResults(finished, grid, season.teams, season.year)
 
     // Record (applies progression/upgrades, writes the round) and persist to the DB.
     season.recordRaceResult(results)

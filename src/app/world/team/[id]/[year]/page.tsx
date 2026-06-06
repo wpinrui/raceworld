@@ -72,7 +72,7 @@ export default function TeamSeasonPage() {
                           <div className="flex flex-col gap-1.5">
                             {r.cars.map((c) => (
                               <span key={c.driverId} className="flex items-center gap-2">
-                                <ResultChip position={c.dnf ? null : c.finishPosition} />
+                                <ResultChip position={c.dnf ? null : c.finishPosition} year={detail.year} />
                                 <DriverLink id={c.driverId} className="text-[#FFFFFF]">{c.driverName}</DriverLink>
                                 <span className="text-[#FFFFFF] tabular-nums">(P{c.gridPosition})</span>
                               </span>

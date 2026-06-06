@@ -1,5 +1,5 @@
 import type { RaceState, Driver, Team, RaceResult } from './types'
-import { getPoints } from './points'
+import { getPoints, hasFastestLapPoint } from './points'
 
 // Default confidence for drivers without a stored value (new drivers / pre-#58 saves).
 export const CONFIDENCE_DEFAULT = 5
@@ -71,7 +71,19 @@ export function applyConfidenceUpdate(drivers: Driver[], results: RaceResult[]):
 
 // Build the persisted RaceResult[] from a finished race state. Shared by the live
 // race screen and the headless "simulate ahead" path so both produce identical rows.
-export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams: Team[]): RaceResult[] {
+// `year` selects the era points table and whether a fastest-lap point applies (issue #63).
+export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams: Team[], year: number): RaceResult[] {
+  // Fastest lap = the single quickest lap among classified finishers (DNFs excluded). The +1 point
+  // is awarded only in eras that have it, and only if the FL setter finished in the top 10.
+  let flDriverId: string | null = null
+  let flBest = Infinity
+  for (const ds of raceState.drivers) {
+    if (ds.retired || ds.lapTimes.length === 0) continue
+    const best = Math.min(...ds.lapTimes)
+    if (best < flBest) { flBest = best; flDriverId = ds.driverId }
+  }
+  const flPointEra = hasFastestLapPoint(year)
+
   return raceState.drivers
     .slice()
     .sort((a, b) => a.position - b.position)
@@ -84,12 +96,16 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
       const stints = ds.stintLap > 0
         ? [...ds.stintHistory, { compound: ds.currentTyre.compound, laps: ds.stintLap }]
         : ds.stintHistory
+      const isFastestLap = ds.driverId === flDriverId
+      // Era base points + the fastest-lap bonus (only in FL eras, only for a top-10 finisher).
+      const flBonus = isFastestLap && flPointEra && !ds.retired && ds.position <= 10 ? 1 : 0
       return {
         driverId: ds.driverId, driverName: driver?.name ?? ds.driverId,
         teamId: driver?.teamId ?? '', teamName: team?.name ?? '',
         gridPosition: qr?.gridPosition ?? 0,
         finishPosition: ds.retired ? null : ds.position,
-        points: getPoints(ds.retired ? null : ds.position),
+        points: getPoints(ds.retired ? null : ds.position, year) + flBonus,
+        fastestLap: isFastestLap,
         form: ds.form,
         lapsCompleted: ds.lapTimes.length, totalTime: ds.retired ? null : ds.totalTime,
         dnf: ds.retired, stints,
