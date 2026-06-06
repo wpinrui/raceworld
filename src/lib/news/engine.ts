@@ -1447,9 +1447,9 @@ function championship(ctx: NewsContext): NewsArticle[] {
 // TRIGGER: going into a round, a title (drivers and/or constructors) can be mathematically
 // clinched there. Lays out exactly what must happen, RaceFans-style. The two championships are
 // checked INDEPENDENTLY — they can fall at completely different races, and each gets its own
-// piece. No sprints here, so the per-race maximum is a win (25) plus, in the 2019-2024 era only,
-// the fastest-lap point (issue #63): driver max 26, constructors max 44 (25+18+1). Pre-2019 the
-// +0 keeps the old flat-25 maths identical.
+// piece. No sprints here, so the per-race maximum is a win under THIS season's era points table
+// (a 1998 win is 10, a 2010+ win is 25) plus, in 2019-2024 only, the fastest-lap point (issue #63) —
+// all the maxima and position thresholds below derive from getPoints/driverMaxPerRace, never a flat table.
 function titleScenario(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
