@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import ReactCountryFlag from 'react-country-flag'
 import { ChevronRight } from 'lucide-react'
 import { Panel } from '@/components/world/ui'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
 
@@ -112,7 +112,7 @@ export function RaceBanner({ simming, onSimTo }: Props) {
       }
     >
       <div ref={scrollRef} className="flex gap-2 overflow-x-auto px-5 py-4">
-        {calendar2026.map((c, idx) => {
+        {calendarForYear(year).map((c, idx) => {
           const round = idx + 1
           // A finished race shows its podium. currentRound stays pinned at the final round
           // through the off-season (advanceRound rolls straight into endSeason without
@@ -204,7 +204,7 @@ export function RaceBanner({ simming, onSimTo }: Props) {
       </div>
 
       {modalRound != null && (() => {
-        const c = calendar2026[modalRound - 1]
+        const c = calendarForYear(year)[modalRound - 1]
         const isCurrent = modalRound === currentRound
         const cancel = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide whitespace-nowrap hover:bg-[#303848] transition-colors'
         const secondary = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide whitespace-nowrap hover:bg-[#303848] disabled:opacity-40 transition-colors'

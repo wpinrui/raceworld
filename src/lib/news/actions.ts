@@ -15,7 +15,7 @@ import {
 } from '@/lib/db/queries'
 import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type RecordMetric, type SeasonRecordMark } from './engine'
 import type { Driver, Team, RaceResult, Circuit } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 
 // Reconstruct the grid changes from an archived season to the NEXT one by diffing rosters: a team gone
 // next year departed, a team new next year joined, a same-id team with a new name rebranded. Fed to the
@@ -215,7 +215,7 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
     id: race.circuit_id, name: race.circuit_name, code: '', location: '', country: '', laps: 0, flatModifier: 0,
     // Pull the real Sunday-ordinal from the live calendar by id so archived article dates resolve to
     // the correct date for that season's year (the DB doesn't store scheduling).
-    sundayOfYear: calendar2026.find((c) => c.id === race.circuit_id)?.sundayOfYear ?? 0,
+    sundayOfYear: calendarForYear(year).find((c) => c.id === race.circuit_id)?.sundayOfYear ?? 0,
   }))
 
   // Prefer the feed snapshotted when the season archived (carries the live-only producers, e.g.

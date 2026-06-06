@@ -10,7 +10,7 @@ import { useTeamCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
 import { HonoursPanel } from '@/components/world/HonoursPanel'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
@@ -21,14 +21,14 @@ import { UpgradeOverride } from '@/components/world/UpgradeOverride'
 
 type Tab = 'overview' | 'seasons'
 
-const TOTAL_ROUNDS = calendar2026.length
-
 export default function TeamPage() {
   const { id } = useParams<{ id: string }>()
   const { career, loading } = useTeamCareer(id)
   const { feats: honours, loading: honoursLoading } = useEntityHonours('team', id)
   const devPlan = useSeasonStore((s) => s.devPlans.find((p) => p.teamId === id))
   const currentRound = useSeasonStore((s) => s.currentRound)
+  // The live season's round count drives the in-season upgrade timeline.
+  const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
   const liveTeam = useSeasonStore((s) => s.teams.find((t) => t.id === id))
   const updateTeam = useSeasonStore((s) => s.updateTeam)
   const onGrid = !!liveTeam
@@ -169,7 +169,7 @@ export default function TeamPage() {
 
                   {/* God-mode: inspect and edit the next car upgrade before it lands. */}
                   {onGrid && devPlan && upgradeEditable && (
-                    <UpgradeOverride teamId={id} devPlan={devPlan} currentRound={currentRound} totalRounds={TOTAL_ROUNDS} />
+                    <UpgradeOverride teamId={id} devPlan={devPlan} currentRound={currentRound} totalRounds={totalRounds} />
                   )}
                 </div>
               )}

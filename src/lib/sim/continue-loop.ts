@@ -1,5 +1,5 @@
 import type { NewsArticle } from '@/lib/news/engine'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { raceDate, toISODate } from './calendar-dates'
 
 // The brain of the FM-style "Continue" loop. Pure + UI-agnostic: given today's clock, how many
@@ -38,10 +38,11 @@ export function computeNextStop(args: {
   settings: ContinueSettings
 }): NextStop {
   const { currentDate, completedRounds, year, articles, settings } = args
-  const total = calendar2026.length
+  const calendar = calendarForYear(year)
+  const total = calendar.length
   const nextRaceRound = completedRounds + 1
   const nextRaceDate = nextRaceRound <= total
-    ? toISODate(raceDate(year, calendar2026[nextRaceRound - 1]))
+    ? toISODate(raceDate(year, calendar[nextRaceRound - 1]))
     : null
 
   // Interrupting stories strictly after today and strictly before the next race (raceday wins ties).

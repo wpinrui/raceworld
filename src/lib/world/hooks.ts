@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import {
   actionGetDriverCareer, actionGetTeamCareer, actionGetWorldOverview,
   actionGetDriverSeason, actionGetTeamSeason, actionGetRaceClassification,
@@ -21,7 +21,7 @@ function useLiveStore(): LiveStore {
   return {
     year: s.year, drivers: s.drivers, teams: s.teams,
     driverStandings: s.driverStandings, constructorStandings: s.constructorStandings,
-    raceResults: s.raceResults, calendar: calendar2026, statHistory: s.statHistory,
+    raceResults: s.raceResults, calendar: calendarForYear(s.year), statHistory: s.statHistory,
   }
 }
 

@@ -1,6 +1,6 @@
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from './race-results'
 import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
 
@@ -14,7 +14,7 @@ export async function commitCurrentRace(): Promise<boolean> {
 
   const season = useSeasonStore.getState()
   const round = season.currentRound
-  const circuit = calendar2026[round - 1]
+  const circuit = calendarForYear(season.year)[round - 1]
   if (!circuit) return false
 
   const results = buildRaceResults(rs, race.drivers, race.teams, season.year)

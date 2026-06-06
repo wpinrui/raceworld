@@ -2,7 +2,7 @@
 // departure) through generateNews and confirm the bespoke copy renders with every slot filled.
 // Run: npx tsx scripts/team-news-check.ts
 import { generateNews } from '../src/lib/news/engine'
-import { calendar2026 } from '../src/data/calendar'
+import { calendarForYear } from '../src/data/calendars'
 
 const mk = (driverId: string, driverName: string, teamId: string, teamName: string, fp: number, pts: number) =>
   ({ driverId, driverName, teamId, teamName, finishPosition: fp, gridPosition: fp, points: pts, dnf: false, fastestLap: false, startedFrom: fp })
@@ -45,7 +45,7 @@ const teamDriverTallies = {
 }
 const baseCtx = {
   phase: 'off-season', completedRounds: 24, drivers, raceResults, upgradeEvents: [],
-  constructorHistory: [], calendar: calendar2026, live: true, careers, teamCareers, teamDriverTallies,
+  constructorHistory: [], calendar: calendarForYear(2026), live: true, careers, teamCareers, teamDriverTallies,
   teams: [{ id: 'ferrari', name: 'Ferrari' }, { id: 'hinwil', name: 'Sauber' }, { id: 'toyota', name: 'Toyota' }],
 }
 

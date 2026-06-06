@@ -13,7 +13,7 @@ import { StatBar } from '@/components/setup/StatBar'
 import { StatSlider } from '@/components/setup/StatSlider'
 import { STAT_KEYS, STAT_LABELS } from '@/components/setup/stat-utils'
 import { ResultChip, ResultCell } from '@/components/standings/ResultCell'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { TeamLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
 import { ChampPill } from '@/components/world/pills'
@@ -121,6 +121,10 @@ export default function DriverPage() {
   // useDriverSeason transparently builds the live season from the store and fetches archived ones.
   const [formYear, setFormYear] = useRetainedState<number | null>(`driver:${id}:formYear`, null)
   const careerYears = career ? [...new Set(career.seasons.map((s) => s.year))].sort((x, y) => y - x) : []
+  // The career results grid spans seasons of different lengths (era-accurate calendars, #64), so its
+  // columns are round NUMBERS sized to the driver's longest season — circuit codes can't be shared
+  // across eras. Each cell still resolves to its own season's result.
+  const maxRounds = Math.max(1, ...(career?.seasons ?? []).map((s) => s.results.length))
   const effectiveFormYear = formYear ?? careerYears[0] ?? seasonYear
   const { detail: formDetail, loading: formLoading } = useDriverSeason(id, effectiveFormYear)
   const [hydrated, setHydrated] = useState(false)
@@ -361,7 +365,7 @@ export default function DriverPage() {
                                     href={`/world/season/${current?.year}/${r.round}`}
                                     className="flex shrink-0 flex-col items-center gap-1"
                                   >
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#FFFFFF]">{calendar2026[r.round - 1]?.code ?? String(r.round).padStart(2, '0')}</span>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#FFFFFF]">{calendarForYear(current?.year ?? DEFAULT_CALENDAR_YEAR)[r.round - 1]?.code ?? String(r.round).padStart(2, '0')}</span>
                                     <ResultChip position={r.finishPosition} year={current?.year ?? 2026} />
                                   </Link>
                                 </Tooltip>
@@ -480,8 +484,8 @@ export default function DriverPage() {
                             <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
                               <th className="text-left py-2 px-4 font-medium sticky left-0 bg-[#1E2431]">Year</th>
                               <th className="text-left py-2 px-3 font-medium">Team</th>
-                              {Array.from({ length: calendar2026.length }, (_, i) => (
-                                <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px] tabular-nums font-medium">{calendar2026[i]?.code ?? i + 1}</th>
+                              {Array.from({ length: maxRounds }, (_, i) => (
+                                <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px] tabular-nums font-medium">{i + 1}</th>
                               ))}
                               <th className="text-center py-2 px-3 font-medium">WDC</th>
                               <th className="text-right py-2 px-4 font-medium">Points</th>
@@ -495,7 +499,7 @@ export default function DriverPage() {
                                   {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
                                 </td>
                                 <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
-                                {Array.from({ length: calendar2026.length }, (_, i) => (
+                                {Array.from({ length: maxRounds }, (_, i) => (
                                   <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} year={s.year} />
                                 ))}
                                 <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>

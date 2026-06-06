@@ -59,7 +59,7 @@ async function main() {
   // Dynamic imports so the localStorage shim above is installed before the stores are created.
   const { useSeasonStore } = await import('@/lib/store/season-store')
   const { useRaceStore } = await import('@/lib/store/race-store')
-  const { calendar2026 } = await import('@/data/calendar')
+  const { calendarForYear } = await import('@/data/calendars')
   const { composeSeason } = await import('@/lib/history/compose')
   const { buildRaceResults } = await import('@/lib/sim/race-results')
   const { isOffSeason } = await import('@/lib/sim/types')
@@ -69,7 +69,6 @@ async function main() {
   // Optional reproducibility: seed the global RNG the whole sim + generators draw from.
   if (SEED) { const rng = mulberry32(SEED); Math.random = () => rng() }
 
-  const N = calendar2026.length
   const season = () => useSeasonStore.getState()
 
   // Cross-season F1 career totals, accumulated as the run progresses (no DB here, so we tally
@@ -160,7 +159,7 @@ async function main() {
       year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
       upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
-      endOfSeason: s.endOfSeasonSummary, calendar: calendar2026, live: true, careers, teamCareers, records: buildRecords(),
+      endOfSeason: s.endOfSeasonSummary, calendar: calendarForYear(s.year), live: true, careers, teamCareers, records: buildRecords(),
       contractWatch: s.seasonContractWatch, renewals: s.seasonRenewals, draft: s.seasonDraft,
     }
   }
@@ -184,6 +183,8 @@ async function main() {
       useSeasonStore.setState({ phase: 'pre-race' })
     }
     const year = season().year
+    const seasonCal = calendarForYear(year)
+    const N = seasonCal.length
     process.stderr.write(`Simulating ${year} (${N} races)...\n`)
 
     capture(year) // pre-season slate (round 0): launches, season preview, rookie watch
@@ -194,7 +195,7 @@ async function main() {
       const s = season()
       if (s.phase === 'idle' || isOffSeason(s.phase)) break
       const round = s.currentRound
-      const circuit = calendar2026[round - 1]
+      const circuit = seasonCal[round - 1]
       if (!circuit) break
       const grid = s.drivers.filter((d) => d.teamId !== '')
 
@@ -284,7 +285,7 @@ async function main() {
     }
     lines.push(`### ${art.headline}`)
     lines.push('')
-    lines.push(`*${CATEGORY_LABELS[art.category] ?? art.category} · ${roundLabel(art.round, N)}*`)
+    lines.push(`*${CATEGORY_LABELS[art.category] ?? art.category} · ${roundLabel(art.round, calendarForYear(year).length)}*`)
     lines.push('')
     lines.push(`_${art.dek}_`)
     lines.push('')

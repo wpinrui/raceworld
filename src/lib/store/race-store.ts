@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Driver, Team, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
 import { useSeasonStore } from './season-store'
@@ -59,7 +59,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
 
   initSession: () => {
     const { drivers, teams, selectedCircuitId, forms, strategyNoise } = get()
-    const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
+    const circuit = calendarForYear(useSeasonStore.getState().year).find((c) => c.id === selectedCircuitId)
     if (!circuit) return
     const { results, sessions } = runQualifying(drivers, teams, circuit, forms)
     const raceState = initRaceState(drivers, teams, circuit, results, sessions, forms, strategyNoise)
@@ -69,9 +69,9 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   tickLap: (godModeActions) => {
     const { raceState, drivers, teams, selectedCircuitId } = get()
     if (!raceState || raceState.phase !== 'racing') return
-    const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
-    if (!circuit) return
     const year = useSeasonStore.getState().year
+    const circuit = calendarForYear(year).find((c) => c.id === selectedCircuitId)
+    if (!circuit) return
     set({ raceState: simulateLap(raceState, drivers, teams, circuit, year, godModeActions) })
   },
 

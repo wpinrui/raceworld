@@ -2,7 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
 import type { DriverSeasonRace } from '@/lib/world/types'
-import { calendar2026 } from '@/data/calendar'
+import { CIRCUITS } from '@/data/calendars'
 
 // Football-Manager-style form line across a WHOLE season: the pre-race form rating (0-10) for every
 // round, dots coloured by rating, with qualifying + race result in the tooltip. Sibling of
@@ -53,7 +53,7 @@ export function SeasonFormChart({ races }: { races: DriverSeasonRace[] }) {
     x: i,
     form: r.form,
     round: r.round,
-    code: calendar2026[r.round - 1]?.code ?? String(r.round).padStart(2, '0'),
+    code: CIRCUITS[r.circuitId]?.code ?? String(r.round).padStart(2, '0'),
     circuitName: r.circuitName,
     grid: r.gridPosition,
     finish: r.finishPosition,
