@@ -101,7 +101,7 @@ function liveDriverResults(driverId: string, raceResults: RaceResult[][], calend
 
 // A title counts the moment it's mathematically secured (or the season has ended), not only once the
 // season is archived. The max a rival can still take per race is era-dependent (issue #63): a win
-// (driver 25 / constructor 43) plus the fastest-lap point in 2019-2024.
+// (driver) / 1-2 (constructor) under that season's points table, plus the fastest-lap point in 2019-2024.
 
 export function clinchedDriverChampion(store: LiveStore): string | null {
   const ds = store.driverStandings
