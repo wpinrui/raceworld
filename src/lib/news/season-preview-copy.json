@@ -1,0 +1,107 @@
+{
+  "headline": [
+    "{year} season preview: {fav} leads the field as {champion} defends",
+    "{champion}'s title defence headlined by a strong challenge from {fav}",
+    "Can {fav} unseat the reigning champion as {year} approaches?",
+    "{year} opens with {champion} and {fav} at the front of preseason attention",
+    "The {year} championship begins: {champion} defending, {fav} pursuing"
+  ],
+  "dek": [
+    "The {year} Formula 1 season is within reach, with {fav} the name most paddock voices attach to the favourite's role and {champion} carrying last year's number 1.",
+    "{champion} arrives at the first round as title-holder; {fav} heads a field that believes the gap can be closed.",
+    "Preseason testing has wrapped, the cars are loaded, and {fav} and {champion} are the two names shaping early expectations for {year}.",
+    "With {year} days away, {fav} has emerged as the driver the rest of the field is measured against, and {champion} is intent on making that the wrong call.",
+    "{champion} comes in as champion; {fav} comes in as the clearest threat — what happens next is the {year} season."
+  ],
+  "intro": [
+    "The winter is over. {year} Formula 1 cars have completed their shakedowns, crossed the distance in testing and now wait for a race. The paddock has reconvened, the freight is packed, and whatever teams learned in the off-season will stay private for a little longer.",
+    "Testing is behind us and the {year} field is set. There is always a moment in preseason where the speculation and the timesheets give way to something quieter — an acknowledgement that the only session that matters is coming. That moment is here.",
+    "Every winter is the same in broad outline and different in its particulars. {year} is no different: new developments landed under wraps, drivers worked through their programmes in cool air, and the serious conversations stayed behind closed doors. Now the racing starts.",
+    "The {year} season is ready to begin. By the time the first lights go out, the preseason conversations will already feel distant. What teams brought to testing, what they found, and what they chose to show will become clear one race at a time.",
+    "Preseason is a period of inference and guesswork. The {year} chapter closes it and opens something real. Teams have done what they could with the winter; from here the results belong to the circuits."
+  ],
+  "reigning": [
+    "{champion} arrives as the reigning world champion, and {constructor} as the team that won last year's constructors' title. Both carry the weight of that status into {year} — first among equals until the races prove otherwise.",
+    "The number 1 is {champion}'s to carry, and {constructor}'s car is the one the field has spent the winter studying. Defending a championship is a different kind of pressure, and {champion} has it in full.",
+    "{champion} finished last season with the title, and {constructor} finished it as constructors' champion. Those facts define the expectation placed on both as {year} begins — everyone else is hunting them.",
+    "Last year belonged to {champion} and {constructor}. Whether that translates into a second consecutive title fight is what this season will determine, but they open it as the standard the rest of the field must reach.",
+    "{constructor} is the team to beat on the strength of the previous season's evidence, and {champion} is the driver who arrived at the finale with the title already secured. They start {year} as the only proven combination at the front."
+  ],
+  "favourites": [
+    "The preseason consensus around who can win the title keeps returning to the same names. {names} are the drivers most consistently placed at the head of those conversations.",
+    "Car performance, driver reputation, team stability: the factors that shape early expectations all point toward {names} as the likeliest title contenders when the season begins.",
+    "Not every preseason favourite converts, but the drivers who arrive with the strongest combination of machinery and track record are {names}. That is where attention begins.",
+    "{names} head the field of drivers with a realistic shot at the championship, on the weight of what they bring to the grid and what their teams have shown across the off-season.",
+    "The cars that tested well and the drivers who can extract from them what the car has to offer: that thread runs through the names {names}, and it is where the title picture starts."
+  ],
+  "darkHorses": [
+    "Outside the lead group but not far from it: {names} arrive with enough pace in qualifying trim to make their presence felt when the opportunity comes.",
+    "{names} are the drivers whose results could surprise the paddock — each in a car that is unlikely to lead the championship but capable of putting together a strong result on the right weekend.",
+    "The title is probably beyond them, but the podium is not. {names} are the names to watch when conditions shift and the front-runners' margins compress.",
+    "Each of {names} brings a combination of ability and circumstance that could produce results beyond what their car's baseline suggests. Worth noting at the start of a long season.",
+    "{names}: drivers rated highly enough to matter on any given Sunday, in cars that may not carry them all the way to the title but will carry them to the points, and occasionally beyond."
+  ],
+  "bestOfRest": [
+    "Behind the championship contenders, the fight to lead the midfield is its own competition. {teams} are best placed to win that argument.",
+    "The gap from the sharp end to the middle of the grid is as wide as it ever was. Among the teams occupying that territory, {teams} are expected to set the pace.",
+    "{teams} head into {year} with the resources and recent trajectory to challenge for top positions among the teams not expected to fight for the championship itself.",
+    "Points finishes and occasional podiums in unusual circumstances — that is the realistic target for {teams}, and they are better equipped than most to chase it.",
+    "The midfield fight can produce some of the most closely contested racing of a season. {teams} are the outfits best positioned to lead it when the lights go out."
+  ],
+  "veteransResurgent": [
+    "{names} are the experienced drivers who have not slipped quietly toward the back of the order — still expected at or near the sharp end, still a factor in any race they start.",
+    "Years on the grid have a way of dulling pace or sharpening it, depending on the driver. {names} are the ones still in the latter category: experienced, quick, and relevant.",
+    "The argument that longevity erodes competitiveness does not apply cleanly to {names}. Each arrives at {year} as a front-running concern rather than a fading one.",
+    "{names} have spent enough seasons at this level to know what they need and how to get it. Neither has stopped getting it, and both remain among the drivers the rest of the field must account for.",
+    "There is a version of a long career that ends at the front. {names} are currently living it, each still among the names you expect to see on race day when the order settles."
+  ],
+  "veteransTwilight": [
+    "Experience carries weight, but pace is not always respectful of tenure. {names} are drivers whose expected level has shifted toward the back of the field — still on the grid, still capable of a point, but no longer the threat they once were.",
+    "{names} begin the season with careers that have accumulated more than most, but expectations that are more measured than they once were. Points finishes will be the measure of a good day.",
+    "A long career in Formula 1 is an achievement in itself. {names} have one. The question for both is whether the car and the pace still combine on enough weekends to produce meaningful results.",
+    "{names} are at a stage where the calendar rows they occupy are the back portion rather than the front, and where strong qualifying laps are less predictable than they were. Still useful contributors on the right circuit and in the right conditions.",
+    "Neither written off nor expected to challenge near the front: {names} are veterans at a point in their careers where the weekly target has become points rather than podiums, and where that is, under honest assessment, the right benchmark."
+  ],
+  "rookies": [
+    "{names} step onto an F1 grid for the first time this season, each making the leap from whatever they were doing last year to a race-ready Formula 1 car. The margin for error at this level is unlike anything in the junior categories.",
+    "Every grid needs the next generation to arrive, and in {year} it is {names} making that first entry. How rookies adapt in the opening rounds tends to define how the rest of the season goes for them.",
+    "The transition to Formula 1 is a known difficulty, and {names} are the drivers about to discover it from the inside. Natural talent brought them here; what they do with it in real race conditions is the question now.",
+    "{names} make their Formula 1 debuts this season, first-time starters whose career trajectories have brought them to the sport's top tier. The car is faster, the field is deeper, and the scrutiny is immediate.",
+    "No prior starts in Formula 1, and now a full season ahead: {names} are the new names on the entry list this year, each making the jump from whatever class shaped them to the grid where they will be judged by a different standard entirely."
+  ],
+  "newTeams": [
+    "{teams} join the Formula 1 grid for the first time this season — new constructors, new entry list names, and new unknowns. The grid's least-proven outfits, whatever their funding, are found in this group until the races say otherwise.",
+    "The entry list grows this year with the arrival of {teams}. New teams bring fresh ambition and fresh uncertainty in equal measure — the resources may be in place, but the racing kilometres are not yet there.",
+    "{teams} are first-time Formula 1 constructors, and that status carries a weight that no amount of preseason testing fully resolves. The grid will absorb them, and the gap will reveal itself soon enough.",
+    "Formula 1 rarely welcomes new constructors, so when {teams} takes its first place on the grid it matters. The entry has been cleared, the cars are ready, and everything else — whether it can compete, whether the structure holds — is still ahead of them.",
+    "{teams} arrive as the newest names on the entry list. Well-funded or not, a new constructor starts from the bottom of the experience curve and works from there. A credible first season is a meaningful result. What comes after that is the real question."
+  ],
+  "headlineNoChamp": [
+    "{year} season preview: {fav} heads the field as a new era begins with no reigning champion",
+    "No title-holder yet: {fav} leads preseason attention into {year}",
+    "{year} opens with everything to be decided and {fav} at the front of the conversation",
+    "A clean slate for {year}: {fav} the name most often placed at the head of the field",
+    "The {year} championship begins from scratch, with {fav} the early favourite"
+  ],
+  "dekNoChamp": [
+    "The {year} Formula 1 season is within reach, with no previous champion to defend and {fav} the name most paddock voices attach to the favourite's role.",
+    "There is no reigning title-holder this time — {year} begins with a field setting out and no established benchmark, and {fav} heads the early expectations.",
+    "Preseason testing has wrapped and the cars are loaded for {year}, a season that opens with the title there for the taking and {fav} the name shaping early expectations.",
+    "With {year} days away and no champion to chase, {fav} has emerged as the driver the rest of the field is measured against — though nothing has yet been proven on track.",
+    "{fav} comes in as the clearest favourite, but {year} starts with a clean slate: no prior title-holder, no established order, and everything still to be decided."
+  ],
+  "headlineDefendingFav": [
+    "{year} season preview: {champion} defends as favourite, with {fav} the closest challenger",
+    "{champion} begins the title defence as the man to beat; {fav} leads the chase",
+    "{year} opens with {champion} the clear favourite and {fav} the nearest threat",
+    "Champion and favourite: {champion} heads {year}, {fav} the driver closest behind",
+    "The {year} championship begins with {champion} favoured to defend and {fav} pushing hardest"
+  ],
+  "dekDefendingFav": [
+    "The {year} Formula 1 season is within reach, with {champion} carrying last year's number 1 as the favourite to retain it and {fav} the challenger most often placed nearest.",
+    "{champion} arrives at the first round as both title-holder and the driver to beat; {fav} heads the field that means to close the gap.",
+    "Preseason testing has wrapped and the cars are loaded for {year}, a season that opens with {champion} favoured to defend and {fav} the clearest challenger.",
+    "With {year} days away, {champion} is the name the rest of the field is measured against as the defence begins, and {fav} is the driver positioned closest behind.",
+    "{champion} comes in as champion and favourite alike; {fav} comes in as the nearest threat — what happens next is the {year} season."
+  ]
+}

@@ -31,6 +31,8 @@ import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-m
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
 import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
+import { buildSeasonAnalysis, previewCast } from './season-analysis'
+import seasonPreviewCopy from './season-preview-copy.json'
 import milestoneCopy from './milestone-copy.json'
 import titleCopy from './titlescenario-copy.json'
 import recordsCopy from './records-copy.json'
@@ -2209,55 +2211,51 @@ const LAUNCH_COPY: {
   },
 }
 
+// The season preview (#88): introduces the season's protagonists across tiers from the media-projection
+// expectation model (season-analysis), replacing the old pace-only preview blurb. Forward-looking, round 0.
+// Copy is Sonnet-authored (season-preview-copy.json); this only resolves the cast to name slots and assembles
+// the non-empty sections. The reigning champion's stature is always credited; every new team is named.
+function seasonPreview(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.teams.length === 0 || ctx.completedRounds > 0) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const cast = previewCast(ctx, analysis)
+  const c = seasonPreviewCopy
+  const seed = `season-preview-${ctx.year}`
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const teamOf = (id: string) => ctx.drivers.find((d) => d.id === id)?.teamId ?? ''
+  const champion = cast.reigningChampion ? dn(cast.reigningChampion) : ''
+  const topExpected = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank)[0]?.driverId
+  const topFavId = cast.titleFavourites[0] ?? topExpected
+  // When the reigning champion is also the top favourite, {fav} becomes the leading CHALLENGER (so the
+  // headline doesn't name the same driver twice); otherwise {fav} is the top favourite itself.
+  const championIsTopFav = !!cast.reigningChampion && topFavId === cast.reigningChampion
+  const challengerId = cast.titleFavourites.find((id) => id !== cast.reigningChampion) ?? topExpected
+  const fav = dn((championIsTopFav ? challengerId : topFavId) ?? '')
+  const slots = { year: ctx.year, fav, champion, constructor: cast.reigningConstructor ? teamName(ctx, cast.reigningConstructor) : '' }
+
+  const sections: string[] = []
+  if (champion) sections.push(fill(pick(c.reigning, `${seed}|reign`), slots))
+  if (cast.titleFavourites.length) sections.push(fill(pick(c.favourites, `${seed}|fav`), { ...slots, names: listJoin(cast.titleFavourites.map(dn)) }))
+  if (cast.darkHorses.length) sections.push(fill(pick(c.darkHorses, `${seed}|dh`), { ...slots, names: listJoin(cast.darkHorses.map((id) => `${dn(id)} (${teamName(ctx, teamOf(id))})`)) }))
+  if (cast.bestOfRest.length) sections.push(fill(pick(c.bestOfRest, `${seed}|bor`), { ...slots, teams: listJoin(cast.bestOfRest.map((id) => teamName(ctx, id))) }))
+  const resurgent = cast.veterans.filter((v) => v.kind === 'resurgent').map((v) => dn(v.driverId))
+  const twilight = cast.veterans.filter((v) => v.kind === 'twilight').map((v) => dn(v.driverId))
+  if (resurgent.length) sections.push(fill(pick(c.veteransResurgent, `${seed}|vr`), { ...slots, names: listJoin(resurgent) }))
+  if (twilight.length) sections.push(fill(pick(c.veteransTwilight, `${seed}|vt`), { ...slots, names: listJoin(twilight) }))
+  if (cast.rookies.length) sections.push(fill(pick(c.rookies, `${seed}|rk`), { ...slots, names: listJoin(cast.rookies.map(dn)) }))
+  if (cast.newTeams.length) sections.push(fill(pick(c.newTeams, `${seed}|nt`), { ...slots, teams: listJoin(cast.newTeams.map((id) => teamName(ctx, id))) }))
+
+  const hArr = !champion ? c.headlineNoChamp : championIsTopFav ? c.headlineDefendingFav : c.headline
+  const dArr = !champion ? c.dekNoChamp : championIsTopFav ? c.dekDefendingFav : c.dek
+  const headline = fill(pick(hArr, `${seed}|h`), slots)
+  const dek = fill(pick(dArr, `${seed}|d`), slots)
+  const body = paras(fill(pick(c.intro, `${seed}|intro`), slots), ...sections)
+  return [{ id: seed, category: 'preview_schedule', round: 0, priority: 85, headline, dek, body }]
+}
+
 function preSeason(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
-  const byPace = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
-  const seed = `season-preview-${ctx.year}`
-  const sp = { year: ctx.year, fav: byPace[0]?.name ?? '', fav2: byPace[1]?.name ?? '' }
-  out.push({
-    id: seed, category: 'preview_schedule', round: 0, priority: 85,
-    headline: fill(pick([
-      'The {year} title picture, before a wheel turns',
-      '{fav} lead the charge into {year}',
-      'Pre-season pace sets up a {year} showdown',
-      '{fav} and {fav2} draw first blood in {year}',
-      'Winter speed tells a story for {year}',
-      'What the pre-season numbers say about {year}',
-    ], `${seed}|h`), sp),
-    dek: fill(pick([
-      '{fav} arrive at the first race as the team to beat, with {fav2} their closest shadow on the timing screens.',
-      'Pre-season testing has handed {fav} a clear pace advantage, putting the rest of the grid on the back foot before a race has been run.',
-      'The {year} grid has sorted itself early, with {fav} at the top and {fav2} the only side close enough to make it a genuine fight.',
-      'Before a points-paying lap is turned, {fav} have already made their intentions plain with the quickest car in the paddock.',
-    ], `${seed}|d`), sp),
-    body: paras(
-      fill(pick([
-        '{fav} carry the fastest raw car pace into {year}, a benchmark the rest of the grid measured themselves against across every session of winter running.',
-        'The gap between {fav} and the chasing pack is not enormous, but it is real, and in a sport where tenths decide championships, it matters enormously.',
-        '{fav2} are the team closest to matching that pre-season pace, making a two-way fight at the front the likeliest opening chapter of {year}.',
-        'What {fav} have shown in testing is not merely a single-lap flier but a consistent race-trim performance that signals a car built to win across a long calendar.',
-        'For {fav2}, the pace deficit to {fav} is narrow enough to suggest that track-specific setups and strategic calls could flip the order on any given weekend.',
-        'Every other team on the grid is now playing catch-up, with {fav} having set the pre-season bar higher than the competition was hoping to see.',
-      ], `${seed}|b1`), sp),
-      fill(pick([
-        'The development war will run in parallel with the championship itself, and whichever side keeps its upgrade curve steepest through the flyaway rounds could shift the balance of power before the summer break.',
-        'Reliability is the silent variable that reshapes title fights, and a car carrying the lap time {fav} have shown inevitably carries the complexity that brings risk alongside speed.',
-        'The midfield is packed tightly enough that a single successful upgrade package could vault a team from sixth in the constructors\' standings to third, making the chasing positions as contested as the front.',
-        'A full-season calendar leaves almost no margin for mechanical failure or operational errors, and the teams that convert pace into points consistently, rather than brilliantly, tend to be the ones lifting trophies.',
-        'The same regulations everyone has had a year to study mean the intellectual gap across the grid is smaller now than at any point since the rules were written.',
-        'The attrition that a long calendar inflicts means the team that manages its car, its tyres and its people across the full distance has historically outscored the team that merely has the quickest machine.',
-      ], `${seed}|b2`), sp),
-      fill(pick([
-        'Pace advantage is a starting position in a championship, not a finishing one, and the history of the sport is built on teams who led pre-season tests and then watched rivals close the gap round by round.',
-        'For {fav2}, the task is narrowing the gap to {fav} fast enough that a title fight is still mathematically alive when the calendar turns to its final third.',
-        'The pressure on every team outside the top two is structural, not motivational, because the resource gap between front-runners and the midfield makes genuine championship bids difficult to sustain across an entire year.',
-        'What will ultimately decide {year} is the rate of in-season development, because a car that leads winter testing rarely crosses the final finish line with exactly the same relative advantage it carried into the opener.',
-        'The team that wins the {year} title will almost certainly be the one that brought both the fastest package and the fewest self-inflicted wounds, and right now {fav} have shown they own at least the first half of that equation.',
-        'A pre-season pace lead is a head start, not a guarantee, and {fav2} are close enough to make {fav} pay for any slip.',
-      ], `${seed}|b3`), sp),
-    ),
-  })
   // Launch coverage grouped into three pieces by the paddock's pace tier — front-runners, midfield,
   // backmarkers. Each lists every car in its tier (fastest first); a no-repeat picker hands each team
   // a distinct line and reference from the large LAUNCH_COPY pools so a group never reads templated.
@@ -3884,6 +3882,7 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
 
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
+    ...seasonPreview(ctx),
     ...preSeason(ctx),
     ...raceReports(ctx),
     ...milestones(ctx),
