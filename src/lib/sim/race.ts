@@ -46,12 +46,18 @@ export function initRaceState(
 
   // Sample one set of tyre assumptions per team — both drivers share these
   const teamAssumptions: Record<string, TeamTyreAssumptions> = {}
-  // Track compatibility: one roll per team this race (Normal(5, 1.5), clamped
-  // 0–10). The deviation from 5 adds straight to car pace for both cars.
-  const trackCompat: Record<string, number> = {}
+  // Per-race car form (#65): one roll per team this race — a pace swing for a good or bad weekend,
+  // applied equally to both the team's cars. Normal(0, σ) with σ ≈ 5.19 so the quartiles land at
+  // ±3.5 (0.6745·σ ≈ 3.5). Added straight to car pace for the race (replaces the narrower trackCompat).
+  // Hard-clamped at ±25 (~5 grid positions, ~4.8σ) so the otherwise-unbounded normal tail can't feed
+  // an absurd pace into lap time. It's a safety rail, not a shaper: it virtually never binds and leaves
+  // the specced distribution (quartiles ±3.5) intact.
+  const CAR_FORM_SIGMA = 5.19
+  const CAR_FORM_CAP = 25
+  const carForm: Record<string, number> = {}
   for (const team of teams) {
     teamAssumptions[team.id] = sampleTeamAssumptions(circuit.laps, strategyNoise)
-    trackCompat[team.id] = Math.max(0, Math.min(10, sampleNormal(5, 1.5, Math.random)))
+    carForm[team.id] = Math.max(-CAR_FORM_CAP, Math.min(CAR_FORM_CAP, sampleNormal(0, CAR_FORM_SIGMA, Math.random)))
   }
 
   // Sort by grid position
@@ -113,7 +119,7 @@ export function initRaceState(
     paused: false,
     strategyNoise,
     teamAssumptions,
-    trackCompat,
+    carForm,
   }
 }
 
@@ -292,10 +298,10 @@ export function simulateLap(
       carAheadLapTime = lapTimesThisLap.get(carAheadState.driverId) ?? null
     }
 
-    // 2e. Compute lap time — track compatibility shifts the car's pace for this
-    // race (compat 5 = neutral; every point above/below adds to car pace).
-    const compat = state.trackCompat?.[team.id] ?? 5
-    const raceTeam = compat === 5 ? team : { ...team, carPace: team.carPace + (compat - 5) }
+    // 2e. Compute lap time — this race's car form shifts the car's pace for the whole race
+    // (0 = neutral; the form delta adds straight to car pace for both the team's cars).
+    const form = state.carForm[team.id] ?? 0
+    const raceTeam = form === 0 ? team : { ...team, carPace: team.carPace + form }
     const lapResult = computeLapTime({
       driver,
       team: raceTeam,
