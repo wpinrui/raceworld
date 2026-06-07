@@ -32,9 +32,10 @@ import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-m
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp, pronouns } from './util'
 import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
-import { buildSeasonAnalysis, previewCast, titleArcEvents } from './season-analysis'
+import { buildSeasonAnalysis, previewCast, titleArcEvents, constructorArcEvents } from './season-analysis'
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
+import constructorArcCopy from './constructor-arc-copy.json'
 import raceCodaCopy from './race-coda-copy.json'
 import seasonReviewCopy from './season-review-copy.json'
 import milestoneCopy from './milestone-copy.json'
@@ -1483,6 +1484,38 @@ function championshipArc(ctx: NewsContext): NewsArticle[] {
       headline: fill(pick(c.h, `${seed}|h`), slots),
       dek: fill(pick(c.d, `${seed}|d`), slots),
       body: fill(pick(c.b, `${seed}|b`), slots),
+    }
+  })
+}
+
+// The constructors' championship arc (#88): the teams' title fight, same sparse inflection detection as the
+// drivers' arc (constructorArcEvents). Priority just below the drivers' arc so the marquee title leads the round.
+function constructorArc(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.endOfSeason) return []
+  const tn = (id: string) => teamName(ctx, id)
+  const c = constructorArcCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return constructorArcEvents(ctx).map((e) => {
+    const leader = tn(e.leaderId)
+    const chaser = tn(e.chaserId)
+    const h2hHi = Math.max(e.h2hLeader, e.h2hChaser)
+    const h2hLo = Math.min(e.h2hLeader, e.h2hChaser)
+    const h2h = e.h2hLeader === e.h2hChaser ? `level at ${e.h2hLeader}-${e.h2hChaser}` : `${h2hHi}-${h2hLo} in ${poss(e.h2hLeader >= e.h2hChaser ? leader : chaser)} favour`
+    const slots = {
+      year: ctx.year, round: e.round, leader, chaser,
+      gap: e.gap, gap_pts: plural(e.gap, 'point'), gap_ago: e.gapAgo, rounds_ago: e.roundsAgo, change: Math.abs(e.change),
+      remaining: e.remaining, races_left: `${e.remaining} ${plural(e.remaining, 'race')}`, max_pts: e.maxPts,
+      h2h, mom_leader: e.momLeader, mom_chaser: e.momChaser, chaser_wins: e.chaserWins, leader_dnfs: e.leaderDnfs,
+    }
+    const angle = e.kind === 'erosion'
+      ? (e.merit === 'handed' ? 'erosionHanded' : e.merit === 'merit' ? 'erosionMerit' : 'erosionMixed')
+      : e.kind
+    const cc = c[angle]
+    const seed = `cons-arc-${ctx.year}-${e.round}`
+    return {
+      id: seed, category: 'championship_state', round: e.round, priority: 74,
+      headline: fill(pick(cc.h, `${seed}|h`), slots),
+      dek: fill(pick(cc.d, `${seed}|d`), slots),
+      body: fill(pick(cc.b, `${seed}|b`), slots),
     }
   })
 }
@@ -3194,6 +3227,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...technicalRoundup(ctx),
     ...championship(ctx),
     ...championshipArc(ctx),
+    ...constructorArc(ctx),
     ...seasonReview(ctx),
     ...driverArc(ctx),
     ...teammateBattle(ctx),
