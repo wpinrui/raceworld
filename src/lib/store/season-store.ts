@@ -341,11 +341,12 @@ export const useSeasonStore = create<SeasonStore>()(
               const existingPool = get().drivers.filter((d) => d.teamId === '')
               return existingPool.length > 0 ? existingPool : generateFreeAgentPool(25, year, drivers, Math.random)
             })()
-        // Roll each driver's season form (#66) once, here at season start; held all year.
+        // Roll season form (#66) for SEATED drivers only, here at season start; held all year. Free
+        // agents haven't raced, so they carry no wobble (form 0) until they take a seat at a rollover.
         const allDrivers = [
           ...drivers.filter((d) => d.teamId !== ''),
           ...poolDrivers,
-        ].map((d) => ({ ...d, seasonForm: rollSeasonForm(Math.random) }))
+        ].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
         set({
           phase: 'pre-race',
           year,
@@ -893,7 +894,7 @@ export const useSeasonStore = create<SeasonStore>()(
         if (!pendingNextSeasonState) {
           // Fallback: should not normally occur
           const { teams } = get()
-          const drivers = get().drivers.map((d) => ({ ...d, seasonForm: rollSeasonForm(Math.random) }))
+          const drivers = get().drivers.map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
           const fundingTiers = computeFundingTiers(teams, constructorHistory)
           const devPlans = initDevPlans(teams, fundingTiers, Math.random)
           set({
@@ -930,8 +931,8 @@ export const useSeasonStore = create<SeasonStore>()(
           const poolSize = pendingDrivers.filter((d) => d.teamId === '').length
           topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
         }
-        // Roll each driver's season form (#66) for the new season; held all year.
-        const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: rollSeasonForm(Math.random) }))
+        // Roll season form (#66) for the new season — seated drivers only (free agents carry no wobble).
+        const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = initDevPlans(teams, fundingTiers, Math.random)
 
