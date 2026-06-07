@@ -3737,7 +3737,7 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   const c = marketFeatureCopy.watch
   const year = ctx.year
   const seed = `contract-watch-${year}`
-  const hslots = { n: watch.length, year, next: year + 1 }
+  const hslots = { n: watch.length, year, next: year + 1, round: marketWatchRound(ctx.calendar.length) }
   type Verdict = 'could_do_better' | 'right_place' | 'lucky'
   // Most newsworthy first: the biggest over- and under-placements lead; well-matched cases sit nearest 0.
   const newsworthiness = (key: Verdict) => (a: ContractWatch, b: ContractWatch) =>
@@ -3775,7 +3775,7 @@ function renewalsFeature(ctx: NewsContext): NewsArticle[] {
   const year = ctx.year
   const next = year + 1
   const seed = `renewals-roundup-${year}`
-  const hslots = { n: renewals.length, m: stillExpiring.length, year, next }
+  const hslots = { n: renewals.length, m: stillExpiring.length, year, next, round: renewalRound }
   const renewedNames = listJoin(renewals.map((r) => `${r.driverName} (${r.teamName}, ${r.years}yr)`))
   const expiringNames = listJoin(stillExpiring.map((d) => `${d.name} (${teamName(ctx, d.teamId)})`))
   const body = paras(
