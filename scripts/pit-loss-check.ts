@@ -47,12 +47,13 @@ const qr: QualifyingResult[] = [
 
 // Mean extra time the trailing teammate (B, started P2 -> processed second) loses when BOTH pit lap 1,
 // vs the leader (A). Big track gap removes the car-ahead clamp so we isolate the pit penalty; both pit,
-// so the base pit loss cancels and the remaining gap is the double-stack wait.
-function measureStackExtra(year: number, runs = 500): number {
+// so the base pit loss cancels and the remaining difference is the double-stack wait. `gap` is the
+// on-track time gap (B set that far behind A) — the wait should be max(0, crewBusy - gap).
+function measureStackExtra(year: number, gap = 0, runs = 500): number {
   const base = initRaceState(drivers, teams, circuit, qr, [], { A: 5, B: 5 }, year)
-  // Keep them on track but not interacting: large gap -> no contested-overtake clamp; equal totalTime
-  // (both 0 at the start) -> they count as double-stacking.
-  const state = { ...base, drivers: base.drivers.map((d) => ({ ...d, gap: 100 })) }
+  // Large track gap -> no contested-overtake clamp. B sits `gap` seconds behind A in race time, so they
+  // count as double-stacking with that gap between them.
+  const state = { ...base, drivers: base.drivers.map((d) => ({ ...d, gap: 100, totalTime: d.driverId === 'B' ? gap : 0 })) }
   const force = [
     { type: 'force-pit' as const, driverId: 'A' },
     { type: 'force-pit' as const, driverId: 'B' },
@@ -69,10 +70,14 @@ function measureStackExtra(year: number, runs = 500): number {
 }
 
 process.stdout.write('double-stack Monte-Carlo (trailing teammate extra loss):\n')
-const extra1996 = measureStackExtra(1996)
-const extra2026 = measureStackExtra(2026)
-check(`1996 extra ~${doubleStackPenalty(1996).toFixed(1)}s`, close(extra1996, doubleStackPenalty(1996), 1.5), `measured ${extra1996.toFixed(2)}`)
-check(`2026 extra ~${doubleStackPenalty(2026).toFixed(1)}s`, close(extra2026, doubleStackPenalty(2026), 1.5), `measured ${extra2026.toFixed(2)}`)
+const extra1996 = measureStackExtra(1996, 0)
+const extra2026 = measureStackExtra(2026, 0)
+const gap5 = measureStackExtra(1996, 5)   // expect ~11-5 = 6
+const gap15 = measureStackExtra(1996, 15) // expect ~max(0, 11-15) = 0
+check(`1996 nose-to-tail ~${doubleStackPenalty(1996).toFixed(1)}s`, close(extra1996, doubleStackPenalty(1996), 1.5), `measured ${extra1996.toFixed(2)}`)
+check(`2026 nose-to-tail ~${doubleStackPenalty(2026).toFixed(1)}s`, close(extra2026, doubleStackPenalty(2026), 1.5), `measured ${extra2026.toFixed(2)}`)
+check('5s gap eats into the wait (~6s)', close(gap5, 6, 1.5), `measured ${gap5.toFixed(2)}`)
+check('15s gap clears the crew (~0s)', close(gap15, 0, 1.0), `measured ${gap15.toFixed(2)}`)
 check('stacking hurts more in 1996 than 2026', extra1996 > extra2026 + 3, `${extra1996.toFixed(2)} vs ${extra2026.toFixed(2)}`)
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`)

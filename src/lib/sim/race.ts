@@ -314,15 +314,17 @@ export function simulateLap(
 
     if (pitDecision.shouldPit) {
       pitted = true
-      // Double-stack (issue #101): a teammate who already pitted THIS lap (processed earlier = ahead on
-      // track) within one pit-loss of us ties up the crew, so this, the latter car, waits extra.
+      // Double-stack (issue #101): if a teammate already pitted THIS lap (processed earlier = ahead on
+      // track), the crew is still busy when this, the latter car, arrives. It only waits out the crew-
+      // busy time the on-track gap hasn't already absorbed: max(0, stackPenalty - gap). Right behind ->
+      // the full wait; a few seconds back -> little or none.
       let stackExtra = 0
       for (const [id, st] of updatedStates) {
         if (id === current.driverId || st.lastPitLap !== state.currentLap) continue
         if (driverMap.get(id)?.teamId !== driver.teamId) continue
         const myT = fieldByDriver.get(current.driverId)?.totalTime ?? 0
         const tmT = fieldByDriver.get(id)?.totalTime ?? 0
-        if (Math.abs(myT - tmT) <= pitLoss) { stackExtra = stackPenalty; break }
+        stackExtra = Math.max(stackExtra, Math.max(0, stackPenalty - Math.abs(myT - tmT)))
       }
       // Era pit-lane loss + a small execution jitter (clean vs scruffy stop), plus any stacking wait.
       pitPenalty = pitLoss + (Math.random() * 2 - 1) * 1.5 + stackExtra

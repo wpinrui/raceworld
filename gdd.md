@@ -120,7 +120,7 @@ Weather in the newsroom: a finished race carries a weather summary, computed at 
 Pit stop:
 The time lost for a tyre change is era-dependent (issue #101). A single year-driven source, pitLaneLoss(year) in sim/pit-loss.ts (mirroring perRaceTechnicalDNF), feeds BOTH the runtime penalty and the strategy planner, so they never diverge. Refuelling is not modelled, so this is a pure tyre-change loss: modern stops are transit-dominated (pit-lane speed limit since 1994) at ~22s, rising for slower 1990s/2000s crews (~30s in 1996). The runtime adds a small symmetric execution jitter on top (a clean vs scruffy stop); the planner uses the clean mean. The player sees a "Pit loss ~Ns" estimate in the race header.
 
-Teammate double-stacking: when two teammates pit on the same lap and are within one pit-loss of each other on track, the trailing car waits for the busy crew and loses extra time, the era's crew-busy portion, from ~3s in the modern era up to ~11s in 1996.
+Teammate double-stacking: when two teammates pit on the same lap, the trailing car arrives while the crew is still working the first. It loses only the crew-busy time the on-track gap has not already absorbed: max(0, crew-busy − gap). Crew-busy is the era's stationary portion, ~3s modern up to ~11s in 1996, so a car right behind loses the lot while one several seconds back loses little or nothing.
 
 Final computed laptime
 Each lap, a player can see the lap time that each car will have the next lap. 
