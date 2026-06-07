@@ -40,9 +40,23 @@ Each driver's age is tracked, along with their peak potential and prime end. The
 
 The progression happens after each race. Generation happens after each season. After each season, drivers who have not been in F1 for five years are removed from the driver market. Drivers who have driven in F1 who are retired will have their history archived.
 
-Progression before peak is also RNG: take 20 * years till prime end to calculate a rough number of races to reach potential, then calculate overall (detailed below) and take gap between current overall and potential, then divide that gap by number of races to potential. This value will act as the lower quartile on the normal curve, this value * 1.5 will act as the median on the normal curve, and we will randomly calculate the actual improvement, then apply this improvement to every stat (with some small random noise to prevent a completely uniform improvement across stats).
+Progression before peak is also RNG: take 15 * years till prime end to calculate a rough number of races to reach potential, then calculate overall (detailed below) and take gap between current overall and potential, then divide that gap by number of races to potential. This value will act as the lower quartile on the normal curve, this value * 1.5 will act as the median on the normal curve, and we will randomly calculate the actual improvement (the base per-race gain).
 
-Note that drivers have 4 stats: pace, wet-weather pace, overtaking and smoothness. All of them are out of 100. The overall stat (just for user-friendliness) is calculated by taking 0.6\*pace + 0.2\*smoothness + 0.1\*overtake + 0.1\*wet weather pace. This is just a cosmetic overall that the player can use to sort, however it is used to see if the driver has hit his potential (which means no further improvement can happen, and the driver can only plateau until prime end)
+Per-attribute develop & decline rates: that base gain (developing) and the per-race drop (declining) are not applied uniformly — each attribute scales the base by its own multiplier, so a driver's profile shifts as they grow and age. The ordering is the spec; the magnitudes are tunable, and are shared by the live engine and the historical-grid projection so composed grids match live development.
+
+| attribute | develop | decline |
+|---|---|---|
+| Pace | 1.3 | 1.2 |
+| Consistency | 1.0 | 1.0 |
+| Smoothness | 1.0 | 0.6 |
+| Overtaking | 0.8 | 0.8 |
+| Wet weather | 0.7 | 0.6 |
+
+Pace grows and fades fastest; consistency builds slowly and fades relatively quickly; overtaking barely moves either way; smoothness and wet weather build slowly and are only slowly lost. A small per-stat noise on top keeps growth from being perfectly proportional.
+
+Season form: on top of the smooth career projection, each driver gets a once-per-season form offset added to ALL of their ratings, modelling up-and-down years / non-linear progression. It is `Normal(0, ~2)` (about +/-4 at the tails), clamped to +/-10, rolled once at the start of each season and held all year. Crucially, the smoothly-developing ratings are the hidden, internal TRUE values; the ratings the player sees AND the values the race sim uses are those plus the season-form offset (clamped 0-100). So a driver can visibly over- or under-perform their underlying trajectory for a season without that wobble compounding into their development.
+
+Note that drivers have 5 stats: pace, wet-weather pace, overtaking, smoothness and consistency. All of them are out of 100. The overall stat (just for user-friendliness) is calculated by taking 0.5\*pace + 0.18\*consistency + 0.15\*overtaking + 0.1\*wet weather pace + 0.07\*smoothness. This is just a cosmetic overall that the player can use to sort, however it is used (on the internal true ratings) to see if the driver has hit his potential (which means no further improvement can happen, and the driver can only plateau until prime end)
 
 # Simulation engine
 For a given lap, the simulation works like this:
