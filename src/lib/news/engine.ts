@@ -1564,11 +1564,33 @@ function constructorArc(ctx: NewsContext): NewsArticle[] {
       : e.kind
     const cc = c[angle]
     const seed = `cons-arc-${ctx.year}-${e.round}`
+    // Enrich the body (#88 follow-up): the gap alone is thin. Add who actually scored the window's points for
+    // each team, and the development race between them (upgrades brought + which car is quicker now).
+    const fromR = e.round - e.roundsAgo + 1
+    const contribs = (teamId: string): string[] => {
+      const m = new Map<string, number>()
+      for (let k = fromR; k <= e.round; k++) for (const res of ctx.raceResults[k - 1] ?? []) if (res.teamId === teamId) m.set(res.driverId, (m.get(res.driverId) ?? 0) + res.points)
+      return [...m.entries()].filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1]).map(([id, p]) => `${lastName(ctx.drivers.find((d) => d.id === id)?.name ?? id)} (${p})`)
+    }
+    const contribPhrase = (cs: string[]) => (cs.length === 0 ? 'neither car scoring' : cs.length === 1 ? cs[0] : `${cs[0]} and ${cs[1]}`)
+    const upgrades = (teamId: string) => (ctx.upgradeEvents ?? []).filter((u) => u.teamId === teamId && !u.failed && u.round >= fromR && u.round <= e.round)
+    const lUp = upgrades(e.leaderId), cUp = upgrades(e.chaserId)
+    const lDev = lUp.reduce((s, u) => s + u.paceDelta, 0), cDev = cUp.reduce((s, u) => s + u.paceDelta, 0)
+    const dev =
+      lUp.length === 0 && cUp.length === 0 ? 'Neither has brought an upgrade across the window'
+      : lUp.length > cUp.length ? `${leader} have out-developed ${chaser}, ${lUp.length} ${plural(lUp.length, 'upgrade')} to ${cUp.length}`
+      : cUp.length > lUp.length ? `${chaser} have out-developed ${leader}, ${cUp.length} ${plural(cUp.length, 'upgrade')} to ${lUp.length}`
+      : lDev > cDev + 0.3 ? `${poss(leader)} upgrades have brought the bigger step`
+      : cDev > lDev + 0.3 ? `${poss(chaser)} upgrades have brought the bigger step`
+      : 'Both have developed at a similar rate'
+    const lPace = ctx.teams.find((t) => t.id === e.leaderId)?.carPace ?? 0, cPace = ctx.teams.find((t) => t.id === e.chaserId)?.carPace ?? 0
+    const paceClause = Math.abs(lPace - cPace) < 1 ? 'the two cars are now closely matched on pace' : `${poss(lPace > cPace ? leader : chaser)} car is the quicker of the two`
+    const details = `Across the window, ${poss(chaser)} points came through ${contribPhrase(contribs(e.chaserId))}, ${poss(leader)} through ${contribPhrase(contribs(e.leaderId))}. ${dev}, and ${paceClause}.`
     return {
       id: seed, category: 'championship_state', round: e.round, priority: 74,
       headline: fill(pick(cc.h, `${seed}|h`), slots),
       dek: fill(pick(cc.d, `${seed}|d`), slots),
-      body: fill(pick(cc.b, `${seed}|b`), slots),
+      body: paras(fill(pick(cc.b, `${seed}|b`), slots), details),
     }
   })
 }
