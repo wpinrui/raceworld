@@ -146,7 +146,7 @@ export interface RaceState {
   paused: boolean
   strategyNoise: number                                    // 0–1; tunable
   teamAssumptions: Record<string, TeamTyreAssumptions>     // teamId -> compound -> wear rate/lap
-  trackCompat?: Record<string, number>                     // teamId -> 0–10 (5 neutral); (compat−5) adds to car pace this race
+  carForm: Record<string, number>                          // teamId -> per-race car-form pace delta (Normal(0, ~5.19)); adds straight to car pace this race
 }
 
 export interface GodModeAction {
