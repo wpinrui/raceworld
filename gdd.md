@@ -69,12 +69,12 @@ Weather: every 5% of moisture adds 1s to the laptime, varied linearly. If tyres 
 Wet-weather ability: the driver's pace and the wet weather ability will be summed up linearly, such that percentage moisture * wet weather + (1 - percentage moisture) * pace will be used as the final pace value.
 Fuel load: every 1 lap of fuel corresponds to 0.05 seconds.
 Tyre delta: soft tyres have no modifier, medium tyres add 0.7 seconds per lap, hard tyres add 1.5 seconds per lap. Intermediate tyres add 2.5 seconds per lap. Wet tyres add 4 seconds per lap.
-Form modifier: a driver's form can range between 0 and 10. This form lasts the entire race weekend (including qualifying). At 5, there is no bonus or penalty. Every +1 or -1 will add to the pace calculation directly. Form is randomised pre-race as a normal distribution, and the player can view this pre-race and edit the form.
+Form modifier: a driver's form can range between 0 and 10. This form lasts the entire race weekend (including qualifying). At 5, there is no bonus or penalty. Every +1 or -1 will add to the pace calculation directly. Form is randomised pre-race as a normal distribution, and the player can view this pre-race and edit the form. The roll's MEAN is set by the driver's confidence/morale (a 0-10 rating): mean = 2 + 0.6 * confidence (confidence 0 -> mean 2, 5 -> 5, 10 -> 8), drawn as Normal(mean, 1.8) clamped to [0, 10] — so confident drivers tend to roll higher form. Confidence starts at 5, persists across seasons, and updates after every race by whether the driver over- or under-performed their teammate across qualifying + race; a signed streak counter amplifies repeated swings.
 Car form: each team has a per-race randomised value that affects both drivers equally, since it affects the car pace, modelling the car simply having a good or bad weekend. It is purely per-race random (not track-specific affinity). It is a normal distribution centred on 0 with a standard deviation of about 5.19, chosen so its quartiles sit at +/-3.5, and the value adds directly to the car's pace calculation. At 0 there is no bonus or penalty. It is re-rolled each race, identical for both of the team's cars, and clamped to +/-25 as a safety bound on the otherwise-unbounded tail.
 A per circuit modifier will add a flat X seconds to the final time, where X can be positive or negative or zero. This allows laptimes to look different across different circuits. It serves a purely cosmetic function and does not affect any relative times.
 During the race, the gap to car ahead affects the lap time calculation. If the gap to car ahead is between 1s and 2s, the car behind cannot overtake the car in front unless the car behind is more than 2*x seconds faster that lap, where x is the gap before the start of the lap (and is thus clamped to a laptime that causes that car to be 0.5 seconds + some random noise between 0 and 0.5 seconds behind that car). 
-If the gap to the car ahead is between 0 and 1s, and the calculated lap time is faster than the car ahead, then the player's overtaking stat will be used: ((1 - gap in s) + (overtaking stat/2))/2 will be the probability of the overtake happening. If the overtaking happens, the position swaps and no other penalty is applied to either car. If the overtaking fails, then the player's laptime is clamped such that the gap to the car in front remains some noise between 0 and 0.5 seconds.
-Random modifier: a noise of [0s, 0.3s] is applied to the calculated lap time.
+If the gap to the car ahead is between 0 and 1s, and the calculated lap time is faster than the car ahead, it is a contested overtake. First a collision roll (issue #60), driven purely by BOTH drivers' consistency: with f(c) = 2e-6 * (100 - c)^2, the crash chance is f(attacker) + f(defender) - f(attacker)*f(defender) (calibrated to ~1 / 0.5 / 0.1 overtake crash-outs per 24-race season at consistency 65 / 75 / 90). On a crash the attacker, the defender, or both retire (collision-damage), in equal thirds. Otherwise the overtaking stat decides: ((1 - gap in s) + (overtaking stat/2))/2 is the probability of the overtake. If it happens, the position swaps and no penalty is applied to either car. If it fails, the attacker's laptime is clamped so the gap stays a 0-0.5s noise behind.
+Consistency noise (issue #59): the per-lap random modifier is a slow-down scaled by the driver's consistency rating (the fifth driver stat, 0-100) — uniform over [0s, 1.2 - 0.01 * consistency], i.e. consistency 90 -> [0, 0.30s] (the old flat noise), 75 -> [0, 0.45s], 65 -> [0, 0.55s]. It is always a penalty, so low consistency is systematically slower, not just noisier.
 
 Teams will do live-race heuristics to decide when to pit. They will do it as smart as possible but with imperfect information, so that each team will achieve reasonable pit strategy without knowing exactly their car pace, driver pace and all other simulation inputs, but not all teams will achieve optimal, lap-perfect pit strategy. They do this per-car per-lap. AI agent, you will have to propose to me how you intend to achieve this.
 
@@ -88,7 +88,7 @@ INTERMEDIATE: 100% can last 30 + [-5, +10] percent of race distance. Moisture wi
 WET: 100%  can last 45 + [-5, +10] percent of race distance. Moisture window is 35% to 80%.
 A smoothness of 100 can make the tyres last 1.5x as long as the base. A smoothness of 0 can only make the tyres last 0.5x as long as the base. A smoothness of 50 has no bonus or penalty.
 
-Weather data:
+Weather data: (NOT YET IMPLEMENTED — the live engine currently uses an always-dry stub, so wet weather never occurs in-sim today and wet-weather pace is inert; it is weighted in overall() by the historical wet-race fraction instead. The intended model below is pending, and once it lands the wet weight should be re-derived from its actual moisture distribution.)
 Pre-race, the weather curve is calculated. About 67% of the time, the race should be completely dry. In the other 33% of the time, the race should start dry half the time. The direction of the rain (gets more wet, stays the same, gets more dry) is randomised every 5 laps. The magnitude of the rain is randomised as [-1, 4] (so note that it can contradict the direction 20% of the time). 
 
 Pit stop:
@@ -97,16 +97,32 @@ The in-lap to a pit stop adds 10s plus some noise between [0, 2]. The out-lap of
 Final computed laptime
 Each lap, a player can see the lap time that each car will have the next lap. 
 
+# Mistakes and retirements
+Beyond the contested-overtake collision (in the simulation engine above), two more retirement sources run per lap:
+
+Driver mistakes (issue #59): each lap, a consistency-scaled chance of a mistake, rate(c) = 1.3e-5 * (100 - consistency)^2 (consistency 65 -> ~1.6%/lap, 75 -> ~0.8%, 90 -> ~0.13%). On a mistake, 20% of the time the driver crashes out (collision-damage retirement); the other 80% is a one-off time loss of 2 + Exp(mean 3) seconds, clamped to [2, 25].
+
+Technical reliability (issue #61): mechanical DNFs are era-accurate and FLAT across all cars — there is no per-team reliability, only the year matters. The per-race technical-DNF probability tracks the real-world trend: ~27% in 1996 decaying to ~3.4% by the mid-2020s, with a bump at the 2014 turbo-hybrid introduction (~12%) and a smaller mid-2000s dip. It is converted to a per-lap rate so season-long attrition is independent of circuit length. On a technical DNF the cause is drawn uniformly from: engine, gearbox, hydraulics, electrical, suspension, brakes, clutch, overheating.
+
+Every retirement carries a named reason: "collision-damage" covers all crashes (driver mistakes + overtake collisions), the rest are technical.
+
 # Stats Engine
 The stats engine collects raw data from every race and stores it in a structured database. It also computes processed data programatically, and calculates season-wide strats, feats, and compares teammates to each other and compares predicted vs actual performances. I need you to propose all the possible programatically calculatable processed stats, feats, records that can be feasibly done by this engine without LLM support, even if most of the time, these searches are fruitless (most of the time, a record or a feat is not set during an avertage race). Because if we DO detect a statistical anomaly or a feat or record, then it becomes very much newsworthy and can have a dedicated article in the newsroom.
 
 As mentioned above, the LLM model used for the news can tap on any of the stats engine "APIs", and always knows what is available, in writing any on demand news articles that the player is wanting to find. For the more routine news articles, the race data, general season data, standings etc should serve as the general minimal information needed to write the race report and other things.
 
 # Points System
-Points are awarded using the standard F1 system: 25-18-15-12-10-8-6-4-2-1 for positions 1 through 10. No point is awarded for fastest lap. The points system is not customisable.
+Points are era-accurate — the system in force matches the real F1 season being played (issue #63), selected by year, not player-customisable:
+- 1996-2002: top 6 score 10-6-4-3-2-1.
+- 2003-2009: top 8 score 10-8-6-5-4-3-2-1.
+- 2010-2018: top 10 score 25-18-15-12-10-8-6-4-2-1.
+- 2019-2024: as 2010-2018, plus 1 point for fastest lap, awarded only if the fastest-lap setter finishes in the top 10.
+- 2025 onward: top 10 as above, the fastest-lap point dropped.
+
+Every clinch / "uncatchable" calculation keys off the active season's table (and its fastest-lap rule), so a title is never over- or under-claimed across eras — a 1998 win is worth 10, not 25.
 
 # Calendar
-The race calendar follows the real-world 2026 F1 season calendar. The agent implementing the simulation will look up real-world lap times for each circuit and determine reasonable per-circuit flat modifiers accordingly. The calendar is not editable by the player.
+The race calendar is era-accurate (issue #64): each season plays the real-world calendar for that year, 1996-2026 — real circuits in championship round order, the real round count (16 in 1996 up to 24 in 2024-26), real race dates, and real lap counts. It is held as a circuit registry (each venue's stable attributes: code, location, country, cosmetic flat modifier) joined with per-season tables (the year's ordered schedule: circuit, GP name, lap count, and race-day Sunday-of-year). Historical-only circuits get a researched lap count and a plausible flat modifier. The calendar is selected by the season's year and is not editable by the player.
 
 # Qualifying
 Qualifying follows the standard 2026 F1 format: three sessions (Q1, Q2, Q3). For simplicity, weather is held constant within each session (dry weather chance is still 67%; if wet than randomise [1, 100]). Each driver gets exactly two flying laps per session; their fastest lap from those two attempts is kept. The grid order for the race is determined by Q3 results for the top 10, Q2 results for positions 11–15, and Q1 results for the remainder. Driver form, car pace, driver pace, wet-weather ability, and the circuit modifier all apply to qualifying lap times using the same simulation engine formulas as the race, minus tyre wear, fuel load, and the DRS/overtaking logic.
