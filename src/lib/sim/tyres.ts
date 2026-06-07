@@ -4,7 +4,7 @@ import { sampleNormal } from './rng-utils'
 // Per-race pace delta (s/lap) anchors and base-life (fraction of race distance) anchors. Life anchors
 // follow the GDD figures; the old code ran soft a touch shorter (12-20% vs GDD 15-25%) — now aligned.
 export const DEFAULT_COMPOUND_DELTAS: Record<TyreCompound, number> = { soft: 0, medium: 0.7, hard: 1.5, intermediate: 2.5, wet: 4.0 }
-const LIFE_ANCHOR: Record<TyreCompound, number> = { soft: 0.20, medium: 0.30, hard: 0.45, intermediate: 0.30, wet: 0.45 }
+export const DEFAULT_TYRE_LIFE: Record<TyreCompound, number> = { soft: 0.20, medium: 0.30, hard: 0.45, intermediate: 0.30, wet: 0.45 }
 
 // Per-race compound pace deltas. Soft is the 0 reference. The dry trio (soft≤medium≤hard) and the wet
 // pair (intermediate≤wet) are each kept in order — softer at least as fast — but the two chains are
@@ -22,11 +22,11 @@ export function generateCompoundDeltas(): Record<TyreCompound, number> {
 export function generateTyreBaseLife(): Record<TyreCompound, number> {
   const roll = (anchor: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, sampleNormal(anchor, 0.035, Math.random)))
   return {
-    soft: roll(LIFE_ANCHOR.soft, 0.15, 0.25),
-    medium: roll(LIFE_ANCHOR.medium, 0.24, 0.40),
-    hard: roll(LIFE_ANCHOR.hard, 0.38, 0.55),
-    intermediate: roll(LIFE_ANCHOR.intermediate, 0.24, 0.40),
-    wet: roll(LIFE_ANCHOR.wet, 0.38, 0.55),
+    soft: roll(DEFAULT_TYRE_LIFE.soft, 0.15, 0.25),
+    medium: roll(DEFAULT_TYRE_LIFE.medium, 0.24, 0.40),
+    hard: roll(DEFAULT_TYRE_LIFE.hard, 0.38, 0.55),
+    intermediate: roll(DEFAULT_TYRE_LIFE.intermediate, 0.24, 0.40),
+    wet: roll(DEFAULT_TYRE_LIFE.wet, 0.38, 0.55),
   }
 }
 
