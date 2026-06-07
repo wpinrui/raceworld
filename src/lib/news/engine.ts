@@ -42,6 +42,8 @@ import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
 import expectationCheckCopy from './expectation-check-copy.json'
+import { driverArcs } from './archetypes'
+import driverArcCopy from './driver-arc-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
@@ -2471,6 +2473,32 @@ const slumpScore = (avg: number) => clamp((avg - 10) * 6, 0, 100)
 const surgeScore = (avg: number) => clamp((6 - avg) * 16, 0, 100)        // avg 5th -> 16, 2nd -> 64, 1st -> 80
 const trajectoryScore = (absDelta: number) => clamp(absDelta * 18, 0, 100)
 
+// Driver-arc retrospectives (#88): the season's individual stories — an overachiever dragging a lesser car
+// to podiums, a preseason pick who flopped, a fast start that deflated, a rookie beating a veteran teammate,
+// a rookie podium, a late-career resurgence. End-of-season, sparse (top 3 most newsworthy across the grid).
+function driverArc(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = driverArcCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return driverArcs(ctx, analysis).slice(0, 3).map((m) => {
+    const driver = dn(m.driverId)
+    const teammate = m.teammateId ? dn(m.teammateId) : ''
+    const slots = {
+      year: ctx.year, driver, driver_last: lastName(driver), podiums: m.podiums, wins: m.wins,
+      teammate, teammate_last: teammate ? lastName(teammate) : '',
+    }
+    const a = c[m.key]
+    const seed = `driver-arc-${ctx.year}-${m.driverId}`
+    return {
+      id: seed, category: 'feature', round: ctx.completedRounds, priority: 70,
+      headline: fill(pick(a.h, `${seed}|h`), slots),
+      dek: fill(pick(a.d, `${seed}|d`), slots),
+      body: fill(pick(a.b, `${seed}|b`), slots),
+    }
+  })
+}
+
 // Expectation-vs-actual checkpoint (#88): ~twice a season (one-third, two-thirds), who is running above or
 // below their PRESEASON projection — drivers and teams. Compares the season-analysis preseason expectation
 // (round-independent) against the actual standings AT that checkpoint round. Supersedes the analysis
@@ -3531,6 +3559,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...championship(ctx),
     ...championshipArc(ctx),
     ...seasonReview(ctx),
+    ...driverArc(ctx),
     ...expectationCheck(ctx),
     ...analysis(ctx),
     ...previews(ctx),
