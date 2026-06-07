@@ -35,9 +35,9 @@ import { buildSeasonAnalysis, previewCast, titleArcEvents } from './season-analy
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
 import raceCodaCopy from './race-coda-copy.json'
+import seasonReviewCopy from './season-review-copy.json'
 import milestoneCopy from './milestone-copy.json'
 import recordsCopy from './records-copy.json'
-import sillyCopy from './sillyseason-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import { historicalGrids } from '@/data/history/grids'
@@ -1503,120 +1503,52 @@ function championshipArc(ctx: NewsContext): NewsArticle[] {
   })
 }
 
-// TRIGGER: a long state-of-the-season feature at half-distance, and a season review once the
-// final round is in. Grounded entirely in the standings to date.
-function features(ctx: NewsContext): NewsArticle[] {
-  const N = ctx.calendar.length
-  const out: NewsArticle[] = []
-  const half = Math.round(N / 2)
-
-  // Mid-season state of play
-  if (!ctx.endOfSeason && ctx.completedRounds >= half && half >= 3) {
-    const r = half
-    const ds = driverStandingsAfter(ctx, r)
-    const cs = constructorStandingsAfter(ctx, r)
-    if (ds.length >= 2 && cs.length >= 1) {
-      const seed = `feature-mid-${ctx.year}`
-      const gap = ds[0].points - ds[1].points
-      const slots = {
-        year: ctx.year, leader: ds[0].driverName, leader_last: lastName(ds[0].driverName), leader_poss: poss(lastName(ds[0].driverName)), second: ds[1].driverName,
-        gap, gap_pts: plural(gap, 'point'), top_team: cs[0].teamName, third: ds[2]?.driverName ?? ds[1].driverName, round: r,
-        ...pronouns(ctx.drivers.find((d) => d.id === ds[0].driverId)?.gender),
-      }
-      out.push({
-        id: seed, category: 'feature', round: r, priority: 82,
-        headline: fill(pick([
-          '{leader_last} holds the upper hand at half-distance',
-          '{leader_last} leads {second} by {gap} {gap_pts} with the hard miles still to come',
-          'Halfway through {year}, {leader_last} is on top but far from clear',
-          'Why {leader_poss} lead over {second} is comfortable but not conclusive',
-          '{leader_last} leads and {top_team} rule as {year} reaches its midpoint',
-        ], `${seed}|h`), slots),
-        dek: fill(pick([
-          '{leader} carries a {gap}-point advantage into the second half of {year}, but the development race and the circuits ahead mean nothing is decided.',
-          'At round {round}, {leader_last} has converted pace into points more consistently than anyone, yet {second} and {third} stay close enough to make the next stretch defining.',
-          '{top_team} sit atop the constructors table and {leader} heads the drivers standings, but the midseason upgrade cycle could scramble both pictures.',
-        ], `${seed}|d`), slots),
-        body: paras(
-          fill(pick([
-            '{leader} arrives at the midpoint having turned {their} car\'s strengths into points with a ruthlessness that has opened a {gap}-point gap over {second}.',
-            'The {gap}-point margin between {leader} and {second} at round {round} is meaningful but not decisive, one retirement for the leader and one win for the challenger enough to reshuffle the maths overnight.',
-            '{leader_poss} consistency has been {their} sharpest weapon, and where {second} has seen points dented by small errors and mechanical trouble, {leader_last} has banked them whenever the car was capable.',
-            '{second} has not been slow, the {gap}-point gap reflecting the fine margins at the front of the field more than any collapse in form.',
-            'At the midpoint of {year}, the championship reads as a {leader_last} advantage rather than a {leader_last} runaway, and the distinction matters for everything that follows.',
-          ], `${seed}|b1`), slots),
-          fill(pick([
-            '{top_team} lead the constructors on the strength of both cars scoring heavily, a depth single-car operations cannot match when reliability is even.',
-            'Behind {leader} and {second}, {third} has emerged as the most credible threat to the established order, pairing raw pace with the point-gathering focus that makes an outside challenger dangerous.',
-            'The constructors battle is not just about the quickest car on a Saturday, but about which team can field two consistent, trouble-free entries across very different circuits.',
-            '{third} has shown the gap to the leading pair is not fixed, and any weekend {leader} or {second} drops points opens a window.',
-            '{top_team} hold the constructors advantage for now, but the teams behind are narrowing the gap on upgrades.',
-          ], `${seed}|b2`), slots),
-          fill(pick([
-            'Development pace from here decides the title as much as driver craft, the team that extracts the most from upgrades carrying momentum into the run-in.',
-            'Reliability will matter as much as raw speed, a {gap}-point buffer capable of vanishing in two rounds of mechanical bad luck.',
-            'The circuits to come will test aerodynamic versatility, tyre management over long stints, and the ability to change set-up direction quickly.',
-            'Consistency under pressure is the real test of the second half, the driver who loses least when conditions are difficult usually the one lifting the trophy.',
-            '{leader_poss} rivals will study {their} weaker circuits, knowing a gap of {gap} {gap_pts} is surmountable while the maths still allow it.',
-          ], `${seed}|b3`), slots),
-        ),
-      })
-    }
+// The season review (#88): the end-of-season retrospective that pays off the preview — how the title was
+// won, who beat or missed their preseason projection, the best of the rest. Replaces the old `feature`
+// producer (keeps the `feature` category). Grounded in the season-analysis deltas + title trajectory.
+function seasonReview(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.endOfSeason && ctx.completedRounds < ctx.calendar.length) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const t = analysis.driverTitle
+  if (!t.currentLeaderId || t.series.length === 0) return []
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const tn = (id: string) => teamName(ctx, id)
+  const champion = t.currentLeaderId
+  const runnerUp = t.series[t.series.length - 1]?.secondId ?? null
+  const constructorChampion = analysis.constructorTitle.currentLeaderId
+  const earlyLeader = t.series[0]?.leaderId
+  const maxPer = driverMaxPerRace(ctx.year)
+  const shape = t.wireToWire ? 'WireToWire'
+    : earlyLeader && earlyLeader !== champion ? 'Comeback'
+    : t.currentGap <= maxPer ? 'Decider' : 'Clear'
+  const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
+  const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
+  const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
+  const teamUnder = analysis.teamDeltas.find((d) => d.delta < 0)?.id
+  const bestOfRest = analysis.teamDeltas
+    .filter((d) => analysis.teamExpectations.get(d.id)?.tier !== 'front')
+    .sort((a, b) => a.actualRank - b.actualRank)[0]?.id
+  const c = seasonReviewCopy as Record<string, string[]>
+  const seed = `season-review-${ctx.year}`
+  const slots: Record<string, string | number> = {
+    year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
+    runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
+    gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
+    constructor_champion: constructorChampion ? tn(constructorChampion) : '',
   }
-
-  // Season review (final round complete). Not gated on endOfSeason, so the capstone read
-  // survives once the off-season market runs and stays in the feed.
-  if (ctx.completedRounds >= N && N >= 1) {
-    const ds = driverStandingsAfter(ctx, N)
-    const cs = constructorStandingsAfter(ctx, N)
-    if (ds.length >= 1 && cs.length >= 1) {
-      const seed = `feature-review-${ctx.year}`
-      const slots = {
-        year: ctx.year, champ: ds[0].driverName, champ_last: lastName(ds[0].driverName), champ_poss: poss(lastName(ds[0].driverName)),
-        champ_team: ds[0].teamName,
-        runner: ds[1]?.driverName ?? ds[0].driverName, top_team: cs[0].teamName, wins: ds[0].wins, wins_word: plural(ds[0].wins, 'win'),
-        ...pronouns(ctx.drivers.find((d) => d.id === ds[0].driverId)?.gender),
-      }
-      out.push({
-        id: seed, category: 'feature', round: N, priority: 88,
-        headline: fill(pick([
-          '{champ_last} delivers in {year} with {wins} {wins_word} and the title',
-          'How {champ_last} turned car pace into a {year} title',
-          '{champ_last} takes the drivers crown as {top_team} win the constructors in {year}',
-          '{wins} {wins_word} and a world title, {champ_poss} {year} reviewed',
-          'The {year} championship belongs to {champ_last}, with {top_team} taking the constructors',
-        ], `${seed}|h`), slots),
-        dek: fill(pick([
-          '{champ} finishes {year} as world champion with {wins} {wins_word} for {champ_team}, while {top_team} took the constructors title.',
-          '{runner} pushed hardest and came closest, but {champ_poss} knack for harvesting points even when victory was off the table proved the decisive gap.',
-          '{top_team} dominate the constructors in {year} on the back of two cars scoring all season long.',
-        ], `${seed}|d`), slots),
-        body: paras(
-          fill(pick([
-            '{champ} finishes {year} as world champion for {champ_team} on the back of {wins} {wins_word}, a tally that understates how completely {they} controlled the title.',
-            '{runner} was the closest challenger and gave the championship its best stretches, yet when the pressure asked {champ_last} to respond, {they} did, at exactly the moments that mattered.',
-            'The {wins} {wins_word} {champ} took were not one purple patch, coming at different circuits and in different conditions, the mark of a complete championship effort.',
-            'What separated {champ} from {runner} was the accumulation of points in the finishes that fell short of victory, second and third banked when the win was not on, building the cushion that decided it.',
-            '{runner} can look back on a season where the pace was rarely in question, the final margin flattering neither the closeness of the fight nor the effort behind it.',
-          ], `${seed}|b1`), slots),
-          fill(pick([
-            '{top_team} leave {year} as constructors champions, earned through the dual consistency of two cars scoring in every condition the season served up.',
-            'The constructors crown reflects an organisational quality easy to understate, {top_team} arriving each weekend having understood the last and adjusted accordingly.',
-            'Both championships were effectively settled early, the leads at the front proving too large for the chasers to overturn.',
-            'Where the teams chasing {top_team} found speed on their best circuits, they could not match the breadth of scoring that made the champions so hard to catch.',
-            '{year} had its twists, but its defining arc was one of control, {top_team} in the constructors and {champ_last} in the drivers.',
-          ], `${seed}|b2`), slots),
-          fill(pick([
-            '{champ_last} enters the off-season as the benchmark every rival builds their winter around, a position that brings expectation as much as prestige.',
-            'For {runner} and that team, the winter begins knowing the gap to {champ_last} is not structural, the pace there on the right circuits and the job now to widen that list.',
-            '{top_team} carry the specific burden of the defending champion, every strength catalogued and every weakness filed by rivals over the months ahead.',
-            'The reset begins now, new tyres and revised development paths, and a grid that has spent a year learning exactly how far it must close on {champ_last}.',
-          ], `${seed}|b3`), slots),
-        ),
-      })
-    }
-  }
-  return out
+  const sections: string[] = [fill(pick(c[`champion${shape}`], `${seed}|champ`), slots)]
+  if (constructorChampion) sections.push(fill(pick(c.constructors, `${seed}|cons`), slots))
+  if (over.length) sections.push(fill(pick(c.overPerformers, `${seed}|over`), { ...slots, names: listJoin(over.map(dn)) }))
+  if (under.length) sections.push(fill(pick(c.underPerformers, `${seed}|under`), { ...slots, names: listJoin(under.map(dn)) }))
+  if (teamOver) sections.push(fill(pick(c.teamOver, `${seed}|tover`), { ...slots, team: tn(teamOver) }))
+  if (teamUnder) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), { ...slots, team: tn(teamUnder) }))
+  if (bestOfRest && bestOfRest !== teamOver && bestOfRest !== teamUnder) sections.push(fill(pick(c.bestOfRest, `${seed}|bor`), { ...slots, team: tn(bestOfRest) }))
+  return [{
+    id: seed, category: 'feature', round: ctx.completedRounds, priority: 88,
+    headline: fill(pick(c.headline, `${seed}|h`), slots),
+    dek: fill(pick(c.dek, `${seed}|d`), slots),
+    body: paras(...sections),
+  }]
 }
 
 // A grounded "last time out" talking point for a preview of round r, pulled from round r-1.
@@ -2489,132 +2421,6 @@ function teamTransitions(ctx: NewsContext): NewsArticle[] {
     const copy = TEAMNEWS[key]
     if (!copy) continue // generic team_exit handled in market()
     out.push(renderTeamArticle(key, 'team_exit', r, 68, copy, teamTransitionSlots(ctx, rem.teamId, { kind: 'departure', team: rem.teamName })))
-  }
-  return out
-}
-
-// TRIGGER (live only): three windows — mid-season, three-quarter distance, and the
-// penultimate round. The rumours are real: we run the actual driver-market sim on the
-// season-to-date with a seeded -10..+10 error applied to each driver's media rating, then
-// report the non-trivial moves it spits out as paddock speculation.
-function sillySeason(ctx: NewsContext): NewsArticle[] {
-  // The rumour windows are all mid-season (rounds N/2, 3N/4, N-1), so they belong in the season's
-  // permanent record. Don't gate on endOfSeason — otherwise the whole season's silly-season feed is
-  // erased the instant the final race resolves and the newsroom regenerates with endOfSeason set.
-  if (!ctx.live || ctx.completedRounds < 2 || ctx.teams.length === 0) return []
-  const N = ctx.calendar.length
-  const windows = [...new Set([Math.round(N / 2), Math.round((3 * N) / 4), N - 1])].filter((r) => r >= 2 && r <= ctx.completedRounds)
-  const out: NewsArticle[] = []
-  for (const r of windows) {
-    const resultsSoFar = ctx.raceResults.slice(0, r)
-    const cstand = constructorStandingsAfter(ctx, r)
-    const rankInfo = cstand.map((c, i) => ({ teamId: c.teamId, points: c.points, finalPosition: i + 1 }))
-    for (const t of ctx.teams) if (!rankInfo.find((x) => x.teamId === t.id)) rankInfo.push({ teamId: t.id, points: 0, finalPosition: rankInfo.length + 1 })
-
-    const baseScores = computeDriverMediaScores(ctx.drivers, ctx.teams, resultsSoFar, rankInfo, ctx.teams.length)
-    const rng = mulberry32(`silly-${ctx.year}-${r}`)
-    const noised = baseScores.map((s) => ({ driverId: s.driverId, score: clamp(s.score + (rng() * 20 - 10), 0, 100) }))
-    const teamScores = computeTeamMediaScores(ctx.teams, ctx.constructorHistory, rankInfo)
-    const retention = computeRetentionDeltas(ctx.drivers, ctx.teams, resultsSoFar)
-
-    let projection
-    try {
-      projection = runDriverMarket(ctx.drivers, ctx.teams, noised, teamScores, retention, ctx.year + 1, rng)
-    } catch {
-      continue
-    }
-    // Only established drivers switching teams. Rookie fill-ins are excluded (mediaScore 0);
-    // they are generated after the moves are settled and use Math.random() for their names, so
-    // dropping them keeps the reported rumours fully deterministic. We also drop implausible
-    // links (a driver tied to a team several places worse than their current one) — the media
-    // noise can otherwise pair a frontrunner with a backmarker, which reads as nonsense.
-    const cpos = new Map(cstand.map((c, i) => [c.teamId, i + 1]))
-    const moves = projection.marketMoves.filter((m) => {
-      if (m.isResignation || m.fromTeamId == null || m.mediaScore <= 0) return false
-      const fromP = cpos.get(m.fromTeamId) ?? ctx.teams.length
-      const toP = cpos.get(m.toTeamId) ?? ctx.teams.length
-      return toP - fromP <= 4
-    })
-    const window = r === N - 1 ? 'with the season nearly over' : r >= (3 * N) / 4 ? 'as the campaign enters its closing stretch' : 'at the midway point of the season'
-
-    if (moves.length === 0) {
-      const seed = `silly-quiet-${ctx.year}-${r}`
-      if (!chance(seed, 50)) continue
-      const slots = { window, round: r }
-      out.push({
-        id: seed, category: 'silly_season', round: r, priority: 28,
-        headline: fill(pick(['A quiet driver market, for now', 'Silly season slow to ignite', 'No movement yet on the grid', 'The market holds its breath'], `${seed}|h`), slots),
-        dek: fill(pick(['The paddock rumour mill is unusually still {window}.', 'Few seats look likely to change hands.', 'Calm before the storm, perhaps.'], `${seed}|d`), slots),
-        body: paras(
-          compose(`${seed}:p1`, slots,
-            ['For all the talk, the driver market is quiet {window}.', 'The grid looks settled {window}.', 'There is little concrete movement {window}.'],
-            ['Most teams appear content with their current line-ups.', 'No obvious dominoes are poised to fall just yet.', 'The big names seem to be staying put.']),
-          compose(`${seed}:p2`, slots,
-            ['That can change in an instant, of course.', 'One signing tends to trigger several more.', 'The calm rarely lasts long in this paddock.'],
-            ['A single result can reopen a seat thought closed.', 'Performance, as ever, will drive the market.', 'Patience is the watchword for now.']),
-          compose(`${seed}:p3`, slots,
-            ['For now, there is little to report.', 'The rumour mill will have to wait.', 'Watch this space as the season unwinds.'],
-            ['Things tend to heat up later in the year.', 'The real moves often come late.', 'Expect activity before long.']),
-        ),
-      })
-      continue
-    }
-
-    // One consolidated silly-season roundup per window, a paragraph per rumour, ordered by how
-    // newsworthy the move is — rather than a separate article per move (which buried a round under
-    // half a dozen near-identical pieces).
-    const dstand = driverStandingsAfter(ctx, r)
-    const ordered = [...moves].sort((a, b) => b.mediaScore - a.mediaScore)
-    const seed = `silly-${ctx.year}-${r}`
-    const moveParas = ordered.map((m) => {
-      const fromName = teamName(ctx, m.fromTeamId as string)
-      const dpts = dstand.find((s) => s.driverId === m.driverId)?.points ?? 0
-      const dRank = dstand.findIndex((s) => s.driverId === m.driverId)
-      // Only brag about a points haul when it is actually notable (upper half of the grid).
-      const notablePoints = dpts > 0 && dRank >= 0 && dRank < dstand.length / 2
-      const toIdx = cstand.findIndex((c) => c.teamId === m.toTeamId)
-      const toPos = toIdx >= 0 ? ordinal(toIdx + 1) : ''
-      const fromIdx = cstand.findIndex((c) => c.teamId === m.fromTeamId)
-      const fromPos = fromIdx >= 0 ? ordinal(fromIdx + 1) : ''
-      // Frame the move by its real direction in the constructors order (lower index = better).
-      const direction = fromIdx >= 0 && toIdx >= 0 ? (toIdx < fromIdx ? 'up' : toIdx > fromIdx ? 'down' : 'level') : 'unknown'
-      const mseed = `${seed}-${m.driverId}`
-      const drv = ctx.drivers.find((d) => d.id === m.driverId)
-      const veteran = (drv?.age ?? 25) >= 30
-      const outOfContract = !!drv && drv.contractExpiresAfterSeason <= ctx.year
-      // Ambiguous, unfalsifiable "qualities" that fit "value {driver}'s {appeal}" — age-aware so we
-      // never claim something the data could contradict. No leading article.
-      const qualities = veteran
-        ? ['experience and know-how', 'racecraft and composure', 'steadying influence in the garage', 'big-race temperament', 'sheer mileage', 'marketability', 'professionalism', 'all-round package', 'standing in the paddock', 'reliability between the walls']
-        : ['youth and upside', 'raw potential', 'sky-high ceiling', 'fearlessness', 'long-term promise', 'marketability', 'professionalism', 'all-round package', 'standing in the paddock', 'fresh edge']
-      const appeal = pick(qualities, `${mseed}|appeal`)
-      const wins = winsUpTo(ctx, m.driverId, r)
-      const status = wins > 0 ? 'a proven race winner' : (dRank >= 0 && dRank < 4 ? 'an upper-echelon talent' : 'a known quantity')
-      const slots = { driver: m.driverName, driver_last: lastName(m.driverName), to: m.toTeamName, to_poss: poss(m.toTeamName), from: fromName, window, round: r, driver_points: dpts, to_pos: toPos, from_pos: fromPos, appeal, status }
-      // One grounded paragraph per rumour: the link, its real direction, the points (if notable),
-      // the appeal/status, and the contract situation.
-      const para = compose(`${mseed}:line`, slots,
-        sillyCopy.link,
-        direction === 'up' ? sillyCopy.dirUp : direction === 'down' ? sillyCopy.dirDown : direction === 'level' ? sillyCopy.dirLevel : [''],
-        notablePoints ? sillyCopy.points : [''],
-        sillyCopy.appealStatus,
-        outOfContract ? sillyCopy.contractUp : sillyCopy.contractTied)
-      // A media-pen quote per rumour, fired often (the newsroom wants more voices, not fewer).
-      const q = texture(`${mseed}|pen`, sillyCopy.pen, slots, 45)
-      return q ? `${para} ${q}` : para
-    })
-    const top = ordered[0]
-    const rslots = { window, round: r, n: ordered.length, moves_word: plural(ordered.length, 'move'), top: top.driverName, top_last: lastName(top.driverName) }
-    out.push({
-      id: seed, category: 'silly_season', round: r, priority: 30,
-      headline: fill(pick(sillyCopy.headline, `${seed}|h`), rslots),
-      dek: fill(pick(sillyCopy.dek, `${seed}|d`), rslots),
-      body: paras(
-        fill(pick(sillyCopy.intro, `${seed}|intro`), rslots),
-        ...moveParas,
-        fill(pick(sillyCopy.close, `${seed}|close`), rslots),
-      ),
-    })
   }
   return out
 }
@@ -3647,9 +3453,8 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...technicalRoundup(ctx),
     ...championship(ctx),
     ...championshipArc(ctx),
-    ...features(ctx),
+    ...seasonReview(ctx),
     ...analysis(ctx),
-    ...sillySeason(ctx),
     ...previews(ctx),
     ...market(ctx),
     ...teamTransitions(ctx),
