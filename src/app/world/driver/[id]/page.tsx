@@ -500,7 +500,7 @@ export default function DriverPage() {
                                 </td>
                                 <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
                                 {Array.from({ length: maxRounds }, (_, i) => (
-                                  <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} year={s.year} />
+                                  <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} year={s.year} code={calendarForYear(s.year)[i]?.code} />
                                 ))}
                                 <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
                                 <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
