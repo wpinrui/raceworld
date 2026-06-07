@@ -35,6 +35,8 @@ deks pick from ~8–14 variants each. Net effect: the feed reads written, not st
 | `analysis_opinion` | expectationCheck | **~Twice a season (#88)** (one-third, two-thirds). Drivers and teams running above/below their PRESEASON projection — "who's cooking vs trash". Replaced the old `analysis` form-slump/surge + team-vs-car-pace angles. |
 | `analysis_opinion` | teammateBattle | **End of season (#88).** The intra-team verdicts (top 2) — one driver routing the other on equal machinery, or the more-fancied driver beaten by the other side of the garage. From the archetype classifier; replaced the old `analysis` teammate-imbalance angle. |
 | `analysis_opinion` | crossTeamDuel | **End of season (#88).** The season's single defining cross-team battle outside the title fight — a parallel fight among the fast cars, or a midfield duel. From the archetype classifier. |
+| `analysis_opinion` | bestOfRest | **End of season (#90).** The fight to lead the midfield (order behind the front three) — a compressed band, a surge from a projected backmarker, or a clear win. |
+| `analysis_opinion` | backmarker | **End of season (#90).** One story from the back — a new team's tough debut, a tail-ender scoring against the odds, or a tight last-place battle. |
 
 ## Season-long narrative (#88)
 
