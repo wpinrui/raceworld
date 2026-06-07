@@ -2,6 +2,7 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
 import { calendarForYear } from '@/data/calendars'
 import { isOffSeason } from './types'
+import { shownStats } from './progression'
 import { buildRaceResults } from './race-results'
 import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
 
@@ -47,10 +48,11 @@ export async function simulateUntilRound(targetRound: number, onRace?: (round: n
       dbSeasonId = await actionCreateSeason(season.year)
       useSeasonStore.getState().setDbSeasonId(dbSeasonId)
     }
-    // Post-race attribute snapshots for the ratings-progression chart.
+    // Post-race attribute snapshots (SHOWN stats, #66) for the ratings-progression chart — mirrors the
+    // interactive race-commit path so watched and simulated-ahead races archive consistent ratings.
     const snapshots = useSeasonStore.getState().drivers
       .filter((d) => d.teamId !== '')
-      .map((d) => ({ driverId: d.id, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness, consistency: d.consistency }))
+      .map((d) => ({ driverId: d.id, ...shownStats(d) }))
     await actionFlushRaceResult(dbSeasonId, round, circuit.id, circuit.name, results, snapshots)
 
     // Advance (handles end-of-season on the final round) and clear the race engine.
