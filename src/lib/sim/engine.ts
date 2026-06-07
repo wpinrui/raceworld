@@ -47,12 +47,15 @@ export function computeLapTime(input: LapInput): LapResult {
   // 3. moisture at this lap
   const moisture = getMoistureAtLap(weather, lap)
 
-  // 4. effectiveStat
-  const effectiveStat =
-    (1 - moisture) * driver.pace + moisture * driver.wetWeatherPace + (form - 5)
-
-  // 5. driverMod
-  const driverMod = -((effectiveStat - 75) / 5) * 0.1
+  // 4-5. driverMod — the driver's skill delta to lap time, from a 75 baseline. Pace and wet-weather pace
+  // blend by moisture, each worth 0.03s/lap per rating point; the WET rating counts DOUBLE in the wet
+  // (issue #102), so at full wet a wet-rating point is worth 0.06s/lap. Per-race form keeps its own
+  // 0.02s/lap weight (unchanged).
+  const WET_EFFECT_MULTIPLIER = 2
+  const skillDelta =
+    (1 - moisture) * (driver.pace - 75) +
+    WET_EFFECT_MULTIPLIER * moisture * (driver.wetWeatherPace - 75)
+  const driverMod = -(skillDelta * 0.03 + (form - 5) * 0.02)
 
   // 6. tyreWearMod — every 4% of wear adds 0.1s/lap (fresh tyres matter; #pit-strategy)
   const tyreWearMod = ((100 - tyre.condition) / 4) * 0.1
