@@ -366,7 +366,7 @@ export default function DriverPage() {
                                     className="flex shrink-0 flex-col items-center gap-1"
                                   >
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-[#FFFFFF]">{calendarForYear(current?.year ?? DEFAULT_CALENDAR_YEAR)[r.round - 1]?.code ?? String(r.round).padStart(2, '0')}</span>
-                                    <ResultChip position={r.finishPosition} year={current?.year ?? 2026} />
+                                    <ResultChip position={r.finishPosition} year={current?.year ?? DEFAULT_CALENDAR_YEAR} />
                                   </Link>
                                 </Tooltip>
                               ))}
