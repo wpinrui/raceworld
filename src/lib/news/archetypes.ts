@@ -295,8 +295,8 @@ function teamSeasonStats(ctx: NewsContext, N: number): TeamRow[] {
 
 export type BestOfRestKind = 'compressed' | 'surge' | 'clear'
 export interface BestOfRestResult {
-  winnerId: string // top team behind the front three
-  runnerUpId?: string
+  winnerId: string // best finisher among teams outside the preseason front tier
+  runnerUpId: string // the next non-front team (always present; the producer needs two)
   gap: number // points to the next team in the midfield
   kind: BestOfRestKind
 }
