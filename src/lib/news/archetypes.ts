@@ -1,5 +1,5 @@
 import type { NewsContext } from './engine'
-import type { SeasonAnalysis } from './season-analysis'
+import { raceH2H, type SeasonAnalysis } from './season-analysis'
 import { driverMaxPerRace } from '@/lib/sim/points'
 
 // Season-archetype classifier (#88). Pure detectors over the season-analysis layer + raw results. Each
@@ -207,16 +207,7 @@ export function crossTeamDuels(ctx: NewsContext, analysis: SeasonAnalysis): Cros
     if (a.teamId === b.teamId) continue // must be a CROSS-team duel
     const gap = a.points - b.points
     if (gap > 15) continue // close on points
-    let h2hA = 0, h2hB = 0
-    for (let r = 1; r <= N; r++) {
-      const rr = ctx.raceResults[r - 1] ?? []
-      const x = rr.find((z) => z.driverId === a.id)
-      const y = rr.find((z) => z.driverId === b.id)
-      if (x && y && !x.dnf && !y.dnf && x.finishPosition != null && y.finishPosition != null) {
-        if (x.finishPosition < y.finishPosition) h2hA++
-        else h2hB++
-      }
-    }
+    const [h2hA, h2hB] = raceH2H(ctx, a.id, b.id, N)
     const total = h2hA + h2hB
     if (total < 4) continue // enough wheel-to-wheel meetings
     const dominance = Math.max(h2hA, h2hB) / total
@@ -233,22 +224,26 @@ export function crossTeamDuels(ctx: NewsContext, analysis: SeasonAnalysis): Cros
 export type ChampionShape =
   | 'TitleNoWins' | 'WinStreak' | 'ComebackMerit' | 'ComebackHanded' | 'ThreeWay' | 'Domination' | 'WireToWire' | 'Decider' | 'Clear'
 
-export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): ChampionShape {
+// The comeback shapes also report WHO led early (the driver whose lead the champion overhauled / who
+// retired it away) — distinct from the final runner-up, so the copy can name the right driver.
+export interface ChampionShapeResult { shape: ChampionShape; earlyLeaderId?: string }
+
+export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): ChampionShapeResult {
   const t = analysis.driverTitle
   const champ = t.currentLeaderId
   const N = analysis.completedRounds
-  if (!champ || N < 3) return 'Clear'
+  if (!champ || N < 3) return { shape: 'Clear' }
   const st = statsUpTo(ctx, champ, 1, N)
 
   // Title built on consistency, no win all year — the most striking shape.
-  if (st.wins === 0) return 'TitleNoWins'
+  if (st.wins === 0) return { shape: 'TitleNoWins' }
 
   // A long unbeaten run (5+ consecutive wins) that defined the season.
   let streak = 0, maxStreak = 0
   for (let r = 1; r <= N; r++) {
     if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === champ)?.finishPosition === 1) { streak++; maxStreak = Math.max(maxStreak, streak) } else streak = 0
   }
-  if (maxStreak >= 5) return 'WinStreak'
+  if (maxStreak >= 5) return { shape: 'WinStreak' }
 
   // Came from behind: the champion wasn't leading early. Merit (own wins) vs handed (the early leader's DNFs).
   const earlyLeader = t.series[0]?.leaderId
@@ -260,19 +255,21 @@ export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): C
       if (rr.find((x) => x.driverId === champ)?.finishPosition === 1) champWins++
       if (rr.find((x) => x.driverId === earlyLeader)?.dnf) earlyLeaderDnfs++
     }
-    return earlyLeaderDnfs > champWins ? 'ComebackHanded' : 'ComebackMerit'
+    return { shape: earlyLeaderDnfs > champWins ? 'ComebackHanded' : 'ComebackMerit', earlyLeaderId: earlyLeader }
   }
 
-  // Three (or more) drivers still mathematically alive with three rounds to go.
+  if (st.wins >= Math.ceil(N / 2)) return { shape: 'Domination' } // won at least half the races
+  if (t.wireToWire) return { shape: 'WireToWire' } // led the table every round
+
+  // Three (or more) drivers still mathematically alive with three rounds to go. Checked AFTER domination/
+  // wire-to-wire so a one-sided season with stragglers merely "mathematically alive" isn't called a three-way.
   if (N >= 4) {
     const checkRound = Math.max(1, N - 3)
     const rows = ctx.drivers.filter((d) => d.teamId !== '').map((d) => ({ pts: statsUpTo(ctx, d.id, 1, checkRound).points })).sort((a, b) => b.pts - a.pts)
     const reach = (N - checkRound) * driverMaxPerRace(ctx.year)
-    if (rows.length >= 3 && rows.filter((r) => rows[0].pts - r.pts <= reach).length >= 3) return 'ThreeWay'
+    if (rows.length >= 3 && rows.filter((r) => rows[0].pts - r.pts <= reach).length >= 3) return { shape: 'ThreeWay' }
   }
 
-  if (st.wins >= Math.ceil(N / 2)) return 'Domination' // won at least half the races
-  if (t.wireToWire) return 'WireToWire' // led the table every round
-  if (t.currentGap <= driverMaxPerRace(ctx.year)) return 'Decider' // settled late, within a race win
-  return 'Clear'
+  if (t.currentGap <= driverMaxPerRace(ctx.year)) return { shape: 'Decider' } // settled late, within a race win
+  return { shape: 'Clear' }
 }

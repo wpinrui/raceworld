@@ -359,6 +359,19 @@ function windowPoints(ctx: NewsContext, driverId: string, round: number, w: numb
   return pts
 }
 
+// Race-by-race head-to-head between two drivers over rounds 1..upToRound, counting only rounds BOTH
+// classified (no DNF). Shared by the title arc and the cross-team duel detector.
+export function raceH2H(ctx: NewsContext, aId: string, bId: string, upToRound: number): [number, number] {
+  let a = 0, b = 0
+  for (let k = 1; k <= upToRound; k++) {
+    const rr = ctx.raceResults[k - 1] ?? []
+    const x = rr.find((z) => z.driverId === aId)
+    const y = rr.find((z) => z.driverId === bId)
+    if (x && y && !x.dnf && !y.dnf && x.finishPosition != null && y.finishPosition != null) { if (x.finishPosition < y.finishPosition) a++; else b++ }
+  }
+  return [a, b]
+}
+
 // Generic arc-event detector, shared by the drivers' and constructors' title fights. The series-specific
 // bits (how points/wins/DNFs/head-to-head are read for a driver vs a team) come in as deps; the swing/
 // onset/decider/merit logic is identical for both.
@@ -420,15 +433,7 @@ export function titleArcEvents(ctx: NewsContext): TitleArcEvent[] {
     maxPer: driverMaxPerRace(ctx.year),
     windowWins: (id, from, to) => { let n = 0; for (let k = from; k <= to; k++) if (at(k).find((x) => x.driverId === id)?.finishPosition === 1) n++; return n },
     windowDnfs: (id, from, to) => { let n = 0; for (let k = from; k <= to; k++) if (at(k).find((x) => x.driverId === id)?.dnf) n++; return n },
-    seasonH2H: (leaderId, chaserId, upto) => {
-      let a = 0, b = 0
-      for (let k = 1; k <= upto; k++) {
-        const x = at(k).find((z) => z.driverId === leaderId)
-        const y = at(k).find((z) => z.driverId === chaserId)
-        if (x && y && !x.dnf && !y.dnf && x.finishPosition != null && y.finishPosition != null) { if (x.finishPosition < y.finishPosition) a++; else b++ }
-      }
-      return [a, b]
-    },
+    seasonH2H: (leaderId, chaserId, upto) => raceH2H(ctx, leaderId, chaserId, upto),
     windowPts: (id, round, w) => windowPoints(ctx, id, round, w),
   })
 }

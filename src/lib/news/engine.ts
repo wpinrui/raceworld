@@ -1536,7 +1536,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const champion = t.currentLeaderId
   const runnerUp = t.series[t.series.length - 1]?.secondId ?? null
   const constructorChampion = analysis.constructorTitle.currentLeaderId
-  const shape = championshipShape(ctx, analysis) // full #88 title-battle taxonomy, not just the basic four
+  const { shape, earlyLeaderId } = championshipShape(ctx, analysis) // full #88 title-battle taxonomy, not just the basic four
   const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
   const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
   const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
@@ -1549,6 +1549,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
+    early_leader: earlyLeaderId ? dn(earlyLeaderId) : '', early_leader_last: earlyLeaderId ? lastName(dn(earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
   }
@@ -2501,7 +2502,7 @@ function crossTeamDuel(ctx: NewsContext): NewsArticle[] {
   return crossTeamDuels(ctx, analysis).map((m) => {
     const a = dn(m.aId)
     const b = dn(m.bId)
-    const slots = { year: ctx.year, a, a_last: lastName(a), b, b_last: lastName(b), h2h_a: m.h2hA, h2h_b: m.h2hB, gap: m.gap }
+    const slots = { year: ctx.year, a_last: lastName(a), b_last: lastName(b), h2h_a: m.h2hA, h2h_b: m.h2hB, gap: m.gap }
     const cc = c[m.key]
     const seed = `crossteam-${ctx.year}-${m.aId}-${m.bId}`
     return {
