@@ -54,6 +54,11 @@ export default function RacePage() {
     if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleSpeedClick = (s: SimSpeed) => {
+    if (s === 4) { setShowSpeed4Modal(true); return }
+    setSpeed4Confirmed(false); setSpeed(s)
+  }
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
@@ -128,11 +133,6 @@ export default function RacePage() {
     }, 50)
     return () => clearInterval(timer)
   }, [phase, paused, speed])
-
-  const handleSpeedClick = (s: SimSpeed) => {
-    if (s === 4) { setShowSpeed4Modal(true); return }
-    setSpeed4Confirmed(false); setSpeed(s)
-  }
 
   const confirmSpeed4 = () => { setShowSpeed4Modal(false); setSpeed4Confirmed(true); setSpeed(4) }
 
