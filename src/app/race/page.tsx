@@ -121,7 +121,7 @@ export default function RacePage() {
     }
     schedule(remaining)
     return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
-  }, [phase, paused, speed]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, paused, speed])
 
   useEffect(() => {
     if (phase !== 'racing' || paused || speed === 4) {

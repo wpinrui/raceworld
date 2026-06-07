@@ -54,12 +54,12 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       toggleFollowDriver: (id) => {
         const cur = new Set(get().followedDriverIds)
-        cur.has(id) ? cur.delete(id) : cur.add(id)
+        if (cur.has(id)) cur.delete(id); else cur.add(id)
         set({ followedDriverIds: [...cur] })
       },
       toggleFollowTeam: (id) => {
         const cur = new Set(get().followedTeamIds)
-        cur.has(id) ? cur.delete(id) : cur.add(id)
+        if (cur.has(id)) cur.delete(id); else cur.add(id)
         set({ followedTeamIds: [...cur] })
       },
       setInterruptOnFollowed: (on) => set({ interruptOnFollowed: on }),

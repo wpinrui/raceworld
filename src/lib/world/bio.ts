@@ -17,11 +17,6 @@ function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function lastName(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/)
-  return parts[parts.length - 1] || fullName
-}
-
 function listJoin(items: string[]): string {
   if (items.length <= 1) return items[0] ?? ''
   if (items.length === 2) return `${items[0]} and ${items[1]}`
