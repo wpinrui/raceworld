@@ -49,11 +49,15 @@ export function initRaceState(
   // Per-race car form (#65): one roll per team this race — a pace swing for a good or bad weekend,
   // applied equally to both the team's cars. Normal(0, σ) with σ ≈ 5.19 so the quartiles land at
   // ±3.5 (0.6745·σ ≈ 3.5). Added straight to car pace for the race (replaces the narrower trackCompat).
+  // Hard-clamped at ±25 (~5 grid positions, ~4.8σ) so the otherwise-unbounded normal tail can't feed
+  // an absurd pace into lap time. It's a safety rail, not a shaper: it virtually never binds and leaves
+  // the specced distribution (quartiles ±3.5) intact.
   const CAR_FORM_SIGMA = 5.19
+  const CAR_FORM_CAP = 25
   const carForm: Record<string, number> = {}
   for (const team of teams) {
     teamAssumptions[team.id] = sampleTeamAssumptions(circuit.laps, strategyNoise)
-    carForm[team.id] = sampleNormal(0, CAR_FORM_SIGMA, Math.random)
+    carForm[team.id] = Math.max(-CAR_FORM_CAP, Math.min(CAR_FORM_CAP, sampleNormal(0, CAR_FORM_SIGMA, Math.random)))
   }
 
   // Sort by grid position
