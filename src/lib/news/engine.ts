@@ -64,8 +64,10 @@ export interface NewsContext {
   constructorHistory: ConstructorSeasonRecord[]   // prior-season records (for silly-season team media)
   endOfSeason: EndOfSeasonSummary | null
   calendar: Circuit[]
-  seasonStartCarPace?: Record<string, number>  // teamId -> carPace at round 0, for expectation anchoring (#88).
-                                   // Absent on archived contexts; season-analysis falls back to current pace.
+  seasonStartCarPace?: Record<string, number>  // teamId -> carPace at round 0. Only the first-season fallback for
+                                   // the media car projection (#88); normally projection anchors on last season's finish.
+  priorDriverMediaScores?: Record<string, number>  // driverId -> last season's end-of-year media score (#88), the
+                                   // basis for this season's driver expectation. Absent -> pace+narrative fallback.
   live: boolean                    // true = the active season from the store (full attributes available);
                                    // false = an archived season rebuilt from the DB (results only — the
                                    // attribute-dependent producers, e.g. trajectory/silly-season, stand down)

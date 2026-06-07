@@ -1,5 +1,4 @@
 import type { NewsContext } from './engine'
-import { overall } from '@/lib/sim/progression'
 
 // Season-long analysis layer (#88). One pass over the NewsContext produces the reusable facts the
 // narrative producers (season preview, championship arc, race-report coda, expectation-vs-actual,
@@ -11,17 +10,22 @@ import { overall } from '@/lib/sim/progression'
 
 export type Tier = 'front' | 'midfield' | 'backmarker'
 
-// Expectation basis (the issue leaves this to the implementer): start-of-season CAR PACE is the primary
-// signal — it dominates results and is the thing that actually shifts over a season (via upgrades) — with
-// driver overall as a secondary splitter between a team's two cars and near tier boundaries. Anchored to
-// round-0 pace when available (ctx.seasonStartCarPace), else current pace (identical at round 0).
-const DRIVER_WEIGHT = 0.3 // how much driver quality nudges the car-derived expectation (tunable; calibrate vs simmed seasons)
-const DRIVER_BASE = 78 // ~midfield-driver overall; the pivot so an average driver neither lifts nor drags the car
+// Expectation basis (#88). The MEDIA's fallible preseason view, deliberately distinct from true car pace so
+// teams/drivers can beat or miss it (that gap is the story engine):
+//   - Car projection: anchored on LAST SEASON's constructors' finish (ctx.constructorHistory). New teams
+//     project to the back; if there is no prior season at all (first year of a save), fall back to car pace.
+//   - Driver projection: LAST SEASON's media score (ctx.priorDriverMediaScores); no prior data (rookies,
+//     returnees) falls back to pace + narrative modifier — the shape media-scores.ts gives a free agent.
+// Combination is CAR-DOMINANT: the car sets the tier and base grid slot (team's projected rank, two seats
+// each, spanning the whole grid); the driver shifts that by a bounded swing in PLAIN POSITIONS — the better
+// teammate takes the better seat and a standout edges ahead of the car just above, but no driver jumps tiers.
+const DRIVER_POSITION_SWING = 4 // a ±2σ driver spans this many expected grid positions (≈ ±2 around the car's slot)
+const PACE_PIVOT = 68 // pace that reads as neutral in the no-prior-data fallback (mirrors media-scores' free-agent pace term)
 
 export interface DriverExpectation {
   driverId: string
   teamId: string
-  score: number // blended expectation score (higher = expected to finish higher)
+  score: number // combined car+driver position score (LOWER = stronger); expectedRank is this, ranked
   expectedRank: number // 1 = expected best in the drivers' table (seated drivers only)
   tier: Tier
 }
@@ -152,28 +156,59 @@ export function buildSeasonAnalysis(ctx: NewsContext): SeasonAnalysis {
   const teams = ctx.teams
   const totalTeams = teams.length || 1
 
-  // --- team expectations from start-of-season pace ---
+  // --- car projection: the media's preseason view, anchored on last season's constructors' finish ---
   const startPaceOf = (teamId: string): number =>
     ctx.seasonStartCarPace?.[teamId] ?? teams.find((t) => t.id === teamId)?.carPace ?? 0
-  const teamsByPace = [...teams].sort((a, b) => startPaceOf(b.id) - startPaceOf(a.id))
+  const hist = ctx.constructorHistory ?? []
+  let teamOrder: string[] // teamIds, best-projected first
+  if (hist.length === 0) {
+    // First season of the save — no media history to project from; fall back to raw car pace.
+    teamOrder = [...teams].sort((a, b) => startPaceOf(b.id) - startPaceOf(a.id)).map((t) => t.id)
+  } else {
+    const latestYear = Math.max(...hist.map((h) => h.seasonYear))
+    const lastSeason = hist.filter((h) => h.seasonYear === latestYear)
+    const finishByTeam = new Map(lastSeason.map((h) => [h.teamId, h.finalPosition]))
+    // Established teams in last season's finishing order; teams with no prior record (newcomers) project to
+    // the back, ordered among themselves by raw pace as a weak prior.
+    const established = teams.filter((t) => finishByTeam.has(t.id)).sort((a, b) => finishByTeam.get(a.id)! - finishByTeam.get(b.id)!)
+    const newcomers = teams.filter((t) => !finishByTeam.has(t.id)).sort((a, b) => startPaceOf(b.id) - startPaceOf(a.id))
+    teamOrder = [...established, ...newcomers].map((t) => t.id)
+  }
+  const teamRankOf = new Map(teamOrder.map((id, i) => [id, i + 1]))
   const teamExpectations = new Map<string, TeamExpectation>()
   const tiers = { front: [] as string[], midfield: [] as string[], backmarker: [] as string[] }
-  teamsByPace.forEach((t, i) => {
+  teamOrder.forEach((id, i) => {
     const rank = i + 1
     const tier = tierOf(rank, totalTeams)
-    teamExpectations.set(t.id, { teamId: t.id, startPace: startPaceOf(t.id), expectedRank: rank, tier })
-    tiers[tier].push(t.id)
+    teamExpectations.set(id, { teamId: id, startPace: startPaceOf(id), expectedRank: rank, tier })
+    tiers[tier].push(id)
   })
 
-  // --- driver expectations: car pace primary, driver overall a secondary splitter ---
-  const scored = seated.map((d) => ({
+  // --- driver projection: last season's media score, else pace + narrative modifier ---
+  const driverProj = (d: (typeof seated)[number]): number => {
+    const prior = ctx.priorDriverMediaScores?.[d.id]
+    if (prior != null) return prior
+    return (d.pace - PACE_PIVOT) * 0.8 + (d.narrativeModifier ?? 0)
+  }
+  const projByDriver = new Map(seated.map((d) => [d.id, driverProj(d)]))
+  const projVals = [...projByDriver.values()]
+  const mean = projVals.length ? projVals.reduce((s, v) => s + v, 0) / projVals.length : 0
+  const std = Math.sqrt(projVals.length ? projVals.reduce((s, v) => s + (v - mean) ** 2, 0) / projVals.length : 0)
+  // Driver shift in plain positions: a z-score clamped to ±2σ maps to ±SWING/2 places (robust to outliers and
+  // to ties, unlike min/max). Best projections lift toward the car just ahead; the car still sets the tier.
+  const driverShift = (proj: number): number => {
+    if (std === 0) return 0
+    const z = Math.max(-2, Math.min(2, (proj - mean) / std))
+    return -z * (DRIVER_POSITION_SWING / 4)
+  }
+  const combined = seated.map((d) => ({
     driverId: d.id,
     teamId: d.teamId,
-    score: startPaceOf(d.teamId) + DRIVER_WEIGHT * (overall(d) - DRIVER_BASE),
+    score: 2 * ((teamRankOf.get(d.teamId) ?? totalTeams) - 1) + driverShift(projByDriver.get(d.id)!),
   }))
-  scored.sort((a, b) => b.score - a.score)
+  combined.sort((a, b) => a.score - b.score)
   const driverExpectations = new Map<string, DriverExpectation>()
-  scored.forEach((s, i) => {
+  combined.forEach((s, i) => {
     driverExpectations.set(s.driverId, {
       driverId: s.driverId,
       teamId: s.teamId,
@@ -190,8 +225,8 @@ export function buildSeasonAnalysis(ctx: NewsContext): SeasonAnalysis {
   // --- expectation vs actual (only meaningful once racing has started) ---
   const driverActual = driverPointsAfter(ctx, completedRounds)
   const driverActualRank = new Map(driverActual.map((row, i) => [row.id, i + 1]))
-  const lastDriverRank = scored.length // unraced/not-yet-scored drivers sort to the back
-  const driverDeltas: PerfDelta[] = scored.map((s) => {
+  const lastDriverRank = combined.length // unraced/not-yet-scored drivers sort to the back
+  const driverDeltas: PerfDelta[] = combined.map((s) => {
     const expectedRank = driverExpectations.get(s.driverId)!.expectedRank
     const actualRank = driverActualRank.get(s.driverId) ?? lastDriverRank
     return { id: s.driverId, expectedRank, actualRank, delta: expectedRank - actualRank }
@@ -200,10 +235,10 @@ export function buildSeasonAnalysis(ctx: NewsContext): SeasonAnalysis {
 
   const teamActual = teamPointsAfter(ctx, completedRounds)
   const teamActualRank = new Map(teamActual.map((row, i) => [row.id, i + 1]))
-  const teamDeltas: PerfDelta[] = teamsByPace.map((t) => {
-    const expectedRank = teamExpectations.get(t.id)!.expectedRank
-    const actualRank = teamActualRank.get(t.id) ?? totalTeams
-    return { id: t.id, expectedRank, actualRank, delta: expectedRank - actualRank }
+  const teamDeltas: PerfDelta[] = teamOrder.map((id) => {
+    const expectedRank = teamExpectations.get(id)!.expectedRank
+    const actualRank = teamActualRank.get(id) ?? totalTeams
+    return { id, expectedRank, actualRank, delta: expectedRank - actualRank }
   })
   teamDeltas.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
 
