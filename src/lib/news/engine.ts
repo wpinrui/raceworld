@@ -896,6 +896,28 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       ? compose(`${seed}:wx`, { circuit: circuitName }, wx.forecastThreatenedRain ? wxCopy.dryThreatened : wxCopy.dryFlavour)
       : ''
 
+    // Win-streak / dense-stretch modifier for the dek (#88): a current run of wins is the story, so when one
+    // exists the dek leads with it ("to win his 4th race in a row", "for 6 wins in 7 races").
+    const streakDek = ((): string => {
+      const wonR = (k: number) => (ctx.raceResults[k - 1] ?? []).some((x) => x.driverId === p1.driverId && x.finishPosition === 1)
+      let streak = 0
+      for (let k = r; k >= 1 && wonR(k); k--) streak++
+      let tail = ''
+      if (streak >= 3) tail = `to win ${pronouns(ctx.drivers.find((d) => d.id === p1.driverId)?.gender).their} ${ordinal(streak)} race in a row`
+      else {
+        let best: { w: number; W: number } | null = null
+        for (let W = Math.min(r, 7); W >= 5; W--) {
+          let w = 0
+          for (let k = r - W + 1; k <= r; k++) if (wonR(k)) w++
+          if (w >= 4 && W - w <= 2 && (!best || w > best.w)) best = { w, W }
+        }
+        if (best) tail = `for ${best.w} wins in ${best.W} races`
+      }
+      if (!tail) return ''
+      const m = hasMargin ? `, finishing ${margin} clear of ${p2?.driverName ?? 'the field'},` : ''
+      return `${p1.driverName} won the ${circuitName}${m} ${tail}.`
+    })()
+
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
       headline: fill(pick([
@@ -905,7 +927,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         'Victory for {winner_last} at the {circuit_wx}', '{winner_last} moves clear after the {circuit_wx}', '{winner_last} delivers at the {circuit_wx}',
         '{team} claim the {circuit_wx} through {winner_last}', '{winner} masters the {circuit_wx}',
       ], `${seed}|h`), slots),
-      dek: fill(pick([
+      dek: streakDek || fill(pick([
         '{winner} took victory at the {circuit}, with {p2} and {p3} completing the podium.',
         ...(hasMargin ? ['{winner} won the {circuit}, finishing {margin} clear of {p2}.'] : []),
         '{winner_last} delivered a controlled drive to win the {circuit} ahead of {p2} and {p3}.',
