@@ -13,6 +13,7 @@ import { generateWeatherCurve, generateForecastCurve, getMoistureAtLap } from '.
 import { computeTyreLife, wearTyre, recommendTyre, generateCompoundDeltas, generateTyreBaseLife } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
+import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
 import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
@@ -36,6 +37,7 @@ export function initRaceState(
   qualifyingResults: QualifyingResult[],
   qualifyingSessions: QualifyingSessionResult[],
   forms: Record<string, number>,
+  year: number,
   strategyNoise: number = 0.35,
 ): RaceState {
   const weather = generateWeatherCurve(circuit.laps)
@@ -80,7 +82,7 @@ export function initRaceState(
       maxLifeLaps,
     }
 
-    const initialPlan = planStrategy(1, circuit.laps, 100, compound, driver.smoothness, teamBeliefs[team.id], weather, weatherForecast)
+    const initialPlan = planStrategy(1, circuit.laps, 100, compound, driver.smoothness, teamBeliefs[team.id], weather, weatherForecast, pitLaneLoss(year))
 
     return {
       driverId: driver.id,
@@ -108,6 +110,7 @@ export function initRaceState(
 
   return {
     circuitId: circuit.id,
+    year,
     totalLaps: circuit.laps,
     currentLap: 1,
     weather,
@@ -181,6 +184,9 @@ export function simulateLap(
 
   // Per-lap technical-failure chance for this race — flat across cars, varying only by era (issue #61).
   const techDNFPerLap = perLapTechnicalDNF(year, state.totalLaps)
+  // Era pit-lane loss + double-stack penalty (issue #101) — one source, shared with the planner below.
+  const pitLoss = pitLaneLoss(year)
+  const stackPenalty = doubleStackPenalty(year)
 
   // Track lap times this lap for gap logic
   const lapTimesThisLap = new Map<string, number>()
@@ -276,6 +282,7 @@ export function simulateLap(
       teamBeliefs[team.id],
       state.weather,
       state.weatherForecast,
+      pitLoss,
     )
     current = { ...current, targetPitLap: plan.targetPitLap, targetNextCompound: plan.targetNextCompound }
 
@@ -289,6 +296,7 @@ export function simulateLap(
       currentMoisture,
       selfField,
       field,
+      pitLoss,
     )
 
     // God mode pit overrides
@@ -306,7 +314,18 @@ export function simulateLap(
 
     if (pitDecision.shouldPit) {
       pitted = true
-      pitPenalty = 20 + Math.random() * 4
+      // Double-stack (issue #101): a teammate who already pitted THIS lap (processed earlier = ahead on
+      // track) within one pit-loss of us ties up the crew, so this, the latter car, waits extra.
+      let stackExtra = 0
+      for (const [id, st] of updatedStates) {
+        if (id === current.driverId || st.lastPitLap !== state.currentLap) continue
+        if (driverMap.get(id)?.teamId !== driver.teamId) continue
+        const myT = fieldByDriver.get(current.driverId)?.totalTime ?? 0
+        const tmT = fieldByDriver.get(id)?.totalTime ?? 0
+        if (Math.abs(myT - tmT) <= pitLoss) { stackExtra = stackPenalty; break }
+      }
+      // Era pit-lane loss + a small execution jitter (clean vs scruffy stop), plus any stacking wait.
+      pitPenalty = pitLoss + (Math.random() * 2 - 1) * 1.5 + stackExtra
       const newMaxLifeLaps = computeTyreLife(
         state.tyreBaseLife[pitDecision.targetCompound],
         driver.smoothness,

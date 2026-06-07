@@ -67,8 +67,9 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   initSession: () => {
     const { drivers, teams, selectedCircuit, forms, strategyNoise } = get()
     if (!selectedCircuit) return
+    const year = useSeasonStore.getState().year
     const { results, sessions } = runQualifying(drivers, teams, selectedCircuit, forms)
-    const raceState = initRaceState(drivers, teams, selectedCircuit, results, sessions, forms, strategyNoise)
+    const raceState = initRaceState(drivers, teams, selectedCircuit, results, sessions, forms, year, strategyNoise)
     set({ raceState })
   },
 
