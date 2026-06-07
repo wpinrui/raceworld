@@ -23,7 +23,7 @@ import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuf
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
-import { runDraft, negotiateRenewals, assessExpiringContracts, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
+import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
@@ -31,10 +31,9 @@ import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
 // Default new-game grid: the latest season composed from the historical timeline (no bespoke grid).
 const DEFAULT_GRID = composeDefaultSeason()
 // Round count is per-season (era-accurate calendars, #64): derived from the active season's year
-// where needed, never a single global. See calendarForYear().
-// Driver market in-season beats: a contract watch shortly before the window, then renewals.
-const WATCH_ROUND = 15
-const RENEWAL_ROUND = 18
+// where needed, never a single global. See calendarForYear(). The in-season driver-market beats
+// (contract watch, then renewals) are likewise placed proportionally per season via
+// marketWatchRound / marketRenewalRound.
 
 // Pre-season testing always runs at Barcelona/Catalunya.
 const TEST_CIRCUIT = calendarForYear(DEFAULT_CALENDAR_YEAR).find((c) => c.id === 'spain') ?? calendarForYear(DEFAULT_CALENDAR_YEAR)[0]
@@ -569,13 +568,15 @@ export const useSeasonStore = create<SeasonStore>()(
         // the new deal). Whoever isn't re-signed becomes a free agent in the end-of-season draft.
         let seasonRenewals = get().seasonRenewals
         let seasonContractWatch = get().seasonContractWatch
-        if (currentRound === WATCH_ROUND || currentRound === RENEWAL_ROUND) {
+        const watchRound = marketWatchRound(calendarForYear(year).length)
+        const renewalRound = marketRenewalRound(calendarForYear(year).length)
+        if (currentRound === watchRound || currentRound === renewalRound) {
           const standings = computeConstructorStandings(updatedTeams, updatedDrivers, updated)
           const rankInfo = standings.map((cs, idx) => ({ teamId: cs.teamId, points: cs.points, finalPosition: idx + 1 }))
           const mediaScores = computeDriverMediaScores(updatedDrivers, updatedTeams, updated, rankInfo, updatedTeams.length)
           const mediaMap = new Map(mediaScores.map((s) => [s.driverId, s.score]))
           const wccOrderBestFirst = standings.map((cs) => cs.teamId)
-          if (currentRound === WATCH_ROUND) {
+          if (currentRound === watchRound) {
             seasonContractWatch = assessExpiringContracts({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year })
           } else {
             const result = negotiateRenewals({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year, rng: Math.random })

@@ -28,6 +28,7 @@ import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/medi
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
+import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
 import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
 import milestoneCopy from './milestone-copy.json'
@@ -3248,13 +3249,16 @@ const VETERAN_CAREER: Record<string, string[]> = {
 }
 
 function driverToWatch(ctx: NewsContext): NewsArticle[] {
-  // Fires on a fixed 8-window schedule weighted to the season's end; like silly-season it belongs in the
+  // Fires on an 8-window schedule weighted to the season's end; like silly-season it belongs in the
   // season's permanent record (don't gate on endOfSeason or the retrospective loses the market narrative).
   if (!ctx.live) return []
   const freeAgents = ctx.drivers.filter((d) => d.teamId === '')
   if (freeAgents.length === 0 || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
-  const ROUNDS = [7, 12, 16, 19, 21, 22, 23, 24]
+  // The canonical windows are tuned to a 24-round season; scale them proportionally so a shorter season
+  // (era-accurate calendars, #64) gets the same back-loaded shape rather than dropping windows off the end.
+  const N = ctx.calendar.length
+  const ROUNDS = [...new Set([7, 12, 16, 19, 21, 22, 23, 24].map((r) => Math.max(1, Math.round((r / 24) * N))))].sort((a, b) => a - b)
   if (ctx.completedRounds < ROUNDS[0]) return out
   // Lock the slate by R7: the top free agents by market perception (driver media score), one per window,
   // each covered exactly once. The ranking is snapshotted as of R7 so the covered set never drifts as the
@@ -3681,11 +3685,11 @@ function recordNews(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-// ---- Driver-market journalism: a round-15 watch, a round-18 renewals round-up, and an off-season
+// ---- Driver-market journalism: a contract watch, a renewals round-up, and an off-season
 // retrospective. All three are fed by the store's market beats (ctx.contractWatch / renewals / draft);
 // they only run on the live context (archived seasons replay the snapshot taken when these were live).
-const WATCH_PIN_ROUND = 15    // matches the store's WATCH_ROUND
-const RENEWAL_PIN_ROUND = 18  // matches the store's RENEWAL_ROUND
+// The watch / renewal rounds are placed proportionally per season (marketWatchRound / marketRenewalRound),
+// matching the store exactly so each article's date lands on the round its mechanic actually ran.
 
 // A count of 1 against a hardcoded plural noun ("1 drivers", "1 Expiring Contracts") reads as a template
 // tell. Singularise the known market count nouns (with an optional single adjective in between) when they
@@ -3728,7 +3732,7 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   if (verdicts.length) verdicts[0] = verdicts[0].replace(/^As for /, 'For ')
   const body = paras(fill(pick(c.intro, `${seed}|intro`), hslots), ...verdicts)
   return [agreeArticle({
-    id: seed, category: 'silly_season', round: WATCH_PIN_ROUND, priority: 34,
+    id: seed, category: 'silly_season', round: marketWatchRound(ctx.calendar.length), priority: 34,
     headline: fill(pick(c.title, `${seed}|h`), hslots),
     dek: fill(pick(c.dek, `${seed}|d`), hslots),
     body,
@@ -3738,8 +3742,9 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
 // Round-18 round-up once the renewal window closes. Chunked: one sentence lists the re-signings (team +
 // length), one lists who is heading to the market.
 function renewalsFeature(ctx: NewsContext): NewsArticle[] {
-  // Fires from round 18 on (incl. the off-season archive snapshot, so it persists to archived seasons).
-  if (!ctx.live || ctx.completedRounds < RENEWAL_PIN_ROUND) return []
+  // Fires from the renewal round on (incl. the off-season archive snapshot, so it persists to archived seasons).
+  const renewalRound = marketRenewalRound(ctx.calendar.length)
+  if (!ctx.live || ctx.completedRounds < renewalRound) return []
   const renewals = ctx.renewals ?? []
   const stillExpiring = ctx.drivers.filter((d) => d.teamId !== '' && d.contractExpiresAfterSeason === ctx.year)
   if (renewals.length === 0 && stillExpiring.length === 0) return []
@@ -3756,7 +3761,7 @@ function renewalsFeature(ctx: NewsContext): NewsArticle[] {
     stillExpiring.length ? paras(fill(pick(c.expiring, `${seed}|expiring`), { ...hslots, names: expiringNames }), quoteLine(c.quote_expiring, `${seed}|q-exp`, stillExpiring[0].name)) : '',
   )
   return [agreeArticle({
-    id: seed, category: 'silly_season', round: RENEWAL_PIN_ROUND, priority: 36,
+    id: seed, category: 'silly_season', round: renewalRound, priority: 36,
     headline: fill(pick(c.title, `${seed}|h`), hslots),
     dek: fill(pick(c.dek, `${seed}|d`), hslots),
     body,
