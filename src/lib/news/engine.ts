@@ -143,6 +143,10 @@ export interface NewsArticle {
   // Always populated by generateNews (optional only so the per-producer literals stay terse):
   date?: string      // ISO 'YYYY-MM-DD' the story drops on, derived from round + category + calendar
   entities?: { driverIds: string[]; teamIds: string[]; circuitId?: string } // who/what it mentions (for name-follow + linking)
+  // True for forward-looking previews of an upcoming round (e.g. title-scenario "what X needs at race N").
+  // articleDate drops these in their round's race WEEK rather than at the category's post-race offset, so
+  // they interrupt BEFORE the round they preview instead of after it.
+  preview?: boolean
 }
 
 // Join composed paragraphs, dropping any that collapsed to empty.
@@ -1643,7 +1647,10 @@ function titleScenario(ctx: NewsContext): NewsArticle[] {
       }
     }
   }
-  return out
+  // Every title-scenario piece is a forward-looking PREVIEW of an upcoming round (driver/constructor
+  // clinch chances + the two finale deciders), so they all drop in race week — not at championship_state's
+  // post-race offset, which fired them after the very race they previewed. See articleDate.
+  return out.map((a) => ({ ...a, preview: true }))
 }
 
 // TRIGGER (gated): a tight title fight in the final third of the calendar. Emitted for the
@@ -3475,11 +3482,11 @@ function articleDate(ctx: NewsContext, a: NewsArticle): string {
   const n = ctx.calendar.length
   if (a.round <= 0) return toISODate(addDays(raceDayOf(ctx, 1), a.category === 'car_launch_livery' ? -24 : -14))
   const anchor = a.round > n ? n : a.round
-  // The title-scenario PREVIEW ("what X needs to clinch at round r", id `scenario-...`) shares the
-  // championship_state category with the post-race "champion crowned" piece, but it is a PREVIEW: it must
-  // drop in its round's race WEEK, BEFORE that race — not at the +1 post-race offset, which fired it a
-  // round late, after the very race it was previewing (same date-driven-interrupt class as #53). Reactions keep their offset.
-  const offset = a.id.startsWith('scenario-') ? -4 : (CATEGORY_DAY_OFFSET[a.category] ?? 0)
+  // Forward-looking previews (title-scenario clinch/finale pieces, `a.preview`) share the
+  // championship_state category with the post-race "champion crowned" reaction, but must drop in their
+  // round's race WEEK, BEFORE that race — not at the +1 post-race offset, which fired them a round late,
+  // after the very race they previewed (same date-driven-interrupt class as #53). Reactions keep their offset.
+  const offset = a.preview ? -4 : (CATEGORY_DAY_OFFSET[a.category] ?? 0)
   const raw = addDays(raceDayOf(ctx, anchor), offset)
   // The day offset is cosmetic intra-round ordering only — it must NOT push a story past its round's
   // NEXT race, or the date-driven Continue-loop interrupt (continue-loop.ts) fires a round or more late
