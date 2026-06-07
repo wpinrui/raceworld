@@ -25,12 +25,14 @@ deks pick from ~8–14 variants each. Net effect: the feed reads written, not st
 | `championship_state` | championship | The factual clinch + lead-change moments — driver + constructor titles, emitted at the round secured. |
 | `championship_state` | championshipArc | **Sparse, in-season (#88).** The title-fight narrative — fires only at trajectory inflections (a lead eroding/extending, a decider, a lead change), telling a comeback-on-merit apart from one handed over by leader DNFs. Absorbed the old titleFight + titleScenario. |
 | `feature` | seasonReview | **End of season (#88).** Pays off the preview: how the title was won (wire-to-wire / comeback / decider / clear), who beat or missed their projection, the best of the rest. Replaced the old `features` producer. |
+| `feature` | driverArc | **End of season (#88).** The season's individual stories (top 3) — an overachiever dragging a lesser car to podiums, a preseason pick who flopped, a fast start that deflated, a rookie beating a veteran team-mate, a rookie podium, a late-career resurgence. From the archetype classifier (`archetypes.ts`). |
 | `preview_schedule` | seasonPreview | **Round 0 (#88).** Introduces the season's protagonists across tiers (favourites, dark horses, best-of-the-rest, rookies, veterans, new teams) from the media-projection expectation model. Replaced the old pace-only preview blurb. |
 | `preview_schedule` | previews | A run-up piece for **every round** (off the standings as they stood beforehand), plus the upcoming round while live. |
 | `car_launch_livery` / `rookie_debut` | preSeason | Pre-season launches per team + youngest-driver spotlights (live only). |
 | `driver_signing` / `driver_exit` / `career_retirement` | market | End-of-season `marketMoves` / `droppedDrivers` / `retiredDriverIds`. |
 | `silly_season` | contractWatchFeature / renewalsFeature / offSeasonFeature | The free-agent market beats — contract-watch verdicts, the mid-season renewals round-up, and the end-of-season transfer recap. (The speculative rumour mill, `sillySeason`, was removed for quality, #92.) |
-| `analysis_opinion` | analysis | **At most one per round.** Every angle (teammate imbalance, form slump, form surge / hot streak, team over/under-performance) is scored for newsworthiness; subjects featured in the last few rounds take a small penalty; the single best candidate runs if it clears a bar. Trajectory angles are live-only (need car pace). |
+| `analysis_opinion` | expectationCheck | **~Twice a season (#88)** (one-third, two-thirds). Drivers and teams running above/below their PRESEASON projection — "who's cooking vs trash". Replaced the old `analysis` form-slump/surge + team-vs-car-pace angles. |
+| `analysis_opinion` | teammateBattle | **End of season (#88).** The intra-team verdicts (top 2) — one driver routing the other on equal machinery, or the more-fancied driver beaten by the other side of the garage. From the archetype classifier; replaced the old `analysis` teammate-imbalance angle. |
 
 ## Season-long narrative (#88)
 

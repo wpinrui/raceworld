@@ -1,0 +1,140 @@
+{
+  "aboveCar": {
+    "h": [
+      "{driver_last} takes {podiums} podiums in a car that never won in {year}",
+      "{podiums} podiums, zero wins: {driver_last} drags an off-pace {year} car to the front",
+      "{driver_last}'s {year}: {podiums} trips to the podium without a winning car under {them}",
+      "No win available, {podiums} podiums collected — {driver_last}'s {year} overachievement",
+      "{driver_last} outscored the machinery, banking {podiums} podiums across {year}"
+    ],
+    "d": [
+      "{driver} stood on the podium {podiums} times in {year} in a car that was never the fastest.",
+      "{podiums} podiums for {driver_last}, none a win — the {year} car could not deliver one.",
+      "The {year} machinery did not produce a victory; {driver_last} produced {podiums} podiums regardless.",
+      "{driver}'s {podiums} {year} podiums came from a car the rest of the front row had the beating of.",
+      "{driver_last} converted an uncompetitive {year} package into {podiums} podium finishes."
+    ],
+    "b": [
+      "{driver} took {podiums} podiums in {year} without a single win, in a car that gave {them} no shot at the top step. The result column flatters the machinery, not the other way around.",
+      "{podiums} podium finishes is what {driver_last} extracted from the {year} car. None became a win because the pace was never there — the driver was the difference every time.",
+      "The {year} car could not win a race; {driver_last} put it on the podium {podiums} times anyway. That gap between car and result is the season's story.",
+      "{driver_last} banked {podiums} podiums in {year} from a package that belonged a step back. Each podium was earned against quicker cars, not handed by the machinery.",
+      "Across {year}, {driver} delivered {podiums} podiums in a car that never had winning pace. The trophies sat above the machinery's level all season."
+    ]
+  },
+  "flopPick": {
+    "h": [
+      "{driver_last} finishes {year} well short of the preseason billing",
+      "The winter favoured {driver_last}; {year} did not deliver on it",
+      "{driver_last}'s {year}: a top-rated pick that fell flat",
+      "Tipped high, finished low — {driver_last}'s {year} undershoots the forecast",
+      "{driver_last} ends {year} below the level the preseason set for {them}"
+    ],
+    "d": [
+      "{driver} was a heavily backed preseason pick. The {year} season landed nowhere near it.",
+      "The winter form sheet rated {driver_last} highly; {their} {year} finished short with no single cause.",
+      "{driver_last} did not meet the {year} expectation, and there is no one failure to point to.",
+      "A strong preseason call on {driver} did not hold up across {year}.",
+      "{driver_last} closed {year} under the bar the preseason picture set, by some distance."
+    ],
+    "b": [
+      "{driver} carried real preseason expectation into {year} and did not come close to matching it. No single fault explains the shortfall — the whole season simply sat below the billing.",
+      "The winter had {driver_last} as a pick to watch. {year} undershot that across the board, without a defining mistake or failure to hang it on.",
+      "{driver_last} was rated highly before {year} and finished well below it. The gap built quietly, race by race, rather than from any one collapse.",
+      "Expectation on {driver} was high entering {year}; the return was not. There is no single cause to isolate, only a season that never reached the projected level.",
+      "{year} was meant to be a strong one for {driver_last}. It was not, and no individual round or incident accounts for it — the whole campaign fell short."
+    ]
+  },
+  "fastStart": {
+    "h": [
+      "{driver_last} opened {year} strong, then faded for the rest of the season",
+      "Early form, late drop: {driver_last}'s {year} ran out of road",
+      "{driver_last} led off {year} hard before the results dried up",
+      "A sharp start gave way to a quiet finish for {driver_last} in {year}",
+      "{driver_last}'s {year}: front-loaded, with the back end falling away"
+    ],
+    "d": [
+      "{driver} was quick through the opening third of {year}, then dropped off for the remainder.",
+      "The first stretch of {year} belonged to {driver_last}; the rest did not.",
+      "{driver_last} started {year} at the sharp end and slid back as the season wore on.",
+      "{driver}'s early {year} pace did not last — a clear decline followed the strong opening.",
+      "{driver_last} front-loaded {year}: strong out of the gate, fading from there."
+    ],
+    "b": [
+      "{driver} ran the opening third of {year} at the front, then fell away for the rest of the season. The early results carried a campaign that the back end could not sustain.",
+      "{driver_last}'s {year} peaked early. After a strong start, the form dropped off and stayed down through the closing rounds.",
+      "The first stretch of {year} flattered {driver_last}; the remainder undercut it. A bright opening gave way to a long, quiet decline.",
+      "{driver} was a factor early in {year} and a spectator late. The drop after the opening third defined the season more than the fast start did.",
+      "{driver_last} built {year} on its first third and gave most of it back over the rest. The early pace was real; it simply did not last."
+    ]
+  },
+  "rookieBeatsVet": {
+    "h": [
+      "{driver_last} outscores teammate {teammate_last} in {their} rookie {year}",
+      "Rookie {driver_last} beats {teammate_last} across {year}",
+      "{driver_last} wins the {year} intra-team count over the vet {teammate_last}",
+      "First season, higher tally: {driver_last} tops {teammate_last} in {year}",
+      "{driver_last} outpoints the experienced {teammate_last} in a debut {year}"
+    ],
+    "d": [
+      "{driver}, in {their} first season, outscored teammate {teammate} across {year}.",
+      "The rookie beat the veteran: {driver_last} finished {year} ahead of {teammate_last}.",
+      "{driver_last} took more points than the experienced {teammate_last} over the {year} season.",
+      "In the same car, debutant {driver_last} outscored {teammate_last} across {year}.",
+      "{teammate_last} had the experience; {driver_last} had the bigger {year} points haul."
+    ],
+    "b": [
+      "{driver} outscored teammate {teammate} over the full {year} season — a rookie beating an experienced hand in matched machinery. The points gap ran the wrong way for the senior driver.",
+      "In {their} debut year, {driver_last} took more points than {teammate_last} across {year}. Same car, more experience on the other side of the garage, and the rookie still came out ahead.",
+      "{teammate_last}'s experience did not translate into the points: {driver_last} outscored {teammate_last} over {year} in {their} first season. The intra-team count went to the newcomer.",
+      "{driver} finished {year} ahead of {their} veteran teammate {teammate_last} on points. For a rookie to win the teammate battle outright over a full season is the campaign's headline.",
+      "Across {year}, {driver_last} beat {teammate_last} on the scoreboard despite the experience gap pointing the other way. The rookie took the team's bigger haul."
+    ]
+  },
+  "rookieEarly": {
+    "h": [
+      "{driver_last} reaches the podium {podiums} times as a {year} rookie",
+      "Debut season, {podiums} podiums: {driver_last} arrives in {year}",
+      "{driver_last} takes {podiums} rookie podiums against expectation in {year}",
+      "{podiums} podiums in year one — {driver_last}'s {year} debut delivers early",
+      "{driver_last} cracks the podium {podiums} times in {their} first {year} season"
+    ],
+    "d": [
+      "{driver} reached the podium {podiums} times in {their} debut {year} season — not what was expected of a rookie.",
+      "{podiums} podiums for {driver_last} in {their} first year, well ahead of the {year} forecast for a newcomer.",
+      "A rookie was not meant to score like this: {driver_last} took {podiums} podiums in {year}.",
+      "{driver_last} hit the podium {podiums} times in {year}, {their} debut season, against the preseason call.",
+      "{driver}'s first season produced {podiums} podiums — above what {year} expected of a rookie."
+    ],
+    "b": [
+      "{driver} took {podiums} podiums in {year}, {their} debut season, beating the expectation set for a rookie. Newcomers are not supposed to reach the front this often, this early.",
+      "{podiums} podium finishes is a rookie return that {year} did not see coming from {driver_last}. The debut delivered results most first-year drivers do not.",
+      "{driver_last} reached the podium {podiums} times in {their} first season. For a rookie, in {year}, that is well above the bar the preseason set.",
+      "Against the forecast for a debutant, {driver} banked {podiums} podiums in {year}. The rookie tag did not hold {them} back from the front.",
+      "{driver_last}'s {year} debut produced {podiums} podiums — a tally that outran every expectation placed on a first-year driver."
+    ]
+  },
+  "lateSurge": {
+    "h": [
+      "{driver_last}, at the sharp end in {year}, got stronger as the season closed",
+      "{podiums} podiums and rising: {driver_last}'s {year} peaked late",
+      "{driver_last} ran up front all {year} and finished it hardest",
+      "Late charge from {driver_last}: {podiums} podiums and best form at the end of {year}",
+      "{driver_last} closed {year} on the up, fighting at the front to the last"
+    ],
+    "d": [
+      "{driver} contended at the front through {year} and was at {their} strongest as the season ended.",
+      "{podiums} podiums for {driver_last} in {year}, with {their} sharpest form saved for the closing rounds.",
+      "{driver_last} ran at the sharp end all {year} and built toward the finish rather than fading.",
+      "The end of {year} was {driver_last}'s best stretch — {podiums} podiums and rising form.",
+      "{driver} took {podiums} podiums in {year} and got quicker as the season ran down."
+    ],
+    "b": [
+      "{driver} spent {year} at the front and finished it stronger than {they} started, taking {podiums} podiums with {their} best form in the closing rounds. The late surge ran against the usual late-season decline.",
+      "{podiums} podiums and a campaign that peaked at the end: {driver_last} ran at the sharp end all {year} and was at {their} most dangerous as it closed.",
+      "{driver_last} contended through {year} for {podiums} podiums and saved {their} sharpest stretch for last. The form curve climbed when most expected it to fall.",
+      "Across {year}, {driver} fought at the front and got stronger late, banking {podiums} podiums. The closing rounds were the season's high point, not its wind-down.",
+      "{driver_last} took {podiums} podiums in {year} and finished the year on the up, running at the front and improving as the season ran out."
+    ]
+  }
+}

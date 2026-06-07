@@ -1,0 +1,48 @@
+{
+  "dominant": {
+    "h": [
+      "Same {team} car, different season: {winner_last} outscored {loser_last} better than two-to-one",
+      "{winner_last} took the {team} garage in {year}, leaving {loser_last} far behind",
+      "{year} inside {team}: {winner_last} comprehensively beat team-mate {loser_last}",
+      "{winner_last} doubled up on {loser_last} in identical {team} machinery",
+      "The {team} intra-team fight wasn't close — {winner_last} buried {loser_last} in {year}"
+    ],
+    "d": [
+      "{winner_last} comprehensively outscored {loser_last} across the {year} season in the same {team} car.",
+      "Identical {team} machinery, returns that weren't: {winner_last} beat {loser_last} by better than two-to-one.",
+      "{winner} took the bulk of {team}'s {year} points; {loser_last} was left with the remainder.",
+      "The {team} garage answered to {winner_last} all year — {loser_last} never got level.",
+      "{winner_last} won the {year} teammate battle at {team} comprehensively, in a car {loser} drove too."
+    ],
+    "b": [
+      "{winner} and {loser} shared the same {team} car in {year}. {winner_last} outscored the other side of the garage by better than two-to-one.",
+      "Same machinery, different season: {winner_last} comprehensively beat {loser_last} across {year}. The {team} car was identical; the returns were not.",
+      "{winner_last} took the {team} garage in {year}, outscoring team-mate {loser_last} roughly two-to-one. Nothing in the car explains the gap.",
+      "Across {year}, {winner} was the {team} driver who delivered. {loser_last} ran the same equipment and finished a distant second in the garage.",
+      "{winner_last} buried {loser_last} in {year} — better than two-to-one in identical {team} machinery. The split came from the seat, not the car."
+    ]
+  },
+  "underdeliver": {
+    "h": [
+      "{loser_last} was the bigger name at {team}; {winner_last} beat {loser_last} in {year}",
+      "Out-scored by the other car: {winner_last} got the better of {loser_last} at {team}",
+      "{year} upset inside {team}: the fancied {loser_last} lost to {winner_last}",
+      "{winner_last} beat the more-fancied {loser_last} in the same {team} car",
+      "{team} backed {loser_last}; {winner_last} out-performed {loser_last} across {year}"
+    ],
+    "d": [
+      "{loser_last} arrived the more-fancied {team} driver in {year}. {winner_last} out-performed {loser_last} in the same car.",
+      "The favoured name lost: {winner} beat team-mate {loser} across {year} in identical {team} machinery.",
+      "{loser_last} was expected to lead {team}; {winner_last} took that role across the season.",
+      "{winner_last} out-scored the better-regarded {loser_last} in {year}, both in the same {team} car.",
+      "Billing said {loser_last}; the results said {winner_last} — the other side of the {team} garage came out ahead."
+    ],
+    "b": [
+      "{loser} came into {year} as the more-fancied half of the {team} line-up. {winner_last} out-performed {loser_last} in the same car.",
+      "The favoured name was beaten by the other side of the garage: {winner_last} out-scored {loser_last} across {year}, both in identical {team} machinery.",
+      "{loser_last} was the bigger reputation at {team} in {year}. {winner_last} drove the same car and finished ahead in the teammate battle.",
+      "Expectations had {loser_last} leading {team}; {winner_last} took that position across the season. The machinery was shared — the billing was wrong.",
+      "{winner} beat the more-fancied {loser} in {year}. Same {team} car, and the result went to the side of the garage nobody picked."
+    ]
+  }
+}

@@ -18,7 +18,8 @@
 //  - silly_season     : only at three points (mid / three-quarter / penultimate round), and the
 //                       rumours are produced by actually running the market sim with a seeded
 //                       -10..+10 error on each driver's media rating.
-//  - analysis_opinion : at most one per round, the most newsworthy angle, with a recency bias.
+//  - analysis_opinion : expectation checkpoints (~twice a season, over/under preseason billing) plus the
+//                       end-of-season teammate-battle verdicts. (The old single-per-round opinion column was removed.)
 
 import type {
   Driver, Team, RaceResult, DevUpgradeEvent,
@@ -41,6 +42,10 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
+import expectationCheckCopy from './expectation-check-copy.json'
+import { driverArcs, teammateBattles } from './archetypes'
+import driverArcCopy from './driver-arc-copy.json'
+import teammateBattleCopy from './teammate-battle-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
@@ -388,57 +393,6 @@ function startingTyre(stints: RaceResult['stints']): string | null {
   return c ? (TYRE_PLURAL[c] ?? c) : null
 }
 
-// Format a run of recent finishes, grouping repeats: [30,11,30] -> "two retirements and an 11th
-// place", [6,7,7] -> "a 6th place and two 7th places". The caller adds the "in the last N races".
-// recentFinishesUpTo uses 30 as the DNF sentinel, and a real grid never reaches 30th, so >= 30
-// reliably means a retirement.
-function formatRecent(recent: number[]): string {
-  const order: number[] = []
-  const counts = new Map<number, number>()
-  for (const p of recent) { if (!counts.has(p)) order.push(p); counts.set(p, (counts.get(p) ?? 0) + 1) }
-  const numWord = ['', 'a', 'two', 'three', 'four', 'five']
-  const phrases = order.map((p) => {
-    const c = counts.get(p) ?? 1
-    const noun = p >= 30 ? 'retirement' : `${ordinal(p)} place`
-    if (c === 1) return p >= 30 ? 'a retirement' : `${/^(8|11|18)/.test(String(p)) ? 'an' : 'a'} ${noun}`
-    return `${numWord[c] ?? c} ${noun}s`
-  })
-  return listJoin(phrases)
-}
-
-// Points a driver scored across the last `x` completed rounds (ending at `round`).
-function pointsInWindow(ctx: NewsContext, driverId: string, round: number, x: number): number {
-  let p = 0
-  for (let rr = Math.max(1, round - x + 1); rr <= round; rr++) {
-    const row = (ctx.raceResults[rr - 1] ?? []).find((z) => z.driverId === driverId)
-    if (row) p += row.points
-  }
-  return p
-}
-
-// For a teammate gap, pick the recent window (3..6 races) that tells the starkest story, and
-// say whether the trailing driver is clawing back or falling further behind. Returns null if
-// there aren't enough rounds. `trend` is 'fightback' | 'widening' | 'steady'.
-function teammateTrend(ctx: NewsContext, aheadId: string, behindId: string, round: number):
-  { x: number; ra: number; rb: number; trend: 'fightback' | 'widening' | 'steady' } | null {
-  if (round < 3) return null
-  let best: { x: number; ra: number; rb: number } | null = null
-  let bestScore = -1
-  for (const x of [3, 4, 5, 6]) {
-    if (x > round) break
-    const ra = pointsInWindow(ctx, aheadId, round, x)
-    const rb = pointsInWindow(ctx, behindId, round, x)
-    // Prefer a window where the trailing driver is ahead recently (fightback, the more telling
-    // angle); otherwise the one with the starkest PER-RACE margin, so a concentrated recent
-    // stretch beats a longer window that merely accumulates a bigger raw number.
-    const score = (rb - ra >= 4 ? 1000 : 0) + Math.abs(ra - rb) / x
-    if (score > bestScore) { bestScore = score; best = { x, ra, rb } }
-  }
-  if (!best) return null
-  const diff = best.rb - best.ra
-  const trend = diff >= 4 ? 'fightback' : (best.ra - best.rb >= 4 ? 'widening' : 'steady')
-  return { x: best.x, ra: best.ra, rb: best.rb, trend }
-}
 
 // A team's finishing position last season, from the constructor history (null in year one).
 function lastSeasonPos(ctx: NewsContext, teamId: string): number | null {
@@ -2457,364 +2411,96 @@ function teamTransitions(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-interface AnalysisCandidate {
-  subject: string          // recency key (driverId or teamId)
-  score: number            // base newsworthiness (0-100ish, comparable across angles)
-  make: () => NewsArticle
+// Driver-arc retrospectives (#88): the season's individual stories — an overachiever dragging a lesser car
+// to podiums, a preseason pick who flopped, a fast start that deflated, a rookie beating a veteran teammate,
+// a rookie podium, a late-career resurgence. End-of-season, sparse (top 3 most newsworthy across the grid).
+function driverArc(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = driverArcCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return driverArcs(ctx, analysis).slice(0, 3).map((m) => {
+    const driver = dn(m.driverId)
+    const teammate = m.teammateId ? dn(m.teammateId) : ''
+    const slots = {
+      year: ctx.year, driver, driver_last: lastName(driver), podiums: m.podiums, wins: m.wins,
+      teammate, teammate_last: teammate ? lastName(teammate) : '',
+      ...pronouns(ctx.drivers.find((x) => x.id === m.driverId)?.gender),
+    }
+    const a = c[m.key]
+    const seed = `driver-arc-${ctx.year}-${m.driverId}`
+    return {
+      id: seed, category: 'feature', round: ctx.completedRounds, priority: 70,
+      headline: fill(pick(a.h, `${seed}|h`), slots),
+      dek: fill(pick(a.d, `${seed}|d`), slots),
+      body: fill(pick(a.b, `${seed}|b`), slots),
+    }
+  })
 }
 
-// Each angle's newsworthiness on a shared scale, so the most striking story wins regardless
-// of type: a runaway teammate gap, a deep slump, a hot streak, or a team off its car-pace tier.
-const teammateScore = (gap: number) => clamp(gap * 2, 0, 100)
-const slumpScore = (avg: number) => clamp((avg - 10) * 6, 0, 100)
-const surgeScore = (avg: number) => clamp((6 - avg) * 16, 0, 100)        // avg 5th -> 16, 2nd -> 64, 1st -> 80
-const trajectoryScore = (absDelta: number) => clamp(absDelta * 18, 0, 100)
+// Teammate-battle retrospectives (#88): the season's intra-team verdicts — one driver routing the other on
+// equal machinery, or the more-fancied driver being beaten by the other side of the garage. End-of-season,
+// top 2. Supersedes the analysis producer's teammate-imbalance angle.
+function teammateBattle(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = teammateBattleCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return teammateBattles(ctx, analysis).slice(0, 2).map((m) => {
+    const winner = dn(m.winnerId)
+    const loser = dn(m.loserId)
+    const slots = { year: ctx.year, winner, winner_last: lastName(winner), loser, loser_last: lastName(loser), team: teamName(ctx, m.teamId) }
+    const a = c[m.key]
+    const seed = `teammate-${ctx.year}-${m.teamId}`
+    return {
+      id: seed, category: 'analysis_opinion', round: ctx.completedRounds, priority: 35,
+      headline: fill(pick(a.h, `${seed}|h`), slots),
+      dek: fill(pick(a.d, `${seed}|d`), slots),
+      body: fill(pick(a.b, `${seed}|b`), slots),
+    }
+  })
+}
 
-// TRIGGER (opinion): AT MOST ONE analysis piece per round. Every angle (teammate imbalance,
-// form slump, form surge, team over/under-performance) is scored for newsworthiness; subjects
-// featured in the last few rounds take a small penalty so the column doesn't fixate on one
-// story; the single best candidate runs, but only if it clears a minimum bar. Rounds are
-// walked in order so the recency bias reflects what has already been published.
-function analysis(ctx: NewsContext): NewsArticle[] {
-  if (ctx.endOfSeason) return []
-  const total = ctx.teams.length
-  const THRESHOLD = 30
-  const CAP = 2          // at most this many analysis pieces about any one subject per season
-  const MATERIAL = 15    // a repeat only fires if the subject's score grew at least this much
-  const featuredAt = new Map<string, number>()
-  const featuredScore = new Map<string, number>()
-  const featuredCount = new Map<string, number>()
-  // Wider, steeper penalty than before, so a runaway story does not resurface every few rounds.
-  const recencyPenalty = (subject: string, r: number): number => {
-    const last = featuredAt.get(subject)
-    if (last == null) return 0
-    const gap = r - last
-    return gap <= 0 || gap >= 6 ? 0 : (6 - gap) * 6
-  }
-
+// Expectation-vs-actual checkpoint (#88): ~twice a season (one-third, two-thirds), who is running above or
+// below their PRESEASON projection — drivers and teams. Compares the season-analysis preseason expectation
+// (round-independent) against the actual standings AT that checkpoint round. Supersedes the analysis
+// producer's form-slump/surge and team-vs-car-pace angles. Live only (needs the expectation basis).
+function expectationCheck(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.completedRounds < 3) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const N = ctx.calendar.length
+  const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3)])].filter((k) => k >= 3)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = expectationCheckCopy
   const out: NewsArticle[] = []
-  for (let r = 3; r <= ctx.completedRounds; r++) {
-    const candidates: AnalysisCandidate[] = []
-    const stand = driverStandingsAfter(ctx, r)
-
-    // Teammate imbalance
-    const byTeam = new Map<string, SimpleStanding[]>()
-    for (const s of stand) {
-      if (s.teamId === '') continue
-      const arr = byTeam.get(s.teamId) ?? []
-      arr.push(s)
-      byTeam.set(s.teamId, arr)
-    }
-    for (const [teamId, pair] of byTeam) {
-      if (pair.length < 2) continue
-      const [a, b] = [...pair].sort((x, y) => y.points - x.points)
-      const gap = a.points - b.points
-      if (gap < 25) continue
-      const id = `tm-${ctx.year}-${r}-${teamId}`
-      const tr = teammateTrend(ctx, a.driverId, b.driverId, r)
-      const slots = { team: a.teamName, ahead: a.driverName, ahead_last: lastName(a.driverName), behind: b.driverName, behind_last: lastName(b.driverName), ap: a.points, bp: b.points, gap, round: r, win_x: tr?.x ?? 0, ra: tr?.ra ?? 0, rb: tr?.rb ?? 0 }
-      // Grounded recent-form line: the most telling window, and which way the gap is moving.
-      const trendPara = tr ? fill(pick(
-        tr.trend === 'fightback'
-          ? ['There are signs of a fightback, with {behind_last} outscoring {ahead_last} {rb} to {ra} over the last {win_x} races.', 'Recent form offers {behind_last} hope, the trailing driver beating {ahead_last} {rb} to {ra} across the last {win_x} races.']
-          : tr.trend === 'widening'
-          ? ['And it is only widening, with {ahead_last} outscoring {behind_last} {ra} to {rb} over the last {win_x} races.', 'The recent trend is grim for {behind_last}, beaten {rb} to {ra} on points over the last {win_x} races.']
-          : ['Of late the pair have been more evenly matched, {ra} against {rb} over the last {win_x} races.', 'Recent form has been closer, {ahead_last} on {ra} to {behind_last}\'s {rb} across the last {win_x} races.'],
-        `${id}|trend`), slots) : ''
-      candidates.push({
-        subject: teamId, score: teammateScore(gap),
-        make: () => ({
-          id, category: 'analysis_opinion', round: r, priority: 35,
-          headline: fill(pick([
-            '{ahead} has the upper hand at {team}', '{behind} struggling in the {team} fight',
-            'The {team} garage is becoming one-sided', '{ahead} pulling clear of {behind}',
-            'Who is number one at {team}?', '{behind} on the back foot at {team}',
-          ], `${id}|h`), slots),
-          dek: fill(pick([
-            '{ahead} leads {behind} {ap} to {bp} at {team}.', 'A {gap}-point gap inside the {team} garage.',
-            '{behind} has work to do against {ahead}.', 'The intra-team balance has tilted at {team}.',
-          ], `${id}|d`), slots),
-          body: paras(
-            compose(`${id}:p1`, slots,
-              [
-                '{ahead} leads {behind} {ap} to {bp}, a {gap}-point gap that has opened up inside the same garage.',
-                'A {gap}-point margin separates {ahead} from {behind} at {team}, the widest the intra-team gulf has been this season.',
-                '{ahead} and {behind} share a pit wall and an engineering group, yet the scoreboard shows {ahead} on {ap} against {behind_last}\'s {bp}.',
-              ],
-              [
-                'A gap of that magnitude between teammates is not noise; it reflects a consistent edge in race execution and qualifying trim.',
-                'In a points system where a single position swing is worth four points, a {gap}-point chasm represents multiple race weekends of compounded advantage.',
-                'The {gap} points do not merely represent races lost; they represent constructor points that {team} are only half-claiming from their budget.',
-              ]),
-            trendPara,
-            compose(`${id}:p2`, slots,
-              [
-                '{behind_last} needs to interrupt the current pattern before the mathematics become truly daunting.',
-                'For {behind_last}, the most damaging consequence is not the points gap itself but the internal leverage it hands to {ahead_last} when engineering resources are allocated.',
-                'A trailing teammate rarely faces pressure from outside the car alone; the data that lands on the engineer\'s desk every Sunday evening tells its own story at {team}.',
-              ],
-              [
-                'Every race weekend {behind_last} fails to close the gap, the burden of expectation compounds.',
-                'At {team} the number has now grown large enough that neutrals have stopped calling it a phase and started calling it a hierarchy.',
-                'The question for {behind_last} is whether the gap gets addressed through performance or rationalised through excuses, and the paddock is watching for which answer emerges.',
-              ]),
-            compose(`${id}:p3`, slots,
-              [
-                'From {ahead_last}\'s perspective the pattern is straightforward: translate car pace into points more efficiently than {behind_last}, round after round.',
-                '{ahead_last} has demonstrated the capacity to extract from this car what is available; the issue is that {behind_last} has not matched that benchmark.',
-                'The internal pecking order at {team} is hardening into something that will be difficult for {behind_last} to overturn without a clear step forward in raw qualifying pace.',
-              ],
-              [
-                '{behind_last} must identify whether the deficit is mechanical setup, tyre management, or racecraft, because the fix differs in each case.',
-                'A single strong weekend can shift the narrative, but {behind_last} needs a string of them to dent a gap this wide.',
-                'Until {behind_last} can outscore {ahead_last} on consecutive weekends, the gap will remain the story inside the {team} garage.',
-              ]),
-            texture(`${id}|q`, [
-              '"I am not panicking, we keep working," said {behind_last}.',
-              '"The results do not reflect the effort," {behind_last} said.',
-              '"My side of the garage will come good," said {behind_last}.',
-            ], slots, 62),
-          ),
-        }),
-      })
-    }
-
-    // Form slump (poor recent run) and form surge (hot streak)
-    for (const d of ctx.drivers.filter((x) => x.teamId !== '')) {
-      const recent = recentFinishesUpTo(ctx, d.id, r, 3)
-      if (recent.length < 3) continue
-      const avg = recent.reduce((s, x) => s + x, 0) / recent.length
-      if (avg >= 12) {
-        const id = `slump-${ctx.year}-${r}-${d.id}`
-        const veteran = (d.age ?? 25) >= 32
-        const slots = { driver: d.name, driver_last: lastName(d.name), driver_poss: poss(lastName(d.name)), team: teamName(ctx, d.teamId), round: r, recent_runs: formatRecent(recent) }
-        // Many independent low-odds texture sources (several may fire) instead of generic filler.
-        const slumpTexture = [
-          texture(`${id}|upg`, ['{team} are understood to be fast-tracking upgrades to arrest the slide.', 'The hope at {team} is that new parts can turn it around.'], slots, 16),
-          texture(`${id}|chassis`, ['There is talk of a chassis change to rule out hidden damage.', 'A back-to-basics inspection of the car is reportedly under way.'], slots, 16),
-          texture(`${id}|psych`, ['Word is {driver_last} has been leaning on a sports psychologist.'], slots, 12),
-          texture(`${id}|luck`, ['Analysts put much of the run down to plain bad luck.', 'Some pundits insist the pace is still there and the results flatter to deceive.'], slots, 18),
-          texture(`${id}|tweet`, ['A cryptic post from {driver_last} only added to the intrigue.'], slots, 12),
-          texture(`${id}|spox`, ['A {team} spokesperson insisted there is no cause for concern.', 'The team line is that it is a blip and nothing more.'], slots, 14),
-          texture(`${id}|rivals`, ['Even rivals have offered private sympathy for the run.'], slots, 10),
-          texture(`${id}|age`, veteran ? ['Some in the paddock wonder aloud whether the years are catching up.'] : [], slots, 14),
-          texture(`${id}|mood`, ['{driver_last} cut a frustrated figure in the paddock.', '{driver_last} kept the post-race media duties brief.'], slots, 14),
-        ].filter(Boolean).join(' ')
-        candidates.push({
-          subject: d.id, score: slumpScore(avg),
-          make: () => ({
-            id, category: 'analysis_opinion', round: r, priority: 30,
-            headline: fill(pick([
-              'Pressure builds on {driver}', '{driver} searching for answers', 'A worrying run for {driver}',
-              'What has gone wrong for {driver}?', '{driver} stuck in a rut', 'The slump deepens for {driver}',
-            ], `${id}|h`), slots),
-            dek: fill(pick([
-              '{driver} has slipped down the order in recent rounds.', 'Points have dried up for {driver}.',
-              'A difficult spell for the {team} driver.', 'The form guide makes grim reading for {driver}.',
-            ], `${id}|d`), slots),
-            body: paras(
-              compose(`${id}:p1`, slots,
-                [
-                  '{driver} has posted {recent_runs} in the last three races, a sequence that has dropped the {team} driver well off the scoring pace.',
-                  'The recent returns from {driver} make grim reading, {recent_runs} in the last three races with barely a point to show for it.',
-                  'The last three races have brought {recent_runs} for {driver}, a run heading firmly the wrong way.',
-                ],
-                [
-                  'That run has cost {driver_last} ground just as the rest of the field keeps banking finishes.',
-                  'Points missed in a spell like this are rarely won back, and {driver_last} can feel the order pulling away.',
-                  'Whatever the cause, {driver_last} needs to arrest the slide before it defines the season.',
-                ]),
-              compose(`${id}:p2`, slots,
-                [
-                  'The concerning aspect for {team} is that no single obvious cause has been identified publicly, which makes the reset harder to engineer.',
-                  '{driver_poss} recent finishing positions sit well below what the {team} car has shown it can do.',
-                  'For {team}, this is a compounding problem: the constructor loses points from one side of the garage at a time when development pace demands full contribution from both cars.',
-                ]),
-              slumpTexture,
-              texture(`${id}|q`, [
-                '"We stay calm and keep digging," said {driver_last}.',
-                '"It will turn, I have no doubt," {driver_last} said.',
-                '"You do not forget how to drive overnight," said {driver_last}.',
-              ], slots, 62),
-            ),
-          }),
-        })
-      } else if (avg <= 5) {
-        const id = `surge-${ctx.year}-${r}-${d.id}`
-        const slots = { driver: d.name, driver_last: lastName(d.name), driver_poss: poss(lastName(d.name)), team: teamName(ctx, d.teamId), round: r, recent_runs: formatRecent(recent) }
-        candidates.push({
-          subject: d.id, score: surgeScore(avg),
-          make: () => ({
-            id, category: 'analysis_opinion', round: r, priority: 32,
-            headline: fill(pick([
-              '{driver} is on a roll', 'Red-hot {driver} hits form', 'The {driver} surge continues',
-              '{driver} can do no wrong', 'Everything clicking for {driver}', '{driver} in unstoppable form',
-            ], `${id}|h`), slots),
-            dek: fill(pick([
-              '{driver} has strung together a run of strong results.', 'Points are flowing for {driver}.',
-              'A purple patch for the {team} driver.', '{driver} is the form pick of the grid.',
-            ], `${id}|d`), slots),
-            body: paras(
-              compose(`${id}:p1`, slots,
-                [
-                  '{driver} has delivered {recent_runs} across the last three rounds, a sequence that places {driver_last} among the outstanding performers on the current grid.',
-                  'Back-to-back excellence from {driver}: {recent_runs} in three outings, with a points haul that few rivals can match across the same window.',
-                  'The most recent three rounds read {recent_runs} for {driver}, a return that would flatter most drivers on a career-best weekend, let alone as a sustained run.',
-                ],
-                [
-                  'That sequence has lifted {driver_last} meaningfully up the standings and shifted the conversation about where {driver_last} genuinely sits in the championship picture.',
-                  'Three consecutive high finishes compound in the standings in ways that single strong races do not; {driver_last} has effectively banked a championship buffer during this run.',
-                  'The arithmetic of {recent_runs} means {driver_last} has extracted maximum value from machinery that not every driver on the grid is using as effectively.',
-                ]),
-              compose(`${id}:p2`, slots,
-                [
-                  '{driver_last} is at a stage of form where car reads are sharp, tyre decisions are costing less and race management leaves rivals short of opportunity.',
-                  'A driver operating at this level tends to create pressure that compounds: rivals start making the mistakes {driver_last} is currently avoiding.',
-                  'The data underneath the results suggests {driver_last} is not riding fortune; the consistency of execution across different circuits and conditions points to a driver in control of the process.',
-                ],
-                [
-                  'The question every rival strategist is wrestling with is where the vulnerability lies, because on the evidence of {recent_runs} there is no obvious one to exploit.',
-                  'Sustaining a run like this demands that {driver_last} avoids the trap of overdriving; the finishes so far suggest a driver who understands the difference between fast and reckless.',
-                  'The most dangerous form in racing is the kind built on reliability rather than luck, and {driver_last}\'s recent run has that quality.',
-                ]),
-              compose(`${id}:p3`, slots,
-                [
-                  '{team} are pulling more points from the constructors\' pot than their car\'s pace tier would ordinarily suggest, and {driver_last}\'s run is the primary reason.',
-                  'The championship standings now reflect a driver that rivals can no longer treat as a secondary threat; {driver_last} has earned the front-of-mind respect that comes with results.',
-                  'At a point in the season when the standings crystallise around the consistent performers, {driver_last} has made a compelling case for inclusion in that group.',
-                ],
-                [
-                  'Whether {driver_last} can extend it beyond three rounds will determine whether this reads as a hot patch or the moment {driver_last} genuinely entered title contention.',
-                  'The next test is a circuit that may not suit {driver_poss} natural strengths, and how {driver_last} adapts will say something about the depth of this form.',
-                  'Opponents have noted the run and will arrive at the next round with specific game plans; {driver_last} will need to show the surge was built on more than circumstance.',
-                ]),
-              texture(`${id}|q`, [
-                '"Everything is just clicking right now," said {driver_last}.',
-                '"I feel completely at one with the car," {driver_last} said.',
-                '"Long may it continue," said {driver_last} with a grin.',
-              ], slots, 62),
-            ),
-          }),
-        })
-      }
-    }
-
-    // Team trajectory vs car pace (live only — needs real car pace)
-    if (ctx.live) {
-      const cstand = constructorStandingsAfter(ctx, r)
-      cstand.forEach((cs, idx) => {
-        const standingPos = idx + 1
-        const pace = paceRank(ctx, cs.teamId)
-        const delta = pace - standingPos // positive = punching above car pace
-        if (Math.abs(delta) < 2) return
-        const id = `traj-${ctx.year}-${r}-${cs.teamId}`
-        const slots = { team: cs.teamName, team_poss: poss(cs.teamName), pos: ordinal(standingPos), tier: tierWord(pace, total), round: r }
-        const over = delta > 0
-        candidates.push({
-          subject: cs.teamId, score: trajectoryScore(Math.abs(delta)),
-          make: () => ({
-            id, category: 'analysis_opinion', round: r, priority: 28,
-            headline: fill(pick(over
-              ? ['{team} are punching above their weight', 'Overachieving {team} defy the form book', 'How are {team} doing it?', '{team} the overperformers of the season', '{team} keep outdoing themselves']
-              : ['{team} underdelivering on their potential', 'Has {team} hit a ceiling?', '{team} leaving points on the table', 'Underwhelming {team} fall short', 'Where are the points, {team}?'],
-              `${id}|h`), slots),
-            dek: fill(pick(over
-              ? ['{team} sit {pos} despite a {tier} car.', '{team} are outscoring their machinery.', '{team} are running {pos}, well above where a {tier} car belongs.']
-              : ['{team} sit only {pos} with a {tier} car.', '{team} are not making their pace count.', 'A {tier} car has returned only {pos} for {team}, well short of what it should.'],
-              `${id}|d`), slots),
-            body: over
-              ? paras(
-                  compose(`${id}:p1`, slots,
-                    [
-                      '{team} are {pos} in the constructors\' standings with a car that independent pace data brackets as {tier}, a gap between performance and position that does not close by accident.',
-                      'Park the {team} car alongside the competition on raw lap time and you get a {tier} machine; park their results next to the same competition and you see a {pos}-place team.',
-                      'The {tier} label on {team_poss} machinery sits oddly against a {pos}-place constructors\' position that {tier} cars have no business occupying.',
-                    ],
-                    [
-                      'The delta between their car\'s objective pace tier and their actual championship position is wide enough to constitute a sustainable competitive advantage in its own right.',
-                      'Qualifying well, managing tyres efficiently and converting safety-car windows into net gains adds up, and {team} have done all three more consistently than {tier} teams tend to.',
-                      '{team} have demonstrated over multiple rounds that the gap between {tier} car pace and {pos} place in the standings is bridgeable through clean execution.',
-                    ]),
-                  compose(`${id}:p2`, slots,
-                    [
-                      'The operational margin they have built comes from decisions rather than horsepower: strategy calls that come early, pit stops that are completed cleanly, and pitstop windows that are not given back through traffic.',
-                      'Teams with superior car pace have outpaced {team} on individual lap times this season and still left fewer points on the board, which tells you everything about where the constructors\' championship is actually decided.',
-                      'The structural advantage {team} holds has nothing to do with the wind tunnel; it is built in the timing stand, the pit lane, and in drivers who execute rather than spectate.',
-                    ],
-                    [
-                      'The risk that this creates for {team} is one of expectation management: as development cycles tighten, the teams with better cars will close the gap, and the execution margin may not prove sufficient.',
-                      'Their rivals are not blind to the overperformance; the teams with faster cars will prioritise closing this gap operationally in the second half of the season.',
-                      'Sustaining {pos} into the latter stages of the constructors\' fight requires {team} to keep an error rate near zero while rivals are permitted to catch up on outright pace.',
-                    ]),
-                  compose(`${id}:p3`, slots,
-                    [
-                      'If {team} hold {pos} into the final rounds, the conversation will shift from overperformance to simply performance, and that is a significant rebranding of what this team represents.',
-                      'The constructors\' position they currently hold controls trackside resources, prize money distributions, and facility investment in ways that compound season over season.',
-                      'Every additional race {team} spend {pos} tightens the financial and reputational case for a development cycle that could eventually make the raw car match the standing.',
-                    ],
-                    [
-                      'The pressure on {team} is now to not merely hold the position but justify it when rivals arrive with mid-season development that narrows the gap on paper.',
-                      'Staying ahead of teams with faster cars is the hardest thing to sustain over a full season; the question is whether {team_poss} operational edge is sufficient to answer that.',
-                      '{team} have earned the right to be where they are on merit, and the only honest test of that is whether they can still say the same at the final round.',
-                    ]),
-                )
-              : paras(
-                  compose(`${id}:p1`, slots,
-                    [
-                      '{team} have the raw material of a {tier} car and only {pos} in the constructors\' standings to show for it, a conversion rate the rest of the paddock will note with interest.',
-                      'By pace metrics, {team} operate a {tier} machine; by the actual results column, they sit {pos}, a position no {tier} car should occupy at this stage of the campaign.',
-                      'The gap between {team_poss} car pace and their constructors\' position is measurable and widening: a {tier} package deserves more than {pos} on current evidence.',
-                    ],
-                    [
-                      'The squandered pace is not a marginal figure; it translates directly into prize-fund distribution, circuit leverage and the development runway that determines where the team sits in twelve months.',
-                      'Formula 1 rewards pace on lap-time sheets and results on the scoreboard; {team} are proving that the two are not the same thing, to their own significant cost.',
-                      'A {tier} car earning {pos} constructors\' points means the engineering, manufacturing and driver budgets are not returning what they should, a problem that compounds with every missed weekend.',
-                    ]),
-                  compose(`${id}:p2`, slots,
-                    [
-                      'The deficit is operational: pit stop timing, undercut calls, double-stacking decisions, and the management of safety-car periods have collectively cost {team} finishing positions their car\'s pace had already secured.',
-                      'Analysis of their race losses points to a pattern of avoidable error rather than pace deficit; the car arrives at the race able to score better and leaves having not done so.',
-                      '{team_poss} car pace means they enter most race weekends as a higher-points threat than their tally reflects; the conversion failure is a process and decision-making problem, not a technical one.',
-                    ],
-                    [
-                      'The gap between what their car can score and what it is scoring represents a quantifiable management failure that the {team} leadership is now under public pressure to address.',
-                      'Other teams in the {tier} bracket are outscoring {team} on equivalent or worse machinery, which removes the car as a credible explanation for the deficit.',
-                      'Execution under pressure is a learnable skill, but {team} have not yet shown they have learned it at the rate the {pos}-place standing demands.',
-                    ]),
-                  compose(`${id}:p3`, slots,
-                    [
-                      'The longer {team} sit {pos} with a car capable of better, the harder it becomes to recruit, retain, and motivate the personnel who know exactly what the car should be scoring.',
-                      'A {tier} car trapped {pos} in the standings is a resource allocation problem as much as a sporting one: the prize money differential between {pos} and where the car belongs is not trivial.',
-                      'The cost of squandering {tier} pace is not just the points not scored today; it is the development budget difference next season that those points would have bought.',
-                    ],
-                    [
-                      'What {team} need is not a new car but a new discipline around the decisions that convert fast machinery into actual championship points.',
-                      'A clear operational review, specific accountability for the decisions that cost positions, and a measurable standard for execution are the minimum requirement for closing the gap between where they are and where their car says they should be.',
-                      'The second half of the season is short enough that every remaining race must be treated as a recovery opportunity, which leaves {team} no margin for the kind of operational errors that defined the first.',
-                    ]),
-                ),
-          }),
-        })
-      })
-    }
-
-    // A subject already covered may only resurface if it is below the season cap AND its score
-    // has grown materially since last time — otherwise it is "the same story again".
-    const eligible = candidates.filter((c) => {
-      const count = featuredCount.get(c.subject) ?? 0
-      if (count === 0) return true
-      if (count >= CAP) return false
-      return c.score - (featuredScore.get(c.subject) ?? 0) >= MATERIAL
+  for (const K of checkpoints) {
+    if (K > ctx.completedRounds) continue
+    const dStand = driverStandingsAfter(ctx, K)
+    const dRank = new Map(dStand.map((s, i) => [s.driverId, i + 1]))
+    // Only judge drivers who have actually raced by K — a seated mid-season joiner absent from the
+    // standings isn't "under-performing", they simply weren't on the grid yet.
+    const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, delta: e.expectedRank - dRank.get(e.driverId)! }))
+    const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
+    const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
+    const cStand = constructorStandingsAfter(ctx, K)
+    const cRank = new Map(cStand.map((s, i) => [s.teamId, i + 1]))
+    const tDelta = [...analysis.teamExpectations.values()].filter((e) => cRank.has(e.teamId)).map((e) => ({ id: e.teamId, delta: e.expectedRank - cRank.get(e.teamId)! }))
+    const tOver = tDelta.filter((x) => x.delta >= 2).sort((a, b) => b.delta - a.delta)[0]?.id
+    const tUnder = tDelta.filter((x) => x.delta <= -2).sort((a, b) => a.delta - b.delta)[0]?.id
+    if (!dOver.length && !dUnder.length && !tOver && !tUnder) continue // nothing notable this checkpoint
+    const seed = `expectation-${ctx.year}-${K}`
+    const slots = { year: ctx.year, round: K }
+    const sections: string[] = []
+    if (dOver.length) sections.push(fill(pick(c.driversOver, `${seed}|do`), { ...slots, names: listJoin(dOver.map(dn)) }))
+    if (dUnder.length) sections.push(fill(pick(c.driversUnder, `${seed}|du`), { ...slots, names: listJoin(dUnder.map(dn)) }))
+    if (tOver) sections.push(fill(pick(c.teamsOver, `${seed}|to`), { ...slots, team: teamName(ctx, tOver) }))
+    if (tUnder) sections.push(fill(pick(c.teamsUnder, `${seed}|tu`), { ...slots, team: teamName(ctx, tUnder) }))
+    out.push({
+      id: seed, category: 'analysis_opinion', round: K, priority: 33,
+      headline: fill(pick(c.headline, `${seed}|h`), slots),
+      dek: fill(pick(c.dek, `${seed}|d`), slots),
+      body: paras(fill(pick(c.intro, `${seed}|intro`), slots), ...sections),
     })
-    if (eligible.length === 0) continue
-    const best = eligible
-      .map((c) => ({ c, adj: c.score - recencyPenalty(c.subject, r) }))
-      .sort((x, y) => y.adj - x.adj || x.c.subject.localeCompare(y.c.subject))[0]
-    if (best.adj < THRESHOLD) continue
-    out.push(best.c.make())
-    featuredAt.set(best.c.subject, r)
-    featuredScore.set(best.c.subject, best.c.score)
-    featuredCount.set(best.c.subject, (featuredCount.get(best.c.subject) ?? 0) + 1)
   }
   return out
 }
@@ -3486,7 +3172,9 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...championship(ctx),
     ...championshipArc(ctx),
     ...seasonReview(ctx),
-    ...analysis(ctx),
+    ...driverArc(ctx),
+    ...teammateBattle(ctx),
+    ...expectationCheck(ctx),
     ...previews(ctx),
     ...market(ctx),
     ...teamTransitions(ctx),
