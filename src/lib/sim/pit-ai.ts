@@ -1,5 +1,5 @@
 import type { TyreCompound, WeatherPoint } from './types'
-import { tyreStepsOutOfWindow } from './tyres'
+import { tyreStepsOutOfWindow, recommendTyre } from './tyres'
 import { DEFAULT_COMPOUND_DELTAS, DEFAULT_TYRE_LIFE } from './tyres'
 import { forecastMoistureAtLap } from './weather'
 
@@ -24,7 +24,7 @@ export interface PitDecision {
   targetCompound: TyreCompound
 }
 
-const WEAR_PENALTY = 0.1 / 8 // seconds per 1% condition lost (matches engine lap-time model)
+const WEAR_PENALTY = 0.1 / 4 // seconds per 1% condition lost (matches engine lap-time model)
 const CLIFF_PENALTY = 5 // extra seconds/lap once a tyre is dead
 const PIT_COST = 22 // seconds lost in the pit lane
 const MOISTURE_PENALTY = 15 // seconds/lap per step the compound is out of its moisture window (engine)
@@ -35,15 +35,18 @@ const ALL_COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate',
 // In-window execution thresholds (sim-and-tune).
 const UNDERCUT_GAP = 2.5 // a car this close ahead is undercuttable
 const CLEAR_AIR_GAP = 2.0 // rejoin counts as clean if the nearest car ahead is at least this far
+const TARGET_PIT_PCT = 14 // aim to pit at ~this projected condition (lands in the 10-15% band)
+const UNDERCUT_EARLY_PCT = 4 // may pit this much earlier (higher condition) to undercut a rival
+const CLEAR_AIR_GRACE_PCT = 5 // with no clear air, pit by (TARGET − this) rather than ride to the cliff
 const WINDOW_MAX = 8 // widest half-window (laps) when the team is most uncertain
 
 // --- condition buckets ------------------------------------------------------------------------
-// The pit wall reads live condition only to a 15-wide bucket (0-15,…,75-90,90-100); it never knows
-// finer. We hand the optimiser the bucket midpoint.
+// The pit wall reads live condition only to a coarse 25-wide bucket (0-25, 25-50, 50-75, 75-100); it
+// never knows finer. We hand the optimiser the bucket midpoint.
 export function bucketCondition(cond: number): number {
   const c = Math.max(0, Math.min(100, cond))
-  if (c >= 90) return 95
-  return Math.floor(c / 15) * 15 + 7.5
+  if (c >= 75) return 87.5
+  return Math.floor(c / 25) * 25 + 12.5
 }
 
 // --- belief model -----------------------------------------------------------------------------
@@ -77,7 +80,7 @@ export function initTeamBelief(totalLaps: number): TeamBelief {
 // Fold one car's lap into the team belief. Wear is inferred from the (bucketed) condition seen so far
 // this stint, normalised by the driver's own smoothness to recover the driver-independent base rate;
 // pace converges toward the race's true delta the longer the compound is run. Returns a new belief.
-const FRESH_BUCKET = 95 // a fresh tyre (100%) reads as this bucket midpoint
+const FRESH_BUCKET = 87.5 // a fresh tyre (100%) reads as this bucket midpoint
 
 export function observeTyre(
   belief: TeamBelief,
@@ -99,7 +102,7 @@ export function observeTyre(
   let wearObs = cb.wearObs
   if (stintLap >= 2 && bucketedCondition < FRESH_BUCKET) {
     const smoothMult = 0.5 + smoothness / 100
-    const observedBaseRate = Math.max(0.1, ((FRESH_BUCKET - bucketedCondition) / stintLap) / smoothMult)
+    const observedBaseRate = Math.max(0.1, ((100 - bucketedCondition) / stintLap) / smoothMult)
     wearObs = Math.min(cb.wearObs + 1, 40)
     baseWearRate = (cb.baseWearRate * cb.wearObs + observedBaseRate) / (cb.wearObs + 1)
   }
@@ -195,7 +198,18 @@ export function planStrategy(
   const midMoisture = projMoisture[Math.floor(projMoisture.length / 2)] ?? 0
   const candidates = sensibleCompounds(midMoisture)
 
-  let bestCost = stintCost(lapsRemaining, currentLap, currentCompound, bucketedCondition, belief, smoothness, currentLap, projMoisture)
+  // Best compound to fit if we had to pit now for the rest of the race — the forced/late-stop choice.
+  let forcedC: TyreCompound = currentCompound
+  let forcedCost = Infinity
+  for (const c of candidates) {
+    const cost = stintCost(lapsRemaining, currentLap, c, 100, belief, smoothness, currentLap, projMoisture)
+    if (cost < forcedCost) { forcedCost = cost; forcedC = c }
+  }
+  // 0-stop is only on the table if the current tyre would actually reach the flag above the cliff —
+  // otherwise riding it to the end just earns a forced cliff stop anyway.
+  const wearRate = belief[currentCompound].baseWearRate * (0.5 + smoothness / 100)
+  const zeroStopViable = bucketedCondition - wearRate * lapsRemaining > REAL_CLIFF_BUFFER
+  let bestCost = zeroStopViable ? stintCost(lapsRemaining, currentLap, currentCompound, bucketedCondition, belief, smoothness, currentLap, projMoisture) : Infinity
   let bestP1: number | null = null
   let bestC2: TyreCompound = currentCompound
   let bestP2: number | null = null
@@ -252,26 +266,25 @@ export function planStrategy(
     if (windowEnd < windowStart) windowEnd = windowStart
   }
 
-  return { targetPitLap: bestP1, targetNextCompound: bestC2, windowStart, windowEnd, stints }
+  return { targetPitLap: bestP1, targetNextCompound: bestP1 !== null ? bestC2 : forcedC, windowStart, windowEnd, stints }
 }
 
 // --- execution --------------------------------------------------------------------------------
 export interface FieldCar {
   driverId: string
   position: number
-  gapToLeader: number // cumulative seconds behind the leader at the start of the lap
-  gapToCarAhead: number
-  condition: number // REAL condition (for the freshness comparison; the team sees its rival's tyres)
+  totalTime: number // cumulative race time (s) — for the rejoin projection
+  condition: number // REAL condition (the team can see a rival's tyre age)
   retired: boolean
 }
 
-// Decide whether to box THIS lap. Forced by the real cliff, the window's end, or being on a badly
-// wrong tyre for the actual conditions. Otherwise a voluntary stop needs clear air on rejoin; an
-// undercut opportunity lets it come early, else it waits until at/after the believed-optimal lap.
+// Decide whether to box THIS lap. Forced by a badly wrong tyre for the conditions or the real cliff.
+// Otherwise the car aims to pit at ~TARGET_PIT_PCT projected condition (which lands ~10-15% real),
+// PREFERRING clear air on rejoin (a preference, not a veto) and taking an undercut when one is on.
 export function decidePit(
   plan: StrategyPlan,
   realCondition: number,
-  currentLap: number,
+  projectedCond: number,
   currentCompound: TyreCompound,
   currentMoisture: number,
   self: FieldCar,
@@ -279,36 +292,34 @@ export function decidePit(
 ): PitDecision {
   const target = plan.targetNextCompound
 
-  // Forced: caught on a badly wrong tyre for the actual weather (e.g. slicks in a downpour).
-  if (tyreStepsOutOfWindow(currentCompound, currentMoisture) >= 2) return { shouldPit: true, targetCompound: target }
+  // Forced: wrong tyre for the actual weather — fit what suits NOW (not the strategy's mid-race pick,
+  // which may be dry if the shower passes, else we'd pit straight back).
+  if (tyreStepsOutOfWindow(currentCompound, currentMoisture) >= 2) return { shouldPit: true, targetCompound: recommendTyre(currentMoisture) }
   // Forced: real tyre about to fall off the cliff.
   if (realCondition <= REAL_CLIFF_BUFFER) return { shouldPit: true, targetCompound: target }
+  // Optimiser plans no stop (the current tyre reaches the flag above the cliff) — sit out.
+  if (plan.targetPitLap === null) return { shouldPit: false, targetCompound: target }
 
-  if (plan.targetPitLap === null || plan.windowStart === null || plan.windowEnd === null) {
-    return { shouldPit: false, targetCompound: target }
-  }
-
-  // Forced: window closing.
-  if (currentLap >= plan.windowEnd) return { shouldPit: true, targetCompound: target }
-  // Not in the window yet.
-  if (currentLap < plan.windowStart) return { shouldPit: false, targetCompound: target }
-
-  // Voluntary stops need clear air on rejoin.
-  const rejoinGap = self.gapToLeader + PIT_COST
-  let nearestAhead = -Infinity
+  // Real rejoin projection: slot the car back in by race time (its totalTime + the pit loss) and read
+  // the gap to whoever it would come out behind.
+  const rejoinTime = self.totalTime + PIT_COST
+  let aheadTime = -Infinity
   for (const c of field) {
     if (c.driverId === self.driverId || c.retired) continue
-    if (c.gapToLeader < rejoinGap && c.gapToLeader > nearestAhead) nearestAhead = c.gapToLeader
+    if (c.totalTime <= rejoinTime && c.totalTime > aheadTime) aheadTime = c.totalTime
   }
-  const clearAir = nearestAhead === -Infinity || rejoinGap - nearestAhead >= CLEAR_AIR_GAP
-  if (!clearAir) return { shouldPit: false, targetCompound: target }
+  const clearAir = aheadTime === -Infinity || rejoinTime - aheadTime >= CLEAR_AIR_GAP
 
-  // Undercut: a beatable car directly ahead lets us pit before the optimal lap.
+  // Undercut: tyre worn enough, a beatable car directly ahead (close in race time, on tyres no fresher),
+  // and a clean rejoin → pit early to jump it.
   const carAhead = field.find((c) => c.position === self.position - 1 && !c.retired)
-  const undercut = !!carAhead && self.gapToCarAhead <= UNDERCUT_GAP && carAhead.condition <= self.condition + 5
-  if (undercut) return { shouldPit: true, targetCompound: target }
+  const gapAhead = carAhead ? self.totalTime - carAhead.totalTime : Infinity
+  const beatable = !!carAhead && gapAhead <= UNDERCUT_GAP && carAhead.condition <= self.condition + 5
+  if (beatable && clearAir && projectedCond <= TARGET_PIT_PCT + UNDERCUT_EARLY_PCT) return { shouldPit: true, targetCompound: target }
 
-  // Otherwise pit once we're at/after the believed-optimal lap and have clear air.
-  if (currentLap >= plan.targetPitLap) return { shouldPit: true, targetCompound: target }
+  // Normal stop: aim for ~TARGET_PIT_PCT projected. Clear air is a PREFERENCE, not a veto — with none,
+  // pit a little past target rather than ride to the cliff.
+  if (projectedCond <= TARGET_PIT_PCT && clearAir) return { shouldPit: true, targetCompound: target }
+  if (projectedCond <= TARGET_PIT_PCT - CLEAR_AIR_GRACE_PCT) return { shouldPit: true, targetCompound: target }
   return { shouldPit: false, targetCompound: target }
 }

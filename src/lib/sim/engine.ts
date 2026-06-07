@@ -54,8 +54,8 @@ export function computeLapTime(input: LapInput): LapResult {
   // 5. driverMod
   const driverMod = -((effectiveStat - 75) / 5) * 0.1
 
-  // 6. tyreWearMod
-  const tyreWearMod = ((100 - tyre.condition) / 8) * 0.1
+  // 6. tyreWearMod — every 4% of wear adds 0.1s/lap (fresh tyres matter; #pit-strategy)
+  const tyreWearMod = ((100 - tyre.condition) / 4) * 0.1
 
   // 7. tyreCliff
   const tyreCliff = tyre.condition <= 0 ? 5.0 : 0

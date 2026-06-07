@@ -30,14 +30,24 @@ export function generateTyreBaseLife(): Record<TyreCompound, number> {
   }
 }
 
-// Tyre life in laps for a per-race base-life fraction and a driver's smoothness (0.5x at 0, 1.5x at 100).
+// Tyre life in laps for a per-race base-life fraction and a driver's smoothness (0.5x at 0, 1.5x at 100),
+// plus a per-SET "good set / duff set" modifier rolled once per fitting — so the exact life of THIS set
+// varies around the race's base life. Teams learn the average, never this set, so the cliff is a gamble.
 export function computeTyreLife(baseLifeFraction: number, smoothness: number, totalLaps: number): number {
   const smoothnessMultiplier = 0.5 + smoothness / 100
-  return Math.max(1, Math.round(baseLifeFraction * totalLaps * smoothnessMultiplier))
+  const setModifier = Math.max(0.8, Math.min(1.2, sampleNormal(1, 0.08, Math.random)))
+  return Math.max(1, Math.round(baseLifeFraction * totalLaps * smoothnessMultiplier * setModifier))
 }
 
 export function degradeTyre(tyre: TyreState): number {
   return Math.max(0, Math.round(tyre.condition - 100 / tyre.maxLifeLaps))
+}
+
+// Actual per-lap wear: the baseline drop jittered ±30% so the real condition path is noisy and the
+// exact cliff lap can't be predicted. degradeTyre stays the deterministic preview for the UI.
+export function wearTyre(tyre: TyreState): number {
+  const baseline = 100 / tyre.maxLifeLaps
+  return Math.max(0, Math.round(tyre.condition - baseline * (0.7 + Math.random() * 0.6)))
 }
 
 export function tyreStepsOutOfWindow(compound: TyreCompound, moisture: number): number {
