@@ -1,21 +1,21 @@
 {
   "newTeamDebut": {
     "h": [
-      "{team} closes out a {year} debut at the back — slow, but finishing",
-      "A first season for {team}: last on pace in {year}, but seeing the flag",
+      "{team} closes out a {year} debut at the back, slow but finishing",
+      "A first season for {team}, last on pace in {year} but seeing the flag",
       "{team} endures a rookie {year} campaign at the rear of the grid",
-      "Debut year for {team} in {year}: off the pace, races completed",
-      "{team} learns the trade in {year} — back of the grid, but reliable"
+      "Debut year for {team} in {year}, off the pace but races completed",
+      "{team} learns the trade in {year}, back of the grid but reliable"
     ],
     "d": [
-      "{team} endured a debut season at the back of the grid in {year} — slow, but completing races.",
+      "{team} endured a debut season at the back of the grid in {year}, slow but completing races.",
       "A first campaign for {team} brought no pace in {year}, but the cars kept reaching the flag.",
       "{team} ran {year} at the rear of the field, the debut year defined by finishes rather than results.",
       "Off the pace through {year}, {team} still saw the chequered flag in a steady debut season.",
       "{team} spent a rookie {year} at the back of the grid, trading speed for reliability."
     ],
     "b": [
-      "{team} endured a debut season at the back of the grid in {year} — slow, but completing races. A first year on the grid is measured in finishes, not lap times.",
+      "{team} endured a debut season at the back of the grid in {year}, slow but completing races. A first year on the grid is measured in finishes, not lap times.",
       "A first campaign for {team} unfolded at the rear of the field in {year}. The pace never came, but the cars kept reaching the flag through a long learning year.",
       "{team} ran {year} as the slowest team on the grid, yet brought the cars home race after race. For a debutant, reliability counts as progress.",
       "Off the pace all {year}, {team} still completed races in a debut season at the back. The foundations matter more than the timing screens in a first year.",
@@ -24,21 +24,21 @@
   },
   "pointsAgainstOdds": {
     "h": [
-      "{team} beats the odds in {year} — {points} points from the back of the grid",
+      "{team} beats the odds in {year}, {points} points from the back of the grid",
       "{points} points for tail-ender {team} in {year}, against every expectation",
       "{team} drags {points} points out of a {year} backmarker campaign",
-      "Against the odds: {team} banks {points} points in {year}",
+      "Against the odds, {team} banks {points} points in {year}",
       "{team} defies the grid order for {points} points in {year}"
     ],
     "d": [
-      "{team}, a tail-ender all {year}, scored against the odds — {points} points from the back of the grid.",
+      "{team}, a tail-ender all {year}, scored against the odds, {points} points from the back of the grid.",
       "Few expected anything from {team} in {year}, yet the season brought {points} points.",
       "{team} turned a backmarker {year} into {points} points, a haul well beyond the car's pace.",
       "From the rear of the field, {team} banked {points} points across {year} against the odds.",
       "{team} punched above the grid order in {year}, scoring {points} points as a tail-ender."
     ],
     "b": [
-      "{team} ran at the back all {year}, yet scored against the odds — {points} points from a car that had no business near the order. Every one was earned the hard way.",
+      "{team} ran at the back all {year}, yet scored against the odds, {points} points from a car that had no business near the order. Every one was earned the hard way.",
       "Few expected {team} to trouble the scorers in {year}. The season delivered {points} points, a haul that outran the car's pace and the grid order alike.",
       "{team} turned a backmarker {year} into {points} points. For a tail-ender, that return reads as a season's worth of opportunism converted.",
       "From the rear of the field, {team} banked {points} points across {year} against the odds. Each finish in the points came against far quicker machinery.",
@@ -48,7 +48,7 @@
   "lastPlaceBattle": {
     "h": [
       "{team} edges {other} to escape last in {year}, by {gap} points",
-      "{gap} points decide the {year} wooden-spoon fight: {team} ahead of {other}",
+      "{gap} points decide the {year} wooden-spoon fight, {team} ahead of {other}",
       "{team} avoids last place in {year}, pipping {other} by {gap}",
       "Bottom-of-the-grid scrap goes to {team} over {other} by {gap}",
       "{team} stays off the foot of the {year} table, {gap} points clear of {other}"

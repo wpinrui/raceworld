@@ -1,9 +1,9 @@
 {
   "headline": [
-    "{year} form check after {round} rounds: who is beating the preseason billing",
+    "{year} form check after {round} rounds against the preseason billing",
     "{round} rounds in, the {year} grid sorted against its winter form guide",
-    "{year} at the {round}-round mark: running above and below preseason projection",
-    "Preseason expectation vs reality: the {year} grid after {round} rounds",
+    "The {year} grid above and below preseason projection after {round} rounds",
+    "Preseason expectation vs reality across the {year} grid after {round} rounds",
     "{round} rounds of {year}, measured against where the form guide placed each driver"
   ],
   "dek": [
@@ -16,22 +16,22 @@
   "intro": [
     "{round} rounds into {year}, the question is not who won last time but who is running above or below the preseason form guide.",
     "The {year} season has reached {round} rounds, far enough to measure each driver against the winter projection rather than the latest result.",
-    "After {round} rounds of {year}, the standings can be read against the preseason form guide — who has cleared the billing and who has fallen behind it.",
+    "After {round} rounds of {year}, the standings can be read against the preseason form guide: who has cleared the billing and who has fallen behind it.",
     "{round} rounds is enough of {year} to set the current order beside the projected one and see who is over and under the preseason expectation.",
     "With {round} rounds of {year} run, the field divides into those exceeding the preseason projection and those trailing it."
   ],
   "driversOver": [
     "Running above the preseason form guide so far: {names}.",
-    "{names} sits higher than the winter projection.",
-    "The preseason call undersold {names}, who is ahead of that billing through {round} rounds.",
-    "{names}, an early overachiever against the preseason expectation, is running above forecast.",
+    "Beating the winter projection through {round} rounds: {names}.",
+    "The preseason call undersold {names}.",
+    "Ahead of the preseason billing so far: {names}.",
     "Above the level the preseason picture set: {names}."
   ],
   "driversUnder": [
     "Running below the preseason form guide so far: {names}.",
-    "{names} sits lower than the winter projection.",
-    "The preseason call oversold {names}, who is behind that billing through {round} rounds.",
-    "{names}, an early underachiever against the preseason expectation, is running below forecast.",
+    "Short of the winter projection through {round} rounds: {names}.",
+    "The preseason call oversold {names}.",
+    "Behind the preseason billing so far: {names}.",
     "Below the level the preseason picture set: {names}."
   ],
   "teamsOver": [
