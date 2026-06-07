@@ -29,7 +29,7 @@ import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/po
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
-import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp } from './util'
+import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp, pronouns } from './util'
 import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
 import milestoneCopy from './milestone-copy.json'
 import titleCopy from './titlescenario-copy.json'
@@ -446,14 +446,6 @@ function careerOf(ctx: NewsContext, id: string): DriverCareer | null {
 
 // Gendered pronoun slots for a single driver, so copy reads with natural pronouns (he/she, his/her,
 // him/her, ...) instead of contorting to stay neutral. A driver's gender is always known.
-function pronouns(gender: string | undefined): Record<string, string> {
-  const f = gender === 'female'
-  return {
-    they: f ? 'she' : 'he', they_cap: f ? 'She' : 'He',
-    them: f ? 'her' : 'him', their: f ? 'her' : 'his', their_cap: f ? 'Her' : 'His',
-    theirs: f ? 'hers' : 'his', themself: f ? 'herself' : 'himself', theyre: f ? 'she\'s' : 'he\'s',
-  }
-}
 
 // Extend a careers map (DB totals for prior seasons) with one in-progress/just-finished season's
 // results from the live store, so the live newsroom sees a complete, up-to-date career. The base
