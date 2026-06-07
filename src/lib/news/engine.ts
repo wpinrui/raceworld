@@ -36,7 +36,6 @@ import { buildSeasonAnalysis, previewCast, titleArcEvents, constructorArcEvents 
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
 import constructorArcCopy from './constructor-arc-copy.json'
-import raceCodaCopy from './race-coda-copy.json'
 import seasonReviewCopy from './season-review-copy.json'
 import milestoneCopy from './milestone-copy.json'
 import recordsCopy from './records-copy.json'
@@ -584,14 +583,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
-    // Title trajectory for the coda (#88): how the CURRENT leader's gap has moved over the trailing window,
-    // so the report's closing line carries the running narrative instead of just the static gap.
-    const codaW = Math.min(4, r - 1)
-    const agoStand = driverStandingsAfter(ctx, r - codaW)
-    const ptsAgo = (id?: string) => (id ? agoStand.find((x) => x.driverId === id)?.points ?? 0 : 0)
-    const gapAgo = leader && afterR[1] ? ptsAgo(leader.driverId) - ptsAgo(afterR[1].driverId) : leadGap
-    const codaSwing = leadGap - gapAgo
-    const codaTrajectory = !clinched && !leadChanged && afterR.length >= 2 && codaW >= 2 && gapAgo > 0 && Math.abs(codaSwing) >= 10
 
     // Safe, specific colour.
     const winnerHome = isHomeRace(ctx, p1.driverId, r)
@@ -644,7 +635,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       leader_last: leader ? lastName(leader.driverName) : '', second_last: afterR[1] ? lastName(afterR[1].driverName) : '',
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
       c_leader: cLeaderTeam?.teamName ?? '', c_second: cAfterR[1]?.teamName ?? '', prev_leader: afterPrev[0]?.driverName ?? '',
-      gap_ago: gapAgo, rounds_ago: codaW, swing: Math.abs(codaSwing),
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
       dnf_solo_reason: dnfSolo ? pick(poolFor(dnfSolo), `${seed}|why-${dnfSolo.driverId}`) : '',
@@ -809,38 +799,65 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       '"These points matter. Every race this season has felt like it counts, and today was no different," said {winner_last}.',
     ], slots, 72)
 
-    const champPool = !leader
-      ? ['']
-      : clinched
-      ? [
-          'With the win, {leader} can no longer be caught in the championship.',
-          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
-          '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
-          'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
-        ]
-      : leadChanged
-      ? [
-          'The result swings the championship, {leader} moving ahead of {prev_leader} to {leader_points} points and a {lead_gap}-point lead.',
-          'There is a new name on top of the standings in {leader}, {lead_gap} {lead_gap_pts} clear of {second}.',
-          '{leader} takes over at the head of the table, {lead_gap} {lead_gap_pts} ahead of {second}.',
-          'The points lead changes hands, {leader} now in front of {second} by {lead_gap} {lead_gap_pts}.',
-        ]
-      : codaTrajectory
-      ? (codaSwing < 0 ? raceCodaCopy.closing : raceCodaCopy.extending)
-      : r === 1
-      ? [
-          '{c_leader} lead the constructors\' championship after the opening round.',
-          'Round one puts {c_leader} top of the constructors\' standings, ahead of {c_second}.',
-          'The constructors\' championship opens with {c_leader} on top.',
-          '{c_leader} take the early constructors\' lead, {c_second} the nearest of the rest.',
-        ]
-      : [
-          'In the championship, {leader} stays in front, {lead_gap} {lead_gap_pts} clear of {second}.',
-          '{leader} holds the points lead on {leader_points}, {lead_gap} {lead_gap_pts} up on {second}.',
-          'Atop the standings, {leader} keeps a {lead_gap}-point cushion over {second}.',
-          'No change at the top of the standings, {leader} on {leader_points} points with {second} {lead_gap} {lead_gap_pts} adrift.',
-        ]
-    const champPara = compose(`${seed}:champ`, slots, champPool)
+    // Championship coda (#88, reworked): tell the title fight as a story. Lead with what moved THIS race —
+    // the protagonists' actual results and the swing from one race ago — and reframe entirely when a new
+    // name takes the lead or climbs into the top two (the old margin is then irrelevant; positions moved).
+    const champPara = ((): string => {
+      if (!leader) return ''
+      if (clinched) return compose(`${seed}:champ`, slots, [
+        'With the win, {leader} can no longer be caught in the championship.',
+        'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
+        '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
+        'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
+      ])
+      if (r === 1) return compose(`${seed}:champ`, slots, [
+        "{c_leader} lead the constructors' championship after the opening round.",
+        "Round one puts {c_leader} top of the constructors' standings, ahead of {c_second}.",
+        "The constructors' championship opens with {c_leader} on top.",
+        "{c_leader} take the early constructors' lead, {c_second} the nearest of the rest.",
+      ])
+      const second = afterR[1]
+      if (!second) return `${lastName(leader.driverName)} heads the championship after the ${circuitName}.`
+      if (remaining === 0) return `${lastName(leader.driverName)} is crowned ${ctx.year} World Drivers' Champion, ${leadGap} ${plural(leadGap, 'point')} clear of ${lastName(second.driverName)}.`
+      // A title protagonist's result THIS race, as a bare noun ("win") and a verb ("won").
+      const raceFin = (id: string): { noun: string; verb: string } => {
+        const res = results.find((x) => x.driverId === id)
+        if (!res || res.finishPosition == null) return res?.dnf ? { noun: 'retirement', verb: 'retired' } : { noun: 'absence', verb: 'did not start' }
+        if (res.dnf) return { noun: 'retirement', verb: 'retired' }
+        if (res.finishPosition === 1) return { noun: 'win', verb: 'won' }
+        return { noun: `${ordinal(res.finishPosition)}-place finish`, verb: `finished ${ordinal(res.finishPosition)}` }
+      }
+      const ld = lastName(leader.driverName), sd = lastName(second.driverName)
+      const prL = pronouns(ctx.drivers.find((d) => d.id === leader.driverId)?.gender)
+      const gapPts = plural(leadGap, 'point')
+      const priorRankOf = (id: string) => (afterPrev.findIndex((s) => s.driverId === id) + 1) || afterPrev.length + 1
+
+      // A new name has taken the championship lead: lead with the takeover and how far they have climbed.
+      if (leadChanged) {
+        const climbed = priorRankOf(leader.driverId)
+        const verb = climbed >= 4 ? 'catapults' : climbed === 3 ? 'lifts' : 'moves'
+        const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
+        return `${ld}'s ${raceFin(leader.driverId).noun} ${verb} ${prL.them} into the championship lead${from}. ${prL.they_cap} now leads ${sd}, who ${raceFin(second.driverId).verb}, by ${leadGap} ${gapPts} with ${racesLeft} remaining.`
+      }
+      // Same leader, but a new name has climbed into second: frame it as entering the conversation.
+      const prevSecondId = afterPrev[1]?.driverId
+      if (prevSecondId && prevSecondId !== second.driverId) {
+        const climbed = priorRankOf(second.driverId)
+        const prS = pronouns(ctx.drivers.find((d) => d.id === second.driverId)?.gender)
+        const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
+        return `${sd}'s ${raceFin(second.driverId).noun} lifts ${prS.them} into championship contention${from}. ${prS.they_cap} now sits ${leadGap} ${gapPts} behind ${ld} with ${racesLeft} remaining.`
+      }
+      // Same top two: how did the gap move this race, and why?
+      const leaderRacePts = results.find((x) => x.driverId === leader.driverId)?.points ?? 0
+      const secondRacePts = results.find((x) => x.driverId === second.driverId)?.points ?? 0
+      const raceSwing = leaderRacePts - secondRacePts
+      const prevGap = leadGap - raceSwing
+      if (Math.abs(raceSwing) >= 4) {
+        return `${sd}'s ${raceFin(second.driverId).noun} and ${ld}'s ${raceFin(leader.driverId).noun} ${raceSwing < 0 ? 'cut' : 'stretched'} the title gap from ${prevGap} to ${leadGap} ${gapPts}, ${ld} leading ${sd} with ${racesLeft} remaining.`
+      }
+      const moved = raceSwing !== 0 ? `, ${raceSwing < 0 ? 'down' : 'up'} from ${prevGap}` : ''
+      return `${ld} leads ${sd} by ${leadGap} ${gapPts}${moved} with ${racesLeft} remaining.`
+    })()
 
     // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
     // gated to a newsworthy magnitude — a wobble of 5 seconds or more. Crash-outs are not eligible
