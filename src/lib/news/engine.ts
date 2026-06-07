@@ -31,7 +31,7 @@ import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp, pronouns } from './util'
-import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
+import { raceDate, toISODate, addDays, daysBetween } from '@/lib/sim/calendar-dates'
 import { buildSeasonAnalysis, previewCast, titleArcEvents, constructorArcEvents } from './season-analysis'
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
@@ -43,7 +43,6 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
-import expectationCheckCopy from './expectation-check-copy.json'
 import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
@@ -644,7 +643,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
       leader_last: leader ? lastName(leader.driverName) : '', second_last: afterR[1] ? lastName(afterR[1].driverName) : '',
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
-      c_leader: cLeaderTeam?.teamName ?? '', c_second: cAfterR[1]?.teamName ?? '',
+      c_leader: cLeaderTeam?.teamName ?? '', c_second: cAfterR[1]?.teamName ?? '', prev_leader: afterPrev[0]?.driverName ?? '',
       gap_ago: gapAgo, rounds_ago: codaW, swing: Math.abs(codaSwing),
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
@@ -821,7 +820,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ]
       : leadChanged
       ? [
-          'The result swings the championship, and {leader} now leads.',
+          'The result swings the championship, {leader} moving ahead of {prev_leader} to {leader_points} points and a {lead_gap}-point lead.',
           'There is a new name on top of the standings in {leader}, {lead_gap} {lead_gap_pts} clear of {second}.',
           '{leader} takes over at the head of the table, {lead_gap} {lead_gap_pts} ahead of {second}.',
           'The points lead changes hands, {leader} now in front of {second} by {lead_gap} {lead_gap_pts}.',
@@ -2641,7 +2640,10 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3)])].filter((k) => k >= 3)
   const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
-  const c = expectationCheckCopy
+  const CARD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+  const numWord = (n: number) => CARD[n] ?? String(n)
+  const numTimes = (n: number) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${numWord(n)} times`)
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
   const out: NewsArticle[] = []
   for (const K of checkpoints) {
     if (K > ctx.completedRounds) continue
@@ -2652,25 +2654,80 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
     const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, delta: e.expectedRank - dRank.get(e.driverId)! }))
     const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
     const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
-    const cStand = constructorStandingsAfter(ctx, K)
-    const cRank = new Map(cStand.map((s, i) => [s.teamId, i + 1]))
-    const tDelta = [...analysis.teamExpectations.values()].filter((e) => cRank.has(e.teamId)).map((e) => ({ id: e.teamId, delta: e.expectedRank - cRank.get(e.teamId)! }))
-    const tOver = tDelta.filter((x) => x.delta >= 2).sort((a, b) => b.delta - a.delta)[0]?.id
-    const tUnder = tDelta.filter((x) => x.delta <= -2).sort((a, b) => a.delta - b.delta)[0]?.id
-    if (!dOver.length && !dUnder.length && !tOver && !tUnder) continue // nothing notable this checkpoint
-    const seed = `expectation-${ctx.year}-${K}`
-    const slots = { year: ctx.year, round: K }
-    const sections: string[] = []
-    if (dOver.length) sections.push(fill(pick(c.driversOver, `${seed}|do`), { ...slots, names: listJoin(dOver.map(dn)) }))
-    if (dUnder.length) sections.push(fill(pick(c.driversUnder, `${seed}|du`), { ...slots, names: listJoin(dUnder.map(dn)) }))
-    if (tOver) sections.push(fill(pick(c.teamsOver, `${seed}|to`), { ...slots, team: teamName(ctx, tOver) }))
-    if (tUnder) sections.push(fill(pick(c.teamsUnder, `${seed}|tu`), { ...slots, team: teamName(ctx, tUnder) }))
-    out.push({
-      id: seed, category: 'analysis_opinion', round: K, priority: 33,
-      headline: fill(pick(c.headline, `${seed}|h`), slots),
-      dek: fill(pick(c.dek, `${seed}|d`), slots),
-      body: paras(fill(pick(c.intro, `${seed}|intro`), slots), ...sections),
-    })
+    if (!dOver.length && !dUnder.length) continue // nothing notable this checkpoint
+
+    // Per-driver facts at this checkpoint: where the winter ranked them (the projection, now SHOWN, not
+    // implied) vs where they actually sit, plus the concrete reason — retirements, a scoring drought.
+    const statsFor = (id: string) => {
+      let dnfs = 0, lastScored = 0, best = 99, starts = 0
+      for (let rr = 0; rr < K; rr++) {
+        const res = (ctx.raceResults[rr] ?? []).find((x) => x.driverId === id)
+        if (!res) continue
+        starts++
+        if (res.dnf) dnfs++
+        if (res.finishPosition != null && res.finishPosition < best) best = res.finishPosition
+        if (res.points > 0) lastScored = rr + 1
+      }
+      return { dnfs, lastScored, best: best === 99 ? null : best, starts }
+    }
+    const info = (id: string) => {
+      const proj = analysis.driverExpectations.get(id)!.expectedRank
+      const pos = dRank.get(id)!
+      return { name: dn(id), last: lastName(dn(id)), pos, proj, delta: proj - pos, gender: ctx.drivers.find((d) => d.id === id)?.gender, ...statsFor(id) }
+    }
+    type Info = ReturnType<typeof info>
+    const overs = dOver.map(info)
+    const unders = dUnder.map(info)
+
+    const overSentence = (f: Info, i: number): string => {
+      const pr = pronouns(f.gender)
+      return [
+        `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
+        `${f.name}, projected ${ordinal(f.proj)} over the winter, has climbed to ${ordinal(f.pos)}.`,
+        `${f.name} has turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} on the road.`,
+      ][i % 3]
+    }
+    const reason = (f: Info, i: number): string => {
+      if (f.dnfs >= 2) return i % 2 ? `has ${numTimes(f.dnfs)} retirements already` : `has retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`
+      if (f.lastScored === 0) return 'has yet to trouble the scorers'
+      if (K - f.lastScored >= 2) return i % 2 ? `last scored back in round ${f.lastScored}` : `has not scored since round ${f.lastScored}`
+      if (f.dnfs === 1) return i % 2 ? 'has lost a finish to retirement' : 'has already retired once'
+      return ''
+    }
+    const underSentence = (f: Info, i: number): string => {
+      const projP = [`ranked ${ordinal(f.proj)} in the preseason`, `${ordinal(f.proj)} in the winter ratings`, `a projected ${ordinal(f.proj)}`][i % 3]
+      const posP = ['sits', 'has slid to', 'now runs'][i % 3]
+      const r = reason(f, i)
+      return r ? `${f.name}, ${projP}, ${r} and ${posP} ${ordinal(f.pos)}.` : `${f.name}, ${projP}, has slipped to ${ordinal(f.pos)}.`
+    }
+
+    // Next-round signpost from the real calendar gap.
+    const nextC = ctx.calendar[K]
+    const closer = nextC
+      ? `${ctx.year} resumes in ${numWord(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)))} ${plural(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)), 'week')} at the ${circuit(ctx, K + 1)}.`
+      : ''
+
+    const paragraphs: string[] = []
+    if (overs.length) paragraphs.push(`${cap(numWord(K))} rounds in, ${ctx.year} has already broken from the winter form guide. ${overs.map(overSentence).join(' ')}`)
+    if (unders.length) {
+      const lead = overs.length ? 'The bigger story is how far the fancied names have fallen.' : `${cap(numWord(K))} rounds in, the names the winter rated highly have gone backwards.`
+      paragraphs.push(`${lead} ${unders.map(underSentence).join(' ')}`)
+    }
+    if (closer) paragraphs.push(closer)
+
+    // Headline + dek lead with the actual movers, not a restatement of the premise.
+    const headline = overs.length && unders.length
+      ? `${overs[0].last} climbs and ${unders[0].last} slides ${numWord(K)} rounds into ${ctx.year}`
+      : overs.length
+      ? `${overs[0].last} runs ${ordinal(overs[0].pos)}, well above the winter call, after ${numWord(K)} rounds`
+      : `${unders[0].last} slides to ${ordinal(unders[0].pos)} ${numWord(K)} rounds into ${ctx.year}`
+    const dek = overs.length && unders.length
+      ? `${overs[0].name} has climbed to ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} has gone the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.`
+      : overs.length
+      ? `${overs[0].name} leads the names running clear of the winter projection ${numWord(K)} rounds into ${ctx.year}.`
+      : `${unders[0].name} heads the names trailing the winter projection ${numWord(K)} rounds into ${ctx.year}.`
+
+    out.push({ id: `expectation-${ctx.year}-${K}`, category: 'analysis_opinion', round: K, priority: 33, headline, dek, body: paras(...paragraphs) })
   }
   return out
 }
