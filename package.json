@@ -10,7 +10,8 @@
     "db:init": "node -e \"require('./src/lib/db/client').getDb()\"",
     "news:play": "tsx scripts/news-playthrough.ts",
     "history:check": "tsx scripts/history-check.ts",
-    "weather:check": "tsx scripts/weather-news-check.ts"
+    "weather:check": "tsx scripts/weather-news-check.ts",
+    "wet:measure": "tsx scripts/wet-fraction-measure.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
