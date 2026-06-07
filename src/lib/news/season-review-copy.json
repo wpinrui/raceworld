@@ -1,0 +1,86 @@
+{
+  "headline": [
+    "{year} review: {champion_last} is world champion",
+    "{champion} takes the {year} title",
+    "{year} is {champion_last}'s — the championship is decided",
+    "{champion_last} wins the {year} drivers' championship",
+    "{year} review: the title goes to {champion}"
+  ],
+  "dek": [
+    "{champion_last} is {year} world champion; {runner_up_last} finished as runner-up.",
+    "The {year} title belongs to {champion}, with {runner_up_last} second in the standings.",
+    "{champion} closed out {year} ahead of {runner_up_last} in the final order.",
+    "{runner_up_last} ran {champion_last} closest, but the {year} championship is {champion}'s.",
+    "{champion_last} ends {year} as champion; {runner_up_last} takes the runner-up place."
+  ],
+  "championWireToWire": [
+    "{champion} led the standings from the opening round to the last and was never headed across the {year} season.",
+    "Not once in {year} did {champion} surrender the championship lead — first after round one, first at the finish.",
+    "{champion_last} took the points lead at the season opener and held it every round to the title.",
+    "{champion} ran the table on the standings: top of the championship from the first round through to the last.",
+    "From the opening round, the lead was {champion_last}'s, and no rival took it back at any point in {year}."
+  ],
+  "championComeback": [
+    "{champion} was not leading the standings early, then chased {runner_up_last} down to take the {year} title.",
+    "Behind in the opening stretch, {champion_last} overhauled the early leaders to finish {year} as champion.",
+    "{champion} started {year} off the championship lead and reeled it in to win the title.",
+    "The early standings did not have {champion_last} on top; the final ones do — a comeback to the {year} championship.",
+    "{champion_last} trailed in the first half and came from behind, passing {runner_up_last} to claim {year}."
+  ],
+  "championDecider": [
+    "{champion} settled the {year} title in the closing rounds, finishing {gap} {gap_pts} clear of {runner_up_last}.",
+    "It went to the final rounds: {champion_last} took the championship by {gap} {gap_pts} over {runner_up}.",
+    "{gap} {gap_pts} decided {year} — {champion_last} held off {runner_up_last} to the last.",
+    "The title was live into the run-in, and {champion} closed it out by {gap} {gap_pts}.",
+    "{champion_last} edged {runner_up_last} by {gap} {gap_pts}, the {year} championship decided in the final rounds."
+  ],
+  "championClear": [
+    "{champion} took over the championship lead during the season and pulled clear, ending {year} comfortably ahead of {runner_up_last}.",
+    "Once {champion_last} hit the front of the standings, the margin only grew; {year} ended a comfortable {gap} {gap_pts} over {runner_up_last}.",
+    "{champion} did not lead from the start but, having taken the lead, won {year} going away by {gap} {gap_pts}.",
+    "{champion_last} assumed the championship lead in-season and stretched it, finishing {year} clear of {runner_up}.",
+    "After taking over at the top, {champion} controlled {year} to a comfortable {gap} {gap_pts} margin over {runner_up_last}."
+  ],
+  "constructors": [
+    "{constructor_champion} won the constructors' championship.",
+    "The teams' title went to {constructor_champion}.",
+    "{constructor_champion} took the constructors' crown in {year}.",
+    "In the constructors' standings, {constructor_champion} finished first.",
+    "{constructor_champion} is the {year} constructors' champion."
+  ],
+  "overPerformers": [
+    "{names} finished the season above the preseason projection.",
+    "Ahead of where the winter form sheet placed them: {names}.",
+    "{names}, an overachiever against the preseason expectation, ended the year higher than forecast.",
+    "The preseason call undersold {names}, who beat it.",
+    "{names} closed {year} above the level the preseason picture set."
+  ],
+  "underPerformers": [
+    "{names} finished the season below the preseason projection.",
+    "Short of where the winter form sheet placed them: {names}.",
+    "{names}, an underachiever against the preseason expectation, ended the year lower than forecast.",
+    "The preseason call oversold {names}, who fell short of it.",
+    "{names} closed {year} below the level the preseason picture set."
+  ],
+  "teamOver": [
+    "{team} beat its preseason projection.",
+    "{team} finished {year} ahead of where the preseason picture placed it.",
+    "The forecast undersold {team}, which outscored it.",
+    "{team} cleared its preseason target for the season.",
+    "Against the winter projection, {team} came out ahead."
+  ],
+  "teamUnder": [
+    "{team} fell short of its preseason projection.",
+    "{team} finished {year} behind where the preseason picture placed it.",
+    "The forecast oversold {team}, which did not reach it.",
+    "{team} missed its preseason target for the season.",
+    "Against the winter projection, {team} came up short."
+  ],
+  "bestOfRest": [
+    "{team} led the midfield, finishing best of those not expected at the front.",
+    "Top of the pack behind the title teams: {team}, the year's best of the rest.",
+    "{team} won the midfield fight, ahead of every team not projected to challenge at the front.",
+    "Of the teams outside the front group, {team} finished highest.",
+    "{team} headed the midfield in {year}, first among those not expected to contend up front."
+  ]
+}

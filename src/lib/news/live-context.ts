@@ -26,6 +26,10 @@ export interface LiveSeasonSlice {
   seasonRenewals?: RenewalResult[]
   seasonDraft?: DraftPick[]
   signingDayRevealed?: number
+  // Per-round car-pace snapshots; only [0] (season start) is read, to anchor the first-season car projection (#88).
+  carPaceHistory?: { round: number; paces: Record<string, number> }[]
+  // Last completed season's driver media scores — the basis for this season's driver expectation (#88).
+  priorSeasonDriverMediaScores?: Record<string, number>
 }
 
 export function buildLiveNewsContext(
@@ -57,6 +61,8 @@ export function buildLiveNewsContext(
     constructorHistory: s.constructorHistory,
     endOfSeason: s.endOfSeasonSummary,
     calendar: calendarForYear(s.year),
+    seasonStartCarPace: s.carPaceHistory?.find((h) => h.round === 0)?.paces,
+    priorDriverMediaScores: s.priorSeasonDriverMediaScores,
     live: true,
     records,
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),

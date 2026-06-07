@@ -95,6 +95,8 @@ export function HeadlinesPanel() {
   const seasonRenewals = useSeasonStore((s) => s.seasonRenewals)
   const seasonDraft = useSeasonStore((s) => s.seasonDraft)
   const signingDayRevealed = useSeasonStore((s) => s.signingDayRevealed)
+  const priorSeasonDriverMediaScores = useSeasonStore((s) => s.priorSeasonDriverMediaScores)
+  const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
   const markNewsRead = useSeasonStore((s) => s.markNewsRead)
   const readNewsIds = useSeasonStore((s) => s.readNewsIds)
   const driverCard = useLiveDriverCards()
@@ -115,13 +117,13 @@ export function HeadlinesPanel() {
     // Use the SAME shared builder as the newsroom and the Continue loop, so the home feed can never
     // drift from them (it previously omitted the market beats: contract watch / renewals / draft).
     const ctx = buildLiveNewsContext(
-      { year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed },
+      { year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory },
       careerBase, teamCareerBase, records, teamDriverTallies,
     )
     // The feed is already newest-first (round desc, then priority); show the most recent 20
     // and let the panel scroll.
     return generateNews(ctx).slice(0, 20)
-  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, careerBase, teamCareerBase, records, teamDriverTallies])
+  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory, careerBase, teamCareerBase, records, teamDriverTallies])
 
   // Name-to-world-page matcher for hyperlinking the open article (home feed is always the live season).
   const newsIndex = useMemo(() => buildNewsIndex({

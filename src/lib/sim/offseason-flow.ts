@@ -28,7 +28,7 @@ export async function advanceOffSeason(): Promise<string> {
       // Archive the finished season, then start + immediately begin the next one.
       if (s.dbSeasonId) {
         // Snapshot the complete live feed before archiving: the attribute-dependent producers
-        // (silly-season, driver-to-watch) can't be rebuilt from results, so we persist them now.
+        // (season narrative, driver-to-watch, market beats) can't be rebuilt from results, so we persist them now.
         // The store still holds the finished season here (next-season state is pending, not live).
         const [careerBase, teamCareerBase, records, teamDriverTalliesBase] = await Promise.all([
           actionGetDriverCareers(s.year - 1),
@@ -41,6 +41,7 @@ export async function advanceOffSeason(): Promise<string> {
           allUpgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
           endOfSeasonSummary: s.endOfSeasonSummary, approvedSeasonChanges: s.approvedSeasonChanges,
           seasonContractWatch: s.seasonContractWatch, seasonRenewals: s.seasonRenewals, seasonDraft: s.seasonDraft, signingDayRevealed: s.signingDayRevealed,
+          priorSeasonDriverMediaScores: s.priorSeasonDriverMediaScores, carPaceHistory: s.carPaceHistory, // #88 expectation basis — must be snapshotted so archived reviews/codas don't degrade
         }, careerBase, teamCareerBase, records, teamDriverTalliesBase))
         await actionSaveSeasonNews(s.dbSeasonId, JSON.stringify(articles))
 
