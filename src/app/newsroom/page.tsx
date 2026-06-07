@@ -46,7 +46,9 @@ export default function NewsroomPage() {
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
   // Roster for the selected archived season, used to hyperlink names in the article text.
   const [archivedRoster, setArchivedRoster] = useState<{ drivers: { id: string; name: string }[]; teams: { id: string; name: string }[]; circuits: { name: string; round: number }[] }>({ drivers: [], teams: [], circuits: [] })
-  const [loadingArchive, setLoadingArchive] = useState(false)
+  // Year whose archive has finished loading; `loadingArchive` (derived below) is true until it matches
+  // the selected year, so the spinner is shown without a synchronous setState inside the fetch effect.
+  const [loadedArchiveYear, setLoadedArchiveYear] = useState<number | null>(null)
   // Cross-season ("all seasons") feed, loaded once on demand.
   const [allData, setAllData] = useState<AllSeasonNews | null>(null)
   const [loadingAll, setLoadingAll] = useState(false)
@@ -101,11 +103,9 @@ export default function NewsroomPage() {
   useEffect(() => {
     if (isLive || allSeasons) return
     let cancelled = false
-    setLoadingArchive(true)
     actionGetSeasonNews(selectedYear)
-      .then((res) => { if (!cancelled) { setArchivedArticles(res.articles); setArchivedRoster({ drivers: res.drivers, teams: res.teams, circuits: res.circuits }) } })
-      .catch(() => { if (!cancelled) { setArchivedArticles([]); setArchivedRoster({ drivers: [], teams: [], circuits: [] }) } })
-      .finally(() => { if (!cancelled) setLoadingArchive(false) })
+      .then((res) => { if (!cancelled) { setArchivedArticles(res.articles); setArchivedRoster({ drivers: res.drivers, teams: res.teams, circuits: res.circuits }); setLoadedArchiveYear(selectedYear) } })
+      .catch(() => { if (!cancelled) { setArchivedArticles([]); setArchivedRoster({ drivers: [], teams: [], circuits: [] }); setLoadedArchiveYear(selectedYear) } })
     return () => { cancelled = true }
   }, [isLive, allSeasons, selectedYear])
 
@@ -201,6 +201,7 @@ export default function NewsroomPage() {
   }), [scopeDrivers, scopeTeams, selected?.year, liveYear])
   const index = allSeasons ? allSeasonsIndex : (isLive ? liveIndex : archivedIndex)
 
+  const loadingArchive = loadedArchiveYear !== selectedYear
   const loading = allSeasons ? loadingAll : (!isLive && loadingArchive)
 
   if (!hydrated) return null
