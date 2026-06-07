@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { Trophy } from 'lucide-react'
@@ -76,7 +77,7 @@ export default function StandingsPage() {
   const [allTimeTeams, setAllTimeTeams] = useState<AllTimeTeamStat[]>([])
   const [openDrivers, setOpenDrivers] = useRetainedState('standings:openDrivers', true)
   const [openTeams, setOpenTeams] = useRetainedState('standings:openTeams', true)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const scrollRef = useScrollRestore<HTMLDivElement>(`standings:scroll:${tab}`)
 
   // Nationality by id for the all-time flags — archived rows carry no nationality, so resolve from the
@@ -113,7 +114,6 @@ export default function StandingsPage() {
   const foldedTeams = useMemo(() => foldLiveTeamStats(allTimeTeams, liveForAllTime), [allTimeTeams, liveForAllTime])
 
   useEffect(() => {
-    setHydrated(true)
     actionGetArchivedSeasons().then(setArchivedSeasons)
     actionGetAllTimeDriverStats().then(setAllTimeDrivers).catch(() => setAllTimeDrivers([]))
     actionGetAllTimeTeamStats().then(setAllTimeTeams).catch(() => setAllTimeTeams([]))

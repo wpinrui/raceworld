@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
@@ -37,7 +38,7 @@ export default function RacePage() {
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
   const [showSpeed4Modal, setShowSpeed4Modal] = useState(false)
   const [speed4Confirmed, setSpeed4Confirmed] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [lapProgress, setLapProgress] = useState(0)
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -48,7 +49,6 @@ export default function RacePage() {
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
 
   useEffect(() => {
-    setHydrated(true)
     if (season.phase === 'idle') { router.replace('/setup'); return }
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
     if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)

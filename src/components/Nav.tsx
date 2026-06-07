@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { usePathname, useRouter } from 'next/navigation'
 import { EllipsisVertical, ChevronRight, Play } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -46,7 +47,7 @@ export default function Nav() {
   const realWorldMode = useSeasonStore((s) => s.realWorldMode)
   const realWorldChangesResolved = useSeasonStore((s) => s.realWorldChangesResolved)
 
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
   const [restartOpen, setRestartOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -63,7 +64,6 @@ export default function Nav() {
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
 
-  useEffect(() => setHydrated(true), [])
   // Pre-season (no season started yet): Setup is the only reachable page.
   useEffect(() => {
     if (hydrated && phase === 'idle' && pathname !== '/setup') router.replace('/setup')

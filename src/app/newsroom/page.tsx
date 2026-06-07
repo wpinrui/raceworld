@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -33,7 +34,7 @@ export default function NewsroomPage() {
   const s = useSeasonStore()
   const followedDriverIds = useSettingsStore((st) => st.followedDriverIds)
   const followedTeamIds = useSettingsStore((st) => st.followedTeamIds)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [filter, setFilter] = useRetainedState<string | null>('newsroom:filter', null)
   const [query, setQuery] = useRetainedState('newsroom:query', '')
   const [entity, setEntity] = useRetainedState<EntityValue | null>('newsroom:entity', null)
@@ -59,7 +60,6 @@ export default function NewsroomPage() {
   const listScrollRef = useScrollRestore<HTMLDivElement>('newsroom:list')
   const driverCard = useLiveDriverCards()
   useEffect(() => {
-    setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
     if (typeof window !== 'undefined' && window.location.hash.length > 1) {
       const id = decodeURIComponent(window.location.hash.slice(1))
