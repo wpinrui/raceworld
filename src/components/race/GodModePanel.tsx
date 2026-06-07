@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Driver, Team, DriverRaceState, GodModeAction, TyreCompound, RaceState } from '@/lib/sim/types'
 import { planStrategy, truthBelief, type StrategyStint } from '@/lib/sim/pit-ai'
+import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { degradeTyre } from '@/lib/sim/tyres'
 import TyreIndicator from './TyreIndicator'
 
@@ -79,6 +80,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       ds.currentTyre.condition, ds.currentTyre.compound, driver.smoothness,
       truthBelief(raceState.compoundDeltas, raceState.tyreBaseLife, raceState.totalLaps),
       raceState.weather, raceState.weatherForecast,
+      pitLaneLoss(raceState.year),
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDriverId, raceState.currentLap, ds?.currentTyre.condition, ds?.currentTyre.compound])

@@ -26,7 +26,6 @@ export interface PitDecision {
 
 const WEAR_PENALTY = 0.1 / 4 // seconds per 1% condition lost (matches engine lap-time model)
 const CLIFF_PENALTY = 5 // extra seconds/lap once a tyre is dead
-const PIT_COST = 22 // seconds lost in the pit lane
 const MOISTURE_PENALTY = 15 // seconds/lap per step the compound is out of its moisture window (engine)
 const EFFECTIVE_CLIFF_PCT = 10 // teams treat a tyre as dead a bit before 0% — a planning buffer
 const REAL_CLIFF_BUFFER = 4 // force a stop once the REAL condition is this close to falling off
@@ -186,6 +185,7 @@ export function planStrategy(
   belief: TeamBelief,
   weather: WeatherPoint[],
   forecast: WeatherPoint[],
+  pitCost: number, // era pit-lane loss (issue #101); same source the runtime applies
 ): StrategyPlan {
   const lapsRemaining = totalLaps - currentLap
   if (lapsRemaining <= 1) {
@@ -219,7 +219,7 @@ export function planStrategy(
   for (let offset = 3; offset <= lapsRemaining - 3; offset++) {
     const s1 = stintCost(offset, currentLap, currentCompound, bucketedCondition, belief, smoothness, currentLap, projMoisture)
     for (const c2 of candidates) {
-      const cost = s1 + PIT_COST + stintCost(lapsRemaining - offset, currentLap + offset, c2, 100, belief, smoothness, currentLap, projMoisture)
+      const cost = s1 + pitCost + stintCost(lapsRemaining - offset, currentLap + offset, c2, 100, belief, smoothness, currentLap, projMoisture)
       if (cost < bestCost) { bestCost = cost; bestP1 = currentLap + offset; bestC2 = c2; bestP2 = null; bestC3 = null }
     }
   }
@@ -232,7 +232,7 @@ export function planStrategy(
         for (const c2 of candidates) {
           const s2 = stintCost(p2 - p1, currentLap + p1, c2, 100, belief, smoothness, currentLap, projMoisture)
           for (const c3 of candidates) {
-            const cost = s1 + PIT_COST + s2 + PIT_COST + stintCost(lapsRemaining - p2, currentLap + p2, c3, 100, belief, smoothness, currentLap, projMoisture)
+            const cost = s1 + pitCost + s2 + pitCost + stintCost(lapsRemaining - p2, currentLap + p2, c3, 100, belief, smoothness, currentLap, projMoisture)
             if (cost < bestCost) { bestCost = cost; bestP1 = currentLap + p1; bestC2 = c2; bestP2 = currentLap + p2; bestC3 = c3 }
           }
         }
@@ -289,6 +289,7 @@ export function decidePit(
   currentMoisture: number,
   self: FieldCar,
   field: FieldCar[],
+  pitCost: number, // era pit-lane loss (issue #101), for the rejoin projection
 ): PitDecision {
   const target = plan.targetNextCompound
 
@@ -302,7 +303,7 @@ export function decidePit(
 
   // Real rejoin projection: slot the car back in by race time (its totalTime + the pit loss) and read
   // the gap to whoever it would come out behind.
-  const rejoinTime = self.totalTime + PIT_COST
+  const rejoinTime = self.totalTime + pitCost
   let aheadTime = -Infinity
   for (const c of field) {
     if (c.driverId === self.driverId || c.retired) continue

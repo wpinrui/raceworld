@@ -142,6 +142,7 @@ export interface WeatherPoint {
 
 export interface RaceState {
   circuitId: string
+  year: number                                             // season year, for era-dependent effects (e.g. pit-lane loss)
   totalLaps: number
   currentLap: number
   weather: WeatherPoint[]                                   // the true weather (drives the sim)
