@@ -12,19 +12,19 @@ function round1(n: number): number {
 }
 
 // Overall rating weights across the five rated attributes (issue #59). Sum = 1.0.
-// Empirically calibrated (#69): each weight ∝ the attribute's measured marginal effect on race results
-// (points/race), with the car equalised and technical DNFs excluded, one attribute varied at a time.
-// Pace and wetWeatherPace split the measured "speed" impact (0.43) by weather exposure — the lap-time
-// blend is (1-moisture)*pace + moisture*wet, so the share carried by wet is the lap-weighted mean
-// moisture. Measured from the live weather model (17.3% rain × ~0.156 mean moisture in a wet race) the
-// effective fraction is ~0.027; the split below sits a touch above it. Re-derive with
-// `npm run wet:measure` if the rain rate or archetype mix changes.
+// Empirically calibrated (#69, re-baselined #102): each weight ∝ the attribute's measured marginal
+// effect on race results (points/race), with the car equalised, form neutralised and technical DNFs
+// excluded, one attribute varied at a time. Re-run via `npm run overall:calibrate`.
+// Pace and wetWeatherPace split the measured "speed" impact by weather exposure: the lap-time blend is
+// (1-moisture)*pace + moisture*wet, and the WET rating now counts DOUBLE in the wet (#102), so wet's
+// share of speed is 2E[m]/(1+E[m]) ≈ 0.054 (E[m] ≈ 0.028, the lap-weighted mean moisture from the live
+// model; `npm run wet:measure`). Re-derive if the lap-time model, rain rate, or archetype mix changes.
 export const OVERALL_WEIGHTS = {
-  pace: 0.415,
-  consistency: 0.26,
-  overtaking: 0.1,
-  wetWeatherPace: 0.015,
-  smoothness: 0.21,
+  pace: 0.44,
+  consistency: 0.232,
+  overtaking: 0.097,
+  wetWeatherPace: 0.025,
+  smoothness: 0.206,
 } as const
 
 // Cosmetic overall used to test whether a driver has reached their potential and for display.
