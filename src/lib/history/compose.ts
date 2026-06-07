@@ -57,12 +57,14 @@ function initialContractYears(id: string): number {
 
 // Per-attribute develop rates (#66) make pace climb far more than wet/smoothness over a career, which
 // would skew composed drivers' PRIME profiles — the authored entry ratings were balanced for the OLD
-// uniform curve. Re-balance each driver's ENTRY so the SAME prime is reached under the new differential
-// curve: spread the development headroom across attributes by their rate. Fast-developing stats (pace)
-// start lower; slow ones (wet, smoothness) start nearer their prime. The shift is overall-neutral at
-// entry, and because that leaves the headroom D unchanged it EXACTLY preserves the prime the old uniform
-// curve produced (prime[s] = entry[s] + D). adj[s] = D * (1 - devRate[s] / W); a plain 1/devRate scaling
-// would overshoot wildly since development is additive on the headroom, not multiplicative on the rating.
+// uniform curve. Re-balance each driver's ENTRY so they reach a sensible, balanced prime under the new
+// differential curve: spread the development headroom across attributes by their rate. Fast-developing
+// stats (pace) start lower with room to grow; slow ones (wet, smoothness) start nearer their prime. The
+// shift is overall-neutral at entry (Σ weight·adj = 0), so it preserves the total development headroom D
+// (the overall gained to plateau) and only redistributes WHERE that growth lands. It does NOT make each
+// prime[s] = entry[s] + D — pace still gains more than wet under the differential curve. adj[s] =
+// D * (1 - devRate[s] / W); a plain 1/devRate scaling would overshoot wildly since development is
+// additive on the headroom, not multiplicative on the rating.
 const DEV_W = STAT_KEYS.reduce((sum, k) => sum + OVERALL_WEIGHTS[k] * DEVELOP_RATES[k], 0)
 function retuneEntry(stats: Stats, peakPotential: number, primeEnd: number, ageAtEntry: number): Stats {
   if (ageAtEntry >= primeEnd) return stats // enters already in decline — no development to compensate for
