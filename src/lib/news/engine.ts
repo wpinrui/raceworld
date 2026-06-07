@@ -41,6 +41,7 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
+import expectationCheckCopy from './expectation-check-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
@@ -2470,6 +2471,50 @@ const slumpScore = (avg: number) => clamp((avg - 10) * 6, 0, 100)
 const surgeScore = (avg: number) => clamp((6 - avg) * 16, 0, 100)        // avg 5th -> 16, 2nd -> 64, 1st -> 80
 const trajectoryScore = (absDelta: number) => clamp(absDelta * 18, 0, 100)
 
+// Expectation-vs-actual checkpoint (#88): ~twice a season (one-third, two-thirds), who is running above or
+// below their PRESEASON projection — drivers and teams. Compares the season-analysis preseason expectation
+// (round-independent) against the actual standings AT that checkpoint round. Supersedes the analysis
+// producer's form-slump/surge and team-vs-car-pace angles. Live only (needs the expectation basis).
+function expectationCheck(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.completedRounds < 3) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const N = ctx.calendar.length
+  const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3)])].filter((k) => k >= 3)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = expectationCheckCopy
+  const out: NewsArticle[] = []
+  for (const K of checkpoints) {
+    if (K > ctx.completedRounds) continue
+    const dStand = driverStandingsAfter(ctx, K)
+    const dRank = new Map(dStand.map((s, i) => [s.driverId, i + 1]))
+    const dLast = dStand.length + 1
+    const dDelta = [...analysis.driverExpectations.values()].map((e) => ({ id: e.driverId, delta: e.expectedRank - (dRank.get(e.driverId) ?? dLast) }))
+    const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
+    const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
+    const cStand = constructorStandingsAfter(ctx, K)
+    const cRank = new Map(cStand.map((s, i) => [s.teamId, i + 1]))
+    const cLast = cStand.length + 1
+    const tDelta = [...analysis.teamExpectations.values()].map((e) => ({ id: e.teamId, delta: e.expectedRank - (cRank.get(e.teamId) ?? cLast) }))
+    const tOver = tDelta.filter((x) => x.delta >= 2).sort((a, b) => b.delta - a.delta)[0]?.id
+    const tUnder = tDelta.filter((x) => x.delta <= -2).sort((a, b) => a.delta - b.delta)[0]?.id
+    if (!dOver.length && !dUnder.length && !tOver && !tUnder) continue // nothing notable this checkpoint
+    const seed = `expectation-${ctx.year}-${K}`
+    const slots = { year: ctx.year, round: K }
+    const sections: string[] = []
+    if (dOver.length) sections.push(fill(pick(c.driversOver, `${seed}|do`), { ...slots, names: listJoin(dOver.map(dn)) }))
+    if (dUnder.length) sections.push(fill(pick(c.driversUnder, `${seed}|du`), { ...slots, names: listJoin(dUnder.map(dn)) }))
+    if (tOver) sections.push(fill(pick(c.teamsOver, `${seed}|to`), { ...slots, team: teamName(ctx, tOver) }))
+    if (tUnder) sections.push(fill(pick(c.teamsUnder, `${seed}|tu`), { ...slots, team: teamName(ctx, tUnder) }))
+    out.push({
+      id: seed, category: 'analysis_opinion', round: K, priority: 33,
+      headline: fill(pick(c.headline, `${seed}|h`), slots),
+      dek: fill(pick(c.dek, `${seed}|d`), slots),
+      body: paras(fill(pick(c.intro, `${seed}|intro`), slots), ...sections),
+    })
+  }
+  return out
+}
+
 // TRIGGER (opinion): AT MOST ONE analysis piece per round. Every angle (teammate imbalance,
 // form slump, form surge, team over/under-performance) is scored for newsworthiness; subjects
 // featured in the last few rounds take a small penalty so the column doesn't fixate on one
@@ -3486,6 +3531,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...championship(ctx),
     ...championshipArc(ctx),
     ...seasonReview(ctx),
+    ...expectationCheck(ctx),
     ...analysis(ctx),
     ...previews(ctx),
     ...market(ctx),
