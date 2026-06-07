@@ -1,0 +1,71 @@
+{
+  "compressed": {
+    "h": [
+      "{year} best of the rest: {winner} tops a packed band, {gap} points clear of {runner_up}",
+      "{gap} points decide a compressed midfield — {winner} ahead of {runner_up}",
+      "{winner} leads the {year} best-of-the-rest band by {gap} from {runner_up}",
+      "A tight chase behind the front three: {winner} edges {runner_up} by {gap}",
+      "{winner} wins the {year} second-tier fight from {runner_up} by {gap} points"
+    ],
+    "d": [
+      "{winner} led a tightly-packed best-of-the-rest band in {year}, finishing {gap} points clear of {runner_up}.",
+      "The midfield closed up in {year}: {winner} came out on top by {gap} points over {runner_up}.",
+      "{winner} headed the best-of-the-rest order by just {gap} points from {runner_up} across {year}.",
+      "Behind the front three, {winner} edged {runner_up} by {gap} points in a compressed {year} field.",
+      "{gap} points split {winner} and {runner_up} at the head of the {year} midfield, with {winner} ahead."
+    ],
+    "b": [
+      "{winner} led the best-of-the-rest band in {year}, but by only {gap} points over {runner_up}. The midfield packed tight all season, and the margin held to the end.",
+      "Across {year}, {winner} came out on top of a compressed midfield, finishing {gap} points clear of {runner_up}. A handful of points separated the leading bunch race after race.",
+      "The {year} best-of-the-rest fight stayed close all year. {winner} edged clear by {gap} points from {runner_up}, with the order behind the front three rarely settling.",
+      "{winner} won the {year} second-tier battle by {gap} points over {runner_up}. The chasing pack ran nose to tail, and the gap stayed small to the flag.",
+      "In a packed {year} midfield, {winner} finished {gap} points ahead of {runner_up} for best of the rest. The lead changed hands often before {winner} held on."
+    ]
+  },
+  "surge": {
+    "h": [
+      "{winner} surges from preseason also-ran to {year} best of the rest",
+      "Projected well down the order, {winner} ends {year} as best of the rest",
+      "{winner} defies the preseason form to lead the {year} best-of-the-rest band",
+      "From the back of the projections to best of the rest: {winner} in {year}",
+      "{winner} leaps the order to take the {year} best-of-the-rest honours from {runner_up}"
+    ],
+    "d": [
+      "{winner} was projected well down the order before {year}, then surged to lead the best-of-the-rest band.",
+      "Few rated {winner} ahead of preseason — yet {winner} finished {year} as best of the rest.",
+      "{winner} defied a low preseason projection to top the {year} best-of-the-rest order over {runner_up}.",
+      "Against the preseason form book, {winner} climbed to best of the rest in {year}.",
+      "{winner} began {year} pegged near the back of the order and ended the season leading the best-of-the-rest band."
+    ],
+    "b": [
+      "{winner} was projected well down the order before {year}, then surged to lead the best-of-the-rest band. The climb left {runner_up} second in the second-tier fight.",
+      "Preseason form put {winner} near the back of the grid. By the end of {year}, {winner} had risen to best of the rest, {gap} points clear of {runner_up}.",
+      "Nobody pencilled {winner} in as best of the rest before {year}. A season-long surge changed that, lifting {winner} above {runner_up} behind the front three.",
+      "{winner} defied a low preseason projection through {year}, climbing the order to lead the best-of-the-rest band by {gap} points over {runner_up}.",
+      "Pegged well down the order before {year}, {winner} surged through the field to finish best of the rest. The late-season form left {runner_up} chasing by {gap} points."
+    ]
+  },
+  "clear": {
+    "h": [
+      "{winner} leads the {year} best of the rest with ease, {gap} points clear of {runner_up}",
+      "{gap} points: {winner} runs away with the {year} second-tier fight from {runner_up}",
+      "{winner} dominates the best-of-the-rest band in {year}, {gap} clear of {runner_up}",
+      "Comfortable behind the front three: {winner} beats {runner_up} by {gap}",
+      "{winner} controls the {year} best-of-the-rest order, {gap} points ahead of {runner_up}"
+    ],
+    "d": [
+      "{winner} led the best-of-the-rest band comfortably in {year}, finishing {gap} points clear of {runner_up}.",
+      "There was no contest behind the front three: {winner} beat {runner_up} by {gap} points across {year}.",
+      "{winner} ran away with the {year} second-tier fight, {gap} points clear of {runner_up} by season's end.",
+      "{winner} headed the {year} best-of-the-rest order with room to spare, {gap} points ahead of {runner_up}.",
+      "A clear {gap}-point margin separated {winner} from {runner_up} at the front of the {year} midfield."
+    ],
+    "b": [
+      "{winner} led the best-of-the-rest band comfortably in {year}, finishing {gap} points clear of {runner_up}. The margin was never seriously threatened.",
+      "Across {year}, {winner} controlled the fight behind the front three, beating {runner_up} by {gap} points with weeks to spare.",
+      "{winner} took the {year} second-tier honours at a canter, {gap} points clear of {runner_up}. The best-of-the-rest order settled early and held.",
+      "There was little drama behind the front three in {year}: {winner} headed {runner_up} by {gap} points from start to finish.",
+      "{winner} ran away with the {year} best-of-the-rest band, {gap} points clear of {runner_up}. The lead grew steadily through the season."
+    ]
+  }
+}

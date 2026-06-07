@@ -273,3 +273,88 @@ export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): C
   if (t.currentGap <= driverMaxPerRace(ctx.year)) return { shape: 'Decider' } // settled late, within a race win
   return { shape: 'Clear' }
 }
+
+// ---- tier coverage (#90): the best-of-the-rest fight and the backmarker tier ----
+
+interface TeamRow { id: string; points: number; wins: number }
+
+function teamSeasonStats(ctx: NewsContext, N: number): TeamRow[] {
+  return ctx.teams
+    .map((t) => {
+      let points = 0, wins = 0
+      for (let r = 1; r <= N; r++) {
+        for (const c of (ctx.raceResults[r - 1] ?? []).filter((x) => x.teamId === t.id)) {
+          points += c.points
+          if (c.finishPosition === 1) wins++
+        }
+      }
+      return { id: t.id, points, wins }
+    })
+    .sort((a, b) => b.points - a.points)
+}
+
+export type BestOfRestKind = 'compressed' | 'surge' | 'clear'
+export interface BestOfRestResult {
+  winnerId: string // best finisher among teams outside the preseason front tier
+  runnerUpId: string // the next non-front team (always present; the producer needs two)
+  gap: number // points to the next team in the midfield
+  kind: BestOfRestKind
+}
+
+// The best-of-the-rest battle (#90): the fight to lead the midfield, defined EXACTLY as the season review's
+// best-of-the-rest line — the best ACTUAL finisher among teams NOT in the preseason front tier — so the two
+// end-of-season pieces never name different teams. `surge` = projected well down preseason; `compressed` = a
+// tight band among the leading non-front teams.
+export function bestOfRestBattle(ctx: NewsContext, analysis: SeasonAnalysis): BestOfRestResult | null {
+  const N = analysis.completedRounds
+  if (N < 6) return null
+  const front = new Set(analysis.tiers.front)
+  const rows = teamSeasonStats(ctx, N).filter((r) => !front.has(r.id))
+  if (rows.length < 2) return null // need a midfield with at least two teams
+  const bor = rows[0]
+  const runnerUp = rows[1]
+  const gap = bor.points - runnerUp.points
+  const band = rows.slice(0, 4)
+  const bandSpread = band.length >= 3 ? band[0].points - band[band.length - 1].points : 999
+  const actualRank = front.size + 1 // the best-of-the-rest sits just behind the front tier
+  const expRank = analysis.teamExpectations.get(bor.id)?.expectedRank ?? actualRank
+  const surge = expRank - actualRank >= 3 // projected well down preseason, finished best-of-the-rest
+  const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= 25 ? 'compressed' : 'clear'
+  return { winnerId: bor.id, runnerUpId: runnerUp.id, gap, kind }
+}
+
+export type BackmarkerKey = 'newTeamDebut' | 'pointsAgainstOdds' | 'lastPlaceBattle'
+export interface BackmarkerResult {
+  key: BackmarkerKey
+  teamId: string // the story's subject team
+  otherId?: string // the rival, for the last-place battle
+  gap: number
+  points: number
+}
+
+// The backmarker tier (#90): one notable story from the back — a new team's tough debut, a tail-ender
+// scoring against the odds, or a tight last-place battle. Returns the single most newsworthy.
+export function backmarkerStory(ctx: NewsContext, analysis: SeasonAnalysis): BackmarkerResult | null {
+  const N = analysis.completedRounds
+  if (N < 6) return null
+  const rows = teamSeasonStats(ctx, N)
+  if (rows.length < 4) return null
+  const last = rows[rows.length - 1]
+  const secondLast = rows[rows.length - 2]
+  const everRaced = new Set((ctx.constructorHistory ?? []).map((h) => h.teamId))
+
+  // A brand-new team enduring a debut DEAD LAST — only then is the "slowest on the grid" copy accurate.
+  if (everRaced.size > 0 && !everRaced.has(last.id)) {
+    return { key: 'newTeamDebut', teamId: last.id, gap: 0, points: last.points }
+  }
+  // A tail-ender (bottom three) scoring against the odds — a win, or a real points haul.
+  const overPerformer = rows.slice(-3).find((r) => r.wins > 0 || r.points >= 15)
+  if (overPerformer) {
+    return { key: 'pointsAgainstOdds', teamId: overPerformer.id, gap: 0, points: overPerformer.points }
+  }
+  // A tight fight to avoid last.
+  if (secondLast.points - last.points <= 10) {
+    return { key: 'lastPlaceBattle', teamId: secondLast.id, otherId: last.id, gap: secondLast.points - last.points, points: secondLast.points }
+  }
+  return null
+}
