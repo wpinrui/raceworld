@@ -1,5 +1,5 @@
 import type { Driver, Team } from '@/lib/sim/types'
-import { overall, DEVELOP_RATES, DECLINE_RATES } from '@/lib/sim/progression'
+import { overall, OVERALL_WEIGHTS, DEVELOP_RATES, DECLINE_RATES } from '@/lib/sim/progression'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
 import type { HistoricalDriver } from '@/data/history/types'
@@ -55,6 +55,25 @@ function initialContractYears(id: string): number {
   return r < 9 ? Math.floor(r / 3) : 3
 }
 
+// Per-attribute develop rates (#66) make pace climb far more than wet/smoothness over a career, which
+// would skew composed drivers' PRIME profiles — the authored entry ratings were balanced for the OLD
+// uniform curve. Re-balance each driver's ENTRY so the SAME prime is reached under the new differential
+// curve: spread the development headroom across attributes by their rate. Fast-developing stats (pace)
+// start lower; slow ones (wet, smoothness) start nearer their prime. The shift is overall-neutral at
+// entry, and because that leaves the headroom D unchanged it EXACTLY preserves the prime the old uniform
+// curve produced (prime[s] = entry[s] + D). adj[s] = D * (1 - devRate[s] / W); a plain 1/devRate scaling
+// would overshoot wildly since development is additive on the headroom, not multiplicative on the rating.
+const DEV_W = STAT_KEYS.reduce((sum, k) => sum + OVERALL_WEIGHTS[k] * DEVELOP_RATES[k], 0)
+function retuneEntry(stats: Stats, peakPotential: number, primeEnd: number, ageAtEntry: number): Stats {
+  if (ageAtEntry >= primeEnd) return stats // enters already in decline — no development to compensate for
+  const headroom = Math.max(0, peakPotential - overall(stats))
+  const out = { ...stats }
+  for (const k of STAT_KEYS) {
+    out[k] = round1(Math.max(0, Math.min(100, stats[k] + headroom * (1 - DEVELOP_RATES[k] / DEV_W))))
+  }
+  return out
+}
+
 // Project a driver's ratings + age from market entry forward to `targetYear`.
 export function projectToYear(h: HistoricalDriver, targetYear: number): { stats: Stats; age: number } {
   let stats: Stats = {
@@ -62,6 +81,8 @@ export function projectToYear(h: HistoricalDriver, targetYear: number): { stats:
     overtaking: h.overtaking ?? DEFAULTS.overtaking, smoothness: h.smoothness ?? DEFAULTS.smoothness,
     consistency: h.consistency ?? DEFAULTS.consistency,
   }
+  // Re-balance the authored entry for the per-attribute curve before projecting forward (#66).
+  stats = retuneEntry(stats, peakOf(h), primeEndOf(h), h.ageAtEntry)
   let age = h.ageAtEntry
   for (let y = h.marketEntryYear; y < targetYear; y++) {
     for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRace(stats, age, peakOf(h), primeEndOf(h))
