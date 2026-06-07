@@ -247,6 +247,9 @@ interface SeasonStore {
   statHistory: StatHistory
   // Per-round car-pace snapshots for the current season's Car Development chart.
   carPaceHistory: CarPaceSnapshot[]
+  // Last completed season's end-of-year driver media scores (driverId -> score), carried into the new
+  // season as the basis for news expectation (#88). Empty in a save's first season.
+  priorSeasonDriverMediaScores: Record<string, number>
   // The end-of-season draft picks (ordered, best seat first), for the Signing Day reveal.
   seasonDraft: DraftPick[]
   // Round-18 contract renewals this season, for the renewals round-up feature.
@@ -321,6 +324,7 @@ export const useSeasonStore = create<SeasonStore>()(
       seasonStartStats: {},
       statHistory: {},
       carPaceHistory: [],
+      priorSeasonDriverMediaScores: {},
       seasonDraft: [],
       seasonRenewals: [],
       seasonContractWatch: [],
@@ -892,6 +896,12 @@ export const useSeasonStore = create<SeasonStore>()(
       startNewSeason: () => {
         const { pendingNextSeasonState, year, constructorHistory } = get()
         const newYear = year + 1
+        // Carry the just-completed season's driver media scores into the new season as the basis for
+        // news expectation (#88). Captured here (not at finalization) so during season N the field holds
+        // N-1's scores — exactly what the new season's preview/expectation articles need.
+        const priorSeasonDriverMediaScores = Object.fromEntries(
+          (get().endOfSeasonSummary?.driverMediaScores ?? []).map((s) => [s.driverId, s.score]),
+        )
 
         if (!pendingNextSeasonState) {
           // Fallback: should not normally occur
@@ -909,6 +919,7 @@ export const useSeasonStore = create<SeasonStore>()(
             devPlans,
             allUpgradeEvents: [],
             endOfSeasonSummary: null,
+            priorSeasonDriverMediaScores,
             seasonStartStats: snapshotStats(drivers),
             statHistory: seedStatHistory(drivers),
             carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
@@ -951,6 +962,7 @@ export const useSeasonStore = create<SeasonStore>()(
           allUpgradeEvents: [],
           endOfSeasonSummary: null,
           pendingNextSeasonState: null,
+          priorSeasonDriverMediaScores,
           seasonStartStats: snapshotStats(drivers),
           statHistory: seedStatHistory(drivers),
           carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
@@ -1018,6 +1030,7 @@ export const useSeasonStore = create<SeasonStore>()(
         seasonStartStats: state.seasonStartStats,
         statHistory: state.statHistory,
         carPaceHistory: state.carPaceHistory,
+        priorSeasonDriverMediaScores: state.priorSeasonDriverMediaScores,
         seasonDraft: state.seasonDraft,
         seasonRenewals: state.seasonRenewals,
         seasonContractWatch: state.seasonContractWatch,
