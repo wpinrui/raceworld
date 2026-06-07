@@ -273,3 +273,88 @@ export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): C
   if (t.currentGap <= driverMaxPerRace(ctx.year)) return { shape: 'Decider' } // settled late, within a race win
   return { shape: 'Clear' }
 }
+
+// ---- tier coverage (#90): the best-of-the-rest fight and the backmarker tier ----
+
+interface TeamRow { id: string; points: number; wins: number }
+
+function teamSeasonStats(ctx: NewsContext, N: number): TeamRow[] {
+  return ctx.teams
+    .map((t) => {
+      let points = 0, wins = 0
+      for (let r = 1; r <= N; r++) {
+        for (const c of (ctx.raceResults[r - 1] ?? []).filter((x) => x.teamId === t.id)) {
+          points += c.points
+          if (c.finishPosition === 1) wins++
+        }
+      }
+      return { id: t.id, points, wins }
+    })
+    .sort((a, b) => b.points - a.points)
+}
+
+export type BestOfRestKind = 'compressed' | 'surge' | 'clear'
+export interface BestOfRestResult {
+  winnerId: string // top team behind the front three
+  runnerUpId?: string
+  gap: number // points to the next team in the midfield
+  kind: BestOfRestKind
+}
+
+// The best-of-the-rest battle (#90): the fight to lead the midfield, taken as the order behind the front
+// three. `surge` = the winner was projected well down preseason; `compressed` = a tight P4-P7 band.
+export function bestOfRestBattle(ctx: NewsContext, analysis: SeasonAnalysis): BestOfRestResult | null {
+  const N = analysis.completedRounds
+  if (N < 6) return null
+  const rows = teamSeasonStats(ctx, N)
+  const FRONT = 3
+  if (rows.length < FRONT + 2) return null // need a midfield to have a best-of-the-rest
+  const bor = rows[FRONT]
+  const runnerUp = rows[FRONT + 1]
+  const gap = bor.points - (runnerUp?.points ?? 0)
+  const band = rows.slice(FRONT, FRONT + 4)
+  const bandSpread = band.length >= 3 ? band[0].points - band[band.length - 1].points : 999
+  const expRank = analysis.teamExpectations.get(bor.id)?.expectedRank ?? FRONT + 1
+  const surge = expRank - (FRONT + 1) >= 3 // expected ~7th or worse, finished best-of-the-rest
+  const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= 25 ? 'compressed' : 'clear'
+  return { winnerId: bor.id, runnerUpId: runnerUp?.id, gap, kind }
+}
+
+export type BackmarkerKey = 'newTeamDebut' | 'pointsAgainstOdds' | 'lastPlaceBattle'
+export interface BackmarkerResult {
+  key: BackmarkerKey
+  teamId: string // the story's subject team
+  otherId?: string // the rival, for the last-place battle
+  gap: number
+  points: number
+  wins: number
+}
+
+// The backmarker tier (#90): one notable story from the back — a new team's tough debut, a tail-ender
+// scoring against the odds, or a tight last-place battle. Returns the single most newsworthy.
+export function backmarkerStory(ctx: NewsContext, analysis: SeasonAnalysis): BackmarkerResult | null {
+  const N = analysis.completedRounds
+  if (N < 6) return null
+  const rows = teamSeasonStats(ctx, N)
+  if (rows.length < 4) return null
+  const last = rows[rows.length - 1]
+  const secondLast = rows[rows.length - 2]
+  const everRaced = new Set((ctx.constructorHistory ?? []).map((h) => h.teamId))
+
+  // A brand-new team enduring a debut at the back.
+  const debutant = [last, secondLast].find((r) => !everRaced.has(r.id))
+  if (debutant && everRaced.size > 0) {
+    return { key: 'newTeamDebut', teamId: debutant.id, gap: 0, points: debutant.points, wins: debutant.wins }
+  }
+  // A tail-ender (bottom three) scoring against the odds — a win, or a real points haul.
+  const bottom = rows.slice(-3)
+  const overPerformer = bottom.find((r) => r.wins > 0 || r.points >= 15)
+  if (overPerformer) {
+    return { key: 'pointsAgainstOdds', teamId: overPerformer.id, gap: 0, points: overPerformer.points, wins: overPerformer.wins }
+  }
+  // A tight fight to avoid last.
+  if (secondLast.points - last.points <= 10) {
+    return { key: 'lastPlaceBattle', teamId: secondLast.id, otherId: last.id, gap: secondLast.points - last.points, points: secondLast.points, wins: 0 }
+  }
+  return null
+}

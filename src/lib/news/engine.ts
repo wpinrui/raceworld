@@ -44,9 +44,11 @@ import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
 import expectationCheckCopy from './expectation-check-copy.json'
-import { driverArcs, teammateBattles, crossTeamDuels, championshipShape } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
+import bestOfRestCopy from './best-of-rest-copy.json'
+import backmarkerCopy from './backmarker-copy.json'
 import teammateBattleCopy from './teammate-battle-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
@@ -2514,6 +2516,44 @@ function crossTeamDuel(ctx: NewsContext): NewsArticle[] {
   })
 }
 
+// Best-of-the-rest retrospective (#90): the fight to lead the midfield (the order behind the front three) —
+// a compressed band, a surge from a projected backmarker, or a clear win. End-of-season.
+function bestOfRest(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const r = bestOfRestBattle(ctx, buildSeasonAnalysis(ctx))
+  if (!r) return []
+  const tn = (id: string) => teamName(ctx, id)
+  const c = bestOfRestCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  const slots = { year: ctx.year, winner: tn(r.winnerId), runner_up: r.runnerUpId ? tn(r.runnerUpId) : '', gap: r.gap }
+  const cc = c[r.kind]
+  const seed = `best-of-rest-${ctx.year}`
+  return [{
+    id: seed, category: 'analysis_opinion', round: ctx.completedRounds, priority: 33,
+    headline: fill(pick(cc.h, `${seed}|h`), slots),
+    dek: fill(pick(cc.d, `${seed}|d`), slots),
+    body: fill(pick(cc.b, `${seed}|b`), slots),
+  }]
+}
+
+// Backmarker retrospective (#90): one notable story from the back — a new team's tough debut, a tail-ender
+// scoring against the odds, or a tight last-place battle. End-of-season.
+function backmarker(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const r = backmarkerStory(ctx, buildSeasonAnalysis(ctx))
+  if (!r) return []
+  const tn = (id: string) => teamName(ctx, id)
+  const c = backmarkerCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  const slots = { year: ctx.year, team: tn(r.teamId), other: r.otherId ? tn(r.otherId) : '', gap: r.gap, points: r.points }
+  const cc = c[r.key]
+  const seed = `backmarker-${ctx.year}`
+  return [{
+    id: seed, category: 'analysis_opinion', round: ctx.completedRounds, priority: 32,
+    headline: fill(pick(cc.h, `${seed}|h`), slots),
+    dek: fill(pick(cc.d, `${seed}|d`), slots),
+    body: fill(pick(cc.b, `${seed}|b`), slots),
+  }]
+}
+
 // Expectation-vs-actual checkpoint (#88): ~twice a season (one-third, two-thirds), who is running above or
 // below their PRESEASON projection — drivers and teams. Compares the season-analysis preseason expectation
 // (round-independent) against the actual standings AT that checkpoint round. Supersedes the analysis
@@ -3229,6 +3269,8 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...driverArc(ctx),
     ...teammateBattle(ctx),
     ...crossTeamDuel(ctx),
+    ...bestOfRest(ctx),
+    ...backmarker(ctx),
     ...expectationCheck(ctx),
     ...previews(ctx),
     ...market(ctx),
