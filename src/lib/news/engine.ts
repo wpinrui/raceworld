@@ -3248,17 +3248,30 @@ const VETERAN_CAREER: Record<string, string[]> = {
   ],
 }
 
+// Free-agent spotlight windows, weighted to the season's end: the last `tail` rounds are covered every
+// round (consistent late coverage) and the gap between earlier windows grows by one each step (sparser
+// early). Generated from the season length, so it stays robust across era-accurate calendars (#64)
+// instead of hardcoding a 24-round schedule. e.g. 24 rounds -> [2,8,13,17,20,22,23,24]; 16 -> [5,9,12,14,15,16].
+function driverWatchWindows(totalRounds: number, tail = 3, maxWindows = 8): number[] {
+  const rounds: number[] = []
+  let r = totalRounds
+  let gap = 1
+  for (let step = 0; r >= 1 && rounds.length < maxWindows; step++) {
+    rounds.push(r)
+    if (step + 1 >= tail) gap++ // past the every-round tail, widen the gap each window going earlier
+    r -= gap
+  }
+  return rounds.reverse()
+}
+
 function driverToWatch(ctx: NewsContext): NewsArticle[] {
-  // Fires on an 8-window schedule weighted to the season's end; like silly-season it belongs in the
-  // season's permanent record (don't gate on endOfSeason or the retrospective loses the market narrative).
+  // Fires on an end-weighted window schedule; like silly-season it belongs in the season's permanent
+  // record (don't gate on endOfSeason or the retrospective loses the market narrative).
   if (!ctx.live) return []
   const freeAgents = ctx.drivers.filter((d) => d.teamId === '')
   if (freeAgents.length === 0 || ctx.teams.length === 0) return []
   const out: NewsArticle[] = []
-  // The canonical windows are tuned to a 24-round season; scale them proportionally so a shorter season
-  // (era-accurate calendars, #64) gets the same back-loaded shape rather than dropping windows off the end.
-  const N = ctx.calendar.length
-  const ROUNDS = [...new Set([7, 12, 16, 19, 21, 22, 23, 24].map((r) => Math.max(1, Math.round((r / 24) * N))))].sort((a, b) => a - b)
+  const ROUNDS = driverWatchWindows(ctx.calendar.length)
   if (ctx.completedRounds < ROUNDS[0]) return out
   // Lock the slate by R7: the top free agents by market perception (driver media score), one per window,
   // each covered exactly once. The ranking is snapshotted as of R7 so the covered set never drifts as the
