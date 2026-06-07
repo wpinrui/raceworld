@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendarForYear } from '@/data/calendars'
 import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
+import { shownStats } from '@/lib/sim/progression'
 import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
@@ -31,7 +32,8 @@ function predict(drivers: Driver[], teams: Team[], raceResults: RaceResult[][], 
   const teamById = new Map(teams.map((t) => [t.id, t]))
   const grid = drivers
     .filter((d) => d.teamId !== '')
-    .map((d) => ({ d, team: teamById.get(d.teamId) }))
+    // Predict off the SHOWN ratings (true + season form, #66) the driver actually races at this year.
+    .map((d) => ({ d: { ...d, ...shownStats(d) }, team: teamById.get(d.teamId) }))
     .filter((p): p is { d: Driver; team: Team } => p.team !== undefined)
   const field = grid.length || 20
 

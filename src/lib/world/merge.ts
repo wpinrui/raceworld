@@ -4,7 +4,7 @@
 
 import type { Driver, Team, DriverStanding, ConstructorStanding, RaceResult, Circuit } from '@/lib/sim/types'
 import type { StatPoint } from '@/lib/store/season-store'
-import { overall } from '@/lib/sim/progression'
+import { overall, shownStats, shownOverall } from '@/lib/sim/progression'
 import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
 import type { Feat } from '@/lib/stats/types'
 import type { DriverCareer, TeamCareer, CareerSeason, DriverAttributes, DriverCurrentResult, TeamSeason, SeasonChampionRow, RatingsPoint } from './types'
@@ -38,8 +38,8 @@ function liveTeammateH2H(driverId: string, store: LiveStore) {
   return aggregateTeammateH2H(rows)
 }
 
-// The current (unarchived) season's attribute timeline from the live store. StatPoint snapshots
-// don't carry consistency (a stable trait), so the live driver's value is injected for the overall.
+// The current (unarchived) season's attribute timeline from the live store. The points are SHOWN stats
+// (#66); StatPoint carries only four, so the live driver's SHOWN consistency is injected for the overall.
 function liveRatingsHistory(driverId: string, year: number, statHistory: Record<string, StatPoint[]>, consistency: number): RatingsPoint[] {
   const series = statHistory[driverId] ?? []
   return [...series]
@@ -53,9 +53,10 @@ function liveRatingsHistory(driverId: string, year: number, statHistory: Record<
 
 function driverAttributes(d: Driver, teams: Team[]): DriverAttributes {
   const team = teams.find((t) => t.id === d.teamId)
+  const s = shownStats(d) // display the SHOWN ratings (true + season form, #66)
   return {
-    pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness,
-    overall: Math.round(overall(d)),
+    pace: s.pace, wetWeatherPace: s.wetWeatherPace, overtaking: s.overtaking, smoothness: s.smoothness,
+    overall: Math.round(shownOverall(d)),
     age: d.age, primeEnd: d.primeEnd, peakPotential: d.peakPotential,
     narrativeModifier: d.narrativeModifier,
     nationality: d.nationality, gender: d.gender ?? 'male',
@@ -157,10 +158,10 @@ export function mergeDriverCareer(db: DriverCareer, store: LiveStore): DriverCar
       seasons: db.totals.seasons + (racing ? 1 : 0),
     },
     seasons: liveSeason ? [liveSeason, ...db.seasons] : db.seasons,
-    // Archived points already carry overall computed from their stored consistency (actions.ts);
-    // live points use the live driver's consistency (stable over a career). No re-derivation.
+    // Archived points already carry the shown overall (actions.ts); live points inject the live driver's
+    // SHOWN consistency (#66) so the in-season overall matches the form-adjusted four stats in the chart.
     ratingsHistory: racing
-      ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory, live.consistency)]
+      ? [...db.ratingsHistory, ...liveRatingsHistory(db.driverId, store.year, store.statHistory, shownStats(live).consistency)]
       : db.ratingsHistory,
     recentForm: racing
       ? [...db.recentForm, ...liveDriverResults(db.driverId, store.raceResults, store.calendar).map((r) => ({
@@ -221,7 +222,7 @@ export function mergeTeamCareer(db: TeamCareer, store: LiveStore): TeamCareer {
       seasons: db.totals.seasons + 1,
     },
     seasons: [liveSeason, ...db.seasons],
-    currentSquad: squad.map((d) => ({ driverId: d.id, driverName: d.name, overall: Math.round(overall(d)) })),
+    currentSquad: squad.map((d) => ({ driverId: d.id, driverName: d.name, overall: Math.round(shownOverall(d)) })),
     teamColor: live.color,
     carPace: live.carPace,
     currentPosition: ci >= 0 ? ci + 1 : null,

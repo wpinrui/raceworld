@@ -28,7 +28,7 @@ import { RecentFormCard } from '@/components/world/RecentFormCard'
 import { SeasonFormChart } from '@/components/world/SeasonFormChart'
 import { buildDriverBio } from '@/lib/world/bio'
 import { buildMilestones } from '@/lib/world/milestones'
-import { overall } from '@/lib/sim/progression'
+import { shownStats, shownOverall } from '@/lib/sim/progression'
 
 type Tab = 'overview' | 'development' | 'results' | 'milestones' | 'form' | 'h2h'
 
@@ -171,7 +171,7 @@ export default function DriverPage() {
               { key: 'smoothness' as const, label: 'tyre management', v: a.smoothness },
             ]
             return defs
-              .filter((d) => grid.filter((g) => g[d.key] > d.v).length < 5)
+              .filter((d) => grid.filter((g) => shownStats(g)[d.key] > d.v).length < 5)
               .sort((x, y) => y.v - x.v)
               .map((d) => d.label)
           })()
@@ -179,7 +179,7 @@ export default function DriverPage() {
           const overallRank = (() => {
             if (!a || a.isFreeAgent) return null
             const grid = allDrivers.filter((d) => d.teamId !== '')
-            return grid.filter((g) => Math.round(overall(g)) > a.overall).length
+            return grid.filter((g) => Math.round(shownOverall(g)) > a.overall).length
           })()
           const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength, knownFor, overallRank) : null
           const milestones = buildMilestones(career)

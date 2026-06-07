@@ -3,7 +3,7 @@
 import * as RadixTooltip from '@radix-ui/react-tooltip'
 import type { Driver } from '@/lib/sim/types'
 import type { DriverCareer } from '@/lib/news/engine'
-import { overall } from '@/lib/sim/progression'
+import { shownOverall } from '@/lib/sim/progression'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 
 // An expanded hover card for a driver: rating (overall + potential), career totals, age, nationality,
@@ -41,7 +41,7 @@ export function DriverTooltip({
   children: React.ReactNode
   side?: 'top' | 'right' | 'bottom' | 'left'
 }) {
-  const ov = Math.round(overall(driver))
+  const ov = Math.round(shownOverall(driver))
   const pot = Math.round(driver.peakPotential)
   return (
     <RadixTooltip.Provider delayDuration={150}>

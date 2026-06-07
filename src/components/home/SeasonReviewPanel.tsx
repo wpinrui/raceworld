@@ -3,6 +3,7 @@
 import { Trophy, TrendingUp, TrendingDown, Star } from 'lucide-react'
 import type { EndOfSeasonSummary, Driver, Team, DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { ProgressionPanel } from '@/components/standings/ProgressionPanel'
+import { shownStats } from '@/lib/sim/progression'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
@@ -98,9 +99,9 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
   const hasImproved = mostImproved && mostImproved.delta > 0
   const hasDeclined = steepestDecline && steepestDecline.delta < 0
 
-  // Best uncontracted prospect by raw pace.
+  // Best uncontracted prospect by SHOWN pace (true + season form, #66).
   const freeAgents = drivers.filter((d) => d.teamId === '')
-  const oneToWatch = freeAgents.length ? freeAgents.reduce((a, b) => (b.pace > a.pace ? b : a)) : undefined
+  const oneToWatch = freeAgents.length ? freeAgents.reduce((a, b) => (shownStats(b).pace > shownStats(a).pace ? b : a)) : undefined
 
   const topFive = driverStandings.slice(0, 5)
 
@@ -148,7 +149,7 @@ export function SeasonReviewPanel({ summary, drivers, teams, driverStandings, co
               <p className="font-semibold text-[#FFFFFF]"><DriverHover id={oneToWatch.id} card={card}><DriverLink id={oneToWatch.id}>{oneToWatch.name}</DriverLink></DriverHover></p>
               <p className="text-xs text-[#FFFFFF] flex items-center justify-between">
                 <span>Free agent · age {oneToWatch.age}</span>
-                <span className="tabular-nums font-semibold text-[#00D9FF]">{oneToWatch.pace} pace</span>
+                <span className="tabular-nums font-semibold text-[#00D9FF]">{shownStats(oneToWatch).pace} pace</span>
               </p>
             </div>
           )}
