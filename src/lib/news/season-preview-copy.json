@@ -28,53 +28,53 @@
     "{constructor} is the team to beat on last season's evidence, and {champion} is the driver who clinched the title before the finale. They start {year} as the reference point."
   ],
   "favourites": [
-    "{names} are the drivers preseason consensus keeps returning to when the title conversation starts.",
-    "Car performance, driver reputation, team stability: those factors all point toward {names} as the likeliest championship contenders.",
-    "{names} arrive with the strongest combination of machinery and track record — that is where the title picture starts.",
-    "{names} head the field with a realistic shot at the championship, on the weight of what their machinery and season records show.",
-    "The cars that tested well and the drivers who can extract from them what the car has to offer: that thread runs through {names}."
+    "The title conversation keeps returning to {names} — preseason consensus places that group at the front of the championship picture.",
+    "Car performance, driver reputation, team stability: those threads run through {names}.",
+    "{names} — the combination of machinery and track record that a realistic title shot requires is there.",
+    "The championship picture starts with {names}: the car data and the season records both point the same way.",
+    "Where the grid's likeliest title challengers sit: {names} — the preseason numbers keep landing there."
   ],
   "darkHorses": [
-    "{names} are outside the lead group but close enough: each in a car capable of a strong result on the right weekend.",
-    "{names} are the drivers whose results could surprise — unlikely to lead the championship, but capable of a podium when conditions compress the front.",
-    "The podium is not beyond {names} when the front-runners' margins tighten and track conditions shift.",
-    "{names} each bring a combination of ability and circumstance that can produce results beyond their car's baseline on the right circuit.",
-    "{names}: drivers who can matter on any given Sunday, in cars that won't carry them to the title but will carry them to the points and occasionally beyond."
+    "Outside the lead group but close enough — {names}: capable of a podium when the front compresses.",
+    "The podium is not beyond {names} on the right weekend; unlikely to lead a championship, but a factor when conditions shift.",
+    "{names} — the ability and the circumstance to produce results above the car's baseline are both present.",
+    "Strong results are possible from {names}: not a championship threat, but a real one when margins at the front tighten.",
+    "{names} — capable of mattering on any given Sunday, in machinery that won't carry a title run but will carry points and occasionally a podium."
   ],
   "bestOfRest": [
-    "Behind the championship contenders, the midfield fight has its own hierarchy — {teams} are best placed to lead it.",
-    "{teams} head into {year} with the trajectory and resources to challenge for top positions among the teams not fighting for the title.",
-    "Points finishes and podiums in unusual conditions are the realistic ceiling for {teams}, and they are better equipped than most midfield rivals to reach it.",
-    "{teams} are the outfits best positioned to set the pace in the fight between teams outside the championship picture.",
-    "{teams} carry the strongest combination of development rate and recent results among those not expected to challenge for the title."
+    "Behind the championship contenders, the midfield has its own hierarchy — {teams} sit at the top of it.",
+    "{teams} head into {year} with the trajectory and resources to lead the fight among teams outside the title picture.",
+    "The realistic ceiling for the midfield is points finishes and podiums in unusual conditions; {teams} are best equipped to reach it.",
+    "The midfield fight has a front-runner — {teams}: better trajectory and more recent results than the rest of that group.",
+    "{teams} carry the strongest combination of development rate and form among those not expected to challenge for the title."
   ],
   "veteransResurgent": [
-    "{names} have not drifted toward the back of the order — still expected near the sharp end, still a factor in any race they start.",
-    "{names} are the experienced drivers still in the sharp end: their longevity has not come at the cost of pace.",
-    "The argument that longevity erodes competitiveness does not apply to {names} — each enters {year} as a front-running concern.",
-    "{names} know what they need from a car and how to get it, and both remain among the drivers the rest of the field must account for.",
-    "{names} are each still among the drivers you expect to see near the front when the order settles on a Sunday afternoon."
+    "Still near the sharp end: {names} — longevity that has not come at the cost of pace.",
+    "The argument that a long career erodes competitiveness does not apply to {names} — front-running pace is still the baseline.",
+    "{names}: experienced enough to know exactly what a car requires, still fast enough to be at the front when it gets it.",
+    "No drift toward the back of the order for {names} — a factor in any race, on any circuit, at this stage of a career.",
+    "{names} — the kind of experience that reads a race correctly and the pace to act on it; both are still intact."
   ],
   "veteransTwilight": [
-    "{names} are experienced drivers whose expected level has shifted toward the back of the field — points finishes will measure a good day.",
-    "{names} begin {year} with careers that have accumulated more than most, but expectations more measured than they once were.",
-    "{names} are at a point in their careers where strong qualifying laps are less predictable, and where points rather than podiums are the honest weekly benchmark.",
-    "{names} occupy the back portion of the grid's competitive order — capable of scoring on the right circuit, but the front-running pace that defined earlier careers is no longer the baseline.",
-    "Points rather than podiums are the right benchmark for {names} at this stage — that assessment is honest, not dismissive."
+    "Points finishes will measure a good day for {names} at this stage — that is an honest benchmark, not a dismissive one.",
+    "{names} — careers that have accumulated more than most, expectations now more measured than they once were.",
+    "The front-running pace that defined earlier seasons is no longer the baseline for {names}: strong qualifying laps are less predictable, and points rather than podiums are the right weekly target.",
+    "A good circuit and a clean race can still produce a points finish from {names} — but the competitive ceiling has settled toward the back of the field.",
+    "{names} — capable of scoring on the right weekend, operating toward the back of the competitive order, with careers that have earned the honest assessment."
   ],
   "rookies": [
-    "{names} step onto an F1 grid for the first time this season, making the jump to a car that carries no comparison to anything in the junior categories.",
-    "In {year}, {names} make that first entry onto an F1 grid — how they adapt in the opening rounds typically sets the pattern for the whole season.",
-    "{names} are the drivers about to discover the Formula 1 transition from the inside: the car is faster, the field is deeper, and the scrutiny is immediate.",
-    "{names} make their Formula 1 debuts this season as first-time starters whose career trajectories have reached the sport's top tier.",
-    "{names} are the new names on the entry list — no prior starts, a full season ahead, and a different standard of scrutiny than anything they have faced before."
+    "Stepping onto an F1 grid for the first time this season: {names} — making a jump to a car with no comparable junior-category reference.",
+    "{names} make that first entry onto an F1 grid in {year}: how the opening rounds go typically sets the pattern for the whole season.",
+    "About to discover the Formula 1 transition from the inside — {names}: faster car, deeper field, immediate scrutiny.",
+    "{names} — no prior starts, a full season ahead, and a standard of competition that nothing in the junior categories fully prepares for.",
+    "New to the entry list: {names} — first-time starters whose career trajectories have reached the sport's top tier."
   ],
   "newTeams": [
-    "{teams} join the Formula 1 grid as first-time constructors — new entry list names with no racing kilometres at this level yet banked.",
-    "The entry list grows with the arrival of {teams}: fresh ambition alongside fresh uncertainty, with no race experience to draw on.",
-    "{teams} are first-time Formula 1 constructors, a status that no amount of preseason testing fully resolves — the experience deficit only closes through racing.",
-    "Formula 1 rarely clears a new constructor to race, so {teams} taking its first place on the grid carries weight; whether the structure holds under race conditions is still ahead of them.",
-    "{teams} arrive at the bottom of the constructors' experience curve with no prior race data at this level — that gap closes only one race at a time."
+    "Joining the Formula 1 grid as a first-time constructor: {teams} — new to the entry list, with no racing kilometres at this level yet banked.",
+    "The entry list grows with {teams}: fresh ambition alongside fresh uncertainty, and no race experience to draw on.",
+    "{teams} — first-time constructor status is one no amount of preseason testing fully resolves; the experience deficit closes only through racing.",
+    "Formula 1 rarely clears a new constructor to race, so {teams} taking a place on the grid carries weight — whether the structure holds under race conditions is still ahead.",
+    "{teams} arrive at the bottom of the constructors' experience curve; the gap to the established field closes one race at a time."
   ],
   "headlineNoChamp": [
     "{year} season preview: {fav} heads the field as no reigning champion lines up",
