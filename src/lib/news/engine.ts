@@ -578,6 +578,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const leadGap = leader ? leader.points - (afterR[1]?.points ?? 0) : 0
     const prevLeaderId = afterPrev[0]?.driverId
     const leadChanged = !!leader && !!prevLeaderId && leader.driverId !== prevLeaderId
+    // Constructors' standings, for the opening-round coda: after one race the WDC "lead" is just the win,
+    // so the first-round report speaks to the constructors' championship instead.
+    const cAfterR = constructorStandingsAfter(ctx, r)
+    const cLeaderTeam = cAfterR[0]
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
@@ -640,6 +644,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
       leader_last: leader ? lastName(leader.driverName) : '', second_last: afterR[1] ? lastName(afterR[1].driverName) : '',
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
+      c_leader: cLeaderTeam?.teamName ?? '', c_second: cAfterR[1]?.teamName ?? '',
       gap_ago: gapAgo, rounds_ago: codaW, swing: Math.abs(codaSwing),
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
@@ -823,6 +828,13 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         ]
       : codaTrajectory
       ? (codaSwing < 0 ? raceCodaCopy.closing : raceCodaCopy.extending)
+      : r === 1
+      ? [
+          '{c_leader} lead the constructors\' championship after the opening round.',
+          'Round one puts {c_leader} top of the constructors\' standings, ahead of {c_second}.',
+          'The constructors\' championship opens with {c_leader} on top.',
+          '{c_leader} take the early constructors\' lead, {c_second} the nearest of the rest.',
+        ]
       : [
           'In the championship, {leader} stays in front, {lead_gap} {lead_gap_pts} clear of {second}.',
           '{leader} holds the points lead on {leader_points}, {lead_gap} {lead_gap_pts} up on {second}.',
@@ -1838,7 +1850,7 @@ const LAUNCH_COPY: {
       intro: [
         'The cars that will contest race victories in {year} are no longer a secret. {n} {teams_word} with credible championship ambitions have unveiled their contenders, and the engineering statements on show are striking.',
         'Pre-season proper is underway as {n} front-running {teams_word} bring their {year} machines into the open. {lead} arrives with the loudest statement, but the rest of the group have not come to make up the numbers.',
-        '{lead} and {n} other {teams_word} with genuine title intentions have launched their {year} cars within days of one another, compressing the field\'s design philosophies into a single revealing week.',
+        '{lead} and {others} other {others_word} with genuine title intentions have launched their {year} cars within days of one another, compressing the field\'s design philosophies into a single revealing week.',
         'The {year} campaign takes shape as {n} {teams_word} at the front of the expected order pull the covers off. Every one of them has been built to win, and the technical differences between them are already a talking point.',
         'Scrutiny falls on {n} {teams_word} as the fastest expected cars of {year} make their public debut. {lead} may lead the conversation, but the entire group has arrived with something to say.',
       ],
@@ -1863,7 +1875,7 @@ const LAUNCH_COPY: {
       dek: [
         '{n} {teams_word} scrapping for points positions have launched their {year} cars, with {lead} setting the tone.',
         'The midfield is rarely decided at the launch, but {n} {teams_word}, {lead} among them, have given the first clues.',
-        '{lead} leads {n} midfield {teams_word} into the open, each convinced its winter work has found time in the middle of the pack.',
+        '{lead} heads a group of {n} midfield {teams_word} into the open, each convinced its winter work has found time in the middle of the pack.',
         '{n} {teams_word} built to compete for every point on offer in {year} have now shown what they are bringing to the fight.',
         'From {lead} to the back of the group, {n} midfield {teams_word} have launched cars that could easily swap positions by the season\'s end.',
       ],
@@ -1960,11 +1972,21 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   const favName = (f: Facts) => `${f.name} (${f.team}${favTag(f)})`
   // Veteran name: age (always real, the defining veteran fact) plus the headline achievement when one
   // exists. Never cites starts/seasons — in an early save those are near-zero and read as misleading.
-  const vetTag = (f: Facts) => {
+  const vetTag = (f: Facts, ageSeen: boolean) => {
     const ach = f.titles >= 1 ? `${f.titles}-time champion` : f.wins > 0 ? `${f.wins} career ${plural(f.wins, 'win')}` : ''
-    return `age ${f.age}${ach ? `, ${ach}` : ''}`
+    return `${ageSeen ? `also ${f.age}` : `age ${f.age}`}${ach ? `, ${ach}` : ''}`
   }
-  const vetName = (f: Facts) => `${f.name} (${vetTag(f)})`
+  // A veteran name list that collapses a repeated age to "also N", so two same-age veterans in one
+  // sentence don't both read "age 37".
+  const vetNames = (vs: typeof cast.veterans): string[] => {
+    const seen = new Set<number>()
+    return vs.map((v) => {
+      const f = facts(v.driverId)
+      const out = `${f.name} (${vetTag(f, seen.has(f.age))})`
+      seen.add(f.age)
+      return out
+    })
+  }
   // New-team driver: strongest framing — champion, then where they were signed from, then veteran/rookie.
   const ntPhrase = (f: Facts) =>
     f.titles >= 2 ? `${f.titles}-time champion ${f.name}`
@@ -1980,8 +2002,8 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   if (cast.titleFavourites.length) sections.push(fill(pick(c.favourites, `${seed}|fav`), { ...slots, names: listJoin(cast.titleFavourites.map((id) => favName(facts(id)))) }))
   if (cast.darkHorses.length) sections.push(fill(pick(c.darkHorses, `${seed}|dh`), { ...slots, names: listJoin(cast.darkHorses.map((id) => favName(facts(id)))) }))
   if (cast.bestOfRest.length) sections.push(fill(pick(c.bestOfRest, `${seed}|bor`), { ...slots, teams: listJoin(cast.bestOfRest.map((id) => teamName(ctx, id))) }))
-  const resurgent = cast.veterans.filter((v) => v.kind === 'resurgent').map((v) => vetName(facts(v.driverId)))
-  const twilight = cast.veterans.filter((v) => v.kind === 'twilight').map((v) => vetName(facts(v.driverId)))
+  const resurgent = vetNames(cast.veterans.filter((v) => v.kind === 'resurgent'))
+  const twilight = vetNames(cast.veterans.filter((v) => v.kind === 'twilight'))
   if (resurgent.length) sections.push(fill(pick(c.veteransResurgent, `${seed}|vr`), { ...slots, names: listJoin(resurgent) }))
   if (twilight.length) sections.push(fill(pick(c.veteransTwilight, `${seed}|vt`), { ...slots, names: listJoin(twilight) }))
   if (cast.rookies.length) sections.push(fill(pick(c.rookies, `${seed}|rk`), { ...slots, names: listJoin(cast.rookies.map(dn)) }))
@@ -2029,7 +2051,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
       const group = [...ctx.teams].filter((t) => tierKey(t) === tier).sort((a, b) => b.carPace - a.carPace)
       if (group.length === 0) continue
       const lseed = `launch-${lyear}-${tier}`
-      const lslots = { year: lyear, lead: group[0]?.name ?? '', n: group.length, teams_word: plural(group.length, 'team') }
+      const lslots = { year: lyear, lead: group[0]?.name ?? '', n: group.length, teams_word: plural(group.length, 'team'), others: group.length - 1, others_word: plural(group.length - 1, 'team') }
       const C = LAUNCH_COPY.tiers[tier]
       const usedLine = new Set<string>()
       const usedRef = new Set<string>()
