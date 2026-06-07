@@ -168,7 +168,7 @@ export default function Nav() {
   function handleRestart() {
     const s = useSeasonStore.getState()
     const c = calendarForYear(s.year)[s.currentRound - 1]
-    if (c) useRaceStore.getState().resetSession(s.drivers.filter((d) => d.teamId !== ''), s.teams, c.id)
+    if (c) useRaceStore.getState().resetSession(s.drivers.filter((d) => d.teamId !== ''), s.teams, c)
     setRestartOpen(false)
     setMenuOpen(false)
   }

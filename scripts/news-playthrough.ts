@@ -200,7 +200,7 @@ async function main() {
       const grid = s.drivers.filter((d) => d.teamId !== '')
 
       const race = useRaceStore.getState()
-      race.loadFromSeason(grid, s.teams, circuit.id)
+      race.loadFromSeason(grid, s.teams, circuit)
       race.initSession() // qualifying -> pre-race
       const rs = useRaceStore.getState().raceState
       if (!rs) break

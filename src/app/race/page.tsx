@@ -51,7 +51,7 @@ export default function RacePage() {
     setHydrated(true)
     if (season.phase === 'idle') { router.replace('/setup'); return }
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
-    if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit.id)
+    if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

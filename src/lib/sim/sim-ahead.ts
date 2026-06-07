@@ -26,7 +26,7 @@ export async function simulateUntilRound(targetRound: number, onRace?: (round: n
 
     // Run the full race headlessly through the race engine.
     const race = useRaceStore.getState()
-    race.loadFromSeason(grid, season.teams, circuit.id)
+    race.loadFromSeason(grid, season.teams, circuit)
     race.initSession() // qualifying → pre-race
     const rs = useRaceStore.getState().raceState
     if (!rs) break
