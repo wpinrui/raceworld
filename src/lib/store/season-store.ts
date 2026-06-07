@@ -568,8 +568,10 @@ export const useSeasonStore = create<SeasonStore>()(
         // driver's teammate. Uses pre-race confidence (progression doesn't touch it).
         updatedDrivers = applyConfidenceUpdate(updatedDrivers, results)
 
-        // Phase 1 of the driver market plays out in-season: a contract watch at round 15, then renewals
-        // at round 18. Both compare each expiring driver's grid-wide media standing against their team's
+        // Phase 1 of the driver market plays out in-season: a contract watch (~62.5% through the season),
+        // then renewals (~75% through) — both scaled to the season length via marketWatchRound /
+        // marketRenewalRound (#66), so 24 rounds = 15/18, 16 rounds = 10/12. Both compare each expiring
+        // driver's grid-wide media standing against their team's
         // WCC standing — the closer the match, the better the fit (and, at renewal, the likelier + longer
         // the new deal). Whoever isn't re-signed becomes a free agent in the end-of-season draft.
         let seasonRenewals = get().seasonRenewals
