@@ -16,7 +16,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 
 // Expected-value (no-RNG) version of one applyRaceProgression tick for a single driver.
 // Keep the 15 here in step with progression.ts (races-to-potential pacing of the development curve).
-function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number): Stats {
+function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number, declineRate: number): Stats {
   // Mirror the live plateau check: all five rated stats (consistency included) grow until overall
   // reaches peakPotential, the same point applyRaceProgression would stop (issue #59).
   const ov = overall(stats)
@@ -30,7 +30,8 @@ function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: nu
     // Per-attribute develop rates (#66), shared with live progression so composed grids match.
     for (const k of STAT_KEYS) next[k] = Math.min(100, round1(stats[k] + gain * DEVELOP_RATES[k]))
   } else {
-    const declineMedian = 0.04 * (age - primeEnd + 1)
+    // Per-driver declineRate damps the acceleration (#87); at 1 this equals the original 0.04·(age−primeEnd+1).
+    const declineMedian = 0.04 * (1 + (age - primeEnd) * declineRate)
     for (const k of STAT_KEYS) next[k] = Math.max(20, round1(stats[k] - declineMedian * DECLINE_RATES[k]))
   }
   return next
@@ -41,6 +42,7 @@ function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: nu
 const DEFAULTS = { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70, consistency: 70, peakPotential: 78, primeEnd: 31, narrativeModifier: 0 }
 const peakOf = (h: HistoricalDriver) => h.peakPotential ?? DEFAULTS.peakPotential
 const primeEndOf = (h: HistoricalDriver) => h.primeEnd ?? DEFAULTS.primeEnd
+const declineRateOf = (h: HistoricalDriver) => h.declineRate ?? 1 // #87: absent ⇒ normal accelerating decline
 
 // A seated driver's initial contract length (1-3 years), spread by a stable hash of the id so a
 // composed grid's seats DON'T all expire in the same year (which would dump the whole field onto the
@@ -87,7 +89,7 @@ export function projectToYear(h: HistoricalDriver, targetYear: number): { stats:
   stats = retuneEntry(stats, peakOf(h), primeEndOf(h), h.ageAtEntry)
   let age = h.ageAtEntry
   for (let y = h.marketEntryYear; y < targetYear; y++) {
-    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRace(stats, age, peakOf(h), primeEndOf(h))
+    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRace(stats, age, peakOf(h), primeEndOf(h), declineRateOf(h))
     age += 1
   }
   return { stats, age }
@@ -100,7 +102,7 @@ function toDriver(h: HistoricalDriver, teamId: string, year: number): Driver {
     id: h.id, name: h.name, teamId, nationality: h.nationality, gender: h.gender,
     pace: stats.pace, wetWeatherPace: stats.wetWeatherPace, overtaking: stats.overtaking, smoothness: stats.smoothness,
     consistency: stats.consistency,
-    age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
+    age, peakPotential: peakOf(h), primeEnd: primeEndOf(h), declineRate: h.declineRate, narrativeModifier: h.narrativeModifier ?? DEFAULTS.narrativeModifier,
     // Seated drivers carry a staggered 0-3 year contract, mostly 0-2 (see initialContractYears), so the
     // market churns only part of the grid each off-season but ALWAYS has some seats open, the first season
     // included; free agents are already out of contract (year - 1).

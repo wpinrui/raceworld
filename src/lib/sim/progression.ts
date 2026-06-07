@@ -115,9 +115,12 @@ export function applyRaceProgression(
         next[stat] = Math.min(100, round1(driver[stat] + actualGain * DEVELOP_RATES[stat] * jitter))
       }
     } else {
-      // Declining — accelerates the further past prime end.
-      const yearsPast = driver.age - driver.primeEnd + 1
-      const declineMedian = 0.04 * yearsPast
+      // Declining — accelerates the further past prime end. A per-driver declineRate (default 1) damps that
+      // acceleration so long-lived veterans taper instead of cliffing (#87): at 1 this is the original
+      // 0.04·(age−primeEnd+1); lower values flatten it toward a linear decline. Absent ⇒ 1, so untuned drivers
+      // are unchanged.
+      const declineRate = driver.declineRate ?? 1
+      const declineMedian = 0.04 * (1 + (driver.age - driver.primeEnd) * declineRate)
       for (const stat of STATS) {
         const drop = Math.max(0, sampleNormal(declineMedian, declineMedian * 0.3 + 0.02, rng))
         next[stat] = Math.max(20, round1(driver[stat] - drop * DECLINE_RATES[stat]))
