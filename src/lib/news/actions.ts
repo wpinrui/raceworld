@@ -14,7 +14,7 @@ import {
   type DbRaceResult,
 } from '@/lib/db/queries'
 import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type RecordMetric, type SeasonRecordMark } from './engine'
-import type { Driver, Team, RaceResult, Circuit } from '@/lib/sim/types'
+import type { Driver, Team, RaceResult, Circuit, RaceWeather } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 
 // Reconstruct the grid changes from an archived season to the NEXT one by diffing rosters: a team gone
@@ -144,6 +144,11 @@ export async function actionGetSeasonRecords(): Promise<RecordsContext> {
   return { archivedSeasons, seasonDriver, seasonTeam, driverNames, teamNames }
 }
 
+function parseWeather(json: string | null): RaceWeather | undefined {
+  if (!json) return undefined
+  try { return JSON.parse(json) as RaceWeather } catch { return undefined }
+}
+
 function toRaceResult(r: DbRaceResult): RaceResult {
   let stints: RaceResult['stints'] = []
   try { stints = JSON.parse(r.stints_json) } catch { stints = [] }
@@ -198,7 +203,12 @@ export async function actionGetSeasonNews(year: number): Promise<SeasonNews> {
   const races = [...getRacesForSeason(seasonId)].sort((a, b) => a.round - b.round)
   if (races.length === 0) return EMPTY_SEASON_NEWS
 
-  const raceResults: RaceResult[][] = races.map((race) => getResultsForRace(race.id).map(toRaceResult))
+  // Re-attach each race's weather summary (persisted once on the race row) to every result, matching
+  // the live path where it rides on RaceResult. Archived-pre-feature races simply carry none.
+  const raceResults: RaceResult[][] = races.map((race) => {
+    const weather = parseWeather(race.weather_json)
+    return getResultsForRace(race.id).map((rr) => ({ ...toRaceResult(rr), weather }))
+  })
 
   const driverMap = new Map<string, Driver>()
   const teamMap = new Map<string, Team>()

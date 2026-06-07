@@ -15,6 +15,7 @@ export interface DbRace {
   circuit_id: string
   circuit_name: string
   status: string
+  weather_json: string | null   // serialized RaceWeather; null for races persisted pre-feature
 }
 
 export interface DbRaceResult {
@@ -74,10 +75,10 @@ export function resetDatabase(): void {
   })()
 }
 
-export function createRace(seasonId: number, round: number, circuitId: string, circuitName: string): number {
+export function createRace(seasonId: number, round: number, circuitId: string, circuitName: string, weatherJson: string | null = null): number {
   const result = getDb()
-    .prepare('INSERT INTO races (season_id, round, circuit_id, circuit_name, status) VALUES (?, ?, ?, ?, ?)')
-    .run(seasonId, round, circuitId, circuitName, 'upcoming')
+    .prepare('INSERT INTO races (season_id, round, circuit_id, circuit_name, status, weather_json) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(seasonId, round, circuitId, circuitName, 'upcoming', weatherJson)
   return result.lastInsertRowid as number
 }
 

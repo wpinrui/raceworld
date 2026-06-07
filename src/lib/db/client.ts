@@ -19,6 +19,12 @@ export function getDb(): Database.Database {
       db.exec('DROP TABLE IF EXISTS driver_race_attributes')
       db.exec(SCHEMA)
     }
+    // races.weather_json (weather race-report news) is nullable, so a non-destructive ALTER can add it
+    // to a carried-over DB without dropping the races/race_results graph; old races just carry no weather.
+    const raceCols = db.prepare('PRAGMA table_info(races)').all() as { name: string }[]
+    if (!raceCols.some((c) => c.name === 'weather_json')) {
+      db.exec('ALTER TABLE races ADD COLUMN weather_json TEXT')
+    }
   }
   return db
 }
