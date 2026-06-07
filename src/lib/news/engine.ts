@@ -43,8 +43,9 @@ import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
 import expectationCheckCopy from './expectation-check-copy.json'
-import { driverArcs, teammateBattles } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
+import crossTeamDuelCopy from './cross-team-duel-copy.json'
 import teammateBattleCopy from './teammate-battle-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
@@ -2461,6 +2462,28 @@ function teammateBattle(ctx: NewsContext): NewsArticle[] {
   })
 }
 
+// Cross-team duel retrospective (#88): the season's single defining battle between two drivers on different
+// teams outside the title fight — a parallel fight among the fast cars, or a midfield duel. End-of-season.
+function crossTeamDuel(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = crossTeamDuelCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return crossTeamDuels(ctx, analysis).map((m) => {
+    const a = dn(m.aId)
+    const b = dn(m.bId)
+    const slots = { year: ctx.year, a, a_last: lastName(a), b, b_last: lastName(b), h2h_a: m.h2hA, h2h_b: m.h2hB, gap: m.gap }
+    const cc = c[m.key]
+    const seed = `crossteam-${ctx.year}-${m.aId}-${m.bId}`
+    return {
+      id: seed, category: 'analysis_opinion', round: ctx.completedRounds, priority: 34,
+      headline: fill(pick(cc.h, `${seed}|h`), slots),
+      dek: fill(pick(cc.d, `${seed}|d`), slots),
+      body: fill(pick(cc.b, `${seed}|b`), slots),
+    }
+  })
+}
+
 // Expectation-vs-actual checkpoint (#88): ~twice a season (one-third, two-thirds), who is running above or
 // below their PRESEASON projection — drivers and teams. Compares the season-analysis preseason expectation
 // (round-independent) against the actual standings AT that checkpoint round. Supersedes the analysis
@@ -3174,6 +3197,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...seasonReview(ctx),
     ...driverArc(ctx),
     ...teammateBattle(ctx),
+    ...crossTeamDuel(ctx),
     ...expectationCheck(ctx),
     ...previews(ctx),
     ...market(ctx),

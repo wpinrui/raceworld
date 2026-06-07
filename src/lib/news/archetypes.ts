@@ -173,3 +173,55 @@ export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): Tea
   }
   return [...best.values()].sort((a, b) => b.strength - a.strength)
 }
+
+export type CrossTeamKey = 'parallelFight' | 'midfieldDuel'
+
+export interface CrossTeamMatch {
+  aId: string // the driver who finished ahead
+  bId: string // the driver just behind
+  key: CrossTeamKey
+  h2hA: number // race head-to-head (both classified) in A's favour
+  h2hB: number
+  gap: number // season points gap (small = a real duel)
+  strength: number
+}
+
+// Cross-team rivalry archetypes (#88): two drivers on DIFFERENT teams, NOT in the title fight, who finished
+// the season locked together — a parallel fight among the fast cars behind the leaders, or a midfield duel.
+// Adjacent in the final order, close on points, with an even race head-to-head.
+export function crossTeamDuels(ctx: NewsContext, analysis: SeasonAnalysis): CrossTeamMatch[] {
+  const N = analysis.completedRounds
+  if (N < 6) return []
+  const seated = ctx.drivers.filter((d) => d.teamId !== '')
+  const minStarts = Math.max(3, Math.round(N / 2))
+  const rows = seated
+    .map((d) => ({ id: d.id, teamId: d.teamId, ...statsUpTo(ctx, d.id, 1, N) }))
+    .filter((r) => r.started >= minStarts)
+    .sort((a, b) => b.points - a.points)
+  const out: CrossTeamMatch[] = []
+  // Skip the top two (the title fight is the championship arc's job); walk adjacent pairs below.
+  for (let i = 2; i < rows.length - 1; i++) {
+    const a = rows[i]
+    const b = rows[i + 1]
+    if (a.teamId === b.teamId) continue // must be a CROSS-team duel
+    const gap = a.points - b.points
+    if (gap > 15) continue // close on points
+    let h2hA = 0, h2hB = 0
+    for (let r = 1; r <= N; r++) {
+      const rr = ctx.raceResults[r - 1] ?? []
+      const x = rr.find((z) => z.driverId === a.id)
+      const y = rr.find((z) => z.driverId === b.id)
+      if (x && y && !x.dnf && !y.dnf && x.finishPosition != null && y.finishPosition != null) {
+        if (x.finishPosition < y.finishPosition) h2hA++
+        else h2hB++
+      }
+    }
+    const total = h2hA + h2hB
+    if (total < 4) continue // enough wheel-to-wheel meetings
+    const dominance = Math.max(h2hA, h2hB) / total
+    if (dominance > 0.75) continue // a duel, not a rout
+    const key: CrossTeamKey = i <= 4 ? 'parallelFight' : 'midfieldDuel' // fast cars behind the leaders vs the midfield
+    out.push({ aId: a.id, bId: b.id, key, h2hA, h2hB, gap, strength: (16 - gap) + (1 - Math.abs(0.5 - dominance) * 2) * 10 })
+  }
+  return out.sort((a, b) => b.strength - a.strength).slice(0, 1) // the season's single defining cross-team duel
+}
