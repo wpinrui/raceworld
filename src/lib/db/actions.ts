@@ -86,7 +86,9 @@ export async function actionFlushRaceResult(
   results: RaceResult[],
   attributeSnapshots: DriverAttributeSnapshot[] = [],
 ): Promise<void> {
-  const raceId = createRace(seasonId, round, circuitId, circuitName)
+  // Weather is race-level: persist one summary on the race row (every result carries the same object).
+  const weather = results.find((r) => r.weather)?.weather ?? null
+  const raceId = createRace(seasonId, round, circuitId, circuitName, weather ? JSON.stringify(weather) : null)
   insertRaceResults(raceId, results)
   if (attributeSnapshots.length > 0) insertDriverRaceAttributes(seasonId, round, attributeSnapshots)
   insertDriverRaceForm(raceId, results.map((r) => ({ driverId: r.driverId, form: r.form })))

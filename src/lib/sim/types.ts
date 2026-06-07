@@ -191,6 +191,20 @@ export function isOffSeason(phase: SeasonPhase): boolean {
   return OFF_SEASON_PHASES.includes(phase)
 }
 
+// Per-race weather summary for the newsroom. Computed once at the flag from the true moisture curve
+// and the fallible forecast (both on RaceState) plus the field's lap times, then persisted with the
+// race so archived seasons read identically. `shape` is the day's arc; `wetMaster` is the driver who
+// handled the wet best RELATIVE to the field (biggest dry->wet step-up; see sim/race-weather.ts).
+export interface RaceWeather {
+  rained: boolean
+  peakMoisture: number              // 0-1, the wettest point of the race
+  wetLapCount: number               // laps run at/above the wet (intermediate) threshold
+  shape: 'dry' | 'shower' | 'building' | 'drying' | 'sustained'
+  forecastThreatenedRain: boolean   // a dry race the forecast had wrongly called for rain (phantom rain)
+  wetMasterId: string | null        // best relative wet performer; null on a dry race / too few wet laps
+  wetMasterName: string | null
+}
+
 export interface RaceResult {
   driverId: string
   driverName: string
@@ -214,6 +228,9 @@ export interface RaceResult {
   crashed?: boolean
   retirementReason?: RetirementReason | null
   fastestLap?: boolean                   // set on the driver who set the race's fastest lap (issue #63)
+  // Race-day weather summary (the SAME object on every row of a race). Optional: archived results
+  // predating the field omit it; a fresh DB read re-attaches it from the races table.
+  weather?: RaceWeather
 }
 
 export interface DriverStanding {

@@ -1,0 +1,77 @@
+{
+  "headline": {
+    "damp": ["damp", "greasy", "slippery", "spray-flecked", "mist-shrouded", "treacherous"],
+    "wet": ["rain-soaked", "rain-hit", "rain-affected", "wet", "waterlogged", "rain-swept"],
+    "heavy": ["storm-hit", "rain-lashed", "sodden", "rain-drenched", "waterlogged", "deluge-hit"],
+    "drying": ["drying", "damp-to-dry", "rain-cleared", "rain-eased"]
+  },
+  "wet": {
+    "shower": [
+      "A passing shower caught out half the field at the {circuit}, but {wx_master_last} looked the most assured on the damp surface.",
+      "{wx_master_last} was quickest of all through the rain burst at the {circuit}, reading the spray with a confidence few others could match.",
+      "The brief shower that swept the {circuit} mid-race suited {wx_master_last} like no one else, {their} pace through the wet corners unmatched.",
+      "As the shower passed through the {circuit}, {wx_master_last} carried more speed in the wet than any other driver on track.",
+      "The shower that crossed the {circuit} lasted barely a handful of laps, yet it was long enough to show {wx_master_last} at {their} best.",
+      "Most drivers lost their footing when the shower arrived at the {circuit}, but {wx_master_last} was unflustered by the spray throughout.",
+      "A sharp squall mid-race at the {circuit} separated the assured from the hesitant, and {wx_master_last} was quickest of all in the conditions.",
+      "{wx_master_last} threaded through the spray at the {circuit} with a precision the shower could not shake, finding grip the rest could not."
+    ],
+    "building": [
+      "The rain that arrived late at the {circuit} only brought the best out of {wx_master_last}, {they} carrying more pace than anyone in the wet.",
+      "As conditions deteriorated across the closing stages at the {circuit}, {wx_master_last} came alive in a way {their} rivals simply could not match.",
+      "{wx_master_last} was the quickest driver on track once the rain came at the {circuit}, {their} pace through the spray a cut above the rest.",
+      "The building rain at the {circuit} suited {wx_master_last} like no one else, {they} making the increasingly treacherous conditions look easy.",
+      "With rain intensifying through the final stint at the {circuit}, {wx_master_last} was the most assured driver in the field through the wet corners.",
+      "The later the rain fell at the {circuit}, the more {wx_master_last} seemed in {their} element, finding grip where others struggled for purchase.",
+      "A dry start gave way to a wet finish at the {circuit}, and {wx_master_last} had the measure of the rain better than anyone.",
+      "{wx_master_last} adapted fastest when the downpour arrived in the closing laps at the {circuit}, the {wx_master_team} car finding pace the rest could not."
+    ],
+    "drying": [
+      "As {circuit} dried from a wet start, {wx_master_last} read the changing surface better than anyone else in the field.",
+      "{wx_master_last} had the measure of the drying track at the {circuit} earlier than any rival, carrying more pace through the transitional conditions.",
+      "The drying surface at the {circuit} defined the race, and it was {wx_master_last} who felt what it was offering before the rest.",
+      "With {circuit} losing water through the middle of the race, {wx_master_last} was the quickest driver at reading what the surface could give.",
+      "{wx_master_last} made the wet-to-dry transition at the {circuit} look easy, carrying pace through the changing conditions with a precision few could match.",
+      "The {circuit} surface dried unevenly, but {wx_master_last} found grip on the damp patches before any other driver had located it.",
+      "{wx_master_last} was the first to unlock pace on the drying {circuit} surface, a feel for the conditions that came naturally to {them}.",
+      "As the sun worked on the {circuit} between the wet patches, {wx_master_last} was the most assured driver at reading what the track was offering."
+    ],
+    "sustained": [
+      "Through a {circuit} run entirely in the wet, {wx_master_last} was the quickest driver on a sodden track from start to finish.",
+      "{wx_master_last} had the measure of the wet {circuit} surface all race long, carrying pace through the spray that no one else could match.",
+      "The rain never relented at the {circuit}, and the longer the conditions persisted, the more {wx_master_last} looked in {their} element.",
+      "From lights to flag in the rain at the {circuit}, {wx_master_last} was the most assured driver on a track that punished every mistake.",
+      "A race held entirely in wet conditions at the {circuit} suited {wx_master_last} like no one else, {their} pace through the rain unmatched all afternoon.",
+      "{wx_master_last} was quickest of all at the {circuit} under grey skies throughout, the sustained rain a condition {they} found natural rather than difficult.",
+      "Nobody read a fully wet {circuit} as well as {wx_master_last} did, the {wx_master_team} car fast and precise on a track that tested every driver.",
+      "The sustained rain at the {circuit} sorted the field by feel for conditions, and {wx_master_last} was the clearest answer to what the wet surface demanded."
+    ]
+  },
+  "wetNoMaster": [
+    "Rain swept across the {circuit} and reshuffled the order through the middle of the race.",
+    "The wet conditions at the {circuit} made every tyre decision a gamble, and few teams emerged feeling they had called it correctly.",
+    "A damp surface at the {circuit} kept every driver on edge, the margin for error reduced to almost nothing.",
+    "The rain that fell over the {circuit} turned a straightforward race into a question of nerve and survival.",
+    "Conditions never fully settled at the {circuit}, and the field paid the price in spins, wide moments, and contested calls throughout."
+  ],
+  "dryThreatened": [
+    "The forecast had threatened rain all afternoon, but {circuit} stayed dry and the storm never came.",
+    "Dark clouds gathered over the {circuit} through the closing stages, though they delivered nothing more than an anxious hour for strategy teams.",
+    "Several teams had gambled on intermediates sitting warm in the pitlane at the {circuit}, but the rain never appeared.",
+    "The storm that had circled the {circuit} all morning tracked north before the race began, leaving the surface dry.",
+    "A threatening sky hung over the {circuit} for much of the afternoon, though the track stayed dry from start to finish.",
+    "Rain had been widely predicted at the {circuit} and more than one team structured their strategy around it, yet the surface stayed bone dry throughout."
+  ],
+  "dryFlavour": [
+    "Track temperatures climbed through the afternoon at the {circuit}, and tyre wear punished anyone who pushed too early.",
+    "The asphalt at the {circuit} held its heat well into the closing laps, blistering rear tyres before they announced themselves.",
+    "A light breeze off the perimeter offered some relief at the {circuit}, though cockpit heat through the second half remained severe.",
+    "Graining troubled several runners at the {circuit} in the early stages before the rubber came in, a short but costly window.",
+    "The track at the {circuit} was at its most slippery in the first stint, the surface green before rubber laid down a faster line.",
+    "Visibility was sharply reduced at the {circuit} as glare from the low sun cut across the circuit in the closing stages.",
+    "Cockpit temperatures at the {circuit} were brutal through the middle portion, the car baking in slow corners without airflow at speed.",
+    "Fine dust blown across the {circuit} from outside the racing line kept grip unpredictable throughout the afternoon.",
+    "High ambient temperature and a dark surface at the {circuit} meant tyre degradation was a constant concern across long stints.",
+    "A circuit that holds heat as well as the {circuit} left little margin on compound choice, with softer options degrading visibly late on."
+  ]
+}
