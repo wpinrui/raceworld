@@ -34,6 +34,7 @@ import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
 import { buildSeasonAnalysis, previewCast, titleArcEvents } from './season-analysis'
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
+import raceCodaCopy from './race-coda-copy.json'
 import milestoneCopy from './milestone-copy.json'
 import recordsCopy from './records-copy.json'
 import sillyCopy from './sillyseason-copy.json'
@@ -620,6 +621,14 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
+    // Title trajectory for the coda (#88): how the CURRENT leader's gap has moved over the trailing window,
+    // so the report's closing line carries the running narrative instead of just the static gap.
+    const codaW = Math.min(4, r - 1)
+    const agoStand = driverStandingsAfter(ctx, r - codaW)
+    const ptsAgo = (id?: string) => (id ? agoStand.find((x) => x.driverId === id)?.points ?? 0 : 0)
+    const gapAgo = leader && afterR[1] ? ptsAgo(leader.driverId) - ptsAgo(afterR[1].driverId) : leadGap
+    const codaSwing = leadGap - gapAgo
+    const codaTrajectory = !clinched && !leadChanged && afterR.length >= 2 && codaW >= 2 && gapAgo > 0 && Math.abs(codaSwing) >= 10
 
     // Safe, specific colour.
     const winnerHome = isHomeRace(ctx, p1.driverId, r)
@@ -663,7 +672,9 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       pole_runner_up: poleRunnerUp ? lastName(poleRunnerUp.driverName) : '',
       mover: mover?.driverName ?? '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
+      leader_last: leader ? lastName(leader.driverName) : '', second_last: afterR[1] ? lastName(afterR[1].driverName) : '',
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
+      gap_ago: gapAgo, rounds_ago: codaW, swing: Math.abs(codaSwing),
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
       dnf_solo_reason: dnfSolo ? pick(poolFor(dnfSolo), `${seed}|why-${dnfSolo.driverId}`) : '',
@@ -845,6 +856,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           '{leader} takes over at the head of the table, {lead_gap} {lead_gap_pts} ahead of {second}.',
           'The points lead changes hands, {leader} now in front of {second} by {lead_gap} {lead_gap_pts}.',
         ]
+      : codaTrajectory
+      ? (codaSwing < 0 ? raceCodaCopy.closing : raceCodaCopy.extending)
       : [
           'In the championship, {leader} stays in front, {lead_gap} {lead_gap_pts} clear of {second}.',
           '{leader} holds the points lead on {leader_points}, {lead_gap} {lead_gap_pts} up on {second}.',
