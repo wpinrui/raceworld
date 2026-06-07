@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useTeamSeason } from '@/lib/world/hooks'
@@ -13,8 +13,7 @@ export default function TeamSeasonPage() {
   const { id, year: yearStr } = useParams<{ id: string; year: string }>()
   const year = Number(yearStr)
   const { detail, loading } = useTeamSeason(id, year)
-  const [hydrated, setHydrated] = useState(false)
-  useEffect(() => setHydrated(true), [])
+  const hydrated = useHydrated()
   if (!hydrated) return null
 
   return (

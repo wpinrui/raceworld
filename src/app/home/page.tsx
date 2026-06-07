@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
@@ -18,10 +19,9 @@ export default function HomePage() {
   const phase = useSeasonStore((s) => s.phase)
   const teams = useSeasonStore((s) => s.teams)
   const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [simming, setSimming] = useState(false)
 
-  useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   async function handleSimTo(round: number) {

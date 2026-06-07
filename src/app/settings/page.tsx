@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { Star } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore, DEFAULT_INTERRUPT_CATEGORIES } from '@/lib/store/settings-store'
@@ -18,11 +19,10 @@ export default function SettingsPage() {
     setInterruptOnRaceday, setCategoryInterrupt, toggleFollowDriver, toggleFollowTeam, setInterruptOnFollowed, resetInterruptsToDefault,
   } = useSettingsStore()
 
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [q, setQ] = useState('')
   const [clearOpen, setClearOpen] = useState(false)
   const [clearError, setClearError] = useState(false)
-  useEffect(() => setHydrated(true), [])
 
   async function handleClearSave() {
     // Reset the DB FIRST. If it fails, do nothing else: clearing localStorage now would leave a fresh

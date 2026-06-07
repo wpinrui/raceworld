@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -16,9 +16,8 @@ export default function DriverSeasonPage() {
   const { id, year: yearStr } = useParams<{ id: string; year: string }>()
   const year = Number(yearStr)
   const { detail, loading } = useDriverSeason(id, year)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const scrollRef = useScrollRestore<HTMLDivElement>(`driverseason:${id}:${year}:scroll`)
-  useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   return (

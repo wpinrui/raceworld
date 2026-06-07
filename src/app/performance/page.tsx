@@ -1,14 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { PerformanceView } from '@/components/performance/PerformanceView'
 
 // Full-screen Performance tab: how race results line up with each car's pace.
 export default function PerformancePage() {
   const year = useSeasonStore((s) => s.year)
-  const [hydrated, setHydrated] = useState(false)
-  useEffect(() => setHydrated(true), [])
+  const hydrated = useHydrated()
   if (!hydrated) return null
 
   return (

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -127,8 +128,7 @@ export default function DriverPage() {
   const maxRounds = Math.max(1, ...(career?.seasons ?? []).map((s) => s.results.length))
   const effectiveFormYear = formYear ?? careerYears[0] ?? seasonYear
   const { detail: formDetail, loading: formLoading } = useDriverSeason(id, effectiveFormYear)
-  const [hydrated, setHydrated] = useState(false)
-  useEffect(() => setHydrated(true), [])
+  const hydrated = useHydrated()
   if (!hydrated) return null
 
   const inputClass = 'w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
