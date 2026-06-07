@@ -3475,7 +3475,17 @@ function articleDate(ctx: NewsContext, a: NewsArticle): string {
   const n = ctx.calendar.length
   if (a.round <= 0) return toISODate(addDays(raceDayOf(ctx, 1), a.category === 'car_launch_livery' ? -24 : -14))
   const anchor = a.round > n ? n : a.round
-  return toISODate(addDays(raceDayOf(ctx, anchor), CATEGORY_DAY_OFFSET[a.category] ?? 0))
+  const raw = addDays(raceDayOf(ctx, anchor), CATEGORY_DAY_OFFSET[a.category] ?? 0)
+  // The day offset is cosmetic intra-round ordering only — it must NOT push a story past its round's
+  // NEXT race, or the date-driven Continue-loop interrupt (continue-loop.ts) fires a round or more late
+  // and disagrees with the round the newsroom buckets it under (issue #53; e.g. team_* at +21 days on a
+  // mid-season round 19 would otherwise land past rounds 20-21). Clamp an in-season story to the eve of
+  // its next race; off-season stories (round > n) anchor to the finale and have no next race to cross.
+  if (a.round < n) {
+    const nextRaceEve = addDays(raceDayOf(ctx, a.round + 1), -1)
+    if (raw.getTime() > nextRaceEve.getTime()) return toISODate(nextRaceEve)
+  }
+  return toISODate(raw)
 }
 
 function escapeRe(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
