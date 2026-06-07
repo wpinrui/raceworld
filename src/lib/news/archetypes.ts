@@ -112,3 +112,60 @@ export function driverArcs(ctx: NewsContext, analysis: SeasonAnalysis): DriverAr
   }
   return [...best.values()].sort((a, b) => b.strength - a.strength)
 }
+
+export type TeammateKey = 'dominant' | 'underdeliver'
+
+export interface TeammateMatch {
+  teamId: string
+  winnerId: string // the driver who came out ahead (the story's subject)
+  loserId: string // the team-mate who came out behind
+  key: TeammateKey
+  strength: number
+}
+
+// Teammate-battle archetypes (#88): one driver routing the other on equal machinery, or the more-fancied
+// driver being out-performed by a team-mate. (Incident-driven clashes + team-orders favouritism are deferred
+// — neither incidents nor an orders flag are modelled; see DEFERRED_ARCHETYPES.)
+export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): TeammateMatch[] {
+  const N = analysis.completedRounds
+  if (N < 6) return []
+  const seated = ctx.drivers.filter((d) => d.teamId !== '')
+  const minStarts = Math.max(3, Math.round(N / 2))
+  const out: TeammateMatch[] = []
+  const seenTeams = new Set<string>()
+  for (const t of ctx.teams) {
+    if (seenTeams.has(t.id)) continue
+    seenTeams.add(t.id)
+    const pair = seated.filter((d) => d.teamId === t.id)
+    if (pair.length !== 2) continue
+    const [a, b] = pair
+    const sa = statsUpTo(ctx, a.id, 1, N)
+    const sb = statsUpTo(ctx, b.id, 1, N)
+    if (sa.started < minStarts || sb.started < minStarts) continue
+    const hi = sa.points >= sb.points ? a : b
+    const lo = hi === a ? b : a
+    const hiPts = Math.max(sa.points, sb.points)
+    const loPts = Math.min(sa.points, sb.points)
+    // Dominant: ~2:1 or better on equal equipment (guard the loPts==0 case via a points floor).
+    if (hiPts >= 30 && hiPts >= loPts * 1.8 + 1) {
+      out.push({ teamId: t.id, winnerId: hi.id, loserId: lo.id, key: 'dominant', strength: hiPts - loPts })
+    }
+    // Underdeliver: the more-fancied driver (better preseason expectation) finished behind the team-mate.
+    const expA = analysis.driverExpectations.get(a.id)?.expectedRank ?? 99
+    const expB = analysis.driverExpectations.get(b.id)?.expectedRank ?? 99
+    const fancied = expA <= expB ? a : b
+    const other = fancied === a ? b : a
+    const fancPts = fancied === a ? sa.points : sb.points
+    const otherPts = other === a ? sa.points : sb.points
+    if (Math.abs(expA - expB) >= 2 && otherPts > fancPts * 1.15 && otherPts >= 20) {
+      out.push({ teamId: t.id, winnerId: other.id, loserId: fancied.id, key: 'underdeliver', strength: otherPts - fancPts })
+    }
+  }
+  // Strongest battle per team, then most newsworthy first.
+  const best = new Map<string, TeammateMatch>()
+  for (const m of out) {
+    const cur = best.get(m.teamId)
+    if (!cur || m.strength > cur.strength) best.set(m.teamId, m)
+  }
+  return [...best.values()].sort((a, b) => b.strength - a.strength)
+}
