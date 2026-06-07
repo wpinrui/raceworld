@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
@@ -37,7 +38,7 @@ export default function RacePage() {
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
   const [showSpeed4Modal, setShowSpeed4Modal] = useState(false)
   const [speed4Confirmed, setSpeed4Confirmed] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [lapProgress, setLapProgress] = useState(0)
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -48,11 +49,15 @@ export default function RacePage() {
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
 
   useEffect(() => {
-    setHydrated(true)
     if (season.phase === 'idle') { router.replace('/setup'); return }
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
     if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSpeedClick = (s: SimSpeed) => {
+    if (s === 4) { setShowSpeed4Modal(true); return }
+    setSpeed4Confirmed(false); setSpeed(s)
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -116,7 +121,7 @@ export default function RacePage() {
     }
     schedule(remaining)
     return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
-  }, [phase, paused, speed]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, paused, speed])
 
   useEffect(() => {
     if (phase !== 'racing' || paused || speed === 4) {
@@ -128,11 +133,6 @@ export default function RacePage() {
     }, 50)
     return () => clearInterval(timer)
   }, [phase, paused, speed])
-
-  const handleSpeedClick = (s: SimSpeed) => {
-    if (s === 4) { setShowSpeed4Modal(true); return }
-    setSpeed4Confirmed(false); setSpeed(s)
-  }
 
   const confirmSpeed4 = () => { setShowSpeed4Modal(false); setSpeed4Confirmed(true); setSpeed(4) }
 
@@ -179,7 +179,7 @@ export default function RacePage() {
               <RaceTable
                 drivers={drivers} teams={teams} states={raceState.drivers}
                 currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
-                phase={phase} selectedDriverId={selectedDriverId}
+                selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
               />
             </div>

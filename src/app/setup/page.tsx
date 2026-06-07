@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRouter } from 'next/navigation'
 import { Upload, Download, Plus, ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -23,22 +24,19 @@ export default function SetupPage() {
   const seasonStore = useSeasonStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [localDrivers, setLocalDrivers] = useState<Driver[]>([])
-  const [localTeams, setLocalTeams] = useState<Team[]>([])
+  // Editable copies of the grid, seeded from the persisted store. zustand-persist rehydrates the
+  // client store synchronously, so these lazy initialisers read the saved grid (the page is gated on
+  // `hydrated` below, so the server's empty default is never rendered).
+  const [localDrivers, setLocalDrivers] = useState<Driver[]>(() => seasonStore.drivers.map((d) => ({ ...d })))
+  const [localTeams, setLocalTeams] = useState<Team[]>(() => seasonStore.teams.map((t) => ({ ...t })))
   const [importError, setImportError] = useState<string | null>(null)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [newTeamName, setNewTeamName] = useState('')
   const [newTeamShort, setNewTeamShort] = useState('')
   const [newTeamColor, setNewTeamColor] = useState('#888888')
   // Which season to start from, and whether real-world changes apply each season-end.
   const [startYear, setStartYear] = useState(DEFAULT_START_YEAR)
   const [realWorld, setRealWorld] = useState(false)
-
-  useEffect(() => {
-    setHydrated(true)
-    setLocalDrivers(seasonStore.drivers.map((d) => ({ ...d })))
-    setLocalTeams(seasonStore.teams.map((t) => ({ ...t })))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any

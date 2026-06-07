@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import Link from 'next/link'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -38,10 +38,9 @@ function LeaderList({ title, kind, entries, suffix }: { title: string; kind: 'dr
 export default function WorldPage() {
   const season = useSeasonStore()
   const { data, loading } = useWorldOverview()
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const scrollRef = useScrollRestore<HTMLDivElement>('world:scroll')
   const card = useLiveDriverCards()
-  useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   const champDriver = season.driverStandings[0]

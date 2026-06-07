@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -16,9 +16,8 @@ export default function RaceClassificationPage() {
   const year = Number(yearStr)
   const round = Number(roundStr)
   const { classification, loading } = useRaceClassification(year, round)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const scrollRef = useScrollRestore<HTMLDivElement>(`season:${year}:${round}:scroll`)
-  useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   const winnerTime = classification?.rows.find((r) => !r.dnf)?.totalTime ?? null

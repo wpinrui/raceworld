@@ -1,4 +1,4 @@
-import type { DriverRaceState, TyreCompound, WeatherPoint, TeamTyreAssumptions } from './types'
+import type { DriverRaceState, TyreCompound, TeamTyreAssumptions } from './types'
 
 export interface PitDecision {
   shouldPit: boolean
@@ -149,12 +149,11 @@ export function planStrategy(
   }
 }
 
-// Per-lap decision: check weather overrides, cliff emergency, then execute the plan.
+// Per-lap decision: cliff emergency, then execute the plan.
 export function decidePit(
   state: DriverRaceState,
   currentLap: number,
   totalLaps: number,
-  weather: WeatherPoint[],
 ): PitDecision {
   const lapsRemaining = totalLaps - currentLap
 

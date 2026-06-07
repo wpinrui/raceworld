@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -33,7 +34,7 @@ export default function NewsroomPage() {
   const s = useSeasonStore()
   const followedDriverIds = useSettingsStore((st) => st.followedDriverIds)
   const followedTeamIds = useSettingsStore((st) => st.followedTeamIds)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const [filter, setFilter] = useRetainedState<string | null>('newsroom:filter', null)
   const [query, setQuery] = useRetainedState('newsroom:query', '')
   const [entity, setEntity] = useRetainedState<EntityValue | null>('newsroom:entity', null)
@@ -45,7 +46,9 @@ export default function NewsroomPage() {
   const [archivedArticles, setArchivedArticles] = useState<NewsArticle[]>([])
   // Roster for the selected archived season, used to hyperlink names in the article text.
   const [archivedRoster, setArchivedRoster] = useState<{ drivers: { id: string; name: string }[]; teams: { id: string; name: string }[]; circuits: { name: string; round: number }[] }>({ drivers: [], teams: [], circuits: [] })
-  const [loadingArchive, setLoadingArchive] = useState(false)
+  // Year whose archive has finished loading; `loadingArchive` (derived below) is true until it matches
+  // the selected year, so the spinner is shown without a synchronous setState inside the fetch effect.
+  const [loadedArchiveYear, setLoadedArchiveYear] = useState<number | null>(null)
   // Cross-season ("all seasons") feed, loaded once on demand.
   const [allData, setAllData] = useState<AllSeasonNews | null>(null)
   const [loadingAll, setLoadingAll] = useState(false)
@@ -59,7 +62,6 @@ export default function NewsroomPage() {
   const listScrollRef = useScrollRestore<HTMLDivElement>('newsroom:list')
   const driverCard = useLiveDriverCards()
   useEffect(() => {
-    setHydrated(true)
     // Deep link from the home headlines: /newsroom#<articleId> opens that exact story.
     if (typeof window !== 'undefined' && window.location.hash.length > 1) {
       const id = decodeURIComponent(window.location.hash.slice(1))
@@ -101,11 +103,9 @@ export default function NewsroomPage() {
   useEffect(() => {
     if (isLive || allSeasons) return
     let cancelled = false
-    setLoadingArchive(true)
     actionGetSeasonNews(selectedYear)
-      .then((res) => { if (!cancelled) { setArchivedArticles(res.articles); setArchivedRoster({ drivers: res.drivers, teams: res.teams, circuits: res.circuits }) } })
-      .catch(() => { if (!cancelled) { setArchivedArticles([]); setArchivedRoster({ drivers: [], teams: [], circuits: [] }) } })
-      .finally(() => { if (!cancelled) setLoadingArchive(false) })
+      .then((res) => { if (!cancelled) { setArchivedArticles(res.articles); setArchivedRoster({ drivers: res.drivers, teams: res.teams, circuits: res.circuits }); setLoadedArchiveYear(selectedYear) } })
+      .catch(() => { if (!cancelled) { setArchivedArticles([]); setArchivedRoster({ drivers: [], teams: [], circuits: [] }); setLoadedArchiveYear(selectedYear) } })
     return () => { cancelled = true }
   }, [isLive, allSeasons, selectedYear])
 
@@ -201,6 +201,7 @@ export default function NewsroomPage() {
   }), [scopeDrivers, scopeTeams, selected?.year, liveYear])
   const index = allSeasons ? allSeasonsIndex : (isLive ? liveIndex : archivedIndex)
 
+  const loadingArchive = loadedArchiveYear !== selectedYear
   const loading = allSeasons ? loadingAll : (!isLive && loadingArchive)
 
   if (!hydrated) return null

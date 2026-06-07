@@ -96,7 +96,6 @@ function simulateSeason(drivers, teamPace, rng) {
 }
 
 function runMarket(drivers, teams, stat, year, mode, rng) {
-  const teamPace = Object.fromEntries(teams.map((t) => [t.id, t.carPace]))
   // car-pace rank (1 = fastest), expectation per seat
   const paceRank = {}
   ;[...teams].sort((a, b) => b.carPace - a.carPace).forEach((t, i) => { paceRank[t.id] = i + 1 })

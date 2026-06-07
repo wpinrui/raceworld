@@ -35,29 +35,38 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
   const [forceCompound, setForceCompound] = useState<TyreCompound>('medium')
   const prevPitStops = useRef(ds?.pitStops ?? 0)
 
-  useEffect(() => {
-    if (ds) {
-      setNextCond(degradeTyre(ds.currentTyre))
-      setNextForm(ds.form)
-      prevPitStops.current = ds.pitStops
-    }
+  // Keep the editable "next lap" values in sync with the live driver: re-read them whenever the
+  // selected driver or the lap changes, and reset the pit override only on a driver switch. Adjusting
+  // state during render (React's sanctioned pattern for reacting to a changed value) replaces two
+  // effects whose synchronous setState tripped react-hooks/set-state-in-effect.
+  const [syncedKey, setSyncedKey] = useState(`${selectedDriverId}:${raceState.currentLap}`)
+  const [syncedDriver, setSyncedDriver] = useState(selectedDriverId)
+  const liveKey = `${selectedDriverId}:${raceState.currentLap}`
+  if (liveKey !== syncedKey) {
+    setSyncedKey(liveKey)
+    if (ds) { setNextCond(degradeTyre(ds.currentTyre)); setNextForm(ds.form) }
+  }
+  if (selectedDriverId !== syncedDriver) {
+    setSyncedDriver(selectedDriverId)
     setPitOverride('auto')
-  }, [selectedDriverId])
+  }
 
+  // On a driver switch, reset the pit-stop baseline so the lap detector below doesn't misfire.
+  useEffect(() => {
+    if (ds) prevPitStops.current = ds.pitStops
+  }, [selectedDriverId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Each lap: once a forced pit has actually happened, flip to no-pit and cancel; keep cancelling
+  // while the driver is held out. onAction talks to the race engine, so this stays an effect.
   useEffect(() => {
     if (!ds) return
-    setNextCond(degradeTyre(ds.currentTyre))
-    setNextForm(ds.form)
-
     if (pitOverride === 'pit' && ds.pitStops > prevPitStops.current) {
       setPitOverride('no-pit')
       onAction([{ type: 'cancel-pit', driverId: selectedDriverId }])
     }
-
     if (pitOverride === 'no-pit') {
       onAction([{ type: 'cancel-pit', driverId: selectedDriverId }])
     }
-
     prevPitStops.current = ds.pitStops
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raceState.currentLap])

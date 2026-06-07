@@ -27,16 +27,18 @@ function useLiveStore(): LiveStore {
 
 export function useDriverCareer(id: string) {
   const live = useLiveStore()
-  const [db, setDb] = useState<DriverCareer | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Track which id the fetched row belongs to, so `loading` is derived (true until the row for the
+  // current id has arrived) instead of flipped by a synchronous setState inside the effect.
+  const [loaded, setLoaded] = useState<{ id: string; db: DriverCareer | null } | null>(null)
 
   useEffect(() => {
     let on = true
-    setLoading(true)
-    actionGetDriverCareer(id).then((d) => { if (on) { setDb(d); setLoading(false) } })
+    actionGetDriverCareer(id).then((d) => { if (on) setLoaded({ id, db: d }) })
     return () => { on = false }
   }, [id])
 
+  const db = loaded?.id === id ? loaded.db : null
+  const loading = loaded?.id !== id
   const career = db ? mergeDriverCareer(db, live) : null
   const notFound = !!career && career.seasons.length === 0 && career.attributes === null
   return { career: notFound ? null : career, loading }
@@ -44,16 +46,16 @@ export function useDriverCareer(id: string) {
 
 export function useTeamCareer(id: string) {
   const live = useLiveStore()
-  const [db, setDb] = useState<TeamCareer | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loaded, setLoaded] = useState<{ id: string; db: TeamCareer | null } | null>(null)
 
   useEffect(() => {
     let on = true
-    setLoading(true)
-    actionGetTeamCareer(id).then((d) => { if (on) { setDb(d); setLoading(false) } })
+    actionGetTeamCareer(id).then((d) => { if (on) setLoaded({ id, db: d }) })
     return () => { on = false }
   }, [id])
 
+  const db = loaded?.id === id ? loaded.db : null
+  const loading = loaded?.id !== id
   const career = db ? mergeTeamCareer(db, live) : null
   const notFound = !!career && career.seasons.length === 0 && career.currentSquad === null
   return { career: notFound ? null : career, loading }
@@ -64,73 +66,73 @@ export function useTeamCareer(id: string) {
 export function useDriverSeason(id: string, year: number) {
   const live = useLiveStore()
   const isLive = year === live.year
-  const [db, setDb] = useState<DriverSeasonDetail | null>(null)
-  const [loading, setLoading] = useState(!isLive)
+  const [loaded, setLoaded] = useState<{ key: string; db: DriverSeasonDetail | null } | null>(null)
+  const key = `${id}:${year}`
 
   useEffect(() => {
     if (isLive) return
     let on = true
-    setLoading(true)
-    actionGetDriverSeason(id, year).then((d) => { if (on) { setDb(d); setLoading(false) } })
+    actionGetDriverSeason(id, year).then((d) => { if (on) setLoaded({ key: `${id}:${year}`, db: d }) })
     return () => { on = false }
   }, [id, year, isLive])
 
   if (isLive) return { detail: buildLiveDriverSeason(id, live), loading: false }
-  return { detail: db, loading }
+  const db = loaded?.key === key ? loaded.db : null
+  return { detail: db, loading: loaded?.key !== key }
 }
 
 export function useTeamSeason(id: string, year: number) {
   const live = useLiveStore()
   const isLive = year === live.year
-  const [db, setDb] = useState<TeamSeasonDetail | null>(null)
-  const [loading, setLoading] = useState(!isLive)
+  const [loaded, setLoaded] = useState<{ key: string; db: TeamSeasonDetail | null } | null>(null)
+  const key = `${id}:${year}`
 
   useEffect(() => {
     if (isLive) return
     let on = true
-    setLoading(true)
-    actionGetTeamSeason(id, year).then((d) => { if (on) { setDb(d); setLoading(false) } })
+    actionGetTeamSeason(id, year).then((d) => { if (on) setLoaded({ key: `${id}:${year}`, db: d }) })
     return () => { on = false }
   }, [id, year, isLive])
 
   if (isLive) return { detail: buildLiveTeamSeason(id, live), loading: false }
-  return { detail: db, loading }
+  const db = loaded?.key === key ? loaded.db : null
+  return { detail: db, loading: loaded?.key !== key }
 }
 
 export function useRaceClassification(year: number, round: number) {
   const live = useLiveStore()
   const isLive = year === live.year
-  const [db, setDb] = useState<RaceClassification | null>(null)
-  const [loading, setLoading] = useState(!isLive)
+  const [loaded, setLoaded] = useState<{ key: string; db: RaceClassification | null } | null>(null)
+  const key = `${year}:${round}`
 
   useEffect(() => {
     if (isLive) return
     let on = true
-    setLoading(true)
-    actionGetRaceClassification(year, round).then((d) => { if (on) { setDb(d); setLoading(false) } })
+    actionGetRaceClassification(year, round).then((d) => { if (on) setLoaded({ key: `${year}:${round}`, db: d }) })
     return () => { on = false }
   }, [year, round, isLive])
 
   if (isLive) return { classification: buildLiveRaceClassification(round, live), loading: false }
-  return { classification: db, loading }
+  const db = loaded?.key === key ? loaded.db : null
+  return { classification: db, loading: loaded?.key !== key }
 }
 
 // Career feats/records for an entity, from the archived stats DB, with a live-clinched
 // current-season title folded in so the Honours panel reflects it before archiving.
 export function useEntityHonours(kind: 'driver' | 'team', id: string) {
   const live = useLiveStore()
-  const [dbFeats, setDbFeats] = useState<Feat[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loaded, setLoaded] = useState<{ key: string; feats: Feat[] } | null>(null)
+  const key = `${kind}:${id}`
 
   useEffect(() => {
     let on = true
-    setLoading(true)
     const fetcher = kind === 'driver' ? actionGetDriverHonours : actionGetTeamHonours
-    fetcher(id).then((f) => { if (on) { setDbFeats(f); setLoading(false) } })
+    fetcher(id).then((f) => { if (on) setLoaded({ key: `${kind}:${id}`, feats: f }) })
     return () => { on = false }
   }, [kind, id])
 
-  return { feats: augmentHonoursWithLiveTitle(dbFeats, kind, id, live), loading }
+  const dbFeats = loaded?.key === key ? loaded.feats : []
+  return { feats: augmentHonoursWithLiveTitle(dbFeats, kind, id, live), loading: loaded?.key !== key }
 }
 
 export function useWorldOverview() {

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
@@ -37,9 +38,8 @@ export default function TeamPage() {
   const upgradeEditable = useSeasonStore((s) => !isOffSeason(s.phase))
   const [tab, setTab] = useRetainedState<Tab>(`team:${id}:tab`, 'overview')
   const [editing, setEditing] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
+  const hydrated = useHydrated()
   const scrollRef = useScrollRestore<HTMLDivElement>(`team:${id}:scroll`)
-  useEffect(() => setHydrated(true), [])
   if (!hydrated) return null
 
   const inputClass = 'w-full px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
