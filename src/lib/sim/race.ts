@@ -11,7 +11,7 @@ import type {
   TeamTyreAssumptions,
 } from './types'
 import { generateWeatherCurve, generateForecastCurve, getMoistureAtLap } from './weather'
-import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
+import { computeTyreLife, degradeTyre, recommendTyre, generateCompoundDeltas, generateTyreBaseLife } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
 import { generateCommentary } from './commentary'
@@ -42,6 +42,8 @@ export function initRaceState(
   const weather = generateWeatherCurve(circuit.laps)
   const weatherForecast = generateForecastCurve(weather, circuit.laps)
   const lap1Moisture = getMoistureAtLap(weather, 1)
+  const compoundDeltas = generateCompoundDeltas()
+  const tyreBaseLife = generateTyreBaseLife()
 
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
 
@@ -71,7 +73,7 @@ export function initRaceState(
     const team = teamMap.get(driver.teamId)!
 
     const compound = recommendTyre(lap1Moisture)
-    const maxLifeLaps = computeTyreLife(compound, driver.smoothness, circuit.laps)
+    const maxLifeLaps = computeTyreLife(tyreBaseLife[compound], driver.smoothness, circuit.laps)
 
     const tyre: TyreState = {
       compound,
@@ -120,6 +122,8 @@ export function initRaceState(
     speed: 1,
     paused: false,
     strategyNoise,
+    compoundDeltas,
+    tyreBaseLife,
     teamAssumptions,
     carForm,
   }
@@ -266,7 +270,7 @@ export function simulateLap(
       pitted = true
       pitPenalty = 20 + Math.random() * 4
       const newMaxLifeLaps = computeTyreLife(
-        pitDecision.targetCompound,
+        state.tyreBaseLife[pitDecision.targetCompound],
         driver.smoothness,
         state.totalLaps,
       )
@@ -312,6 +316,7 @@ export function simulateLap(
       fuelLaps: current.fuelLaps,
       lap: state.currentLap,
       weather: state.weather,
+      compoundDeltas: state.compoundDeltas,
       gapToCarAhead,
       carAheadLapTime,
       circuitFlatModifier: circuit.flatModifier,

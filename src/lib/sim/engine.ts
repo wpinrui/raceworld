@@ -1,4 +1,4 @@
-import type { Driver, Team, TyreState, WeatherPoint } from './types'
+import type { Driver, Team, TyreState, WeatherPoint, TyreCompound } from './types'
 import { getMoistureAtLap } from './weather'
 import { tyreStepsOutOfWindow } from './tyres'
 
@@ -10,6 +10,7 @@ export interface LapInput {
   fuelLaps: number
   lap: number
   weather: WeatherPoint[]
+  compoundDeltas: Record<TyreCompound, number>  // this race's per-compound pace deltas
   gapToCarAhead: number       // Infinity if leading
   carAheadLapTime: number | null
   circuitFlatModifier: number
@@ -68,15 +69,8 @@ export function computeLapTime(input: LapInput): LapResult {
   // 10. fuelMod
   const fuelMod = fuelLaps * 0.05
 
-  // 11. compoundDelta
-  const compoundDeltas: Record<string, number> = {
-    soft: 0,
-    medium: 0.7,
-    hard: 1.5,
-    intermediate: 2.5,
-    wet: 4.0,
-  }
-  const compoundDelta = compoundDeltas[tyre.compound]
+  // 11. compoundDelta — this race's randomised per-compound pace delta
+  const compoundDelta = input.compoundDeltas[tyre.compound]
 
   // 12. noise: a per-lap time PENALTY scaled by consistency (issue #59). Uniform over
   //     [0, 1.2 - 0.01*c]: c=90 -> 0-0.30s (the old flat range), c=75 -> 0-0.45s, c=65 -> 0-0.55s.

@@ -151,6 +151,8 @@ export interface RaceState {
   speed: SimSpeed
   paused: boolean
   strategyNoise: number                                    // 0–1; tunable
+  compoundDeltas: Record<TyreCompound, number>             // per-race pace delta (s/lap) per compound
+  tyreBaseLife: Record<TyreCompound, number>               // per-race base life (fraction of race) per compound
   teamAssumptions: Record<string, TeamTyreAssumptions>     // teamId -> compound -> wear rate/lap
   carForm: Record<string, number>                          // teamId -> per-race car-form pace delta (Normal(0, ~5.19)); adds straight to car pace this race
 }
