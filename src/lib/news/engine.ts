@@ -64,6 +64,8 @@ export interface NewsContext {
   constructorHistory: ConstructorSeasonRecord[]   // prior-season records (for silly-season team media)
   endOfSeason: EndOfSeasonSummary | null
   calendar: Circuit[]
+  seasonStartCarPace?: Record<string, number>  // teamId -> carPace at round 0, for expectation anchoring (#88).
+                                   // Absent on archived contexts; season-analysis falls back to current pace.
   live: boolean                    // true = the active season from the store (full attributes available);
                                    // false = an archived season rebuilt from the DB (results only — the
                                    // attribute-dependent producers, e.g. trajectory/silly-season, stand down)
