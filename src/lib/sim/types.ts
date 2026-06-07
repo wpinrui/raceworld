@@ -35,6 +35,11 @@ export interface Driver {
   age: number
   peakPotential: number
   primeEnd: number       // age at which decline starts
+  // Per-driver decline damper (#87). The decline median is 0.04·(1 + (age−primeEnd)·declineRate): at 1 it is
+  // the original 0.04·(age−primeEnd+1) accelerating curve; lower values flatten it toward a linear taper so a
+  // long-lived veteran ages gracefully instead of cliffing. Absent reads as 1 (no effect) — untuned drivers
+  // are unchanged. Carried through from the historical entry so the live engine keeps tapering past the start year.
+  declineRate?: number
   narrativeModifier: number // -20 to +20
   contractExpiresAfterSeason: number
   // Morale rating in [0, 10] that biases the per-race form roll (issue #58). Starts at 5,

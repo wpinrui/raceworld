@@ -16,6 +16,7 @@ export interface HistoricalDriver {
   // Ratings as of market entry (0-100), suggested separately and signed off; optional so bios can be
   // encoded first. The composer applies a neutral placeholder for any field still missing.
   primeEnd?: number          // peak age; decline begins after this
+  declineRate?: number       // decline-acceleration damper (#87); absent ⇒ 1 = normal accelerating decline, lower = ages gracefully past prime
   pace?: number
   wetWeatherPace?: number
   overtaking?: number
