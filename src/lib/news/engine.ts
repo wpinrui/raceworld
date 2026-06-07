@@ -22,7 +22,7 @@
 
 import type {
   Driver, Team, RaceResult, DevUpgradeEvent,
-  EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord,
+  EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord, RaceWeather,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
@@ -37,6 +37,7 @@ import recordsCopy from './records-copy.json'
 import sillyCopy from './sillyseason-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
+import wxCopy from './weather-report-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
 
@@ -287,6 +288,15 @@ function marginWord(gap: number | null): string {
   if (gap == null) return ''
   if (gap < 1) return `just ${gap.toFixed(3)}s`
   return `${gap.toFixed(1)}s`
+}
+
+// Headline weather modifier bucket (weather race-report news): a drying day reads as "drying",
+// otherwise the descriptor escalates with how wet the track got at its peak.
+function wxHeadlineBucket(wx: RaceWeather): 'damp' | 'wet' | 'heavy' | 'drying' {
+  if (wx.shape === 'drying') return 'drying'
+  if (wx.peakMoisture >= 0.70) return 'heavy'
+  if (wx.peakMoisture >= 0.35) return 'wet'
+  return 'damp'
 }
 
 // Invented, unfalsifiable colour. The rule: a texture line may NEVER reference a tracked
@@ -628,6 +638,12 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
 
     const circuitName = circuit(ctx, r)
     const seed = `report-${ctx.year}-${r}`
+    // Weather angle (weather race-report news): the per-race summary rides on every result row. On a
+    // wet race the headline gains a conditions modifier ("the rain-soaked {circuit}"); dry stays plain.
+    const wx = results.find((x) => x.weather)?.weather ?? null
+    const circuitWx = wx?.rained
+      ? `${pick(wxCopy.headline[wxHeadlineBucket(wx)], `${seed}|wxh`)} ${circuitName}`
+      : circuitName
     // Read the stored retirementReason (issue #61): collision-damage → a crash phrase, a technical
     // type → its own phrasings, absent → a generic mechanical fallback. De-duplicated within a race
     // so the same phrasing doesn't appear twice in one report.
@@ -653,7 +669,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const slots: Record<string, string | number> = {
       winner: p1.driverName, winner_last: lastName(p1.driverName), team: p1.teamName,
       p2: p2?.driverName ?? '', p2_last: p2 ? lastName(p2.driverName) : '', p3: p3?.driverName ?? '',
-      circuit: circuitName, margin, points: p1.points, pole: pole?.driverName ?? '', pole_last: pole ? lastName(pole.driverName) : '',
+      circuit: circuitName, circuit_wx: circuitWx, margin, points: p1.points, pole: pole?.driverName ?? '', pole_last: pole ? lastName(pole.driverName) : '',
       pole_runner_up: poleRunnerUp ? lastName(poleRunnerUp.driverName) : '',
       mover: mover?.driverName ?? '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
@@ -863,14 +879,35 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         }, NOTABLE_MISTAKE_POOL)
       : ''
 
+    // Weather paragraph: a wet race always gets a short conditions line naming who handled the wet
+    // best (relative wet pace; never a position/gap claim, since the master is often not the winner).
+    // A dry race gets a flavoured line only sometimes (more often when rain had been forecast), and
+    // never the bland "it was dry".
+    const wxMaster = wx?.wetMasterId ? ctx.drivers.find((d) => d.id === wx.wetMasterId) : undefined
+    const weatherPara = !wx
+      ? ''
+      : wx.rained
+      ? (() => {
+          const masterName = wxMaster?.name ?? wx.wetMasterName ?? ''
+          const pool = masterName && wx.shape !== 'dry' ? wxCopy.wet[wx.shape] : wxCopy.wetNoMaster
+          return compose(`${seed}:wx`, {
+            circuit: circuitName, wx_master: masterName, wx_master_last: lastName(masterName),
+            wx_master_team: wxMaster ? teamName(ctx, wxMaster.teamId) : '',
+            ...pronouns(wxMaster?.gender),
+          }, pool)
+        })()
+      : chance(`${seed}:wx`, wx.forecastThreatenedRain ? 55 : 18)
+      ? compose(`${seed}:wx`, { circuit: circuitName }, wx.forecastThreatenedRain ? wxCopy.dryThreatened : wxCopy.dryFlavour)
+      : ''
+
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
       headline: fill(pick([
-        '{winner} wins the {circuit}', '{winner_last} triumphs at the {circuit}', '{winner_last} holds on for {circuit} victory',
-        '{winner_last} dominates from start to finish at the {circuit}', '{team} celebrate as {winner_last} takes {circuit} honours',
-        '{winner_last} converts pace into victory at the {circuit}', '{winner_last} sees off {p2_last} to win the {circuit}',
-        'Victory for {winner_last} at the {circuit}', '{winner_last} moves clear after the {circuit}', '{winner_last} delivers at the {circuit}',
-        '{team} claim the {circuit} through {winner_last}', '{winner} masters the {circuit}',
+        '{winner} wins the {circuit_wx}', '{winner_last} triumphs at the {circuit_wx}', '{winner_last} holds on for {circuit_wx} victory',
+        '{winner_last} dominates from start to finish at the {circuit_wx}', '{team} celebrate as {winner_last} takes {circuit_wx} honours',
+        '{winner_last} converts pace into victory at the {circuit_wx}', '{winner_last} sees off {p2_last} to win the {circuit_wx}',
+        'Victory for {winner_last} at the {circuit_wx}', '{winner_last} moves clear after the {circuit_wx}', '{winner_last} delivers at the {circuit_wx}',
+        '{team} claim the {circuit_wx} through {winner_last}', '{winner} masters the {circuit_wx}',
       ], `${seed}|h`), slots),
       dek: fill(pick([
         '{winner} took victory at the {circuit}, with {p2} and {p3} completing the podium.',
@@ -881,7 +918,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         '{winner_last} wins the {circuit} and tightens {their} grip on the season.',
         'A composed afternoon from {winner_last} puts {team} on the top step at the {circuit}.',
       ], `${seed}|d`), slots),
-      body: paras(leadPara, startPara, attritionPara, mistakePara, texturePara, champPara, quotePara),
+      body: paras(leadPara, startPara, weatherPara, attritionPara, mistakePara, texturePara, champPara, quotePara),
     })
   }
   return out
