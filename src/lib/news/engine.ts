@@ -3475,7 +3475,12 @@ function articleDate(ctx: NewsContext, a: NewsArticle): string {
   const n = ctx.calendar.length
   if (a.round <= 0) return toISODate(addDays(raceDayOf(ctx, 1), a.category === 'car_launch_livery' ? -24 : -14))
   const anchor = a.round > n ? n : a.round
-  const raw = addDays(raceDayOf(ctx, anchor), CATEGORY_DAY_OFFSET[a.category] ?? 0)
+  // The title-scenario PREVIEW ("what X needs to clinch at round r", id `scenario-...`) shares the
+  // championship_state category with the post-race "champion crowned" piece, but it is a PREVIEW: it must
+  // drop in its round's race WEEK, BEFORE that race — not at the +1 post-race offset, which fired it a
+  // round late, after the very race it was previewing (same date-driven-interrupt class as #53). Reactions keep their offset.
+  const offset = a.id.startsWith('scenario-') ? -4 : (CATEGORY_DAY_OFFSET[a.category] ?? 0)
+  const raw = addDays(raceDayOf(ctx, anchor), offset)
   // The day offset is cosmetic intra-round ordering only — it must NOT push a story past its round's
   // NEXT race, or the date-driven Continue-loop interrupt (continue-loop.ts) fires a round or more late
   // and disagrees with the round the newsroom buckets it under (issue #53; e.g. team_* at +21 days on a
