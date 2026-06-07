@@ -90,13 +90,15 @@ function OffSeasonReview() {
 
   // Auto-open the recap for whatever off-season stage you've just advanced into — once per phase, so
   // returning to Home (after Standings, etc.) doesn't reopen it. The next Continue changes the phase
-  // and re-arms it.
-  useEffect(() => {
-    if (OFF_SEASON_PHASES.includes(season.phase) && lastAutoOpenedPhase !== season.phase) {
-      lastAutoOpenedPhase = season.phase
-      setOpen(season.phase)
-    }
-  }, [season.phase])
+  // and re-arms it. `autoOpened` is seeded from the module-scoped memory so the "once" survives the
+  // component unmounting; we adjust it during render (React's pattern for reacting to a changed value)
+  // and write the memory back in an effect, so render itself stays pure.
+  const [autoOpened, setAutoOpened] = useState(lastAutoOpenedPhase)
+  if (OFF_SEASON_PHASES.includes(season.phase) && autoOpened !== season.phase) {
+    setAutoOpened(season.phase)
+    setOpen(season.phase)
+  }
+  useEffect(() => { lastAutoOpenedPhase = autoOpened }, [autoOpened])
 
   if (!summary) {
     return <Panel title="Off-Season"><p className="text-sm text-[#FFFFFF]">Wrapping up the season…</p></Panel>
