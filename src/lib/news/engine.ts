@@ -732,7 +732,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const qualiPool = pMargin && pole
       ? [
           '{pole_last} had split the field in qualifying, taking pole by {pole_margin}.',
-          'Qualifying had gone to {pole_last} by {pole_margin}, a margin that spoke of real single-lap pace.',
+          'Qualifying had gone to {pole_last} by {pole_margin}.',
           '{pole_last} had grabbed pole by {pole_margin} from {pole_runner_up}.',
         ]
       : ['']
@@ -780,7 +780,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       '{winner_last} pulled off {their} helmet on the slow-down lap to take in the reception from the grandstands.',
       'The {team} pit wall let the tension of the final laps drain away the instant the flag fell.',
       '{winner_last} drove the in-lap at a measured pace, in no rush to let the afternoon end.',
-      '{winner_last} stood on the podium with the look of someone who knew the result had been earned, not gifted.',
       'The {team} mechanics were at the pit-lane wall before the car had stopped, ready for the celebrations.',
       '{winner_last} held the trophy in both hands and looked out into the crowd before the formalities resumed.',
       '{winner_last} was treated for dehydration once the cameras had moved on, the cockpit a brutal place in the closing laps.',
@@ -828,7 +827,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'In the championship, {leader} stays in front, {lead_gap} {lead_gap_pts} clear of {second}.',
           '{leader} holds the points lead on {leader_points}, {lead_gap} {lead_gap_pts} up on {second}.',
           'Atop the standings, {leader} keeps a {lead_gap}-point cushion over {second}.',
-          'No change at the top, {leader} on {leader_points} points with {second} {lead_gap} {lead_gap_pts} adrift.',
+          'No change at the top of the standings, {leader} on {leader_points} points with {second} {lead_gap} {lead_gap_pts} adrift.',
         ]
     const champPara = compose(`${seed}:champ`, slots, champPool)
 
@@ -1473,6 +1472,7 @@ function championshipArc(ctx: NewsContext): NewsArticle[] {
       leader_last: lastName(leader), chaser_last: lastName(chaser),
       leader_poss: poss(lastName(leader)), chaser_poss: poss(lastName(chaser)),
       gap: e.gap, gap_pts: plural(e.gap, 'point'), gap_ago: e.gapAgo, rounds_ago: e.roundsAgo, change: Math.abs(e.change),
+      prev_state: e.gapAgo > 0 ? `led by ${e.gapAgo} ${plural(e.gapAgo, 'point')}` : e.gapAgo < 0 ? `trailed by ${-e.gapAgo} ${plural(-e.gapAgo, 'point')}` : 'been level',
       remaining: e.remaining, races_left: `${e.remaining} ${plural(e.remaining, 'race')}`, max_pts: e.maxPts,
       h2h, mom_leader: e.momLeader, mom_chaser: e.momChaser, chaser_wins: e.chaserWins, leader_dnfs: e.leaderDnfs,
     }
@@ -1505,6 +1505,7 @@ function constructorArc(ctx: NewsContext): NewsArticle[] {
     const slots = {
       year: ctx.year, round: e.round, leader, chaser,
       gap: e.gap, gap_pts: plural(e.gap, 'point'), gap_ago: e.gapAgo, rounds_ago: e.roundsAgo, change: Math.abs(e.change),
+      prev_state: e.gapAgo > 0 ? `led by ${e.gapAgo} ${plural(e.gapAgo, 'point')}` : e.gapAgo < 0 ? `trailed by ${-e.gapAgo} ${plural(-e.gapAgo, 'point')}` : 'been level',
       remaining: e.remaining, races_left: `${e.remaining} ${plural(e.remaining, 'race')}`, max_pts: e.maxPts,
       h2h, mom_leader: e.momLeader, mom_chaser: e.momChaser, chaser_wins: e.chaserWins, leader_dnfs: e.leaderDnfs,
     }
