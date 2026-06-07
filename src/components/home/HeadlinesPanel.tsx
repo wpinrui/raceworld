@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { Panel } from '@/components/world/ui'
 import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
@@ -26,7 +26,7 @@ function whenLabel(a: NewsArticle, calLen: number): string {
 
 // Modal reader for a single headline. Shows the full article and links through to the
 // newsroom (deep-linked via the URL hash, so the news tab opens on this exact story).
-function ArticleModal({ article, index, driverCard, onClose }: { article: NewsArticle; index: NewsIndex | null; driverCard?: DriverCardResolver; onClose: () => void }) {
+function ArticleModal({ article, calLen, index, driverCard, onClose }: { article: NewsArticle; calLen: number; index: NewsIndex | null; driverCard?: DriverCardResolver; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -41,7 +41,7 @@ function ArticleModal({ article, index, driverCard, onClose }: { article: NewsAr
       >
         <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[#2A3142]">
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">
-            {whenLabel(article, calendar2026.length)} · {CATEGORY_LABELS[article.category] ?? article.category}
+            {whenLabel(article, calLen)} · {CATEGORY_LABELS[article.category] ?? article.category}
           </p>
           <button
             onClick={onClose}
@@ -127,7 +127,7 @@ export function HeadlinesPanel() {
   const newsIndex = useMemo(() => buildNewsIndex({
     drivers: drivers.map((d) => ({ id: d.id, name: d.name })),
     teams: teams.map((t) => ({ id: t.id, name: t.name })),
-    circuits: calendar2026.slice(0, raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    circuits: calendarForYear(year).slice(0, raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
     year,
   }), [drivers, teams, raceResults.length, year])
 
@@ -154,7 +154,7 @@ export function HeadlinesPanel() {
                 >
                   <span className={`block text-sm leading-snug font-semibold ${readNewsIds.includes(h.id) ? 'text-[#9CA3AF]' : 'text-[#FFFFFF]'}`}>{h.headline}</span>
                   <span className="block text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">
-                    {whenLabel(h, calendar2026.length)} · {CATEGORY_LABELS[h.category] ?? h.category}
+                    {whenLabel(h, calendarForYear(year).length)} · {CATEGORY_LABELS[h.category] ?? h.category}
                   </span>
                 </button>
               </li>
@@ -163,7 +163,7 @@ export function HeadlinesPanel() {
         )}
       </Panel>
 
-      {open && <ArticleModal article={open} index={newsIndex} driverCard={driverCard} onClose={() => setOpenId(null)} />}
+      {open && <ArticleModal article={open} calLen={calendarForYear(year).length} index={newsIndex} driverCard={driverCard} onClose={() => setOpenId(null)} />}
     </>
   )
 }

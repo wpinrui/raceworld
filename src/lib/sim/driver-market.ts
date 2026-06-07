@@ -5,11 +5,18 @@ import { sampleNormal } from './rng-utils'
 // moves; the news rumour producers still use runDriverMarket for speculation). The media evaluation
 // (computeDriverMediaScores) is the input; this module is purely the PROCESS.
 //
-//  Phase 1 (round 18, in-season): teams negotiate renewals with their expiring drivers. A renewal is
-//  likelier the closer the driver's grid-wide media percentile is to the team's WCC percentile.
+//  Phase 1 (the renewal round, in-season): teams negotiate renewals with their expiring drivers. A
+//  renewal is likelier the closer the driver's grid-wide media percentile is to the team's WCC percentile.
 //  Phase 2 (end of season): an NBA-draft-style fill of the open seats — best seat first, each pool
 //  driver weighted by a normalised geometric over the media ranking, with contract length driven by
 //  how PROBABLE the realised placement was across the whole sequential draft.
+
+// The two in-season market beats are placed proportionally so they land sensibly whatever the season's
+// length (era-accurate calendars, #64): contract-watch ~62.5% through, renewals ~75%. A 24-round season
+// keeps the original rounds 15 / 18; a 16-round one gets 10 / 12. The store fires the mechanic on these
+// rounds and the newsroom pins the matching articles to them, so both stay in lockstep off one formula.
+export const marketWatchRound = (totalRounds: number) => Math.round(totalRounds * 0.625)
+export const marketRenewalRound = (totalRounds: number) => Math.round(totalRounds * 0.75)
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 

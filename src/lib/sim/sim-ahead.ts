@@ -1,6 +1,6 @@
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { isOffSeason } from './types'
 import { buildRaceResults } from './race-results'
 import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
@@ -10,7 +10,9 @@ import { actionCreateSeason, actionFlushRaceResult } from '@/lib/db/actions'
 // the target. Yields to the event loop between races so the home screen repaints live
 // (each recordRaceResult updates the season store). Stops if the season ends first.
 export async function simulateUntilRound(targetRound: number, onRace?: (round: number) => void): Promise<void> {
-  const total = calendar2026.length
+  // The season's year is fixed across the loop, so its calendar is too.
+  const calendar = calendarForYear(useSeasonStore.getState().year)
+  const total = calendar.length
 
   while (true) {
     const season = useSeasonStore.getState()
@@ -18,13 +20,13 @@ export async function simulateUntilRound(targetRound: number, onRace?: (round: n
     if (season.currentRound >= targetRound) break
 
     const round = season.currentRound
-    const circuit = calendar2026[round - 1]
+    const circuit = calendar[round - 1]
     if (!circuit) break
     const grid = season.drivers.filter((d) => d.teamId !== '')
 
     // Run the full race headlessly through the race engine.
     const race = useRaceStore.getState()
-    race.loadFromSeason(grid, season.teams, circuit.id)
+    race.loadFromSeason(grid, season.teams, circuit)
     race.initSession() // qualifying → pre-race
     const rs = useRaceStore.getState().raceState
     if (!rs) break

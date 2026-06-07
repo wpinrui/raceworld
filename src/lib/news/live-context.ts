@@ -1,4 +1,4 @@
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { foldLiveSeason, foldLiveSeasonTeams, foldLiveSeasonTeamDrivers, type NewsContext, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from './engine'
 import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
@@ -56,7 +56,7 @@ export function buildLiveNewsContext(
     upgradeEvents: s.allUpgradeEvents,
     constructorHistory: s.constructorHistory,
     endOfSeason: s.endOfSeasonSummary,
-    calendar: calendar2026,
+    calendar: calendarForYear(s.year),
     live: true,
     records,
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),

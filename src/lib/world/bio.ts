@@ -1,6 +1,6 @@
 import type { DriverCareer, DriverAttributes } from './types'
 import { countryName } from '@/data/countries'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 
 // Auto-generated driver biography. Plain, factual sentences derived from career totals,
 // attributes and team history, so it always matches the save.
@@ -99,9 +99,9 @@ function recordSentence(c: DriverCareer, subjCap: string): string {
   return `In ${seasons} ${seasons === 1 ? 'season' : 'seasons'} ${subjCap.toLowerCase()} has ${wins} ${wins === 1 ? 'win' : 'wins'}, ${podiums} ${podiums === 1 ? 'podium' : 'podiums'}, ${poles} ${poles === 1 ? 'pole' : 'poles'} and ${points.toLocaleString()} points.`
 }
 
-// "Australian GP" -> "Australian Grand Prix".
-function grandPrixName(roundIdx: number): string {
-  const name = calendar2026[roundIdx]?.name ?? `Round ${roundIdx + 1}`
+// "Australian GP" -> "Australian Grand Prix", from that season's calendar (roundIdx is 0-based).
+function grandPrixName(year: number, roundIdx: number): string {
+  const name = calendarForYear(year)[roundIdx]?.name ?? `Round ${roundIdx + 1}`
   return name.replace(/\bGP\b/, 'Grand Prix')
 }
 
@@ -133,14 +133,14 @@ function famouslySentence(career: DriverCareer, subjCap: string): string {
 
   if (wins > 0) {
     const first = firstResult(career.seasons, (r) => r === 1)
-    const base = first ? `${subjCap} famously won the ${first.year} ${grandPrixName(first.round)}` : `${subjCap} is a race winner`
+    const base = first ? `${subjCap} famously won the ${first.year} ${grandPrixName(first.year, first.round)}` : `${subjCap} is a race winner`
     const extra = wins - 1
     const tail = extra <= 0 ? '' : extra === 1 ? ', and has accumulated an additional race win' : `, and has accumulated an additional ${extra} race wins`
     return `${base}${tail}.`
   }
 
   const first = firstResult(career.seasons, (r) => r != null && r <= 3)
-  const base = first ? `${subjCap} famously finished on the podium at the ${first.year} ${grandPrixName(first.round)}` : `${subjCap} has stood on the podium`
+  const base = first ? `${subjCap} famously finished on the podium at the ${first.year} ${grandPrixName(first.year, first.round)}` : `${subjCap} has stood on the podium`
   const extra = podiums - 1
   const tail = extra <= 0 ? '' : extra === 1 ? ', and has accumulated an additional podium' : `, and has accumulated an additional ${extra} podiums`
   return `${base}${tail}.`

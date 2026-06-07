@@ -9,7 +9,7 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { isOffSeason } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { raceDate, toISODate, fromISODate, formatDate } from '@/lib/sim/calendar-dates'
 import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
@@ -77,19 +77,20 @@ export default function Nav() {
 
   const seasonActive = phase !== 'idle'
   const offSeason = isOffSeason(phase)
-  const total = calendar2026.length
+  const calendar = calendarForYear(year)
+  const total = calendar.length
   const completedRounds = raceResults.length
   const nextRaceRound = completedRounds + 1
-  const nextRaceDate = nextRaceRound <= total ? toISODate(raceDate(year, calendar2026[nextRaceRound - 1])) : null
+  const nextRaceDate = nextRaceRound <= total ? toISODate(raceDate(year, calendar[nextRaceRound - 1])) : null
   const atRaceday = !!nextRaceDate && currentDate >= nextRaceDate
-  const circuit = calendar2026[currentRound - 1]
+  const circuit = calendar[currentRound - 1]
   const dateLabel = currentDate ? formatDate(fromISODate(currentDate), { year: true }) : ''
 
   // Hyperlink matcher for the interrupt modal (live roster; circuits limited to rounds run).
   const newsIndex = useMemo(() => buildNewsIndex({
     drivers: drivers.map((d) => ({ id: d.id, name: d.name })),
     teams: teams.map((t) => ({ id: t.id, name: t.name })),
-    circuits: calendar2026.slice(0, raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    circuits: calendarForYear(year).slice(0, raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
     year,
   }), [drivers, teams, raceResults.length, year])
 
@@ -166,8 +167,8 @@ export default function Nav() {
 
   function handleRestart() {
     const s = useSeasonStore.getState()
-    const c = calendar2026[s.currentRound - 1]
-    if (c) useRaceStore.getState().resetSession(s.drivers.filter((d) => d.teamId !== ''), s.teams, c.id)
+    const c = calendarForYear(s.year)[s.currentRound - 1]
+    if (c) useRaceStore.getState().resetSession(s.drivers.filter((d) => d.teamId !== ''), s.teams, c)
     setRestartOpen(false)
     setMenuOpen(false)
   }

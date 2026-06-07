@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
 import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
@@ -151,11 +151,12 @@ export function PunditPredictions() {
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
   const currentRound = useSeasonStore((s) => s.currentRound)
+  const year = useSeasonStore((s) => s.year)
   const raceResults = useSeasonStore((s) => s.raceResults)
 
   if (isOffSeason(phase)) return <OffSeasonReview />
 
-  const nextRace = calendar2026[currentRound - 1]
+  const nextRace = calendarForYear(year)[currentRound - 1]
   if (!nextRace) {
     return (
       <Panel title="Pundit Predictions">

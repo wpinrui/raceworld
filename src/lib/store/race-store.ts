@@ -1,6 +1,5 @@
 import { create } from 'zustand'
-import type { Driver, Team, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
+import type { Driver, Team, Circuit, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
 import { useSeasonStore } from './season-store'
@@ -9,12 +8,15 @@ interface RaceStore {
   raceState: RaceState | null
   drivers: Driver[]
   teams: Team[]
-  selectedCircuitId: string
+  // The exact circuit being raced, held as the resolved object rather than an id: a season can run the
+  // same venue twice (era-accurate double-headers, e.g. 2020 Bahrain GP 57 laps + Sakhir GP 87 laps share
+  // id 'bahrain'), so an id is no longer enough to identify the right round's lap count (#64).
+  selectedCircuit: Circuit | null
   forms: Record<string, number>
   strategyNoise: number
   godModeDriverId: string | null  // persists across races
 
-  loadFromSeason: (drivers: Driver[], teams: Team[], circuitId: string) => void
+  loadFromSeason: (drivers: Driver[], teams: Team[], circuit: Circuit) => void
   setGodModeDriver: (driverId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
   setStrategyNoise: (n: number) => void
@@ -22,26 +24,26 @@ interface RaceStore {
   tickLap: (godModeActions?: GodModeAction[]) => void
   setSpeed: (speed: SimSpeed) => void
   setPaused: (paused: boolean) => void
-  resetSession: (drivers?: Driver[], teams?: Team[], circuitId?: string) => void
+  resetSession: (drivers?: Driver[], teams?: Team[], circuit?: Circuit) => void
 }
 
 export const useRaceStore = create<RaceStore>((set, get) => ({
   raceState: null,
   drivers: [],
   teams: [],
-  selectedCircuitId: 'australia',
+  selectedCircuit: null,
   forms: {},
   strategyNoise: 0.35,
   godModeDriverId: null,
 
-  loadFromSeason: (drivers, teams, circuitId) => {
+  loadFromSeason: (drivers, teams, circuit) => {
     const { godModeDriverId } = get()
     // Keep selection if the driver is still on the grid, otherwise clear
     const stillExists = godModeDriverId && drivers.some((d) => d.id === godModeDriverId)
     set({
       drivers: drivers.map((d) => ({ ...d })),
       teams: teams.map((t) => ({ ...t })),
-      selectedCircuitId: circuitId,
+      selectedCircuit: circuit,
       forms: rollForms(drivers),
       godModeDriverId: stillExists ? godModeDriverId : null,
     })
@@ -58,21 +60,18 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   setStrategyNoise: (n) => set({ strategyNoise: Math.min(1, Math.max(0, n)) }),
 
   initSession: () => {
-    const { drivers, teams, selectedCircuitId, forms, strategyNoise } = get()
-    const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
-    if (!circuit) return
-    const { results, sessions } = runQualifying(drivers, teams, circuit, forms)
-    const raceState = initRaceState(drivers, teams, circuit, results, sessions, forms, strategyNoise)
+    const { drivers, teams, selectedCircuit, forms, strategyNoise } = get()
+    if (!selectedCircuit) return
+    const { results, sessions } = runQualifying(drivers, teams, selectedCircuit, forms)
+    const raceState = initRaceState(drivers, teams, selectedCircuit, results, sessions, forms, strategyNoise)
     set({ raceState })
   },
 
   tickLap: (godModeActions) => {
-    const { raceState, drivers, teams, selectedCircuitId } = get()
-    if (!raceState || raceState.phase !== 'racing') return
-    const circuit = calendar2026.find((c) => c.id === selectedCircuitId)
-    if (!circuit) return
+    const { raceState, drivers, teams, selectedCircuit } = get()
+    if (!raceState || raceState.phase !== 'racing' || !selectedCircuit) return
     const year = useSeasonStore.getState().year
-    set({ raceState: simulateLap(raceState, drivers, teams, circuit, year, godModeActions) })
+    set({ raceState: simulateLap(raceState, drivers, teams, selectedCircuit, year, godModeActions) })
   },
 
   setSpeed: (speed) => {
@@ -87,13 +86,13 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set({ raceState: { ...raceState, paused } })
   },
 
-  resetSession: (drivers, teams, circuitId) => {
+  resetSession: (drivers, teams, circuit) => {
     const nextDrivers = (drivers ?? get().drivers).map((d) => ({ ...d }))
     set({
       raceState: null,
       drivers: nextDrivers,
       teams: teams ? teams.map((t) => ({ ...t })) : get().teams,
-      selectedCircuitId: circuitId ?? get().selectedCircuitId,
+      selectedCircuit: circuit ?? get().selectedCircuit,
       forms: rollForms(nextDrivers),
     })
   },

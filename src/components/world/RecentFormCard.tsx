@@ -2,7 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
 import type { RecentFormEntry } from '@/lib/world/types'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 
 // Football-Manager-style form line: the pre-race form rating (0-10) over the most recent
 // races, dots coloured by rating, with qualifying + race result in the tooltip.
@@ -56,7 +56,7 @@ export function RecentFormCard({ entries }: { entries: RecentFormEntry[] }) {
     form: r.form,
     round: r.round,
     year: r.year,
-    code: calendar2026[r.round - 1]?.code ?? String(r.round).padStart(2, '0'),
+    code: calendarForYear(r.year)[r.round - 1]?.code ?? String(r.round).padStart(2, '0'),
     circuitName: r.circuitName,
     grid: r.gridPosition,
     finish: r.finishPosition,

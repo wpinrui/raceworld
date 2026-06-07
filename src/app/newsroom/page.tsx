@@ -5,7 +5,7 @@ import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { Panel } from '@/components/world/ui'
 import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
@@ -187,7 +187,7 @@ export default function NewsroomPage() {
   const liveIndex = useMemo(() => buildNewsIndex({
     drivers: s.drivers.map((d) => ({ id: d.id, name: d.name })),
     teams: s.teams.map((t) => ({ id: t.id, name: t.name })),
-    circuits: calendar2026.slice(0, s.raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    circuits: calendarForYear(liveYear).slice(0, s.raceResults.length).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
     year: liveYear,
   }), [s.drivers, s.teams, s.raceResults.length, liveYear])
   const archivedIndex = useMemo(() => buildNewsIndex({
@@ -196,7 +196,7 @@ export default function NewsroomPage() {
   // Cross-season: union roster + the selected article's own year for circuit links.
   const allSeasonsIndex = useMemo(() => buildNewsIndex({
     drivers: scopeDrivers, teams: scopeTeams,
-    circuits: calendar2026.map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
+    circuits: calendarForYear(selected?.year ?? liveYear).map((c, i) => ({ name: c.name.replace(/\bGP\b/, 'Grand Prix'), round: i + 1 })),
     year: selected?.year ?? liveYear,
   }), [scopeDrivers, scopeTeams, selected?.year, liveYear])
   const index = allSeasons ? allSeasonsIndex : (isLive ? liveIndex : archivedIndex)
@@ -305,7 +305,7 @@ export default function NewsroomPage() {
                         >
                           <p className={`text-sm font-semibold ${s.readNewsIds.includes(a.id) ? 'text-[#9CA3AF]' : 'text-[#FFFFFF]'}`}>{a.headline}</p>
                           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-1">
-                            {whenLabel(a, calendar2026.length)} · {CATEGORY_LABELS[a.category] ?? a.category}
+                            {whenLabel(a, calendarForYear(a.year).length)} · {CATEGORY_LABELS[a.category] ?? a.category}
                           </p>
                         </button>
                       )
@@ -315,7 +315,7 @@ export default function NewsroomPage() {
               </Panel>
 
               {/* Reader */}
-              <Panel title={selected ? `${whenLabel(selected, calendar2026.length)} · ${CATEGORY_LABELS[selected.category] ?? selected.category}` : 'Article'} className="lg:col-span-2">
+              <Panel title={selected ? `${whenLabel(selected, calendarForYear(selected.year).length)} · ${CATEGORY_LABELS[selected.category] ?? selected.category}` : 'Article'} className="lg:col-span-2">
                 {selected ? (
                   <article className="space-y-3">
                     <h2 className="font-display text-xl tracking-wide text-[#FFFFFF]"><LinkedText text={selected.headline} index={index} driverCard={driverCard} /></h2>

@@ -6,7 +6,7 @@ import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
 import RaceTable from '@/components/race/RaceTable'
 import GodModePanel from '@/components/race/GodModePanel'
@@ -44,14 +44,14 @@ export default function RacePage() {
   const nextTickAtRef = useRef<number>(0)
   const doTickRef = useRef<() => void>(() => {})
 
-  const currentCircuit = calendar2026[season.currentRound - 1]
+  const currentCircuit = calendarForYear(season.year)[season.currentRound - 1]
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
 
   useEffect(() => {
     setHydrated(true)
     if (season.phase === 'idle') { router.replace('/setup'); return }
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
-    if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit.id)
+    if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

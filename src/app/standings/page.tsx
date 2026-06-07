@@ -5,7 +5,7 @@ import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { Trophy } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear } from '@/data/calendars'
 import { DriverStandingsTable } from '@/components/standings/DriverStandingsTable'
 import { ConstructorStandingsTable } from '@/components/standings/ConstructorStandingsTable'
 import { TeammateH2HPanel } from '@/components/standings/TeammateH2HPanel'
@@ -132,7 +132,7 @@ export default function StandingsPage() {
   // An archived season is complete: show all of ITS rounds, not the live season's progress. Its
   // round count is the length of any standing's per-round results array.
   const archivedRounds = selectedArchive?.driverStandings[0]?.results.length ?? 0
-  const totalRounds = selectedArchive ? archivedRounds : calendar2026.length
+  const totalRounds = selectedArchive ? archivedRounds : calendarForYear(season.year).length
   const completedRounds = selectedArchive ? archivedRounds : season.raceResults.length
 
   const displayDrivers = selectedArchive ? selectedArchive.driverStandings : season.driverStandings

@@ -17,33 +17,33 @@ import type {
   DroppedDriver,
 } from '@/lib/sim/types'
 import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
-import { calendar2026 } from '@/data/calendar'
+import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
-import { runDraft, negotiateRenewals, assessExpiringContracts, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
+import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
 
 // Default new-game grid: the latest season composed from the historical timeline (no bespoke grid).
 const DEFAULT_GRID = composeDefaultSeason()
-const TOTAL_ROUNDS = calendar2026.length
-// Driver market in-season beats: a contract watch shortly before the window, then renewals.
-const WATCH_ROUND = 15
-const RENEWAL_ROUND = 18
+// Round count is per-season (era-accurate calendars, #64): derived from the active season's year
+// where needed, never a single global. See calendarForYear(). The in-season driver-market beats
+// (contract watch, then renewals) are likewise placed proportionally per season via
+// marketWatchRound / marketRenewalRound.
 
 // Pre-season testing always runs at Barcelona/Catalunya.
-const TEST_CIRCUIT = calendar2026.find((c) => c.id === 'spain') ?? calendar2026[0]
+const TEST_CIRCUIT = calendarForYear(DEFAULT_CALENDAR_YEAR).find((c) => c.id === 'spain') ?? calendarForYear(DEFAULT_CALENDAR_YEAR)[0]
 
 // The game clock starts on 1 January of the season year — a pre-season window (launches,
 // testing) ahead of the opening round. Stored as a serialisable 'YYYY-MM-DD' string.
 const seasonStartDate = (year: number) => `${year}-01-01`
 // Race day (ISO date string) for a 1-based round in a given season year.
 const roundDate = (year: number, round: number): string => {
-  const c = calendar2026[round - 1]
+  const c = calendarForYear(year)[round - 1]
   return c ? toISODate(raceDate(year, c)) : seasonStartDate(year)
 }
 
@@ -137,7 +137,7 @@ function computeDriverStandings(
     if (!s) {
       s = {
         driverId, driverName: name, teamId, teamName: teamName(teamId),
-        points: 0, wins: 0, results: Array(TOTAL_ROUNDS).fill(null),
+        points: 0, wins: 0, results: Array(raceResults.length).fill(null),
       }
       map.set(driverId, s)
     }
@@ -188,7 +188,7 @@ function computeConstructorStandings(
       teamName: team.name,
       points: 0,
       wins: 0,
-      results: order.map(() => Array(TOTAL_ROUNDS).fill(null)),
+      results: order.map(() => Array(raceResults.length).fill(null)),
     })
   }
 
@@ -568,13 +568,15 @@ export const useSeasonStore = create<SeasonStore>()(
         // the new deal). Whoever isn't re-signed becomes a free agent in the end-of-season draft.
         let seasonRenewals = get().seasonRenewals
         let seasonContractWatch = get().seasonContractWatch
-        if (currentRound === WATCH_ROUND || currentRound === RENEWAL_ROUND) {
+        const watchRound = marketWatchRound(calendarForYear(year).length)
+        const renewalRound = marketRenewalRound(calendarForYear(year).length)
+        if (currentRound === watchRound || currentRound === renewalRound) {
           const standings = computeConstructorStandings(updatedTeams, updatedDrivers, updated)
           const rankInfo = standings.map((cs, idx) => ({ teamId: cs.teamId, points: cs.points, finalPosition: idx + 1 }))
           const mediaScores = computeDriverMediaScores(updatedDrivers, updatedTeams, updated, rankInfo, updatedTeams.length)
           const mediaMap = new Map(mediaScores.map((s) => [s.driverId, s.score]))
           const wccOrderBestFirst = standings.map((cs) => cs.teamId)
-          if (currentRound === WATCH_ROUND) {
+          if (currentRound === watchRound) {
             seasonContractWatch = assessExpiringContracts({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year })
           } else {
             const result = negotiateRenewals({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year, rng: Math.random })
@@ -604,8 +606,8 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       advanceRound: () => {
-        const { currentRound, endSeason } = get()
-        if (currentRound >= TOTAL_ROUNDS) {
+        const { currentRound, endSeason, year } = get()
+        if (currentRound >= calendarForYear(year).length) {
           endSeason()
         } else {
           set({ currentRound: currentRound + 1, phase: 'pre-race' })
@@ -1026,7 +1028,7 @@ export const useSeasonStore = create<SeasonStore>()(
         // (the upcoming race's date), or the season start if no valid round.
         if (!state.currentDate) {
           const r = state.currentRound
-          state.currentDate = r >= 1 && r <= TOTAL_ROUNDS ? roundDate(state.year, r) : seasonStartDate(state.year)
+          state.currentDate = r >= 1 && r <= calendarForYear(state.year).length ? roundDate(state.year, r) : seasonStartDate(state.year)
         }
         // Saves from before M4: default the grid-change queue and backfill each dev
         // plan's pre-rolled pending upgrade so the override UI always has a value.
