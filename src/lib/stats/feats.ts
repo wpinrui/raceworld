@@ -289,7 +289,10 @@ export function detectRaceFeats(seasonId: number, round: number): Feat[] {
 
   // Victory margin (needs classified P1 + P2 with total times)
   if (winner?.total_time_ms != null && second?.total_time_ms != null) {
-    const marginS = (second.total_time_ms - winner.total_time_ms) / 1000
+    // total_time_ms stores SECONDS despite the column name (see b08bfd2 / news/actions.ts), so the
+    // margin is already in seconds — no /1000 (issue #16; the old divisor made every gap 1000x too small,
+    // so "dominant win" >20s never fired and "photo finish" <1s fired for almost every race).
+    const marginS = second.total_time_ms - winner.total_time_ms
     if (marginS > DOMINANT_MARGIN_S)
       feats.push({ id: `race-${race.id}-dominant`, category: 'race', round, priority: 60, title: `Dominant win — ${winner.driver_name} by ${marginS.toFixed(1)}s`, value: marginS })
     else if (marginS >= 0 && marginS < PHOTO_FINISH_S)
