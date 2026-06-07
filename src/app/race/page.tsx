@@ -179,7 +179,7 @@ export default function RacePage() {
               <RaceTable
                 drivers={drivers} teams={teams} states={raceState.drivers}
                 currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
-                phase={phase} selectedDriverId={selectedDriverId}
+                selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
               />
             </div>

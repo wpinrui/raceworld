@@ -1,7 +1,7 @@
 'use client'
 
 import ReactCountryFlag from 'react-country-flag'
-import type { Driver, Team, DriverRaceState, RacePhase } from '@/lib/sim/types'
+import type { Driver, Team, DriverRaceState } from '@/lib/sim/types'
 import TyreIndicator from './TyreIndicator'
 
 interface RaceTableProps {
@@ -10,7 +10,6 @@ interface RaceTableProps {
   states: DriverRaceState[]
   currentLap: number
   totalLaps: number
-  phase: RacePhase
   selectedDriverId?: string | null
   onSelectDriver?: (id: string) => void
 }
@@ -29,7 +28,7 @@ function formatLapTime(lapTimes: number[]): string {
   return `${mins}:${secs}`
 }
 
-export default function RaceTable({ drivers, teams, states, phase, selectedDriverId, onSelectDriver }: RaceTableProps) {
+export default function RaceTable({ drivers, teams, states, selectedDriverId, onSelectDriver }: RaceTableProps) {
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
 

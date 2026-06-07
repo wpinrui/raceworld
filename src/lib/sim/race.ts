@@ -245,7 +245,7 @@ export function simulateLap(
     current = { ...current, targetPitLap: newPlan.targetPitLap, targetNextCompound: newPlan.targetNextCompound }
 
     // 2d. Decide whether to pit this lap based on the plan
-    let pitDecision = decidePit(current, state.currentLap, state.totalLaps, state.weather)
+    let pitDecision = decidePit(current, state.currentLap, state.totalLaps)
 
     // God mode pit overrides
     const godActionsForDriver = (godModeActions ?? []).filter(a => a.driverId === current.driverId)
