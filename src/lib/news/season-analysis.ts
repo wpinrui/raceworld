@@ -26,6 +26,7 @@ export interface DriverExpectation {
   driverId: string
   teamId: string
   score: number // combined car+driver position score (LOWER = stronger); expectedRank is this, ranked
+  driverScore: number // raw driver projection (last-season media score, or pace+narrative fallback)
   expectedRank: number // 1 = expected best in the drivers' table (seated drivers only)
   tier: Tier
 }
@@ -213,6 +214,7 @@ export function buildSeasonAnalysis(ctx: NewsContext): SeasonAnalysis {
       driverId: s.driverId,
       teamId: s.teamId,
       score: s.score,
+      driverScore: projByDriver.get(s.driverId) ?? 0,
       expectedRank: i + 1,
       tier: teamExpectations.get(s.teamId)?.tier ?? 'midfield',
     })
@@ -254,4 +256,57 @@ export function buildSeasonAnalysis(ctx: NewsContext): SeasonAnalysis {
     driverDeltas,
     teamDeltas,
   }
+}
+
+// The season preview's cast (#88): who the media frames as this season's protagonists, across tiers.
+// IDs only — copy decides the words. All derived from the expectation model, so the preview's claims are
+// the same aggregated facts the season then confirms or subverts.
+export interface PreviewCast {
+  titleFavourites: string[] // driverIds — best-projected drivers in a front-tier car
+  darkHorses: string[] // driverIds — a strongly-rated driver stuck in a non-front car
+  bestOfRest: string[] // teamIds — top midfield projections
+  rookies: string[] // driverIds — no prior F1 starts
+  veterans: { driverId: string; kind: 'resurgent' | 'twilight' }[] // 35+, still up front vs slipped back
+  newTeams: string[] // teamIds new to the grid this season
+}
+
+export function previewCast(ctx: NewsContext, analysis: SeasonAnalysis): PreviewCast {
+  const seated = ctx.drivers.filter((d) => d.teamId !== '')
+  const exp = analysis.driverExpectations
+  const byRank = [...exp.values()].sort((a, b) => a.expectedRank - b.expectedRank)
+
+  // Title favourites: the best-projected drivers in a front-tier car.
+  const titleFavourites = byRank.filter((e) => e.tier === 'front').slice(0, 3).map((e) => e.driverId)
+
+  // Dark horses: a top-of-the-field driver (personal projection) stuck in a non-front car.
+  const byDriverScore = [...exp.values()].sort((a, b) => b.driverScore - a.driverScore)
+  const eliteIds = new Set(byDriverScore.slice(0, Math.max(4, Math.round(seated.length / 4))).map((e) => e.driverId))
+  const darkHorses = byDriverScore.filter((e) => eliteIds.has(e.driverId) && e.tier !== 'front').slice(0, 2).map((e) => e.driverId)
+
+  // Best of the rest: the top midfield-projected teams.
+  const bestOfRest = analysis.tiers.midfield
+    .slice()
+    .sort((a, b) => (analysis.teamExpectations.get(a)?.expectedRank ?? 99) - (analysis.teamExpectations.get(b)?.expectedRank ?? 99))
+    .slice(0, 3)
+
+  // Rookies: no prior F1 starts (careers when present; else a debut dated to this season).
+  const isRookie = (d: (typeof seated)[number]): boolean => {
+    const c = ctx.careers?.[d.id]
+    return c ? (c.starts ?? 0) === 0 : d.debutYear === ctx.year
+  }
+  const rookies = byRank.map((e) => seated.find((x) => x.id === e.driverId)).filter((d): d is (typeof seated)[number] => !!d && isRookie(d)).slice(0, 3).map((d) => d.id)
+
+  // Veterans: the grid's elder statesmen (35+), most-decorated first; resurgent if still front/midfield,
+  // twilight if their projection has slipped to the back.
+  const veterans = seated
+    .filter((d) => d.age >= 35)
+    .sort((a, b) => (ctx.careers?.[b.id]?.titles ?? 0) - (ctx.careers?.[a.id]?.titles ?? 0) || (ctx.careers?.[b.id]?.starts ?? 0) - (ctx.careers?.[a.id]?.starts ?? 0))
+    .slice(0, 3)
+    .map((d) => ({ driverId: d.id, kind: (exp.get(d.id)?.tier === 'backmarker' ? 'twilight' : 'resurgent') as 'resurgent' | 'twilight' }))
+
+  // New teams: on the grid this season but absent from every prior constructors' record.
+  const everRaced = new Set((ctx.constructorHistory ?? []).map((h) => h.teamId))
+  const newTeams = ctx.teams.filter((t) => !everRaced.has(t.id)).map((t) => t.id)
+
+  return { titleFavourites, darkHorses, bestOfRest, rookies, veterans, newTeams }
 }
