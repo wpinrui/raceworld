@@ -9,7 +9,7 @@
     ],
     "d": [
       "{driver} stood on the podium {podiums} times in {year} in a car that was never the fastest.",
-      "{podiums} podiums for {driver_last}, none of them a win — the {year} car could not deliver one.",
+      "{podiums} podiums for {driver_last}, none a win — the {year} car could not deliver one.",
       "The {year} machinery did not produce a victory; {driver_last} produced {podiums} podiums regardless.",
       "{driver}'s {podiums} {year} podiums came from a car the rest of the front row had the beating of.",
       "{driver_last} converted an uncompetitive {year} package into {podiums} podium finishes."
@@ -18,7 +18,7 @@
       "{driver} took {podiums} podiums in {year} without a single win, in a car that gave {them} no shot at the top step. The result column flatters the machinery, not the other way around.",
       "{podiums} podium finishes is what {driver_last} extracted from the {year} car. None became a win because the pace was never there — the driver was the difference every time.",
       "The {year} car could not win a race; {driver_last} put it on the podium {podiums} times anyway. That gap between car and result is the season's story.",
-      "{driver_last} banked {podiums} podiums in {year} from a package that belonged a step back. Every one of them was earned against quicker cars, not handed by them.",
+      "{driver_last} banked {podiums} podiums in {year} from a package that belonged a step back. Each podium was earned against quicker cars, not handed by the machinery.",
       "Across {year}, {driver} delivered {podiums} podiums in a car that never had winning pace. The trophies sat above the machinery's level all season."
     ]
   },
@@ -86,7 +86,7 @@
     "b": [
       "{driver} outscored teammate {teammate} over the full {year} season — a rookie beating an experienced hand in matched machinery. The points gap ran the wrong way for the senior driver.",
       "In {their} debut year, {driver_last} took more points than {teammate_last} across {year}. Same car, more experience on the other side of the garage, and the rookie still came out ahead.",
-      "{teammate_last}'s experience did not translate into the points: {driver_last} outscored {them} over {year} in {their} first season. The intra-team count went to the newcomer.",
+      "{teammate_last}'s experience did not translate into the points: {driver_last} outscored {teammate_last} over {year} in {their} first season. The intra-team count went to the newcomer.",
       "{driver} finished {year} ahead of {their} veteran teammate {teammate_last} on points. For a rookie to win the teammate battle outright over a full season is the campaign's headline.",
       "Across {year}, {driver_last} beat {teammate_last} on the scoreboard despite the experience gap pointing the other way. The rookie took the team's bigger haul."
     ]
