@@ -12,12 +12,17 @@ function round1(n: number): number {
 }
 
 // Overall rating weights across the five rated attributes (issue #59). Sum = 1.0.
+// Empirically calibrated (#69): each weight ∝ the attribute's measured marginal effect on race results
+// (points/race), with the car equalised and technical DNFs excluded, one attribute varied at a time.
+// Pace and wetWeatherPace split the measured "speed" impact by weather exposure — the lap-time blend is
+// (1-moisture)*pace + moisture*wet, and effective E[moisture] ≈ 0.075 (≈15% of races wet × ~half-wet),
+// so wet ≈ 0.075 of the speed weight (placeholder until a real weather model exists — measure it then).
 export const OVERALL_WEIGHTS = {
-  pace: 0.5,
-  consistency: 0.18,
-  overtaking: 0.15,
-  wetWeatherPace: 0.1,
-  smoothness: 0.07,
+  pace: 0.4,
+  consistency: 0.26,
+  overtaking: 0.1,
+  wetWeatherPace: 0.03,
+  smoothness: 0.21,
 } as const
 
 // Cosmetic overall used to test whether a driver has reached their potential and for display.
