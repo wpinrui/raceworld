@@ -1,5 +1,5 @@
 import type { Driver, Team } from '@/lib/sim/types'
-import { overall } from '@/lib/sim/progression'
+import { overall, DEVELOP_RATES, DECLINE_RATES } from '@/lib/sim/progression'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
 import type { HistoricalDriver } from '@/data/history/types'
@@ -27,10 +27,11 @@ function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: nu
     const racesToPotential = Math.max(1, 15 * yearsTillPrime)
     const gap = peakPotential - ov
     const gain = Math.min(gap, (gap / racesToPotential) * 1.5) // per-race median
-    for (const k of STAT_KEYS) next[k] = Math.min(100, round1(stats[k] + gain))
+    // Per-attribute develop rates (#66), shared with live progression so composed grids match.
+    for (const k of STAT_KEYS) next[k] = Math.min(100, round1(stats[k] + gain * DEVELOP_RATES[k]))
   } else {
     const declineMedian = 0.04 * (age - primeEnd + 1)
-    for (const k of STAT_KEYS) next[k] = Math.max(20, round1(stats[k] - declineMedian))
+    for (const k of STAT_KEYS) next[k] = Math.max(20, round1(stats[k] - declineMedian * DECLINE_RATES[k]))
   }
   return next
 }

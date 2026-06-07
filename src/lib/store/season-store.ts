@@ -20,7 +20,7 @@ import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
-import { applyRaceProgression, ageDrivers } from '@/lib/sim/progression'
+import { applyRaceProgression, ageDrivers, rollSeasonForm, shownStats } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
 import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
@@ -55,37 +55,41 @@ type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overt
 export type StatPoint = { round: number; pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }
 type StatHistory = Record<string, StatPoint[]>
 
-// Snapshot the four stats of every grid driver, keyed by id.
+// Snapshot the four SHOWN stats (true + season form, #66) of every grid driver, keyed by id — the
+// ratings timeline is what the player saw, so it carries the form wobble.
 function snapshotStats(drivers: Driver[]): StatSnapshot {
   const snap: StatSnapshot = {}
   for (const d of drivers) {
     if (d.teamId === '') continue
+    const s = shownStats(d)
     snap[d.id] = {
-      pace: d.pace,
-      wetWeatherPace: d.wetWeatherPace,
-      overtaking: d.overtaking,
-      smoothness: d.smoothness,
+      pace: s.pace,
+      wetWeatherPace: s.wetWeatherPace,
+      overtaking: s.overtaking,
+      smoothness: s.smoothness,
     }
   }
   return snap
 }
 
-// Seed the per-race stat history with a round-0 baseline for every grid driver.
+// Seed the per-race stat history with a round-0 baseline (shown stats) for every grid driver.
 function seedStatHistory(drivers: Driver[]): StatHistory {
   const hist: StatHistory = {}
   for (const d of drivers) {
     if (d.teamId === '') continue
-    hist[d.id] = [{ round: 0, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }]
+    const s = shownStats(d)
+    hist[d.id] = [{ round: 0, pace: s.pace, wetWeatherPace: s.wetWeatherPace, overtaking: s.overtaking, smoothness: s.smoothness }]
   }
   return hist
 }
 
-// Append a post-race point for each grid driver at the given round.
+// Append a post-race point (shown stats) for each grid driver at the given round.
 function appendStatHistory(prev: StatHistory, drivers: Driver[], round: number): StatHistory {
   const next: StatHistory = { ...prev }
   for (const d of drivers) {
     if (d.teamId === '') continue
-    const point: StatPoint = { round, pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness }
+    const s = shownStats(d)
+    const point: StatPoint = { round, pace: s.pace, wetWeatherPace: s.wetWeatherPace, overtaking: s.overtaking, smoothness: s.smoothness }
     const series = (next[d.id] ?? []).filter((p) => p.round !== round)
     next[d.id] = [...series, point]
   }
@@ -337,10 +341,12 @@ export const useSeasonStore = create<SeasonStore>()(
               const existingPool = get().drivers.filter((d) => d.teamId === '')
               return existingPool.length > 0 ? existingPool : generateFreeAgentPool(25, year, drivers, Math.random)
             })()
+        // Roll season form (#66) for SEATED drivers only, here at season start; held all year. Free
+        // agents haven't raced, so they carry no wobble (form 0) until they take a seat at a rollover.
         const allDrivers = [
           ...drivers.filter((d) => d.teamId !== ''),
           ...poolDrivers,
-        ]
+        ].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
         set({
           phase: 'pre-race',
           year,
@@ -887,7 +893,8 @@ export const useSeasonStore = create<SeasonStore>()(
 
         if (!pendingNextSeasonState) {
           // Fallback: should not normally occur
-          const { drivers, teams } = get()
+          const { teams } = get()
+          const drivers = get().drivers.map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
           const fundingTiers = computeFundingTiers(teams, constructorHistory)
           const devPlans = initDevPlans(teams, fundingTiers, Math.random)
           set({
@@ -924,7 +931,8 @@ export const useSeasonStore = create<SeasonStore>()(
           const poolSize = pendingDrivers.filter((d) => d.teamId === '').length
           topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
         }
-        const drivers = [...pendingDrivers, ...topUp]
+        // Roll season form (#66) for the new season — seated drivers only (free agents carry no wobble).
+        const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = initDevPlans(teams, fundingTiers, Math.random)
 

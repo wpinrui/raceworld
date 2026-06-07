@@ -2,7 +2,12 @@ import { create } from 'zustand'
 import type { Driver, Team, Circuit, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
+import { shownStats } from '@/lib/sim/progression'
 import { useSeasonStore } from './season-store'
+
+// The sim races the SHOWN ratings (true + season form, #66). Bake them in as drivers enter the race
+// store and zero the offset on the copy, so the form applies exactly once (a re-bake is then a no-op).
+const toRaceDriver = (d: Driver): Driver => ({ ...d, ...shownStats(d), seasonForm: 0 })
 
 interface RaceStore {
   raceState: RaceState | null
@@ -41,7 +46,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     // Keep selection if the driver is still on the grid, otherwise clear
     const stillExists = godModeDriverId && drivers.some((d) => d.id === godModeDriverId)
     set({
-      drivers: drivers.map((d) => ({ ...d })),
+      drivers: drivers.map(toRaceDriver),
       teams: teams.map((t) => ({ ...t })),
       selectedCircuit: circuit,
       forms: rollForms(drivers),
@@ -87,7 +92,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   },
 
   resetSession: (drivers, teams, circuit) => {
-    const nextDrivers = (drivers ?? get().drivers).map((d) => ({ ...d }))
+    const nextDrivers = (drivers ?? get().drivers).map(toRaceDriver)
     set({
       raceState: null,
       drivers: nextDrivers,

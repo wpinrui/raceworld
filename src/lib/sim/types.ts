@@ -27,6 +27,11 @@ export interface Driver {
   // Distinct from smoothness. A rating like any other — authored/generated at entry level, then it
   // develops and declines through the same progression curve as pace/wet/overtaking/smoothness.
   consistency: number
+  // Season form (#66): a once-per-season offset added to all five ratings, modelling up-and-down years.
+  // The five stat fields above are the hidden, smoothly-developing TRUE values; the SHOWN ratings the
+  // player sees and the sim races are those + this offset, clamped (see shownStats in progression.ts).
+  // Absent reads as 0 (e.g. pre-roll at setup). Rolled at each season start: Normal(0, ~2), clamped +/-10.
+  seasonForm?: number
   age: number
   peakPotential: number
   primeEnd: number       // age at which decline starts
