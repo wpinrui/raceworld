@@ -24,21 +24,21 @@
   },
   "underdeliver": {
     "h": [
-      "{loser_last} was the bigger name at {team}; {winner_last} beat him in {year}",
+      "{loser_last} was the bigger name at {team}; {winner_last} beat {loser_last} in {year}",
       "Out-scored by the other car: {winner_last} got the better of {loser_last} at {team}",
       "{year} upset inside {team}: the fancied {loser_last} lost to {winner_last}",
       "{winner_last} beat the more-fancied {loser_last} in the same {team} car",
-      "{team} backed {loser_last}; {winner_last} out-performed him across {year}"
+      "{team} backed {loser_last}; {winner_last} out-performed {loser_last} across {year}"
     ],
     "d": [
-      "{loser_last} arrived the more-fancied {team} driver in {year}. {winner_last} out-performed him in the same car.",
+      "{loser_last} arrived the more-fancied {team} driver in {year}. {winner_last} out-performed {loser_last} in the same car.",
       "The favoured name lost: {winner} beat team-mate {loser} across {year} in identical {team} machinery.",
       "{loser_last} was expected to lead {team}; {winner_last} took that role across the season.",
       "{winner_last} out-scored the better-regarded {loser_last} in {year}, both in the same {team} car.",
       "Billing said {loser_last}; the results said {winner_last} — the other side of the {team} garage came out ahead."
     ],
     "b": [
-      "{loser} came into {year} as the more-fancied half of the {team} line-up. {winner_last} out-performed him in the same car.",
+      "{loser} came into {year} as the more-fancied half of the {team} line-up. {winner_last} out-performed {loser_last} in the same car.",
       "The favoured name was beaten by the other side of the garage: {winner_last} out-scored {loser_last} across {year}, both in identical {team} machinery.",
       "{loser_last} was the bigger reputation at {team} in {year}. {winner_last} drove the same car and finished ahead in the teammate battle.",
       "Expectations had {loser_last} leading {team}; {winner_last} took that position across the season. The machinery was shared — the billing was wrong.",

@@ -18,7 +18,8 @@
 //  - silly_season     : only at three points (mid / three-quarter / penultimate round), and the
 //                       rumours are produced by actually running the market sim with a seeded
 //                       -10..+10 error on each driver's media rating.
-//  - analysis_opinion : at most one per round, the most newsworthy angle, with a recency bias.
+//  - analysis_opinion : expectation checkpoints (~twice a season, over/under preseason billing) plus the
+//                       end-of-season teammate-battle verdicts. (The old single-per-round opinion column was removed.)
 
 import type {
   Driver, Team, RaceResult, DevUpgradeEvent,
@@ -2424,6 +2425,7 @@ function driverArc(ctx: NewsContext): NewsArticle[] {
     const slots = {
       year: ctx.year, driver, driver_last: lastName(driver), podiums: m.podiums, wins: m.wins,
       teammate, teammate_last: teammate ? lastName(teammate) : '',
+      ...pronouns(ctx.drivers.find((x) => x.id === m.driverId)?.gender),
     }
     const a = c[m.key]
     const seed = `driver-arc-${ctx.year}-${m.driverId}`
@@ -2475,14 +2477,14 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
     if (K > ctx.completedRounds) continue
     const dStand = driverStandingsAfter(ctx, K)
     const dRank = new Map(dStand.map((s, i) => [s.driverId, i + 1]))
-    const dLast = dStand.length + 1
-    const dDelta = [...analysis.driverExpectations.values()].map((e) => ({ id: e.driverId, delta: e.expectedRank - (dRank.get(e.driverId) ?? dLast) }))
+    // Only judge drivers who have actually raced by K — a seated mid-season joiner absent from the
+    // standings isn't "under-performing", they simply weren't on the grid yet.
+    const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, delta: e.expectedRank - dRank.get(e.driverId)! }))
     const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
     const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
     const cStand = constructorStandingsAfter(ctx, K)
     const cRank = new Map(cStand.map((s, i) => [s.teamId, i + 1]))
-    const cLast = cStand.length + 1
-    const tDelta = [...analysis.teamExpectations.values()].map((e) => ({ id: e.teamId, delta: e.expectedRank - (cRank.get(e.teamId) ?? cLast) }))
+    const tDelta = [...analysis.teamExpectations.values()].filter((e) => cRank.has(e.teamId)).map((e) => ({ id: e.teamId, delta: e.expectedRank - cRank.get(e.teamId)! }))
     const tOver = tDelta.filter((x) => x.delta >= 2).sort((a, b) => b.delta - a.delta)[0]?.id
     const tUnder = tDelta.filter((x) => x.delta <= -2).sort((a, b) => a.delta - b.delta)[0]?.id
     if (!dOver.length && !dUnder.length && !tOver && !tUnder) continue // nothing notable this checkpoint

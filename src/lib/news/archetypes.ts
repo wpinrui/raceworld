@@ -51,11 +51,14 @@ export interface DriverArcMatch {
   teammateId?: string
 }
 
-// A driver counts as a rookie when the F1 career to date shows no prior starts (careers when present;
-// else a debut dated to this season). Mirrors previewCast's rule.
-function isRookie(ctx: NewsContext, driverId: string, debutYear?: number): boolean {
+// A driver counts as a rookie when they had no F1 starts BEFORE this season. NB ctx.careers folds this
+// season's results in (live end-of-season), so we subtract this season's starts to recover the prior total;
+// a raw `careers.starts <= 1` would reject every real rookie by year end. Falls back to a this-year debut
+// when no career record exists.
+function isRookieSeason(ctx: NewsContext, driverId: string, debutYear: number | undefined, thisSeasonStarts: number): boolean {
   const c = ctx.careers?.[driverId]
-  return c ? (c.starts ?? 0) <= 1 : debutYear === ctx.year
+  if (c) return Math.max(0, (c.starts ?? 0) - thisSeasonStarts) <= 1
+  return debutYear === ctx.year
 }
 
 export function driverArcs(ctx: NewsContext, analysis: SeasonAnalysis): DriverArcMatch[] {
@@ -74,7 +77,7 @@ export function driverArcs(ctx: NewsContext, analysis: SeasonAnalysis): DriverAr
     const delta = analysis.driverDeltas.find((x) => x.id === d.id)?.delta ?? 0
     const tm = teammateOf(d)
     const tmSt = tm ? statsUpTo(ctx, tm.id, 1, N) : null
-    const rookie = isRookie(ctx, d.id, d.debutYear)
+    const rookie = isRookieSeason(ctx, d.id, d.debutYear, st.started)
 
     // Overachiever: a non-front car, podiums but no wins, finishing clearly above the car's billing.
     if (exp && exp.tier !== 'front' && st.podiums >= 2 && st.wins === 0 && delta >= 4) {
@@ -91,7 +94,7 @@ export function driverArcs(ctx: NewsContext, analysis: SeasonAnalysis): DriverAr
       push({ driverId: d.id, key: 'fastStart', strength: late.avgFinish - early.avgFinish, wins: st.wins, podiums: st.podiums })
     }
     // Rookie outscoring a veteran teammate over the season.
-    if (rookie && tm && tmSt && !isRookie(ctx, tm.id, tm.debutYear) && st.points > tmSt.points && st.points >= tmSt.points * 1.1) {
+    if (rookie && tm && tmSt && !isRookieSeason(ctx, tm.id, tm.debutYear, tmSt.started) && st.points > tmSt.points && st.points >= tmSt.points * 1.1) {
       push({ driverId: d.id, key: 'rookieBeatsVet', strength: (st.points - tmSt.points), wins: st.wins, podiums: st.podiums, teammateId: tm.id })
     }
     // Rookie on the podium against expectation.
@@ -99,7 +102,8 @@ export function driverArcs(ctx: NewsContext, analysis: SeasonAnalysis): DriverAr
       push({ driverId: d.id, key: 'rookieEarly', strength: st.podiums * 3 + st.wins * 5, wins: st.wins, podiums: st.podiums })
     }
     // Late-career resurgence: 35+, running at the sharp end and getting stronger as the year closed.
-    if (d.age >= 35 && late.finishes.length >= 2 && late.avgFinish <= 7 && early.avgFinish - late.avgFinish >= 2) {
+    // Both windows need real finishes — else early.avgFinish=99 (no classified finish) fakes a giant "surge".
+    if (d.age >= 35 && early.finishes.length >= 2 && late.finishes.length >= 2 && late.avgFinish <= 7 && early.avgFinish - late.avgFinish >= 2) {
       push({ driverId: d.id, key: 'lateSurge', strength: (early.avgFinish - late.avgFinish) + st.podiums, wins: st.wins, podiums: st.podiums })
     }
   }
