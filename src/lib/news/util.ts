@@ -84,6 +84,18 @@ export function compose(seed: string, slots: Record<string, string | number>, ..
     .join(' ')
 }
 
+// Gendered pronoun slots for templated copy, resolved from a driver's gender. Absent gender reads as
+// male (the historical default for unlabelled entries). Singular forms, so templates pair them with
+// singular verbs ("the seat {they} wanted", "{they} is settled").
+export function pronouns(gender: string | undefined): Record<string, string> {
+  const f = gender === 'female'
+  return {
+    they: f ? 'she' : 'he', they_cap: f ? 'She' : 'He',
+    them: f ? 'her' : 'him', their: f ? 'her' : 'his', their_cap: f ? 'Her' : 'His',
+    theirs: f ? 'hers' : 'his', themself: f ? 'herself' : 'himself', theyre: f ? "she's" : "he's",
+  }
+}
+
 // Small seeded PRNG (mulberry32) so we can run the sim's market logic deterministically
 // for silly-season speculation — same season state always projects the same rumours.
 export function mulberry32(seedStr: string): () => number {
