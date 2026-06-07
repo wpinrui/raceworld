@@ -301,23 +301,26 @@ export interface BestOfRestResult {
   kind: BestOfRestKind
 }
 
-// The best-of-the-rest battle (#90): the fight to lead the midfield, taken as the order behind the front
-// three. `surge` = the winner was projected well down preseason; `compressed` = a tight P4-P7 band.
+// The best-of-the-rest battle (#90): the fight to lead the midfield, defined EXACTLY as the season review's
+// best-of-the-rest line — the best ACTUAL finisher among teams NOT in the preseason front tier — so the two
+// end-of-season pieces never name different teams. `surge` = projected well down preseason; `compressed` = a
+// tight band among the leading non-front teams.
 export function bestOfRestBattle(ctx: NewsContext, analysis: SeasonAnalysis): BestOfRestResult | null {
   const N = analysis.completedRounds
   if (N < 6) return null
-  const rows = teamSeasonStats(ctx, N)
-  const FRONT = 3
-  if (rows.length < FRONT + 2) return null // need a midfield to have a best-of-the-rest
-  const bor = rows[FRONT]
-  const runnerUp = rows[FRONT + 1]
-  const gap = bor.points - (runnerUp?.points ?? 0)
-  const band = rows.slice(FRONT, FRONT + 4)
+  const front = new Set(analysis.tiers.front)
+  const rows = teamSeasonStats(ctx, N).filter((r) => !front.has(r.id))
+  if (rows.length < 2) return null // need a midfield with at least two teams
+  const bor = rows[0]
+  const runnerUp = rows[1]
+  const gap = bor.points - runnerUp.points
+  const band = rows.slice(0, 4)
   const bandSpread = band.length >= 3 ? band[0].points - band[band.length - 1].points : 999
-  const expRank = analysis.teamExpectations.get(bor.id)?.expectedRank ?? FRONT + 1
-  const surge = expRank - (FRONT + 1) >= 3 // expected ~7th or worse, finished best-of-the-rest
+  const actualRank = front.size + 1 // the best-of-the-rest sits just behind the front tier
+  const expRank = analysis.teamExpectations.get(bor.id)?.expectedRank ?? actualRank
+  const surge = expRank - actualRank >= 3 // projected well down preseason, finished best-of-the-rest
   const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= 25 ? 'compressed' : 'clear'
-  return { winnerId: bor.id, runnerUpId: runnerUp?.id, gap, kind }
+  return { winnerId: bor.id, runnerUpId: runnerUp.id, gap, kind }
 }
 
 export type BackmarkerKey = 'newTeamDebut' | 'pointsAgainstOdds' | 'lastPlaceBattle'
@@ -327,7 +330,6 @@ export interface BackmarkerResult {
   otherId?: string // the rival, for the last-place battle
   gap: number
   points: number
-  wins: number
 }
 
 // The backmarker tier (#90): one notable story from the back — a new team's tough debut, a tail-ender
@@ -341,20 +343,18 @@ export function backmarkerStory(ctx: NewsContext, analysis: SeasonAnalysis): Bac
   const secondLast = rows[rows.length - 2]
   const everRaced = new Set((ctx.constructorHistory ?? []).map((h) => h.teamId))
 
-  // A brand-new team enduring a debut at the back.
-  const debutant = [last, secondLast].find((r) => !everRaced.has(r.id))
-  if (debutant && everRaced.size > 0) {
-    return { key: 'newTeamDebut', teamId: debutant.id, gap: 0, points: debutant.points, wins: debutant.wins }
+  // A brand-new team enduring a debut DEAD LAST — only then is the "slowest on the grid" copy accurate.
+  if (everRaced.size > 0 && !everRaced.has(last.id)) {
+    return { key: 'newTeamDebut', teamId: last.id, gap: 0, points: last.points }
   }
   // A tail-ender (bottom three) scoring against the odds — a win, or a real points haul.
-  const bottom = rows.slice(-3)
-  const overPerformer = bottom.find((r) => r.wins > 0 || r.points >= 15)
+  const overPerformer = rows.slice(-3).find((r) => r.wins > 0 || r.points >= 15)
   if (overPerformer) {
-    return { key: 'pointsAgainstOdds', teamId: overPerformer.id, gap: 0, points: overPerformer.points, wins: overPerformer.wins }
+    return { key: 'pointsAgainstOdds', teamId: overPerformer.id, gap: 0, points: overPerformer.points }
   }
   // A tight fight to avoid last.
   if (secondLast.points - last.points <= 10) {
-    return { key: 'lastPlaceBattle', teamId: secondLast.id, otherId: last.id, gap: secondLast.points - last.points, points: secondLast.points, wins: 0 }
+    return { key: 'lastPlaceBattle', teamId: secondLast.id, otherId: last.id, gap: secondLast.points - last.points, points: secondLast.points }
   }
   return null
 }

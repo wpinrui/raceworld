@@ -1543,9 +1543,6 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
   const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
   const teamUnder = analysis.teamDeltas.find((d) => d.delta < 0)?.id
-  const bestOfRest = analysis.teamDeltas
-    .filter((d) => analysis.teamExpectations.get(d.id)?.tier !== 'front')
-    .sort((a, b) => a.actualRank - b.actualRank)[0]?.id
   const c = seasonReviewCopy as Record<string, string[]>
   const seed = `season-review-${ctx.year}`
   const slots: Record<string, string | number> = {
@@ -1561,7 +1558,6 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   if (under.length) sections.push(fill(pick(c.underPerformers, `${seed}|under`), { ...slots, names: listJoin(under.map(dn)) }))
   if (teamOver) sections.push(fill(pick(c.teamOver, `${seed}|tover`), { ...slots, team: tn(teamOver) }))
   if (teamUnder) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), { ...slots, team: tn(teamUnder) }))
-  if (bestOfRest && bestOfRest !== teamOver && bestOfRest !== teamUnder) sections.push(fill(pick(c.bestOfRest, `${seed}|bor`), { ...slots, team: tn(bestOfRest) }))
   return [{
     id: seed, category: 'feature', round: ctx.completedRounds, priority: 88,
     headline: fill(pick(c.headline, `${seed}|h`), slots),
@@ -2516,8 +2512,9 @@ function crossTeamDuel(ctx: NewsContext): NewsArticle[] {
   })
 }
 
-// Best-of-the-rest retrospective (#90): the fight to lead the midfield (the order behind the front three) —
-// a compressed band, a surge from a projected backmarker, or a clear win. End-of-season.
+// Best-of-the-rest retrospective (#90): the fight to lead the midfield (the best finisher among the teams
+// outside the preseason front tier) — a compressed band, a surge from a projected backmarker, or a clear
+// win. Shares its definition with the season review's best-of-the-rest line. End-of-season.
 function bestOfRest(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || !ctx.endOfSeason) return []
   const r = bestOfRestBattle(ctx, buildSeasonAnalysis(ctx))

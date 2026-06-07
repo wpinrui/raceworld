@@ -110,12 +110,5 @@
     "The forecast oversold {team}, which did not reach it.",
     "{team} missed its preseason target for the season.",
     "Against the winter projection, {team} came up short."
-  ],
-  "bestOfRest": [
-    "{team} led the midfield, finishing best of those not expected at the front.",
-    "Top of the pack behind the title teams: {team}, the year's best of the rest.",
-    "{team} won the midfield fight, ahead of every team not projected to challenge at the front.",
-    "Of the teams outside the front group, {team} finished highest.",
-    "{team} headed the midfield in {year}, first among those not expected to contend up front."
   ]
 }
