@@ -44,7 +44,7 @@ import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
 import expectationCheckCopy from './expectation-check-copy.json'
-import { driverArcs, teammateBattles, crossTeamDuels } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels, championshipShape } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
 import teammateBattleCopy from './teammate-battle-copy.json'
@@ -1536,11 +1536,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const champion = t.currentLeaderId
   const runnerUp = t.series[t.series.length - 1]?.secondId ?? null
   const constructorChampion = analysis.constructorTitle.currentLeaderId
-  const earlyLeader = t.series[0]?.leaderId
-  const maxPer = driverMaxPerRace(ctx.year)
-  const shape = t.wireToWire ? 'WireToWire'
-    : earlyLeader && earlyLeader !== champion ? 'Comeback'
-    : t.currentGap <= maxPer ? 'Decider' : 'Clear'
+  const shape = championshipShape(ctx, analysis) // full #88 title-battle taxonomy, not just the basic four
   const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
   const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
   const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
