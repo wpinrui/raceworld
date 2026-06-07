@@ -3729,7 +3729,7 @@ function agreeArticle(a: NewsArticle): NewsArticle {
 // Strip a trailing full stop from the line so it doesn't collide with the closing comma.
 const quoteLine = (pool: string[], seed: string, name: string): string => `"${pick(pool, seed).replace(/\.$/, '')}," said ${lastName(name)}.`
 
-// Round-15 survey of the expiring contracts, graded from the driver's side. Chunked: ONE sentence per
+// A survey of the expiring contracts at the (season-scaled) contract-watch round, graded from the driver's side. Chunked: ONE sentence per
 // verdict names the whole group (with their teams), instead of a paragraph per driver.
 function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   const watch = ctx.contractWatch
@@ -3737,7 +3737,7 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   const c = marketFeatureCopy.watch
   const year = ctx.year
   const seed = `contract-watch-${year}`
-  const hslots = { n: watch.length, year, next: year + 1 }
+  const hslots = { n: watch.length, year, next: year + 1, round: marketWatchRound(ctx.calendar.length) }
   type Verdict = 'could_do_better' | 'right_place' | 'lucky'
   // Most newsworthy first: the biggest over- and under-placements lead; well-matched cases sit nearest 0.
   const newsworthiness = (key: Verdict) => (a: ContractWatch, b: ContractWatch) =>
@@ -3762,7 +3762,7 @@ function contractWatchFeature(ctx: NewsContext): NewsArticle[] {
   })]
 }
 
-// Round-18 round-up once the renewal window closes. Chunked: one sentence lists the re-signings (team +
+// A round-up once the renewal window closes (at the season-scaled renewal round). Chunked: one sentence lists the re-signings (team +
 // length), one lists who is heading to the market.
 function renewalsFeature(ctx: NewsContext): NewsArticle[] {
   // Fires from the renewal round on (incl. the off-season archive snapshot, so it persists to archived seasons).
@@ -3775,7 +3775,7 @@ function renewalsFeature(ctx: NewsContext): NewsArticle[] {
   const year = ctx.year
   const next = year + 1
   const seed = `renewals-roundup-${year}`
-  const hslots = { n: renewals.length, m: stillExpiring.length, year, next }
+  const hslots = { n: renewals.length, m: stillExpiring.length, year, next, round: renewalRound }
   const renewedNames = listJoin(renewals.map((r) => `${r.driverName} (${r.teamName}, ${r.years}yr)`))
   const expiringNames = listJoin(stillExpiring.map((d) => `${d.name} (${teamName(ctx, d.teamId)})`))
   const body = paras(

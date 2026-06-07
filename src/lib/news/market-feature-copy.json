@@ -14,7 +14,7 @@
       "From frontrunners to tail-enders, {n} deals define the {year} market."
     ],
     "intro": [
-      "Round 15 of {year} opens the renewal window with {n} drivers still unsigned, a figure large enough to redraw significant sections of the grid.",
+      "Round {round} of {year} opens the renewal window with {n} drivers still unsigned, a figure large enough to redraw significant sections of the grid.",
       "The {year} renewal window is formally open and {n} out-of-contract drivers are now free to negotiate with rival teams.",
       "With {n} contracts expiring at season's end, the {year} field faces a reshuffle that will be settled over the next few weeks.",
       "Formula racing's contract calendar has arrived at its most consequential moment, with {n} drivers in {year} holding deals that expire at season's end."
@@ -78,14 +78,14 @@
     ],
     "dek": [
       "The renewal window has shut with {n} drivers re-signed and {m} heading to the end-of-season market.",
-      "{n} out-of-contract drivers found agreement before the Round 18 deadline, leaving {m} to negotiate without a clock in their favour.",
+      "{n} out-of-contract drivers found agreement before the Round {round} deadline, leaving {m} to negotiate without a clock in their favour.",
       "The {year} mid-season window produced {n} confirmations and left {m} names still unresolved.",
       "With {n} re-signings confirmed and {m} outstanding, the {year} driver market enters its most unpredictable phase."
     ],
     "intro": [
-      "The {year} renewal window closed before Round 18 with {n} extensions confirmed and {m} drivers heading to the open market.",
+      "The {year} renewal window closed before Round {round} with {n} extensions confirmed and {m} drivers heading to the open market.",
       "Formula racing's mid-season deadline passed with {n} deals done and {m} drivers entering the end-of-season market under considerably less leverage.",
-      "When the window shut ahead of Round 18 of {year}, {n} drivers had secured their futures and {m} had not, a split that immediately changes the negotiating dynamics for those still unsigned.",
+      "When the window shut ahead of Round {round} of {year}, {n} drivers had secured their futures and {m} had not, a split that immediately changes the negotiating dynamics for those still unsigned.",
       "The {year} renewal window produced {n} confirmed extensions before its formal close, leaving {m} drivers to contest the end-of-season market where teams historically hold the stronger hand."
     ],
     "renewed": [
