@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { WeatherPoint } from '@/lib/sim/types'
 import { getMoistureAtLap, forecastMoistureAtLap } from '@/lib/sim/weather'
 
@@ -74,16 +75,16 @@ export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props
         />
 
         {reveal ? (
-          /* god-mode: the true future, in amber */
+          /* god-mode reveal: the true future, same solid cyan as the actual line (one colour = reality) */
           <polyline
             points={truthAhead}
             fill="none"
-            stroke="#FFB020"
+            stroke="#00D9FF"
             strokeWidth={1.75}
             vectorEffect="non-scaling-stroke"
           />
         ) : (
-          /* forecast ahead, dashed */
+          /* forecast ahead, dashed and muted so it reads as a prediction, not fact */
           <polyline
             points={forecastAhead}
             fill="none"
@@ -101,14 +102,18 @@ export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props
         />
       </svg>
 
-      <button
-        type="button"
-        onClick={() => setReveal((r) => !r)}
-        aria-label={reveal ? 'Hide actual weather' : 'Reveal actual weather (god mode)'}
-        className={`p-1 rounded transition-colors ${reveal ? 'text-[#FFB020]' : 'text-[#6B7280] hover:text-[#A0A9B8]'}`}
-      >
-        {reveal ? <Eye size={14} /> : <EyeOff size={14} />}
-      </button>
+      <Tooltip content={reveal ? 'Showing the true weather ahead (god mode)' : 'Future is the forecast. Reveal the true weather ahead (god mode)'}>
+        <button
+          type="button"
+          onClick={() => setReveal((r) => !r)}
+          className={`flex items-center gap-1 px-1.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+            reveal ? 'text-[#00D9FF] bg-[#00D9FF]/10' : 'text-[#6B7280] hover:text-[#A0A9B8]'
+          }`}
+        >
+          {reveal ? <Eye size={12} /> : <EyeOff size={12} />}
+          <span>{reveal ? 'Actual' : 'Forecast'}</span>
+        </button>
+      </Tooltip>
     </div>
   )
 }
