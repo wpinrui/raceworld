@@ -1,3 +1,5 @@
+import type { TeamBelief } from './pit-ai'
+
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
 export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
@@ -138,10 +140,6 @@ export interface WeatherPoint {
   moisture: number       // 0-1
 }
 
-// Per-team assumed tyre wear rates (condition lost per lap per compound).
-// Sampled once at race start with noise — both drivers share the same team assumptions.
-export type TeamTyreAssumptions = Record<TyreCompound, number>
-
 export interface RaceState {
   circuitId: string
   totalLaps: number
@@ -156,7 +154,9 @@ export interface RaceState {
   speed: SimSpeed
   paused: boolean
   strategyNoise: number                                    // 0–1; tunable
-  teamAssumptions: Record<string, TeamTyreAssumptions>     // teamId -> compound -> wear rate/lap
+  compoundDeltas: Record<TyreCompound, number>             // per-race pace delta (s/lap) per compound
+  tyreBaseLife: Record<TyreCompound, number>               // per-race base life (fraction of race) per compound
+  teamBeliefs: Record<string, TeamBelief>                  // teamId -> per-compound tyre belief (imperfect info)
   carForm: Record<string, number>                          // teamId -> per-race car-form pace delta (Normal(0, ~5.19)); adds straight to car pace this race
 }
 

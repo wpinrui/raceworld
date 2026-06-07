@@ -8,12 +8,11 @@ import type {
   QualifyingSessionResult,
   GodModeAction,
   TyreState,
-  TeamTyreAssumptions,
 } from './types'
 import { generateWeatherCurve, generateForecastCurve, getMoistureAtLap } from './weather'
-import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
+import { computeTyreLife, wearTyre, recommendTyre, generateCompoundDeltas, generateTyreBaseLife } from './tyres'
 import { computeLapTime } from './engine'
-import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
+import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { generateCommentary } from './commentary'
 import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
@@ -42,11 +41,13 @@ export function initRaceState(
   const weather = generateWeatherCurve(circuit.laps)
   const weatherForecast = generateForecastCurve(weather, circuit.laps)
   const lap1Moisture = getMoistureAtLap(weather, 1)
+  const compoundDeltas = generateCompoundDeltas()
+  const tyreBaseLife = generateTyreBaseLife()
 
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
 
-  // Sample one set of tyre assumptions per team — both drivers share these
-  const teamAssumptions: Record<string, TeamTyreAssumptions> = {}
+  // Each team's tyre belief for this race — both drivers feed (and share) it.
+  const teamBeliefs: Record<string, TeamBelief> = {}
   // Per-race car form (#65): one roll per team this race — a pace swing for a good or bad weekend,
   // applied equally to both the team's cars. Normal(0, σ) with σ ≈ 5.19 so the quartiles land at
   // ±3.5 (0.6745·σ ≈ 3.5). Added straight to car pace for the race (replaces the narrower trackCompat).
@@ -57,7 +58,7 @@ export function initRaceState(
   const CAR_FORM_CAP = 25
   const carForm: Record<string, number> = {}
   for (const team of teams) {
-    teamAssumptions[team.id] = sampleTeamAssumptions(circuit.laps, strategyNoise)
+    teamBeliefs[team.id] = initTeamBelief(circuit.laps)
     carForm[team.id] = Math.max(-CAR_FORM_CAP, Math.min(CAR_FORM_CAP, sampleNormal(0, CAR_FORM_SIGMA, Math.random)))
   }
 
@@ -71,7 +72,7 @@ export function initRaceState(
     const team = teamMap.get(driver.teamId)!
 
     const compound = recommendTyre(lap1Moisture)
-    const maxLifeLaps = computeTyreLife(compound, driver.smoothness, circuit.laps)
+    const maxLifeLaps = computeTyreLife(tyreBaseLife[compound], driver.smoothness, circuit.laps)
 
     const tyre: TyreState = {
       compound,
@@ -79,8 +80,7 @@ export function initRaceState(
       maxLifeLaps,
     }
 
-    const assumptions = teamAssumptions[team.id]
-    const initialPlan = planStrategy(1, circuit.laps, 100, compound, maxLifeLaps, assumptions)
+    const initialPlan = planStrategy(1, circuit.laps, 100, compound, driver.smoothness, teamBeliefs[team.id], weather, weatherForecast)
 
     return {
       driverId: driver.id,
@@ -120,7 +120,9 @@ export function initRaceState(
     speed: 1,
     paused: false,
     strategyNoise,
-    teamAssumptions,
+    compoundDeltas,
+    tyreBaseLife,
+    teamBeliefs,
     carForm,
   }
 }
@@ -183,6 +185,27 @@ export function simulateLap(
   // Track lap times this lap for gap logic
   const lapTimesThisLap = new Map<string, number>()
 
+  // Update each team's tyre belief from BOTH its cars' (bucketed) condition — pooled, learned by
+  // running. Then snapshot the field by track position (last lap's gaps) for undercut / clear-air.
+  const teamBeliefs: Record<string, TeamBelief> = { ...state.teamBeliefs }
+  for (const ds of state.drivers) {
+    if (ds.retired) continue
+    const d = driverMap.get(ds.driverId)
+    if (!d) continue
+    teamBeliefs[d.teamId] = observeTyre(
+      teamBeliefs[d.teamId],
+      ds.currentTyre.compound,
+      bucketCondition(ds.currentTyre.condition),
+      ds.stintLap,
+      d.smoothness,
+      state.compoundDeltas[ds.currentTyre.compound],
+    )
+  }
+  const field: FieldCar[] = state.drivers.map((d) => ({
+    driverId: d.driverId, position: d.position, totalTime: d.totalTime, condition: d.currentTyre.condition, retired: d.retired,
+  }))
+  const fieldByDriver = new Map(field.map((f) => [f.driverId, f]))
+
   // Step 2: Process each driver in position order
   const updatedStates = new Map<string, DriverRaceState>(
     driverStates.map((d) => [d.driverId, d]),
@@ -234,20 +257,39 @@ export function simulateLap(
       current = { ...current, worstMistakeLoss: Math.max(current.worstMistakeLoss, mistakeTimeLoss) }
     }
 
-    // 2c. Re-solve strategy this lap (adapts to weather changes, actual wear, etc.)
-    const assumptions = state.teamAssumptions[team.id]
-    const newPlan = planStrategy(
+    // 2c. Re-solve strategy this lap. The team plans on its PROJECTED condition (100 − believed wear
+    // rate × laps on the tyre), not the coarse bucket reading — a smooth, stint-anchored guess of where
+    // the tyre is, so it aims for ~the cliff buffer without the target lap receding. Buckets still feed
+    // the rate (above); when the guess is off the real cliff catches it.
+    const cBelief = teamBeliefs[team.id][current.currentTyre.compound]
+    const bkt = bucketCondition(current.currentTyre.condition)
+    const rateProj = 100 - cBelief.baseWearRate * (0.5 + driver.smoothness / 100) * current.stintLap
+    // Clamp the rate-based guess to the bucket the pit wall actually reads — it can't believe the tyre
+    // is fresher (or deader) than the visible bucket allows.
+    const projectedCond = Math.max(0, Math.min(100, Math.max(bkt - 12.5, Math.min(bkt + 12.5, rateProj))))
+    const plan = planStrategy(
       state.currentLap,
       state.totalLaps,
-      current.currentTyre.condition,
+      projectedCond,
       current.currentTyre.compound,
-      current.currentTyre.maxLifeLaps,
-      assumptions,
+      driver.smoothness,
+      teamBeliefs[team.id],
+      state.weather,
+      state.weatherForecast,
     )
-    current = { ...current, targetPitLap: newPlan.targetPitLap, targetNextCompound: newPlan.targetNextCompound }
+    current = { ...current, targetPitLap: plan.targetPitLap, targetNextCompound: plan.targetNextCompound }
 
-    // 2d. Decide whether to pit this lap based on the plan
-    let pitDecision = decidePit(current, state.currentLap, state.totalLaps)
+    // 2d. Decide whether to pit this lap — window + undercut / clear-air, forced at the real cliff.
+    const selfField = fieldByDriver.get(current.driverId)!
+    let pitDecision = decidePit(
+      plan,
+      current.currentTyre.condition,
+      projectedCond,
+      current.currentTyre.compound,
+      currentMoisture,
+      selfField,
+      field,
+    )
 
     // God mode pit overrides
     const godActionsForDriver = (godModeActions ?? []).filter(a => a.driverId === current.driverId)
@@ -266,7 +308,7 @@ export function simulateLap(
       pitted = true
       pitPenalty = 20 + Math.random() * 4
       const newMaxLifeLaps = computeTyreLife(
-        pitDecision.targetCompound,
+        state.tyreBaseLife[pitDecision.targetCompound],
         driver.smoothness,
         state.totalLaps,
       )
@@ -312,6 +354,7 @@ export function simulateLap(
       fuelLaps: current.fuelLaps,
       lap: state.currentLap,
       weather: state.weather,
+      compoundDeltas: state.compoundDeltas,
       gapToCarAhead,
       carAheadLapTime,
       circuitFlatModifier: circuit.flatModifier,
@@ -347,7 +390,7 @@ export function simulateLap(
     }
 
     // 2h. Degrade tyre
-    const newCondition = degradeTyre(current.currentTyre)
+    const newCondition = wearTyre(current.currentTyre)
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },
@@ -420,6 +463,7 @@ export function simulateLap(
 
   return {
     ...state,
+    teamBeliefs,
     currentLap: nextLap,
     drivers: withGaps,
     commentary: [...state.commentary, ...newCommentary],
