@@ -32,9 +32,10 @@ import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-m
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp, pronouns } from './util'
 import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
-import { buildSeasonAnalysis, previewCast, titleArcEvents } from './season-analysis'
+import { buildSeasonAnalysis, previewCast, titleArcEvents, constructorArcEvents } from './season-analysis'
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
+import constructorArcCopy from './constructor-arc-copy.json'
 import raceCodaCopy from './race-coda-copy.json'
 import seasonReviewCopy from './season-review-copy.json'
 import milestoneCopy from './milestone-copy.json'
@@ -43,8 +44,9 @@ import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
 import expectationCheckCopy from './expectation-check-copy.json'
-import { driverArcs, teammateBattles } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels, championshipShape } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
+import crossTeamDuelCopy from './cross-team-duel-copy.json'
 import teammateBattleCopy from './teammate-battle-copy.json'
 import { historicalGrids } from '@/data/history/grids'
 import { milestoneCrossed } from '@/lib/stats/milestone-defs'
@@ -1486,6 +1488,38 @@ function championshipArc(ctx: NewsContext): NewsArticle[] {
   })
 }
 
+// The constructors' championship arc (#88): the teams' title fight, same sparse inflection detection as the
+// drivers' arc (constructorArcEvents). Priority just below the drivers' arc so the marquee title leads the round.
+function constructorArc(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || ctx.endOfSeason) return []
+  const tn = (id: string) => teamName(ctx, id)
+  const c = constructorArcCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return constructorArcEvents(ctx).map((e) => {
+    const leader = tn(e.leaderId)
+    const chaser = tn(e.chaserId)
+    const h2hHi = Math.max(e.h2hLeader, e.h2hChaser)
+    const h2hLo = Math.min(e.h2hLeader, e.h2hChaser)
+    const h2h = e.h2hLeader === e.h2hChaser ? `level at ${e.h2hLeader}-${e.h2hChaser}` : `${h2hHi}-${h2hLo} in ${poss(e.h2hLeader >= e.h2hChaser ? leader : chaser)} favour`
+    const slots = {
+      year: ctx.year, round: e.round, leader, chaser,
+      gap: e.gap, gap_pts: plural(e.gap, 'point'), gap_ago: e.gapAgo, rounds_ago: e.roundsAgo, change: Math.abs(e.change),
+      remaining: e.remaining, races_left: `${e.remaining} ${plural(e.remaining, 'race')}`, max_pts: e.maxPts,
+      h2h, mom_leader: e.momLeader, mom_chaser: e.momChaser, chaser_wins: e.chaserWins, leader_dnfs: e.leaderDnfs,
+    }
+    const angle = e.kind === 'erosion'
+      ? (e.merit === 'handed' ? 'erosionHanded' : e.merit === 'merit' ? 'erosionMerit' : 'erosionMixed')
+      : e.kind
+    const cc = c[angle]
+    const seed = `cons-arc-${ctx.year}-${e.round}`
+    return {
+      id: seed, category: 'championship_state', round: e.round, priority: 74,
+      headline: fill(pick(cc.h, `${seed}|h`), slots),
+      dek: fill(pick(cc.d, `${seed}|d`), slots),
+      body: fill(pick(cc.b, `${seed}|b`), slots),
+    }
+  })
+}
+
 // The season review (#88): the end-of-season retrospective that pays off the preview — how the title was
 // won, who beat or missed their preseason projection, the best of the rest. Replaces the old `feature`
 // producer (keeps the `feature` category). Grounded in the season-analysis deltas + title trajectory.
@@ -1502,11 +1536,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const champion = t.currentLeaderId
   const runnerUp = t.series[t.series.length - 1]?.secondId ?? null
   const constructorChampion = analysis.constructorTitle.currentLeaderId
-  const earlyLeader = t.series[0]?.leaderId
-  const maxPer = driverMaxPerRace(ctx.year)
-  const shape = t.wireToWire ? 'WireToWire'
-    : earlyLeader && earlyLeader !== champion ? 'Comeback'
-    : t.currentGap <= maxPer ? 'Decider' : 'Clear'
+  const { shape, earlyLeaderId } = championshipShape(ctx, analysis) // full #88 title-battle taxonomy, not just the basic four
   const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
   const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
   const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
@@ -1519,6 +1549,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
+    early_leader: earlyLeaderId ? dn(earlyLeaderId) : '', early_leader_last: earlyLeaderId ? lastName(dn(earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
   }
@@ -2461,6 +2492,28 @@ function teammateBattle(ctx: NewsContext): NewsArticle[] {
   })
 }
 
+// Cross-team duel retrospective (#88): the season's single defining battle between two drivers on different
+// teams outside the title fight — a parallel fight among the fast cars, or a midfield duel. End-of-season.
+function crossTeamDuel(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.endOfSeason) return []
+  const analysis = buildSeasonAnalysis(ctx)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const c = crossTeamDuelCopy as Record<string, { h: string[]; d: string[]; b: string[] }>
+  return crossTeamDuels(ctx, analysis).map((m) => {
+    const a = dn(m.aId)
+    const b = dn(m.bId)
+    const slots = { year: ctx.year, a_last: lastName(a), b_last: lastName(b), h2h_a: m.h2hA, h2h_b: m.h2hB, gap: m.gap }
+    const cc = c[m.key]
+    const seed = `crossteam-${ctx.year}-${m.aId}-${m.bId}`
+    return {
+      id: seed, category: 'analysis_opinion', round: ctx.completedRounds, priority: 34,
+      headline: fill(pick(cc.h, `${seed}|h`), slots),
+      dek: fill(pick(cc.d, `${seed}|d`), slots),
+      body: fill(pick(cc.b, `${seed}|b`), slots),
+    }
+  })
+}
+
 // Expectation-vs-actual checkpoint (#88): ~twice a season (one-third, two-thirds), who is running above or
 // below their PRESEASON projection — drivers and teams. Compares the season-analysis preseason expectation
 // (round-independent) against the actual standings AT that checkpoint round. Supersedes the analysis
@@ -3171,9 +3224,11 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...technicalRoundup(ctx),
     ...championship(ctx),
     ...championshipArc(ctx),
+    ...constructorArc(ctx),
     ...seasonReview(ctx),
     ...driverArc(ctx),
     ...teammateBattle(ctx),
+    ...crossTeamDuel(ctx),
     ...expectationCheck(ctx),
     ...previews(ctx),
     ...market(ctx),

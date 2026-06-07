@@ -1,5 +1,5 @@
 import type { NewsContext } from './engine'
-import { driverMaxPerRace } from '@/lib/sim/points'
+import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
 
 // Season-long analysis layer (#88). One pass over the NewsContext produces the reusable facts the
 // narrative producers (season preview, championship arc, race-report coda, expectation-vs-actual,
@@ -359,25 +359,48 @@ function windowPoints(ctx: NewsContext, driverId: string, round: number, w: numb
   return pts
 }
 
-export function titleArcEvents(ctx: NewsContext): TitleArcEvent[] {
-  const N = ctx.calendar.length
-  const maxPer = driverMaxPerRace(ctx.year)
+// Race-by-race head-to-head between two drivers over rounds 1..upToRound, counting only rounds BOTH
+// classified (no DNF). Shared by the title arc and the cross-team duel detector.
+export function raceH2H(ctx: NewsContext, aId: string, bId: string, upToRound: number): [number, number] {
+  let a = 0, b = 0
+  for (let k = 1; k <= upToRound; k++) {
+    const rr = ctx.raceResults[k - 1] ?? []
+    const x = rr.find((z) => z.driverId === aId)
+    const y = rr.find((z) => z.driverId === bId)
+    if (x && y && !x.dnf && !y.dnf && x.finishPosition != null && y.finishPosition != null) { if (x.finishPosition < y.finishPosition) a++; else b++ }
+  }
+  return [a, b]
+}
+
+// Generic arc-event detector, shared by the drivers' and constructors' title fights. The series-specific
+// bits (how points/wins/DNFs/head-to-head are read for a driver vs a team) come in as deps; the swing/
+// onset/decider/merit logic is identical for both.
+interface ArcRow { id: string; points: number }
+interface ArcDeps {
+  pointsAfter: (round: number) => ArcRow[]
+  maxPer: number
+  windowWins: (id: string, fromR: number, toR: number) => number // chaser-entity wins in the window
+  windowDnfs: (id: string, fromR: number, toR: number) => number // leader-entity retirements in the window
+  seasonH2H: (leaderId: string, chaserId: string, upto: number) => [number, number]
+  windowPts: (id: string, round: number, w: number) => number
+}
+
+function arcEvents(N: number, completedRounds: number, d: ArcDeps): TitleArcEvent[] {
   const events: TitleArcEvent[] = []
   let lastDir = 0 // -1 closing, +1 extending, 0 none — so a sustained swing fires once at its onset
   let lastLeaderId = '' // to fire the decider only at the run-in's onset or when the lead changes hands
-  for (let r = 4; r <= ctx.completedRounds; r++) {
-    const s = driverPointsAfter(ctx, r)
+  for (let r = 4; r <= completedRounds; r++) {
+    const s = d.pointsAfter(r)
     if (s.length < 2) continue
     const gap = s[0].points - s[1].points
     const remaining = N - r
-    if (remaining < 0) continue
-    if (remaining <= 0 || gap > remaining * maxPer) { lastDir = 0; continue } // clinched/finale — championship() owns it
+    if (remaining <= 0 || gap > remaining * d.maxPer) { lastDir = 0; continue } // clinched/finale — championship() owns it
     const leaderId = s[0].id
     const leadChanged = lastLeaderId !== '' && leaderId !== lastLeaderId
     lastLeaderId = leaderId
     const chaserId = s[1].id
     const w = Math.min(4, r - 1)
-    const past = driverPointsAfter(ctx, r - w)
+    const past = d.pointsAfter(r - w)
     const ptsAgo = (id: string) => past.find((x) => x.id === id)?.points ?? 0
     const gapAgo = ptsAgo(leaderId) - ptsAgo(chaserId)
     const change = gap - gapAgo
@@ -388,33 +411,52 @@ export function titleArcEvents(ctx: NewsContext): TitleArcEvent[] {
     // Sparse: a swing fires once at its onset; the decider fires at the run-in's onset (3 to go) or a lead change.
     const fireDecider = decider && (remaining === 3 || leadChanged)
     if (!fireDecider && !onset) continue
-
-    let chaserWins = 0
-    let leaderDnfs = 0
-    for (let k = r - w + 1; k <= r; k++) {
-      const rr = ctx.raceResults[k - 1] ?? []
-      if (rr.find((x) => x.driverId === chaserId)?.finishPosition === 1) chaserWins++
-      if (rr.find((x) => x.driverId === leaderId)?.dnf) leaderDnfs++
-    }
-    let h2hLeader = 0
-    let h2hChaser = 0
-    for (let k = 1; k <= r; k++) {
-      const rr = ctx.raceResults[k - 1] ?? []
-      const a = rr.find((x) => x.driverId === leaderId)
-      const b = rr.find((x) => x.driverId === chaserId)
-      if (a && b && !a.dnf && !b.dnf && a.finishPosition != null && b.finishPosition != null) {
-        if (a.finishPosition < b.finishPosition) h2hLeader++
-        else h2hChaser++
-      }
-    }
+    const chaserWins = d.windowWins(chaserId, r - w + 1, r)
+    const leaderDnfs = d.windowDnfs(leaderId, r - w + 1, r)
+    const [h2hLeader, h2hChaser] = d.seasonH2H(leaderId, chaserId, r)
     const kind: TitleArcEvent['kind'] = decider ? 'decider' : dir < 0 ? 'erosion' : 'extension'
     const merit: TitleArcEvent['merit'] | undefined =
       kind === 'erosion' ? (chaserWins > leaderDnfs ? 'merit' : leaderDnfs > chaserWins ? 'handed' : 'mixed') : undefined
     events.push({
-      round: r, leaderId, chaserId, gap, gapAgo, roundsAgo: w, change, remaining, maxPts: remaining * maxPer,
+      round: r, leaderId, chaserId, gap, gapAgo, roundsAgo: w, change, remaining, maxPts: remaining * d.maxPer,
       kind, merit, chaserWins, leaderDnfs, h2hLeader, h2hChaser,
-      momLeader: windowPoints(ctx, leaderId, r, w), momChaser: windowPoints(ctx, chaserId, r, w),
+      momLeader: d.windowPts(leaderId, r, w), momChaser: d.windowPts(chaserId, r, w),
     })
   }
   return events
+}
+
+export function titleArcEvents(ctx: NewsContext): TitleArcEvent[] {
+  const at = (k: number) => ctx.raceResults[k - 1] ?? []
+  return arcEvents(ctx.calendar.length, ctx.completedRounds, {
+    pointsAfter: (r) => driverPointsAfter(ctx, r),
+    maxPer: driverMaxPerRace(ctx.year),
+    windowWins: (id, from, to) => { let n = 0; for (let k = from; k <= to; k++) if (at(k).find((x) => x.driverId === id)?.finishPosition === 1) n++; return n },
+    windowDnfs: (id, from, to) => { let n = 0; for (let k = from; k <= to; k++) if (at(k).find((x) => x.driverId === id)?.dnf) n++; return n },
+    seasonH2H: (leaderId, chaserId, upto) => raceH2H(ctx, leaderId, chaserId, upto),
+    windowPts: (id, round, w) => windowPoints(ctx, id, round, w),
+  })
+}
+
+// Constructors' title arc — same shape detection over the teams' championship. A team "win" is a round
+// where one of its cars took P1; "DNFs" counts car retirements; head-to-head compares the two teams'
+// per-round points hauls.
+export function constructorArcEvents(ctx: NewsContext): TitleArcEvent[] {
+  const cars = (teamId: string, k: number) => (ctx.raceResults[k - 1] ?? []).filter((x) => x.teamId === teamId)
+  return arcEvents(ctx.calendar.length, ctx.completedRounds, {
+    pointsAfter: (r) => teamPointsAfter(ctx, r),
+    maxPer: constructorMaxPerRace(ctx.year),
+    windowWins: (id, from, to) => { let n = 0; for (let k = from; k <= to; k++) if (cars(id, k).some((c) => c.finishPosition === 1)) n++; return n },
+    windowDnfs: (id, from, to) => { let n = 0; for (let k = from; k <= to; k++) for (const c of cars(id, k)) if (c.dnf) n++; return n },
+    seasonH2H: (leaderId, chaserId, upto) => {
+      let a = 0, b = 0
+      for (let k = 1; k <= upto; k++) {
+        const ap = cars(leaderId, k).reduce((s, c) => s + c.points, 0)
+        const bp = cars(chaserId, k).reduce((s, c) => s + c.points, 0)
+        if (ap > bp) a++; else if (bp > ap) b++
+      }
+      return [a, b]
+    },
+    windowPts: (id, round, w) => { let p = 0; for (let k = round - w + 1; k <= round; k++) p += cars(id, k).reduce((s, c) => s + c.points, 0); return p },
+  })
 }

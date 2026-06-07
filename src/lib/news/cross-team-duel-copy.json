@@ -1,0 +1,48 @@
+{
+  "parallelFight": {
+    "h": [
+      "Best of the rest in {year}: {a_last} edges {b_last} by {gap} points, head-to-head split {h2h_a}-{h2h_b}",
+      "A private race behind the title fight: {a_last} and {b_last}, {gap} points apart",
+      "{year}'s second-tier duel: {a_last} ahead of {b_last} by {gap}, head-to-head {h2h_a}-{h2h_b}",
+      "Two fast cars, two teams, one private fight: {a_last} pips {b_last} by {gap}",
+      "{a_last} shades the {year} best-of-the-rest fight from {b_last} by {gap}, head-to-head {h2h_a}-{h2h_b}"
+    ],
+    "d": [
+      "{a_last} and {b_last} fought for best of the rest all {year}, on different teams. {a_last} finished {gap} points ahead, with the season head-to-head split {h2h_a}-{h2h_b}.",
+      "Behind the title contenders, {a_last} and {b_last} ran the season's other duel. {a_last} took the higher placing by {gap} points; the race-by-race head-to-head finished {h2h_a}-{h2h_b}.",
+      "Two of the faster cars, on rival teams, settled the best-of-the-rest placings between {a_last} and {b_last}. {a_last} came out {gap} points clear, the head-to-head {h2h_a}-{h2h_b}.",
+      "{a_last} edged {b_last} to the {year} second-tier honours by {gap} points, the two separated by just {gap} after a head-to-head that split {h2h_a}-{h2h_b}.",
+      "The {year} best-of-the-rest battle went to {a_last} over {b_last} by {gap} points across the season, the head-to-head finishing {h2h_a}-{h2h_b} race by race."
+    ],
+    "b": [
+      "{a_last} and {b_last} were the quickest drivers behind the title contenders in {year}, and on different teams. {a_last} finished {gap} points ahead, with the season head-to-head split {h2h_a}-{h2h_b}.",
+      "The best-of-the-rest fight ran all {year} between {a_last} and {b_last}. {a_last} took the higher placing by {gap} points, the race-by-race head-to-head finishing {h2h_a}-{h2h_b} — a high-quality duel decided by a small margin.",
+      "Two fast cars on rival teams produced the season's other championship. {a_last} edged {b_last} by {gap} points for best of the rest in {year}, the head-to-head {h2h_a}-{h2h_b}.",
+      "Across {year}, {a_last} and {b_last} traded the best-of-the-rest placings without ever touching the title fight. The points gap was {gap}; the season head-to-head closed {h2h_a}-{h2h_b}.",
+      "{a_last} edged {b_last} by {gap} points in {year}, separated by just {gap} with a head-to-head that split {h2h_a}-{h2h_b}. Both ran among the faster cars, on different teams, and neither was in the title hunt."
+    ]
+  },
+  "midfieldDuel": {
+    "h": [
+      "{year} midfield duel: {a_last} pips {b_last} by {gap} points, head-to-head split {h2h_a}-{h2h_b}",
+      "{a_last} and {b_last} traded places all year — {gap} points decide it",
+      "Midfield, two teams, one fight: {a_last} edges {b_last} by {gap}, head-to-head {h2h_a}-{h2h_b}",
+      "{gap} points between {a_last} and {b_last} after a season-long midfield scrap",
+      "{a_last} shades the {year} midfield battle from {b_last} by {gap}, head-to-head {h2h_a}-{h2h_b}"
+    ],
+    "d": [
+      "{a_last} and {b_last} swapped places across the {year} midfield, on different teams. {a_last} finished {gap} points ahead, with the season head-to-head split {h2h_a}-{h2h_b}.",
+      "The midfield duel between {a_last} and {b_last} ran the full season and came down to {gap} points. The race-by-race head-to-head finished {h2h_a}-{h2h_b}.",
+      "On rival teams, {a_last} and {b_last} traded positions all {year}. {a_last} took the higher placing by {gap} points, the head-to-head {h2h_a}-{h2h_b}.",
+      "{a_last} edged {b_last} by {gap} points in the {year} midfield, the two separated by just {gap} after a head-to-head that split {h2h_a}-{h2h_b}.",
+      "The {year} midfield fight went to {a_last} over {b_last} by {gap} points across the year, the head-to-head finishing {h2h_a}-{h2h_b} race by race."
+    ],
+    "b": [
+      "{a_last} and {b_last} fought through the {year} midfield on different teams, trading places race after race. {a_last} finished {gap} points ahead, with the season head-to-head split {h2h_a}-{h2h_b}.",
+      "The midfield produced its own season-long duel between {a_last} and {b_last}. {a_last} took the year by {gap} points, the race-by-race head-to-head finishing {h2h_a}-{h2h_b}.",
+      "Across {year}, {a_last} and {b_last} swapped positions all season without either breaking clear. The gap was {gap} points; the season head-to-head closed {h2h_a}-{h2h_b}.",
+      "{a_last} edged {b_last} by {gap} points in the {year} midfield, separated by just {gap} across rival teams, with the head-to-head {h2h_a}-{h2h_b}.",
+      "Two midfield drivers on different teams, {a_last} and {b_last} settled the fight by {gap} points in {year}. The season head-to-head finished {h2h_a}-{h2h_b}."
+    ]
+  }
+}

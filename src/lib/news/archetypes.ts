@@ -1,5 +1,6 @@
 import type { NewsContext } from './engine'
-import type { SeasonAnalysis } from './season-analysis'
+import { raceH2H, type SeasonAnalysis } from './season-analysis'
+import { driverMaxPerRace } from '@/lib/sim/points'
 
 // Season-archetype classifier (#88). Pure detectors over the season-analysis layer + raw results. Each
 // returns a KEYED match (ids + numeric signals only — never a dramatic label, so nothing leaks into copy)
@@ -172,4 +173,103 @@ export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): Tea
     if (!cur || m.strength > cur.strength) best.set(m.teamId, m)
   }
   return [...best.values()].sort((a, b) => b.strength - a.strength)
+}
+
+export type CrossTeamKey = 'parallelFight' | 'midfieldDuel'
+
+export interface CrossTeamMatch {
+  aId: string // the driver who finished ahead
+  bId: string // the driver just behind
+  key: CrossTeamKey
+  h2hA: number // race head-to-head (both classified) in A's favour
+  h2hB: number
+  gap: number // season points gap (small = a real duel)
+  strength: number
+}
+
+// Cross-team rivalry archetypes (#88): two drivers on DIFFERENT teams, NOT in the title fight, who finished
+// the season locked together — a parallel fight among the fast cars behind the leaders, or a midfield duel.
+// Adjacent in the final order, close on points, with an even race head-to-head.
+export function crossTeamDuels(ctx: NewsContext, analysis: SeasonAnalysis): CrossTeamMatch[] {
+  const N = analysis.completedRounds
+  if (N < 6) return []
+  const seated = ctx.drivers.filter((d) => d.teamId !== '')
+  const minStarts = Math.max(3, Math.round(N / 2))
+  const rows = seated
+    .map((d) => ({ id: d.id, teamId: d.teamId, ...statsUpTo(ctx, d.id, 1, N) }))
+    .filter((r) => r.started >= minStarts)
+    .sort((a, b) => b.points - a.points)
+  const out: CrossTeamMatch[] = []
+  // Skip the top two (the title fight is the championship arc's job); walk adjacent pairs below.
+  for (let i = 2; i < rows.length - 1; i++) {
+    const a = rows[i]
+    const b = rows[i + 1]
+    if (a.teamId === b.teamId) continue // must be a CROSS-team duel
+    const gap = a.points - b.points
+    if (gap > 15) continue // close on points
+    const [h2hA, h2hB] = raceH2H(ctx, a.id, b.id, N)
+    const total = h2hA + h2hB
+    if (total < 4) continue // enough wheel-to-wheel meetings
+    const dominance = Math.max(h2hA, h2hB) / total
+    if (dominance > 0.75) continue // a duel, not a rout
+    const key: CrossTeamKey = i <= 4 ? 'parallelFight' : 'midfieldDuel' // fast cars behind the leaders vs the midfield
+    out.push({ aId: a.id, bId: b.id, key, h2hA, h2hB, gap, strength: (16 - gap) + (1 - Math.abs(0.5 - dominance) * 2) * 10 })
+  }
+  return out.sort((a, b) => b.strength - a.strength).slice(0, 1) // the season's single defining cross-team duel
+}
+
+// How the drivers' title was actually won (#88 championship-battle taxonomy) — the most salient single shape,
+// used to frame the season review beyond the basic wire-to-wire/comeback/decider split. Suffix-keyed so the
+// producer can index `champion${shape}` copy directly.
+export type ChampionShape =
+  | 'TitleNoWins' | 'WinStreak' | 'ComebackMerit' | 'ComebackHanded' | 'ThreeWay' | 'Domination' | 'WireToWire' | 'Decider' | 'Clear'
+
+// The comeback shapes also report WHO led early (the driver whose lead the champion overhauled / who
+// retired it away) — distinct from the final runner-up, so the copy can name the right driver.
+export interface ChampionShapeResult { shape: ChampionShape; earlyLeaderId?: string }
+
+export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): ChampionShapeResult {
+  const t = analysis.driverTitle
+  const champ = t.currentLeaderId
+  const N = analysis.completedRounds
+  if (!champ || N < 3) return { shape: 'Clear' }
+  const st = statsUpTo(ctx, champ, 1, N)
+
+  // Title built on consistency, no win all year — the most striking shape.
+  if (st.wins === 0) return { shape: 'TitleNoWins' }
+
+  // A long unbeaten run (5+ consecutive wins) that defined the season.
+  let streak = 0, maxStreak = 0
+  for (let r = 1; r <= N; r++) {
+    if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === champ)?.finishPosition === 1) { streak++; maxStreak = Math.max(maxStreak, streak) } else streak = 0
+  }
+  if (maxStreak >= 5) return { shape: 'WinStreak' }
+
+  // Came from behind: the champion wasn't leading early. Merit (own wins) vs handed (the early leader's DNFs).
+  const earlyLeader = t.series[0]?.leaderId
+  if (earlyLeader && earlyLeader !== champ) {
+    const half = Math.floor(N / 2)
+    let champWins = 0, earlyLeaderDnfs = 0
+    for (let r = half + 1; r <= N; r++) {
+      const rr = ctx.raceResults[r - 1] ?? []
+      if (rr.find((x) => x.driverId === champ)?.finishPosition === 1) champWins++
+      if (rr.find((x) => x.driverId === earlyLeader)?.dnf) earlyLeaderDnfs++
+    }
+    return { shape: earlyLeaderDnfs > champWins ? 'ComebackHanded' : 'ComebackMerit', earlyLeaderId: earlyLeader }
+  }
+
+  if (st.wins >= Math.ceil(N / 2)) return { shape: 'Domination' } // won at least half the races
+  if (t.wireToWire) return { shape: 'WireToWire' } // led the table every round
+
+  // Three (or more) drivers still mathematically alive with three rounds to go. Checked AFTER domination/
+  // wire-to-wire so a one-sided season with stragglers merely "mathematically alive" isn't called a three-way.
+  if (N >= 4) {
+    const checkRound = Math.max(1, N - 3)
+    const rows = ctx.drivers.filter((d) => d.teamId !== '').map((d) => ({ pts: statsUpTo(ctx, d.id, 1, checkRound).points })).sort((a, b) => b.pts - a.pts)
+    const reach = (N - checkRound) * driverMaxPerRace(ctx.year)
+    if (rows.length >= 3 && rows.filter((r) => rows[0].pts - r.pts <= reach).length >= 3) return { shape: 'ThreeWay' }
+  }
+
+  if (t.currentGap <= driverMaxPerRace(ctx.year)) return { shape: 'Decider' } // settled late, within a race win
+  return { shape: 'Clear' }
 }
