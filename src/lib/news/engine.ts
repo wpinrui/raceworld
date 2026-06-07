@@ -1927,7 +1927,6 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   const c = seasonPreviewCopy
   const seed = `season-preview-${ctx.year}`
   const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
-  const teamOf = (id: string) => ctx.drivers.find((d) => d.id === id)?.teamId ?? ''
   const champion = cast.reigningChampion ? dn(cast.reigningChampion) : ''
   const topExpected = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank)[0]?.driverId
   const topFavId = cast.titleFavourites[0] ?? topExpected
@@ -1938,17 +1937,75 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   const fav = dn((championIsTopFav ? challengerId : topFavId) ?? '')
   const slots = { year: ctx.year, fav, champion, constructor: cast.reigningConstructor ? teamName(ctx, cast.reigningConstructor) : '' }
 
+  // Data-driven cast facts: every descriptor below is a real career/market figure, so the copy tracks the
+  // world rather than asserting a hardcoded label. Missing data degrades to the plainest TRUE label.
+  const draftBy = new Map((ctx.draft ?? []).map((p) => [p.driverId, p]))
+  const facts = (id: string) => {
+    const d = ctx.drivers.find((x) => x.id === id)
+    const car = ctx.careers?.[id]
+    const team = teamName(ctx, d?.teamId ?? '')
+    const prev = draftBy.get(id)?.prevTeamName ?? ''
+    return {
+      name: d?.name ?? id, team,
+      titles: car?.titles ?? 0, wins: car?.wins ?? 0, starts: car?.starts ?? 0, seasons: car?.seasons ?? 0, age: d?.age ?? 0,
+      rookie: (car?.starts ?? 0) === 0,
+      veteran: (car?.seasons ?? 0) >= 4,
+      fromTeam: prev && prev !== team ? prev : '', // prior team from the Signing Day draft ('' = pool/rookie/stayer)
+    }
+  }
+  type Facts = ReturnType<typeof facts>
+  // Favourite / dark-horse name: car always, plus the strongest career mark (champion > race-winner).
+  const favTag = (f: Facts) => (f.titles >= 2 ? `, ${f.titles}-time champion` : f.titles === 1 ? ', former champion' : f.wins > 0 ? ', race-winner' : '')
+  const favName = (f: Facts) => `${f.name} (${f.team}${favTag(f)})`
+  // Veteran name: age (always real, the defining veteran fact) plus the headline achievement when one
+  // exists. Never cites starts/seasons — in an early save those are near-zero and read as misleading.
+  const vetTag = (f: Facts) => {
+    const ach = f.titles >= 1 ? `${f.titles}-time champion` : f.wins > 0 ? `${f.wins} career ${plural(f.wins, 'win')}` : ''
+    return `age ${f.age}${ach ? `, ${ach}` : ''}`
+  }
+  const vetName = (f: Facts) => `${f.name} (${vetTag(f)})`
+  // New-team driver: strongest framing — champion, then where they were signed from, then veteran/rookie.
+  const ntPhrase = (f: Facts) =>
+    f.titles >= 2 ? `${f.titles}-time champion ${f.name}`
+    : f.titles === 1 ? `former champion ${f.name}`
+    : f.fromTeam ? `ex-${f.fromTeam} driver ${f.name}`
+    : f.veteran ? `veteran ${f.name}`
+    : f.wins > 0 ? `race-winner ${f.name}`
+    : f.starts > 0 ? `the experienced ${f.name}`
+    : `rookie ${f.name}`
+
   const sections: string[] = []
   if (champion) sections.push(fill(pick(c.reigning, `${seed}|reign`), slots))
-  if (cast.titleFavourites.length) sections.push(fill(pick(c.favourites, `${seed}|fav`), { ...slots, names: listJoin(cast.titleFavourites.map(dn)) }))
-  if (cast.darkHorses.length) sections.push(fill(pick(c.darkHorses, `${seed}|dh`), { ...slots, names: listJoin(cast.darkHorses.map((id) => `${dn(id)} (${teamName(ctx, teamOf(id))})`)) }))
+  if (cast.titleFavourites.length) sections.push(fill(pick(c.favourites, `${seed}|fav`), { ...slots, names: listJoin(cast.titleFavourites.map((id) => favName(facts(id)))) }))
+  if (cast.darkHorses.length) sections.push(fill(pick(c.darkHorses, `${seed}|dh`), { ...slots, names: listJoin(cast.darkHorses.map((id) => favName(facts(id)))) }))
   if (cast.bestOfRest.length) sections.push(fill(pick(c.bestOfRest, `${seed}|bor`), { ...slots, teams: listJoin(cast.bestOfRest.map((id) => teamName(ctx, id))) }))
-  const resurgent = cast.veterans.filter((v) => v.kind === 'resurgent').map((v) => dn(v.driverId))
-  const twilight = cast.veterans.filter((v) => v.kind === 'twilight').map((v) => dn(v.driverId))
+  const resurgent = cast.veterans.filter((v) => v.kind === 'resurgent').map((v) => vetName(facts(v.driverId)))
+  const twilight = cast.veterans.filter((v) => v.kind === 'twilight').map((v) => vetName(facts(v.driverId)))
   if (resurgent.length) sections.push(fill(pick(c.veteransResurgent, `${seed}|vr`), { ...slots, names: listJoin(resurgent) }))
   if (twilight.length) sections.push(fill(pick(c.veteransTwilight, `${seed}|vt`), { ...slots, names: listJoin(twilight) }))
   if (cast.rookies.length) sections.push(fill(pick(c.rookies, `${seed}|rk`), { ...slots, names: listJoin(cast.rookies.map(dn)) }))
-  if (cast.newTeams.length) sections.push(fill(pick(c.newTeams, `${seed}|nt`), { ...slots, teams: listJoin(cast.newTeams.map((id) => teamName(ctx, id))) }))
+  if (cast.newTeams.length) {
+    if (cast.newTeams.length >= ctx.teams.length) {
+      // Whole grid is new (first season of a save, no constructor history) — one line, not a bio per team.
+      sections.push(fill(pick(c.newTeams.allNew, `${seed}|nt-all`), slots))
+    } else {
+      const ntLine = (tid: string, i: number): string => {
+        const team = teamName(ctx, tid)
+        const ds = ctx.drivers.filter((d) => d.teamId === tid).map((d) => facts(d.id))
+        const anchors = ds.filter((f) => !f.rookie)
+        const rookies = ds.filter((f) => f.rookie)
+        const base = { ...slots, team }
+        if (anchors.length && rookies.length) return fill(pick(c.newTeams.anchorAndRookie, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)), rookies: listJoin(rookies.map(ntPhrase)) })
+        if (anchors.length) return fill(pick(c.newTeams.anchorLed, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)) })
+        return fill(pick(c.newTeams.allRookie, `${seed}|nt${i}`), { ...base, names: listJoin(ds.map((f) => f.name)) })
+      }
+      const shown = cast.newTeams.slice(0, 3)
+      let text = shown.map((tid, i) => ntLine(tid, i)).join(' ')
+      const extra = cast.newTeams.slice(3)
+      if (extra.length) text += ` ${listJoin(extra.map((id) => teamName(ctx, id)))} also join the grid for the first time.`
+      sections.push(text)
+    }
+  }
 
   const hArr = !champion ? c.headlineNoChamp : championIsTopFav ? c.headlineDefendingFav : c.headline
   const dArr = !champion ? c.dekNoChamp : championIsTopFav ? c.dekDefendingFav : c.dek
