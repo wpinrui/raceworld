@@ -268,6 +268,8 @@ export interface PreviewCast {
   rookies: string[] // driverIds — no prior F1 starts
   veterans: { driverId: string; kind: 'resurgent' | 'twilight' }[] // 35+, still up front vs slipped back
   newTeams: string[] // teamIds new to the grid this season
+  reigningChampion?: string // driverId of last season's drivers' champion — must be credited even if a favourite
+  reigningConstructor?: string // teamId of last season's constructors' champion
 }
 
 export function previewCast(ctx: NewsContext, analysis: SeasonAnalysis): PreviewCast {
@@ -308,5 +310,12 @@ export function previewCast(ctx: NewsContext, analysis: SeasonAnalysis): Preview
   const everRaced = new Set((ctx.constructorHistory ?? []).map((h) => h.teamId))
   const newTeams = ctx.teams.filter((t) => !everRaced.has(t.id)).map((t) => t.id)
 
-  return { titleFavourites, darkHorses, bestOfRest, rookies, veterans, newTeams }
+  // Reigning champions: drivers' title-holder via careers (titleYears includes last season), constructors'
+  // via last season's P1 finish. Both must be credited by the copy even when already named elsewhere.
+  const reigningChampion = seated.find((d) => (ctx.careers?.[d.id]?.titleYears ?? []).includes(ctx.year - 1))?.id
+  const lastYear = (ctx.constructorHistory ?? []).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
+  const champRec = (ctx.constructorHistory ?? []).find((h) => h.seasonYear === lastYear && h.finalPosition === 1)
+  const reigningConstructor = champRec && ctx.teams.some((t) => t.id === champRec.teamId) ? champRec.teamId : undefined
+
+  return { titleFavourites, darkHorses, bestOfRest, rookies, veterans, newTeams, reigningChampion, reigningConstructor }
 }
