@@ -15,7 +15,7 @@ interface GodModePanelProps {
   onAction: (actions: GodModeAction[]) => void
 }
 
-const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard']
+const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
 
 function formatLapTime(lapTimes: number[]): string {
   if (!lapTimes.length) return '--'

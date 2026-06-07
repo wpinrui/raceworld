@@ -2,6 +2,7 @@
 
 import type { RacePhase, RaceState } from '@/lib/sim/types'
 import type { Circuit } from '@/lib/sim/types'
+import { WeatherGraph } from './WeatherGraph'
 
 interface Props {
   phase: RacePhase
@@ -39,6 +40,14 @@ export function RaceHeader({
         )}
       </div>
 
+      {raceState && (
+        <WeatherGraph
+          weather={raceState.weather ?? []}
+          forecast={raceState.weatherForecast ?? []}
+          currentLap={raceState.currentLap}
+          totalLaps={raceState.totalLaps}
+        />
+      )}
     </div>
   )
 }

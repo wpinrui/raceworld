@@ -141,7 +141,8 @@ export interface RaceState {
   circuitId: string
   totalLaps: number
   currentLap: number
-  weather: WeatherPoint[]
+  weather: WeatherPoint[]                                   // the true weather (drives the sim)
+  weatherForecast: WeatherPoint[]                           // fallible prediction; blended toward truth as laps near (UI only)
   drivers: DriverRaceState[]
   commentary: CommentaryEntry[]
   phase: RacePhase

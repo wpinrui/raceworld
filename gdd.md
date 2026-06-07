@@ -88,8 +88,20 @@ INTERMEDIATE: 100% can last 30 + [-5, +10] percent of race distance. Moisture wi
 WET: 100%  can last 45 + [-5, +10] percent of race distance. Moisture window is 35% to 80%.
 A smoothness of 100 can make the tyres last 1.5x as long as the base. A smoothness of 0 can only make the tyres last 0.5x as long as the base. A smoothness of 50 has no bonus or penalty.
 
-Weather data: (NOT YET IMPLEMENTED — the live engine currently uses an always-dry stub, so wet weather never occurs in-sim today and wet-weather pace is inert; it is weighted in overall() by the historical wet-race fraction instead. The intended model below is pending, and once it lands the wet weight should be re-derived from its actual moisture distribution.)
-Pre-race, the weather curve is calculated. About 67% of the time, the race should be completely dry. In the other 33% of the time, the race should start dry half the time. The direction of the rain (gets more wet, stays the same, gets more dry) is randomised every 5 laps. The magnitude of the rain is randomised as [-1, 4] (so note that it can contradict the direction 20% of the time). 
+Weather data:
+Pre-race, two wetness curves (moisture %, 0-100, sampled at the START of each lap) are generated: the TRUE curve, which drives the sim, and a FORECAST curve, a deliberately-imperfect prediction used only by the raceday UI.
+
+True weather: ~17.5% of races see rain (sitting between "races with meaningful wet running", ~15%, and "races touched by any rain", ~20%). When a race rains, one of four archetypes is chosen, each with randomised onset, intensity and duration plus a small per-point wobble so no curve is memorisable:
+- Passing shower (~45%): dry, a shower rises and fades, dry again.
+- Building rain (~25%): starts dry, builds toward the end.
+- Drying track (~22%): starts wet, dries out.
+- Sustained wet (~8%, rare): wet throughout, with variation.
+
+Forecast: the curve the raceday graph shows. It is the true curve with its onset shifted (start-lap error), its wet window stretched (end-lap error) and its intensity mis-scaled (how-hard error), so the long-range forecast can be well off. The live view blends the forecast toward the truth as each lap nears: displayed error fades as e^(-lead/8), so the forecast is trustworthy within ~8 laps and reads the truth at the current lap. Two rarer binary misses also occur: phantom rain (~10% of dry races forecast rain that never lands) and unforeseen rain (~4% of wet races arrive with no forecast warning). Measured forecast error on wet laps grows from ~2/100 a couple of laps out to ~19/100 at long range. A god-mode toggle on the graph reveals the true future.
+
+The engine always runs on the TRUE curve (the forecast never affects results). Pit strategy is NOT yet weather-aware — the strategy AI plans dry compounds only, so a wet race currently scrambles results until the wet/dry pit-strategy rework (follow-up). The qualifying weather model below is likewise still a dry stub.
+
+Wet-weather rating weight: overall() still splits the speed impact between pace and wet-weather pace by the historical wet fraction (effective ~0.075). Now that weather is live, that weight should be re-derived from this model's actual moisture distribution — tracked as a follow-up, alongside the pit-strategy rework.
 
 Pit stop:
 The in-lap to a pit stop adds 10s plus some noise between [0, 2]. The out-lap of a pit stop adds 10s plus some noise between [0, 2].
@@ -125,7 +137,7 @@ Every clinch / "uncatchable" calculation keys off the active season's table (and
 The race calendar is era-accurate (issue #64): each season plays the real-world calendar for that year, 1996-2026 — real circuits in championship round order, the real round count (16 in 1996 up to 24 in 2024-26), real race dates, and real lap counts. It is held as a circuit registry (each venue's stable attributes: code, location, country, cosmetic flat modifier) joined with per-season tables (the year's ordered schedule: circuit, GP name, lap count, and race-day Sunday-of-year). Historical-only circuits get a researched lap count and a plausible flat modifier. The calendar is selected by the season's year and is not editable by the player.
 
 # Qualifying
-Qualifying follows the standard 2026 F1 format: three sessions (Q1, Q2, Q3). For simplicity, weather is held constant within each session (dry weather chance is still 67%; if wet than randomise [1, 100]). Each driver gets exactly two flying laps per session; their fastest lap from those two attempts is kept. The grid order for the race is determined by Q3 results for the top 10, Q2 results for positions 11–15, and Q1 results for the remainder. Driver form, car pace, driver pace, wet-weather ability, and the circuit modifier all apply to qualifying lap times using the same simulation engine formulas as the race, minus tyre wear, fuel load, and the DRS/overtaking logic.
+Qualifying follows the standard 2026 F1 format: three sessions (Q1, Q2, Q3). For simplicity, weather is held constant within each session (intended dry-weather chance ~82.5%, matching the race rain rate; if wet then randomise [1, 100]). Qualifying weather is not yet implemented — the engine currently runs qualifying dry. Each driver gets exactly two flying laps per session; their fastest lap from those two attempts is kept. The grid order for the race is determined by Q3 results for the top 10, Q2 results for positions 11–15, and Q1 results for the remainder. Driver form, car pace, driver pace, wet-weather ability, and the circuit modifier all apply to qualifying lap times using the same simulation engine formulas as the race, minus tyre wear, fuel load, and the DRS/overtaking logic.
 
 # Season Flow
 Outside of races, the simulation advances through discrete time steps that the player manually triggers:

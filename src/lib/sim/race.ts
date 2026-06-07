@@ -10,7 +10,7 @@ import type {
   TyreState,
   TeamTyreAssumptions,
 } from './types'
-import { generateWeatherCurve, getMoistureAtLap } from './weather'
+import { generateWeatherCurve, generateForecastCurve, getMoistureAtLap } from './weather'
 import { computeTyreLife, degradeTyre, recommendTyre } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, sampleTeamAssumptions } from './pit-ai'
@@ -40,6 +40,7 @@ export function initRaceState(
   strategyNoise: number = 0.35,
 ): RaceState {
   const weather = generateWeatherCurve(circuit.laps)
+  const weatherForecast = generateForecastCurve(weather, circuit.laps)
   const lap1Moisture = getMoistureAtLap(weather, 1)
 
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
@@ -110,6 +111,7 @@ export function initRaceState(
     totalLaps: circuit.laps,
     currentLap: 1,
     weather,
+    weatherForecast,
     drivers: driverStates,
     commentary: [],
     phase: 'pre-race',
