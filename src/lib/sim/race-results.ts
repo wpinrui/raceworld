@@ -1,5 +1,6 @@
 import type { RaceState, Driver, Team, RaceResult } from './types'
 import { getPoints, hasFastestLapPoint } from './points'
+import { summarizeRaceWeather } from './race-weather'
 
 // Default confidence for drivers without a stored value (new drivers / pre-#58 saves).
 export const CONFIDENCE_DEFAULT = 5
@@ -84,6 +85,10 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
   }
   const flPointEra = hasFastestLapPoint(year)
 
+  // One weather summary for the whole race, attached to every row so it survives the live store and
+  // the DB round-trip (persisted once on the races table; see actionFlushRaceResult / actionGetSeasonNews).
+  const weather = summarizeRaceWeather(raceState, drivers)
+
   return raceState.drivers
     .slice()
     .sort((a, b) => a.position - b.position)
@@ -116,6 +121,7 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
         worstMistakeLoss: ds.worstMistakeLoss,
         crashed: ds.retired && ds.retirementReason === 'collision-damage',
         retirementReason: ds.retired ? ds.retirementReason : null,
+        weather,
       } satisfies RaceResult
     })
 }

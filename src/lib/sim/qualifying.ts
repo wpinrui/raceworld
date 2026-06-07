@@ -11,6 +11,7 @@ import type {
 } from './types'
 // WeatherPoint used in computeLapTime call signature only
 import { computeLapTime } from './engine'
+import { DEFAULT_COMPOUND_DELTAS } from './tyres'
 
 function selectQualifyingTyre(): TyreCompound {
   return 'soft' // M1: always dry, always softs in qualifying
@@ -32,7 +33,8 @@ function simulateQualifyingLap(
   const result = computeLapTime({
     driver, team, tyre, form,
     fuelLaps: 0, lap: 1,
-    weather, gapToCarAhead: Infinity, carAheadLapTime: null,
+    weather, compoundDeltas: DEFAULT_COMPOUND_DELTAS,
+    gapToCarAhead: Infinity, carAheadLapTime: null,
     circuitFlatModifier: circuit.flatModifier,
   })
 

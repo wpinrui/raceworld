@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import type { DraftPick } from '@/lib/sim/driver-market'
 import type { Driver, DroppedDriver } from '@/lib/sim/types'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { signingDaySocialPosts } from '@/lib/news/signing-day-social'
+import { signingDayReactions } from '@/lib/news/signing-day-reactions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import { actionGetDriverCareers } from '@/lib/news/actions'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
@@ -31,14 +31,6 @@ const FLAVOUR_TAG: Record<DraftPick['flavour'], { label: string; bg: string; fg:
   rookie: { label: 'Rookie', bg: '#10B981', fg: '#0F1419' },
   veteran_short: { label: 'Veteran', bg: '#F59E0B', fg: '#0F1419' },
   chalk: null,
-}
-
-// Stable accent per analyst account, so each voice reads consistently down the feed.
-const HANDLE_COLOR: Record<string, string> = {}
-const ACCENTS = ['#00D9FF', '#10B981', '#F59E0B', '#C084FC', '#FB7185']
-function accentFor(handle: string): string {
-  if (!HANDLE_COLOR[handle]) HANDLE_COLOR[handle] = ACCENTS[Object.keys(HANDLE_COLOR).length % ACCENTS.length]
-  return HANDLE_COLOR[handle]
 }
 
 // The old team (their last-season team), shown only when it adds something: a switch or a re-signing.
@@ -94,7 +86,10 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const revealed = Math.min(stored, total)
   const onClock = revealed < total ? picks[revealed] : null
   const complete = !onClock
-  const posts = signingDaySocialPosts(picks).filter((p) => p.pickIndex < revealed).sort((a, b) => b.pickIndex - a.pickIndex)
+  // This-season drivers win over next-season copies (correct age/form at signing time); next-season
+  // entries cover any promoted rookie not on the current grid.
+  const reactionDrivers = [...(pending?.drivers ?? []), ...drivers]
+  const posts = signingDayReactions(picks, reactionDrivers).filter((p) => p.pickIndex < revealed).sort((a, b) => b.pickIndex - a.pickIndex)
 
   // Free-agent rank is fixed for the window: the first seat's contender list is the full pool in ranked
   // order, so each driver keeps their original rank on the board even after higher names sign off the list.
@@ -237,26 +232,15 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
         </div>
       </div>
 
-      {/* Analyst reaction to the confirmed signings, in its own bounded scroll band. */}
+      {/* Newsroom reaction (headline + dek) to each confirmed signing, in its own bounded scroll band. */}
       {posts.length > 0 && (
         <div className="shrink-0">
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5">Paddock reaction</p>
           <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
             {posts.map((post) => (
-              <div key={post.id} className="flex gap-2.5 rounded-lg bg-[#0F1419]/40 px-3 py-2">
-                <span
-                  className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-[#0F1419]"
-                  style={{ backgroundColor: accentFor(post.handle) }}
-                >
-                  {post.name.charAt(0)}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs">
-                    <span className="font-semibold text-[#FFFFFF]">{post.name}</span>{' '}
-                    <span className="text-[#FFFFFF]">{post.handle}</span>
-                  </p>
-                  <p className="text-sm text-[#FFFFFF]">{post.text}</p>
-                </div>
+              <div key={post.id} className="rounded-lg bg-[#0F1419]/40 px-3 py-2">
+                <p className="text-sm font-semibold text-[#FFFFFF]">{post.headline}</p>
+                <p className="text-xs text-[#FFFFFF] mt-0.5">{post.dek}</p>
               </div>
             ))}
           </div>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import type { Driver, Team, DriverRaceState, GodModeAction, TyreCompound, RaceState } from '@/lib/sim/types'
-import { planStrategy, sampleTeamAssumptions, type StrategyStint } from '@/lib/sim/pit-ai'
+import { planStrategy, truthBelief, type StrategyStint } from '@/lib/sim/pit-ai'
 import { degradeTyre } from '@/lib/sim/tyres'
 import TyreIndicator from './TyreIndicator'
 
@@ -73,11 +73,12 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
 
   const perfectPit = useMemo(() => {
     if (!ds || !driver || !team) return null
-    const exactAssumptions = sampleTeamAssumptions(raceState.totalLaps, 0)
+    // Perfect-information benchmark: the optimiser on the race's TRUE deltas/life and exact condition.
     return planStrategy(
       raceState.currentLap, raceState.totalLaps,
-      ds.currentTyre.condition, ds.currentTyre.compound, ds.currentTyre.maxLifeLaps,
-      exactAssumptions,
+      ds.currentTyre.condition, ds.currentTyre.compound, driver.smoothness,
+      truthBelief(raceState.compoundDeltas, raceState.tyreBaseLife, raceState.totalLaps),
+      raceState.weather, raceState.weatherForecast,
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDriverId, raceState.currentLap, ds?.currentTyre.condition, ds?.currentTyre.compound])

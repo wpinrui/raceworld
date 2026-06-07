@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS races (
   round INTEGER NOT NULL,
   circuit_id TEXT NOT NULL,
   circuit_name TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'upcoming'
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  weather_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS race_results (
