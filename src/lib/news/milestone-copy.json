@@ -81,16 +81,14 @@
           "When {driver_last} crossed the line at the end of the final qualifying run at the {circuit}, {they} already knew. The lap was the best {they} had ever delivered, and the timesheet confirmed it."
         ],
         "b2": [
-          "Pole does not guarantee anything on Sunday, but it tells everyone in the paddock where the pace sits when the pressure is highest.",
-          "For {team}, {driver_poss} name at the top of the qualifying order is a marker of where this car can run when everything is found.",
-          "Qualifying is unforgiving: one mistake and the lap is gone. {driver_last} made no mistakes.",
-          "The grid tomorrow will be arranged around a benchmark set by {driver_last}, which is exactly the position every driver in the sport is chasing."
+          "Pole guarantees nothing on its own, but it marks where the pace sits when the pressure is highest.",
+          "For {team}, {driver_poss} name at the top of the qualifying order is a marker of where this car can run when everything is found."
         ],
         "q": [
           "\"The lap just came together, corner by corner; everything I asked of the car, it gave me,\" said {driver_last}.",
           "\"To be fastest in qualifying for the first time in your career is a feeling I cannot really describe yet,\" said {driver_last}.",
           "\"We knew we had the pace in the car this weekend; the hard part was putting it on one lap, and today we did,\" said {driver_last}.",
-          "\"Starting from the front for the first time tomorrow is something I have been working towards since I arrived in this sport,\" said {driver_last}."
+          "\"Starting from the front for the first time is something I have been working towards since I arrived in this sport,\" said {driver_last}."
         ]
       },
       "nth": {
@@ -208,7 +206,7 @@
           "Surviving to the flag is not enough in this sport, but it is the first proof that {driver_last} belongs here, and today {they} proved it.",
           "For {team}, putting a new driver in the car is a statement of confidence, and the confidence looked justified from the first stint.",
           "The paddock is full of drivers who started once and never came back; {driver_last} will be working every race from here to make sure that is not the version of this story that gets told.",
-          "The hardest thing in Formula 1 is not getting here; it is staying here, and that is the challenge {driver_last} picks up from tomorrow."
+          "The hardest thing in Formula 1 is not getting here; it is staying here, and that is the challenge {driver_last} now takes on."
         ],
         "q": [
           "\"I have been working my whole life for this and now I just want to do it justice,\" said {driver_last}.",
@@ -354,8 +352,7 @@
     "mr": [
       "The {circuit} will sit permanently in {driver_poss} story, the place {they} became a Formula 1 race winner, a distinction that belongs to fewer people than most realize.",
       "A maiden win is a threshold crossed only once; {driver_last} crossed it at the {circuit}, and the sport recorded it there and then.",
-      "{driver_poss} first Formula 1 victory is now part of the record, and the {circuit} is the answer {they} will give for the rest of {their} life when anyone asks where it happened.",
-      "Nobody takes a first win away from you. The {circuit} is where {driver_last} got {theirs}, and that fact is permanent."
+      "{driver_poss} first Formula 1 victory is now part of the record, and the {circuit} is the answer {they} will give for the rest of {their} life when anyone asks where it happened."
     ],
     "home": [
       "{driver_poss} first win came on home soil, a detail that sharpened the moment for {them} and for the crowd that had been willing {them} on from the first corner.",
