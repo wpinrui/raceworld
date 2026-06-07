@@ -187,10 +187,14 @@ export function buildSeasonAnalysis(ctx: NewsContext): SeasonAnalysis {
   })
 
   // --- driver projection: last season's media score, else pace + narrative modifier ---
+  // The fallback MUST land on the same 0-100 scale as a media score, or a field that mixes established
+  // drivers (media score) with rookies/returnees (fallback) ranks and z-scores them incomparably. Media
+  // scores centre ~50, so the fallback is a 50 base plus the same pace/narrative adjustment media-scores
+  // gives a free agent (PACE_PIVOT reads as neutral), clamped to 0-100.
   const driverProj = (d: (typeof seated)[number]): number => {
     const prior = ctx.priorDriverMediaScores?.[d.id]
     if (prior != null) return prior
-    return (d.pace - PACE_PIVOT) * 0.8 + (d.narrativeModifier ?? 0)
+    return Math.max(0, Math.min(100, 50 + (d.pace - PACE_PIVOT) * 0.8 + (d.narrativeModifier ?? 0)))
   }
   const projByDriver = new Map(seated.map((d) => [d.id, driverProj(d)]))
   const projVals = [...projByDriver.values()]
@@ -367,7 +371,7 @@ export function titleArcEvents(ctx: NewsContext): TitleArcEvent[] {
     const gap = s[0].points - s[1].points
     const remaining = N - r
     if (remaining < 0) continue
-    if (gap > remaining * maxPer) { lastDir = 0; continue } // already clinched — championship() owns it
+    if (remaining <= 0 || gap > remaining * maxPer) { lastDir = 0; continue } // clinched/finale — championship() owns it
     const leaderId = s[0].id
     const leadChanged = lastLeaderId !== '' && leaderId !== lastLeaderId
     lastLeaderId = leaderId
@@ -405,7 +409,7 @@ export function titleArcEvents(ctx: NewsContext): TitleArcEvent[] {
     }
     const kind: TitleArcEvent['kind'] = decider ? 'decider' : dir < 0 ? 'erosion' : 'extension'
     const merit: TitleArcEvent['merit'] | undefined =
-      kind === 'erosion' ? (chaserWins > leaderDnfs ? 'merit' : leaderDnfs > 0 && leaderDnfs >= chaserWins ? 'handed' : 'mixed') : undefined
+      kind === 'erosion' ? (chaserWins > leaderDnfs ? 'merit' : leaderDnfs > chaserWins ? 'handed' : 'mixed') : undefined
     events.push({
       round: r, leaderId, chaserId, gap, gapAgo, roundsAgo: w, change, remaining, maxPts: remaining * maxPer,
       kind, merit, chaserWins, leaderDnfs, h2hLeader, h2hChaser,

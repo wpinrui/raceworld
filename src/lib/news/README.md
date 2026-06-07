@@ -12,44 +12,56 @@ opener × detail × closer. A paragraph built from two pools of ~8 fragments is 
 paragraphs; a body of four or five such paragraphs runs into the thousands of combinations
 from a couple hundred authored strings. Each pool seeds its pick off the article id, so the
 same article always reads the same way, but article-to-article the prose varies. Headlines and
-deks pick from ~8–14 variants each. **Every article is built to reach at least five
-sentences** (`paras()` joins composed paragraphs and drops any that collapsed to empty). Net
-effect: the feed reads written, not stamped, across a 24-race season.
+deks pick from ~8–14 variants each. Net effect: the feed reads written, not stamped, across a
+24-race season.
 
 ## Cadence (not every category every race)
 
 | Category | Producer | Cadence / trigger |
 |---|---|---|
-| `race_report` | raceReports | **Every race.** One consolidated report: winner + podium + margin, the start (pole / drive of the day), attrition (DNFs), and the title picture. Result, incident, retirement and championship all live *inside* this piece. |
-| `milestone` | milestones | **Per race, on a genuine first.** First win of the season for a driver, a surprise podium (a non-top-pace car reaching the rostrum, first of its year — live only), or a team 1-2. Naturally rare. |
+| `race_report` | raceReports | **Every race.** One consolidated report: winner + podium + margin, the start, attrition (DNFs), the weather angle (wet races), and the title picture. Its closing line is **trajectory-aware** — the running championship coda (#88) when the gap is swinging, else the static state. |
+| `milestone` | milestones | **Per race, on a genuine first.** First win of the season for a driver, a surprise podium (live only), or a team 1-2. Naturally rare. |
 | `technical_upgrade` | technicalRoundup | **Per race, only if someone upgraded.** One roundup grouping every team's package that round (delivered vs misfired). |
-| `championship_state` | championship | The clinch moments only — driver + constructor titles, emitted at the round they were mathematically secured. |
-| `championship_state` | titleFight | Final third of the calendar, gap ≤ a catchable margin, gated — the run-in gets coverage round by round. |
-| `feature` | features | A long state-of-the-season read at half-distance, and a season review once the final round is in. Grounded in the standings to date. |
+| `championship_state` | championship | The factual clinch + lead-change moments — driver + constructor titles, emitted at the round secured. |
+| `championship_state` | championshipArc | **Sparse, in-season (#88).** The title-fight narrative — fires only at trajectory inflections (a lead eroding/extending, a decider, a lead change), telling a comeback-on-merit apart from one handed over by leader DNFs. Absorbed the old titleFight + titleScenario. |
+| `feature` | seasonReview | **End of season (#88).** Pays off the preview: how the title was won (wire-to-wire / comeback / decider / clear), who beat or missed their projection, the best of the rest. Replaced the old `features` producer. |
+| `preview_schedule` | seasonPreview | **Round 0 (#88).** Introduces the season's protagonists across tiers (favourites, dark horses, best-of-the-rest, rookies, veterans, new teams) from the media-projection expectation model. Replaced the old pace-only preview blurb. |
 | `preview_schedule` | previews | A run-up piece for **every round** (off the standings as they stood beforehand), plus the upcoming round while live. |
-| `preview_schedule` | preSeason | Pre-season season preview (live only). |
 | `car_launch_livery` / `rookie_debut` | preSeason | Pre-season launches per team + youngest-driver spotlights (live only). |
 | `driver_signing` / `driver_exit` / `career_retirement` | market | End-of-season `marketMoves` / `droppedDrivers` / `retiredDriverIds`. |
-| `silly_season` | sillySeason | **Three windows only** — mid-season, three-quarter distance, penultimate round. See below. |
+| `silly_season` | contractWatchFeature / renewalsFeature / offSeasonFeature | The free-agent market beats — contract-watch verdicts, the mid-season renewals round-up, and the end-of-season transfer recap. (The speculative rumour mill, `sillySeason`, was removed for quality, #92.) |
 | `analysis_opinion` | analysis | **At most one per round.** Every angle (teammate imbalance, form slump, form surge / hot streak, team over/under-performance) is scored for newsworthiness; subjects featured in the last few rounds take a small penalty; the single best candidate runs if it clears a bar. Trajectory angles are live-only (need car pace). |
 
-## Silly season is a real projection
+## Season-long narrative (#88)
 
-`sillySeason` doesn't hand-wave the rumours. At each window it takes the season-to-date,
-computes every driver's media rating (`computeDriverMediaScores`), applies a **seeded
-−10..+10 error** to each, then runs the actual driver-market sim (`runDriverMarket`, with
-`computeTeamMediaScores` + `computeRetentionDeltas`) one season forward. The genuine team
-switches it produces become the speculation; a quiet projection becomes a "quiet market"
-piece. Same season state always projects the same rumours (seeded RNG).
+A pure `season-analysis.ts` pass derives the season's story once, and the preview / arc / coda /
+review all read it:
+
+- **Expectation model** — the media's *fallible* preseason view, deliberately distinct from true
+  pace. Driver = last season's media score (→ `50 + pace/narrative` on the same 0-100 scale for
+  rookies/returnees with no prior score); car = last season's constructors' finish (newcomers to
+  the back; a save's first season falls back to raw car pace). Combination is **car-dominant**: the
+  car sets the tier and base grid slot; the driver shifts it a bounded ~2 places (a z-score clamped
+  to ±2σ), never a full tier.
+- **Gap trajectory** (drivers' + constructors') with erosion / extension / decider detection and
+  merit-vs-DNF framing; **tier** segmentation; **expectation-vs-actual** deltas.
+
+The gap between projection and reality is the story engine: a team that was 5th but built a rocket
+gets "projected midfield, delivering wins". Copy is authored to the project's hand-written newsroom
+voice, grounds every fact in in-game aggregate stats, and limits texture to details the sim does
+not model (so it can never be contradicted). Last season's driver media scores + season-start car
+pace are carried into the live context (`season-store` carryover → `live-context`), and snapshotted
+into the archive so past seasons keep the same feed.
 
 ## Multi-season
 
 The page has a season selector (newest first; the live season pinned to the top). The **live**
-season is generated client-side from the store with full attributes. **Past** seasons are
-rebuilt from the archive DB by `actions.ts` (`actionGetSeasonNews`) — results only, so
-`live: false` stands down the attribute-dependent producers (trajectory, silly-season). Past
-seasons therefore carry race reports, clinches, title-fight, previews and results-based
-analysis.
+season is generated client-side from the store with full attributes. **Past** seasons are served
+from the snapshot captured at archival (`offseason-flow` → `actionSaveSeasonNews`); the
+attribute-dependent producers (season narrative, analysis trajectory, market beats) can't be
+rebuilt from results alone, so the snapshot preserves them. A results-only rebuild
+(`actions.ts`, `live: false`) is the fallback when no snapshot exists, carrying race reports,
+clinches, previews and results-based analysis.
 
 ## Out of scope (deliberately not generated)
 

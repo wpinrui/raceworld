@@ -41,6 +41,7 @@ export async function advanceOffSeason(): Promise<string> {
           allUpgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
           endOfSeasonSummary: s.endOfSeasonSummary, approvedSeasonChanges: s.approvedSeasonChanges,
           seasonContractWatch: s.seasonContractWatch, seasonRenewals: s.seasonRenewals, seasonDraft: s.seasonDraft, signingDayRevealed: s.signingDayRevealed,
+          priorSeasonDriverMediaScores: s.priorSeasonDriverMediaScores, carPaceHistory: s.carPaceHistory, // #88 expectation basis — must be snapshotted so archived reviews/codas don't degrade
         }, careerBase, teamCareerBase, records, teamDriverTalliesBase))
         await actionSaveSeasonNews(s.dbSeasonId, JSON.stringify(articles))
 

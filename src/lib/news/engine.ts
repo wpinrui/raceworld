@@ -1536,7 +1536,10 @@ function championshipArc(ctx: NewsContext): NewsArticle[] {
 // won, who beat or missed their preseason projection, the best of the rest. Replaces the old `feature`
 // producer (keeps the `feature` category). Grounded in the season-analysis deltas + title trajectory.
 function seasonReview(ctx: NewsContext): NewsArticle[] {
-  if (!ctx.endOfSeason && ctx.completedRounds < ctx.calendar.length) return []
+  // Live only — the expectation basis (prior media scores, constructor history) exists only on the live
+  // context; the archived feed is served from the snapshot captured here at season end. Without this guard
+  // the results-only archived rebuild yields a degenerate all-equal expectation and bogus over/under deltas.
+  if (!ctx.live || (!ctx.endOfSeason && ctx.completedRounds < ctx.calendar.length)) return []
   const analysis = buildSeasonAnalysis(ctx)
   const t = analysis.driverTitle
   if (!t.currentLeaderId || t.series.length === 0) return []
