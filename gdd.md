@@ -11,6 +11,17 @@ There are five main screens in RaceWorld.
 # Newsroom
 The newsroom feature, whether it is the routinely generated news or the player demand news, should ground its facts based on the stats engine. As such, the LLM is actually given tools (API calls) to query the stats database, and is given guidance on how to search up relevant info, including what info is available.
 
+## Season-long narrative (#88, #92)
+The newsroom is built around a season *arc*, not point-in-time snapshots. A single season-analysis pass derives each season's story from the data: a media-style **expectation** for every driver and car (driver = last season's media score, falling back to pace + narrative for newcomers; car = last season's constructors' finish, with newcomers projected to the back and a save's first season falling back to raw car pace), plus the round-by-round **championship-gap trajectory** and **tier** segmentation. The expectation is the media's *fallible* preseason view, deliberately distinct from true pace — the gap between projection and what actually happens is the story engine. The car dominates the expected order; a driver shifts it by a bounded ~2 grid places, never a full tier.
+
+This drives four grounded pieces (every figure an in-game aggregate stat; texture is limited to details the sim does not model, so it can never be contradicted):
+- **Season preview** — introduces the protagonists across tiers (title favourites, dark horses, best-of-the-rest, rookies, veterans, new teams), always crediting the reigning champion's stature and naming every new entry.
+- **Championship arc** — sparse standalone pieces firing only at real inflections (a lead eroding or extending, a decider, a lead change), distinguishing a comeback earned on merit from one handed over by the leader's retirements.
+- **Race-report coda** — each race report closes on the *running* title narrative when the gap is swinging, not just the static current gap.
+- **Season review** — pays off the preview: how the title was won (wire-to-wire / comeback / decider / clear), who beat or missed their projection, and the best of the rest.
+
+Quality over quantity (#92): low-signal producers — the transfer rumour mill, the point-in-time title-fight and title-scenario pieces, and the generic mid-season feature — are pruned in favour of these higher-signal, arc-aware pieces. The factual clinch/lead-change announcement stays. Article copy is authored to the project's hand-written newsroom voice.
+
 # During the season
 A few mechanics interact together to make the season dynamic.
 
