@@ -110,5 +110,22 @@
     "The forecast oversold {team}, which did not reach it.",
     "{team} missed its preseason target for the season.",
     "Against the winter projection, {team} came up short."
-  ]
+  ],
+  "consBothCarsDominate": ["PLACEHOLDER {constructor_champion} won the constructors' title with both cars at the front all year."],
+  "consOneCarCarried": ["PLACEHOLDER {constructor_champion} took the constructors' title largely on {carried_driver_last}'s points."],
+  "consWinsVsPoints": ["PLACEHOLDER {constructor_champion} won the constructors' title on points; {cons_other} took more race wins."],
+  "consLeadTradedLate": ["PLACEHOLDER {constructor_champion} and {cons_other} traded the constructors' lead all year, settled late."],
+  "consRepeatChampion": ["PLACEHOLDER {constructor_champion} retained the constructors' title."],
+  "consClear": ["PLACEHOLDER {constructor_champion} won the constructors' championship."],
+  "consDriversSealedEarly": ["PLACEHOLDER The drivers' title was settled well before the constructors' went to the wire."],
+  "champTeammatePair": ["PLACEHOLDER The two title protagonists shared a garage."],
+  "champLateWobble": ["PLACEHOLDER A commanding lead came under late pressure but held."],
+  "champWetAided": ["PLACEHOLDER Several of those wins came in the wet."],
+  "runnerUpValiant": ["PLACEHOLDER {runner_up_last} closed a {peak_deficit}-point gap to within {final_gap} but fell short."],
+  "runnerUpLateChargeOwnDnf": ["PLACEHOLDER {runner_up_last}'s late charge ended with a retirement."],
+  "runnerUpAliveToFlag": ["PLACEHOLDER {runner_up_last} kept the title alive to the final round."],
+  "teamArcFlop": ["PLACEHOLDER {team} fell well short of preseason expectations."],
+  "teamArcDevSurge": ["PLACEHOLDER {team} developed from the back of the grid to the front over the season."],
+  "teamArcDevDecline": ["PLACEHOLDER {team} started near the front and faded as the year went on."],
+  "teamArcDeadSeat": ["PLACEHOLDER {team} leaned on {arc_driver_last}; the other seat scored almost nothing."]
 }

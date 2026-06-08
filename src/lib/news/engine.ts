@@ -42,7 +42,7 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
-import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, bestOfRestBattle, backmarkerStory } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, constructorShape, teamArcs, runnerUpArc, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
 import bestOfRestCopy from './best-of-rest-copy.json'
@@ -1611,22 +1611,46 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const champion = t.currentLeaderId
   const runnerUp = t.series[t.series.length - 1]?.secondId ?? null
   const constructorChampion = analysis.constructorTitle.currentLeaderId
-  const { shape, earlyLeaderId } = championshipShape(ctx, analysis) // full #88 title-battle taxonomy, not just the basic four
+  const sm = championshipShape(ctx, analysis) // full #88 title-battle taxonomy + combination modifiers
+  const cs = constructorShape(ctx, analysis)
+  const ruArc = runnerUpArc(ctx, analysis)
+  const arc = teamArcs(ctx, analysis)[0] ?? null
   const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
   const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
   const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
   const teamUnder = analysis.teamDeltas.find((d) => d.delta < 0)?.id
   const c = seasonReviewCopy as Record<string, string[]>
   const seed = `season-review-${ctx.year}`
+  const cap = (k: string) => k[0].toUpperCase() + k.slice(1)
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
-    early_leader: earlyLeaderId ? dn(earlyLeaderId) : '', early_leader_last: earlyLeaderId ? lastName(dn(earlyLeaderId)) : '',
+    early_leader: sm.earlyLeaderId ? dn(sm.earlyLeaderId) : '', early_leader_last: sm.earlyLeaderId ? lastName(dn(sm.earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
   }
-  const sections: string[] = [fill(pick(c[`champion${shape}`], `${seed}|champ`), slots)]
-  if (constructorChampion) sections.push(fill(pick(c.constructors, `${seed}|cons`), slots))
+  // Champion section + any combination modifiers (#88: teammate fight / late wobble / wet-aided run).
+  let champSection = fill(pick(c[`champion${sm.shape}`], `${seed}|champ`), slots)
+  const mods: string[] = []
+  if (sm.teammatePair) mods.push(fill(pick(c.champTeammatePair, `${seed}|mtp`), slots))
+  if (sm.lateWobble) mods.push(fill(pick(c.champLateWobble, `${seed}|mlw`), slots))
+  if (sm.wetAided) mods.push(fill(pick(c.champWetAided, `${seed}|mwa`), slots))
+  if (mods.length) champSection = `${champSection} ${mods.join(' ')}`
+  const sections: string[] = [champSection]
+  // The runner-up's side of the title fight (#88).
+  if (ruArc) sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), { ...slots, peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins }))
+  // Constructors' title shape + the drivers-sealed-early modifier (#88).
+  if (constructorChampion) {
+    const consSlots = { ...slots, cons_other: cs.otherId ? tn(cs.otherId) : '', carried_driver: cs.carriedDriverId ? dn(cs.carriedDriverId) : '', carried_driver_last: cs.carriedDriverId ? lastName(dn(cs.carriedDriverId)) : '' }
+    let consSection = fill(pick(c[`cons${cs.shape}`], `${seed}|cons`), consSlots)
+    if (cs.driversSealedEarly) consSection = `${consSection} ${fill(pick(c.consDriversSealedEarly, `${seed}|cse`), consSlots)}`
+    sections.push(consSection)
+  }
+  // The season's standout team arc away from the title (#88: flop / dev surge / dev fade / dead seat).
+  if (arc) {
+    const arcSlots = { ...slots, team: tn(arc.teamId), arc_driver: arc.driverId ? dn(arc.driverId) : '', arc_driver_last: arc.driverId ? lastName(dn(arc.driverId)) : '', arc_other: arc.otherId ? dn(arc.otherId) : '', arc_other_last: arc.otherId ? lastName(dn(arc.otherId)) : '' }
+    sections.push(fill(pick(c[`teamArc${cap(arc.key)}`], `${seed}|tarc`), arcSlots))
+  }
   if (over.length) sections.push(fill(pick(c.overPerformers, `${seed}|over`), { ...slots, names: listJoin(over.map(dn)) }))
   if (under.length) sections.push(fill(pick(c.underPerformers, `${seed}|under`), { ...slots, names: listJoin(under.map(dn)) }))
   if (teamOver) sections.push(fill(pick(c.teamOver, `${seed}|tover`), { ...slots, team: tn(teamOver) }))
