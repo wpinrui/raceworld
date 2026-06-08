@@ -9,8 +9,9 @@ import type {
   GodModeAction,
   TyreState,
 } from './types'
-import { generateWeatherCurve, generateForecastCurve, getMoistureAtLap } from './weather'
-import { computeTyreLife, wearTyre, recommendTyre, generateCompoundDeltas, generateTyreBaseLife } from './tyres'
+import { getMoistureAtLap } from './weather'
+import { raceConditions } from './race-conditions'
+import { computeTyreLife, wearTyre, recommendTyre } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
@@ -40,11 +41,11 @@ export function initRaceState(
   year: number,
   strategyNoise: number = 0.35,
 ): RaceState {
-  const weather = generateWeatherCurve(circuit.laps)
-  const weatherForecast = generateForecastCurve(weather, circuit.laps)
+  // Weather + tyre characteristics are seeded from (year, circuit) so the race runs exactly the
+  // forecast and tyre picture a pre-race preview can show. Everything else this race (car form, team
+  // beliefs, driver form, per-set tyre luck, lap wear) stays freshly random.
+  const { weather, forecast: weatherForecast, compoundDeltas, tyreBaseLife } = raceConditions(year, circuit)
   const lap1Moisture = getMoistureAtLap(weather, 1)
-  const compoundDeltas = generateCompoundDeltas()
-  const tyreBaseLife = generateTyreBaseLife()
 
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
 

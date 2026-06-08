@@ -26,6 +26,8 @@ import type {
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
+import { raceConditions } from '@/lib/sim/race-conditions'
+import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
@@ -1984,6 +1986,49 @@ function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
   return movers.slice(0, 2).map(sentence).join(' ')
 }
 
+// Race-logistics beat (#88 preview spec): lap count, the forecast the race will actually run (weather
+// is seeded from year+circuit, so this IS the race's forecast — and, like a real forecast, it may be
+// wrong), and a hedged pre-race read of the likely pit-stop spread from this race's (also seeded) tyre
+// life, lap count and era pit-loss. Only attaches to the upcoming race.
+function previewRaceLogistics(ctx: NewsContext, r: number): string {
+  const circ = ctx.calendar[r - 1]
+  if (!circ) return ''
+  const laps = circ.laps
+  const circuitName = circuit(ctx, r)
+  const sd = `logi-${ctx.year}-${r}`
+  const { forecast, tyreBaseLife } = raceConditions(ctx.year, circ)
+  const peak = forecast.reduce((m, p) => Math.max(m, p.moisture), 0)
+
+  // Wet forecast: strategy is weather-led, so frame on the crossover, not a stop count.
+  if (peak >= 0.1) {
+    const firstWet = forecast.find((p) => p.moisture >= 0.1)?.lap ?? laps
+    const frac = firstWet / laps
+    const when = frac <= 0.34 ? 'from early on' : frac <= 0.67 ? 'around mid-distance' : 'in the closing stages'
+    return fill(pick([
+      'The {circuit} runs to {laps} laps, but rain is forecast {when}, leaving the race on the slick-to-intermediate crossover.',
+      '{laps} laps await at the {circuit}, with showers forecast {when}; the timing of the switch to wets could shape the result.',
+      'Rain is forecast {when} at the {circuit}, putting its {laps} laps at the mercy of the crossover and how each team reads it.',
+    ], sd), { circuit: circuitName, laps, when })
+  }
+
+  // Dry: a stop-count spread. The longest viable dry stint is the hardest tyre run by a smooth driver
+  // (the fewest-stops line); the alternative is one more stop for fresher rubber. Different races land
+  // different counts because the tyre life is seeded per race.
+  const lo = Math.max(1, Math.ceil(laps / Math.max(1, tyreBaseLife.hard * laps * 1.3)) - 1)
+  const hi = lo + 1
+  // Article baked into the value so fill()'s a/an pass can't trip on "one" ("a one-stop", never "an").
+  const word = (n: number) => `a ${n === 1 ? 'one' : n === 2 ? 'two' : n === 3 ? 'three' : String(n)}-stop`
+  const base = fill(pick([
+    'A dry forecast leaves the {circuit}, over {laps} laps, on an open call: we could see some teams take {lo} while others run {hi}.',
+    'Over {laps} dry laps at the {circuit}, the split looks to be {lo} on the harder tyre against {hi} on softer rubber.',
+    'Expect {laps} dry laps at the {circuit} to divide the field between {lo} and {hi}.',
+  ], sd), { circuit: circuitName, laps, lo: word(lo), hi: word(hi) })
+  const note = pitLaneLoss(ctx.year) >= 27
+    ? pick([' The long pit lane here makes the extra stop costly.', ' A slow pit lane nudges teams toward the lower count.'], `${sd}|n`)
+    : ''
+  return base + note
+}
+
 function previews(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
@@ -2011,9 +2056,10 @@ function previews(ctx: NewsContext): NewsArticle[] {
 
     // Grid talking point from last time out (non-opener rounds; the opener uses openerPiece instead).
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
-    // Forward-looking development beat — only the upcoming race (the pre-rolled upgrade data is
-    // meaningful only there).
+    // Forward-looking development + logistics beats — only the upcoming race (the pre-rolled upgrade
+    // data and the seeded race conditions are meaningful only there).
     const upgradeOutlook = isNext ? previewUpgradeOutlook(ctx, r) : ''
+    const raceLogistics = isNext ? previewRaceLogistics(ctx, r) : ''
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
@@ -2069,6 +2115,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
               : ['{top_team} head the constructors\' championship.']),
           upgradeOutlook,
+          raceLogistics,
           trackTexture,
         )
     out.push({

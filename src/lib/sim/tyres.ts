@@ -9,18 +9,18 @@ export const DEFAULT_TYRE_LIFE: Record<TyreCompound, number> = { soft: 0.20, med
 // Per-race compound pace deltas. Soft is the 0 reference. The dry trio (soft≤medium≤hard) and the wet
 // pair (intermediate≤wet) are each kept in order — softer at least as fast — but the two chains are
 // independent (inter/wet aren't "harder" dry tyres). σ/anchors are sim-and-tune knobs.
-export function generateCompoundDeltas(): Record<TyreCompound, number> {
-  const medium = Math.max(0, sampleNormal(DEFAULT_COMPOUND_DELTAS.medium, 0.22, Math.random))
-  const hard = Math.max(medium, sampleNormal(DEFAULT_COMPOUND_DELTAS.hard, 0.30, Math.random))
-  const intermediate = Math.max(0, sampleNormal(DEFAULT_COMPOUND_DELTAS.intermediate, 0.40, Math.random))
-  const wet = Math.max(intermediate, sampleNormal(DEFAULT_COMPOUND_DELTAS.wet, 0.55, Math.random))
+export function generateCompoundDeltas(rng: () => number = Math.random): Record<TyreCompound, number> {
+  const medium = Math.max(0, sampleNormal(DEFAULT_COMPOUND_DELTAS.medium, 0.22, rng))
+  const hard = Math.max(medium, sampleNormal(DEFAULT_COMPOUND_DELTAS.hard, 0.30, rng))
+  const intermediate = Math.max(0, sampleNormal(DEFAULT_COMPOUND_DELTAS.intermediate, 0.40, rng))
+  const wet = Math.max(intermediate, sampleNormal(DEFAULT_COMPOUND_DELTAS.wet, 0.55, rng))
   return { soft: 0, medium, hard, intermediate, wet }
 }
 
 // Per-race base tyre life (fraction of race distance), rolled once at lights-out so the whole grid
 // shares the day's deg characteristics; per-driver smoothness differentiates from there.
-export function generateTyreBaseLife(): Record<TyreCompound, number> {
-  const roll = (anchor: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, sampleNormal(anchor, 0.035, Math.random)))
+export function generateTyreBaseLife(rng: () => number = Math.random): Record<TyreCompound, number> {
+  const roll = (anchor: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, sampleNormal(anchor, 0.035, rng)))
   return {
     soft: roll(DEFAULT_TYRE_LIFE.soft, 0.15, 0.25),
     medium: roll(DEFAULT_TYRE_LIFE.medium, 0.24, 0.40),
