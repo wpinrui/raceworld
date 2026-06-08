@@ -198,10 +198,16 @@ export default function Nav() {
         await runOffSeasonEvent(stop.event)
         if (stop.event === 'roster-swap') continue            // silent New-Year crossing — keep advancing
         if (opts?.targetRound != null) continue               // a fast-forward runs the beats but never stops on them
-        // A no-one-retired year has nothing to show, so don't stop the sim on an empty retirements beat.
-        if (stop.event === 'retirements' && (useSeasonStore.getState().endOfSeasonSummary?.retiredDriverIds?.length ?? 0) === 0) continue
-        // Every other beat is a HARD STOP — the loop must never run past one. Its recap / board surfaces
-        // on Home; the dated news sits in the newsroom to revisit.
+        // Retirements present as NEWS: stop only if someone actually retired, and show the retirement
+        // story modal (no board, no empty-year stop). Signing Day + Testing are the boards on Home.
+        if (stop.event === 'retirements') {
+          const retired = useSeasonStore.getState().endOfSeasonSummary?.retiredDriverIds ?? []
+          if (retired.length === 0) continue
+          const refreshed = generateNews(buildLiveNewsContext(useSeasonStore.getState(), careerBase, teamCareerBase, records, teamDriverTallies))
+          const retNews = refreshed.filter((a) => a.category === 'career_retirement')
+          if (retNews.length) { retNews.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: retNews }); break }
+        }
+        // Hard stop on Home for the interactive boards (Signing Day, Testing).
         setAdvancing(false); router.push('/home'); break
       }
       if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }

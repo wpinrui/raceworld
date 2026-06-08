@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { isOffSeason } from '@/lib/sim/types'
 import { RaceBanner } from '@/components/home/RaceBanner'
 import { PunditPredictions } from '@/components/home/PunditPredictions'
 import { CompactStandings } from '@/components/home/CompactStandings'
@@ -23,10 +22,10 @@ export default function HomePage() {
 
   if (!hydrated) return null
 
-  const offSeason = isOffSeason(phase)
-  // The pre-season test lands AFTER the New-Year rollover, when the phase is 'pre-race' (not off-season),
-  // so the left panel must also mount then — until round 1 runs — or the test board never renders (#126).
-  const showLeftPanel = offSeason || (!!preSeasonTest && completedRounds === 0)
+  // The home's left review panel shows ONLY for the two interactive off-season boards: Signing Day
+  // (contract-negotiations) and the pre-season test (after the rollover, phase 'pre-race', before round
+  // 1). The season review + retirements are news, read in the feed — not revisit panels (#126).
+  const showLeftPanel = phase === 'contract-negotiations' || (!!preSeasonTest && completedRounds === 0)
 
   return (
     <div className="h-full overflow-hidden bg-[#0F1419] text-[#FFFFFF]">
