@@ -30,6 +30,10 @@ const PRIMARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00D9F
 const SECONDARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#2A3142] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#303848] disabled:opacity-50 transition-colors'
 const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] transition-colors'
 
+// Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
+// fast-forwards so a multi-week gap to the next race doesn't drag. (n = days advanced so far this Continue.)
+const dayTickMs = (n: number): number => (n < 8 ? 900 : n < 24 ? 550 : 320)
+
 export default function Nav() {
   const pathname = usePathname()
   const router = useRouter()
@@ -150,7 +154,7 @@ export default function Nav() {
             cur = toISODate(addDays(fromISODate(cur), 1))
             useSeasonStore.getState().setCurrentDate(cur)
             dayCount++
-            await new Promise((r) => setTimeout(r, dayCount < 8 ? 110 : dayCount < 20 ? 60 : 25))
+            await new Promise((r) => setTimeout(r, dayTickMs(dayCount)))
           }
           if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
           // stop.reason === 'race': the clock now sits on race day.
