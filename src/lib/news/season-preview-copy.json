@@ -44,7 +44,7 @@
   "bestOfRest": [
     "Behind the championship contenders, {teams} sit at the top of the midfield.",
     "{teams} have the trajectory and resources to lead the midfield in {year}.",
-    "The realistic ceiling for the midfield is points finishes and podiums in unusual conditions; {teams} are best equipped to reach it.",
+    "The realistic ceiling for the midfield is points finishes and the odd podium; {teams} are best equipped to reach it.",
     "{teams} lead the midfield, with better trajectory and more recent results than the rest of that group.",
     "{teams} carry the strongest combination of development rate and form among those not expected to challenge for the title."
   ],
@@ -90,26 +90,21 @@
       "{team} begin their {year} debut with {names}, neither with an F1 start to their name.",
       "First-time constructor {team} hands {year} to rookies {names}.",
       "{team} arrive for {year} with {names}, both new to the grid."
-    ],
-    "allNew": [
-      "The {year} grid is brand new, with no team carrying a prior constructors' record.",
-      "Every team on the {year} grid starts from zero history, the whole field new to the championship.",
-      "{year} opens with an entirely new constructors' field, none with a record to defend."
     ]
   },
   "headlineNoChamp": [
-    "{fav} heads the {year} field as no reigning champion lines up",
-    "{fav} leads preseason attention into {year} with no title-holder to defend",
-    "{year} opens with no established order and {fav} as favourite",
-    "{fav} is the name most often placed at the head of a clean-slate {year} field",
-    "{fav} draws the early attention as {year} opens with no prior title-holder"
+    "{fav} the name to beat as the {year} season opens",
+    "{fav} heads preseason attention into {year}",
+    "{fav} the preseason favourite for the {year} title",
+    "{fav} leads the early {year} title picture",
+    "{fav} the favourite as {year} gets under way"
   ],
   "dekNoChamp": [
-    "With no previous champion on the entry list, {fav} heads the early expectations for {year}.",
-    "{year} opens with no benchmark to defend against and {fav} the name most paddock voices attach to the favourite's role.",
-    "The cars are loaded for {year}, a season that opens with the title there for the taking and {fav} shaping expectations.",
-    "No champion to chase and no established order: {fav} has emerged as the driver the rest of the field measures itself against.",
-    "{fav} enters as the clearest favourite, but {year} starts with no prior title-holder and no inherited hierarchy."
+    "{fav} is the name most paddock voices attach to the favourite's role for {year}.",
+    "{fav} heads the field the rest of the grid will be measured against in {year}.",
+    "The {year} title conversation centres on {fav}.",
+    "{fav} has emerged as the clearest favourite heading into {year}.",
+    "{fav} enters {year} as the driver to beat."
   ],
   "headlineDefendingFav": [
     "{champion} defends as favourite, with {fav} the closest challenger",

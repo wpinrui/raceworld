@@ -69,27 +69,6 @@
     "{champion} did not lead from the start but, having taken over, won {year} going away, {champion_wins} victories and {gap} {gap_pts} in hand over {runner_up_ref}.",
     "{champion_last} assumed the lead in-season and stretched it, {champion_wins} wins and a {gap}-point margin over {runner_up_ref} closing out {year}."
   ],
-  "constructors": [
-    "{constructor_champion} won the constructors' championship.",
-    "The teams' title went to {constructor_champion}.",
-    "{constructor_champion} took the constructors' crown in {year}.",
-    "In the constructors' standings, {constructor_champion} finished first.",
-    "{constructor_champion} is the {year} constructors' champion."
-  ],
-  "overPerformers": [
-    "{names} finished the season above the preseason projection.",
-    "Ahead of where the winter form sheet had it: {names}.",
-    "{names} overachieved against the preseason expectation, ending the year above forecast.",
-    "The preseason call undersold {names}, who beat it.",
-    "{names} closed {year} above the level the preseason picture set."
-  ],
-  "underPerformers": [
-    "{names} finished the season below the preseason projection.",
-    "Short of where the winter form sheet had it: {names}.",
-    "{names} underachieved against the preseason expectation, ending the year below forecast.",
-    "The preseason call oversold {names}, who fell short of it.",
-    "{names} closed {year} below the level the preseason picture set."
-  ],
   "teamOver": [
     "{team} beat the winter forecast, a projected {team_expected_pos} in the constructors' becoming {team_final_pos} on {team_points} points.",
     "{team} outran their preseason projection, finishing {team_final_pos} in the constructors' against an expected {team_expected_pos}.",
