@@ -1673,10 +1673,9 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   }
   // Champion section + any combination modifiers (#88: teammate fight / late wobble / wet-aided run).
   let champSection = fill(pick(c[`champion${sm.shape}`], `${seed}|champ`), slots)
-  const mods: string[] = []
-  if (sm.lateWobble) mods.push(fill(pick(c.champLateWobble, `${seed}|mlw`), slots))
-  if (sm.wetAided) mods.push(fill(pick(c.champWetAided, `${seed}|mwa`), slots))
-  if (mods.length) champSection = `${champSection} ${mods.join(' ')}`
+  // At most ONE champion modifier — don't double up same-category archetypes. Priority: late wobble, then wet.
+  const mod = sm.lateWobble ? pick(c.champLateWobble, `${seed}|mlw`) : sm.wetAided ? pick(c.champWetAided, `${seed}|mwa`) : ''
+  if (mod) champSection = `${champSection} ${fill(mod, slots)}`
   const sections: string[] = [champSection]
   // The runner-up's side of the title fight (#88).
   if (ruArc) sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), { ...slots, peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins }))

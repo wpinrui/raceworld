@@ -168,7 +168,11 @@
     "While {runner_up_last} often had the measure of {champion_last} in dry races, {champion_last}'s skill and composure in navigating changeable conditions played a role in {wet_races_str}{wet_win_clause}.",
     "{champion_last}'s wet weather driving helped {champion_obj} outscore {runner_up_last} by {champion_wet_points} to {runner_up_wet_points}, which made the difference in their championship campaigns."
   ],
-  "runnerUpValiant": ["PLACEHOLDER {runner_up_last} closed a {peak_deficit}-point gap to within {final_gap} but fell short."],
+  "runnerUpValiant": [
+    "{runner_up_last}'s title bid fell agonisingly short, recovering from {peak_deficit} points down to within {final_gap} by winning {late_wins} of the closing races, but the early deficit proved too much to overturn.",
+    "It was nearly some comeback from {runner_up_last}, who clawed a {peak_deficit}-point deficit to {champion_last} down to just {final_gap} with {late_wins} late wins, only to fall short at the last.",
+    "{runner_up_last} threw everything at the run-in, {late_wins} wins in the closing rounds cutting a {peak_deficit}-point gap to {final_gap}, but {champion_last} had banked enough to hold on."
+  ],
   "runnerUpLateChargeOwnDnf": ["PLACEHOLDER {runner_up_last}'s late charge ended with a retirement."],
   "runnerUpAliveToFlag": ["PLACEHOLDER {runner_up_last} kept the title alive to the final round."],
   "teamArcFlop": ["PLACEHOLDER {team} fell well short of preseason expectations."],
