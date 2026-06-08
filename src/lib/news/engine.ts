@@ -1622,9 +1622,15 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const c = seasonReviewCopy as Record<string, string[]>
   const seed = `season-review-${ctx.year}`
   const cap = (k: string) => k[0].toUpperCase() + k.slice(1)
+  const championDriver = ctx.drivers.find((d) => d.id === champion)
+  const champTeam = championDriver ? tn(championDriver.teamId) : ''
+  const ruLast = runnerUp ? lastName(dn(runnerUp)) : ''
+  // Top two shared a garage: name the runner-up as the champion's teammate inline (#88), no separate sentence.
+  const runnerUpRef = sm.teammatePair && runnerUp ? `${pronouns(championDriver?.gender).their} ${champTeam} teammate ${ruLast}` : ruLast
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
+    runner_up_ref: runnerUpRef, champ_team: champTeam,
     early_leader: sm.earlyLeaderId ? dn(sm.earlyLeaderId) : '', early_leader_last: sm.earlyLeaderId ? lastName(dn(sm.earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
@@ -1632,7 +1638,6 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   // Champion section + any combination modifiers (#88: teammate fight / late wobble / wet-aided run).
   let champSection = fill(pick(c[`champion${sm.shape}`], `${seed}|champ`), slots)
   const mods: string[] = []
-  if (sm.teammatePair) mods.push(fill(pick(c.champTeammatePair, `${seed}|mtp`), slots))
   if (sm.lateWobble) mods.push(fill(pick(c.champLateWobble, `${seed}|mlw`), slots))
   if (sm.wetAided) mods.push(fill(pick(c.champWetAided, `${seed}|mwa`), slots))
   if (mods.length) champSection = `${champSection} ${mods.join(' ')}`

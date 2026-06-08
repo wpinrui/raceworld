@@ -46,7 +46,7 @@
     "A three-way scrap stayed live to the closing rounds; {champion_last} emerged from it as champion.",
     "{champion} outlasted two rivals in a championship that stayed open three ways until late, taking {year} by {gap} {gap_pts}.",
     "It was a three-cornered fight to the end, and {champion_last} held the nerve the other two could not.",
-    "Three names were in it with rounds to run; {champion} settled {year}, with {runner_up_last} the nearest of the chasers."
+    "Three names were in it with rounds to run; {champion} settled {year}, with {runner_up_ref} the nearest of the chasers."
   ],
   "championDomination": [
     "{champion} won at least half the races in {year}, not a close title but a dominant one.",
@@ -63,18 +63,18 @@
     "From the opening round, the lead was {champion_last}'s, and no rival took it back at any point in {year}."
   ],
   "championDecider": [
-    "{champion} settled the {year} title in the closing rounds, finishing {gap} {gap_pts} clear of {runner_up_last}.",
+    "{champion} settled the {year} title in the closing rounds, finishing {gap} {gap_pts} clear of {runner_up_ref}.",
     "It went to the final rounds: {champion_last} took the championship by {gap} {gap_pts} over {runner_up}.",
-    "{gap} {gap_pts} decided {year}; {champion_last} held off {runner_up_last} to the last.",
+    "{gap} {gap_pts} decided {year}; {champion_last} held off {runner_up_ref} to the last.",
     "The title was live into the run-in, and {champion} closed it out by {gap} {gap_pts}.",
-    "{champion_last} edged {runner_up_last} by {gap} {gap_pts}, the {year} championship decided in the final rounds."
+    "{champion_last} edged {runner_up_ref} by {gap} {gap_pts}, the {year} championship decided in the final rounds."
   ],
   "championClear": [
-    "{champion} took over the championship lead during the season and pulled clear, ending {year} comfortably ahead of {runner_up_last}.",
-    "Once {champion_last} hit the front of the standings, the margin only grew; {year} ended a comfortable {gap} {gap_pts} over {runner_up_last}.",
+    "{champion} took over the championship lead during the season and pulled clear, ending {year} comfortably ahead of {runner_up_ref}.",
+    "Once {champion_last} hit the front of the standings, the margin only grew; {year} ended a comfortable {gap} {gap_pts} over {runner_up_ref}.",
     "{champion} did not lead from the start but, having taken the lead, won {year} going away by {gap} {gap_pts}.",
     "{champion_last} assumed the championship lead in-season and stretched it, finishing {year} clear of {runner_up}.",
-    "After taking over at the top, {champion} controlled {year} to a comfortable {gap} {gap_pts} margin over {runner_up_last}."
+    "After taking over at the top, {champion} controlled {year} to a comfortable {gap} {gap_pts} margin over {runner_up_ref}."
   ],
   "constructors": [
     "{constructor_champion} won the constructors' championship.",
@@ -159,7 +159,6 @@
     "{champion_last} had sealed the drivers' crown well before this.",
     "This came after {champion_last} had already decided the drivers' title {drivers_clinch_ago_str} at the {drivers_clinch_gp}."
   ],
-  "champTeammatePair": ["PLACEHOLDER The two title protagonists shared a garage."],
   "champLateWobble": ["PLACEHOLDER A commanding lead came under late pressure but held."],
   "champWetAided": ["PLACEHOLDER Several of those wins came in the wet."],
   "runnerUpValiant": ["PLACEHOLDER {runner_up_last} closed a {peak_deficit}-point gap to within {final_gap} but fell short."],
