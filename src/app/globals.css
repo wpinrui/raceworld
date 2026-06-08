@@ -88,9 +88,3 @@ button:disabled {
 ::-webkit-scrollbar-thumb:hover {
   background: #3a4255;
 }
-
-/* FM-style sim calendar: each new day slides the strip in from the right. */
-@keyframes simcal-day-in {
-  from { transform: translateX(7%); opacity: 0.35; }
-  to { transform: translateX(0); opacity: 1; }
-}

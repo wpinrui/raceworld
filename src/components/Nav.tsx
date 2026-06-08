@@ -199,10 +199,13 @@ export default function Nav() {
     setBusy(true)
     setRaceModalOpen(true)
     useSimControl.getState().setSimBusy(true)
+    // Let the modal fully fade in and cover the screen BEFORE committing the race, so the result and its
+    // race-report headline never flash in the feed behind it (that spoils the "simulation is happening" illusion).
+    await new Promise((r) => setTimeout(r, 380))
     try {
       await Promise.all([
         simulateUntilRound(useSeasonStore.getState().currentRound + 1),
-        new Promise((r) => setTimeout(r, 1300)), // minimum display so the modal registers
+        new Promise((r) => setTimeout(r, 900)), // hold a beat under full cover so it reads as work happening
       ])
     } finally {
       setBusy(false)
