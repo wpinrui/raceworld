@@ -36,9 +36,10 @@ const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppe
 // Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
 // fast-forwards so a multi-week gap to the next race doesn't drag. (n = days advanced so far this Continue.)
 const dayTickMs = (n: number): number => (n < 8 ? 1080 : n < 24 ? 660 : 385)
-// #127: days with nothing dropping (no news, no event) fast-forward — quick but still visible, so dead
-// stretches (long in-season gaps, the off-season's empty weeks) don't make you sit through every day.
-const EMPTY_DAY_MS = 50
+// #127: an empty stretch (no news, no event) fast-forwards over ~this long TOTAL, not a fixed per-day
+// speed — so a long dead run (the off-season's Jan/Feb weeks) reads as a real ~9s sim rather than a
+// flash, while short hops stay proportionally quick. Per-day = EMPTY_RUN_MS / stretch-length, clamped.
+const EMPTY_RUN_MS = 9000
 
 export default function Nav() {
   const pathname = usePathname()
@@ -169,20 +170,27 @@ export default function Nav() {
     let dayCount = 0
     while (true) {
       const s = useSeasonStore.getState()
+      // The real-world grid-changes decision is a hard gate at a season's start. It's a blocking player
+      // call, so stop the sim for it (the modal is render-driven; breaking here keeps the loop from
+      // running past an unmade decision now that the off-season flows through this same loop) (#126).
+      if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) break
       const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
       setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
       const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
       if (stop.reason === 'idle') break
       // Walk the clock to the stop ONE DAY at a time, accelerating on long runs. Space/Esc set stopRef.
       let cur = s.currentDate
-      // Linger only on days something actually drops; fast-forward the empty stretches between (#127).
+      // Linger on days something drops; fast-forward the empty stretches between, spread over a ~fixed
+      // total so a long dead run reads as a real sim, not a flash (#127).
       const newsDays = new Set(articles.map((a) => a.date).filter((d): d is string => !!d))
+      const segDays = Math.max(1, Math.round((Date.parse(stop.date) - Date.parse(cur)) / 86_400_000))
+      const emptyMs = Math.min(300, Math.max(45, Math.round(EMPTY_RUN_MS / segDays)))
       while (cur < stop.date) {
         if (stopRef.current) break
         cur = toISODate(addDays(fromISODate(cur), 1))
         useSeasonStore.getState().setCurrentDate(cur)
         dayCount++
-        await new Promise((r) => setTimeout(r, newsDays.has(cur) ? dayTickMs(dayCount) : EMPTY_DAY_MS))
+        await new Promise((r) => setTimeout(r, newsDays.has(cur) ? dayTickMs(dayCount) : emptyMs))
       }
       if (stopRef.current) break
       // Dated off-season beat (#126): run its sim/news organically now we've reached the day.
