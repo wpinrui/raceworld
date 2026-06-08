@@ -2383,26 +2383,24 @@ function preSeasonTesting(ctx: NewsContext): NewsArticle[] {
   const top = e[0]; const second = e[1]
   const gap = Math.max(0, second.lapTime - top.lapTime).toFixed(3)
   const seed = `pretest-${ctx.year}`
-  const slots = { year: ctx.year, circuit: ctx.preSeasonTest.circuitName, top: top.driverName, top_last: lastName(top.driverName), top_team: top.teamName, second: second.driverName, gap }
+  const third = e[2]
+  const gap3 = third ? Math.max(0, third.lapTime - top.lapTime).toFixed(3) : ''
+  const slots = { year: ctx.year, circuit: ctx.preSeasonTest.circuitName, top: top.driverName, top_last: lastName(top.driverName), top_team: top.teamName, second: second.driverName, gap, third: third?.driverName ?? '', gap3 }
   const headline = fill(pick([
-    '{top_last} sets the pace in {year} testing',
-    '{top_team} top the {year} testing times',
-    '{top_last} fastest as {year} testing wraps',
+    '{top_last} quickest in {year} testing',
+    '{top_last} tops the {year} testing order',
+    '{top_team} set the {year} testing pace',
   ], `${seed}|h`), slots)
   const dek = fill(pick([
-    '{top} ended pre-season testing quickest at the {circuit}, though the timesheets only ever tell half the story.',
-    '{top_team} led the way at the {circuit}, with the real order still hidden behind fuel and tyres.',
+    '{top} set the fastest time of {year} pre-season testing at the {circuit}.',
+    '{top_team} led the {year} test order at the {circuit}.',
   ], `${seed}|d`), slots)
-  const body = paras(
-    fill(pick([
-      '{top} ended {year} pre-season testing on top at the {circuit}, {gap}s clear of {second}.',
-      'It was {top} quickest when testing closed at the {circuit}, {gap}s ahead of {second}.',
-    ], `${seed}|b1`), slots),
-    pick([
-      'Testing times come with the usual health warning: nobody declares their fuel load or tyre choice, so a headline lap can flatter as easily as it impresses. The honest picture arrives at the first race.',
-      'Read it with caution. With fuel and tyre runs nobody else can verify, the order on the timing screens is as much about programmes as outright pace. The opener settles it.',
-    ], `${seed}|b2`),
-  )
+  const body = fill(pick(third ? [
+    '{top} topped {year} pre-season testing at the {circuit}, {gap}s clear of {second} and {gap3}s up on {third}.',
+    '{top} was fastest as {year} testing closed at the {circuit}, {gap}s ahead of {second}, {gap3}s ahead of {third}.',
+  ] : [
+    '{top} topped {year} pre-season testing at the {circuit}, {gap}s clear of {second}.',
+  ], `${seed}|b`), slots)
   return [{ id: seed, category: 'feature', round: 1, dayOffset: -10, priority: 72, headline, dek, body }]
 }
 
