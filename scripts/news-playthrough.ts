@@ -158,7 +158,7 @@ async function main() {
     return {
       year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
-      upgradeEvents: s.allUpgradeEvents, constructorHistory: s.constructorHistory,
+      upgradeEvents: s.allUpgradeEvents, devPlans: s.devPlans, constructorHistory: s.constructorHistory,
       endOfSeason: s.endOfSeasonSummary, calendar: calendarForYear(s.year), live: true, careers, teamCareers, records: buildRecords(),
       contractWatch: s.seasonContractWatch, renewals: s.seasonRenewals, draft: s.seasonDraft,
     }

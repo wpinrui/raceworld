@@ -21,7 +21,7 @@
 //                       end-of-season teammate-battle verdicts. (The old single-per-round opinion column was removed.)
 
 import type {
-  Driver, Team, RaceResult, DevUpgradeEvent,
+  Driver, Team, RaceResult, DevUpgradeEvent, TeamDevPlan,
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord, RaceWeather,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
@@ -71,6 +71,8 @@ export interface NewsContext {
   teams: Team[]
   raceResults: RaceResult[][]      // [round-1]
   upgradeEvents: DevUpgradeEvent[]
+  devPlans?: TeamDevPlan[]         // pending dev plans (next upgrade round + pre-rolled outcome), for the
+                                   // forward-looking upgrade beat in the preview. Live only — absent on archives.
   constructorHistory: ConstructorSeasonRecord[]   // prior-season records (for silly-season team media)
   endOfSeason: EndOfSeasonSummary | null
   calendar: Circuit[]
@@ -1933,6 +1935,55 @@ function openerPiece(ctx: NewsContext): string {
   return paras(...beats)
 }
 
+// Forward-looking development beat (#88 preview spec): the upgrade(s) due at the upcoming round and
+// how, on pace, they shift the competitive order. The outcome is pre-rolled and deterministic (the
+// devPlans pendingPaceDelta), so the "analyst projection" is genuinely accurate. The delta lands at
+// recordRaceResult and bites from the next race, so the framing is "due / once fitted", not "this
+// race". Omitted entirely when nothing is due that round.
+function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
+  const due = (ctx.devPlans ?? []).filter((p) => p.nextUpgradeRound === r && !p.pendingFailed && (p.pendingPaceDelta ?? 0) > 0)
+  if (due.length === 0 || ctx.teams.length === 0) return ''
+  const circuitName = circuit(ctx, r)
+  const tn = (id: string) => teamName(ctx, id)
+  const curRank = new Map([...ctx.teams].sort((a, b) => b.carPace - a.carPace).map((t, i) => [t.id, i + 1]))
+  const bumped = new Map(ctx.teams.map((t) => [t.id, t.carPace]))
+  for (const p of due) bumped.set(p.teamId, (bumped.get(p.teamId) ?? 0) + (p.pendingPaceDelta ?? 0))
+  const projOrder = [...ctx.teams].sort((a, b) => (bumped.get(b.id) ?? 0) - (bumped.get(a.id) ?? 0))
+  const projRank = new Map(projOrder.map((t, i) => [t.id, i + 1]))
+
+  // Per due team: current vs projected rank, and the rival it leapfrogs (the team now directly
+  // behind it that used to be ahead). Biggest climber first.
+  const movers = due
+    .map((p) => {
+      const from = curRank.get(p.teamId) ?? ctx.teams.length
+      const to = projRank.get(p.teamId) ?? from
+      const behind = projOrder[to] // team at projected rank to + 1
+      const passed = behind && (curRank.get(behind.id) ?? 0) < from ? tn(behind.id) : ''
+      return { teamId: p.teamId, from, to, passed, gain: from - to }
+    })
+    .filter((m) => m.gain > 0)   // only an actual projected order change is a story
+    .sort((a, b) => b.gain - a.gain)
+  if (movers.length === 0) return ''
+
+  const sentence = (m: typeof movers[number]): string => {
+    const slots = { team: tn(m.teamId), team_poss: poss(tn(m.teamId)), circuit: circuitName, from: ordinal(m.from), to: ordinal(m.to), passed: m.passed }
+    const sd = `upg-${ctx.year}-${r}-${m.teamId}`
+    return m.passed
+      ? fill(pick([
+          '{team} bring their next development step to the {circuit}, a package the pace projection has lifting them from {from} to {to}, ahead of {passed} once it is fitted.',
+          'The {circuit} marks {team_poss} next upgrade, projected to move them from {from} to {to} on pace, clear of {passed}.',
+          '{team_poss} next package, due at the {circuit}, projects to climb them from {from} to {to}, past {passed}.',
+        ], sd), slots)
+      : fill(pick([
+          '{team} bring their next development step to the {circuit}, projected to climb from {from} to {to} in the order once it lands.',
+          'The {circuit} brings {team_poss} next upgrade, set to lift them from {from} to {to} on pace.',
+          '{team_poss} next package, due at the {circuit}, projects to lift them to {to} from {from}.',
+        ], sd), slots)
+  }
+
+  return movers.slice(0, 2).map(sentence).join(' ')
+}
+
 function previews(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
@@ -1960,6 +2011,9 @@ function previews(ctx: NewsContext): NewsArticle[] {
 
     // Grid talking point from last time out (non-opener rounds; the opener uses openerPiece instead).
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
+    // Forward-looking development beat — only the upcoming race (the pre-rolled upgrade data is
+    // meaningful only there).
+    const upgradeOutlook = isNext ? previewUpgradeOutlook(ctx, r) : ''
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
@@ -2014,6 +2068,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
             cbefore[1]
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
               : ['{top_team} head the constructors\' championship.']),
+          upgradeOutlook,
           trackTexture,
         )
     out.push({
