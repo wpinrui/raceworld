@@ -458,9 +458,11 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
   const consDecided = cClinch ?? analysis.completedRounds // teams' clinch round, or the final round if it ran the distance
   const driversSealedEarly = dClinch != null && consDecided - dClinch >= 3
 
-  // Repeat: the same constructor won last season too.
-  const lastYear = (ctx.constructorHistory ?? []).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
-  const lastChamp = (ctx.constructorHistory ?? []).find((h) => h.seasonYear === lastYear && h.finalPosition === 1)?.teamId
+  // Repeat: the same constructor won the PRIOR season too. Exclude the current season from the lookup — in a
+  // historical replay the current year is already in the archive, which would otherwise self-match every champion
+  // (and render "1 years running"). The streak count already excludes the current year, so the two now agree.
+  const priorYear = (ctx.constructorHistory ?? []).filter((h) => h.seasonYear < ctx.year).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
+  const lastChamp = (ctx.constructorHistory ?? []).find((h) => h.seasonYear === priorYear && h.finalPosition === 1)?.teamId
   if (lastChamp && lastChamp === champ) return { shape: 'RepeatChampion', championId: champ, driversSealedEarly }
 
   const split = teamDriverSplit(ctx, champ, N)
