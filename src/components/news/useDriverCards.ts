@@ -12,6 +12,7 @@ import { buildDriverCardResolver, type DriverCardResolver } from './LinkedText'
 // links (e.g. an archived-season story read in the newsroom).
 export function useLiveDriverCards(): DriverCardResolver {
   const drivers = useSeasonStore((s) => s.drivers)
+  const teams = useSeasonStore((s) => s.teams)
   const driverStandings = useSeasonStore((s) => s.driverStandings)
   const year = useSeasonStore((s) => s.year)
   const raceResults = useSeasonStore((s) => s.raceResults)
@@ -25,7 +26,7 @@ export function useLiveDriverCards(): DriverCardResolver {
     [careerBase, year, raceResults, champion],
   )
   return useMemo(
-    () => buildDriverCardResolver({ drivers, driverStandings, year, careers }),
-    [drivers, driverStandings, year, careers],
+    () => buildDriverCardResolver({ drivers, driverStandings, year, careers, teams }),
+    [drivers, driverStandings, year, careers, teams],
   )
 }

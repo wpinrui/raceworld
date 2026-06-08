@@ -30,6 +30,8 @@ export function DriverTooltip({
   wdcPosition,
   wdcPoints,
   career,
+  teamName,
+  teamColor,
   children,
   side = 'left',
 }: {
@@ -38,6 +40,8 @@ export function DriverTooltip({
   wdcPosition?: number | null
   wdcPoints?: number
   career?: DriverCareer
+  teamName?: string
+  teamColor?: string
   children: React.ReactNode
   side?: 'top' | 'right' | 'bottom' | 'left'
 }) {
@@ -58,6 +62,12 @@ export function DriverTooltip({
               <NationalityFlag code={driver.nationality} size="1em" />
               <span className="truncate">{driver.name}</span>
             </p>
+            {teamName && (
+              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#FFFFFF]">
+                <span className="h-3 w-1 shrink-0 rounded-sm" style={{ backgroundColor: teamColor ?? '#6B7280' }} />
+                <span className="truncate">{teamName}</span>
+              </p>
+            )}
             <p className="text-[11px] text-[#FFFFFF]">Age {driver.age}</p>
             <p className="mt-0.5 text-[11px] text-[#FFFFFF]">
               {wdcPosition != null

@@ -11,7 +11,7 @@ import { DriverLink, TeamLink, CircuitLink } from '@/components/world/EntityLink
 import { DriverTooltip } from '@/components/world/DriverTooltip'
 import { lastName } from '@/lib/news/util'
 import { useFollowed } from '@/lib/store/useFollowed'
-import type { Driver, DriverStanding } from '@/lib/sim/types'
+import type { Driver, DriverStanding, Team } from '@/lib/sim/types'
 import type { DriverCareer } from '@/lib/news/engine'
 
 // A followed driver/team's name is accented + dotted-underlined wherever it appears in a story.
@@ -85,7 +85,7 @@ export function buildNewsIndex(opts: {
 
 // Resolves a driver id to the data a hover card needs (record + career + this season's standing). Returns
 // null for ids not on the live grid (e.g. archived-season names), so those just render as plain links.
-export type DriverCard = { driver: Driver; year: number; wdcPosition: number | null; wdcPoints?: number; career?: DriverCareer }
+export type DriverCard = { driver: Driver; year: number; wdcPosition: number | null; wdcPoints?: number; career?: DriverCareer; teamName?: string; teamColor?: string }
 export type DriverCardResolver = (id: string) => DriverCard | null
 
 export function buildDriverCardResolver(opts: {
@@ -93,14 +93,17 @@ export function buildDriverCardResolver(opts: {
   driverStandings: DriverStanding[]
   year: number
   careers?: Record<string, DriverCareer>
+  teams?: Team[]
 }): DriverCardResolver {
   const byId = new Map(opts.drivers.map((d) => [d.id, d]))
+  const teamById = new Map((opts.teams ?? []).map((t) => [t.id, t]))
   const posOf = new Map(opts.driverStandings.map((s, i) => [s.driverId, i + 1]))
   const ptsOf = new Map(opts.driverStandings.map((s) => [s.driverId, s.points]))
   return (id) => {
     const driver = byId.get(id)
     if (!driver) return null
-    return { driver, year: opts.year, wdcPosition: posOf.get(id) ?? null, wdcPoints: ptsOf.get(id), career: opts.careers?.[id] }
+    const team = teamById.get(driver.teamId)
+    return { driver, year: opts.year, wdcPosition: posOf.get(id) ?? null, wdcPoints: ptsOf.get(id), career: opts.careers?.[id], teamName: team?.name, teamColor: team?.color }
   }
 }
 
@@ -119,7 +122,7 @@ export function LinkedText({ text, index, driverCard }: { text: string; index: N
       const link = <DriverLink id={t.id} className={followed.drivers.has(t.id) ? FOLLOW_HL : ''}>{matched}</DriverLink>
       const card = driverCard?.(t.id)
       out.push(card
-        ? <DriverTooltip key={start} driver={card.driver} year={card.year} wdcPosition={card.wdcPosition} wdcPoints={card.wdcPoints} career={card.career} side="top"><span>{link}</span></DriverTooltip>
+        ? <DriverTooltip key={start} driver={card.driver} year={card.year} wdcPosition={card.wdcPosition} wdcPoints={card.wdcPoints} career={card.career} teamName={card.teamName} teamColor={card.teamColor} side="top"><span>{link}</span></DriverTooltip>
         : <React.Fragment key={start}>{link}</React.Fragment>)
     }
     else if (t?.kind === 'team') out.push(<TeamLink key={start} id={t.id} className={followed.teams.has(t.id) ? FOLLOW_HL : ''}>{matched}</TeamLink>)
