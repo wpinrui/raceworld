@@ -1,16 +1,19 @@
 import type { NewsContext } from './engine'
 import { raceH2H, type SeasonAnalysis } from './season-analysis'
-import { driverMaxPerRace } from '@/lib/sim/points'
+import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
 
 // Season-archetype classifier (#88). Pure detectors over the season-analysis layer + raw results. Each
 // returns a KEYED match (ids + numeric signals only — never a dramatic label, so nothing leaks into copy)
 // for the targeted producers (driver arcs, teammate battles, cross-team duels) to frame coverage around.
-// Detectors gate themselves to data the sim actually models; wet/safety-car-dependent archetypes are
-// deferred (those flags aren't persisted) — see DEFERRED_ARCHETYPES.
+// Detectors gate themselves to data the sim actually models. Wet-aided shapes ARE now detectable — a
+// per-race weather summary rides on every result (RaceWeather.rained), so see championModifiers.wetAided.
+// What remains deferred depends on signals the sim still doesn't persist — see DEFERRED_ARCHETYPES.
 
 export const DEFERRED_ARCHETYPES = [
-  'win streak heavily wet/SC-aided', 'team orders favouring one car', 'incident-driven teammate clash',
-  'points concentrated in chaotic/wet rounds', 'shock-qualifying not matched in the race (no quali-vs-race split in archive)',
+  'team orders favouring one car (no orders flag modelled)',
+  'incident-driven teammate clash (no incident/contact tracking)',
+  'safety-car-aided run (no safety-car flag persisted)',
+  'shock-qualifying not matched in the race (no quali-vs-race split in archive)',
 ] as const
 
 // ---- per-driver season tally over the completed rounds ----
@@ -152,7 +155,7 @@ export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): Tea
     const hiPts = Math.max(sa.points, sb.points)
     const loPts = Math.min(sa.points, sb.points)
     // Dominant: ~2:1 or better on equal equipment (guard the loPts==0 case via a points floor).
-    if (hiPts >= 30 && hiPts >= loPts * 1.8 + 1) {
+    if (hiPts >= 1.2 * driverMaxPerRace(ctx.year) && hiPts >= loPts * 1.8 + 1) {
       out.push({ teamId: t.id, winnerId: hi.id, loserId: lo.id, key: 'dominant', strength: hiPts - loPts })
     }
     // Underdeliver: the more-fancied driver (better preseason expectation) finished behind the team-mate.
@@ -162,7 +165,7 @@ export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): Tea
     const other = fancied === a ? b : a
     const fancPts = fancied === a ? sa.points : sb.points
     const otherPts = other === a ? sa.points : sb.points
-    if (Math.abs(expA - expB) >= 2 && otherPts > fancPts * 1.15 && otherPts >= 20) {
+    if (Math.abs(expA - expB) >= 2 && otherPts > fancPts * 1.15 && otherPts >= 0.8 * driverMaxPerRace(ctx.year)) {
       out.push({ teamId: t.id, winnerId: other.id, loserId: fancied.id, key: 'underdeliver', strength: otherPts - fancPts })
     }
   }
@@ -206,7 +209,7 @@ export function crossTeamDuels(ctx: NewsContext, analysis: SeasonAnalysis): Cros
     const b = rows[i + 1]
     if (a.teamId === b.teamId) continue // must be a CROSS-team duel
     const gap = a.points - b.points
-    if (gap > 15) continue // close on points
+    if (gap > 0.6 * driverMaxPerRace(ctx.year)) continue // close on points (scales with the era's points system)
     const [h2hA, h2hB] = raceH2H(ctx, a.id, b.id, N)
     const total = h2hA + h2hB
     if (total < 4) continue // enough wheel-to-wheel meetings
@@ -226,9 +229,51 @@ export type ChampionShape =
 
 // The comeback shapes also report WHO led early (the driver whose lead the champion overhauled / who
 // retired it away) — distinct from the final runner-up, so the copy can name the right driver.
-export interface ChampionShapeResult { shape: ChampionShape; earlyLeaderId?: string }
+export interface ChampionShapeResult {
+  shape: ChampionShape
+  earlyLeaderId?: string
+  teammatePair?: boolean // the top two in the drivers' table share a garage (an internal title fight)
+  lateWobble?: boolean // a big lead that shrank sharply over the run-in but still held on
+  wetAided?: boolean // at least half the champion's wins came in races that ran wet
+}
+
+// Modifier flags layered on the primary shape — a season can be e.g. a domination that wobbled late, or an
+// internal teammate fight. Copy reads these to add a clause; they never change the primary shape (#88: a
+// combination of archetypes is itself an archetype).
+function championModifiers(ctx: NewsContext, analysis: SeasonAnalysis): { teammatePair: boolean; lateWobble: boolean; wetAided: boolean } {
+  const t = analysis.driverTitle
+  const champ = t.currentLeaderId
+  const N = analysis.completedRounds
+  if (!champ || N < 3) return { teammatePair: false, lateWobble: false, wetAided: false }
+  const ru = t.series[t.series.length - 1]?.secondId ?? null
+  const champTeam = ctx.drivers.find((d) => d.id === champ)?.teamId
+  const ruTeam = ru ? ctx.drivers.find((d) => d.id === ru)?.teamId : null
+  const teammatePair = !!champTeam && champTeam !== '' && champTeam === ruTeam
+  // Held a big lead (~60 in the modern era) that shrank to single digits but still held on (near-collapse).
+  let champPeak = 0
+  for (const g of t.series) if (g.leaderId === champ && g.gap > champPeak) champPeak = g.gap
+  const maxPer = driverMaxPerRace(ctx.year) // scale 60/10 by the era's points-per-win (preserves modern values)
+  const lateWobble = champPeak >= 2.4 * maxPer && t.currentGap > 0 && t.currentGap < 0.4 * maxPer
+  // Wet-aided title: the champion outscored the runner-up by 1.5x+ in WET races while being outscored in the
+  // DRY — wet-weather skill made the title difference, not just "some wins came in the rain".
+  let champWet = 0, champDry = 0, ruWet = 0, ruDry = 0
+  for (let r = 1; r <= N; r++) {
+    const rr = ctx.raceResults[r - 1] ?? []
+    const wet = (rr.find((x) => x.weather)?.weather?.rained) ?? false
+    const c = rr.find((x) => x.driverId === champ)
+    const u = ru ? rr.find((x) => x.driverId === ru) : undefined
+    if (c) { if (wet) champWet += c.points; else champDry += c.points }
+    if (u) { if (wet) ruWet += u.points; else ruDry += u.points }
+  }
+  const wetAided = !!ru && champWet > 0 && champWet >= 1.5 * ruWet && champDry < ruDry
+  return { teammatePair, lateWobble, wetAided }
+}
 
 export function championshipShape(ctx: NewsContext, analysis: SeasonAnalysis): ChampionShapeResult {
+  return { ...baseChampionShape(ctx, analysis), ...championModifiers(ctx, analysis) }
+}
+
+function baseChampionShape(ctx: NewsContext, analysis: SeasonAnalysis): ChampionShapeResult {
   const t = analysis.driverTitle
   const champ = t.currentLeaderId
   const N = analysis.completedRounds
@@ -319,7 +364,7 @@ export function bestOfRestBattle(ctx: NewsContext, analysis: SeasonAnalysis): Be
   const actualRank = front.size + 1 // the best-of-the-rest sits just behind the front tier
   const expRank = analysis.teamExpectations.get(bor.id)?.expectedRank ?? actualRank
   const surge = expRank - actualRank >= 3 // projected well down preseason, finished best-of-the-rest
-  const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= 25 ? 'compressed' : 'clear'
+  const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= driverMaxPerRace(ctx.year) ? 'compressed' : 'clear'
   return { winnerId: bor.id, runnerUpId: runnerUp.id, gap, kind }
 }
 
@@ -356,5 +401,198 @@ export function backmarkerStory(ctx: NewsContext, analysis: SeasonAnalysis): Bac
   if (secondLast.points - last.points <= 10) {
     return { key: 'lastPlaceBattle', teamId: secondLast.id, otherId: last.id, gap: secondLast.points - last.points, points: secondLast.points }
   }
+  return null
+}
+
+// ---- constructors' & team-season taxonomy (#88) ----
+
+// Points a team scored within a round window, and a per-window ranking of the whole grid by those points —
+// the basis for the development-arc shapes (a team's first-third pace vs its last-third pace).
+function teamPointsRange(ctx: NewsContext, teamId: string, fromR: number, toR: number): number {
+  let p = 0
+  for (let r = fromR; r <= toR; r++) for (const c of ctx.raceResults[r - 1] ?? []) if (c.teamId === teamId) p += c.points
+  return p
+}
+function teamRanksInRange(ctx: NewsContext, fromR: number, toR: number): Map<string, number> {
+  const rows = ctx.teams.map((t) => ({ id: t.id, pts: teamPointsRange(ctx, t.id, fromR, toR) })).sort((a, b) => b.pts - a.pts)
+  return new Map(rows.map((r, i) => [r.id, i + 1]))
+}
+// Each driver's season points within one team, strongest seat first (one-car-carried / dead-seat signals).
+function teamDriverSplit(ctx: NewsContext, teamId: string, N: number): { id: string; points: number }[] {
+  const m = new Map<string, number>()
+  for (let r = 1; r <= N; r++) for (const c of ctx.raceResults[r - 1] ?? []) if (c.teamId === teamId) m.set(c.driverId, (m.get(c.driverId) ?? 0) + c.points)
+  return [...m.entries()].map(([id, points]) => ({ id, points })).sort((a, b) => b.points - a.points)
+}
+// The earliest round at which the leader's gap became mathematically insurmountable (the title clinch).
+export function clinchRound(series: { round: number; gap: number }[], maxPer: number, totalRounds: number): number | null {
+  for (const g of series) if (g.gap > (totalRounds - g.round) * maxPer) return g.round
+  return null
+}
+
+// How the CONSTRUCTORS' title was won. Mirrors championshipShape: one most-salient shape, ids + signals only,
+// suffix-keyed for `cons${shape}` copy. `driversSealedEarly` is a modifier (the drivers' title was settled
+// well before the constructors' went to the wire).
+export type ConstructorShape =
+  | 'BothCarsDominate' | 'OneCarCarried' | 'WinsVsPoints' | 'LeadTradedLate' | 'RepeatChampion' | 'Clear'
+
+export interface ConstructorShapeResult {
+  shape: ConstructorShape
+  championId: string | null
+  otherId?: string // WinsVsPoints: the team that led on wins; LeadTradedLate: the title rival
+  carriedDriverId?: string // OneCarCarried: the seat that scored the bulk of the champion's points
+  driversSealedEarly?: boolean
+}
+
+export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): ConstructorShapeResult {
+  const ct = analysis.constructorTitle
+  const champ = ct.currentLeaderId
+  const N = analysis.completedRounds
+  if (!champ || N < 3) return { shape: 'Clear', championId: champ }
+  const rows = teamSeasonStats(ctx, N)
+  const champRow = rows.find((r) => r.id === champ)
+  if (!champRow) return { shape: 'Clear', championId: champ }
+  const winsLeader = [...rows].sort((a, b) => b.wins - a.wins || b.points - a.points)[0]
+
+  const dClinch = clinchRound(analysis.driverTitle.series, driverMaxPerRace(ctx.year), analysis.totalRounds)
+  const cClinch = clinchRound(ct.series, constructorMaxPerRace(ctx.year), analysis.totalRounds)
+  const consDecided = cClinch ?? analysis.completedRounds // teams' clinch round, or the final round if it ran the distance
+  const driversSealedEarly = dClinch != null && consDecided - dClinch >= 3
+
+  // Repeat: the same constructor won the PRIOR season too. Exclude the current season from the lookup — in a
+  // historical replay the current year is already in the archive, which would otherwise self-match every champion
+  // (and render "1 years running"). The streak count already excludes the current year, so the two now agree.
+  const priorYear = (ctx.constructorHistory ?? []).filter((h) => h.seasonYear < ctx.year).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
+  const lastChamp = (ctx.constructorHistory ?? []).find((h) => h.seasonYear === priorYear && h.finalPosition === 1)?.teamId
+  if (lastChamp && lastChamp === champ) return { shape: 'RepeatChampion', championId: champ, driversSealedEarly }
+
+  const split = teamDriverSplit(ctx, champ, N)
+  const total = split.reduce((s, d) => s + d.points, 0)
+  const topShare = total > 0 ? (split[0]?.points ?? 0) / total : 1
+  // Both cars dominate: won at least half the rounds with the points spread across both seats.
+  if (champRow.wins >= Math.ceil(N / 2) && split.length >= 2 && topShare <= 0.65) {
+    return { shape: 'BothCarsDominate', championId: champ, driversSealedEarly }
+  }
+  // Lead traded all year AND stayed competitive to the end: 3+ round-to-round lead changes and a final gap
+  // within ~1.5 constructor wins (so a traded-then-blowout season isn't framed as a back-and-forth title).
+  // Ranked above one-car / wins-vs-points: a genuine traded WCC is the headline over who carried the team.
+  if (ct.leadChanges >= 3 && ct.currentGap <= constructorMaxPerRace(ctx.year) * 1.5) {
+    return { shape: 'LeadTradedLate', championId: champ, otherId: ct.series[ct.series.length - 1]?.secondId ?? undefined, driversSealedEarly }
+  }
+  // One car carried it: the title leaned heavily on a single seat.
+  if (split.length >= 2 && topShare >= 0.65) {
+    return { shape: 'OneCarCarried', championId: champ, carriedDriverId: split[0]?.id, driversSealedEarly }
+  }
+  // Wins on one team, the title on another (banked consistency beat raw speed). Only when the wins gap is a
+  // genuine 3+ — a one-win edge isn't a "fastest car lost the title" story.
+  if (winsLeader && winsLeader.id !== champ && winsLeader.wins - champRow.wins >= 3) {
+    return { shape: 'WinsVsPoints', championId: champ, otherId: winsLeader.id, driversSealedEarly }
+  }
+  return { shape: 'Clear', championId: champ, driversSealedEarly }
+}
+
+// Team-season arcs (#88): the standout team story away from the title — a fancied team that flopped, a
+// development surge from the back, a fade from the front, or a team carried by one seat while the other
+// scored nothing. Strongest first; the producer surfaces the top one or two.
+export type TeamArcKey = 'flop' | 'devSurge' | 'devDecline' | 'deadSeat'
+export interface TeamArcMatch {
+  teamId: string
+  key: TeamArcKey
+  strength: number
+  driverId?: string // deadSeat: the seat carrying the team
+  otherId?: string // deadSeat: the seat that scored ~nothing
+  earlyRank?: number // dev surge/decline: rank on first-third points
+  lateRank?: number // dev surge/decline: rank on last-third points
+}
+
+export function teamArcs(ctx: NewsContext, analysis: SeasonAnalysis): TeamArcMatch[] {
+  const N = analysis.completedRounds
+  if (N < 6) return []
+  const rows = teamSeasonStats(ctx, N)
+  const finalRank = new Map(rows.map((r, i) => [r.id, i + 1]))
+  const total = ctx.teams.length || 1
+  const e = Math.max(1, Math.round(N / 3))
+  const earlyRank = teamRanksInRange(ctx, 1, e)
+  const lateRank = teamRanksInRange(ctx, N - e + 1, N)
+  const frontCut = Math.max(2, total / 3)
+  const out: TeamArcMatch[] = []
+
+  for (const t of ctx.teams) {
+    const exp = analysis.teamExpectations.get(t.id)
+    const delta = analysis.teamDeltas.find((d) => d.id === t.id)?.delta ?? 0
+    const fRank = finalRank.get(t.id) ?? total
+    const er = earlyRank.get(t.id) ?? total
+    const lr = lateRank.get(t.id) ?? total
+    // Flop: a preseason front team finishing well down the order.
+    if (exp && exp.expectedRank <= frontCut && fRank >= Math.max(4, frontCut + 1) && delta <= -2) {
+      out.push({ teamId: t.id, key: 'flop', strength: -delta + (fRank - exp.expectedRank) })
+    }
+    // Development surge: ran down the order early, climbed toward the front late.
+    if (er - lr >= 3 && lr <= Math.max(4, frontCut + 1)) {
+      out.push({ teamId: t.id, key: 'devSurge', strength: er - lr, earlyRank: er, lateRank: lr })
+    }
+    // Development fade: front early, faded down the order.
+    if (lr - er >= 3 && er <= Math.max(4, frontCut + 1)) {
+      out.push({ teamId: t.id, key: 'devDecline', strength: lr - er, earlyRank: er, lateRank: lr })
+    }
+    // Dead seat: one car carries the team, the other scores next to nothing.
+    const split = teamDriverSplit(ctx, t.id, N)
+    if (split.length >= 2) {
+      const tot = split.reduce((s, d) => s + d.points, 0)
+      if (tot >= 0.8 * driverMaxPerRace(ctx.year) && split[1].points <= Math.max(2, tot * 0.08)) {
+        out.push({ teamId: t.id, key: 'deadSeat', strength: split[0].points - split[1].points, driverId: split[0].id, otherId: split[1].id })
+      }
+    }
+  }
+  // Rank by newsworthiness, not raw magnitude: a dead seat's strength (a points gap) would otherwise always
+  // dwarf a development swing's (a few rank places). One arc per team, its highest-priority match.
+  const PRI: Record<TeamArcKey, number> = { flop: 0, devSurge: 1, devDecline: 2, deadSeat: 3 }
+  const best = new Map<string, TeamArcMatch>()
+  for (const m of out) {
+    const cur = best.get(m.teamId)
+    if (!cur || PRI[m.key] < PRI[cur.key] || (PRI[m.key] === PRI[cur.key] && m.strength > cur.strength)) best.set(m.teamId, m)
+  }
+  return [...best.values()].sort((a, b) => PRI[a.key] - PRI[b.key] || b.strength - a.strength)
+}
+
+// The runner-up's story (#88): the title's losing side, which the champion-centric shape can't tell — a
+// valiant late comeback that fell short, a charge ended by the chaser's own retirement, or a fight kept
+// alive to the final round that needed a leader DNF that never came. Returns the single defining one.
+export type RunnerUpKey = 'valiant' | 'lateChargeOwnDnf' | 'ledIntoFinale' | 'aliveToFlag'
+export interface RunnerUpResult {
+  driverId: string
+  key: RunnerUpKey
+  peakDeficit: number // the largest the runner-up's deficit to the champion ever was
+  finalGap: number
+  lateWins: number // runner-up wins in the trailing window
+  dnfRound?: number // lateChargeOwnDnf: the round of the charge-ending retirement
+  gapBeforeFinal?: number // champion minus runner-up points going into the final round (signed; <0 = runner-up led)
+}
+
+export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerUpResult | null {
+  const t = analysis.driverTitle
+  const N = analysis.completedRounds
+  const champ = t.currentLeaderId
+  const ru = t.series[t.series.length - 1]?.secondId ?? null
+  if (!champ || !ru || N < 6) return null
+  const maxPer = driverMaxPerRace(ctx.year)
+  const champPts = (r: number) => statsUpTo(ctx, champ, 1, r).points
+  const ruPts = (r: number) => statsUpTo(ctx, ru, 1, r).points
+  let peakDeficit = 0
+  for (let r = 1; r <= N; r++) peakDeficit = Math.max(peakDeficit, champPts(r) - ruPts(r))
+  const finalGap = champPts(N) - ruPts(N)
+  const w = Math.min(4, N - 1)
+  let lateWins = 0
+  for (let r = N - w + 1; r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.finishPosition === 1) lateWins++
+  let dnfRound = 0
+  for (let r = Math.max(1, N - 2); r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.dnf) dnfRound = r
+  const closingLate = finalGap < champPts(Math.max(1, N - w)) - ruPts(Math.max(1, N - w))
+  const gapBeforeFinal = N >= 2 ? champPts(N - 1) - ruPts(N - 1) : finalGap // champ - ru going into the final round
+
+  if (closingLate && dnfRound) return { driverId: ru, key: 'lateChargeOwnDnf', peakDeficit, finalGap, lateWins, dnfRound }
+  if (peakDeficit >= 1.2 * maxPer && finalGap <= 0.5 * maxPer && lateWins >= 2) return { driverId: ru, key: 'valiant', peakDeficit, finalGap, lateWins }
+  // The runner-up actually LED going into the final round but lost it at the last (the title flipped at the flag).
+  if (gapBeforeFinal < 0) return { driverId: ru, key: 'ledIntoFinale', peakDeficit, finalGap, lateWins, gapBeforeFinal }
+  // Still mathematically alive but BEHIND going into the final round; the champion held on.
+  if (gapBeforeFinal >= 0 && gapBeforeFinal <= maxPer) return { driverId: ru, key: 'aliveToFlag', peakDeficit, finalGap, lateWins, gapBeforeFinal }
   return null
 }

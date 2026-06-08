@@ -14,67 +14,60 @@
     "{champion_last} ends {year} as champion; {runner_up_last} takes the runner-up place."
   ],
   "championTitleNoWins": [
-    "{champion} won the {year} title without winning a race, banking podiums every weekend while faster rivals threw it away.",
-    "Not a single victory all year, yet {champion_last} is champion; consistency outlasted the cars that beat {champion_last} for pace.",
-    "{champion} took {year} on points, not wins: no race fell to {champion_last}, but no rival matched the run of podiums.",
-    "The fastest cars kept faltering, and {champion_last} was there to collect every time, a championship built without a win.",
-    "{champion_last} never stood on the top step in {year} and still took the title, the steadiest hand while quicker drivers came undone."
+    "{champion} won the {year} title without a race victory, {champion_podiums} podiums from {total_races} rounds keeping {champion_last} {gap} {gap_pts} clear of {runner_up_ref}.",
+    "Not a single win all year, yet {champion_last} is champion, {champion_podiums} podiums and the steadiest scoring in the field while faster rivals threw it away.",
+    "{champion} took {year} on consistency, no wins but {champion_podiums} podiums across {total_races} races, enough to see off {runner_up_ref} by {gap} {gap_pts}.",
+    "The fastest cars kept faltering and {champion_last} collected every time, {champion_podiums} podiums and no wins carrying the title.",
+    "{champion_last} never won a race in {year} and still took the championship, {champion_podiums} podiums the steadiest return while quicker drivers came undone."
   ],
   "championWinStreak": [
-    "{champion} reeled off win after win without interruption, and that unbroken run carried the {year} title.",
-    "A long streak of victories, one after another, was the spine of {champion_last}'s championship.",
-    "{champion_last} went weekend after weekend unbeaten, and the run of wins settled {year} early.",
-    "Once {champion} started winning, the wins did not stop, a sustained streak that decided the title.",
-    "The {year} championship turned on a run of consecutive {champion_last} victories that no rival could break."
+    "{champion} reeled off {win_streak} wins in a row, the run the spine of a {champion_wins}-win campaign that settled {year}, {gap} {gap_pts} clear of {runner_up_ref}.",
+    "A streak of {win_streak} straight victories carried {champion_last} to the {year} title, {champion_wins} wins in all.",
+    "{champion_last} went {win_streak} races unbeaten at one stretch, the run deciding {year} early on the way to {champion_wins} wins.",
+    "Once {champion} got going there was no stopping it, {win_streak} consecutive wins inside a {champion_wins}-win season.",
+    "The {year} championship turned on a run of {win_streak} {champion_last} wins on the bounce that no rival could break."
   ],
   "championComebackMerit": [
-    "{champion} was off the lead early, then strung together a second-half run of wins to chase {early_leader_last} down for the {year} title.",
-    "Behind {early_leader_last} at the midpoint, {champion_last} answered with victory after victory and overhauled that early lead by {gap} {gap_pts}.",
-    "{champion} started {year} adrift, then won the championship the hard way, a late surge of wins that caught {early_leader_last}.",
-    "The early lead was {early_leader_last}'s; the title is {champion_last}'s, taken back on pace with a closing run of wins.",
-    "{champion_last} trailed, then won when it mattered, race after race, to overhaul {early_leader_last} and claim {year}."
+    "Behind {early_leader_last} at the midpoint, {champion_last} answered with win after win, {champion_wins} victories overhauling the deficit to take {year} by {gap} {gap_pts}.",
+    "{champion} started {year} adrift of {early_leader_last}, then won the title the hard way, a {champion_wins}-win haul reeling the early leader in.",
+    "The early lead was {early_leader_last}'s; the title is {champion_last}'s, taken back on merit with {champion_wins} wins and a closing surge.",
+    "{champion_last} trailed {early_leader_last} early but won when it mattered, {champion_wins} wins enough to claim {year} by {gap} {gap_pts}."
   ],
   "championComebackHanded": [
-    "{champion} came from behind in {year}, though it was {early_leader_last}'s retirements, not {champion_last}'s pace, that surrendered the lead.",
-    "The deficit closed without {champion_last} having to take it; {early_leader_last} kept retiring, and the title slipped {champion}'s way.",
-    "{champion_last} ended up champion after starting behind, but {early_leader_last} handed the early lead over with a run of DNFs rather than being beaten outright.",
-    "A comeback in the standings, yes, driven by {early_leader_last} dropping points to retirements more than by anything {champion} did on track.",
-    "{champion} inherited the lead late, the gap erased not by {champion_last} winning races but by {early_leader_last} failing to finish."
+    "{champion} came from behind in {year}, though it was {early_leader_last}'s retirements as much as {champion_last}'s {champion_wins} wins that surrendered the early lead.",
+    "The deficit to {early_leader_last} closed without {champion_last} having to chase it down, a run of DNFs handing the lead to {champion} on the way to the title.",
+    "{champion_last} ended up champion after starting behind {early_leader_last}, the early lead given up to retirements rather than beaten outright.",
+    "{champion} inherited the lead late, the gap to {early_leader_last} erased more by failures to finish than by {champion_last}'s {champion_wins} wins."
   ],
   "championThreeWay": [
-    "Three drivers carried the title fight deep into {year}, and {champion} was the one who came through it.",
-    "A three-way scrap stayed live to the closing rounds; {champion_last} emerged from it as champion.",
-    "{champion} outlasted two rivals in a championship that stayed open three ways until late, taking {year} by {gap} {gap_pts}.",
-    "It was a three-cornered fight to the end, and {champion_last} held the nerve the other two could not.",
-    "Three names were in it with rounds to run; {champion} settled {year}, with {runner_up_last} the nearest of the chasers."
+    "Three drivers carried the {year} title into the closing rounds; {champion_last} came through it, {gap} {gap_pts} clear of {runner_up_ref} with {third_last} the next nearest.",
+    "A three-way scrap stayed live late, and {champion} held the nerve, {champion_wins} wins seeing off {runner_up_ref} and {third_last}.",
+    "It was a three-cornered fight to the end of {year}; {champion_last} settled it, {runner_up_ref} second and {third_last} third.",
+    "{champion} outlasted two rivals in a championship that stayed open three ways until late, taking {year} by {gap} {gap_pts} over {runner_up_ref}."
   ],
   "championDomination": [
-    "{champion} won at least half the races in {year}, not a close title but a dominant one.",
-    "Wins came in numbers no rival could live with; {champion_last} dominated {year} from end to end.",
-    "{champion} took the title by sheer weight of victories, claiming half the season's races or more.",
-    "There was nothing marginal about {champion_last}'s {year}: a clear majority of weekends, a one-sided championship.",
-    "{champion} crushed the field, banking enough wins to put the {year} title beyond doubt."
+    "{champion} dominated {year}, {champion_wins} wins from {total_races} races and a {gap}-point margin over {runner_up_ref}.",
+    "Nothing marginal about {champion_last}'s {year}, {champion_wins} victories in {total_races} rounds and the title never in doubt.",
+    "{champion} crushed the field, {champion_wins} wins putting the {year} championship out of reach of {runner_up_ref} long before the end.",
+    "A clear majority of the {total_races} races fell to {champion_last}, {champion_wins} wins and a {gap}-point cushion the measure of {year}."
   ],
   "championWireToWire": [
-    "{champion} led the standings from the opening round to the last and was never headed across the {year} season.",
-    "Not once in {year} did {champion} surrender the championship lead, first after round one and first at the finish.",
-    "{champion_last} took the points lead at the season opener and held it every round to the title.",
-    "{champion} ran the table on the standings: top of the championship from the first round through to the last.",
-    "From the opening round, the lead was {champion_last}'s, and no rival took it back at any point in {year}."
+    "{champion} led the standings from the opening round to the last, {champion_wins} wins and a {gap}-point final margin over {runner_up_ref} the story of {year}.",
+    "Never headed all season, {champion_last} took the points lead at the opener and held it to the title, {champion_wins} wins in {year}.",
+    "{champion} ran the table on the standings, top of the championship every round of {year} on the way to {champion_wins} wins.",
+    "From round one the lead was {champion_last}'s and no rival took it back, {champion_wins} wins and {gap} {gap_pts} clear of {runner_up_ref} at the end."
   ],
   "championDecider": [
-    "{champion} settled the {year} title in the closing rounds, finishing {gap} {gap_pts} clear of {runner_up_last}.",
-    "It went to the final rounds: {champion_last} took the championship by {gap} {gap_pts} over {runner_up}.",
-    "{gap} {gap_pts} decided {year}; {champion_last} held off {runner_up_last} to the last.",
-    "The title was live into the run-in, and {champion} closed it out by {gap} {gap_pts}.",
-    "{champion_last} edged {runner_up_last} by {gap} {gap_pts}, the {year} championship decided in the final rounds."
+    "{champion_last} edged {runner_up_ref} by {gap} {gap_pts}, the {year} title decided in the closing rounds, {champion_wins} wins to the runner-up's {runner_up_wins}.",
+    "It went to the run-in, {champion} settling {year} by {gap} {gap_pts} over {runner_up_ref}, {champion_wins} wins against {runner_up_wins}.",
+    "{gap} {gap_pts} decided {year}, {champion_last} holding off {runner_up_ref} to the last, {champion_wins} wins to {runner_up_wins}.",
+    "The title was live into the run-in; {champion} closed it out by {gap} {gap_pts}, {champion_wins} wins edging {runner_up_ref}."
   ],
   "championClear": [
-    "{champion} took over the championship lead during the season and pulled clear, ending {year} comfortably ahead of {runner_up_last}.",
-    "Once {champion_last} hit the front of the standings, the margin only grew; {year} ended a comfortable {gap} {gap_pts} over {runner_up_last}.",
-    "{champion} did not lead from the start but, having taken the lead, won {year} going away by {gap} {gap_pts}.",
-    "{champion_last} assumed the championship lead in-season and stretched it, finishing {year} clear of {runner_up}.",
-    "After taking over at the top, {champion} controlled {year} to a comfortable {gap} {gap_pts} margin over {runner_up_last}."
+    "{champion} took over the lead in-season and pulled clear, {champion_wins} wins and a {gap}-point cushion over {runner_up_ref} by the end of {year}.",
+    "Once {champion_last} hit the front of the standings the margin only grew, {year} ending {gap} {gap_pts} clear of {runner_up_ref} on {champion_wins} wins.",
+    "{champion} did not lead from the start but, having taken over, won {year} going away, {champion_wins} victories and {gap} {gap_pts} in hand over {runner_up_ref}.",
+    "{champion_last} assumed the lead in-season and stretched it, {champion_wins} wins and a {gap}-point margin over {runner_up_ref} closing out {year}."
   ],
   "constructors": [
     "{constructor_champion} won the constructors' championship.",
@@ -98,17 +91,112 @@
     "{names} closed {year} below the level the preseason picture set."
   ],
   "teamOver": [
-    "{team} beat its preseason projection.",
-    "{team} finished {year} ahead of where the preseason picture placed it.",
-    "The forecast undersold {team}, which outscored it.",
-    "{team} cleared its preseason target for the season.",
-    "Against the winter projection, {team} came out ahead."
+    "{team} beat the winter forecast, a projected {team_expected_pos} in the constructors' becoming {team_final_pos} on {team_points} points.",
+    "{team} outran their preseason projection, finishing {team_final_pos} in the constructors' against an expected {team_expected_pos}.",
+    "Projected {team_expected_pos} before the season, {team} finished {team_final_pos} on {team_points} points.",
+    "{team} came out ahead of the forecast, {team_final_pos} in the constructors' from a projected {team_expected_pos}."
   ],
   "teamUnder": [
-    "{team} fell short of its preseason projection.",
-    "{team} finished {year} behind where the preseason picture placed it.",
-    "The forecast oversold {team}, which did not reach it.",
-    "{team} missed its preseason target for the season.",
-    "Against the winter projection, {team} came up short."
+    "{team} fell short of the winter forecast, a projected {team_expected_pos} sliding to {team_final_pos} on {team_points} points.",
+    "{team} missed their preseason projection, ending {team_final_pos} in the constructors' against an expected {team_expected_pos}.",
+    "Projected {team_expected_pos}, {team} finished only {team_final_pos} on {team_points} points.",
+    "{team} came up short of the forecast, {team_final_pos} in the constructors' from an expected {team_expected_pos}."
+  ],
+  "consBothCarsDominate": [
+    "From the first race of the season, it was apparent that {constructor_champion} were the quickest. Their domination showed with {cons_wins} wins in {cons_races} races, marking a landslide victory in the constructors' championship over {cons_runner_up}.",
+    "It was known from testing that {constructor_champion} were the class of the field. With {cons_wins} wins in {cons_races} races, there was no doubt that this was their year as they wrapped up the {year} constructors' championship in emphatic fashion.",
+    "{constructor_champion} were the team to beat all season as, race after race, they were the pace setters and unsurprisingly ran away with the {year} constructors' championship as both {champ_team_drivers} dominated the field.",
+    "{constructor_champion} clinched the constructors' championship with {cons_wins} wins from {cons_races} races, finishing well clear of {cons_runner_up} as {champ_team_drivers} outpaced the field all year.",
+    "With both {champ_team_drivers} consistently at the front, {constructor_champion} turned the constructors' title into a procession, accumulating {cons_wins} victories across {cons_races} rounds to leave {cons_runner_up} well adrift."
+  ],
+  "consOneCarCarried": [
+    "{constructor_champion} were able to clinch the {year} constructors' championship largely owing to {carried_driver}'s {carried_driver_points} points, including {carried_driver_podiums_str}, even as {other_driver} struggled with consistency to only produce {other_driver_points} points for the team's campaign.",
+    "The season saw {constructor_champion} crowned as constructors' champions. {carried_driver}'s {carried_driver_points} points were enough to make up for {other_driver}'s less impressive tally of {other_driver_points} points, and the team as a whole {cons_beat} {cons_runner_up} by a final score of {cons_points} to {cons_runner_up_points}.",
+    "With {other_driver} mostly struggling throughout the year, {carried_driver} picked up the pieces by scoring {carried_driver_points} points, including {carried_driver_wins_str}, ensuring {constructor_champion} were able to secure the constructors' title by {cons_margin} points over {cons_runner_up}.",
+    "{constructor_champion} claimed the {year} constructors' title on the back of {carried_driver}'s {carried_driver_points} points, which accounted for the bulk of the team's {cons_points}-point haul, while {other_driver} contributed just {other_driver_points} points as the team {cons_beat} {cons_runner_up} by {cons_margin} points.",
+    "{carried_driver}'s {carried_driver_wins_str} and {carried_driver_podiums_str} gave {constructor_champion} enough of a cushion to secure the constructors' championship despite {other_driver_last} managing only {other_driver_points} points across the year, with {cons_runner_up} finishing {cons_margin} points adrift in the standings."
+  ],
+  "consWinsVsPoints": [
+    "{constructor_champion}, who were not seen as the fastest team, clinched the {year} constructors' championship with a season built on consistency. They had fewer wins ({cons_wins}) than {cons_other} (who had {cons_other_wins} wins), but star drivers {champ_driver1} and {champ_driver2} maximised their opportunities to clinch the championship with a final points tally of {cons_points} to {cons_other_points}.",
+    "This year's constructors' championship battle was an interesting one, with {cons_other} highly thought of as the fastest car on raw pace, yet {constructor_champion}, who won {cons_wins_gap} fewer races, ended up on top. {champ_driver1} and {champ_driver2}'s consistent performances throughout the season ensured that {constructor_champion} would win the title over {cons_runner_up} with a points tally of {cons_points} to {cons_runner_up_points}.{cons_other_extra}",
+    "A scintillating constructors' championship came down to consistency over pure pace, as {constructor_champion} (winners of {cons_wins} races this season) beat out {cons_other}, who won more races with {cons_other_wins}, by a score of {cons_points} to {cons_other_points}.",
+    "{constructor_champion} claimed the {year} constructors' championship despite winning {cons_wins} races to {cons_other}'s {cons_other_wins}, with {champ_driver1} and {champ_driver2} accumulating points steadily enough across the season to finish on {cons_points}, clear of {cons_runner_up} on {cons_runner_up_points}.",
+    "{cons_other} won {cons_wins_gap} more races than {constructor_champion} in {year}, but {champ_driver1} and {champ_driver2}'s reliability and consistency across the season told in the final standings, where {constructor_champion} took the constructors' title with {cons_points} points to {cons_other}'s {cons_other_points}."
+  ],
+  "consLeadTradedLate": [
+    "The {year} constructors' title was a back-and-forth affair, the lead changing hands {cons_lead_changes} times before {constructor_champion} settled it by {cons_margin} points over {cons_runner_up}.",
+    "{constructor_champion} and {cons_runner_up} traded the constructors' lead {cons_lead_changes} times through {year}, {constructor_champion} holding it at the flag, {cons_points} to {cons_runner_up_points}.",
+    "The constructors' lead changed hands {cons_lead_changes} times across {year}, {constructor_champion} and {cons_runner_up} pegging each other back before {constructor_champion} pulled clear at the close, {cons_points} points to {cons_runner_up_points}.",
+    "The constructors' lead in {year} changed hands {cons_lead_changes} times, {cons_runner_up} leading for long spells before {constructor_champion} took it back and closed the season out with a {cons_margin}-point advantage.",
+    "{cons_lead_changes} lead changes separated {constructor_champion} and {cons_runner_up} across the {year} constructors' fight, {champ_driver1} and {champ_driver2} ultimately delivering {cons_wins} wins to put {constructor_champion} clear by {cons_margin} points."
+  ],
+  "consRepeatChampion": [
+    "{constructor_champion} claimed {cons_title_streak} in {year}, another {cons_wins}-win campaign seeing off {cons_runner_up} by {cons_margin} points.",
+    "There was no dislodging {constructor_champion}, the constructors' crown theirs for {cons_titles_in_row} years running, {champ_driver1} and {champ_driver2} again proving too strong for the field.",
+    "{constructor_champion} extended their hold on the constructors' championship to {cons_titles_in_row} straight titles, {cons_points} points to {cons_runner_up}'s {cons_runner_up_points} the measure of their {year} season.",
+    "{constructor_champion} would not be moved, {cons_wins} wins carrying them to {cons_title_streak} and clear of {cons_runner_up} by {cons_margin} points in {year}.",
+    "{constructor_champion} successfully defended the constructors' championship in {year}, {champ_driver1} and {champ_driver2} combining for {cons_wins} wins to keep {cons_runner_up} at arm's length, {cons_points} to {cons_runner_up_points}."
+  ],
+  "consClear": [
+    "{constructor_champion} won the {year} constructors' championship, {cons_wins} wins and {cons_points} points carrying them clear of {cons_runner_up}.",
+    "The {year} constructors' title went to {constructor_champion} on {cons_points} points, with {cons_runner_up} second on {cons_runner_up_points} and {cons_wins} wins telling the story for the champions.",
+    "{champ_driver1} and {champ_driver2} took {constructor_champion} to the {year} constructors' title, {cons_wins} wins enough to keep {cons_runner_up} at bay.",
+    "{constructor_champion} wrapped up the {year} constructors' championship, {cons_runner_up} finishing as runners-up {cons_margin} points adrift on {cons_runner_up_points}.",
+    "{constructor_champion} were the {year} constructors' champions, finishing {cons_margin} points ahead of {cons_runner_up}, {cons_points} to {cons_runner_up_points}."
+  ],
+  "consDriversSealedEarly": [
+    "By then {champion_last} had long since wrapped up the drivers' title, the constructors' the last of the two to be settled.",
+    "The drivers' championship had been {champion_last}'s for some weeks, with the teams' battle outlasting it.",
+    "{champion_last} had sealed the drivers' crown well before this.",
+    "This came after {champion_last} had already decided the drivers' title {drivers_clinch_ago_str} at the {drivers_clinch_gp}."
+  ],
+  "champLateWobble": [
+    "While the championship lead had been as large as {peak_lead} points following the {peak_gp}, a turn in form and fortunes saw {runner_up_last} erode the lead {lead_erosion}, before {champion_last} held on to clinch the title by a slim margin.",
+    "The championship had looked like a foregone conclusion with {champion_last} having an almost insurmountable {peak_lead}-point lead over {runner_up_last} through {peak_round} rounds, but in the last rounds, {runner_up_last} fought back and narrowed the lead to just {gap}, showing {runner_up_poss} grit despite the eventual loss to {runner_up_poss} rival.",
+    "The championship was not without drama, as {champion_last} saw {champion_poss} once massive {peak_lead}-point championship lead cut to below single digits following the {single_digit_gp}, but {champion_subj} ultimately overcame {runner_up_last}'s momentum by hanging on to win {champion_poss} {champion_title_ordinal} drivers' championship."
+  ],
+  "champWetAided": [
+    "While {runner_up_last} often had the measure of {champion_last} in dry races, {champion_last}'s skill and composure in navigating changeable conditions played a role in {wet_races_str}{wet_win_clause}.",
+    "{champion_last}'s wet weather driving helped {champion_obj} outscore {runner_up_last} by {champion_wet_points} to {runner_up_wet_points}, which made the difference in their championship campaigns."
+  ],
+  "runnerUpValiant": [
+    "{runner_up_last}'s title bid fell agonisingly short, recovering from {peak_deficit} points down to within {final_gap} by winning {late_wins} of the closing races, but the early deficit proved too much to overturn.",
+    "It was nearly some comeback from {runner_up_last}, who clawed a {peak_deficit}-point deficit to {champion_last} down to just {final_gap} with {late_wins} late wins, only to fall short at the last.",
+    "{runner_up_last} threw everything at the run-in, {late_wins} wins in the closing rounds cutting a {peak_deficit}-point gap to {final_gap}, but {champion_last} had banked enough to hold on."
+  ],
+  "runnerUpLateChargeOwnDnf": [
+    "{runner_up_last}'s late surge ended in cruel fashion, a retirement at the {dnf_gp} halting a charge that had cut the gap to {champion_last} to {final_gap}.",
+    "Just as {runner_up_last} was reeling {champion_last} in, a DNF at the {dnf_gp} ended the comeback, the title bid undone by {runner_up_last}'s own car.",
+    "{runner_up_last} had been closing on {champion_last}, the gap down to {final_gap}, before a retirement at the {dnf_gp} ended the title fight the hard way."
+  ],
+  "runnerUpAliveToFlag": [
+    "{runner_up_last} went into the final round {gap_before_final} points behind {champion_last}, needing things to fall their way, but {champion_last} finished {champion_final_pos} at the {final_race_gp} to settle it, {runner_up_last} back in {runner_up_final_pos}.",
+    "The title was still alive at the {final_race_gp}, {runner_up_last} {gap_before_final} points adrift, but {champion_last} finished {champion_final_pos} to take it by {final_gap}, {runner_up_last} {runner_up_final_pos} on the day.",
+    "{runner_up_last} carried the fight to the {final_race_gp} {gap_before_final} points behind, but could only finish {runner_up_final_pos} while {champion_last} finished {champion_final_pos} to clinch the championship by {final_gap}."
+  ],
+  "runnerUpLedIntoFinale": [
+    "{runner_up_last} led the championship going into the final round, but {champion_last} finished {champion_final_pos} at the {final_race_gp} to snatch the title by {final_gap}, {runner_up_last} {runner_up_final_pos}.",
+    "The title was {runner_up_last}'s to lose heading to the {final_race_gp} with a {led_by}-point lead, but {champion_last} finished {champion_final_pos} to take it at the last, {runner_up_last} only {runner_up_final_pos}.",
+    "{runner_up_last} carried a {led_by}-point lead into the final round but surrendered it at the flag, {champion_last} finishing {champion_final_pos} to {runner_up_last}'s {runner_up_final_pos} and the title by {final_gap}."
+  ],
+  "teamArcFlop": [
+    "{team} were among the fancied teams over the winter but never delivered, sliding from a projected {team_expected_pos} to {team_final_pos} in the final constructors' standings.",
+    "It was a season to forget for {team}, who failed to build on a promising winter and finished only {team_final_pos} on {team_points} points.",
+    "{team} badly underdelivered, projected around {team_expected_pos} before the season but ending up {team_final_pos}."
+  ],
+  "teamArcDevSurge": [
+    "{team} were a different team by the end of the year, surging from {early_phase_pos} on early-season form to {late_phase_pos} over the closing rounds, allowing their drivers {arc_driver1} and {arc_driver2} to finish {arc_driver1_wdc} and {arc_driver2_wdc} in the drivers' championship.",
+    "{team} stood out for their in-season development, climbing from {early_phase_pos} on early-season pace to {late_phase_pos} by the finish, with {arc_driver1} and {arc_driver2} taking {arc_driver1_wdc} and {arc_driver2_wdc} in the drivers' standings.",
+    "{team} transformed their season through development, an early-season {early_phase_pos} on pace becoming {late_phase_pos} late on, {arc_driver1} and {arc_driver2} ending up {arc_driver1_wdc} and {arc_driver2_wdc} in the championship."
+  ],
+  "teamArcDevDecline": [
+    "{team} started the year strongly but were gradually out-developed, slipping from {early_phase_pos} on early-season pace to {late_phase_pos} by the end.",
+    "{team} faded as the season wore on, an early-season {early_phase_pos} on pace becoming {late_phase_pos} as rivals brought upgrades they could not match.",
+    "{team} could not sustain their early form, dropping from {early_phase_pos} to {late_phase_pos} on pace over the year, {arc_driver1} and {arc_driver2} finishing {arc_driver1_wdc} and {arc_driver2_wdc} in the drivers' championship."
+  ],
+  "teamArcDeadSeat": [
+    "{team} relied almost entirely on {arc_driver}, {arc_other} contributing next to nothing alongside {arc_driver_last}'s {arc_driver_points} points.",
+    "{team}'s season was a one-driver effort, {arc_driver} scoring {arc_driver_points} points while {arc_other} managed just {arc_other_points}.",
+    "{team} leaned heavily on {arc_driver}, the {arc_other} side of the garage adding only {arc_other_points} points to {arc_driver_last}'s {arc_driver_points}."
   ]
 }

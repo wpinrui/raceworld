@@ -17,7 +17,7 @@
     "b": [
       "{winner} and {loser} shared the same {team} car in {year}. {winner_last} outscored the other side of the garage by better than two-to-one.",
       "Same machinery, different season: {winner_last} comprehensively beat {loser_last} across {year}. The {team} car was identical; the returns were not.",
-      "{winner_last} took the {team} garage in {year}, outscoring team-mate {loser_last} roughly two-to-one. Nothing in the car explains the gap.",
+      "{winner_last} took the {team} garage in {year}, outscoring team-mate {loser_last} roughly two-to-one.",
       "Across {year}, {winner} was the {team} driver who delivered. {loser_last} ran the same equipment and finished a distant second in the garage.",
       "{winner_last} buried {loser_last} in {year}, better than two-to-one in identical {team} machinery. The split came from the seat, not the car."
     ]

@@ -42,7 +42,7 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
-import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, bestOfRestBattle, backmarkerStory } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, constructorShape, teamArcs, runnerUpArc, clinchRound, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
 import bestOfRestCopy from './best-of-rest-copy.json'
@@ -162,6 +162,9 @@ export interface NewsArticle {
   // articleDate drops these in their round's race WEEK rather than at the category's post-race offset, so
   // they interrupt BEFORE the round they preview instead of after it.
   preview?: boolean
+  // Overrides the category's default day offset (e.g. the season review + year-end expectation piece drop ON
+  // finale day so they are there the moment the off-season Season Review is reached, not two days later).
+  dayOffset?: number
 }
 
 // Join composed paragraphs, dropping any that collapsed to empty.
@@ -804,12 +807,30 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     // name takes the lead or climbs into the top two (the old margin is then irrelevant; positions moved).
     const champPara = ((): string => {
       if (!leader) return ''
-      if (clinched) return compose(`${seed}:champ`, slots, [
-        'With the win, {leader} can no longer be caught in the championship.',
-        'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
-        '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
-        'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
-      ])
+      if (clinched) {
+        // Only call it a clinch if it happened THIS race. If the title was already secure a race ago, this is a
+        // margin update, not a fresh crowning — name where it was actually sealed instead (#88).
+        const remPrev = N - (r - 1)
+        const clinchedBefore = afterPrev.length >= 2 && remPrev > 0 && (afterPrev[0].points - afterPrev[1].points) > remPrev * driverMaxPerRace(ctx.year)
+        if (!clinchedBefore) return compose(`${seed}:champ`, slots, [
+          '{leader} can no longer be caught in the championship.',
+          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
+          '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
+          'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
+        ])
+        // Already champion: find the round it was sealed at and report the updated margin instead.
+        let clinchRound = 0
+        for (let k = 1; k < r; k++) {
+          const st = driverStandingsAfter(ctx, k)
+          if (st.length >= 2 && N - k > 0 && st[0].points - st[1].points > (N - k) * driverMaxPerRace(ctx.year)) { clinchRound = k; break }
+        }
+        const clinchPhrase = clinchRound ? `at the ${circuit(ctx, clinchRound)}${clinchRound === r - 1 ? ' last weekend' : ''}` : 'earlier this season'
+        return compose(`${seed}:champ`, { ...slots, year: ctx.year, clinch_phrase: clinchPhrase }, [
+          '{leader}, who was named {year} World Champion {clinch_phrase}, is now {lead_gap} {lead_gap_pts} ahead of second-placed {second_last}.',
+          'Already crowned {year} champion {clinch_phrase}, {leader} now leads {second_last} by {lead_gap} {lead_gap_pts} with {races_left} to run.',
+          'With the title already settled {clinch_phrase}, {leader_last} sits {lead_gap} {lead_gap_pts} clear of {second_last}.',
+        ])
+      }
       if (r === 1) return compose(`${seed}:champ`, slots, [
         "{c_leader} lead the constructors' championship after the opening round.",
         "Round one puts {c_leader} top of the constructors' standings, ahead of {c_second}.",
@@ -1611,28 +1632,216 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const champion = t.currentLeaderId
   const runnerUp = t.series[t.series.length - 1]?.secondId ?? null
   const constructorChampion = analysis.constructorTitle.currentLeaderId
-  const { shape, earlyLeaderId } = championshipShape(ctx, analysis) // full #88 title-battle taxonomy, not just the basic four
-  const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
-  const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
-  const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
-  const teamUnder = analysis.teamDeltas.find((d) => d.delta < 0)?.id
+  const sm = championshipShape(ctx, analysis) // full #88 title-battle taxonomy + combination modifiers
+  const cs = constructorShape(ctx, analysis)
+  const ruArc = runnerUpArc(ctx, analysis)
+  const arc = teamArcs(ctx, analysis)[0] ?? null
+  const teamHalf = Math.ceil(ctx.teams.length / 2)
+  const teamPointsOf = (id: string) => { let p = 0; for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === id) p += cc.points; return p }
+  // Only a real over/under-performance: a 2+ place swing, and (over) the team actually scored, or (under) it
+  // was fancied with somewhere to fall. A 0-point backmarker creeping up one place is not a story.
+  const teamOver = analysis.teamDeltas.find((d) => d.delta >= 2 && d.id !== constructorChampion && teamPointsOf(d.id) > 0)?.id
+  const teamUnder = analysis.teamDeltas.find((d) => d.delta <= -2 && d.expectedRank <= teamHalf)?.id
   const c = seasonReviewCopy as Record<string, string[]>
   const seed = `season-review-${ctx.year}`
+  const cap = (k: string) => k[0].toUpperCase() + k.slice(1)
+  const championDriver = ctx.drivers.find((d) => d.id === champion)
+  const champTeam = championDriver ? tn(championDriver.teamId) : ''
+  const ruLast = runnerUp ? lastName(dn(runnerUp)) : ''
+  // Top two shared a garage: name the runner-up as the champion's teammate inline (#88), no separate sentence.
+  const runnerUpRef = sm.teammatePair && runnerUp ? `${pronouns(championDriver?.gender).their} ${champTeam} teammate ${ruLast}` : ruLast
+  // Champion's lead trajectory + identity, for the late-wobble modifier copy.
+  let peakLead = 0, peakRound = 0
+  for (const g of t.series) if (g.leaderId === champion && g.gap > peakLead) { peakLead = g.gap; peakRound = g.round }
+  let sdRound = 0
+  for (const g of t.series) if (g.round > peakRound && g.leaderId === champion && g.gap < 10) { sdRound = g.round; break }
+  // The lead's low point STRICTLY after its peak. If the runner-up actually overtook (the lead went negative,
+  // i.e. the champion stopped being the leader), describe that instead of quoting a number.
+  let lowestLead = peakLead, lostLead = false
+  for (const g of t.series) {
+    if (g.round <= peakRound) continue
+    if (g.leaderId === champion) lowestLead = Math.min(lowestLead, g.gap)
+    else lostLead = true
+  }
+  const leadErosion = lostLead ? 'and briefly take it over altogether' : `all the way down to ${lowestLead}`
+  const runnerUpDriver = runnerUp ? ctx.drivers.find((d) => d.id === runnerUp) : undefined
+  const champPron = pronouns(championDriver?.gender)
+  const championTitleOrdinal = ordinal((ctx.careers?.[champion]?.titleYears ?? []).filter((y) => y < ctx.year).length + 1)
+  // Wet-weather points split (champion vs runner-up) + the champion's latest wet win, for the wet-aided modifier.
+  let champWetPts = 0, ruWetPts = 0, wetRaces = 0, wetWinGp = ''
+  for (let r = 1; r <= analysis.completedRounds; r++) {
+    const rr = ctx.raceResults[r - 1] ?? []
+    if (!((rr.find((x) => x.weather)?.weather?.rained) ?? false)) continue
+    wetRaces++
+    const c = rr.find((x) => x.driverId === champion)
+    if (c) { champWetPts += c.points; if (c.finishPosition === 1) wetWinGp = circuit(ctx, r) }
+    if (runnerUp) { const u = rr.find((x) => x.driverId === runnerUp); if (u) ruWetPts += u.points }
+  }
+  const wetWinClause = wetWinGp ? `, including a crucial win at the ${wetWinGp}` : ''
+  // Champion + runner-up headline stats for the shape lines (wins, podiums, longest consecutive win streak).
+  const seasonStat = (id: string | null) => {
+    let w = 0, pod = 0, streak = 0, cur = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) {
+      const res = id ? (ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === id) : undefined
+      if (res?.finishPosition === 1) { w++; cur++; if (cur > streak) streak = cur } else cur = 0
+      if (res?.finishPosition != null && res.finishPosition <= 3) pod++
+    }
+    return { w, pod, streak }
+  }
+  const champStat = seasonStat(champion)
+  const ruStat = seasonStat(runnerUp)
+  const finalStand = driverStandingsAfter(ctx, analysis.completedRounds)
+  const thirdLast = finalStand[2] ? lastName(finalStand[2].driverName) : ''
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
-    early_leader: earlyLeaderId ? dn(earlyLeaderId) : '', early_leader_last: earlyLeaderId ? lastName(dn(earlyLeaderId)) : '',
+    runner_up_ref: runnerUpRef, champ_team: champTeam,
+    peak_lead: peakLead, peak_round: peakRound, lead_erosion: leadErosion,
+    peak_gp: peakRound ? circuit(ctx, peakRound) : '',
+    single_digit_gp: sdRound ? circuit(ctx, sdRound) : '',
+    champion_subj: champPron.they, champion_poss: champPron.their, champion_obj: champPron.them,
+    runner_up_poss: pronouns(runnerUpDriver?.gender).their,
+    champion_title_ordinal: championTitleOrdinal,
+    champion_wins: champStat.w, champion_podiums: champStat.pod, win_streak: champStat.streak,
+    total_races: analysis.completedRounds, runner_up_wins: ruStat.w, third_last: thirdLast,
+    wet_races_str: `${wetRaces} ${plural(wetRaces, 'race')}`,
+    champion_wet_points: champWetPts, runner_up_wet_points: ruWetPts, wet_win_clause: wetWinClause,
+    early_leader: sm.earlyLeaderId ? dn(sm.earlyLeaderId) : '', early_leader_last: sm.earlyLeaderId ? lastName(dn(sm.earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
   }
-  const sections: string[] = [fill(pick(c[`champion${shape}`], `${seed}|champ`), slots)]
-  if (constructorChampion) sections.push(fill(pick(c.constructors, `${seed}|cons`), slots))
-  if (over.length) sections.push(fill(pick(c.overPerformers, `${seed}|over`), { ...slots, names: listJoin(over.map(dn)) }))
-  if (under.length) sections.push(fill(pick(c.underPerformers, `${seed}|under`), { ...slots, names: listJoin(under.map(dn)) }))
-  if (teamOver) sections.push(fill(pick(c.teamOver, `${seed}|tover`), { ...slots, team: tn(teamOver) }))
-  if (teamUnder) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), { ...slots, team: tn(teamUnder) }))
+  // Champion section + any combination modifiers (#88: teammate fight / late wobble / wet-aided run).
+  let champSection = fill(pick(c[`champion${sm.shape}`], `${seed}|champ`), slots)
+  // At most ONE champion modifier — don't double up same-category archetypes. Priority: late wobble, then wet.
+  const mod = sm.lateWobble ? pick(c.champLateWobble, `${seed}|mlw`) : sm.wetAided ? pick(c.champWetAided, `${seed}|mwa`) : ''
+  if (mod) champSection = `${champSection} ${fill(mod, slots)}`
+  const sections: string[] = [champSection]
+  // The runner-up's side of the title fight (#88).
+  if (ruArc) {
+    const fN = analysis.completedRounds
+    const finalRes = ctx.raceResults[fN - 1] ?? []
+    const finalWinner = finalRes.find((x) => x.finishPosition === 1)
+    const finalOrd = (id: string | null) => {
+      const r = id ? finalRes.find((x) => x.driverId === id) : undefined
+      return r ? (r.dnf || r.finishPosition == null ? 'down the order' : ordinal(r.finishPosition)) : ''
+    }
+    const gbf = ruArc.gapBeforeFinal ?? ruArc.finalGap
+    sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), {
+      ...slots,
+      peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins,
+      dnf_gp: ruArc.dnfRound ? circuit(ctx, ruArc.dnfRound) : '',
+      gap_before_final: Math.max(0, gbf), led_by: Math.max(0, -gbf),
+      final_race_gp: circuit(ctx, fN),
+      final_winner_last: finalWinner ? lastName(ctx.drivers.find((d) => d.id === finalWinner.driverId)?.name ?? '') : '',
+      champion_final_pos: finalOrd(champion), runner_up_final_pos: finalOrd(runnerUp),
+    }))
+  }
+  // Constructors' title shape + the drivers-sealed-early modifier (#88).
+  if (constructorChampion) {
+    const consTitle = analysis.constructorTitle
+    const consRunnerUp = consTitle.series[consTitle.series.length - 1]?.secondId ?? null
+    const otherTeamId = cs.otherId ?? null // the wins-leader (WinsVsPoints) or the title rival (LeadTradedLate)
+    // One pass over results: every team's points + wins, then the final constructors' order.
+    const teamAgg = new Map<string, { points: number; wins: number }>()
+    for (const tm of ctx.teams) teamAgg.set(tm.id, { points: 0, wins: 0 })
+    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) {
+      const a = teamAgg.get(cc.teamId)
+      if (a) { a.points += cc.points; if (cc.finishPosition === 1) a.wins++ }
+    }
+    const teamOrder = [...teamAgg.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => b.points - a.points)
+    const aggOf = (id: string | null) => (id ? teamAgg.get(id) ?? { points: 0, wins: 0 } : { points: 0, wins: 0 })
+    const consWins = aggOf(constructorChampion).wins
+    const consPoints = aggOf(constructorChampion).points
+    const consRunnerUpPoints = aggOf(consRunnerUp).points
+    const consOtherWins = aggOf(otherTeamId).wins
+    const consOtherPoints = aggOf(otherTeamId).points
+    const otherPos = otherTeamId ? teamOrder.findIndex((x) => x.id === otherTeamId) + 1 : 0
+    // The wins-leader's placing clause, used only when they were NOT the points runner-up (fast but unreliable).
+    const consOtherExtra = otherTeamId && consRunnerUp && otherTeamId !== consRunnerUp
+      ? ` ${tn(otherTeamId)} ended up ${ordinal(otherPos)} with ${consOtherPoints} ${plural(consOtherPoints, 'point')}.`
+      : ''
+    // Champion team's seats by season points (lead seat first) for the one-car-carried framing.
+    const seatRows = ctx.drivers.filter((d) => d.teamId === constructorChampion).map((d) => {
+      let points = 0, wins = 0, podiums = 0
+      for (let r = 1; r <= analysis.completedRounds; r++) {
+        const res = (ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === d.id)
+        if (!res) continue
+        points += res.points
+        if (res.finishPosition === 1) wins++
+        if (res.finishPosition != null && res.finishPosition <= 3) podiums++
+      }
+      return { id: d.id, name: d.name, points, wins, podiums }
+    }).sort((a, b) => b.points - a.points)
+    const lead = seatRows[0], other = seatRows[1]
+    const cMax = constructorMaxPerRace(ctx.year)
+    const consBeat = consTitle.currentGap <= cMax ? 'edged out' : consTitle.currentGap <= cMax * 3 ? 'saw off' : 'comfortably beat'
+    // Consecutive constructors' titles ending this season (this year + unbroken prior P1 finishes in history).
+    let consTitlesInRow = 1
+    for (let y = ctx.year - 1; (ctx.constructorHistory ?? []).some((h) => h.seasonYear === y && h.teamId === constructorChampion && h.finalPosition === 1); y--) consTitlesInRow++
+    const consTitleStreak = consTitlesInRow === 2 ? 'back-to-back titles' : `a ${ordinal(consTitlesInRow)} consecutive title`
+    // When the drivers' title was sealed, for the drivers-sealed-early modifier copy.
+    const dClinchRound = clinchRound(analysis.driverTitle.series, driverMaxPerRace(ctx.year), analysis.totalRounds)
+    const driversClinchAgo = dClinchRound ? analysis.completedRounds - dClinchRound : 0
+    const consSlots = {
+      ...slots,
+      cons_other: otherTeamId ? tn(otherTeamId) : '',
+      cons_other_wins: consOtherWins, cons_other_points: consOtherPoints,
+      cons_other_position: otherPos ? ordinal(otherPos) : '', cons_other_extra: consOtherExtra,
+      cons_wins_gap: Math.max(0, consOtherWins - consWins),
+      champ_driver1: lead ? lead.name : '', champ_driver2: other ? other.name : '',
+      carried_driver: lead ? lead.name : '', carried_driver_last: lead ? lastName(lead.name) : '',
+      carried_driver_points: lead?.points ?? 0,
+      carried_driver_wins: lead?.wins ?? 0, carried_driver_wins_str: `${lead?.wins ?? 0} ${plural(lead?.wins ?? 0, 'win')}`,
+      carried_driver_podiums: lead?.podiums ?? 0, carried_driver_podiums_str: `${lead?.podiums ?? 0} ${plural(lead?.podiums ?? 0, 'podium')}`,
+      other_driver: other ? other.name : '', other_driver_last: other ? lastName(other.name) : '', other_driver_points: other?.points ?? 0,
+      cons_wins: consWins, cons_races: analysis.completedRounds, cons_points: consPoints, cons_margin: consTitle.currentGap, cons_lead_changes: consTitle.leadChanges,
+      cons_titles_in_row: consTitlesInRow, cons_title_streak: consTitleStreak,
+      drivers_clinch_ago: driversClinchAgo, drivers_clinch_ago_str: `${driversClinchAgo} ${plural(driversClinchAgo, 'round')} ago`,
+      drivers_clinch_gp: dClinchRound ? circuit(ctx, dClinchRound) : '',
+      cons_runner_up: consRunnerUp ? tn(consRunnerUp) : '', cons_runner_up_points: consRunnerUpPoints,
+      champ_team_drivers: listJoin(seatRows.map((r) => r.name)),
+      cons_beat: consBeat,
+    }
+    let consSection = fill(pick(c[`cons${cs.shape}`], `${seed}|cons`), consSlots)
+    if (cs.driversSealedEarly) consSection = `${consSection} ${fill(pick(c.consDriversSealedEarly, `${seed}|cse`), consSlots)}`
+    sections.push(consSection)
+  }
+  // The season's standout team arc away from the title (#88: flop / dev surge / dev fade / dead seat).
+  if (arc) {
+    const arcExp = analysis.teamExpectations.get(arc.teamId)?.expectedRank
+    const arcActual = analysis.teamDeltas.find((d) => d.id === arc.teamId)?.actualRank
+    let arcPoints = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === arc.teamId) arcPoints += cc.points
+    const finalStandings = driverStandingsAfter(ctx, analysis.completedRounds)
+    const wdcPos = new Map(finalStandings.map((s, i) => [s.driverId, i + 1]))
+    const driverPts = new Map(finalStandings.map((s) => [s.driverId, s.points]))
+    const arcTeamDrivers = ctx.drivers.filter((d) => d.teamId === arc.teamId).map((d) => ({ name: d.name, pos: wdcPos.get(d.id) ?? 99 })).sort((a, b) => a.pos - b.pos)
+    const ad1 = arcTeamDrivers[0], ad2 = arcTeamDrivers[1]
+    const arcSlots = {
+      ...slots, team: tn(arc.teamId),
+      arc_driver: arc.driverId ? dn(arc.driverId) : '', arc_driver_last: arc.driverId ? lastName(dn(arc.driverId)) : '',
+      arc_other: arc.otherId ? dn(arc.otherId) : '', arc_other_last: arc.otherId ? lastName(dn(arc.otherId)) : '',
+      team_expected_pos: arcExp ? ordinal(arcExp) : '', team_final_pos: arcActual ? ordinal(arcActual) : '', team_points: arcPoints,
+      early_phase_pos: arc.earlyRank ? ordinal(arc.earlyRank) : '', late_phase_pos: arc.lateRank ? ordinal(arc.lateRank) : '',
+      arc_driver1: ad1?.name ?? '', arc_driver2: ad2?.name ?? '',
+      arc_driver1_wdc: ad1 ? ordinal(ad1.pos) : '', arc_driver2_wdc: ad2 ? ordinal(ad2.pos) : '',
+      arc_driver_points: arc.driverId ? (driverPts.get(arc.driverId) ?? 0) : 0,
+      arc_other_points: arc.otherId ? (driverPts.get(arc.otherId) ?? 0) : 0,
+    }
+    sections.push(fill(pick(c[`teamArc${cap(arc.key)}`], `${seed}|tarc`), arcSlots))
+  }
+  // Driver over/under-performers are now the rich year-end expectation piece (expectationCheck at K=N), so the
+  // review itself sticks to the title, constructors, and the standout team arc — no vague one-liners here.
+  // Biggest over/under-performing team vs its projection, grounded in projected vs final constructors' position
+  // and points. Skipped when it is the same team the standout team-arc already covered (no double-mention).
+  const teamStat = (id: string) => {
+    const d = analysis.teamDeltas.find((x) => x.id === id)
+    return { ...slots, team: tn(id), team_expected_pos: d ? ordinal(d.expectedRank) : '', team_final_pos: d ? ordinal(d.actualRank) : '', team_points: teamPointsOf(id) }
+  }
+  if (teamOver && teamOver !== arc?.teamId) sections.push(fill(pick(c.teamOver, `${seed}|tover`), teamStat(teamOver)))
+  if (teamUnder && teamUnder !== arc?.teamId) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), teamStat(teamUnder)))
   return [{
-    id: seed, category: 'feature', round: ctx.completedRounds, priority: 88,
+    id: seed, category: 'feature', round: ctx.completedRounds, priority: 88, dayOffset: 0,
     headline: fill(pick(c.headline, `${seed}|h`), slots),
     dek: fill(pick(c.dek, `${seed}|d`), slots),
     body: paras(...sections),
@@ -1699,6 +1908,85 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
 // TRIGGER: a preview for every round of the calendar (run-up coverage across the whole
 // season), plus the upcoming one while the season is live. Frames each round off the
 // standings as they stood beforehand.
+// Season-opener preview body (#88): a sharp, fully data-driven piece — a lead hook, the field around it, one
+// wildcard, then the calendar. Every sentence carries a name or a number; no "the form book is blank" filler.
+// Sourced from the expectation model, careers, and last season's constructors' finishes.
+function openerPiece(ctx: NewsContext): string {
+  const analysis = buildSeasonAnalysis(ctx)
+  const cast = previewCast(ctx, analysis)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const titles = (id: string) => ctx.careers?.[id]?.titles ?? 0
+  const wins = (id: string) => ctx.careers?.[id]?.wins ?? 0
+  const teamOf = (id: string) => teamName(ctx, ctx.drivers.find((d) => d.id === id)?.teamId ?? '')
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  const an = (s: string) => (/^[aeiou]/i.test(s) ? 'an' : 'a')
+  // Driver with their strongest career mark appended (champion > race-winner), or just the name.
+  const tagged = (id: string) => { const t = titles(id); const r = t >= 2 ? `${t}-time champion` : t === 1 ? 'former champion' : wins(id) > 0 ? 'race-winner' : ''; return r ? `${dn(id)}, ${r},` : dn(id) }
+  const byRank = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank).map((e) => e.driverId)
+  const expOf = (id: string) => analysis.driverExpectations.get(id)?.expectedRank ?? 99
+  const N = ctx.calendar.length
+  const beats: string[] = []
+  const named = new Set<string>()
+
+  // The biggest winter move: a driver who switched teams (prior team from the Signing Day draft), taken in
+  // order of who the media most fancies for the title (best projected rank).
+  const draftBy = new Map((ctx.draft ?? []).map((p) => [p.driverId, p]))
+  const fromTeam = (id: string) => { const prev = draftBy.get(id)?.prevTeamName ?? ''; return prev && prev !== teamOf(id) ? prev : '' }
+  const topMover = byRank.find((id) => fromTeam(id))
+
+  // Beat 1 — the lead hook, sharpest first: a title-contender's winter move, else the title defence, else the
+  // two most-fancied drivers. ("The winter" is a time of year, not an agent — it never makes or picks anyone.)
+  const champ = cast.reigningChampion
+  if (topMover && expOf(topMover) <= 3) {
+    const pr = pronouns(ctx.drivers.find((d) => d.id === topMover)?.gender)
+    const rival = byRank.find((id) => id !== topMover)
+    named.add(topMover); if (rival) named.add(rival)
+    const rivalBit = rival ? ` ${tagged(rival)} is the name most likely to stop ${pr.them}.` : ''
+    beats.push(`${tagged(topMover)} begins ${ctx.year} in ${teamOf(topMover)} colours after leaving ${fromTeam(topMover)}, among the favourites for the title.${rivalBit}`)
+  } else if (champ) {
+    const t = titles(champ)
+    const pr = pronouns(ctx.drivers.find((d) => d.id === champ)?.gender)
+    const challenger = cast.titleFavourites.find((id) => id !== champ) ?? byRank.find((id) => id !== champ)
+    named.add(champ); if (challenger) named.add(challenger)
+    const chal = challenger ? ` ${tagged(challenger)} leads the names tipped to stop ${pr.them}.` : ''
+    beats.push(`${dn(champ)}, ${t >= 2 ? `${t}-time champion` : 'reigning champion'}, opens ${ctx.year}${t >= 1 ? ` chasing a ${ordinal(t + 1)} title` : ''}.${chal}`)
+  } else if (byRank.length >= 2) {
+    named.add(byRank[0]); named.add(byRank[1])
+    beats.push(`${tagged(byRank[0])} and ${tagged(byRank[1])} are the names to beat in ${ctx.year}.`)
+  }
+
+  // Beat 2 — the field: who is tipped to split the leaders, plus a team rated above last season's constructors'
+  // finish and one rated below it.
+  const splitter = byRank.find((id) => !named.has(id))
+  const lastYear = (ctx.constructorHistory ?? []).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
+  const lastFin = (teamId: string) => (ctx.constructorHistory ?? []).find((h) => h.seasonYear === lastYear && h.teamId === teamId)?.finalPosition
+  const moves = ctx.teams.map((tm) => ({ id: tm.id, exp: analysis.teamExpectations.get(tm.id)?.expectedRank, lf: lastFin(tm.id) })).filter((x): x is { id: string; exp: number; lf: number } => x.exp != null && x.lf != null)
+  const riser = moves.filter((x) => x.lf - x.exp >= 2).sort((a, b) => (b.lf - b.exp) - (a.lf - a.exp))[0]
+  const faller = moves.filter((x) => x.exp - x.lf >= 2).sort((a, b) => (b.exp - b.lf) - (a.exp - a.lf))[0]
+  const fieldBits: string[] = []
+  if (splitter) fieldBits.push(`${dn(splitter)} (${teamOf(splitter)}) is tipped to split them`)
+  if (riser) fieldBits.push(`${teamName(ctx, riser.id)} is tipped to climb from ${ordinal(riser.lf)} to ${ordinal(riser.exp)}`)
+  if (faller) fieldBits.push(`${teamName(ctx, faller.id)}, ${ordinal(faller.lf)} a year ago, is rated only ${ordinal(faller.exp)}`)
+  if (fieldBits.length) beats.push(`${cap(fieldBits[0])}${fieldBits.length > 1 ? `, while ${fieldBits.slice(1).join(', and ')}` : ''}.`)
+
+  // Beat 3 — one wildcard: a dark horse, a veteran's last stand, or a rookie (unless the whole grid is new).
+  const seated = ctx.drivers.filter((d) => d.teamId !== '').length
+  const dh = cast.darkHorses[0]
+  const vet = cast.veterans.find((v) => v.kind === 'twilight')
+  if (dh) {
+    const tExp = analysis.teamExpectations.get(ctx.drivers.find((d) => d.id === dh)?.teamId ?? '')?.expectedRank
+    beats.push(`The wildcard is ${dn(dh)}, among the highest-rated drivers in the field but in ${an(teamOf(dh))} ${teamOf(dh)} car projected no higher than ${ordinal(tExp ?? 0)}.`)
+  } else if (vet) {
+    beats.push(`${dn(vet.driverId)}, ${ctx.drivers.find((d) => d.id === vet.driverId)?.age}, lines up for what may be a final campaign.`)
+  } else if (cast.rookies.length && cast.rookies.length <= seated / 2) {
+    beats.push(`${dn(cast.rookies[0])} arrives as the rookie to watch.`)
+  }
+
+  // Beat 4 — the calendar.
+  beats.push(`${N} rounds, starting here at the ${circuit(ctx, 1)}.`)
+  return paras(...beats)
+}
+
 function previews(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
@@ -1724,21 +2012,8 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const favAvg = favRecent.length ? favRecent.reduce((s, x) => s + x, 0) / favRecent.length : 99
     const favForm = favAvg <= 6 ? 'on' : favAvg >= 12 ? 'off' : 'mid'
 
-    // Grid talking point from last time out, and (opener only) the rookie debut note.
+    // Grid talking point from last time out (non-opener rounds; the opener uses openerPiece instead).
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
-    // A debutant is a driver with NO prior F1 starts (in historical mode, only in their real debut
-    // season). No age guessing: Button at 21 with 24 starts is not a rookie.
-    const isDebutant = (d: Driver) =>
-      d.debutYear != null ? d.debutYear === ctx.year : (careerTotalsThroughRound(ctx, d.id, r - 1)?.starts ?? 0) === 0
-    const seatedCount = ctx.drivers.filter((d) => d.teamId !== '').length
-    const rookieNames = ctx.drivers.filter((d) => d.teamId !== '' && isDebutant(d)).map((d) => d.name)
-    // A fresh-world mass debut (e.g. a generated season one, where the whole grid has no prior starts)
-    // is not individually newsworthy — suppress the note rather than list the entire field.
-    const massDebutOpener = rookieNames.length > seatedCount / 2
-    const rookieNote = !isOpener || massDebutOpener ? ''
-      : rookieNames.length === 0 ? ''
-      : rookieNames.length === 1 ? `${rookieNames[0]} makes a Grand Prix debut.`
-      : `${listJoin(rookieNames)} all start their first Grand Prix.`
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
@@ -1776,15 +2051,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
       : ''
 
     const body = isOpener
-      ? paras(
-          compose(`${seed}:intro`, slots,
-            ['The {year} season gets under way at the {circuit}.', 'It all begins at the {circuit}.', 'Round one takes the grid to the {circuit}.'],
-            ['All {n_teams} teams start level on zero.', 'Every driver opens the {year} campaign on nothing.', 'The form book is blank over the {remaining} {rounds_word} ahead.']),
-          rookieNote,
-          compose(`${seed}:stake`, slots,
-            ['Reliability over a full race distance is the first real question.', 'The opening laps will give the first honest read on the order.', 'Whether winter pace translates to race day is the question everyone wants answered.']),
-          texture(seed, ['The paddock buzzed with first-race nerves.', 'There was a charged, expectant mood up and down the grid.', 'The garages had the taut quiet of a grid that had run out of time to prepare.'], slots),
-        )
+      ? openerPiece(ctx)
       : paras(
           compose(`${seed}:intro`, slots,
             ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'The {circuit} is next, round {round} of the season.'],
@@ -1836,11 +2103,11 @@ function pickUnique(pool: string[], seed: string, used: Set<string>): string {
 }
 
 // Car-launch prose pools (Sonnet-authored). `line` introduces a team + its drivers; `refPos` adds a
-// last-season reference using {art} {last_pos}; `refNew` covers a team with no prior finish on record
-// (the first season, or a genuine new entrant — never call them "new"). Pools are deliberately large
-// so the no-repeat picker can give every car in a tier a distinct line and reference.
+// last-season reference using {art} {last_pos} WHEN one exists. A team with no prior result on record (the
+// replay's first archived year, or a genuine newcomer) gets no reference line at all — we never narrate the
+// absence of a benchmark. Pools are deliberately large so the no-repeat picker gives every car a distinct line.
 const LAUNCH_COPY: {
-  line: string[]; refPos: string[]; refNew: string[]
+  line: string[]; refPos: string[]
   tiers: Record<'front-running' | 'midfield' | 'backmarker', { prio: number; headline: string[]; dek: string[]; intro: string[]; close: string[] }>
 } = {
   line: [
@@ -1874,20 +2141,6 @@ const LAUNCH_COPY: {
     'From {art} {last_pos}-place championship position, the team\'s stated aim is to move the needle decisively in {year}.',
     'The {last_pos}-place finish that closed out last season is the number the whole factory has been trying to make obsolete.',
     'With {art} {last_pos}-place result as the honest yardstick, the {year} car has been engineered to address every shortcoming that produced it.',
-  ],
-  refNew: [
-    'With no constructors result on the board to measure against, this launch is the only public yardstick on the car.',
-    'There is no prior championship finish to anchor expectations, so the car itself must do the talking.',
-    'No constructors data exists to set a baseline, which means every lap in testing will be the first hard evidence anyone has.',
-    'Without a finishing position in the standings to reference, the technical detail on display today is the sole benchmark available.',
-    'The record books hold no constructors result for this squad, so the {year} car enters service as an unknown quantity by definition.',
-    'There is simply no prior championship finish on the ledger, and that makes today\'s reveal the first real measure of intent.',
-    'No previous constructors campaign provides a frame of reference here; the car and its timing data will have to speak for themselves.',
-    'Because no constructors result exists to judge against, the engineering choices visible in this launch carry unusual scrutiny.',
-    'The absence of any constructors finish to compare with means the {year} car sets its own starting line from day one of testing.',
-    'Without a constructors result to anchor the narrative, the team\'s ambitions must be read from what the drawing office has actually built.',
-    'No championship position has been recorded for this team, leaving today\'s unveiling as the only concrete evidence of where they stand.',
-    'There is no finishing-position history to draw on, so the technical specification revealed today is the single reference point the paddock has.',
   ],
   tiers: {
     'front-running': {
@@ -2124,8 +2377,10 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
         }
         const tseed = `launch-${lyear}|${t.id}`
         const line = fill(pickUnique(LAUNCH_COPY.line, `${tseed}|line`, usedLine), ts)
-        const ref = fill(pickUnique(lastPos ? LAUNCH_COPY.refPos : LAUNCH_COPY.refNew, `${tseed}|ref`, usedRef), ts)
-        return `${line} ${ref}`
+        // No prior constructors result (the replay's first archived year, or a genuine newcomer): just describe
+        // the car. Never narrate the ABSENCE of a benchmark — if there's no result, there's no sentence (#88).
+        const ref = lastPos ? fill(pickUnique(LAUNCH_COPY.refPos, `${tseed}|ref`, usedRef), ts) : ''
+        return ref ? `${line} ${ref}` : line
       }
       out.push({
         id: lseed, category: 'car_launch_livery', round: 0, priority: C.prio,
@@ -2699,7 +2954,7 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || ctx.completedRounds < 3) return []
   const analysis = buildSeasonAnalysis(ctx)
   const N = ctx.calendar.length
-  const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3)])].filter((k) => k >= 3)
+  const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3), N])].filter((k) => k >= 3) // + the full season at year end (#88)
   const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
   const CARD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
   const numWord = (n: number) => CARD[n] ?? String(n)
@@ -2708,13 +2963,17 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   const out: NewsArticle[] = []
   for (const K of checkpoints) {
     if (K > ctx.completedRounds) continue
+    const isEnd = K >= N // the full-season checkpoint reads in the past tense (final positions), not "N rounds in"
     const dStand = driverStandingsAfter(ctx, K)
     const dRank = new Map(dStand.map((s, i) => [s.driverId, i + 1]))
     // Only judge drivers who have actually raced by K — a seated mid-season joiner absent from the
     // standings isn't "under-performing", they simply weren't on the grid yet.
-    const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, delta: e.expectedRank - dRank.get(e.driverId)! }))
-    const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
-    const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
+    const half = Math.ceil(dStand.length / 2)
+    const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, proj: e.expectedRank, pos: dRank.get(e.driverId)!, delta: e.expectedRank - dRank.get(e.driverId)! }))
+    // Over-performers must end up somewhere that matters (top half), not a backmarker creeping up the order;
+    // under-performers must have been fancied (projected top half) — otherwise there was nothing to fall from.
+    const dOver = dDelta.filter((x) => x.delta >= 3 && x.pos <= half).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
+    const dUnder = dDelta.filter((x) => x.delta <= -3 && x.proj <= half).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
     if (!dOver.length && !dUnder.length) continue // nothing notable this checkpoint
 
     // Per-driver facts at this checkpoint: where the winter ranked them (the projection, now SHOWN, not
@@ -2742,53 +3001,79 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
 
     const overSentence = (f: Info, i: number): string => {
       const pr = pronouns(f.gender)
-      return [
-        `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
+      return (isEnd ? [
+        `${f.name} finished ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where ${pr.they} was projected.`,
+        `${f.name}, projected ${ordinal(f.proj)} over the winter, climbed to ${ordinal(f.pos)}.`,
+        `${f.name} turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} by the flag.`,
+      ] : [
+        `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where ${pr.they} was projected.`,
         `${f.name}, projected ${ordinal(f.proj)} over the winter, has climbed to ${ordinal(f.pos)}.`,
         `${f.name} has turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} on the road.`,
-      ][i % 3]
+      ])[i % 3]
     }
     const reason = (f: Info, i: number): string => {
-      if (f.dnfs >= 2) return i % 2 ? `has ${numTimes(f.dnfs)} retirements already` : `has retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`
-      if (f.lastScored === 0) return 'has yet to trouble the scorers'
-      if (K - f.lastScored >= 2) return i % 2 ? `last scored back in round ${f.lastScored}` : `has not scored since round ${f.lastScored}`
-      if (f.dnfs === 1) return i % 2 ? 'has lost a finish to retirement' : 'has already retired once'
+      if (f.dnfs >= 2) return isEnd ? (i % 2 ? `suffered ${numWord(f.dnfs)} retirements` : `retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`) : (i % 2 ? `has ${numTimes(f.dnfs)} retirements already` : `has retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`)
+      if (f.lastScored === 0) return isEnd ? 'never troubled the scorers' : 'has yet to trouble the scorers'
+      if (K - f.lastScored >= 2) return isEnd ? `scored for the last time in round ${f.lastScored}` : (i % 2 ? `last scored back in round ${f.lastScored}` : `has not scored since round ${f.lastScored}`)
+      if (f.dnfs === 1) return isEnd ? 'lost a finish to retirement' : (i % 2 ? 'has lost a finish to retirement' : 'has already retired once')
       return ''
     }
     const underSentence = (f: Info, i: number): string => {
       const projP = [`ranked ${ordinal(f.proj)} in the preseason`, `${ordinal(f.proj)} in the winter ratings`, `a projected ${ordinal(f.proj)}`][i % 3]
-      const posP = ['sits', 'has slid to', 'now runs'][i % 3]
+      const posP = (isEnd ? ['finished', 'slid to', 'ended up'] : ['sits', 'has slid to', 'now runs'])[i % 3]
       const r = reason(f, i)
-      return r ? `${f.name}, ${projP}, ${r} and ${posP} ${ordinal(f.pos)}.` : `${f.name}, ${projP}, has slipped to ${ordinal(f.pos)}.`
+      return r ? `${f.name}, ${projP}, ${r} and ${posP} ${ordinal(f.pos)}.` : `${f.name}, ${projP}, ${isEnd ? 'slipped' : 'has slipped'} to ${ordinal(f.pos)}.`
     }
 
     // Next-round signpost from the real calendar gap.
     const nextC = ctx.calendar[K]
     const closer = nextC
-      ? `${ctx.year} resumes in ${numWord(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)))} ${plural(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)), 'week')} at the ${circuit(ctx, K + 1)}.`
+      ? `The season resumes in ${numWord(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)))} ${plural(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)), 'week')} at the ${circuit(ctx, K + 1)}.`
       : ''
 
+    const eseed = `expect-${ctx.year}-${K}`
     const paragraphs: string[] = []
-    if (overs.length) paragraphs.push(`${cap(numWord(K))} rounds in, ${ctx.year} has already broken from the winter form guide. ${overs.map(overSentence).join(' ')}`)
+    if (overs.length) {
+      const intro = isEnd
+        ? pick([
+            `By the end of ${ctx.year}, the order had pulled clear of the winter form guide.`,
+            `The ${ctx.year} season finished a long way from the winter projections.`,
+            `Several names ended ${ctx.year} clear of their winter ranking.`,
+          ], `${eseed}|oi`)
+        : pick([
+            `${cap(numWord(K))} rounds in, the season has already pulled away from the winter form guide.`,
+            `${cap(numWord(K))} rounds into the season, the winter projections are already being torn up.`,
+            `The opening ${numWord(K)} rounds have already diverged from the winter projections.`,
+            `${cap(numWord(K))} rounds in, several names are running clear of their winter ranking.`,
+          ], `${eseed}|oi`)
+      paragraphs.push(`${intro} ${overs.map(overSentence).join(' ')}`)
+    }
     if (unders.length) {
-      const lead = overs.length ? 'The bigger story is how far the fancied names have fallen.' : `${cap(numWord(K))} rounds in, the names the winter rated highly have gone backwards.`
+      const lead = overs.length
+        ? pick(isEnd
+            ? ['The bigger story was how far the fancied names fell.', 'More striking was how far the fancied names dropped.']
+            : ['The bigger story is how far the fancied names have fallen.', 'More striking is how far the fancied names have slid.'], `${eseed}|ul`)
+        : pick(isEnd
+            ? [`Across ${ctx.year}, the fancied names went backwards.`, `The names rated highly over the winter went the other way in ${ctx.year}.`]
+            : [`${cap(numWord(K))} rounds in, the fancied names have gone backwards.`, `${cap(numWord(K))} rounds in, the names rated highly over the winter have slid down the order.`], `${eseed}|ul`)
       paragraphs.push(`${lead} ${unders.map(underSentence).join(' ')}`)
     }
     if (closer) paragraphs.push(closer)
 
     // Headline + dek lead with the actual movers, not a restatement of the premise.
     const headline = overs.length && unders.length
-      ? `${overs[0].last} climbs and ${unders[0].last} slides ${numWord(K)} rounds into ${ctx.year}`
+      ? (isEnd ? `${overs[0].last} beat the winter call, ${unders[0].last} fell short of it in ${ctx.year}` : `${overs[0].last} climbs and ${unders[0].last} slides ${numWord(K)} rounds into ${ctx.year}`)
       : overs.length
-      ? `${overs[0].last} runs ${ordinal(overs[0].pos)}, well above the winter call, after ${numWord(K)} rounds`
-      : `${unders[0].last} slides to ${ordinal(unders[0].pos)} ${numWord(K)} rounds into ${ctx.year}`
+      ? (isEnd ? `${overs[0].last} finished ${ordinal(overs[0].pos)}, well above the winter call, in ${ctx.year}` : `${overs[0].last} runs ${ordinal(overs[0].pos)}, well above the winter call, after ${numWord(K)} rounds`)
+      : (isEnd ? `${unders[0].last} ended ${ordinal(unders[0].pos)}, well below the winter call, in ${ctx.year}` : `${unders[0].last} slides to ${ordinal(unders[0].pos)} ${numWord(K)} rounds into ${ctx.year}`)
     const dek = overs.length && unders.length
-      ? `${overs[0].name} has climbed to ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} has gone the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.`
+      ? (isEnd ? `${overs[0].name} ended ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} went the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.` : `${overs[0].name} has climbed to ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} has gone the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.`)
       : overs.length
-      ? `${overs[0].name} leads the names running clear of the winter projection ${numWord(K)} rounds into ${ctx.year}.`
-      : `${unders[0].name} heads the names trailing the winter projection ${numWord(K)} rounds into ${ctx.year}.`
+      ? (isEnd ? `${overs[0].name} led the names that beat the winter projection across ${ctx.year}.` : `${overs[0].name} leads the names running clear of the winter projection ${numWord(K)} rounds into ${ctx.year}.`)
+      : (isEnd ? `${unders[0].name} headed the names that trailed the winter projection across ${ctx.year}.` : `${unders[0].name} heads the names trailing the winter projection ${numWord(K)} rounds into ${ctx.year}.`)
 
-    out.push({ id: `expectation-${ctx.year}-${K}`, category: 'analysis_opinion', round: K, priority: 33, headline, dek, body: paras(...paragraphs) })
+    // At year end this is a marquee season piece (drops on finale day); mid-season it's a checkpoint opinion.
+    out.push({ id: `expectation-${ctx.year}-${K}`, category: isEnd ? 'feature' : 'analysis_opinion', round: K, priority: isEnd ? 84 : 33, ...(isEnd ? { dayOffset: 0 } : {}), headline, dek, body: paras(...paragraphs) })
   }
   return out
 }
@@ -3058,7 +3343,7 @@ function articleDate(ctx: NewsContext, a: NewsArticle): string {
   // championship_state category with the post-race "champion crowned" reaction, but must drop in their
   // round's race WEEK, BEFORE that race — not at the +1 post-race offset, which fired them a round late,
   // after the very race they previewed (same date-driven-interrupt class as #53). Reactions keep their offset.
-  const offset = a.preview ? -4 : (CATEGORY_DAY_OFFSET[a.category] ?? 0)
+  const offset = a.preview ? -4 : (a.dayOffset ?? CATEGORY_DAY_OFFSET[a.category] ?? 0)
   const raw = addDays(raceDayOf(ctx, anchor), offset)
   // The day offset is cosmetic intra-round ordering only — it must NOT push a story past its round's
   // NEXT race, or the date-driven Continue-loop interrupt (continue-loop.ts) fires a round or more late
