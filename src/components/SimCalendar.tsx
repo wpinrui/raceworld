@@ -8,7 +8,7 @@ import { raceDate, toISODate, fromISODate, addDays, formatDate } from '@/lib/sim
 import type { NewsArticle } from '@/lib/news/engine'
 
 const PAST_DAYS = 2
-const FUTURE_DAYS = 7
+const FUTURE_DAYS = 6
 
 // FM-style calendar bar. Mounted by the nav only while the Continue loop advances the clock day by day:
 // it spans the full width flush under the top bar, dims and blurs the home screen behind it, and shows each
@@ -74,26 +74,26 @@ export function SimCalendar({ open, articles }: { open: boolean; articles: NewsA
           {days.map((day) => (
             <div
               key={day.iso}
-              className={`flex-1 min-w-0 min-h-[210px] px-3 py-2.5 ${day.today ? 'bg-[#00D9FF]/10' : day.past ? 'bg-[#181D27] opacity-60' : ''}`}
+              className={`flex-1 min-w-0 min-h-[280px] px-3 py-3 ${day.today ? 'bg-[#00D9FF]/10' : day.past ? 'bg-[#181D27] opacity-60' : ''}`}
             >
-              <div className="flex items-baseline gap-1.5 border-b border-[#2A3142] pb-1.5">
-                <span className={`text-base font-bold tabular-nums ${day.today ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{day.num}</span>
-                <span className={`text-[10px] font-bold uppercase tracking-widest ${day.today ? 'text-[#00D9FF]' : 'text-[#9CA3AF]'}`}>{day.wd}</span>
-                <span className="ml-auto text-[9px] font-semibold uppercase tracking-widest text-[#6B7280]">{day.mon}</span>
+              <div className="flex items-baseline gap-1.5 border-b border-[#2A3142] pb-2">
+                <span className={`text-lg font-bold tabular-nums ${day.today ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{day.num}</span>
+                <span className={`text-[11px] font-bold uppercase tracking-widest ${day.today ? 'text-[#00D9FF]' : 'text-[#9CA3AF]'}`}>{day.wd}</span>
+                <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-[#6B7280]">{day.mon}</span>
               </div>
-              <div className="mt-2 space-y-1">
+              <div className="mt-2.5 space-y-1.5">
                 {day.race && (
-                  <div className="flex items-center gap-1.5 rounded border border-[#00D9FF]/30 bg-[#00D9FF]/15 px-1.5 py-1">
-                    <ReactCountryFlag countryCode={day.race.country} svg style={{ width: '0.9em', height: '0.9em', borderRadius: '2px', flexShrink: 0 }} />
-                    <span className="truncate text-[10px] font-bold uppercase tracking-wide text-[#00D9FF]">{day.race.name}</span>
+                  <div className="flex items-center gap-1.5 rounded border border-[#00D9FF]/30 bg-[#00D9FF]/15 px-2 py-1.5">
+                    <ReactCountryFlag countryCode={day.race.country} svg style={{ width: '1em', height: '1em', borderRadius: '2px', flexShrink: 0 }} />
+                    <span className="truncate text-[11px] font-bold uppercase tracking-wide text-[#00D9FF]">{day.race.name}</span>
                   </div>
                 )}
                 {day.news.slice(0, 4).map((a) => (
-                  <div key={a.id} className="rounded border border-[#2A3142] bg-[#0F1419] px-1.5 py-1">
-                    <span className="block truncate text-[10px] font-semibold leading-snug text-[#FFFFFF]">{a.headline}</span>
+                  <div key={a.id} className="rounded border border-[#2A3142] bg-[#0F1419] px-2 py-1.5">
+                    <span className="block truncate text-xs font-semibold leading-snug text-[#FFFFFF]">{a.headline}</span>
                   </div>
                 ))}
-                {day.news.length > 4 && <span className="block pl-0.5 text-[9px] text-[#6B7280]">+{day.news.length - 4} more</span>}
+                {day.news.length > 4 && <span className="block pl-0.5 text-[10px] text-[#6B7280]">+{day.news.length - 4} more</span>}
               </div>
             </div>
           ))}

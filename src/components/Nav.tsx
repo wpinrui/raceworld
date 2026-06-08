@@ -33,7 +33,7 @@ const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppe
 
 // Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
 // fast-forwards so a multi-week gap to the next race doesn't drag. (n = days advanced so far this Continue.)
-const dayTickMs = (n: number): number => (n < 8 ? 900 : n < 24 ? 550 : 320)
+const dayTickMs = (n: number): number => (n < 8 ? 1080 : n < 24 ? 660 : 385)
 
 export default function Nav() {
   const pathname = usePathname()
