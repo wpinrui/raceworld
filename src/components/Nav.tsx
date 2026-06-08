@@ -206,6 +206,7 @@ export default function Nav() {
           const refreshed = generateNews(buildLiveNewsContext(useSeasonStore.getState(), careerBase, teamCareerBase, records, teamDriverTallies))
           const retNews = refreshed.filter((a) => a.category === 'career_retirement')
           if (retNews.length) { retNews.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: retNews }); break }
+          continue // retired but no story (unreachable in practice) — keep advancing, don't open a board
         }
         // Hard stop on Home for the interactive boards (Signing Day, Testing).
         setAdvancing(false); router.push('/home'); break

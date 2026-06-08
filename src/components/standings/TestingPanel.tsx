@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import type { PreSeasonTest, Team, FuelBand, ConstructorStanding } from '@/lib/sim/types'
+import type { PreSeasonTest, Team, FuelBand } from '@/lib/sim/types'
 import TyreIndicator from '@/components/race/TyreIndicator'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
@@ -10,9 +10,9 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 interface Props {
   test: PreSeasonTest | null
-  year: number
+  wccYear: number                 // the season whose WCC finish the comparison column shows (prior season)
+  prevFinish: Map<string, number> // team -> that season's WCC finish (empty in a first season)
   teams: Team[]
-  constructorStandings: ConstructorStanding[]
 }
 
 const FUEL_STYLE: Record<FuelBand, string> = {
@@ -30,7 +30,7 @@ function fmtTime(t: number): string {
 
 type SortKey = 'time' | 'pace' | 'wcc'
 
-export function TestingPanel({ test, year, teams, constructorStandings }: Props) {
+export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
   const card = useLiveDriverCards()
   const [reveal, setReveal] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('time')
@@ -40,8 +40,6 @@ export function TestingPanel({ test, year, teams, constructorStandings }: Props)
   }
 
   const colorOf = (teamId: string) => teams.find((t) => t.id === teamId)?.color ?? '#6B7280'
-  // Previous season's constructors' championship finish (1-indexed).
-  const prevFinish = new Map(constructorStandings.map((cs, i) => [cs.teamId, i + 1]))
   const fastest = Math.min(...test.entries.map((e) => e.lapTime))
 
   // True pace is only known under god mode, so that sort only applies while revealed.
@@ -88,7 +86,7 @@ export function TestingPanel({ test, year, teams, constructorStandings }: Props)
                 </th>
               )}
               <th className={`text-right pb-2 pl-3 font-medium whitespace-nowrap ${headClass('wcc')}`} onClick={() => setSortKey('wcc')}>
-                {year} WCC
+                {wccYear} WCC
               </th>
             </tr>
           </thead>

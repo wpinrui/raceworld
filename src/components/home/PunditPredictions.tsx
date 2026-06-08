@@ -12,7 +12,7 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { positionPalette } from '@/components/world/pills'
 import { SigningDayBoard } from '@/components/home/SigningDayBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
-import type { Driver, Team, RaceResult, PreSeasonTest, ConstructorStanding } from '@/lib/sim/types'
+import type { Driver, Team, RaceResult, PreSeasonTest } from '@/lib/sim/types'
 
 const FORM_RACES = 4 // recent races that feed the form read
 
@@ -107,7 +107,7 @@ function OffSeasonReview() {
 // it shows here. Auto-opens the board as a modal once per season (so it can't be missed), then leaves a
 // button to reopen it through the rest of the run-up.
 let preSeasonTestSeenYear: number | null = null
-function PreSeasonTestingSurface({ test, year, teams, constructorStandings }: { test: PreSeasonTest; year: number; teams: Team[]; constructorStandings: ConstructorStanding[] }) {
+function PreSeasonTestingSurface({ test, year, prevFinish, teams }: { test: PreSeasonTest; year: number; prevFinish: Map<string, number>; teams: Team[] }) {
   const [open, setOpen] = useState(preSeasonTestSeenYear !== year)
   useEffect(() => { preSeasonTestSeenYear = year }, [year])
   return (
@@ -123,7 +123,7 @@ function PreSeasonTestingSurface({ test, year, teams, constructorStandings }: { 
               <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
             <div className="flex-1 min-h-0 p-5 overflow-y-auto">
-              <TestingPanel test={test} year={year} teams={teams} constructorStandings={constructorStandings} />
+              <TestingPanel test={test} wccYear={year - 1} prevFinish={prevFinish} teams={teams} />
             </div>
           </div>
         </div>
@@ -141,12 +141,15 @@ export function PunditPredictions() {
   const year = useSeasonStore((s) => s.year)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const preSeasonTest = useSeasonStore((s) => s.preSeasonTest)
-  const constructorStandings = useSeasonStore((s) => s.constructorStandings)
+  const constructorHistory = useSeasonStore((s) => s.constructorHistory)
 
   if (isOffSeason(phase)) return <OffSeasonReview />
   // After the dated Testing stop (#126), before round 1 runs, the home surface is the test board (modal).
   if (preSeasonTest && raceResults.length === 0) {
-    return <PreSeasonTestingSurface test={preSeasonTest} year={year} teams={teams} constructorStandings={constructorStandings} />
+    // The WCC comparison column shows the PRIOR season's finish, drawn from history — the new season's
+    // standings are empty after the rollover, so they can't supply it.
+    const prevFinish = new Map((constructorHistory ?? []).filter((h) => h.seasonYear === year - 1).map((h) => [h.teamId, h.finalPosition]))
+    return <PreSeasonTestingSurface test={preSeasonTest} year={year} prevFinish={prevFinish} teams={teams} />
   }
 
   const nextRace = calendarForYear(year)[currentRound - 1]
