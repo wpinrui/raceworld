@@ -1,11 +1,9 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { isOffSeason } from '@/lib/sim/types'
-import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { RaceBanner } from '@/components/home/RaceBanner'
 import { PunditPredictions } from '@/components/home/PunditPredictions'
 import { CompactStandings } from '@/components/home/CompactStandings'
@@ -20,19 +18,8 @@ export default function HomePage() {
   const teams = useSeasonStore((s) => s.teams)
   const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
   const hydrated = useHydrated()
-  const [simming, setSimming] = useState(false)
 
   if (!hydrated) return null
-
-  async function handleSimTo(round: number) {
-    if (simming) return
-    setSimming(true)
-    try {
-      await simulateUntilRound(round)
-    } finally {
-      setSimming(false)
-    }
-  }
 
   const offSeason = isOffSeason(phase)
 
@@ -41,7 +28,7 @@ export default function HomePage() {
       <div className="max-w-7xl mx-auto h-full px-4 py-4 flex flex-col gap-3 min-h-0">
         {/* Combined title + calendar bar */}
         <div className="shrink-0">
-          <RaceBanner simming={simming} onSimTo={handleSimTo} />
+          <RaceBanner />
         </div>
 
         <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[45fr_55fr]">

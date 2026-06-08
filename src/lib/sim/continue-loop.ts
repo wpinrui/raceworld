@@ -1,6 +1,6 @@
 import type { NewsArticle } from '@/lib/news/engine'
 import { calendarForYear } from '@/data/calendars'
-import { raceDate, toISODate } from './calendar-dates'
+import { raceDate, toISODate, addDays } from './calendar-dates'
 
 // The brain of the FM-style "Continue" loop. Pure + UI-agnostic: given today's clock, how many
 // rounds have been run, and the dated news feed, it decides the next date the sim should stop and
@@ -36,18 +36,24 @@ export function computeNextStop(args: {
   year: number
   articles: NewsArticle[]
   settings: ContinueSettings
+  readIds?: string[] // already-read stories never re-interrupt (issue #114)
 }): NextStop {
-  const { currentDate, completedRounds, year, articles, settings } = args
+  const { currentDate, completedRounds, year, articles, settings, readIds = [] } = args
   const calendar = calendarForYear(year)
   const total = calendar.length
   const nextRaceRound = completedRounds + 1
+  // The sim halts at the race WEEKEND (Friday = race Sunday minus 2), not the race itself, so the player
+  // enters the weekend on Friday with the mid-week pre-race preview already dropped.
   const nextRaceDate = nextRaceRound <= total
-    ? toISODate(raceDate(year, calendar[nextRaceRound - 1]))
+    ? toISODate(addDays(raceDate(year, calendar[nextRaceRound - 1]), -2))
     : null
 
   // Interrupting stories strictly after today and strictly before the next race (raceday wins ties).
+  // Already-read stories are skipped, so Continue never halts on something the player has seen (#114).
+  const read = new Set(readIds)
   const interrupting = articles
     .filter((a) => !!a.date && a.date > currentDate && (nextRaceDate ? a.date < nextRaceDate : true))
+    .filter((a) => !read.has(a.id))
     .filter((a) => articleInterrupts(a, settings))
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
 

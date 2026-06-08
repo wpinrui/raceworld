@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import ReactCountryFlag from 'react-country-flag'
 import { ChevronRight } from 'lucide-react'
 import { Panel } from '@/components/world/ui'
 import { calendarForYear } from '@/data/calendars'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSimControl } from '@/lib/store/sim-control'
 import { isOffSeason } from '@/lib/sim/types'
 
 const PODIUM = ['#D4AC00', '#9E9E9E', '#C0622B'] // gold / silver / bronze
@@ -17,16 +17,11 @@ function lastName(name: string): string {
   return parts[parts.length - 1] || name
 }
 
-interface Props {
-  simming: boolean
-  onSimTo: (round: number) => void
-}
-
 // Full-season calendar strip: completed races show their podium and link to the full
 // classification; the current race links into the weekend; any future race can be
 // fast-simulated up to (so you land pre-race there) without leaving the home screen.
-export function RaceBanner({ simming, onSimTo }: Props) {
-  const router = useRouter()
+export function RaceBanner() {
+  const simBusy = useSimControl((s) => s.simBusy)
   const currentRound = useSeasonStore((s) => s.currentRound)
   const year = useSeasonStore((s) => s.year)
   const phase = useSeasonStore((s) => s.phase)
@@ -88,18 +83,18 @@ export function RaceBanner({ simming, onSimTo }: Props) {
   // view as the round advances. Outside a sim we leave the scroll alone so manual
   // scrolling (wheel or scrollbar) isn't fought.
   useEffect(() => {
-    if (!simming) return
+    if (!simBusy) return
     const el = scrollRef.current
     const cur = currentRef.current
     if (!el || !cur) return
     const delta = cur.getBoundingClientRect().left + cur.offsetWidth / 2 - (el.getBoundingClientRect().left + el.clientWidth / 2)
     easeTo(el.scrollLeft + delta)
-  }, [currentRound, simming, easeTo])
+  }, [currentRound, simBusy, easeTo])
 
   // When the sim stops, kill any in-flight auto-centre so the scrollbar is free again.
   useEffect(() => {
-    if (!simming && rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
-  }, [simming])
+    if (!simBusy && rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
+  }, [simBusy])
 
   return (
     <Panel
@@ -207,7 +202,6 @@ export function RaceBanner({ simming, onSimTo }: Props) {
         const c = calendarForYear(year)[modalRound - 1]
         const isCurrent = modalRound === currentRound
         const cancel = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide whitespace-nowrap hover:bg-[#303848] transition-colors'
-        const secondary = 'px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide whitespace-nowrap hover:bg-[#303848] disabled:opacity-40 transition-colors'
         const primary = 'px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-bold uppercase tracking-wide whitespace-nowrap hover:bg-[#009CB8] disabled:opacity-40 transition-colors'
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setModalRound(null)}>
@@ -220,12 +214,9 @@ export function RaceBanner({ simming, onSimTo }: Props) {
               <div className="flex justify-end gap-2">
                 <button onClick={() => setModalRound(null)} className={cancel}>Cancel</button>
                 {isCurrent ? (
-                  <>
-                    <button disabled={simming} onClick={() => { onSimTo(modalRound + 1); setModalRound(null) }} className={secondary}>Simulate Race</button>
-                    <button onClick={() => router.push('/race')} className={primary}>Go To Race</button>
-                  </>
+                  <button disabled={simBusy} onClick={() => { useSimControl.getState().requestSimRace(); setModalRound(null) }} className={primary}>Simulate Race</button>
                 ) : (
-                  <button disabled={simming} onClick={() => { onSimTo(modalRound); setModalRound(null) }} className={primary}>Simulate Until Race</button>
+                  <button disabled={simBusy} onClick={() => { useSimControl.getState().requestAdvance(modalRound); setModalRound(null) }} className={primary}>Simulate Until Race</button>
                 )}
               </div>
             </div>

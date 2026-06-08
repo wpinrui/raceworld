@@ -97,6 +97,7 @@ export function HeadlinesPanel() {
   const signingDayRevealed = useSeasonStore((s) => s.signingDayRevealed)
   const priorSeasonDriverMediaScores = useSeasonStore((s) => s.priorSeasonDriverMediaScores)
   const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
+  const currentDate = useSeasonStore((s) => s.currentDate)
   const markNewsRead = useSeasonStore((s) => s.markNewsRead)
   const readNewsIds = useSeasonStore((s) => s.readNewsIds)
   const driverCard = useLiveDriverCards()
@@ -121,9 +122,10 @@ export function HeadlinesPanel() {
       careerBase, teamCareerBase, records, teamDriverTallies,
     )
     // The feed is already newest-first (round desc, then priority); show the most recent 20
-    // and let the panel scroll.
-    return generateNews(ctx).slice(0, 20)
-  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory, careerBase, teamCareerBase, records, teamDriverTallies])
+    // and let the panel scroll. FM-style gating: only what has happened by the current clock date —
+    // future-dated previews and post-race stories never surface before their day (or before the race runs).
+    return generateNews(ctx).filter((a) => !a.date || a.date <= currentDate).slice(0, 20)
+  }, [year, phase, raceResults, drivers, teams, allUpgradeEvents, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory, careerBase, teamCareerBase, records, teamDriverTallies, currentDate])
 
   // Name-to-world-page matcher for hyperlinking the open article (home feed is always the live season).
   const newsIndex = useMemo(() => buildNewsIndex({

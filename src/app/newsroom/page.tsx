@@ -95,8 +95,9 @@ export default function NewsroomPage() {
 
   // Live season: generated client-side from the store (full attributes available).
   const liveArticles = useMemo(
-    () => generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies)),
-    [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, careerBase, teamCareerBase, records, teamDriverTallies], // eslint-disable-line react-hooks/exhaustive-deps
+    // FM-style gating: only stories at or before the current clock date (no future previews / pre-race spoilers).
+    () => generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies)).filter((a) => !a.date || a.date <= s.currentDate),
+    [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, s.currentDate, careerBase, teamCareerBase, records, teamDriverTallies], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Past season: fetched from the archive DB on demand.
