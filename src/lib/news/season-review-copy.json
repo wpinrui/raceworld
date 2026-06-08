@@ -164,7 +164,10 @@
     "The championship had looked like a foregone conclusion with {champion_last} having an almost insurmountable {peak_lead}-point lead over {runner_up_last} through {peak_round} rounds, but in the last rounds, {runner_up_last} fought back and narrowed the lead to just {gap}, showing {runner_up_poss} grit despite the eventual loss to {runner_up_poss} rival.",
     "The championship was not without drama, as {champion_last} saw {champion_poss} once massive {peak_lead}-point championship lead cut to below single digits following the {single_digit_gp}, but {champion_subj} ultimately overcame {runner_up_last}'s momentum by hanging on to win {champion_poss} {champion_title_ordinal} drivers' championship."
   ],
-  "champWetAided": ["PLACEHOLDER Several of those wins came in the wet."],
+  "champWetAided": [
+    "While {runner_up_last} often had the measure of {champion_last} in dry races, {champion_last}'s skill and composure in navigating changeable conditions played a role in {wet_races_str}{wet_win_clause}.",
+    "{champion_last}'s wet weather driving helped {champion_obj} outscore {runner_up_last} by {champion_wet_points} to {runner_up_wet_points}, which made the difference in their championship campaigns."
+  ],
   "runnerUpValiant": ["PLACEHOLDER {runner_up_last} closed a {peak_deficit}-point gap to within {final_gap} but fell short."],
   "runnerUpLateChargeOwnDnf": ["PLACEHOLDER {runner_up_last}'s late charge ended with a retirement."],
   "runnerUpAliveToFlag": ["PLACEHOLDER {runner_up_last} kept the title alive to the final round."],

@@ -254,12 +254,18 @@ function championModifiers(ctx: NewsContext, analysis: SeasonAnalysis): { teamma
   let champPeak = 0
   for (const g of t.series) if (g.leaderId === champ && g.gap > champPeak) champPeak = g.gap
   const lateWobble = champPeak >= 60 && t.currentGap > 0 && t.currentGap < 10
-  let wins = 0, wetWins = 0
+  // Wet-aided title: the champion outscored the runner-up by 1.5x+ in WET races while being outscored in the
+  // DRY — wet-weather skill made the title difference, not just "some wins came in the rain".
+  let champWet = 0, champDry = 0, ruWet = 0, ruDry = 0
   for (let r = 1; r <= N; r++) {
-    const res = (ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === champ)
-    if (res?.finishPosition === 1) { wins++; if (res.weather?.rained) wetWins++ }
+    const rr = ctx.raceResults[r - 1] ?? []
+    const wet = (rr.find((x) => x.weather)?.weather?.rained) ?? false
+    const c = rr.find((x) => x.driverId === champ)
+    const u = ru ? rr.find((x) => x.driverId === ru) : undefined
+    if (c) { if (wet) champWet += c.points; else champDry += c.points }
+    if (u) { if (wet) ruWet += u.points; else ruDry += u.points }
   }
-  const wetAided = wins >= 3 && wetWins >= 2 && wetWins * 3 >= wins // a real chunk of the title's wins in the rain
+  const wetAided = !!ru && champWet > 0 && champWet >= 1.5 * ruWet && champDry < ruDry
   return { teammatePair, lateWobble, wetAided }
 }
 

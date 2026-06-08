@@ -1644,6 +1644,17 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const runnerUpDriver = runnerUp ? ctx.drivers.find((d) => d.id === runnerUp) : undefined
   const champPron = pronouns(championDriver?.gender)
   const championTitleOrdinal = ordinal((ctx.careers?.[champion]?.titleYears ?? []).filter((y) => y < ctx.year).length + 1)
+  // Wet-weather points split (champion vs runner-up) + the champion's latest wet win, for the wet-aided modifier.
+  let champWetPts = 0, ruWetPts = 0, wetRaces = 0, wetWinGp = ''
+  for (let r = 1; r <= analysis.completedRounds; r++) {
+    const rr = ctx.raceResults[r - 1] ?? []
+    if (!((rr.find((x) => x.weather)?.weather?.rained) ?? false)) continue
+    wetRaces++
+    const c = rr.find((x) => x.driverId === champion)
+    if (c) { champWetPts += c.points; if (c.finishPosition === 1) wetWinGp = circuit(ctx, r) }
+    if (runnerUp) { const u = rr.find((x) => x.driverId === runnerUp); if (u) ruWetPts += u.points }
+  }
+  const wetWinClause = wetWinGp ? `, including a crucial win at the ${wetWinGp}` : ''
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
@@ -1651,9 +1662,11 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     peak_lead: peakLead, peak_round: peakRound, lead_erosion: leadErosion,
     peak_gp: peakRound ? circuit(ctx, peakRound) : '',
     single_digit_gp: sdRound ? circuit(ctx, sdRound) : '',
-    champion_subj: champPron.they, champion_poss: champPron.their,
+    champion_subj: champPron.they, champion_poss: champPron.their, champion_obj: champPron.them,
     runner_up_poss: pronouns(runnerUpDriver?.gender).their,
     champion_title_ordinal: championTitleOrdinal,
+    wet_races_str: `${wetRaces} ${plural(wetRaces, 'race')}`,
+    champion_wet_points: champWetPts, runner_up_wet_points: ruWetPts, wet_win_clause: wetWinClause,
     early_leader: sm.earlyLeaderId ? dn(sm.earlyLeaderId) : '', early_leader_last: sm.earlyLeaderId ? lastName(dn(sm.earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
