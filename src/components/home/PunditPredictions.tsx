@@ -14,7 +14,7 @@ import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
 import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
 import { SigningDayBoard } from '@/components/home/SigningDayBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
-import type { Driver, Team, RaceResult } from '@/lib/sim/types'
+import type { Driver, Team, RaceResult, PreSeasonTest, ConstructorStanding } from '@/lib/sim/types'
 
 const FORM_RACES = 4 // recent races that feed the form read
 
@@ -149,6 +149,35 @@ function OffSeasonReview() {
   )
 }
 
+// Pre-season testing surface (#126): the dated test lands before round 1 with no off-season phase, so
+// it shows here. Auto-opens the board as a modal once per season (so it can't be missed), then leaves a
+// button to reopen it through the rest of the run-up.
+let preSeasonTestSeenYear: number | null = null
+function PreSeasonTestingSurface({ test, year, teams, constructorStandings }: { test: PreSeasonTest; year: number; teams: Team[]; constructorStandings: ConstructorStanding[] }) {
+  const [open, setOpen] = useState(preSeasonTestSeenYear !== year)
+  useEffect(() => { preSeasonTestSeenYear = year }, [year])
+  return (
+    <Panel title={`${year} Pre-Season Testing`} flush fill>
+      <div className="p-4">
+        <button onClick={() => setOpen(true)} className="px-3 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-semibold uppercase tracking-wide hover:bg-[#009CB8] transition-colors">View testing times</button>
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{year} Pre-Season Testing</h2>
+              <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
+            </div>
+            <div className="flex-1 min-h-0 p-5 overflow-y-auto">
+              <TestingPanel test={test} year={year} teams={teams} constructorStandings={constructorStandings} />
+            </div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
+
 export function PunditPredictions() {
   const card = useLiveDriverCards()
   const phase = useSeasonStore((s) => s.phase)
@@ -161,15 +190,9 @@ export function PunditPredictions() {
   const constructorStandings = useSeasonStore((s) => s.constructorStandings)
 
   if (isOffSeason(phase)) return <OffSeasonReview />
-  // After the dated Testing stop (#126), before round 1 runs, the home surface is the test board.
+  // After the dated Testing stop (#126), before round 1 runs, the home surface is the test board (modal).
   if (preSeasonTest && raceResults.length === 0) {
-    return (
-      <Panel title={`${year} Pre-Season Testing`} flush fill>
-        <div className="p-4">
-          <TestingPanel test={preSeasonTest} year={year} teams={teams} constructorStandings={constructorStandings} />
-        </div>
-      </Panel>
-    )
+    return <PreSeasonTestingSurface test={preSeasonTest} year={year} teams={teams} constructorStandings={constructorStandings} />
   }
 
   const nextRace = calendarForYear(year)[currentRound - 1]

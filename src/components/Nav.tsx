@@ -198,13 +198,11 @@ export default function Nav() {
         await runOffSeasonEvent(stop.event)
         if (stop.event === 'roster-swap') continue            // silent New-Year crossing — keep advancing
         if (opts?.targetRound != null) continue               // a fast-forward runs the beats but never stops on them
-        if (stop.event === 'signing-day' || stop.event === 'testing') { setAdvancing(false); router.push('/home'); break } // hard-stop boards live on Home
-        // Retirements: surface the news that just dropped, like any interrupt.
-        const refreshed = generateNews(buildLiveNewsContext(useSeasonStore.getState(), careerBase, teamCareerBase, records, teamDriverTallies))
-        const todays = refreshed.filter((a) => a.date === stop.date)
-        todays.forEach((a) => useSeasonStore.getState().markNewsRead(a.id))
-        if (todays.length) { setNewsStop({ date: stop.date, articles: todays }); break }
-        continue
+        // A no-one-retired year has nothing to show, so don't stop the sim on an empty retirements beat.
+        if (stop.event === 'retirements' && (useSeasonStore.getState().endOfSeasonSummary?.retiredDriverIds?.length ?? 0) === 0) continue
+        // Every other beat is a HARD STOP — the loop must never run past one. Its recap / board surfaces
+        // on Home; the dated news sits in the newsroom to revisit.
+        setAdvancing(false); router.push('/home'); break
       }
       if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
       // Race weekend (Friday): a fast-forward stops at the target weekend; a normal Continue hands the race
