@@ -1769,7 +1769,16 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   }
   // The season's standout team arc away from the title (#88: flop / dev surge / dev fade / dead seat).
   if (arc) {
-    const arcSlots = { ...slots, team: tn(arc.teamId), arc_driver: arc.driverId ? dn(arc.driverId) : '', arc_driver_last: arc.driverId ? lastName(dn(arc.driverId)) : '', arc_other: arc.otherId ? dn(arc.otherId) : '', arc_other_last: arc.otherId ? lastName(dn(arc.otherId)) : '' }
+    const arcExp = analysis.teamExpectations.get(arc.teamId)?.expectedRank
+    const arcActual = analysis.teamDeltas.find((d) => d.id === arc.teamId)?.actualRank
+    let arcPoints = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === arc.teamId) arcPoints += cc.points
+    const arcSlots = {
+      ...slots, team: tn(arc.teamId),
+      arc_driver: arc.driverId ? dn(arc.driverId) : '', arc_driver_last: arc.driverId ? lastName(dn(arc.driverId)) : '',
+      arc_other: arc.otherId ? dn(arc.otherId) : '', arc_other_last: arc.otherId ? lastName(dn(arc.otherId)) : '',
+      team_expected_pos: arcExp ? ordinal(arcExp) : '', team_final_pos: arcActual ? ordinal(arcActual) : '', team_points: arcPoints,
+    }
     sections.push(fill(pick(c[`teamArc${cap(arc.key)}`], `${seed}|tarc`), arcSlots))
   }
   if (over.length) sections.push(fill(pick(c.overPerformers, `${seed}|over`), { ...slots, names: listJoin(over.map(dn)) }))

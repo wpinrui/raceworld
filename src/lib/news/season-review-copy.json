@@ -188,7 +188,11 @@
     "The title was {runner_up_last}'s to lose heading to the {final_race_gp} with a {led_by}-point lead, but {champion_last} finished {champion_final_pos} to take it at the last, {runner_up_last} only {runner_up_final_pos}.",
     "{runner_up_last} carried a {led_by}-point lead into the final round but surrendered it at the flag, {champion_last} finishing {champion_final_pos} to {runner_up_last}'s {runner_up_final_pos} and the title by {final_gap}."
   ],
-  "teamArcFlop": ["PLACEHOLDER {team} fell well short of preseason expectations."],
+  "teamArcFlop": [
+    "{team} were among the fancied teams over the winter but never delivered, sliding from a projected {team_expected_pos} to {team_final_pos} in the final constructors' standings.",
+    "It was a season to forget for {team}, who failed to build on a promising winter and finished only {team_final_pos} on {team_points} points.",
+    "{team} badly underdelivered, projected around {team_expected_pos} before the season but ending up {team_final_pos}."
+  ],
   "teamArcDevSurge": ["PLACEHOLDER {team} developed from the back of the grid to the front over the season."],
   "teamArcDevDecline": ["PLACEHOLDER {team} started near the front and faded as the year went on."],
   "teamArcDeadSeat": ["PLACEHOLDER {team} leaned on {arc_driver_last}; the other seat scored almost nothing."]
