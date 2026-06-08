@@ -1818,7 +1818,7 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
     const tslots = {
       prev_circuit: prevCircuit, t_team: teamName(ctx, teamCand.teamId),
       t_fins: listJoin(cars.map((c) => (c.dnf || c.finishPosition == null ? 'a retirement' : ordinal(c.finishPosition)))),
-      t_car_exp: ordinal(paceRank(ctx, teamCand.teamId)),
+      t_car_exp: ordinal(teamPaceRank.get(teamCand.teamId) ?? ctx.teams.length),
     }
     const tpool = teamCand.dir === 'over'
       ? ['{t_team} scored with both cars at the {prev_circuit}, {t_fins}, a haul the {t_car_exp}-quickest car rarely delivers; the question is whether they can back it up.']
@@ -2153,7 +2153,9 @@ function previews(ctx: NewsContext): NewsArticle[] {
       if (before[k].points - before[k + 1].points > availLeft) secured = k + 1
       else break
     }
-    const winsLine = (leader?.wins ?? 0) > 0
+    // The leader's win tally is a live-title detail; once a place is locked and the stake has shifted
+    // to the fight below, it would tag the champion's wins onto a P2/P3 story, so drop it then.
+    const winsLine = secured === 0 && (leader?.wins ?? 0) > 0
       ? fill(pick(['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to {their} name so far.'], `${seed}:wins`), slots)
       : ''
     const openA = before[secured]
