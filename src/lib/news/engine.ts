@@ -819,12 +819,12 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
           'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
         ])
         // Already champion: find the round it was sealed at and report the updated margin instead.
-        let clinchRound = 0
+        let clinchR = 0
         for (let k = 1; k < r; k++) {
           const st = driverStandingsAfter(ctx, k)
-          if (st.length >= 2 && N - k > 0 && st[0].points - st[1].points > (N - k) * driverMaxPerRace(ctx.year)) { clinchRound = k; break }
+          if (st.length >= 2 && N - k > 0 && st[0].points - st[1].points > (N - k) * driverMaxPerRace(ctx.year)) { clinchR = k; break }
         }
-        const clinchPhrase = clinchRound ? `at the ${circuit(ctx, clinchRound)}${clinchRound === r - 1 ? ' last weekend' : ''}` : 'earlier this season'
+        const clinchPhrase = clinchR ? `at the ${circuit(ctx, clinchR)}${clinchR === r - 1 ? ' last weekend' : ''}` : 'earlier this season'
         return compose(`${seed}:champ`, { ...slots, year: ctx.year, clinch_phrase: clinchPhrase }, [
           '{leader}, who was named {year} World Champion {clinch_phrase}, is now {lead_gap} {lead_gap_pts} ahead of second-placed {second_last}.',
           'Already crowned {year} champion {clinch_phrase}, {leader} now leads {second_last} by {lead_gap} {lead_gap_pts} with {races_left} to run.',

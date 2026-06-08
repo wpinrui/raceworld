@@ -584,7 +584,7 @@ export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerU
   let lateWins = 0
   for (let r = N - w + 1; r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.finishPosition === 1) lateWins++
   let dnfRound = 0
-  for (let r = Math.max(1, N - 2); r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.dnf) dnfRound = r
+  for (let r = Math.max(1, N - 3); r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.dnf) dnfRound = r
   const closingLate = finalGap < champPts(Math.max(1, N - w)) - ruPts(Math.max(1, N - w))
   const gapBeforeFinal = N >= 2 ? champPts(N - 1) - ruPts(N - 1) : finalGap // champ - ru going into the final round
 
