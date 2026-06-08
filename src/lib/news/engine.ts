@@ -1722,6 +1722,17 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
 // One form talking point from last time out, framed against CAR expectation (#88 preview spec):
 // either a standout who did well and might keep it going, OR (never both) a driver/team who fell
 // short and must turn it around. Omitted entirely when everyone ran roughly to their machinery.
+// Car pace as it stood GOING INTO `round`: the current pace rolled back over every upgrade delivered
+// at that round or later. A stable quantity (later upgrades cancel out), so any preview built from it
+// reads identically however much the season has since moved on — news that never silently mutates.
+function carPaceBeforeRound(ctx: NewsContext, round: number): Map<string, number> {
+  const m = new Map(ctx.teams.map((t) => [t.id, t.carPace]))
+  for (const e of ctx.upgradeEvents ?? []) {
+    if (e.round >= round && !e.failed) m.set(e.teamId, (m.get(e.teamId) ?? 0) - e.paceDelta)
+  }
+  return m
+}
+
 function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string {
   const prev = r - 1
   if (prev < 1 || prev > ctx.raceResults.length) return ''
@@ -1747,10 +1758,13 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
   // Form vs car: a seated driver's expected finishing slot is their rank when the whole field is
   // ordered by car pace. Last race's finish minus that slot says who beat their machinery (kept it
   // up) and who fell short of it (needs a turnaround). A DNF counts as finishing last + 1.
-  const carPaceOf = (teamId: string) => ctx.teams.find((t) => t.id === teamId)?.carPace ?? 0
+  // Car pace as it stood for the LAST race (round prev), so this beat reads the same on every rebuild.
+  const paceBefore = carPaceBeforeRound(ctx, prev)
+  const carPaceOf = (teamId: string) => paceBefore.get(teamId) ?? 0
   const seated = ctx.drivers.filter((d) => d.teamId)
   const fieldSize = seated.length || results.length
   const expSlot = new Map<string, number>([...seated].sort((a, b) => carPaceOf(b.teamId) - carPaceOf(a.teamId)).map((d, i) => [d.id, i + 1]))
+  const teamPaceRank = new Map<string, number>([...ctx.teams].sort((a, b) => carPaceOf(b.id) - carPaceOf(a.id)).map((t, i) => [t.id, i + 1]))
   const champPos = new Map<string, number>(standings.map((s, i) => [s.driverId, i + 1]))
   const half = Math.ceil(fieldSize / 2)
   const topCut = Math.max(5, Math.ceil(fieldSize / 3))   // "high in the championship"
@@ -1786,7 +1800,7 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
   for (const tm of ctx.teams) {
     const cars = results.filter((x) => x.teamId === tm.id)
     if (cars.length < 2) continue
-    const rank = paceRank(ctx, tm.id)
+    const rank = teamPaceRank.get(tm.id) ?? ctx.teams.length
     const avgDev = cars.reduce((a, c) => a + dev(c), 0) / cars.length
     if (cars.every(scored) && rank > Math.ceil(ctx.teams.length / 2) && avgDev >= 4 && avgDev > teamStr) {
       teamCand = { teamId: tm.id, dir: 'over', cars }; teamStr = avgDev
@@ -1942,31 +1956,37 @@ function openerPiece(ctx: NewsContext): string {
 // only know a team upgraded and whether it worked, never the actual part, so this is colour, not claim.
 const UPGRADE_PARTS = ['front wing', 'floor', 'rear wing', 'diffuser', 'sidepod package', 'suspension package', 'beam wing', 'front-wing endplate']
 
-// Forward-looking development beat (#88 preview spec): the upgrade(s) due at the upcoming round and how,
-// on pace, they shift the order. Outcomes are pre-rolled and deterministic (devPlans), so the projection
-// is genuinely accurate. The delta lands at recordRaceResult and bites from the next race, so the framing
-// is "due / once fitted". A delivering upgrade that holds rank still gets a gap-closing line; a failed one
-// gets a spokesperson quote. Omitted only when nothing is due that round.
+// Per-round development beat (#88 preview spec): the upgrade(s) landing at round r and how, on pace,
+// they shift the order. The outcome is deterministic — pre-rolled in devPlans for rounds still to come,
+// recorded in the upgrade log once delivered — and the pre-round car pace is recovered by rolling the
+// current pace back over later upgrades, so a preview reads identically whether r is the upcoming race
+// or one long past (the article never mutates). A delivering upgrade that holds rank gets a gap-closing
+// line; a failed one a spokesperson quote. Omitted only when nothing is due that round.
 function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
-  const allDue = (ctx.devPlans ?? []).filter((p) => p.nextUpgradeRound === r)
-  if (allDue.length === 0 || ctx.teams.length === 0) return ''
+  if (ctx.teams.length === 0) return ''
+  // Upgrades at round r: rounds still to come read the pending plan, rounds already run read the
+  // delivered log. Normalised to the same {teamId, delta, failed} shape so the copy is identical.
+  const upgrades = r > ctx.completedRounds
+    ? (ctx.devPlans ?? []).filter((p) => p.nextUpgradeRound === r).map((p) => ({ teamId: p.teamId, delta: p.pendingFailed ? 0 : (p.pendingPaceDelta ?? 0), failed: !!p.pendingFailed }))
+    : (ctx.upgradeEvents ?? []).filter((e) => e.round === r).map((e) => ({ teamId: e.teamId, delta: e.paceDelta, failed: e.failed }))
+  if (upgrades.length === 0) return ''
   const circuitName = circuit(ctx, r)
   const tn = (id: string) => teamName(ctx, id)
-  const curOrder = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
+  const before = carPaceBeforeRound(ctx, r)
+  const curOrder = [...ctx.teams].sort((a, b) => (before.get(b.id) ?? 0) - (before.get(a.id) ?? 0))
   const curRank = new Map(curOrder.map((t, i) => [t.id, i + 1]))
-  const delivering = allDue.filter((p) => !p.pendingFailed && (p.pendingPaceDelta ?? 0) > 0)
-  const bumped = new Map(ctx.teams.map((t) => [t.id, t.carPace]))
-  for (const p of delivering) bumped.set(p.teamId, (bumped.get(p.teamId) ?? 0) + (p.pendingPaceDelta ?? 0))
+  const bumped = new Map(before)
+  for (const u of upgrades) if (!u.failed) bumped.set(u.teamId, (bumped.get(u.teamId) ?? 0) + u.delta)
   const projOrder = [...ctx.teams].sort((a, b) => (bumped.get(b.id) ?? 0) - (bumped.get(a.id) ?? 0))
   const projRank = new Map(projOrder.map((t, i) => [t.id, i + 1]))
 
   type Item = { kind: 'mover' | 'gap' | 'fail'; prio: number; text: string }
   const items: Item[] = []
-  for (const p of allDue) {
-    const team = tn(p.teamId)
-    const sd = `upg-${ctx.year}-${r}-${p.teamId}`
-    // C: failed upgrade — a spokesperson conceding the new part has not given up its time.
-    if (p.pendingFailed || (p.pendingPaceDelta ?? 0) <= 0) {
+  for (const u of upgrades) {
+    const team = tn(u.teamId)
+    const sd = `upg-${ctx.year}-${r}-${u.teamId}`
+    // Failed upgrade — a spokesperson conceding the new part has not given up its time.
+    if (u.failed || u.delta <= 0) {
       const part = pick(UPGRADE_PARTS, `${sd}|part`)
       items.push({ kind: 'fail', prio: 1, text: fill(pick([
         'A {team} spokesperson admitted the team is still struggling to extract the time from its new {part}.',
@@ -1975,8 +1995,8 @@ function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
       ], sd), { team, part }) })
       continue
     }
-    const from = curRank.get(p.teamId) ?? ctx.teams.length
-    const to = projRank.get(p.teamId) ?? from
+    const from = curRank.get(u.teamId) ?? ctx.teams.length
+    const to = projRank.get(u.teamId) ?? from
     if (to < from) {
       const behind = projOrder[to] // team at projected rank to + 1
       const passed = behind && (curRank.get(behind.id) ?? 0) < from ? tn(behind.id) : ''
@@ -2085,10 +2105,10 @@ function previews(ctx: NewsContext): NewsArticle[] {
 
     // Grid talking point from last time out (non-opener rounds; the opener uses openerPiece instead).
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
-    // Forward-looking development + logistics beats — only the upcoming race (the pre-rolled upgrade
-    // data and the seeded race conditions are meaningful only there).
-    const upgradeOutlook = isNext ? previewUpgradeOutlook(ctx, r) : ''
-    const raceLogistics = isNext ? previewRaceLogistics(ctx, r) : ''
+    // Development + logistics beats attach to every preview (not just the upcoming one) and are built
+    // from round-stable data, so a past race's preview keeps exactly the words it had pre-race.
+    const upgradeOutlook = isOpener ? '' : previewUpgradeOutlook(ctx, r)
+    const raceLogistics = isOpener ? '' : previewRaceLogistics(ctx, r)
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
