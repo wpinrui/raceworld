@@ -139,7 +139,13 @@
     "The constructors' lead in {year} changed hands {cons_lead_changes} times, {cons_runner_up} leading for long spells before {constructor_champion} took it back and closed the season out with a {cons_margin}-point advantage.",
     "{cons_lead_changes} lead changes separated {constructor_champion} and {cons_runner_up} across the {year} constructors' fight, {champ_driver1} and {champ_driver2} ultimately delivering {cons_wins} wins to put {constructor_champion} clear by {cons_margin} points."
   ],
-  "consRepeatChampion": ["PLACEHOLDER {constructor_champion} retained the constructors' title."],
+  "consRepeatChampion": [
+    "{constructor_champion} claimed {cons_title_streak} in {year}, another {cons_wins}-win campaign seeing off {cons_runner_up} by {cons_margin} points.",
+    "There was no dislodging {constructor_champion}, the constructors' crown theirs for {cons_titles_in_row} years running, {champ_driver1} and {champ_driver2} again proving too strong for the field.",
+    "{constructor_champion} extended their hold on the constructors' championship to {cons_titles_in_row} straight titles, {cons_points} points to {cons_runner_up}'s {cons_runner_up_points} the measure of their {year} season.",
+    "{constructor_champion} would not be moved, {cons_wins} wins carrying them to {cons_title_streak} and clear of {cons_runner_up} by {cons_margin} points in {year}.",
+    "{constructor_champion} successfully defended the constructors' championship in {year}, {champ_driver1} and {champ_driver2} combining for {cons_wins} wins to keep {cons_runner_up} at arm's length, {cons_points} to {cons_runner_up_points}."
+  ],
   "consClear": ["PLACEHOLDER {constructor_champion} won the constructors' championship."],
   "consDriversSealedEarly": ["PLACEHOLDER The drivers' title was settled well before the constructors' went to the wire."],
   "champTeammatePair": ["PLACEHOLDER The two title protagonists shared a garage."],

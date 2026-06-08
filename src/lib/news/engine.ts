@@ -1678,6 +1678,10 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     const lead = seatRows[0], other = seatRows[1]
     const cMax = constructorMaxPerRace(ctx.year)
     const consBeat = consTitle.currentGap <= cMax ? 'edged out' : consTitle.currentGap <= cMax * 3 ? 'saw off' : 'comfortably beat'
+    // Consecutive constructors' titles ending this season (this year + unbroken prior P1 finishes in history).
+    let consTitlesInRow = 1
+    for (let y = ctx.year - 1; (ctx.constructorHistory ?? []).some((h) => h.seasonYear === y && h.teamId === constructorChampion && h.finalPosition === 1); y--) consTitlesInRow++
+    const consTitleStreak = consTitlesInRow === 2 ? 'back-to-back titles' : `a ${ordinal(consTitlesInRow)} consecutive title`
     const consSlots = {
       ...slots,
       cons_other: otherTeamId ? tn(otherTeamId) : '',
@@ -1691,6 +1695,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
       carried_driver_podiums: lead?.podiums ?? 0, carried_driver_podiums_str: `${lead?.podiums ?? 0} ${plural(lead?.podiums ?? 0, 'podium')}`,
       other_driver: other ? other.name : '', other_driver_last: other ? lastName(other.name) : '', other_driver_points: other?.points ?? 0,
       cons_wins: consWins, cons_races: analysis.completedRounds, cons_points: consPoints, cons_margin: consTitle.currentGap, cons_lead_changes: consTitle.leadChanges,
+      cons_titles_in_row: consTitlesInRow, cons_title_streak: consTitleStreak,
       cons_runner_up: consRunnerUp ? tn(consRunnerUp) : '', cons_runner_up_points: consRunnerUpPoints,
       champ_team_drivers: listJoin(seatRows.map((r) => r.name)),
       cons_beat: consBeat,
