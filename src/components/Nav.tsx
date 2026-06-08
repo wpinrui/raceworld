@@ -17,7 +17,7 @@ import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop, type ContinueSettings } from '@/lib/sim/continue-loop'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
-import { runOffSeasonEvent, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
+import { runOffSeasonEvent } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords } from '@/lib/news/actions'
 import { useSetupCta } from '@/lib/store/setup-cta'
 import { pendingRealWorldChanges } from '@/lib/history/transitions'
@@ -315,9 +315,7 @@ export default function Nav() {
         : null
     }
     if (advancing) return <button onClick={handleStop} className={STOP_CTA}>Stop Simulating</button>
-    if (offSeason) {
-      return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA} title={`Next: ${nextOffSeasonStageLabel(phase)}`}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
-    }
+    // Off-season now uses the same unified Continue (the loop handles its dated beats) — no special case.
     if (atRaceday && interruptOnRaceday) {
       return (
         <div className="flex items-center gap-2">
