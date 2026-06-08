@@ -1632,8 +1632,15 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   for (const g of t.series) if (g.leaderId === champion && g.gap > peakLead) { peakLead = g.gap; peakRound = g.round }
   let sdRound = 0
   for (const g of t.series) if (g.round > peakRound && g.leaderId === champion && g.gap < 10) { sdRound = g.round; break }
-  let lowestLead = peakLead // the absolute low point the lead dipped to after its peak (while still leading)
-  for (const g of t.series) if (g.round >= peakRound && g.leaderId === champion) lowestLead = Math.min(lowestLead, g.gap)
+  // The lead's low point STRICTLY after its peak. If the runner-up actually overtook (the lead went negative,
+  // i.e. the champion stopped being the leader), describe that instead of quoting a number.
+  let lowestLead = peakLead, lostLead = false
+  for (const g of t.series) {
+    if (g.round <= peakRound) continue
+    if (g.leaderId === champion) lowestLead = Math.min(lowestLead, g.gap)
+    else lostLead = true
+  }
+  const leadErosion = lostLead ? 'and briefly take it over altogether' : `all the way down to ${lowestLead}`
   const runnerUpDriver = runnerUp ? ctx.drivers.find((d) => d.id === runnerUp) : undefined
   const champPron = pronouns(championDriver?.gender)
   const championTitleOrdinal = ordinal((ctx.careers?.[champion]?.titleYears ?? []).filter((y) => y < ctx.year).length + 1)
@@ -1641,7 +1648,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
     runner_up_ref: runnerUpRef, champ_team: champTeam,
-    peak_lead: peakLead, peak_round: peakRound, lowest_lead: lowestLead,
+    peak_lead: peakLead, peak_round: peakRound, lead_erosion: leadErosion,
     peak_gp: peakRound ? circuit(ctx, peakRound) : '',
     single_digit_gp: sdRound ? circuit(ctx, sdRound) : '',
     champion_subj: champPron.they, champion_poss: champPron.their,
