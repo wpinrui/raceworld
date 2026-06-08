@@ -156,7 +156,7 @@ async function main() {
   const buildCtx = (): NewsContext => {
     const s = season()
     return {
-      year: s.year, phase: s.phase, completedRounds: s.raceResults.length,
+      year: s.year, saveSeed: s.saveSeed, phase: s.phase, completedRounds: s.raceResults.length,
       drivers: s.drivers, teams: s.teams, raceResults: s.raceResults,
       upgradeEvents: s.allUpgradeEvents, devPlans: s.devPlans, constructorHistory: s.constructorHistory,
       endOfSeason: s.endOfSeasonSummary, calendar: calendarForYear(s.year), live: true, careers, teamCareers, records: buildRecords(),

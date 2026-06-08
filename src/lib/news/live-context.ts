@@ -8,6 +8,7 @@ import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-m
 // both see exactly the same generated feed (and the same interrupt decisions).
 export interface LiveSeasonSlice {
   year: number
+  saveSeed?: string
   phase: SeasonPhase
   raceResults: RaceResult[][]
   drivers: Driver[]
@@ -53,6 +54,7 @@ export function buildLiveNewsContext(
     : undefined
   return {
     year: s.year,
+    saveSeed: s.saveSeed,
     phase: s.phase,
     completedRounds: s.raceResults.length,
     drivers: s.drivers,

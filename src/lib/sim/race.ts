@@ -40,11 +40,12 @@ export function initRaceState(
   forms: Record<string, number>,
   year: number,
   strategyNoise: number = 0.35,
+  saveSeed: string = '',
 ): RaceState {
   // Weather + tyre characteristics are seeded from (year, circuit) so the race runs exactly the
   // forecast and tyre picture a pre-race preview can show. Everything else this race (car form, team
   // beliefs, driver form, per-set tyre luck, lap wear) stays freshly random.
-  const { weather, forecast: weatherForecast, compoundDeltas, tyreBaseLife } = raceConditions(year, circuit)
+  const { weather, forecast: weatherForecast, compoundDeltas, tyreBaseLife } = raceConditions(saveSeed, year, circuit)
   const lap1Moisture = getMoistureAtLap(weather, 1)
 
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))

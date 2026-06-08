@@ -67,6 +67,7 @@ export interface RecordsContext {
 
 export interface NewsContext {
   year: number
+  saveSeed?: string                // per-save seed (live only); seeds the preview's race conditions to match the race
   phase: SeasonPhase
   completedRounds: number          // raceResults.length
   drivers: Driver[]                // full roster incl. free agents (teamId === '')
@@ -2024,7 +2025,7 @@ function previewRaceLogistics(ctx: NewsContext, r: number): string {
   const laps = circ.laps
   const circuitName = circuit(ctx, r)
   const sd = `logi-${ctx.year}-${r}`
-  const { forecast, tyreBaseLife } = raceConditions(ctx.year, circ)
+  const { forecast, tyreBaseLife } = raceConditions(ctx.saveSeed ?? '', ctx.year, circ)
   const peak = forecast.reduce((m, p) => Math.max(m, p.moisture), 0)
 
   // Wet forecast: strategy is weather-led, so frame on the crossover, not a stop count.
