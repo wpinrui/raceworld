@@ -2115,7 +2115,6 @@ function previews(ctx: NewsContext): NewsArticle[] {
     // Occasional qualitative descriptor for the gap, by how it compares to the points still on
     // offer. Gated so it is not slapped on every preview; a bare number is often plenty.
     const availLeft = remaining * driverMaxPerRace(ctx.year)
-    const titleSafe = availLeft > 0 && leadGap > availLeft   // the runner-up can no longer catch the leader
     const ratio = leadGap > 0 && availLeft > 0 ? leadGap / availLeft : 0
     // "slender/narrow/wafer-thin" is reserved for a genuinely small absolute gap (a couple of
     // results), not just a small ratio early in a long season where 10+ points is still real.
@@ -2146,6 +2145,39 @@ function previews(ctx: NewsContext): NewsArticle[] {
           slots, 45)
       : ''
 
+    // Stake beat. While the title is live it is leader vs chaser; once places lock from the top (the
+    // driver below cannot make up the gap with the points still on offer), it shifts to the highest
+    // still-contested championship position — the battle for P2, else P3, and so on.
+    let secured = 0
+    for (let k = 0; k + 1 < before.length; k++) {
+      if (before[k].points - before[k + 1].points > availLeft) secured = k + 1
+      else break
+    }
+    const winsLine = (leader?.wins ?? 0) > 0
+      ? fill(pick(['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to {their} name so far.'], `${seed}:wins`), slots)
+      : ''
+    const openA = before[secured]
+    const openB = before[secured + 1]
+    let chaseLine: string
+    if (secured >= 1 && openA && openB) {
+      const aLast = lastName(openA.driverName); const bLast = lastName(openB.driverName)
+      const gap = openA.points - openB.points
+      const lead = secured === 1 ? 'With the title secured' : `With 1st to ${ordinal(secured)} in the championship secured`
+      const margin = gap === 0 ? `level with ${bLast}` : `${gap} ${plural(gap, 'point')} ahead of ${bLast}`
+      chaseLine = `${lead}, the focus turns to ${aLast} and ${bLast}, fighting over ${ordinal(secured + 1)}. ${aLast} has ${openA.points} ${plural(openA.points, 'point')}, ${margin}.`
+    } else if (secured >= 1) {
+      chaseLine = `With the championship order settled, the ${circuitName} is about race wins and pride.`
+    } else {
+      chaseLine = fill(pick(
+        leadGap === 0
+          ? ['{second_last} is level on points with {leader_last} at the top.']
+          : remaining <= 5
+          ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
+          : ['{second_last} sits {lead_gap} {gap_pts} behind {leader_last} and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit to {leader_last}.', '{second_last} has ground to make up on {leader_last}.'],
+        `${seed}:stake`), slots)
+    }
+    const stakePara = [chaseLine, winsLine].filter(Boolean).join(' ')
+
     const body = isOpener
       ? openerPiece(ctx)
       : paras(
@@ -2153,15 +2185,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
             ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'The {circuit} is next, round {round} of the season.'],
             ['{leader} leads on {leader_points} points, {gap_desc}{lead_gap} {gap_pts} clear of {second}.', '{leader} arrives {gap_desc}{lead_gap} {gap_pts} ahead of {second}.', 'It is {leader} who tops the table, {gap_desc}{lead_gap} {gap_pts} up on {second}.']),
           talkingPoint,
-          compose(`${seed}:stake`, slots,
-            leadGap === 0
-              ? ['{second_last} is level on points with {leader_last} at the top.']
-              : titleSafe
-              ? ['{second_last} can no longer reel in {leader_last} for the title, so the {circuit} is about the fight behind.', 'The title is beyond {second_last} now, {leader_last} uncatchable heading into the {circuit}.']
-              : remaining <= 5
-              ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
-              : ['{second_last} sits {lead_gap} {gap_pts} behind {leader_last} and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit to {leader_last}.', '{second_last} has ground to make up on {leader_last}.'],
-            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to {their} name so far.'] : ['']),
+          stakePara,
           compose(`${seed}:wcc`, slots,
             cbefore[1]
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
