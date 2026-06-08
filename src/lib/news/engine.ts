@@ -162,6 +162,9 @@ export interface NewsArticle {
   // articleDate drops these in their round's race WEEK rather than at the category's post-race offset, so
   // they interrupt BEFORE the round they preview instead of after it.
   preview?: boolean
+  // Overrides the category's default day offset (e.g. the season review + year-end expectation piece drop ON
+  // finale day so they are there the moment the off-season Season Review is reached, not two days later).
+  dayOffset?: number
 }
 
 // Join composed paragraphs, dropping any that collapsed to empty.
@@ -1633,8 +1636,6 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const cs = constructorShape(ctx, analysis)
   const ruArc = runnerUpArc(ctx, analysis)
   const arc = teamArcs(ctx, analysis)[0] ?? null
-  const over = analysis.driverDeltas.filter((d) => d.delta > 0 && d.id !== champion).slice(0, 2).map((d) => d.id)
-  const under = analysis.driverDeltas.filter((d) => d.delta < 0).slice(0, 2).map((d) => d.id)
   const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
   const teamUnder = analysis.teamDeltas.find((d) => d.delta < 0)?.id
   const c = seasonReviewCopy as Record<string, string[]>
@@ -1809,12 +1810,12 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     }
     sections.push(fill(pick(c[`teamArc${cap(arc.key)}`], `${seed}|tarc`), arcSlots))
   }
-  if (over.length) sections.push(fill(pick(c.overPerformers, `${seed}|over`), { ...slots, names: listJoin(over.map(dn)) }))
-  if (under.length) sections.push(fill(pick(c.underPerformers, `${seed}|under`), { ...slots, names: listJoin(under.map(dn)) }))
+  // Driver over/under-performers are now the rich year-end expectation piece (expectationCheck at K=N), so the
+  // review itself sticks to the title, constructors, and the standout team arc — no vague one-liners here.
   if (teamOver) sections.push(fill(pick(c.teamOver, `${seed}|tover`), { ...slots, team: tn(teamOver) }))
   if (teamUnder) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), { ...slots, team: tn(teamUnder) }))
   return [{
-    id: seed, category: 'feature', round: ctx.completedRounds, priority: 88,
+    id: seed, category: 'feature', round: ctx.completedRounds, priority: 88, dayOffset: 0,
     headline: fill(pick(c.headline, `${seed}|h`), slots),
     dek: fill(pick(c.dek, `${seed}|d`), slots),
     body: paras(...sections),
@@ -2881,7 +2882,7 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || ctx.completedRounds < 3) return []
   const analysis = buildSeasonAnalysis(ctx)
   const N = ctx.calendar.length
-  const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3)])].filter((k) => k >= 3)
+  const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3), N])].filter((k) => k >= 3) // + the full season at year end (#88)
   const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
   const CARD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
   const numWord = (n: number) => CARD[n] ?? String(n)
@@ -2890,6 +2891,7 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   const out: NewsArticle[] = []
   for (const K of checkpoints) {
     if (K > ctx.completedRounds) continue
+    const isEnd = K >= N // the full-season checkpoint reads in the past tense (final positions), not "N rounds in"
     const dStand = driverStandingsAfter(ctx, K)
     const dRank = new Map(dStand.map((s, i) => [s.driverId, i + 1]))
     // Only judge drivers who have actually raced by K — a seated mid-season joiner absent from the
@@ -2924,24 +2926,28 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
 
     const overSentence = (f: Info, i: number): string => {
       const pr = pronouns(f.gender)
-      return [
+      return (isEnd ? [
+        `${f.name} finished ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
+        `${f.name}, projected ${ordinal(f.proj)} over the winter, climbed to ${ordinal(f.pos)}.`,
+        `${f.name} turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} by the flag.`,
+      ] : [
         `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
         `${f.name}, projected ${ordinal(f.proj)} over the winter, has climbed to ${ordinal(f.pos)}.`,
         `${f.name} has turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} on the road.`,
-      ][i % 3]
+      ])[i % 3]
     }
     const reason = (f: Info, i: number): string => {
-      if (f.dnfs >= 2) return i % 2 ? `has ${numTimes(f.dnfs)} retirements already` : `has retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`
-      if (f.lastScored === 0) return 'has yet to trouble the scorers'
-      if (K - f.lastScored >= 2) return i % 2 ? `last scored back in round ${f.lastScored}` : `has not scored since round ${f.lastScored}`
-      if (f.dnfs === 1) return i % 2 ? 'has lost a finish to retirement' : 'has already retired once'
+      if (f.dnfs >= 2) return isEnd ? (i % 2 ? `suffered ${numWord(f.dnfs)} retirements` : `retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`) : (i % 2 ? `has ${numTimes(f.dnfs)} retirements already` : `has retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`)
+      if (f.lastScored === 0) return isEnd ? 'never troubled the scorers' : 'has yet to trouble the scorers'
+      if (K - f.lastScored >= 2) return isEnd ? `scored for the last time in round ${f.lastScored}` : (i % 2 ? `last scored back in round ${f.lastScored}` : `has not scored since round ${f.lastScored}`)
+      if (f.dnfs === 1) return isEnd ? 'lost a finish to retirement' : (i % 2 ? 'has lost a finish to retirement' : 'has already retired once')
       return ''
     }
     const underSentence = (f: Info, i: number): string => {
       const projP = [`ranked ${ordinal(f.proj)} in the preseason`, `${ordinal(f.proj)} in the winter ratings`, `a projected ${ordinal(f.proj)}`][i % 3]
-      const posP = ['sits', 'has slid to', 'now runs'][i % 3]
+      const posP = (isEnd ? ['finished', 'slid to', 'ended up'] : ['sits', 'has slid to', 'now runs'])[i % 3]
       const r = reason(f, i)
-      return r ? `${f.name}, ${projP}, ${r} and ${posP} ${ordinal(f.pos)}.` : `${f.name}, ${projP}, has slipped to ${ordinal(f.pos)}.`
+      return r ? `${f.name}, ${projP}, ${r} and ${posP} ${ordinal(f.pos)}.` : `${f.name}, ${projP}, ${isEnd ? 'slipped' : 'has slipped'} to ${ordinal(f.pos)}.`
     }
 
     // Next-round signpost from the real calendar gap.
@@ -2951,26 +2957,32 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
       : ''
 
     const paragraphs: string[] = []
-    if (overs.length) paragraphs.push(`${cap(numWord(K))} rounds in, ${ctx.year} has already broken from the winter form guide. ${overs.map(overSentence).join(' ')}`)
+    if (overs.length) {
+      const intro = isEnd ? `Across ${ctx.year}, the final order broke from the winter form guide.` : `${cap(numWord(K))} rounds in, ${ctx.year} has already broken from the winter form guide.`
+      paragraphs.push(`${intro} ${overs.map(overSentence).join(' ')}`)
+    }
     if (unders.length) {
-      const lead = overs.length ? 'The bigger story is how far the fancied names have fallen.' : `${cap(numWord(K))} rounds in, the names the winter rated highly have gone backwards.`
+      const lead = overs.length
+        ? (isEnd ? 'The bigger story was how far the fancied names fell.' : 'The bigger story is how far the fancied names have fallen.')
+        : (isEnd ? `In ${ctx.year}, the names the winter rated highly went backwards.` : `${cap(numWord(K))} rounds in, the names the winter rated highly have gone backwards.`)
       paragraphs.push(`${lead} ${unders.map(underSentence).join(' ')}`)
     }
     if (closer) paragraphs.push(closer)
 
     // Headline + dek lead with the actual movers, not a restatement of the premise.
     const headline = overs.length && unders.length
-      ? `${overs[0].last} climbs and ${unders[0].last} slides ${numWord(K)} rounds into ${ctx.year}`
+      ? (isEnd ? `${overs[0].last} beat the winter call, ${unders[0].last} fell short of it in ${ctx.year}` : `${overs[0].last} climbs and ${unders[0].last} slides ${numWord(K)} rounds into ${ctx.year}`)
       : overs.length
-      ? `${overs[0].last} runs ${ordinal(overs[0].pos)}, well above the winter call, after ${numWord(K)} rounds`
-      : `${unders[0].last} slides to ${ordinal(unders[0].pos)} ${numWord(K)} rounds into ${ctx.year}`
+      ? (isEnd ? `${overs[0].last} finished ${ordinal(overs[0].pos)}, well above the winter call, in ${ctx.year}` : `${overs[0].last} runs ${ordinal(overs[0].pos)}, well above the winter call, after ${numWord(K)} rounds`)
+      : (isEnd ? `${unders[0].last} ended ${ordinal(unders[0].pos)}, well below the winter call, in ${ctx.year}` : `${unders[0].last} slides to ${ordinal(unders[0].pos)} ${numWord(K)} rounds into ${ctx.year}`)
     const dek = overs.length && unders.length
-      ? `${overs[0].name} has climbed to ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} has gone the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.`
+      ? (isEnd ? `${overs[0].name} ended ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} went the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.` : `${overs[0].name} has climbed to ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} has gone the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.`)
       : overs.length
-      ? `${overs[0].name} leads the names running clear of the winter projection ${numWord(K)} rounds into ${ctx.year}.`
-      : `${unders[0].name} heads the names trailing the winter projection ${numWord(K)} rounds into ${ctx.year}.`
+      ? (isEnd ? `${overs[0].name} led the names that beat the winter projection across ${ctx.year}.` : `${overs[0].name} leads the names running clear of the winter projection ${numWord(K)} rounds into ${ctx.year}.`)
+      : (isEnd ? `${unders[0].name} headed the names that trailed the winter projection across ${ctx.year}.` : `${unders[0].name} heads the names trailing the winter projection ${numWord(K)} rounds into ${ctx.year}.`)
 
-    out.push({ id: `expectation-${ctx.year}-${K}`, category: 'analysis_opinion', round: K, priority: 33, headline, dek, body: paras(...paragraphs) })
+    // At year end this is a marquee season piece (drops on finale day); mid-season it's a checkpoint opinion.
+    out.push({ id: `expectation-${ctx.year}-${K}`, category: isEnd ? 'feature' : 'analysis_opinion', round: K, priority: isEnd ? 84 : 33, ...(isEnd ? { dayOffset: 0 } : {}), headline, dek, body: paras(...paragraphs) })
   }
   return out
 }
@@ -3240,7 +3252,7 @@ function articleDate(ctx: NewsContext, a: NewsArticle): string {
   // championship_state category with the post-race "champion crowned" reaction, but must drop in their
   // round's race WEEK, BEFORE that race — not at the +1 post-race offset, which fired them a round late,
   // after the very race they previewed (same date-driven-interrupt class as #53). Reactions keep their offset.
-  const offset = a.preview ? -4 : (CATEGORY_DAY_OFFSET[a.category] ?? 0)
+  const offset = a.preview ? -4 : (a.dayOffset ?? CATEGORY_DAY_OFFSET[a.category] ?? 0)
   const raw = addDays(raceDayOf(ctx, anchor), offset)
   // The day offset is cosmetic intra-round ordering only — it must NOT push a story past its round's
   // NEXT race, or the date-driven Continue-loop interrupt (continue-loop.ts) fires a round or more late
