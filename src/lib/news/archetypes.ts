@@ -415,7 +415,7 @@ function teamDriverSplit(ctx: NewsContext, teamId: string, N: number): { id: str
   return [...m.entries()].map(([id, points]) => ({ id, points })).sort((a, b) => b.points - a.points)
 }
 // The earliest round at which the leader's gap became mathematically insurmountable (the title clinch).
-function clinchRound(series: { round: number; gap: number }[], maxPer: number, totalRounds: number): number | null {
+export function clinchRound(series: { round: number; gap: number }[], maxPer: number, totalRounds: number): number | null {
   for (const g of series) if (g.gap > (totalRounds - g.round) * maxPer) return g.round
   return null
 }
@@ -446,7 +446,8 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
 
   const dClinch = clinchRound(analysis.driverTitle.series, driverMaxPerRace(ctx.year), analysis.totalRounds)
   const cClinch = clinchRound(ct.series, constructorMaxPerRace(ctx.year), analysis.totalRounds)
-  const driversSealedEarly = dClinch != null && (cClinch == null || cClinch - dClinch >= 3)
+  const consDecided = cClinch ?? analysis.completedRounds // teams' clinch round, or the final round if it ran the distance
+  const driversSealedEarly = dClinch != null && consDecided - dClinch >= 3
 
   // Repeat: the same constructor won last season too.
   const lastYear = (ctx.constructorHistory ?? []).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)

@@ -42,7 +42,7 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
-import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, constructorShape, teamArcs, runnerUpArc, bestOfRestBattle, backmarkerStory } from './archetypes'
+import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, constructorShape, teamArcs, runnerUpArc, clinchRound, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
 import bestOfRestCopy from './best-of-rest-copy.json'
@@ -1682,6 +1682,9 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     let consTitlesInRow = 1
     for (let y = ctx.year - 1; (ctx.constructorHistory ?? []).some((h) => h.seasonYear === y && h.teamId === constructorChampion && h.finalPosition === 1); y--) consTitlesInRow++
     const consTitleStreak = consTitlesInRow === 2 ? 'back-to-back titles' : `a ${ordinal(consTitlesInRow)} consecutive title`
+    // When the drivers' title was sealed, for the drivers-sealed-early modifier copy.
+    const dClinchRound = clinchRound(analysis.driverTitle.series, driverMaxPerRace(ctx.year), analysis.totalRounds)
+    const driversClinchAgo = dClinchRound ? analysis.completedRounds - dClinchRound : 0
     const consSlots = {
       ...slots,
       cons_other: otherTeamId ? tn(otherTeamId) : '',
@@ -1696,6 +1699,8 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
       other_driver: other ? other.name : '', other_driver_last: other ? lastName(other.name) : '', other_driver_points: other?.points ?? 0,
       cons_wins: consWins, cons_races: analysis.completedRounds, cons_points: consPoints, cons_margin: consTitle.currentGap, cons_lead_changes: consTitle.leadChanges,
       cons_titles_in_row: consTitlesInRow, cons_title_streak: consTitleStreak,
+      drivers_clinch_ago: driversClinchAgo, drivers_clinch_ago_str: `${driversClinchAgo} ${plural(driversClinchAgo, 'round')} ago`,
+      drivers_clinch_gp: dClinchRound ? circuit(ctx, dClinchRound) : '',
       cons_runner_up: consRunnerUp ? tn(consRunnerUp) : '', cons_runner_up_points: consRunnerUpPoints,
       champ_team_drivers: listJoin(seatRows.map((r) => r.name)),
       cons_beat: consBeat,

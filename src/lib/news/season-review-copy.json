@@ -153,7 +153,12 @@
     "{constructor_champion} wrapped up the {year} constructors' championship, {cons_runner_up} finishing as runners-up {cons_margin} points adrift on {cons_runner_up_points}.",
     "{constructor_champion} were the {year} constructors' champions, finishing {cons_margin} points ahead of {cons_runner_up}, {cons_points} to {cons_runner_up_points}."
   ],
-  "consDriversSealedEarly": ["PLACEHOLDER The drivers' title was settled well before the constructors' went to the wire."],
+  "consDriversSealedEarly": [
+    "By then {champion_last} had long since wrapped up the drivers' title, the constructors' the last of the two to be settled.",
+    "The drivers' championship had been {champion_last}'s for some weeks, with the teams' battle outlasting it.",
+    "{champion_last} had sealed the drivers' crown well before this.",
+    "This came after {champion_last} had already decided the drivers' title {drivers_clinch_ago_str} at the {drivers_clinch_gp}."
+  ],
   "champTeammatePair": ["PLACEHOLDER The two title protagonists shared a garage."],
   "champLateWobble": ["PLACEHOLDER A commanding lead came under late pressure but held."],
   "champWetAided": ["PLACEHOLDER Several of those wins came in the wet."],
