@@ -1919,48 +1919,63 @@ function openerPiece(ctx: NewsContext): string {
   const wins = (id: string) => ctx.careers?.[id]?.wins ?? 0
   const teamOf = (id: string) => teamName(ctx, ctx.drivers.find((d) => d.id === id)?.teamId ?? '')
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  const an = (s: string) => (/^[aeiou]/i.test(s) ? 'an' : 'a')
   // Driver with their strongest career mark appended (champion > race-winner), or just the name.
   const tagged = (id: string) => { const t = titles(id); const r = t >= 2 ? `${t}-time champion` : t === 1 ? 'former champion' : wins(id) > 0 ? 'race-winner' : ''; return r ? `${dn(id)}, ${r},` : dn(id) }
-  const byRank = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank)
+  const byRank = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank).map((e) => e.driverId)
+  const expOf = (id: string) => analysis.driverExpectations.get(id)?.expectedRank ?? 99
   const N = ctx.calendar.length
   const beats: string[] = []
+  const named = new Set<string>()
 
-  // Beat 1 — the lead hook: the title defence (with the milestone it chases) + the chief challenger; with no
-  // reigning champion (a fresh save), the winter's top two instead.
+  // The biggest winter move: a driver who switched teams (prior team from the Signing Day draft), taken in
+  // order of who the media most fancies for the title (best projected rank).
+  const draftBy = new Map((ctx.draft ?? []).map((p) => [p.driverId, p]))
+  const fromTeam = (id: string) => { const prev = draftBy.get(id)?.prevTeamName ?? ''; return prev && prev !== teamOf(id) ? prev : '' }
+  const topMover = byRank.find((id) => fromTeam(id))
+
+  // Beat 1 — the lead hook, sharpest first: a title-contender's winter move, else the title defence, else the
+  // two most-fancied drivers. ("The winter" is a time of year, not an agent — it never makes or picks anyone.)
   const champ = cast.reigningChampion
-  const challenger = cast.titleFavourites.find((id) => id !== champ) ?? byRank.find((e) => e.driverId !== champ)?.driverId
-  if (champ) {
+  if (topMover && expOf(topMover) <= 3) {
+    const pr = pronouns(ctx.drivers.find((d) => d.id === topMover)?.gender)
+    const rival = byRank.find((id) => id !== topMover)
+    named.add(topMover); if (rival) named.add(rival)
+    const rivalBit = rival ? ` ${tagged(rival)} is the name most likely to stop ${pr.them}.` : ''
+    beats.push(`${tagged(topMover)} begins ${ctx.year} in ${teamOf(topMover)} colours after leaving ${fromTeam(topMover)}, among the favourites for the title.${rivalBit}`)
+  } else if (champ) {
     const t = titles(champ)
     const pr = pronouns(ctx.drivers.find((d) => d.id === champ)?.gender)
-    const chase = t >= 1 ? ` chasing a ${ordinal(t + 1)} title` : ''
+    const challenger = cast.titleFavourites.find((id) => id !== champ) ?? byRank.find((id) => id !== champ)
+    named.add(champ); if (challenger) named.add(challenger)
     const chal = challenger ? ` ${tagged(challenger)} leads the names tipped to stop ${pr.them}.` : ''
-    beats.push(`${dn(champ)}, ${t >= 2 ? `${t}-time champion` : 'reigning champion'}, opens ${ctx.year}${chase}.${chal}`)
+    beats.push(`${dn(champ)}, ${t >= 2 ? `${t}-time champion` : 'reigning champion'}, opens ${ctx.year}${t >= 1 ? ` chasing a ${ordinal(t + 1)} title` : ''}.${chal}`)
   } else if (byRank.length >= 2) {
-    beats.push(`The winter makes ${tagged(byRank[0].driverId)} and ${tagged(byRank[1].driverId)} the names to beat in ${ctx.year}.`)
+    named.add(byRank[0]); named.add(byRank[1])
+    beats.push(`${tagged(byRank[0])} and ${tagged(byRank[1])} are the names to beat in ${ctx.year}.`)
   }
 
-  // Beat 2 — the field: who the winter expects to split the leaders, plus a team rated above last season's
-  // constructors' finish and one rated below it.
-  const taken = new Set([champ, challenger].filter(Boolean) as string[])
-  const splitter = byRank.find((e) => !taken.has(e.driverId))?.driverId
+  // Beat 2 — the field: who is tipped to split the leaders, plus a team rated above last season's constructors'
+  // finish and one rated below it.
+  const splitter = byRank.find((id) => !named.has(id))
   const lastYear = (ctx.constructorHistory ?? []).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
   const lastFin = (teamId: string) => (ctx.constructorHistory ?? []).find((h) => h.seasonYear === lastYear && h.teamId === teamId)?.finalPosition
   const moves = ctx.teams.map((tm) => ({ id: tm.id, exp: analysis.teamExpectations.get(tm.id)?.expectedRank, lf: lastFin(tm.id) })).filter((x): x is { id: string; exp: number; lf: number } => x.exp != null && x.lf != null)
   const riser = moves.filter((x) => x.lf - x.exp >= 2).sort((a, b) => (b.lf - b.exp) - (a.lf - a.exp))[0]
   const faller = moves.filter((x) => x.exp - x.lf >= 2).sort((a, b) => (b.exp - b.lf) - (a.exp - a.lf))[0]
   const fieldBits: string[] = []
-  if (splitter) fieldBits.push(`${dn(splitter)} (${teamOf(splitter)}) is the winter's pick to split them`)
+  if (splitter) fieldBits.push(`${dn(splitter)} (${teamOf(splitter)}) is tipped to split them`)
   if (riser) fieldBits.push(`${teamName(ctx, riser.id)} is tipped to climb from ${ordinal(riser.lf)} to ${ordinal(riser.exp)}`)
   if (faller) fieldBits.push(`${teamName(ctx, faller.id)}, ${ordinal(faller.lf)} a year ago, is rated only ${ordinal(faller.exp)}`)
   if (fieldBits.length) beats.push(`${cap(fieldBits[0])}${fieldBits.length > 1 ? `, while ${fieldBits.slice(1).join(', and ')}` : ''}.`)
 
-  // Beat 3 — one wildcard: a dark horse, a veteran's last stand, or a rookie (suppressed if the whole grid is new).
+  // Beat 3 — one wildcard: a dark horse, a veteran's last stand, or a rookie (unless the whole grid is new).
   const seated = ctx.drivers.filter((d) => d.teamId !== '').length
   const dh = cast.darkHorses[0]
   const vet = cast.veterans.find((v) => v.kind === 'twilight')
   if (dh) {
     const tExp = analysis.teamExpectations.get(ctx.drivers.find((d) => d.id === dh)?.teamId ?? '')?.expectedRank
-    beats.push(`The wildcard is ${dn(dh)}, rated among the field's best but in a ${teamOf(dh)} car the winter places no higher than ${ordinal(tExp ?? 0)}.`)
+    beats.push(`The wildcard is ${dn(dh)}, among the highest-rated drivers in the field but in ${an(teamOf(dh))} ${teamOf(dh)} car projected no higher than ${ordinal(tExp ?? 0)}.`)
   } else if (vet) {
     beats.push(`${dn(vet.driverId)}, ${ctx.drivers.find((d) => d.id === vet.driverId)?.age}, lines up for what may be a final campaign.`)
   } else if (cast.rookies.length && cast.rookies.length <= seated / 2) {
