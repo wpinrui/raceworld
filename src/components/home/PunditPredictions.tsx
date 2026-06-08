@@ -3,18 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendarForYear } from '@/data/calendars'
-import { OFF_SEASON_PHASES, isOffSeason } from '@/lib/sim/types'
+import { isOffSeason } from '@/lib/sim/types'
 import { shownStats } from '@/lib/sim/progression'
 import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { positionPalette } from '@/components/world/pills'
-import { SeasonReviewPanel } from '@/components/home/SeasonReviewPanel'
-import { RetirementsPanel } from '@/components/standings/RetirementsPanel'
 import { SigningDayBoard } from '@/components/home/SigningDayBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
-import type { Driver, Team, RaceResult } from '@/lib/sim/types'
+import type { Driver, Team, RaceResult, PreSeasonTest } from '@/lib/sim/types'
 
 const FORM_RACES = 4 // recent races that feed the form read
 
@@ -69,78 +67,63 @@ function FormPill({ pos }: { pos: number | null }) {
   return <span className="inline-flex h-4 min-w-4 items-center justify-center rounded px-1 text-[9px] font-bold tabular-nums" style={{ backgroundColor: bg, color: fg }}>{pos}</span>
 }
 
-// Module-scoped so it survives unmount/remount: which off-season phase we've already auto-opened.
-// This makes the recap pop exactly once when you Continue into a stage, not every time you return to
-// Home (e.g. Home → Standings → Home). It only re-fires when the phase actually changes (next Continue).
-let lastAutoOpenedPhase: string | null = null
-
-const STAGE_LABEL: Record<string, string> = {
-  'end-of-season': 'Season Review',
-  'contract-negotiations': 'Signing Day',
-  'driver-retirements': 'Retirements',
-  'pre-season-testing': 'Testing',
-}
-
-// Off-season mode: Pundit Predictions becomes the season-review surface. One button per stage already
-// reached; each opens a modal recapping how that stage went (Continue, top-right, runs the next one).
+// Signing Day surface (#126): shown at the Signing Day stop (contract-negotiations phase). Auto-opens
+// the board as a modal once per off-season; the signings themselves are revisitable as news in the feed
+// (the season review + retirements are likewise news, not panels). The board persists its reveal state.
+let signingDaySeenYear: number | null = null
 function OffSeasonReview() {
   const season = useSeasonStore()
   const summary = season.endOfSeasonSummary
-  const [open, setOpen] = useState<string | null>(null)
-
-  // Auto-open the recap for whatever off-season stage you've just advanced into — once per phase, so
-  // returning to Home (after Standings, etc.) doesn't reopen it. The next Continue changes the phase
-  // and re-arms it. `autoOpened` is seeded from the module-scoped memory so the "once" survives the
-  // component unmounting; we adjust it during render (React's pattern for reacting to a changed value)
-  // and write the memory back in an effect, so render itself stays pure.
-  const [autoOpened, setAutoOpened] = useState(lastAutoOpenedPhase)
-  if (OFF_SEASON_PHASES.includes(season.phase) && autoOpened !== season.phase) {
-    setAutoOpened(season.phase)
-    setOpen(season.phase)
-  }
-  useEffect(() => { lastAutoOpenedPhase = autoOpened }, [autoOpened])
+  const [open, setOpen] = useState(signingDaySeenYear !== season.year)
+  useEffect(() => { signingDaySeenYear = season.year }, [season.year])
 
   if (!summary) {
-    return <Panel title="Off-Season"><p className="text-sm text-[#FFFFFF]">Wrapping up the season…</p></Panel>
+    return <Panel title="Off-Season"><p className="p-4 text-sm text-[#FFFFFF]">Wrapping up the season…</p></Panel>
   }
 
-  const progressIdx = OFF_SEASON_PHASES.indexOf(season.phase)
-  const reached = OFF_SEASON_PHASES.filter((_, i) => i <= progressIdx)
-
   return (
-    <Panel title={`Season ${season.year} · Off-Season`} flush fill>
+    <Panel title={`Signing Day · ${season.year}`} flush fill>
       <div className="p-4">
-        <div className="flex flex-wrap gap-2">
-          {reached.map((p) => (
-            <button
-              key={p}
-              onClick={() => setOpen(p)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors ${
-                p === season.phase ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
-              }`}
-            >
-              {STAGE_LABEL[p]}
-            </button>
-          ))}
-        </div>
+        <button onClick={() => setOpen(true)} className="px-3 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-semibold uppercase tracking-wide hover:bg-[#009CB8] transition-colors">View Signing Day</button>
       </div>
-
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(null)}>
-          <div className={`bg-[#1E2431] border border-[#2A3142] rounded-xl w-full flex flex-col shadow-xl ${open === 'contract-negotiations' ? 'max-w-5xl h-[85vh]' : 'max-w-3xl max-h-[85vh]'}`} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-5xl h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
-              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{STAGE_LABEL[open]}</h2>
-              <button onClick={() => setOpen(null)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Signing Day · {season.year}</h2>
+              <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
-            <div className={`flex-1 min-h-0 p-5 ${open === 'contract-negotiations' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-              {open === 'end-of-season' && (
-                <SeasonReviewPanel summary={summary} drivers={season.drivers} teams={season.teams} driverStandings={season.driverStandings} constructorStandings={season.constructorStandings} />
-              )}
-              {open === 'contract-negotiations' && <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />}
-              {open === 'driver-retirements' && <RetirementsPanel summary={summary} drivers={season.drivers} />}
-              {open === 'pre-season-testing' && (
-                <TestingPanel summary={summary} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
-              )}
+            <div className="flex-1 min-h-0 p-5 overflow-hidden">
+              <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />
+            </div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+// Pre-season testing surface (#126): the dated test lands before round 1 with no off-season phase, so
+// it shows here. Auto-opens the board as a modal once per season (so it can't be missed), then leaves a
+// button to reopen it through the rest of the run-up.
+let preSeasonTestSeenYear: number | null = null
+function PreSeasonTestingSurface({ test, year, prevFinish, teams }: { test: PreSeasonTest; year: number; prevFinish: Map<string, number>; teams: Team[] }) {
+  const [open, setOpen] = useState(preSeasonTestSeenYear !== year)
+  useEffect(() => { preSeasonTestSeenYear = year }, [year])
+  return (
+    <Panel title={`${year} Pre-Season Testing`} flush fill>
+      <div className="p-4">
+        <button onClick={() => setOpen(true)} className="px-3 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-semibold uppercase tracking-wide hover:bg-[#009CB8] transition-colors">View testing times</button>
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{year} Pre-Season Testing</h2>
+              <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
+            </div>
+            <div className="flex-1 min-h-0 p-5 overflow-y-auto">
+              <TestingPanel test={test} wccYear={year - 1} prevFinish={prevFinish} teams={teams} />
             </div>
           </div>
         </div>
@@ -157,8 +140,17 @@ export function PunditPredictions() {
   const currentRound = useSeasonStore((s) => s.currentRound)
   const year = useSeasonStore((s) => s.year)
   const raceResults = useSeasonStore((s) => s.raceResults)
+  const preSeasonTest = useSeasonStore((s) => s.preSeasonTest)
+  const constructorHistory = useSeasonStore((s) => s.constructorHistory)
 
   if (isOffSeason(phase)) return <OffSeasonReview />
+  // After the dated Testing stop (#126), before round 1 runs, the home surface is the test board (modal).
+  if (preSeasonTest && raceResults.length === 0) {
+    // The WCC comparison column shows the PRIOR season's finish, drawn from history — the new season's
+    // standings are empty after the rollover, so they can't supply it.
+    const prevFinish = new Map((constructorHistory ?? []).filter((h) => h.seasonYear === year - 1).map((h) => [h.teamId, h.finalPosition]))
+    return <PreSeasonTestingSurface test={preSeasonTest} year={year} prevFinish={prevFinish} teams={teams} />
+  }
 
   const nextRace = calendarForYear(year)[currentRound - 1]
   if (!nextRace) {

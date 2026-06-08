@@ -17,7 +17,7 @@ import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop, type ContinueSettings } from '@/lib/sim/continue-loop'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
-import { advanceOffSeason, nextOffSeasonStageLabel } from '@/lib/sim/offseason-flow'
+import { runOffSeasonEvent } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords } from '@/lib/news/actions'
 import { useSetupCta } from '@/lib/store/setup-cta'
 import { pendingRealWorldChanges } from '@/lib/history/transitions'
@@ -36,6 +36,10 @@ const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppe
 // Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
 // fast-forwards so a multi-week gap to the next race doesn't drag. (n = days advanced so far this Continue.)
 const dayTickMs = (n: number): number => (n < 8 ? 1080 : n < 24 ? 660 : 385)
+// #127: an empty stretch (no news, no event) fast-forwards over ~this long TOTAL, not a fixed per-day
+// speed — so a long dead run (the off-season's Jan/Feb weeks) reads as a real ~9s sim rather than a
+// flash, while short hops stay proportionally quick. Per-day = EMPTY_RUN_MS / stretch-length, clamped.
+const EMPTY_RUN_MS = 9000
 
 export default function Nav() {
   const pathname = usePathname()
@@ -166,20 +170,47 @@ export default function Nav() {
     let dayCount = 0
     while (true) {
       const s = useSeasonStore.getState()
+      // The real-world grid-changes decision is a hard gate at a season's start. It's a blocking player
+      // call, so stop the sim for it (the modal is render-driven; breaking here keeps the loop from
+      // running past an unmade decision now that the off-season flows through this same loop) (#126).
+      if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) break
       const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
       setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
       const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
-      if (stop.reason === 'season-end') break
+      if (stop.reason === 'idle') break
       // Walk the clock to the stop ONE DAY at a time, accelerating on long runs. Space/Esc set stopRef.
       let cur = s.currentDate
+      // Linger on days something drops; fast-forward the empty stretches between, spread over a ~fixed
+      // total so a long dead run reads as a real sim, not a flash (#127).
+      const newsDays = new Set(articles.map((a) => a.date).filter((d): d is string => !!d))
+      const segDays = Math.max(1, Math.round((Date.parse(stop.date) - Date.parse(cur)) / 86_400_000))
+      const emptyMs = Math.min(300, Math.max(45, Math.round(EMPTY_RUN_MS / segDays)))
       while (cur < stop.date) {
         if (stopRef.current) break
         cur = toISODate(addDays(fromISODate(cur), 1))
         useSeasonStore.getState().setCurrentDate(cur)
         dayCount++
-        await new Promise((r) => setTimeout(r, dayTickMs(dayCount)))
+        await new Promise((r) => setTimeout(r, newsDays.has(cur) ? dayTickMs(dayCount) : emptyMs))
       }
       if (stopRef.current) break
+      // Dated off-season beat (#126): run its sim/news organically now we've reached the day.
+      if (stop.reason === 'offseason') {
+        await runOffSeasonEvent(stop.event)
+        if (stop.event === 'roster-swap') continue            // silent New-Year crossing — keep advancing
+        if (opts?.targetRound != null) continue               // a fast-forward runs the beats but never stops on them
+        // Retirements present as NEWS: stop only if someone actually retired, and show the retirement
+        // story modal (no board, no empty-year stop). Signing Day + Testing are the boards on Home.
+        if (stop.event === 'retirements') {
+          const retired = useSeasonStore.getState().endOfSeasonSummary?.retiredDriverIds ?? []
+          if (retired.length === 0) continue
+          const refreshed = generateNews(buildLiveNewsContext(useSeasonStore.getState(), careerBase, teamCareerBase, records, teamDriverTallies))
+          const retNews = refreshed.filter((a) => a.category === 'career_retirement')
+          if (retNews.length) { retNews.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: retNews }); break }
+          continue // retired but no story (unreachable in practice) — keep advancing, don't open a board
+        }
+        // Hard stop on Home for the interactive boards (Signing Day, Testing).
+        setAdvancing(false); router.push('/home'); break
+      }
       if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
       // Race weekend (Friday): a fast-forward stops at the target weekend; a normal Continue hands the race
       // to the player; otherwise the race auto-simulates and the loop carries on.
@@ -241,15 +272,9 @@ export default function Nav() {
     setNewsStop(null)
     setBusy(true)
     try {
-      if (isOffSeason(useSeasonStore.getState().phase)) {
-        // Real-world team changes are now decided at the START of the season (announced mid-season, applied
-        // at the rollover), so the off-season no longer gates on them — it just advances.
-        await advanceOffSeason()
-      } else {
-        await runDayAdvance()
-      }
-      // The off-season recap modals live on Home; jump there so they're visible after Continue.
-      if (isOffSeason(useSeasonStore.getState().phase)) router.push('/home')
+      // One unified loop (#126): in-season races + news AND the dated off-season beats all flow through
+      // the day-by-day advance, which navigates to Home itself for the Signing Day / Testing hard stops.
+      await runDayAdvance()
     } finally {
       setBusy(false)
       setAdvancing(false)
@@ -291,9 +316,7 @@ export default function Nav() {
         : null
     }
     if (advancing) return <button onClick={handleStop} className={STOP_CTA}>Stop Simulating</button>
-    if (offSeason) {
-      return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA} title={`Next: ${nextOffSeasonStageLabel(phase)}`}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
-    }
+    // Off-season now uses the same unified Continue (the loop handles its dated beats) — no special case.
     if (atRaceday && interruptOnRaceday) {
       return (
         <div className="flex items-center gap-2">

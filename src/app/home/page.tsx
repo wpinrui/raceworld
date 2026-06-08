@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { isOffSeason } from '@/lib/sim/types'
 import { RaceBanner } from '@/components/home/RaceBanner'
 import { PunditPredictions } from '@/components/home/PunditPredictions'
 import { CompactStandings } from '@/components/home/CompactStandings'
@@ -17,11 +16,16 @@ export default function HomePage() {
   const phase = useSeasonStore((s) => s.phase)
   const teams = useSeasonStore((s) => s.teams)
   const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
+  const preSeasonTest = useSeasonStore((s) => s.preSeasonTest)
+  const completedRounds = useSeasonStore((s) => s.raceResults.length)
   const hydrated = useHydrated()
 
   if (!hydrated) return null
 
-  const offSeason = isOffSeason(phase)
+  // The home's left review panel shows ONLY for the two interactive off-season boards: Signing Day
+  // (contract-negotiations) and the pre-season test (after the rollover, phase 'pre-race', before round
+  // 1). The season review + retirements are news, read in the feed — not revisit panels (#126).
+  const showLeftPanel = phase === 'contract-negotiations' || (!!preSeasonTest && completedRounds === 0)
 
   return (
     <div className="h-full overflow-hidden bg-[#0F1419] text-[#FFFFFF]">
@@ -34,7 +38,7 @@ export default function HomePage() {
         <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[45fr_55fr]">
           {/* Left: off-season stage review (off-season only) sits above the headlines feed. */}
           <div className="flex flex-col gap-3 min-h-0">
-            {offSeason && <div className="flex-1 min-h-0"><PunditPredictions /></div>}
+            {showLeftPanel && <div className="flex-1 min-h-0"><PunditPredictions /></div>}
             <div className="flex-1 min-h-0"><HeadlinesPanel /></div>
           </div>
 

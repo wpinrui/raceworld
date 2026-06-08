@@ -15,6 +15,7 @@ import type {
   PendingGridChanges,
   MarketMove,
   DroppedDriver,
+  PreSeasonTest,
 } from '@/lib/sim/types'
 import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
@@ -239,6 +240,7 @@ interface SeasonStore {
   constructorHistory: ConstructorSeasonRecord[]
   allUpgradeEvents: DevUpgradeEvent[]
   endOfSeasonSummary: EndOfSeasonSummary | null
+  preSeasonTest: PreSeasonTest | null   // new season's test result, shown at the dated pre-season testing stop (#126)
   pendingNextSeasonState: { drivers: Driver[]; teams: Team[] } | null
   // M4 god-mode: team add/remove queued for next season (applied at season end).
   pendingGridChanges: PendingGridChanges
@@ -294,6 +296,9 @@ interface SeasonStore {
   runContractNegotiations: () => void
   runDriverRetirements: () => void
   runPreSeasonTesting: () => void
+  // Date-driven off-season (#126): the New-Year roster swap (kept clock), and the pre-season test on its own date.
+  rolloverSeason: () => void
+  runPreSeasonTestOnly: () => void
   setDbSeasonId: (id: number) => void
   setSigningDayRevealed: (n: number) => void
   markNewsRead: (id: string) => void
@@ -321,6 +326,7 @@ export const useSeasonStore = create<SeasonStore>()(
       constructorHistory: [],
       allUpgradeEvents: [],
       endOfSeasonSummary: null,
+      preSeasonTest: null,
       pendingNextSeasonState: null,
       pendingGridChanges: { additions: [], removals: [] },
       seasonStartStats: {},
@@ -366,6 +372,7 @@ export const useSeasonStore = create<SeasonStore>()(
           devPlans,
           allUpgradeEvents: [],
           endOfSeasonSummary: null,
+          preSeasonTest: null,
           pendingNextSeasonState: null,
           seasonStartStats: snapshotStats(allDrivers),
           statHistory: seedStatHistory(allDrivers),
@@ -964,6 +971,7 @@ export const useSeasonStore = create<SeasonStore>()(
           devPlans,
           allUpgradeEvents: [],
           endOfSeasonSummary: null,
+          preSeasonTest: null,
           pendingNextSeasonState: null,
           priorSeasonDriverMediaScores,
           seasonStartStats: snapshotStats(drivers),
@@ -978,6 +986,65 @@ export const useSeasonStore = create<SeasonStore>()(
         })
       },
 
+      // New-Year roster swap for the dated off-season (#126): make next season's grid live, reshuffle car
+      // pace (the cars are now "built", so launches show them and testing later reveals the pace), and
+      // increment the year — but KEEP the clock running (no Jan-1 reset), so the off-season flows
+      // continuously into the new season's pre-season run-up. Mirrors startNewSeason otherwise.
+      rolloverSeason: () => {
+        const { pendingNextSeasonState, year, constructorHistory, realWorldMode } = get()
+        if (!pendingNextSeasonState) return
+        const newYear = year + 1
+        const priorSeasonDriverMediaScores = Object.fromEntries(
+          (get().endOfSeasonSummary?.driverMediaScores ?? []).map((s) => [s.driverId, s.score]),
+        )
+        const { updatedTeams: teams } = computeCarReshuffle(pendingNextSeasonState.teams, Math.random)
+        const pendingDrivers = pendingNextSeasonState.drivers
+        const existingIds = new Set(pendingDrivers.map((d) => d.id))
+        let topUp: Driver[]
+        if (realWorldMode && newYear <= lastDriverEntryYear()) {
+          topUp = rookiesForYear(newYear).filter((d) => !existingIds.has(d.id))
+        } else {
+          const poolSize = pendingDrivers.filter((d) => d.teamId === '').length
+          topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
+        }
+        const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
+        const devPlans = initDevPlans(teams, computeFundingTiers(teams, constructorHistory), Math.random)
+        set({
+          phase: 'pre-race',
+          year: newYear,
+          drivers,
+          teams,
+          currentRound: 1,
+          // currentDate is intentionally KEPT — the clock flowed here from the finale (no Jan-1 reset).
+          raceResults: [],
+          dbSeasonId: null,
+          devPlans,
+          allUpgradeEvents: [],
+          endOfSeasonSummary: null,
+          preSeasonTest: null,
+          pendingNextSeasonState: null,
+          priorSeasonDriverMediaScores,
+          seasonStartStats: snapshotStats(drivers),
+          statHistory: seedStatHistory(drivers),
+          carPaceHistory: [{ round: 0, paces: snapshotCarPaces(teams) }],
+          seasonDraft: [],
+          seasonRenewals: [],
+          seasonContractWatch: [],
+          signingDayRevealed: 0,
+          realWorldChangesResolved: false,
+          approvedSeasonChanges: null,
+          driverStandings: computeDriverStandings(drivers, teams, []),
+          constructorStandings: computeConstructorStandings(teams, drivers, []),
+        })
+      },
+
+      // The pre-season test on its own dated stop (opener-10): run on the now-live, reshuffled grid and
+      // reveal the pecking order obliquely. Stored for the testing stop's board + its recap news.
+      runPreSeasonTestOnly: () => {
+        const { drivers, teams } = get()
+        set({ preSeasonTest: runPreSeasonTest(drivers, teams, TEST_CIRCUIT, Math.random) })
+      },
+
       resetToIdle: () => {
         const { drivers, teams, year } = get()
         set({
@@ -990,6 +1057,7 @@ export const useSeasonStore = create<SeasonStore>()(
           realWorldChangesResolved: false,
           approvedSeasonChanges: null, // reset with `resolved` — the pair is always cleared together
           endOfSeasonSummary: null,
+          preSeasonTest: null,
           pendingNextSeasonState: null,
           // Season-scoped per-round history is cleared too, matching raceResults/allUpgradeEvents.
           statHistory: {},
@@ -1029,6 +1097,7 @@ export const useSeasonStore = create<SeasonStore>()(
         constructorHistory: state.constructorHistory,
         allUpgradeEvents: state.allUpgradeEvents,
         endOfSeasonSummary: state.endOfSeasonSummary,
+        preSeasonTest: state.preSeasonTest,
         pendingNextSeasonState: state.pendingNextSeasonState,
         pendingGridChanges: state.pendingGridChanges,
         seasonStartStats: state.seasonStartStats,
