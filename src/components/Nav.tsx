@@ -36,6 +36,9 @@ const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppe
 // Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
 // fast-forwards so a multi-week gap to the next race doesn't drag. (n = days advanced so far this Continue.)
 const dayTickMs = (n: number): number => (n < 8 ? 1080 : n < 24 ? 660 : 385)
+// #127: days with nothing dropping (no news, no event) fast-forward — quick but still visible, so dead
+// stretches (long in-season gaps, the off-season's empty weeks) don't make you sit through every day.
+const EMPTY_DAY_MS = 50
 
 export default function Nav() {
   const pathname = usePathname()
@@ -172,12 +175,14 @@ export default function Nav() {
       if (stop.reason === 'season-end') break
       // Walk the clock to the stop ONE DAY at a time, accelerating on long runs. Space/Esc set stopRef.
       let cur = s.currentDate
+      // Linger only on days something actually drops; fast-forward the empty stretches between (#127).
+      const newsDays = new Set(articles.map((a) => a.date).filter((d): d is string => !!d))
       while (cur < stop.date) {
         if (stopRef.current) break
         cur = toISODate(addDays(fromISODate(cur), 1))
         useSeasonStore.getState().setCurrentDate(cur)
         dayCount++
-        await new Promise((r) => setTimeout(r, dayTickMs(dayCount)))
+        await new Promise((r) => setTimeout(r, newsDays.has(cur) ? dayTickMs(dayCount) : EMPTY_DAY_MS))
       }
       if (stopRef.current) break
       if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
