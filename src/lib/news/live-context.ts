@@ -1,6 +1,6 @@
 import { calendarForYear } from '@/data/calendars'
 import { foldLiveSeason, foldLiveSeasonTeams, foldLiveSeasonTeamDrivers, type NewsContext, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from './engine'
-import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
+import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, TeamDevPlan, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 
 // Assemble the live (current-season) NewsContext from the store, folding the archive's prior-season
@@ -8,11 +8,13 @@ import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-m
 // both see exactly the same generated feed (and the same interrupt decisions).
 export interface LiveSeasonSlice {
   year: number
+  saveSeed?: string
   phase: SeasonPhase
   raceResults: RaceResult[][]
   drivers: Driver[]
   teams: Team[]
   allUpgradeEvents: DevUpgradeEvent[]
+  devPlans?: TeamDevPlan[]         // pending dev plans, for the forward-looking upgrade beat in the preview
   constructorHistory: ConstructorSeasonRecord[]
   endOfSeasonSummary: EndOfSeasonSummary | null
   // Real-world changes approved at this season's start (for the mid-season transition newsroom). Optional.
@@ -52,12 +54,14 @@ export function buildLiveNewsContext(
     : undefined
   return {
     year: s.year,
+    saveSeed: s.saveSeed,
     phase: s.phase,
     completedRounds: s.raceResults.length,
     drivers: s.drivers,
     teams: s.teams,
     raceResults: s.raceResults,
     upgradeEvents: s.allUpgradeEvents,
+    devPlans: s.devPlans,
     constructorHistory: s.constructorHistory,
     endOfSeason: s.endOfSeasonSummary,
     calendar: calendarForYear(s.year),

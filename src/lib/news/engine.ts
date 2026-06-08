@@ -12,7 +12,6 @@
 //  - race_report      : one per race, consolidating result + start + attrition + title picture.
 //  - milestone        : per race, only on a genuine first (first win of the season, surprise
 //                       podium, team 1-2).
-//  - technical_upgrade : one ROUNDUP per race, and only when a team actually upgraded.
 //  - championship_state: only the clinch moments + a late-season title-fight watch.
 //  - feature          : a long state-of-the-season read at half-distance + a season review.
 //  - silly_season     : only at three points (mid / three-quarter / penultimate round), and the
@@ -22,11 +21,13 @@
 //                       end-of-season teammate-battle verdicts. (The old single-per-round opinion column was removed.)
 
 import type {
-  Driver, Team, RaceResult, DevUpgradeEvent,
+  Driver, Team, RaceResult, DevUpgradeEvent, TeamDevPlan,
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord, RaceWeather,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
+import { raceConditions } from '@/lib/sim/race-conditions'
+import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
@@ -66,12 +67,15 @@ export interface RecordsContext {
 
 export interface NewsContext {
   year: number
+  saveSeed?: string                // per-save seed (live only); seeds the preview's race conditions to match the race
   phase: SeasonPhase
   completedRounds: number          // raceResults.length
   drivers: Driver[]                // full roster incl. free agents (teamId === '')
   teams: Team[]
   raceResults: RaceResult[][]      // [round-1]
   upgradeEvents: DevUpgradeEvent[]
+  devPlans?: TeamDevPlan[]         // pending dev plans (next upgrade round + pre-rolled outcome), for the
+                                   // forward-looking upgrade beat in the preview. Live only — absent on archives.
   constructorHistory: ConstructorSeasonRecord[]   // prior-season records (for silly-season team media)
   endOfSeason: EndOfSeasonSummary | null
   calendar: Circuit[]
@@ -326,17 +330,6 @@ function texture(seed: string, pool: string[], slots: Record<string, string | nu
   return fill(pick(pool, `${seed}|tex`), slots)
 }
 
-// Upgrades are fully abstracted in the data (we only know a team upgraded and whether it
-// worked), so naming the actual component and what it targets is pure unfalsifiable colour.
-const UPGRADE_PARTS = [
-  'front wing', 'floor', 'rear wing', 'diffuser', 'sidepod package', 'engine cover',
-  'suspension package', 'brake-duct package', 'beam wing', 'front-wing endplate',
-]
-const UPGRADE_AREAS = [
-  'low-speed balance', 'high-speed stability', 'tyre wear', 'straight-line speed',
-  'overall downforce', 'cooling', 'rear-end grip', 'front-end bite', 'kerb-riding',
-]
-
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
 // metadata, nationality) or a count derived from results, so it can never contradict the game.
 
@@ -585,6 +578,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const cLeaderTeam = cAfterR[0]
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
+    // First half of the calendar: frame by how far INTO the season we are; second half: how much is LEFT.
+    const progress = r <= N / 2 ? `, ${r} ${plural(r, 'race')} into the season` : ` with ${remaining} ${plural(remaining, 'race')} remaining`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
 
     // Safe, specific colour.
@@ -735,9 +730,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       : ['']
     const stratPool = strat
       ? [
-          '{winner_last} executed {strategy}, starting on {start_tyre}, and the timing of the stops proved to be the margin.',
-          'The win was built on {strategy}, with {winner_last} making the pit calls the rivals could not replicate.',
-          '{team} committed to {strategy} from the outset and {winner_last} drove it to perfection.',
+          'The win was built on {strategy} from {start_tyre}, with {winner_last} making the pit calls the rivals could not replicate.',
+          '{team} committed to {strategy} on {start_tyre} from the outset and {winner_last} drove it to perfection.',
           'Running {strategy} on {start_tyre}, {winner_last} found the rhythm the tyres allowed and never looked back.',
         ]
       : ['']
@@ -776,7 +770,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       'The {team} garage erupted as {winner_last} crossed the line, months of work landing in a single moment.',
       '{winner_last} pulled off {their} helmet on the slow-down lap to take in the reception from the grandstands.',
       'The {team} pit wall let the tension of the final laps drain away the instant the flag fell.',
-      '{winner_last} drove the in-lap at a measured pace, in no rush to let the afternoon end.',
       'The {team} mechanics were at the pit-lane wall before the car had stopped, ready for the celebrations.',
       '{winner_last} held the trophy in both hands and looked out into the crowd before the formalities resumed.',
       '{winner_last} was treated for dehydration once the cameras had moved on, the cockpit a brutal place in the closing laps.',
@@ -858,7 +851,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         const climbed = priorRankOf(leader.driverId)
         const verb = climbed >= 4 ? 'catapults' : climbed === 3 ? 'lifts' : 'moves'
         const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
-        return `${ld}'s ${raceFin(leader.driverId).noun} ${verb} ${prL.them} into the championship lead${from}. ${prL.they_cap} now leads ${sd}, who ${raceFin(second.driverId).verb}, by ${leadGap} ${gapPts} with ${racesLeft} remaining.`
+        return `${ld}'s ${raceFin(leader.driverId).noun} ${verb} ${prL.them} into the championship lead${from}. ${prL.they_cap} now leads ${sd}, who ${raceFin(second.driverId).verb}, by ${leadGap} ${gapPts}${progress}.`
       }
       // Same leader, but a new name has climbed into second: frame it as entering the conversation.
       const prevSecondId = afterPrev[1]?.driverId
@@ -866,7 +859,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         const climbed = priorRankOf(second.driverId)
         const prS = pronouns(ctx.drivers.find((d) => d.id === second.driverId)?.gender)
         const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
-        return `${sd}'s ${raceFin(second.driverId).noun} lifts ${prS.them} into championship contention${from}. ${prS.they_cap} now sits ${leadGap} ${gapPts} behind ${ld} with ${racesLeft} remaining.`
+        return `${sd}'s ${raceFin(second.driverId).noun} lifts ${prS.them} into championship contention${from}. ${prS.they_cap} now sits ${leadGap} ${gapPts} behind ${ld}${progress}.`
       }
       // Same top two: how did the gap move this race, and why?
       const leaderRacePts = results.find((x) => x.driverId === leader.driverId)?.points ?? 0
@@ -874,10 +867,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       const raceSwing = leaderRacePts - secondRacePts
       const prevGap = leadGap - raceSwing
       if (Math.abs(raceSwing) >= 4) {
-        return `${sd}'s ${raceFin(second.driverId).noun} and ${ld}'s ${raceFin(leader.driverId).noun} ${raceSwing < 0 ? 'cut' : 'stretched'} the title gap from ${prevGap} to ${leadGap} ${gapPts}, ${ld} leading ${sd} with ${racesLeft} remaining.`
+        return `${sd}'s ${raceFin(second.driverId).noun} and ${ld}'s ${raceFin(leader.driverId).noun} ${raceSwing < 0 ? 'cut' : 'stretched'} the title gap from ${prevGap} to ${leadGap} ${gapPts}, ${ld} leading ${sd}${progress}.`
       }
       const moved = raceSwing !== 0 ? `, ${raceSwing < 0 ? 'down' : 'up'} from ${prevGap}` : ''
-      return `${ld} leads ${sd} by ${leadGap} ${gapPts}${moved} with ${racesLeft} remaining.`
+      return `${ld} leads ${sd} by ${leadGap} ${gapPts}${moved}${progress}.`
     })()
 
     // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
@@ -1271,132 +1264,6 @@ function milestones(ctx: NewsContext): NewsArticle[] {
       ? fill(pick(milestoneCopy.connector, `${seed}|conn`), { circuit: circuitName }) + ' ' + lines.join(' ')
       : ''
     out.push({ id: seed, category: 'milestone', round: r, priority, headline, dek, body: paras(...lead, restPara) })
-  }
-  return out
-}
-
-// TRIGGER: any team delivered an upgrade this round (M3 dev cycles). ONE roundup per race,
-// grouping every team's package together — skipped entirely if nobody upgraded.
-function technicalRoundup(ctx: NewsContext): NewsArticle[] {
-  const out: NewsArticle[] = []
-  for (let r = 1; r <= ctx.completedRounds; r++) {
-    const evs = ctx.upgradeEvents.filter((e) => e.round === r)
-    if (evs.length === 0) continue
-    const delivered = evs.filter((e) => !e.failed).map((e) => teamName(ctx, e.teamId))
-    const missed = evs.filter((e) => e.failed).map((e) => teamName(ctx, e.teamId))
-    const circuitName = circuit(ctx, r)
-    const seed = `tech-${ctx.year}-${r}`
-    // A representative upgrading team: its real constructor position grounds the closing line,
-    // and one of its drivers carries the (invented, unfalsifiable) mood line.
-    // The representative team is the BIGGEST delivered upgrade this round (largest pace gain),
-    // so "the eye-catcher" genuinely is the most significant package; fall back to the biggest
-    // of the misfires if none delivered.
-    const repPool = evs.filter((e) => !e.failed).length ? evs.filter((e) => !e.failed) : evs
-    const repTeamId = [...repPool].sort((a, b) => b.paceDelta - a.paceDelta)[0].teamId
-    const repTeamDrivers = ctx.drivers.filter((d) => d.teamId === repTeamId)
-    const repDriver = repTeamDrivers.length ? pick(repTeamDrivers, `${seed}|updrv`) : undefined
-    const cstandTech = constructorStandingsAfter(ctx, r)
-    const repPosIdx = cstandTech.findIndex((c) => c.teamId === repTeamId)
-    const repPos = repPosIdx >= 0 ? ordinal(repPosIdx + 1) : ''
-    const repDelivered = delivered.length > 0 // rep is a delivered team if any delivered, else a misfire
-    const slots: Record<string, string | number> = {
-      circuit: circuitName, delivered: listJoin(delivered), missed: listJoin(missed),
-      n: evs.length, teams: plural(evs.length, 'team'),
-      up_driver: repDriver ? lastName(repDriver.name) : '',
-      rep_team: teamName(ctx, repTeamId), rep_team_poss: poss(teamName(ctx, repTeamId)), rep_pos: repPos,
-      part: pick(UPGRADE_PARTS, `${seed}|part`), area: pick(UPGRADE_AREAS, `${seed}|area`),
-    }
-    const intro = fill(pick(evs.length >= 2
-      ? [
-          'The {circuit} served as the latest proving ground for the development race, with {n} {teams} arriving with significant new components.',
-          'Car upgrades were a major subplot at the {circuit}, as {n} {teams} introduced fresh parts in search of a step forward.',
-          'Development was high on the agenda at the {circuit}, where {n} {teams} brought new parts hoping to find time over their rivals.',
-          'Factory work arrived at the track this weekend, with {n} {teams} running new components for the first time at the {circuit}.',
-        ]
-      : [
-          'Only one team came to the {circuit} carrying new parts, making their update the story of the garage.',
-          'The {circuit} was not a heavy upgrade weekend, with just one team rolling out meaningful new components.',
-          'Development was quiet at the {circuit}, with a single team breaking from the crowd to introduce fresh parts.',
-        ], `${seed}:intro`), slots)
-    const goodPara = delivered.length
-      ? fill(pick([
-          '{delivered} extracted real performance from the new parts, and it showed in the pace through the weekend.',
-          'For {delivered}, the new parts delivered, with a clear step up in competitiveness.',
-          '{delivered} left the {circuit} with data that confirmed what the simulations had promised.',
-          'The new components on the {delivered} car performed as intended and brought a tangible gain in race trim.',
-          '{delivered} came away confident the development direction is sound after a positive showing with the new parts.',
-        ], `${seed}:good`), slots)
-      : ''
-    const badPara = missed.length
-      ? fill(pick([
-          '{missed} found nothing from the new parts across the weekend, a frustrating return on the factory investment.',
-          'The upgrades on the {missed} car failed to translate, leaving the engineers with more questions than answers.',
-          '{missed} will be disappointed, with the new components producing no step and the weekend exposing the gap.',
-          'A difficult verdict for {missed}, whose new parts delivered no meaningful improvement on the timing screens.',
-          '{missed} head back to the factory to work out what went wrong after the package failed to fire at the {circuit}.',
-        ], `${seed}:bad`), slots)
-      : ''
-    // The specific (invented, unfalsifiable) component — different part/area/team each round.
-    const partPara = fill(pick(repDelivered
-      ? [
-          '{rep_team} brought the eye-catching change, a revised {part} aimed at {area}, and it delivered.',
-          '{rep_team} introduced a new {part} with {area} as the primary objective, and the data backed up the concept.',
-          'A redesigned {part} was the centrepiece of {rep_team_poss} package, with the team targeting {area} and finding the gains.',
-          'The new {part} on the {rep_team} car was built around gains in {area}, and it delivered on that brief.',
-        ]
-      : [
-          '{rep_team_poss} new {part} did not bring the {area} gains they were targeting, and the weekend numbers made that clear.',
-          'The revised {part} on the {rep_team} car was meant to unlock {area}, but that improvement did not materialise.',
-          '{rep_team_poss} {part} update promised gains in {area}, yet the track told a different story.',
-          'Despite the focus on {area} in the new {part}, {rep_team} found no reward at the {circuit}.',
-        ], `${seed}:part`), slots)
-    // Grounded close: the representative team's actual constructor position, not platitude.
-    const outlook = repPos
-      ? fill(pick(delivered.length
-          ? [
-              '{rep_team} sit {rep_pos} in the constructors\' championship and will want these gains to hold as the calendar moves on.',
-              'Sitting {rep_pos} in the standings, {rep_team} have given themselves fresh ammunition for the next phase of the season.',
-              '{rep_team} occupy {rep_pos} in the constructors\' championship and now have a confirmed step to build from.',
-              '{rep_team} are {rep_pos} in the constructors\' standings, and a working upgrade puts them in a stronger position to push higher.',
-            ]
-          : [
-              '{rep_team} remain {rep_pos} in the constructors\' championship and are still searching for the breakthrough the results need.',
-              'Stuck {rep_pos} in the standings, {rep_team} head back to the factory to regroup after a fruitless upgrade weekend.',
-              '{rep_team} are {rep_pos} in the constructors\' championship and cannot afford many more weekends where new parts fail to deliver.',
-              'The pressure on {rep_team} only grows, {rep_pos} in the constructors\' standings with parts that did not work.',
-            ], `${seed}:outlook`), slots)
-      : ''
-    // Driver mood is just one flavour of many, so keep it rare (a couple of times a season).
-    const techTexturePool = !repDriver
-      ? []
-      : delivered.length
-        ? [
-            '{up_driver} was upbeat afterwards, noting the car felt more responsive with the new parts.',
-            'The {rep_team} garage had a lighter mood, {up_driver} reporting a more planted feel through the high-speed sections.',
-            '{up_driver} said the update opened up options that had not been there in recent races.',
-            'There was a real lift around {rep_team}, {up_driver} offering positive words on how the car took the changes.',
-          ]
-        : [
-            'The mood inside {rep_team} was subdued, {up_driver} giving measured answers that told their own story.',
-            '{up_driver} chose words carefully afterwards, but the {rep_team} body language said enough about a wasted step.',
-            'There was little to celebrate for {rep_team}, {up_driver} admitting the parts had not done what was hoped.',
-          ]
-    const techTexture = texture(seed, techTexturePool, slots, 18)
-    out.push({
-      id: seed, category: 'technical_upgrade', round: r, priority: 45,
-      headline: fill(pick([
-        'Upgrade roundup from the {circuit}', '{n} {teams} brought new parts to the {circuit}', 'Development verdicts from the {circuit}',
-        'Who won and lost the upgrade battle at the {circuit}', '{rep_team} headline a {circuit} development push',
-        'The winners and losers of parts day at the {circuit}', 'Upgrades assessed at the {circuit}', 'Fresh bodywork at the {circuit}',
-      ], `${seed}|h`), slots),
-      dek: fill(pick([
-        '{n} {teams} arrived at the {circuit} with new parts, and not all of them left happy.',
-        'The {circuit} doubled as a development checkpoint, with {n} {teams} running fresh components.',
-        'Upgrade season hit the {circuit} hard, and the lap-time data has started to separate the gains from the gambles.',
-        'A busy weekend in the garages as {n} {teams} chased performance with new parts at the {circuit}.',
-      ], `${seed}|d`), slots),
-      body: paras(intro, goodPara, badPara, partPara, techTexture, outlook),
-    })
   }
   return out
 }
@@ -1852,57 +1719,155 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
 // Surfaces the single most newsworthy angle from across the grid (one, never a pile-up):
 // win streaks, maiden wins, a title contender's horror show, a standout drive, a first-points
 // breakthrough, a notable retirement, or a fresh upgrade.
+// One form talking point from last time out, framed against CAR expectation (#88 preview spec):
+// either a standout who did well and might keep it going, OR (never both) a driver/team who fell
+// short and must turn it around. Omitted entirely when everyone ran roughly to their machinery.
+// Car pace as it stood GOING INTO `round`: the current pace rolled back over every upgrade delivered
+// at that round or later. A stable quantity (later upgrades cancel out), so any preview built from it
+// reads identically however much the season has since moved on — news that never silently mutates.
+function carPaceBeforeRound(ctx: NewsContext, round: number): Map<string, number> {
+  const m = new Map(ctx.teams.map((t) => [t.id, t.carPace]))
+  for (const e of ctx.upgradeEvents ?? []) {
+    if (e.round >= round && !e.failed) m.set(e.teamId, (m.get(e.teamId) ?? 0) - e.paceDelta)
+  }
+  return m
+}
+
 function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string {
   const prev = r - 1
   if (prev < 1 || prev > ctx.raceResults.length) return ''
   const results = ctx.raceResults[prev - 1] ?? []
   if (results.length === 0) return ''
-  const sorted = sortedResults(results)
-  const standings = driverStandingsAfter(ctx, prev)   // going into round r
-  const before = driverStandingsAfter(ctx, prev - 1)  // before the last race
-  const ptsBefore = (id: string) => before.find((s) => s.driverId === id)?.points ?? 0
+  const standings = driverStandingsAfter(ctx, prev)   // championship going into round r
   const prevCircuit = circuit(ctx, prev)
   const winner = results.find((x) => x.finishPosition === 1)
 
+  // Sharpest "did well, can it continue" hooks, named outright and outranking the form read: a win
+  // streak, or a maiden win of the season.
   let streak = 0
   if (winner) for (let k = prev; k >= 1; k--) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1); if (w && w.driverId === winner.driverId) streak++; else break }
   const maiden = !!winner && prev >= 2 && !wonBefore(ctx, winner.driverId, prev)
-
-  let horror: { who: string; what: string } | null = null
-  for (const s of standings.slice(0, 2)) { const res = results.find((x) => x.driverId === s.driverId); if (res && (res.dnf || (res.finishPosition ?? 0) >= 8)) { horror = { who: lastName(s.driverName), what: res.dnf ? 'a retirement' : ordinal(res.finishPosition ?? 0) }; break } }
-
-  let mover: RaceResult | null = null; let gain = 0
-  for (const x of sorted) { if (x.dnf || x.finishPosition == null) continue; const g = x.gridPosition - x.finishPosition; if (g > gain) { gain = g; mover = x } }
-
-  // A genuine first-points drought-breaker, not everyone's opener (hence prev >= 4).
-  let firstPts: RaceResult | null = null
-  if (prev >= 4) for (const x of results) { if (x.points > 0 && ptsBefore(x.driverId) === 0) { firstPts = x; break } }
-
-  let faller: RaceResult | null = null
-  for (const x of results) { if (!x.dnf) continue; const rank = standings.findIndex((s) => s.driverId === x.driverId); if (rank >= 0 && rank < 8) { faller = x; break } }
-
-  const upg = ctx.upgradeEvents.find((e) => !e.failed && (e.round === prev || e.round === r))
-
-  const slots: Record<string, string | number> = {
-    prev_circuit: prevCircuit, streak,
-    w: winner ? lastName(winner.driverName) : '',
-    horror_who: horror?.who ?? '', horror_what: horror?.what ?? '',
-    mover: mover ? lastName(mover.driverName) : '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
-    first_pts: firstPts ? lastName(firstPts.driverName) : '',
-    faller: faller ? lastName(faller.driverName) : '',
-    upg_team: upg ? teamName(ctx, upg.teamId) : '', upg_team_poss: upg ? poss(teamName(ctx, upg.teamId)) : '',
+  if (winner && (streak >= 2 || maiden)) {
+    const wslots = { prev_circuit: prevCircuit, streak, w: lastName(winner.driverName) }
+    const wpool = streak >= 2
+      ? ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
+      : ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
+    return fill(pick(wpool, `${seed}|tp`), wslots)
   }
 
-  let pool: string[]
-  if (streak >= 2) pool = ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
-  else if (maiden) pool = ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
-  else if (horror) pool = ['{horror_who} endured a rare off-day last time out, {horror_what} at the {prev_circuit}, and badly needs a response.', 'All eyes are on {horror_who} after {horror_what} last time, a dent in the title bid.']
-  else if (gain >= 6 && mover && getPoints(mover.finishPosition ?? 99, ctx.year) > 0) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to} and into the points, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to a points finish in {mover_to}.']
-  else if (firstPts) pool = ['{first_pts} finally opened the account at the {prev_circuit} last time, and will look to build on it.', 'A first points finish for {first_pts} last time out was a long time coming.']
-  else if (faller) pool = ['{faller} retired at the {prev_circuit} last time and will be desperate for a bounce-back.', 'A bounce-back is the order of the day for {faller} after retiring last time.']
-  else if (upg) pool = ['Whether {upg_team_poss} recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team_poss} new parts make a difference.']
-  else return ''
-  return fill(pick(pool, `${seed}|tp`), slots)
+  // Form vs car: a seated driver's expected finishing slot is their rank when the whole field is
+  // ordered by car pace. Last race's finish minus that slot says who beat their machinery (kept it
+  // up) and who fell short of it (needs a turnaround). A DNF counts as finishing last + 1.
+  // Car pace as it stood for the LAST race (round prev), so this beat reads the same on every rebuild.
+  const paceBefore = carPaceBeforeRound(ctx, prev)
+  const carPaceOf = (teamId: string) => paceBefore.get(teamId) ?? 0
+  const seated = ctx.drivers.filter((d) => d.teamId)
+  const fieldSize = seated.length || results.length
+  const expSlot = new Map<string, number>([...seated].sort((a, b) => carPaceOf(b.teamId) - carPaceOf(a.teamId)).map((d, i) => [d.id, i + 1]))
+  const teamPaceRank = new Map<string, number>([...ctx.teams].sort((a, b) => carPaceOf(b.id) - carPaceOf(a.id)).map((t, i) => [t.id, i + 1]))
+  const champPos = new Map<string, number>(standings.map((s, i) => [s.driverId, i + 1]))
+  const half = Math.ceil(fieldSize / 2)
+  const topCut = Math.max(5, Math.ceil(fieldSize / 3))   // "high in the championship"
+  const exp = (id: string) => expSlot.get(id) ?? fieldSize
+  const finSlot = (x: RaceResult) => (x.dnf || x.finishPosition == null ? fieldSize + 1 : x.finishPosition)
+  const dev = (x: RaceResult) => exp(x.driverId) - finSlot(x)            // + beat the car, - fell short
+  const scored = (x: RaceResult) => getPoints(x.finishPosition ?? 99, ctx.year) > 0
+
+  // Turnaround: a title-relevant driver (high in the championship, or a genuine front car) who fell
+  // well short of that car last time — a retirement, or a finish well below where the car belongs.
+  let turn: RaceResult | null = null; let turnStr = 0
+  for (const x of results) {
+    const high = (champPos.get(x.driverId) ?? fieldSize) <= topCut || exp(x.driverId) <= 6
+    if (!high) continue
+    const shortfall = x.dnf ? (fieldSize - exp(x.driverId)) + 4 : -dev(x)
+    const fellShort = x.dnf || (!scored(x) && exp(x.driverId) <= half) || dev(x) <= -4
+    if (fellShort && shortfall > turnStr) { turn = x; turnStr = shortfall }
+  }
+
+  // Keep-it-up: a driver low in the championship who dragged a slower car into the points, or
+  // otherwise clearly beat its level last time.
+  let keep: RaceResult | null = null; let keepStr = 0
+  for (const x of results) {
+    const low = (champPos.get(x.driverId) ?? fieldSize) > half
+    if (!low) continue
+    const beat = (scored(x) && exp(x.driverId) > half) || dev(x) >= 5
+    if (beat && dev(x) >= 4 && dev(x) > keepStr) { keep = x; keepStr = dev(x) }
+  }
+
+  // Team form: both cars pulling the same way — a slower team scoring twice, or a front team both
+  // out of the points — is a team story that competes with the driver candidates on strength.
+  let teamCand: { teamId: string; dir: 'over' | 'under'; cars: RaceResult[] } | null = null; let teamStr = 0
+  for (const tm of ctx.teams) {
+    const cars = results.filter((x) => x.teamId === tm.id)
+    if (cars.length < 2) continue
+    const rank = teamPaceRank.get(tm.id) ?? ctx.teams.length
+    const avgDev = cars.reduce((a, c) => a + dev(c), 0) / cars.length
+    if (cars.every(scored) && rank > Math.ceil(ctx.teams.length / 2) && avgDev >= 4 && avgDev > teamStr) {
+      teamCand = { teamId: tm.id, dir: 'over', cars }; teamStr = avgDev
+    } else if (cars.every((c) => c.dnf || !scored(c)) && rank <= 3 && -avgDev >= 4 && -avgDev > teamStr) {
+      teamCand = { teamId: tm.id, dir: 'under', cars }; teamStr = -avgDev
+    }
+  }
+
+  // Everyone ran roughly to their car — omit (no forced talking point).
+  const best = Math.max(turnStr, keepStr, teamStr)
+  if (best < 4) return ''
+
+  if (teamCand && teamStr === best) {
+    const cars = teamCand.cars.slice().sort((a, b) => finSlot(a) - finSlot(b))
+    const tslots = {
+      prev_circuit: prevCircuit, t_team: teamName(ctx, teamCand.teamId),
+      t_fins: listJoin(cars.map((c) => (c.dnf || c.finishPosition == null ? 'a retirement' : ordinal(c.finishPosition)))),
+      t_car_exp: ordinal(teamPaceRank.get(teamCand.teamId) ?? ctx.teams.length),
+    }
+    const tpool = teamCand.dir === 'over'
+      ? ['{t_team} scored with both cars at the {prev_circuit}, {t_fins}, a haul the {t_car_exp}-quickest car rarely delivers; the question is whether they can back it up.']
+      : ['{t_team} left the {prev_circuit} pointless with both cars, {t_fins}, despite running the {t_car_exp}-quickest car, and will want to put it right here.']
+    return fill(pick(tpool, `${seed}|tp`), tslots)
+  }
+
+  if (turn && turnStr >= keepStr) {
+    const byChamp = (champPos.get(turn.driverId) ?? fieldSize) <= topCut
+    const ord = ordinal(turn.finishPosition ?? fieldSize)
+    const dslots = {
+      prev_circuit: prevCircuit, d_last: lastName(turn.driverName), d_team: teamName(ctx, turn.teamId),
+      d_champ: ordinal(champPos.get(turn.driverId) ?? fieldSize), d_car_exp: ordinal(exp(turn.driverId)),
+      d_result: turn.dnf ? 'retired' : `could only finish ${ord}`,
+      d_result_after: turn.dnf ? 'retiring' : `finishing only ${ord}`,
+    }
+    // Lead on championship position only when it is genuinely high; otherwise the story is a fast
+    // car wasted, so stay on the car.
+    const dpool = byChamp
+      ? [
+          '{d_last}, {d_champ} in the championship, {d_result} at the {prev_circuit} from a car good enough for {d_car_exp}, and needs a response here.',
+          'All eyes on {d_last} after {d_result_after} last time out, a long way short of a car good enough for {d_car_exp}.',
+        ]
+      : [
+          '{d_last} {d_result} at the {prev_circuit}, a long way short of a {d_team} good enough for {d_car_exp}, and needs a response here.',
+          'All eyes on {d_last} after {d_result_after} last time out, well short of a {d_team} good enough for {d_car_exp}.',
+        ]
+    return fill(pick(dpool, `${seed}|tp`), dslots)
+  }
+
+  if (keep) {
+    const podium = (keep.finishPosition ?? 99) <= 3
+    const dslots = {
+      prev_circuit: prevCircuit, d_last: lastName(keep.driverName), d_team: teamName(ctx, keep.teamId),
+      d_fin: ordinal(keep.finishPosition ?? fieldSize), d_car_exp: ordinal(exp(keep.driverId)),
+    }
+    const dpool = podium
+      ? [
+          '{d_last} hauled {d_team} onto the podium at the {prev_circuit}, {d_fin} from a car rated nearer {d_car_exp}; the question is whether the run can continue.',
+          '{d_last} put a {d_team} rated {d_car_exp} on the podium last time, {d_fin} at the {prev_circuit}, and will fancy more of the same.',
+        ]
+      : [
+          '{d_last} dragged {d_team} into the points at the {prev_circuit}, {d_fin} from a car rated nearer {d_car_exp}; the question is whether the run can continue.',
+          '{d_last} was the over-achiever last time, {d_fin} at the {prev_circuit} in a {d_team} rated {d_car_exp}, and will fancy more of the same.',
+        ]
+    return fill(pick(dpool, `${seed}|tp`), dslots)
+  }
+
+  return ''
 }
 
 // TRIGGER: a preview for every round of the calendar (run-up coverage across the whole
@@ -1987,6 +1952,132 @@ function openerPiece(ctx: NewsContext): string {
   return paras(...beats)
 }
 
+// Upgrade component names — invented flavour confined to the failed-part spokesperson quote below. We
+// only know a team upgraded and whether it worked, never the actual part, so this is colour, not claim.
+const UPGRADE_PARTS = ['front wing', 'floor', 'rear wing', 'diffuser', 'sidepod package', 'suspension package', 'beam wing', 'front-wing endplate']
+
+// Per-round development beat (#88 preview spec): the upgrade(s) landing at round r and how, on pace,
+// they shift the order. The outcome is deterministic — pre-rolled in devPlans for rounds still to come,
+// recorded in the upgrade log once delivered — and the pre-round car pace is recovered by rolling the
+// current pace back over later upgrades, so a preview reads identically whether r is the upcoming race
+// or one long past (the article never mutates). A delivering upgrade that holds rank gets a gap-closing
+// line; a failed one a spokesperson quote. Omitted only when nothing is due that round.
+function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
+  if (ctx.teams.length === 0) return ''
+  // Upgrades at round r: rounds still to come read the pending plan, rounds already run read the
+  // delivered log. Normalised to the same {teamId, delta, failed} shape so the copy is identical.
+  const upgrades = r > ctx.completedRounds
+    ? (ctx.devPlans ?? []).filter((p) => p.nextUpgradeRound === r).map((p) => ({ teamId: p.teamId, delta: p.pendingFailed ? 0 : (p.pendingPaceDelta ?? 0), failed: !!p.pendingFailed }))
+    : (ctx.upgradeEvents ?? []).filter((e) => e.round === r).map((e) => ({ teamId: e.teamId, delta: e.paceDelta, failed: e.failed }))
+  if (upgrades.length === 0) return ''
+  const circuitName = circuit(ctx, r)
+  const tn = (id: string) => teamName(ctx, id)
+  const before = carPaceBeforeRound(ctx, r)
+  const curOrder = [...ctx.teams].sort((a, b) => (before.get(b.id) ?? 0) - (before.get(a.id) ?? 0))
+  const curRank = new Map(curOrder.map((t, i) => [t.id, i + 1]))
+  const bumped = new Map(before)
+  for (const u of upgrades) if (!u.failed) bumped.set(u.teamId, (bumped.get(u.teamId) ?? 0) + u.delta)
+  const projOrder = [...ctx.teams].sort((a, b) => (bumped.get(b.id) ?? 0) - (bumped.get(a.id) ?? 0))
+  const projRank = new Map(projOrder.map((t, i) => [t.id, i + 1]))
+
+  type Item = { kind: 'mover' | 'gap' | 'fail'; prio: number; text: string }
+  const items: Item[] = []
+  for (const u of upgrades) {
+    const team = tn(u.teamId)
+    const sd = `upg-${ctx.year}-${r}-${u.teamId}`
+    // Failed upgrade — a spokesperson conceding the new part has not given up its time.
+    if (u.failed || u.delta <= 0) {
+      const part = pick(UPGRADE_PARTS, `${sd}|part`)
+      items.push({ kind: 'fail', prio: 1, text: fill(pick([
+        'A {team} spokesperson admitted the team is still struggling to extract the time from its new {part}.',
+        'At {team}, a spokesperson conceded the new {part} has yet to give up the lap time they were chasing.',
+        '{team} arrive with a new {part}, though a spokesperson admitted it has not yet delivered the step on the stopwatch.',
+      ], sd), { team, part }) })
+      continue
+    }
+    const from = curRank.get(u.teamId) ?? ctx.teams.length
+    const to = projRank.get(u.teamId) ?? from
+    if (to < from) {
+      const behind = projOrder[to] // team at projected rank to + 1
+      const passed = behind && (curRank.get(behind.id) ?? 0) < from ? tn(behind.id) : ''
+      const slots = { team, team_poss: poss(team), circuit: circuitName, from: ordinal(from), to: ordinal(to), passed }
+      const text = passed
+        ? fill(pick([
+            '{team} bring their next development step to the {circuit}, a package projected to lift them from {from} to {to}, ahead of {passed} once it is fitted.',
+            'The {circuit} marks {team_poss} next upgrade, projected to move them from {from} to {to} on pace, clear of {passed}.',
+            '{team_poss} next package, due at the {circuit}, projects to climb them from {from} to {to}, past {passed}.',
+          ], sd), slots)
+        : fill(pick([
+            '{team} bring their next development step to the {circuit}, projected to climb from {from} to {to} in the order once it lands.',
+            'The {circuit} brings {team_poss} next upgrade, set to lift them from {from} to {to} on pace.',
+            '{team_poss} next package, due at the {circuit}, projects to lift them to {to} from {from}.',
+          ], sd), slots)
+      items.push({ kind: 'mover', prio: 3, text })
+    } else if (from > 1) {
+      // A: delivers but holds rank — aim the step at the car immediately ahead.
+      const ahead = tn(curOrder[from - 2].id)
+      const slots = { team, team_poss: poss(team), circuit: circuitName, ahead }
+      items.push({ kind: 'gap', prio: 2, text: fill(pick([
+        '{team} bring their next development step to the {circuit}, aimed at closing the gap to {ahead} ahead.',
+        '{team_poss} next upgrade, due at the {circuit}, is aimed at reeling in {ahead} in front.',
+        'The {circuit} brings {team_poss} next package, a step they hope narrows the gap to {ahead}.',
+      ], sd), slots) })
+    }
+    // from === 1 with no rank change: already top with nobody ahead to chase — omit.
+  }
+  if (items.length === 0) return ''
+
+  // Cap at two sentences. Keep a failed-upgrade quote when present (alongside the best positive line);
+  // otherwise show the two strongest positives (mover before gap-closer).
+  const fails = items.filter((i) => i.kind === 'fail')
+  const positives = items.filter((i) => i.kind !== 'fail').sort((a, b) => b.prio - a.prio)
+  const chosen = (fails.length ? [positives[0], fails[0]] : positives.slice(0, 2)).filter((x): x is Item => !!x)
+  return chosen.map((it) => it.text).join(' ')
+}
+
+// Race-logistics beat (#88 preview spec): lap count, the forecast the race will actually run (weather
+// is seeded from year+circuit, so this IS the race's forecast — and, like a real forecast, it may be
+// wrong), and a hedged pre-race read of the likely pit-stop spread from this race's (also seeded) tyre
+// life, lap count and era pit-loss. Only attaches to the upcoming race.
+function previewRaceLogistics(ctx: NewsContext, r: number): string {
+  const circ = ctx.calendar[r - 1]
+  if (!circ) return ''
+  const laps = circ.laps
+  const circuitName = circuit(ctx, r)
+  const sd = `logi-${ctx.year}-${r}`
+  const { forecast, tyreBaseLife } = raceConditions(ctx.saveSeed ?? '', ctx.year, circ)
+  const peak = forecast.reduce((m, p) => Math.max(m, p.moisture), 0)
+
+  // Wet forecast: strategy is weather-led, so frame on the crossover, not a stop count.
+  if (peak >= 0.1) {
+    const firstWet = forecast.find((p) => p.moisture >= 0.1)?.lap ?? laps
+    const frac = firstWet / laps
+    const when = frac <= 0.34 ? 'from early on' : frac <= 0.67 ? 'around mid-distance' : 'in the closing stages'
+    return fill(pick([
+      'The {circuit} runs to {laps} laps, but rain is forecast {when}, leaving the race on the slick-to-intermediate crossover.',
+      '{laps} laps await at the {circuit}, with showers forecast {when}; the timing of the switch to wets could shape the result.',
+      'Rain is forecast {when} at the {circuit}, putting its {laps} laps at the mercy of the crossover and how each team reads it.',
+    ], sd), { circuit: circuitName, laps, when })
+  }
+
+  // Dry: a stop-count spread. The longest viable dry stint is the hardest tyre run by a smooth driver
+  // (the fewest-stops line); the alternative is one more stop for fresher rubber. Different races land
+  // different counts because the tyre life is seeded per race.
+  const lo = Math.max(1, Math.ceil(laps / Math.max(1, tyreBaseLife.hard * laps * 1.3)) - 1)
+  const hi = lo + 1
+  // Article baked into the value so fill()'s a/an pass can't trip on "one" ("a one-stop", never "an").
+  const word = (n: number) => `a ${n === 1 ? 'one' : n === 2 ? 'two' : n === 3 ? 'three' : String(n)}-stop`
+  const base = fill(pick([
+    'A dry forecast leaves the {circuit}, over {laps} laps, on an open call: we could see some teams take {lo} while others run {hi}.',
+    'Over {laps} dry laps at the {circuit}, the split looks to be {lo} on the harder tyre against {hi} on softer rubber.',
+    'Expect {laps} dry laps at the {circuit} to divide the field between {lo} and {hi}.',
+  ], sd), { circuit: circuitName, laps, lo: word(lo), hi: word(hi) })
+  const note = pitLaneLoss(ctx.year) >= 27
+    ? pick([' The long pit lane here makes the extra stop costly.', ' A slow pit lane nudges teams toward the lower count.'], `${sd}|n`)
+    : ''
+  return base + note
+}
+
 function previews(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
@@ -2014,6 +2105,10 @@ function previews(ctx: NewsContext): NewsArticle[] {
 
     // Grid talking point from last time out (non-opener rounds; the opener uses openerPiece instead).
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
+    // Development + logistics beats attach to every preview (not just the upcoming one) and are built
+    // from round-stable data, so a past race's preview keeps exactly the words it had pre-race.
+    const upgradeOutlook = isOpener ? '' : previewUpgradeOutlook(ctx, r)
+    const raceLogistics = isOpener ? '' : previewRaceLogistics(ctx, r)
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
@@ -2050,6 +2145,41 @@ function previews(ctx: NewsContext): NewsArticle[] {
           slots, 45)
       : ''
 
+    // Stake beat. While the title is live it is leader vs chaser; once places lock from the top (the
+    // driver below cannot make up the gap with the points still on offer), it shifts to the highest
+    // still-contested championship position — the battle for P2, else P3, and so on.
+    let secured = 0
+    for (let k = 0; k + 1 < before.length; k++) {
+      if (before[k].points - before[k + 1].points > availLeft) secured = k + 1
+      else break
+    }
+    // The leader's win tally is a live-title detail; once a place is locked and the stake has shifted
+    // to the fight below, it would tag the champion's wins onto a P2/P3 story, so drop it then.
+    const winsLine = secured === 0 && (leader?.wins ?? 0) > 0
+      ? fill(pick(['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to {their} name so far.'], `${seed}:wins`), slots)
+      : ''
+    const openA = before[secured]
+    const openB = before[secured + 1]
+    let chaseLine: string
+    if (secured >= 1 && openA && openB) {
+      const aLast = lastName(openA.driverName); const bLast = lastName(openB.driverName)
+      const gap = openA.points - openB.points
+      const lead = secured === 1 ? 'With the title secured' : `With 1st to ${ordinal(secured)} in the championship secured`
+      const margin = gap === 0 ? `level with ${bLast}` : `${gap} ${plural(gap, 'point')} ahead of ${bLast}`
+      chaseLine = `${lead}, the focus turns to ${aLast} and ${bLast}, fighting over ${ordinal(secured + 1)}. ${aLast} has ${openA.points} ${plural(openA.points, 'point')}, ${margin}.`
+    } else if (secured >= 1) {
+      chaseLine = `With the championship order settled, the ${circuitName} is about race wins and pride.`
+    } else {
+      chaseLine = fill(pick(
+        leadGap === 0
+          ? ['{second_last} is level on points with {leader_last} at the top.']
+          : remaining <= 5
+          ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
+          : ['{second_last} sits {lead_gap} {gap_pts} behind {leader_last} and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit to {leader_last}.', '{second_last} has ground to make up on {leader_last}.'],
+        `${seed}:stake`), slots)
+    }
+    const stakePara = [chaseLine, winsLine].filter(Boolean).join(' ')
+
     const body = isOpener
       ? openerPiece(ctx)
       : paras(
@@ -2057,17 +2187,13 @@ function previews(ctx: NewsContext): NewsArticle[] {
             ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'The {circuit} is next, round {round} of the season.'],
             ['{leader} leads on {leader_points} points, {gap_desc}{lead_gap} {gap_pts} clear of {second}.', '{leader} arrives {gap_desc}{lead_gap} {gap_pts} ahead of {second}.', 'It is {leader} who tops the table, {gap_desc}{lead_gap} {gap_pts} up on {second}.']),
           talkingPoint,
-          compose(`${seed}:stake`, slots,
-            leadGap === 0
-              ? ['{second_last} is level on points with {leader_last} at the top.']
-              : remaining <= 5
-              ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
-              : ['{second_last} sits {lead_gap} {gap_pts} behind {leader_last} and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit to {leader_last}.', '{second_last} has ground to make up on {leader_last}.'],
-            (leader?.wins ?? 0) > 0 ? ['{leader_last} carries {leader_wins} {wins_word} into the weekend.', '{leader_last} has {leader_wins} {wins_word} to {their} name so far.'] : ['']),
+          stakePara,
           compose(`${seed}:wcc`, slots,
             cbefore[1]
               ? ['In the constructors, {top_team} lead {wcc_second} by {wcc_gap} {wcc_pts}.', '{top_team} head the teams standings, {wcc_gap} {wcc_pts} clear of {wcc_second}.']
               : ['{top_team} head the constructors\' championship.']),
+          upgradeOutlook,
+          raceLogistics,
           trackTexture,
         )
     out.push({
@@ -3309,7 +3435,6 @@ function midSeasonSwaps(ctx: NewsContext): NewsArticle[] {
 // Days a category's story drops relative to its round's race day (negative = before the race).
 const CATEGORY_DAY_OFFSET: Record<string, number> = {
   preview_schedule: -4,   // race-week preview
-  technical_upgrade: -2,  // upgrade reveal in practice
   car_launch_livery: 0,
   rookie_debut: 0,
   race_report: 0,         // race day (Sunday)
@@ -3739,7 +3864,6 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...preSeason(ctx),
     ...raceReports(ctx),
     ...milestones(ctx),
-    ...technicalRoundup(ctx),
     ...championship(ctx),
     ...championshipArc(ctx),
     ...constructorArc(ctx),
@@ -3775,7 +3899,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
 
 // Small helper so the page can label each card by category without importing the list.
 export const CATEGORY_LABELS: Record<string, string> = {
-  race_report: 'Race report', milestone: 'Milestone', technical_upgrade: 'Technical',
+  race_report: 'Race report', milestone: 'Milestone',
   championship_state: 'Championship', feature: 'Feature', preview_schedule: 'Preview',
   car_launch_livery: 'Launch', rookie_debut: 'Rookie', driver_signing: 'Transfer',
   driver_exit: 'Transfer', career_retirement: 'Retirement', silly_season: 'Silly season',
@@ -3790,7 +3914,6 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
   { label: 'Race report', categories: ['race_report'] },
   { label: 'Milestone', categories: ['milestone'] },
-  { label: 'Technical', categories: ['technical_upgrade'] },
   { label: 'Championship', categories: ['championship_state'] },
   { label: 'Feature', categories: ['feature'] },
   { label: 'Preview', categories: ['preview_schedule'] },

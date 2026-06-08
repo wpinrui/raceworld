@@ -15,7 +15,7 @@ const UNFORESEEN_RAIN_CHANCE = 0.04 // of wet races: rain arrives with no foreca
 // Forecast trust grows as a lap nears: displayed error = |forecast - reality| * (1 - e^(-lead/TAU)).
 const FORECAST_LEAD_TAU = 8
 
-const rand = (a: number, b: number) => a + Math.random() * (b - a)
+const rand = (rng: () => number, a: number, b: number) => a + rng() * (b - a)
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
 const WET = 0.02 // moisture below this counts as dry
 
@@ -40,11 +40,11 @@ function normalize(points: WeatherPoint[], totalLaps: number): WeatherPoint[] {
 
 // Small per-point wobble so two curves of the same archetype never read identically (the player can't
 // memorise a fixed shape). Dry points stay dry.
-function jitter(points: WeatherPoint[], totalLaps: number): WeatherPoint[] {
+function jitter(rng: () => number, points: WeatherPoint[], totalLaps: number): WeatherPoint[] {
   return normalize(
     points.map((p) => ({
-      lap: p.lap + rand(-1.5, 1.5),
-      moisture: p.moisture < WET ? 0 : clamp01(p.moisture + rand(-0.05, 0.05)),
+      lap: p.lap + rand(rng, -1.5, 1.5),
+      moisture: p.moisture < WET ? 0 : clamp01(p.moisture + rand(rng, -0.05, 0.05)),
     })),
     totalLaps,
   )
@@ -52,49 +52,49 @@ function jitter(points: WeatherPoint[], totalLaps: number): WeatherPoint[] {
 
 // --- Archetypes (raw control points; normalise()/jitter() finish them) ---------------------------
 
-function passingShower(L: number): WeatherPoint[] {
-  const onset = rand(0.12, 0.55) * L
-  const duration = rand(0.15, 0.38) * L
-  const peak = rand(0.18, 0.5)
-  const peakLap = onset + rand(2, 5)
-  const fadeStart = Math.max(peakLap + 1, onset + duration - rand(3, 7))
+function passingShower(rng: () => number, L: number): WeatherPoint[] {
+  const onset = rand(rng, 0.12, 0.55) * L
+  const duration = rand(rng, 0.15, 0.38) * L
+  const peak = rand(rng, 0.18, 0.5)
+  const peakLap = onset + rand(rng, 2, 5)
+  const fadeStart = Math.max(peakLap + 1, onset + duration - rand(rng, 3, 7))
   return [
     { lap: 1, moisture: 0 },
     { lap: onset, moisture: 0 },
     { lap: peakLap, moisture: peak },
-    { lap: fadeStart, moisture: peak * rand(0.7, 1) },
+    { lap: fadeStart, moisture: peak * rand(rng, 0.7, 1) },
     { lap: onset + duration, moisture: 0 },
     { lap: L, moisture: 0 },
   ]
 }
 
-function buildingRain(L: number): WeatherPoint[] {
-  const onset = rand(0.18, 0.5) * L
-  const mid = onset + (L - onset) * rand(0.4, 0.6)
-  const endIntensity = rand(0.4, 0.8)
+function buildingRain(rng: () => number, L: number): WeatherPoint[] {
+  const onset = rand(rng, 0.18, 0.5) * L
+  const mid = onset + (L - onset) * rand(rng, 0.4, 0.6)
+  const endIntensity = rand(rng, 0.4, 0.8)
   return [
     { lap: 1, moisture: 0 },
     { lap: onset, moisture: 0 },
-    { lap: mid, moisture: endIntensity * rand(0.4, 0.65) },
+    { lap: mid, moisture: endIntensity * rand(rng, 0.4, 0.65) },
     { lap: L, moisture: endIntensity },
   ]
 }
 
-function dryingTrack(L: number): WeatherPoint[] {
-  const start = rand(0.35, 0.65)
-  const dryBy = rand(0.35, 0.8) * L
+function dryingTrack(rng: () => number, L: number): WeatherPoint[] {
+  const start = rand(rng, 0.35, 0.65)
+  const dryBy = rand(rng, 0.35, 0.8) * L
   return [
     { lap: 1, moisture: start },
-    { lap: dryBy * rand(0.4, 0.7), moisture: start * rand(0.4, 0.7) },
+    { lap: dryBy * rand(rng, 0.4, 0.7), moisture: start * rand(rng, 0.4, 0.7) },
     { lap: dryBy, moisture: 0 },
     { lap: L, moisture: 0 },
   ]
 }
 
-function sustainedWet(L: number): WeatherPoint[] {
-  const base = rand(0.4, 0.7)
-  const pts: WeatherPoint[] = [{ lap: 1, moisture: base * rand(0.7, 1) }]
-  for (let i = 1; i <= 4; i++) pts.push({ lap: (L * i) / 4, moisture: clamp01(base + rand(-0.18, 0.18)) })
+function sustainedWet(rng: () => number, L: number): WeatherPoint[] {
+  const base = rand(rng, 0.4, 0.7)
+  const pts: WeatherPoint[] = [{ lap: 1, moisture: base * rand(rng, 0.7, 1) }]
+  for (let i = 1; i <= 4; i++) pts.push({ lap: (L * i) / 4, moisture: clamp01(base + rand(rng, -0.18, 0.18)) })
   return pts
 }
 
@@ -102,35 +102,35 @@ function sustainedWet(L: number): WeatherPoint[] {
 
 // The true weather for a race. ~17.5% of races rain; when they do, one of four archetypes with
 // randomised onset/intensity/duration plus a wobble, so no curve is memorisable.
-export function generateWeatherCurve(totalLaps: number): WeatherPoint[] {
-  if (Math.random() >= RAIN_CHANCE) return [{ lap: 1, moisture: 0 }, { lap: totalLaps, moisture: 0 }]
-  const roll = Math.random()
+export function generateWeatherCurve(totalLaps: number, rng: () => number = Math.random): WeatherPoint[] {
+  if (rng() >= RAIN_CHANCE) return [{ lap: 1, moisture: 0 }, { lap: totalLaps, moisture: 0 }]
+  const roll = rng()
   const pts =
-    roll < SHOWER_CUT ? passingShower(totalLaps)
-    : roll < BUILDING_CUT ? buildingRain(totalLaps)
-    : roll < DRYING_CUT ? dryingTrack(totalLaps)
-    : sustainedWet(totalLaps)
-  return jitter(normalize(pts, totalLaps), totalLaps)
+    roll < SHOWER_CUT ? passingShower(rng, totalLaps)
+    : roll < BUILDING_CUT ? buildingRain(rng, totalLaps)
+    : roll < DRYING_CUT ? dryingTrack(rng, totalLaps)
+    : sustainedWet(rng, totalLaps)
+  return jitter(rng, normalize(pts, totalLaps), totalLaps)
 }
 
 // A believable-but-wrong reading of the real curve, fixed at race start. The live view blends it
 // toward reality as each lap nears (see forecastMoistureAtLap), so the long-range forecast can be
 // well off while the next few laps are trustworthy. Captures onset error (shift), end error (stretch)
 // and intensity error (scale + offset), plus the rarer phantom/unforeseen binary misses.
-export function generateForecastCurve(reality: WeatherPoint[], totalLaps: number): WeatherPoint[] {
+export function generateForecastCurve(reality: WeatherPoint[], totalLaps: number, rng: () => number = Math.random): WeatherPoint[] {
   const isDryRace = reality.every((p) => p.moisture < 0.05)
   if (isDryRace) {
-    if (Math.random() < PHANTOM_RAIN_CHANCE) return jitter(normalize(passingShower(totalLaps), totalLaps), totalLaps)
+    if (rng() < PHANTOM_RAIN_CHANCE) return jitter(rng, normalize(passingShower(rng, totalLaps), totalLaps), totalLaps)
     return [{ lap: 1, moisture: 0 }, { lap: totalLaps, moisture: 0 }]
   }
-  if (Math.random() < UNFORESEEN_RAIN_CHANCE) return [{ lap: 1, moisture: 0 }, { lap: totalLaps, moisture: 0 }]
+  if (rng() < UNFORESEEN_RAIN_CHANCE) return [{ lap: 1, moisture: 0 }, { lap: totalLaps, moisture: 0 }]
 
   const wetLaps = reality.filter((p) => p.moisture > WET).map((p) => p.lap)
   const wetStart = wetLaps.length ? Math.min(...wetLaps) : 1
-  const onsetShift = rand(-11, 11) // start-lap error
-  const stretch = rand(0.45, 1.75) // end-lap error (window longer/shorter than reality)
-  const intensityScale = rand(0.45, 1.85) // how-hard error (kept above ~0.45 so a wet race still
-  const offset = rand(-0.16, 0.16) //        reads as wet — explicit unforeseen misses are separate)
+  const onsetShift = rand(rng, -11, 11) // start-lap error
+  const stretch = rand(rng, 0.45, 1.75) // end-lap error (window longer/shorter than reality)
+  const intensityScale = rand(rng, 0.45, 1.85) // how-hard error (kept above ~0.45 so a wet race still
+  const offset = rand(rng, -0.16, 0.16) //        reads as wet — explicit unforeseen misses are separate)
   const warped = reality.map((p) => ({
     lap: wetStart + onsetShift + (p.lap - wetStart) * stretch,
     moisture: p.moisture < WET ? 0 : clamp01(p.moisture * intensityScale + offset),

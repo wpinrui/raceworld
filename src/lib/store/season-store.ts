@@ -213,6 +213,7 @@ function computeConstructorStandings(
 interface SeasonStore {
   phase: SeasonPhase
   year: number
+  saveSeed: string                 // per-save random id; seeds race weather/tyres so different saves differ
   drivers: Driver[]
   teams: Team[]
   currentRound: number  // 1-indexed
@@ -306,6 +307,7 @@ export const useSeasonStore = create<SeasonStore>()(
     (set, get) => ({
       phase: 'idle',
       year: DEFAULT_START_YEAR,
+      saveSeed: '',
       drivers: DEFAULT_GRID.drivers.map((d) => ({ ...d })),
       teams: DEFAULT_GRID.teams.map((t) => ({ ...t })),
       currentRound: 1,
@@ -354,6 +356,7 @@ export const useSeasonStore = create<SeasonStore>()(
         set({
           phase: 'pre-race',
           year,
+          saveSeed: Math.random().toString(36).slice(2, 10),
           drivers: allDrivers,
           teams,
           currentRound: 1,
@@ -1008,6 +1011,7 @@ export const useSeasonStore = create<SeasonStore>()(
       partialize: (state) => ({
         phase: state.phase,
         year: state.year,
+        saveSeed: state.saveSeed,
         drivers: state.drivers,
         teams: state.teams,
         currentRound: state.currentRound,
@@ -1039,6 +1043,9 @@ export const useSeasonStore = create<SeasonStore>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return
+        // Saves from before per-save seeding: give them a stable seed now, so their weather/tyres
+        // become reproducible (and distinct from other saves) from here on.
+        if (!state.saveSeed) state.saveSeed = Math.random().toString(36).slice(2, 10)
         const { drivers, teams, raceResults } = state
         state.driverStandings = computeDriverStandings(drivers, teams, raceResults)
         state.constructorStandings = computeConstructorStandings(teams, drivers, raceResults)
