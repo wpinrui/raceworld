@@ -470,6 +470,12 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
   if (champRow.wins >= Math.ceil(N / 2) && split.length >= 2 && topShare <= 0.65) {
     return { shape: 'BothCarsDominate', championId: champ, driversSealedEarly }
   }
+  // Lead traded all year AND stayed competitive to the end: 3+ round-to-round lead changes and a final gap
+  // within ~1.5 constructor wins (so a traded-then-blowout season isn't framed as a back-and-forth title).
+  // Ranked above one-car / wins-vs-points: a genuine traded WCC is the headline over who carried the team.
+  if (ct.leadChanges >= 3 && ct.currentGap <= constructorMaxPerRace(ctx.year) * 1.5) {
+    return { shape: 'LeadTradedLate', championId: champ, otherId: ct.series[ct.series.length - 1]?.secondId ?? undefined, driversSealedEarly }
+  }
   // One car carried it: the title leaned heavily on a single seat.
   if (split.length >= 2 && topShare >= 0.65) {
     return { shape: 'OneCarCarried', championId: champ, carriedDriverId: split[0]?.id, driversSealedEarly }
@@ -478,11 +484,6 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
   // genuine 3+ — a one-win edge isn't a "fastest car lost the title" story.
   if (winsLeader && winsLeader.id !== champ && winsLeader.wins - champRow.wins >= 3) {
     return { shape: 'WinsVsPoints', championId: champ, otherId: winsLeader.id, driversSealedEarly }
-  }
-  // Lead genuinely traded hands across the season: a single, clear signal of 3+ round-to-round lead changes
-  // (a high count already implies a competitive year, so no separate closeness gate).
-  if (ct.leadChanges >= 3) {
-    return { shape: 'LeadTradedLate', championId: champ, otherId: ct.series[ct.series.length - 1]?.secondId ?? undefined, driversSealedEarly }
   }
   return { shape: 'Clear', championId: champ, driversSealedEarly }
 }
