@@ -804,12 +804,30 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     // name takes the lead or climbs into the top two (the old margin is then irrelevant; positions moved).
     const champPara = ((): string => {
       if (!leader) return ''
-      if (clinched) return compose(`${seed}:champ`, slots, [
-        'With the win, {leader} can no longer be caught in the championship.',
-        'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
-        '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
-        'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
-      ])
+      if (clinched) {
+        // Only call it a clinch if it happened THIS race. If the title was already secure a race ago, this is a
+        // margin update, not a fresh crowning — name where it was actually sealed instead (#88).
+        const remPrev = N - (r - 1)
+        const clinchedBefore = afterPrev.length >= 2 && remPrev > 0 && (afterPrev[0].points - afterPrev[1].points) > remPrev * driverMaxPerRace(ctx.year)
+        if (!clinchedBefore) return compose(`${seed}:champ`, slots, [
+          '{leader} can no longer be caught in the championship.',
+          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
+          '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
+          'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
+        ])
+        // Already champion: find the round it was sealed at and report the updated margin instead.
+        let clinchRound = 0
+        for (let k = 1; k < r; k++) {
+          const st = driverStandingsAfter(ctx, k)
+          if (st.length >= 2 && N - k > 0 && st[0].points - st[1].points > (N - k) * driverMaxPerRace(ctx.year)) { clinchRound = k; break }
+        }
+        const clinchPhrase = clinchRound ? `at the ${circuit(ctx, clinchRound)}${clinchRound === r - 1 ? ' last weekend' : ''}` : 'earlier this season'
+        return compose(`${seed}:champ`, { ...slots, year: ctx.year, clinch_phrase: clinchPhrase }, [
+          '{leader}, who was named {year} World Champion {clinch_phrase}, is now {lead_gap} {lead_gap_pts} ahead of second-placed {second_last}.',
+          'Already crowned {year} champion {clinch_phrase}, {leader} now leads {second_last} by {lead_gap} {lead_gap_pts} with {races_left} to run.',
+          'With the title already settled {clinch_phrase}, {leader_last} sits {lead_gap} {lead_gap_pts} clear of {second_last}.',
+        ])
+      }
       if (r === 1) return compose(`${seed}:champ`, slots, [
         "{c_leader} lead the constructors' championship after the opening round.",
         "Round one puts {c_leader} top of the constructors' standings, ahead of {c_second}.",
