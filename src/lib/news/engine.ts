@@ -2045,11 +2045,11 @@ function pickUnique(pool: string[], seed: string, used: Set<string>): string {
 }
 
 // Car-launch prose pools (Sonnet-authored). `line` introduces a team + its drivers; `refPos` adds a
-// last-season reference using {art} {last_pos}; `refNew` covers a team with no prior finish on record
-// (the first season, or a genuine new entrant — never call them "new"). Pools are deliberately large
-// so the no-repeat picker can give every car in a tier a distinct line and reference.
+// last-season reference using {art} {last_pos} WHEN one exists. A team with no prior result on record (the
+// replay's first archived year, or a genuine newcomer) gets no reference line at all — we never narrate the
+// absence of a benchmark. Pools are deliberately large so the no-repeat picker gives every car a distinct line.
 const LAUNCH_COPY: {
-  line: string[]; refPos: string[]; refNew: string[]
+  line: string[]; refPos: string[]
   tiers: Record<'front-running' | 'midfield' | 'backmarker', { prio: number; headline: string[]; dek: string[]; intro: string[]; close: string[] }>
 } = {
   line: [
@@ -2083,20 +2083,6 @@ const LAUNCH_COPY: {
     'From {art} {last_pos}-place championship position, the team\'s stated aim is to move the needle decisively in {year}.',
     'The {last_pos}-place finish that closed out last season is the number the whole factory has been trying to make obsolete.',
     'With {art} {last_pos}-place result as the honest yardstick, the {year} car has been engineered to address every shortcoming that produced it.',
-  ],
-  refNew: [
-    'With no constructors result on the board to measure against, this launch is the only public yardstick on the car.',
-    'There is no prior championship finish to anchor expectations, so the car itself must do the talking.',
-    'No constructors data exists to set a baseline, which means every lap in testing will be the first hard evidence anyone has.',
-    'Without a finishing position in the standings to reference, the technical detail on display today is the sole benchmark available.',
-    'The record books hold no constructors result for this squad, so the {year} car enters service as an unknown quantity by definition.',
-    'There is simply no prior championship finish on the ledger, and that makes today\'s reveal the first real measure of intent.',
-    'No previous constructors campaign provides a frame of reference here; the car and its timing data will have to speak for themselves.',
-    'Because no constructors result exists to judge against, the engineering choices visible in this launch carry unusual scrutiny.',
-    'The absence of any constructors finish to compare with means the {year} car sets its own starting line from day one of testing.',
-    'Without a constructors result to anchor the narrative, the team\'s ambitions must be read from what the drawing office has actually built.',
-    'No championship position has been recorded for this team, leaving today\'s unveiling as the only concrete evidence of where they stand.',
-    'There is no finishing-position history to draw on, so the technical specification revealed today is the single reference point the paddock has.',
   ],
   tiers: {
     'front-running': {
@@ -2333,8 +2319,10 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
         }
         const tseed = `launch-${lyear}|${t.id}`
         const line = fill(pickUnique(LAUNCH_COPY.line, `${tseed}|line`, usedLine), ts)
-        const ref = fill(pickUnique(lastPos ? LAUNCH_COPY.refPos : LAUNCH_COPY.refNew, `${tseed}|ref`, usedRef), ts)
-        return `${line} ${ref}`
+        // No prior constructors result (the replay's first archived year, or a genuine newcomer): just describe
+        // the car. Never narrate the ABSENCE of a benchmark — if there's no result, there's no sentence (#88).
+        const ref = lastPos ? fill(pickUnique(LAUNCH_COPY.refPos, `${tseed}|ref`, usedRef), ts) : ''
+        return ref ? `${line} ${ref}` : line
       }
       out.push({
         id: lseed, category: 'car_launch_livery', round: 0, priority: C.prio,
