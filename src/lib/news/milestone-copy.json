@@ -15,7 +15,7 @@
         ],
         "b1": [
           "{driver} brought {team_poss} car home {pos} at the {circuit} to stand on a Formula 1 podium for the first time, a milestone that no subsequent result can take away.",
-          "A first podium does not leave you. {driver_last} earned one at the {circuit} with {pos}, a finish that changes how {their} career reads from here.",
+          "{driver_last} earned a first F1 podium at the {circuit} with {pos}, a finish that changes how {their} career reads from here.",
           "The {circuit} is where {driver_last} climbed to the top three for the first time; {pos} at the line, and a podium trophy that belongs to {them} permanently."
         ],
         "b2": [

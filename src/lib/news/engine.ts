@@ -578,6 +578,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const cLeaderTeam = cAfterR[0]
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
+    // First half of the calendar: frame by how far INTO the season we are; second half: how much is LEFT.
+    const progress = r <= N / 2 ? `, ${r} ${plural(r, 'race')} into the season` : ` with ${remaining} ${plural(remaining, 'race')} remaining`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
 
     // Safe, specific colour.
@@ -728,9 +730,8 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       : ['']
     const stratPool = strat
       ? [
-          '{winner_last} executed {strategy}, starting on {start_tyre}, and the timing of the stops proved to be the margin.',
-          'The win was built on {strategy}, with {winner_last} making the pit calls the rivals could not replicate.',
-          '{team} committed to {strategy} from the outset and {winner_last} drove it to perfection.',
+          'The win was built on {strategy} from {start_tyre}, with {winner_last} making the pit calls the rivals could not replicate.',
+          '{team} committed to {strategy} on {start_tyre} from the outset and {winner_last} drove it to perfection.',
           'Running {strategy} on {start_tyre}, {winner_last} found the rhythm the tyres allowed and never looked back.',
         ]
       : ['']
@@ -769,7 +770,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       'The {team} garage erupted as {winner_last} crossed the line, months of work landing in a single moment.',
       '{winner_last} pulled off {their} helmet on the slow-down lap to take in the reception from the grandstands.',
       'The {team} pit wall let the tension of the final laps drain away the instant the flag fell.',
-      '{winner_last} drove the in-lap at a measured pace, in no rush to let the afternoon end.',
       'The {team} mechanics were at the pit-lane wall before the car had stopped, ready for the celebrations.',
       '{winner_last} held the trophy in both hands and looked out into the crowd before the formalities resumed.',
       '{winner_last} was treated for dehydration once the cameras had moved on, the cockpit a brutal place in the closing laps.',
@@ -851,7 +851,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         const climbed = priorRankOf(leader.driverId)
         const verb = climbed >= 4 ? 'catapults' : climbed === 3 ? 'lifts' : 'moves'
         const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
-        return `${ld}'s ${raceFin(leader.driverId).noun} ${verb} ${prL.them} into the championship lead${from}. ${prL.they_cap} now leads ${sd}, who ${raceFin(second.driverId).verb}, by ${leadGap} ${gapPts} with ${racesLeft} remaining.`
+        return `${ld}'s ${raceFin(leader.driverId).noun} ${verb} ${prL.them} into the championship lead${from}. ${prL.they_cap} now leads ${sd}, who ${raceFin(second.driverId).verb}, by ${leadGap} ${gapPts}${progress}.`
       }
       // Same leader, but a new name has climbed into second: frame it as entering the conversation.
       const prevSecondId = afterPrev[1]?.driverId
@@ -859,7 +859,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         const climbed = priorRankOf(second.driverId)
         const prS = pronouns(ctx.drivers.find((d) => d.id === second.driverId)?.gender)
         const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
-        return `${sd}'s ${raceFin(second.driverId).noun} lifts ${prS.them} into championship contention${from}. ${prS.they_cap} now sits ${leadGap} ${gapPts} behind ${ld} with ${racesLeft} remaining.`
+        return `${sd}'s ${raceFin(second.driverId).noun} lifts ${prS.them} into championship contention${from}. ${prS.they_cap} now sits ${leadGap} ${gapPts} behind ${ld}${progress}.`
       }
       // Same top two: how did the gap move this race, and why?
       const leaderRacePts = results.find((x) => x.driverId === leader.driverId)?.points ?? 0
@@ -867,10 +867,10 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       const raceSwing = leaderRacePts - secondRacePts
       const prevGap = leadGap - raceSwing
       if (Math.abs(raceSwing) >= 4) {
-        return `${sd}'s ${raceFin(second.driverId).noun} and ${ld}'s ${raceFin(leader.driverId).noun} ${raceSwing < 0 ? 'cut' : 'stretched'} the title gap from ${prevGap} to ${leadGap} ${gapPts}, ${ld} leading ${sd} with ${racesLeft} remaining.`
+        return `${sd}'s ${raceFin(second.driverId).noun} and ${ld}'s ${raceFin(leader.driverId).noun} ${raceSwing < 0 ? 'cut' : 'stretched'} the title gap from ${prevGap} to ${leadGap} ${gapPts}, ${ld} leading ${sd}${progress}.`
       }
       const moved = raceSwing !== 0 ? `, ${raceSwing < 0 ? 'down' : 'up'} from ${prevGap}` : ''
-      return `${ld} leads ${sd} by ${leadGap} ${gapPts}${moved} with ${racesLeft} remaining.`
+      return `${ld} leads ${sd} by ${leadGap} ${gapPts}${moved}${progress}.`
     })()
 
     // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
@@ -2115,6 +2115,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
     // Occasional qualitative descriptor for the gap, by how it compares to the points still on
     // offer. Gated so it is not slapped on every preview; a bare number is often plenty.
     const availLeft = remaining * driverMaxPerRace(ctx.year)
+    const titleSafe = availLeft > 0 && leadGap > availLeft   // the runner-up can no longer catch the leader
     const ratio = leadGap > 0 && availLeft > 0 ? leadGap / availLeft : 0
     // "slender/narrow/wafer-thin" is reserved for a genuinely small absolute gap (a couple of
     // results), not just a small ratio early in a long season where 10+ points is still real.
@@ -2155,6 +2156,8 @@ function previews(ctx: NewsContext): NewsArticle[] {
           compose(`${seed}:stake`, slots,
             leadGap === 0
               ? ['{second_last} is level on points with {leader_last} at the top.']
+              : titleSafe
+              ? ['{second_last} can no longer reel in {leader_last} for the title, so the {circuit} is about the fight behind.', 'The title is beyond {second_last} now, {leader_last} uncatchable heading into the {circuit}.']
               : remaining <= 5
               ? ['With just {remaining} {rounds_word} left, time is short for {second_last}.', '{second_last} is running out of road, {remaining} {rounds_word} remaining.']
               : ['{second_last} sits {lead_gap} {gap_pts} behind {leader_last} and will fancy a response.', 'The job for {second_last} is to chip into a {lead_gap}-point deficit to {leader_last}.', '{second_last} has ground to make up on {leader_last}.'],
