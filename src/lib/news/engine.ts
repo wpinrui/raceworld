@@ -1908,6 +1908,70 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
 // TRIGGER: a preview for every round of the calendar (run-up coverage across the whole
 // season), plus the upcoming one while the season is live. Frames each round off the
 // standings as they stood beforehand.
+// Season-opener preview body (#88): a sharp, fully data-driven piece — a lead hook, the field around it, one
+// wildcard, then the calendar. Every sentence carries a name or a number; no "the form book is blank" filler.
+// Sourced from the expectation model, careers, and last season's constructors' finishes.
+function openerPiece(ctx: NewsContext): string {
+  const analysis = buildSeasonAnalysis(ctx)
+  const cast = previewCast(ctx, analysis)
+  const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
+  const titles = (id: string) => ctx.careers?.[id]?.titles ?? 0
+  const wins = (id: string) => ctx.careers?.[id]?.wins ?? 0
+  const teamOf = (id: string) => teamName(ctx, ctx.drivers.find((d) => d.id === id)?.teamId ?? '')
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  // Driver with their strongest career mark appended (champion > race-winner), or just the name.
+  const tagged = (id: string) => { const t = titles(id); const r = t >= 2 ? `${t}-time champion` : t === 1 ? 'former champion' : wins(id) > 0 ? 'race-winner' : ''; return r ? `${dn(id)}, ${r},` : dn(id) }
+  const byRank = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank)
+  const N = ctx.calendar.length
+  const beats: string[] = []
+
+  // Beat 1 — the lead hook: the title defence (with the milestone it chases) + the chief challenger; with no
+  // reigning champion (a fresh save), the winter's top two instead.
+  const champ = cast.reigningChampion
+  const challenger = cast.titleFavourites.find((id) => id !== champ) ?? byRank.find((e) => e.driverId !== champ)?.driverId
+  if (champ) {
+    const t = titles(champ)
+    const pr = pronouns(ctx.drivers.find((d) => d.id === champ)?.gender)
+    const chase = t >= 1 ? ` chasing a ${ordinal(t + 1)} title` : ''
+    const chal = challenger ? ` ${tagged(challenger)} leads the names tipped to stop ${pr.them}.` : ''
+    beats.push(`${dn(champ)}, ${t >= 2 ? `${t}-time champion` : 'reigning champion'}, opens ${ctx.year}${chase}.${chal}`)
+  } else if (byRank.length >= 2) {
+    beats.push(`The winter makes ${tagged(byRank[0].driverId)} and ${tagged(byRank[1].driverId)} the names to beat in ${ctx.year}.`)
+  }
+
+  // Beat 2 — the field: who the winter expects to split the leaders, plus a team rated above last season's
+  // constructors' finish and one rated below it.
+  const taken = new Set([champ, challenger].filter(Boolean) as string[])
+  const splitter = byRank.find((e) => !taken.has(e.driverId))?.driverId
+  const lastYear = (ctx.constructorHistory ?? []).reduce((m, h) => Math.max(m, h.seasonYear), -Infinity)
+  const lastFin = (teamId: string) => (ctx.constructorHistory ?? []).find((h) => h.seasonYear === lastYear && h.teamId === teamId)?.finalPosition
+  const moves = ctx.teams.map((tm) => ({ id: tm.id, exp: analysis.teamExpectations.get(tm.id)?.expectedRank, lf: lastFin(tm.id) })).filter((x): x is { id: string; exp: number; lf: number } => x.exp != null && x.lf != null)
+  const riser = moves.filter((x) => x.lf - x.exp >= 2).sort((a, b) => (b.lf - b.exp) - (a.lf - a.exp))[0]
+  const faller = moves.filter((x) => x.exp - x.lf >= 2).sort((a, b) => (b.exp - b.lf) - (a.exp - a.lf))[0]
+  const fieldBits: string[] = []
+  if (splitter) fieldBits.push(`${dn(splitter)} (${teamOf(splitter)}) is the winter's pick to split them`)
+  if (riser) fieldBits.push(`${teamName(ctx, riser.id)} is tipped to climb from ${ordinal(riser.lf)} to ${ordinal(riser.exp)}`)
+  if (faller) fieldBits.push(`${teamName(ctx, faller.id)}, ${ordinal(faller.lf)} a year ago, is rated only ${ordinal(faller.exp)}`)
+  if (fieldBits.length) beats.push(`${cap(fieldBits[0])}${fieldBits.length > 1 ? `, while ${fieldBits.slice(1).join(', and ')}` : ''}.`)
+
+  // Beat 3 — one wildcard: a dark horse, a veteran's last stand, or a rookie (suppressed if the whole grid is new).
+  const seated = ctx.drivers.filter((d) => d.teamId !== '').length
+  const dh = cast.darkHorses[0]
+  const vet = cast.veterans.find((v) => v.kind === 'twilight')
+  if (dh) {
+    const tExp = analysis.teamExpectations.get(ctx.drivers.find((d) => d.id === dh)?.teamId ?? '')?.expectedRank
+    beats.push(`The wildcard is ${dn(dh)}, rated among the field's best but in a ${teamOf(dh)} car the winter places no higher than ${ordinal(tExp ?? 0)}.`)
+  } else if (vet) {
+    beats.push(`${dn(vet.driverId)}, ${ctx.drivers.find((d) => d.id === vet.driverId)?.age}, lines up for what may be a final campaign.`)
+  } else if (cast.rookies.length && cast.rookies.length <= seated / 2) {
+    beats.push(`${dn(cast.rookies[0])} arrives as the rookie to watch.`)
+  }
+
+  // Beat 4 — the calendar.
+  beats.push(`${N} rounds, starting here at the ${circuit(ctx, 1)}.`)
+  return paras(...beats)
+}
+
 function previews(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const out: NewsArticle[] = []
@@ -1933,21 +1997,8 @@ function previews(ctx: NewsContext): NewsArticle[] {
     const favAvg = favRecent.length ? favRecent.reduce((s, x) => s + x, 0) / favRecent.length : 99
     const favForm = favAvg <= 6 ? 'on' : favAvg >= 12 ? 'off' : 'mid'
 
-    // Grid talking point from last time out, and (opener only) the rookie debut note.
+    // Grid talking point from last time out (non-opener rounds; the opener uses openerPiece instead).
     const talkingPoint = previewTalkingPoint(ctx, r, seed)
-    // A debutant is a driver with NO prior F1 starts (in historical mode, only in their real debut
-    // season). No age guessing: Button at 21 with 24 starts is not a rookie.
-    const isDebutant = (d: Driver) =>
-      d.debutYear != null ? d.debutYear === ctx.year : (careerTotalsThroughRound(ctx, d.id, r - 1)?.starts ?? 0) === 0
-    const seatedCount = ctx.drivers.filter((d) => d.teamId !== '').length
-    const rookieNames = ctx.drivers.filter((d) => d.teamId !== '' && isDebutant(d)).map((d) => d.name)
-    // A fresh-world mass debut (e.g. a generated season one, where the whole grid has no prior starts)
-    // is not individually newsworthy — suppress the note rather than list the entire field.
-    const massDebutOpener = rookieNames.length > seatedCount / 2
-    const rookieNote = !isOpener || massDebutOpener ? ''
-      : rookieNames.length === 0 ? ''
-      : rookieNames.length === 1 ? `${rookieNames[0]} makes a Grand Prix debut.`
-      : `${listJoin(rookieNames)} all start their first Grand Prix.`
 
     const wccGap = cbefore[0] && cbefore[1] ? cbefore[0].points - cbefore[1].points : 0
     const leadGap = leader ? leader.points - (second?.points ?? 0) : 0
@@ -1985,15 +2036,7 @@ function previews(ctx: NewsContext): NewsArticle[] {
       : ''
 
     const body = isOpener
-      ? paras(
-          compose(`${seed}:intro`, slots,
-            ['The {year} season gets under way at the {circuit}.', 'It all begins at the {circuit}.', 'Round one takes the grid to the {circuit}.'],
-            ['All {n_teams} teams start level on zero.', 'Every driver opens the {year} campaign on nothing.', 'The form book is blank over the {remaining} {rounds_word} ahead.']),
-          rookieNote,
-          compose(`${seed}:stake`, slots,
-            ['Reliability over a full race distance is the first real question.', 'The opening laps will give the first honest read on the order.', 'Whether winter pace translates to race day is the question everyone wants answered.']),
-          texture(seed, ['The paddock buzzed with first-race nerves.', 'There was a charged, expectant mood up and down the grid.', 'The garages had the taut quiet of a grid that had run out of time to prepare.'], slots),
-        )
+      ? openerPiece(ctx)
       : paras(
           compose(`${seed}:intro`, slots,
             ['Round {round} takes the championship to the {circuit}.', 'The grid heads to the {circuit} for round {round}.', 'The {circuit} is next, round {round} of the season.'],
