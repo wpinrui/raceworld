@@ -203,5 +203,9 @@
     "{team} faded as the season wore on, an early-season {early_phase_pos} on pace becoming {late_phase_pos} as rivals brought upgrades they could not match.",
     "{team} could not sustain their early form, dropping from {early_phase_pos} to {late_phase_pos} on pace over the year, {arc_driver1} and {arc_driver2} finishing {arc_driver1_wdc} and {arc_driver2_wdc} in the drivers' championship."
   ],
-  "teamArcDeadSeat": ["PLACEHOLDER {team} leaned on {arc_driver_last}; the other seat scored almost nothing."]
+  "teamArcDeadSeat": [
+    "{team} relied almost entirely on {arc_driver}, {arc_other} contributing next to nothing alongside {arc_driver_last}'s {arc_driver_points} points.",
+    "{team}'s season was a one-driver effort, {arc_driver} scoring {arc_driver_points} points while {arc_other} managed just {arc_other_points}.",
+    "{team} leaned heavily on {arc_driver}, the {arc_other} side of the garage adding only {arc_other_points} points to {arc_driver_last}'s {arc_driver_points}."
+  ]
 }
