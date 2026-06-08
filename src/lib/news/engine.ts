@@ -1678,7 +1678,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   if (mod) champSection = `${champSection} ${fill(mod, slots)}`
   const sections: string[] = [champSection]
   // The runner-up's side of the title fight (#88).
-  if (ruArc) sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), { ...slots, peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins }))
+  if (ruArc) sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), { ...slots, peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins, dnf_gp: ruArc.dnfRound ? circuit(ctx, ruArc.dnfRound) : '' }))
   // Constructors' title shape + the drivers-sealed-early modifier (#88).
   if (constructorChampion) {
     const consTitle = analysis.constructorTitle

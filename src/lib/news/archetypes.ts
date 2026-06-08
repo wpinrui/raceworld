@@ -559,6 +559,7 @@ export interface RunnerUpResult {
   peakDeficit: number // the largest the runner-up's deficit to the champion ever was
   finalGap: number
   lateWins: number // runner-up wins in the trailing window
+  dnfRound?: number // lateChargeOwnDnf: the round of the charge-ending retirement
 }
 
 export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerUpResult | null {
@@ -576,12 +577,12 @@ export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerU
   const w = Math.min(4, N - 1)
   let lateWins = 0
   for (let r = N - w + 1; r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.finishPosition === 1) lateWins++
-  let lateDnf = false
-  for (let r = Math.max(1, N - 2); r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.dnf) lateDnf = true
+  let dnfRound = 0
+  for (let r = Math.max(1, N - 2); r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.dnf) dnfRound = r
   const closingLate = finalGap < champPts(Math.max(1, N - w)) - ruPts(Math.max(1, N - w))
   const aliveBeforeFinal = N >= 2 && champPts(N - 1) - ruPts(N - 1) <= maxPer
 
-  if (closingLate && lateDnf) return { driverId: ru, key: 'lateChargeOwnDnf', peakDeficit, finalGap, lateWins }
+  if (closingLate && dnfRound) return { driverId: ru, key: 'lateChargeOwnDnf', peakDeficit, finalGap, lateWins, dnfRound }
   if (peakDeficit >= 30 && finalGap <= 12 && lateWins >= 2) return { driverId: ru, key: 'valiant', peakDeficit, finalGap, lateWins }
   if (aliveBeforeFinal) return { driverId: ru, key: 'aliveToFlag', peakDeficit, finalGap, lateWins }
   return null

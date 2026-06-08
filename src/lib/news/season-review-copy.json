@@ -173,7 +173,11 @@
     "It was nearly some comeback from {runner_up_last}, who clawed a {peak_deficit}-point deficit to {champion_last} down to just {final_gap} with {late_wins} late wins, only to fall short at the last.",
     "{runner_up_last} threw everything at the run-in, {late_wins} wins in the closing rounds cutting a {peak_deficit}-point gap to {final_gap}, but {champion_last} had banked enough to hold on."
   ],
-  "runnerUpLateChargeOwnDnf": ["PLACEHOLDER {runner_up_last}'s late charge ended with a retirement."],
+  "runnerUpLateChargeOwnDnf": [
+    "{runner_up_last}'s late surge ended in cruel fashion, a retirement at the {dnf_gp} halting a charge that had cut the gap to {champion_last} to {final_gap}.",
+    "Just as {runner_up_last} was reeling {champion_last} in, a DNF at the {dnf_gp} ended the comeback, the title bid undone by {runner_up_last}'s own car.",
+    "{runner_up_last} had been closing on {champion_last}, the gap down to {final_gap}, before a retirement at the {dnf_gp} ended the title fight the hard way."
+  ],
   "runnerUpAliveToFlag": ["PLACEHOLDER {runner_up_last} kept the title alive to the final round."],
   "teamArcFlop": ["PLACEHOLDER {team} fell well short of preseason expectations."],
   "teamArcDevSurge": ["PLACEHOLDER {team} developed from the back of the grid to the front over the season."],
