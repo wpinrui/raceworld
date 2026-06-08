@@ -1,0 +1,149 @@
+{
+  "wccDecider": {
+    "headline": [
+      "{lead_team} can clinch the constructors title at the {circuit}",
+      "How {lead_team} wrap up the {year} constructors crown at the {circuit}",
+      "{lead_team} could seal the constructors title at the {circuit}",
+      "The {year} constructors crown is within {lead_team}'s grasp at the {circuit}"
+    ],
+    "dek": [
+      "{lead_team} arrive at the {circuit} with a chance to end {rival_team}'s hopes and pocket the {year} constructors title.",
+      "The numbers that decide whether {lead_team} lift the constructors trophy at the {circuit} or carry the fight to the {next_circuit}.",
+      "{lead_team} hold a {cg}-point advantage and can put the {year} teams title to bed this weekend."
+    ],
+    "p1a": [
+      "{lead_team} can lift the {year} constructors trophy at the {circuit}, settling a season-long fight with {rival_team}.",
+      "The {year} constructors title could belong to {lead_team} before the {circuit} weekend is out.",
+      "A championship that began in {year} testing could end in {lead_team}'s favour at the {circuit}.",
+      "{lead_team} stand one good result from making the {year} constructors title theirs at the {circuit}."
+    ],
+    "p1b": [
+      "They carry a {cg}-point buffer over {rival_team} with {races_left} still on the calendar.",
+      "The margin over {rival_team} stands at {cg} points, and with {races_left} remaining, the moment is now.",
+      "{rival_team} trail by {cg} points and are running out of chances to close the gap.",
+      "With {races_left} to run after this, the pressure falls squarely on {rival_team}."
+    ],
+    "marginPos": [
+      "The arithmetic is straightforward: outscore {rival_team} by {net_needed} points at the {circuit} and the title is sealed.",
+      "{lead_team} need a net swing of {net_needed} points over {rival_team} at the {circuit} to end it here.",
+      "Get {net_needed} points clear of {rival_team} across both cars this weekend and {lead_team} are champions.",
+      "The magic number is {net_needed}: that is the points advantage over {rival_team} that locks the title up at the {circuit}."
+    ],
+    "marginNeg": [
+      "The lead is substantial enough that only {rival_team} outscoring {lead_team} by more than {surv_margin} points would keep the championship alive.",
+      "{lead_team} are effectively champions barring a {surv_margin}-point swing to {rival_team} in a single afternoon.",
+      "{rival_team} would need to haul back more than {surv_margin} points this weekend just to stay in contention.",
+      "Only a {surv_margin}-point turn-around in {rival_team}'s favour would prevent the title from going to {lead_team} at the {circuit}."
+    ],
+    "scenarioGuaranteed": [
+      "Lock out the top two and the constructors title is {lead_team}'s, full stop, whatever {rival_team} score.",
+      "A one-two at the {circuit} puts the trophy in {lead_team}'s cabinet regardless of what {rival_team} produce.",
+      "If {lead_team}'s drivers fill the top two places, no result {rival_team} can manage will keep the championship open.",
+      "The cleanest path: a one-two finish, and {lead_team} are champions on the spot, irrespective of {rival_team}."
+    ],
+    "scenarioCap": [
+      "A one-two only clinches the title if {rival_team} are held to {rival_cap} points or fewer across their two cars.",
+      "Even locking out the top two leaves a condition: {rival_team} must score {rival_cap} points or fewer for the title to be settled.",
+      "{lead_team} can wrap it up with a one-two, but only provided {rival_team} accumulate no more than {rival_cap} combined points.",
+      "The one-two scenario comes with a caveat: {rival_team} must be limited to {rival_cap} points or the fight goes on."
+    ],
+    "close": [
+      "Fall short of those targets and the title heads to the {next_circuit}.",
+      "Miss the mark and {rival_team} get a lifeline heading into the {next_circuit}.",
+      "Anything less than the required swing, and the decider shifts to the {next_circuit}.",
+      "If the numbers do not add up, the title stays open all the way to the {next_circuit}."
+    ]
+  },
+  "finaleDrv": {
+    "headline": [
+      "{leader_last} and {s_last} take the {year} title to the wire at the {circuit}",
+      "One race to decide the {year} world champion",
+      "{leader_last} heads into the {circuit} finale with the {year} crown in sight",
+      "The {year} drivers title goes to the final lap at the {circuit}"
+    ],
+    "dek": [
+      "The {year} drivers championship will be decided at the {circuit}, with {leader_last} and {s_last} splitting the spoils between them.",
+      "{leader_last} carries a {gap}-{gap_pts} advantage over {s_last} into the final round. Here is what each of them needs.",
+      "Everything rides on the {circuit}: a breakdown of how {leader_last} or {s_last} wins the {year} title."
+    ],
+    "p1Zero": [
+      "The {year} drivers title goes to the final round completely level, with everything still to be decided at the {circuit}.",
+      "After a full season of racing, {leader_last} and {s_last} arrive at the {circuit} separated by nothing at all.",
+      "It could not be tighter: the {year} world championship heads into its final round with the standings locked together.",
+      "The {circuit} will settle it. A whole season of effort, and the {year} title remains perfectly balanced."
+    ],
+    "mZero": [
+      "{leader_last} and {s_last} are level on points. Whoever finishes ahead at the {circuit} becomes {year} World Champion, simple as that.",
+      "With nothing between them in the standings, the {year} crown belongs to whichever of them crosses the line ahead of the other.",
+      "Identical points totals mean the {circuit} is a straight fight: finish ahead of your rival and the title is yours.",
+      "No countback, no tiebreaker drama required if one of them leads the other home. The {circuit} is winner takes all."
+    ],
+    "p1Lead": [
+      "{leader_last} arrives at the {circuit} in the driving seat for the {year} world championship, a lead over {s_last} in {their} pocket.",
+      "The {year} season reaches its conclusion at the {circuit}, where {leader_last} can secure {their} first world title.",
+      "It comes down to one race. {leader_last} holds the edge over {s_last} going into the {circuit} finale.",
+      "One weekend of racing at the {circuit} stands between {leader_last} and the {year} world championship."
+    ],
+    "mLead": [
+      "{leader_last} leads {s_last} by {gap} {gap_pts}. {they_cap} are champion unless {s_last} can outscore {them} by {need} {need_pts} before the chequered flag.",
+      "The gap is {gap} {gap_pts}, meaning {s_last} must produce a net swing of {need} {need_pts} over {leader_last} to take the {year} title.",
+      "{leader_last} needs only to stay within {gap} {gap_pts} of {s_last} at the {circuit} to end the season as world champion.",
+      "A {gap}-{gap_pts} buffer means the mathematics favour {leader_last} heavily: {s_last} must outscore {them} by {need} {need_pts} to turn it around."
+    ],
+    "win": [
+      "Victory at the {circuit} and the championship is {leader_last}'s, regardless of where {s_last} finishes.",
+      "If {leader_last} wins the race, the title is settled immediately, whatever {s_last} does.",
+      "A race win puts the {year} crown beyond {s_last}'s reach and hands it to {leader_last} outright.",
+      "Cross the line first and {leader_last} is champion. {s_last}'s result becomes irrelevant."
+    ],
+    "riv": [
+      "{s_last} needs to outscore {leader_last} by {need} {need_pts}: in practice, that means winning while {leader_last} falls well down the order.",
+      "The only realistic route for {s_last} is a victory combined with {leader_last} in serious trouble, a swing of {need} {need_pts} does not happen otherwise.",
+      "For {s_last}, the maths demand a {need}-{need_pts} turnaround in a single afternoon. That requires winning and hoping {leader_last} has a catastrophic race.",
+      "{s_last} must find {need} {need_pts} on {leader_last} between lights-out and the chequered flag. Without a race win and {leader_last} in distress, it cannot be done."
+    ]
+  },
+  "finaleWcc": {
+    "headline": [
+      "{lead_team} and {rival_team} go to the wire for the {year} constructors title",
+      "The {year} teams championship will be settled at the {circuit}",
+      "One race left to decide whether {lead_team} or {rival_team} take the {year} constructors crown",
+      "The {year} constructors title finale, {lead_team} against {rival_team} at the {circuit}"
+    ],
+    "dek": [
+      "The {year} constructors championship comes down to the {circuit}, with {lead_team} and {rival_team} splitting a single race to decide it.",
+      "After a full season of development battles and strategy fights, the {year} teams title requires one more race to separate {lead_team} from {rival_team}.",
+      "Here is what {lead_team} and {rival_team} each need to do at the {circuit} to leave as {year} constructors champions."
+    ],
+    "p1Zero": [
+      "The {year} constructors title goes to the wire perfectly level, with the {circuit} the sole judge.",
+      "All square at the head of the constructors standings: the {year} teams championship requires one final race to find its winner.",
+      "After a season that has refused to separate them, {lead_team} and {rival_team} arrive at the {circuit} locked together in the standings.",
+      "The {year} constructors battle has produced a dead heat, and only the {circuit} can break it."
+    ],
+    "mZero": [
+      "{lead_team} and {rival_team} are level on points. Whichever team outscores the other at the {circuit} takes the {year} constructors crown.",
+      "With the teams inseparable on points, the {year} title belongs to whoever produces the stronger combined result at the {circuit}.",
+      "No margin, no comfort: {lead_team} and {rival_team} know the {year} championship is decided purely by what happens on Sunday.",
+      "Nothing separates them in the standings, and nothing will until the {circuit} provides a final verdict."
+    ],
+    "p1Lead": [
+      "{lead_team} hold the advantage going into the {circuit} finale, but {rival_team} are close enough to take the {year} constructors title away from them.",
+      "The {year} constructors championship reaches its conclusion at the {circuit}, {lead_team} in front but {rival_team} still firmly in the fight.",
+      "One race separates {lead_team} from a {year} constructors title, though {rival_team} have the numbers to deny them.",
+      "{lead_team} lead the constructors standings heading into the final round at the {circuit}, with the trophy not yet secured."
+    ],
+    "mLead": [
+      "{lead_team} lead by {cg} {cg_pts} and lift the {year} constructors trophy unless {rival_team} outscore them by {need} {need_pts} at the {circuit}.",
+      "A {cg}-{cg_pts} buffer means {lead_team} need only keep {rival_team} within {cg} {cg_pts} of them on Sunday to be crowned {year} champions.",
+      "The gap is {cg} {cg_pts}: {rival_team} must produce a net swing of {need} {need_pts} in their favour at the {circuit} to deny {lead_team} the title.",
+      "{lead_team} are constructors champions if they go to the {circuit} and stay within {cg} {cg_pts} of {rival_team}. The margin makes the maths work in their favour."
+    ],
+    "win": [
+      "A one-two for {lead_team} seals the constructors title on the spot, regardless of what {rival_team} score.",
+      "Lock out the top two places and {lead_team} are {year} constructors champions, full stop, whatever {rival_team} produce.",
+      "The cleanest scenario: {lead_team} drivers fill the top two positions, and the constructors trophy is theirs before {rival_team}'s result even matters.",
+      "One-two at the {circuit} and it is over for {lead_team}, irrespective of {rival_team}'s afternoon."
+    ]
+  }
+}
