@@ -44,6 +44,9 @@ export default function RacePage() {
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextTickAtRef = useRef<number>(0)
   const doTickRef = useRef<() => void>(() => {})
+  // Once the race has finished, raceState going null means End Race fired and we're navigating to Home;
+  // render nothing instead of flashing the (now-advanced) next round's pre-qualifying for a frame (#113).
+  const endedRef = useRef(false)
 
   const currentCircuit = calendarForYear(season.year)[season.currentRound - 1]
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
@@ -53,6 +56,8 @@ export default function RacePage() {
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
     if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (phase === 'finished') endedRef.current = true }, [phase])
 
   const handleSpeedClick = (s: SimSpeed) => {
     if (s === 4) { setShowSpeed4Modal(true); return }
@@ -142,6 +147,7 @@ export default function RacePage() {
   }
 
   if (!hydrated) return null
+  if (!raceState && endedRef.current) return null // race over, mid-navigation to Home: don't flash round N+1
 
   const resultsForDisplay = phase === 'finished' ? computeResults() : []
   const selectedDriverId = godModeDriverId
