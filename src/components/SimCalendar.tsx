@@ -8,7 +8,7 @@ import { raceDate, toISODate, fromISODate, addDays, formatDate } from '@/lib/sim
 import type { NewsArticle } from '@/lib/news/engine'
 
 const PAST_DAYS = 2
-const FUTURE_DAYS = 6
+const FUTURE_DAYS = 4
 
 // FM-style calendar bar. Mounted by the nav only while the Continue loop advances the clock day by day:
 // it spans the full width flush under the top bar, dims and blurs the home screen behind it, and shows each
