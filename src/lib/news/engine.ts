@@ -1773,11 +1773,17 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     const arcActual = analysis.teamDeltas.find((d) => d.id === arc.teamId)?.actualRank
     let arcPoints = 0
     for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === arc.teamId) arcPoints += cc.points
+    const wdcPos = new Map(driverStandingsAfter(ctx, analysis.completedRounds).map((s, i) => [s.driverId, i + 1]))
+    const arcTeamDrivers = ctx.drivers.filter((d) => d.teamId === arc.teamId).map((d) => ({ name: d.name, pos: wdcPos.get(d.id) ?? 99 })).sort((a, b) => a.pos - b.pos)
+    const ad1 = arcTeamDrivers[0], ad2 = arcTeamDrivers[1]
     const arcSlots = {
       ...slots, team: tn(arc.teamId),
       arc_driver: arc.driverId ? dn(arc.driverId) : '', arc_driver_last: arc.driverId ? lastName(dn(arc.driverId)) : '',
       arc_other: arc.otherId ? dn(arc.otherId) : '', arc_other_last: arc.otherId ? lastName(dn(arc.otherId)) : '',
       team_expected_pos: arcExp ? ordinal(arcExp) : '', team_final_pos: arcActual ? ordinal(arcActual) : '', team_points: arcPoints,
+      early_phase_pos: arc.earlyRank ? ordinal(arc.earlyRank) : '', late_phase_pos: arc.lateRank ? ordinal(arc.lateRank) : '',
+      arc_driver1: ad1?.name ?? '', arc_driver2: ad2?.name ?? '',
+      arc_driver1_wdc: ad1 ? ordinal(ad1.pos) : '', arc_driver2_wdc: ad2 ? ordinal(ad2.pos) : '',
     }
     sections.push(fill(pick(c[`teamArc${cap(arc.key)}`], `${seed}|tarc`), arcSlots))
   }

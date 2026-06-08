@@ -193,7 +193,11 @@
     "It was a season to forget for {team}, who failed to build on a promising winter and finished only {team_final_pos} on {team_points} points.",
     "{team} badly underdelivered, projected around {team_expected_pos} before the season but ending up {team_final_pos}."
   ],
-  "teamArcDevSurge": ["PLACEHOLDER {team} developed from the back of the grid to the front over the season."],
+  "teamArcDevSurge": [
+    "{team} were a different team by the end of the year, surging from {early_phase_pos} on early-season form to {late_phase_pos} over the closing rounds, allowing their drivers {arc_driver1} and {arc_driver2} to finish {arc_driver1_wdc} and {arc_driver2_wdc} in the drivers' championship.",
+    "{team} stood out for their in-season development, climbing from {early_phase_pos} on early-season pace to {late_phase_pos} by the finish, with {arc_driver1} and {arc_driver2} taking {arc_driver1_wdc} and {arc_driver2_wdc} in the drivers' standings.",
+    "{team} transformed their season through development, an early-season {early_phase_pos} on pace becoming {late_phase_pos} late on, {arc_driver1} and {arc_driver2} ending up {arc_driver1_wdc} and {arc_driver2_wdc} in the championship."
+  ],
   "teamArcDevDecline": ["PLACEHOLDER {team} started near the front and faded as the year went on."],
   "teamArcDeadSeat": ["PLACEHOLDER {team} leaned on {arc_driver_last}; the other seat scored almost nothing."]
 }

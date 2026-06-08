@@ -497,6 +497,8 @@ export interface TeamArcMatch {
   strength: number
   driverId?: string // deadSeat: the seat carrying the team
   otherId?: string // deadSeat: the seat that scored ~nothing
+  earlyRank?: number // dev surge/decline: rank on first-third points
+  lateRank?: number // dev surge/decline: rank on last-third points
 }
 
 export function teamArcs(ctx: NewsContext, analysis: SeasonAnalysis): TeamArcMatch[] {
@@ -523,11 +525,11 @@ export function teamArcs(ctx: NewsContext, analysis: SeasonAnalysis): TeamArcMat
     }
     // Development surge: ran down the order early, climbed toward the front late.
     if (er - lr >= 3 && lr <= Math.max(4, frontCut + 1)) {
-      out.push({ teamId: t.id, key: 'devSurge', strength: er - lr })
+      out.push({ teamId: t.id, key: 'devSurge', strength: er - lr, earlyRank: er, lateRank: lr })
     }
     // Development fade: front early, faded down the order.
     if (lr - er >= 3 && er <= Math.max(4, frontCut + 1)) {
-      out.push({ teamId: t.id, key: 'devDecline', strength: lr - er })
+      out.push({ teamId: t.id, key: 'devDecline', strength: lr - er, earlyRank: er, lateRank: lr })
     }
     // Dead seat: one car carries the team, the other scores next to nothing.
     const split = teamDriverSplit(ctx, t.id, N)
