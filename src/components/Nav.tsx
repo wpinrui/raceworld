@@ -256,8 +256,11 @@ export default function Nav() {
   async function handleEndRace() {
     if (busy) return
     setBusy(true)
-    try { await commitCurrentRace() } finally { setBusy(false) }
+    // Navigate FIRST, in-gesture (like Quit), so /race unmounts before commitCurrentRace advances the round
+    // out from under it (which would otherwise re-render the page into round N+1's pre-qualifying). The
+    // commit runs on the Zustand stores via getState(), so it completes fine after the page unmounts (#113).
     router.push('/home')
+    try { await commitCurrentRace() } finally { setBusy(false) }
   }
 
   function handleRestart() {
