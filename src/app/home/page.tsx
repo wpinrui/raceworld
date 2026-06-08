@@ -17,11 +17,16 @@ export default function HomePage() {
   const phase = useSeasonStore((s) => s.phase)
   const teams = useSeasonStore((s) => s.teams)
   const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
+  const preSeasonTest = useSeasonStore((s) => s.preSeasonTest)
+  const completedRounds = useSeasonStore((s) => s.raceResults.length)
   const hydrated = useHydrated()
 
   if (!hydrated) return null
 
   const offSeason = isOffSeason(phase)
+  // The pre-season test lands AFTER the New-Year rollover, when the phase is 'pre-race' (not off-season),
+  // so the left panel must also mount then — until round 1 runs — or the test board never renders (#126).
+  const showLeftPanel = offSeason || (!!preSeasonTest && completedRounds === 0)
 
   return (
     <div className="h-full overflow-hidden bg-[#0F1419] text-[#FFFFFF]">
@@ -34,7 +39,7 @@ export default function HomePage() {
         <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[45fr_55fr]">
           {/* Left: off-season stage review (off-season only) sits above the headlines feed. */}
           <div className="flex flex-col gap-3 min-h-0">
-            {offSeason && <div className="flex-1 min-h-0"><PunditPredictions /></div>}
+            {showLeftPanel && <div className="flex-1 min-h-0"><PunditPredictions /></div>}
             <div className="flex-1 min-h-0"><HeadlinesPanel /></div>
           </div>
 
