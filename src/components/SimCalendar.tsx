@@ -24,10 +24,16 @@ export function SimCalendar({ open, articles }: { open: boolean; articles: NewsA
     return () => clearTimeout(t)
   }, [])
 
-  // Scheduled race weekends keyed by ISO race date (known in advance, so future days can show them).
+  // Race weekends keyed by ISO date: a Grand Prix occupies Friday (Practice), Saturday (Qualifying) and
+  // Sunday (Race), all known in advance so future days show them.
   const raceByDate = useMemo(() => {
-    const m = new Map<string, { name: string; country: string }>()
-    for (const c of calendarForYear(year)) m.set(toISODate(raceDate(year, c)), { name: c.name, country: c.country })
+    const m = new Map<string, { name: string; country: string; session: string }>()
+    for (const c of calendarForYear(year)) {
+      const sun = raceDate(year, c)
+      m.set(toISODate(addDays(sun, -2)), { name: c.name, country: c.country, session: 'Practice' })
+      m.set(toISODate(addDays(sun, -1)), { name: c.name, country: c.country, session: 'Qualifying' })
+      m.set(toISODate(sun), { name: c.name, country: c.country, session: 'Race' })
+    }
     return m
   }, [year])
 
@@ -83,9 +89,12 @@ export function SimCalendar({ open, articles }: { open: boolean; articles: NewsA
               </div>
               <div className="mt-2.5 space-y-1.5">
                 {day.race && (
-                  <div className="flex items-center gap-1.5 rounded border border-[#00D9FF]/30 bg-[#00D9FF]/15 px-2 py-1.5">
-                    <ReactCountryFlag countryCode={day.race.country} svg style={{ width: '1em', height: '1em', borderRadius: '2px', flexShrink: 0 }} />
-                    <span className="truncate text-[11px] font-bold uppercase tracking-wide text-[#00D9FF]">{day.race.name}</span>
+                  <div className="rounded border border-[#00D9FF]/30 bg-[#00D9FF]/15 px-2 py-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <ReactCountryFlag countryCode={day.race.country} svg style={{ width: '1em', height: '1em', borderRadius: '2px', flexShrink: 0 }} />
+                      <span className="truncate text-[11px] font-bold uppercase tracking-wide text-[#00D9FF]">{day.race.name}</span>
+                    </div>
+                    <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-widest text-[#00D9FF]/70">{day.race.session}</span>
                   </div>
                 )}
                 {day.news.slice(0, 4).map((a) => (

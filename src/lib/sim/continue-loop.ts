@@ -1,6 +1,6 @@
 import type { NewsArticle } from '@/lib/news/engine'
 import { calendarForYear } from '@/data/calendars'
-import { raceDate, toISODate } from './calendar-dates'
+import { raceDate, toISODate, addDays } from './calendar-dates'
 
 // The brain of the FM-style "Continue" loop. Pure + UI-agnostic: given today's clock, how many
 // rounds have been run, and the dated news feed, it decides the next date the sim should stop and
@@ -42,8 +42,10 @@ export function computeNextStop(args: {
   const calendar = calendarForYear(year)
   const total = calendar.length
   const nextRaceRound = completedRounds + 1
+  // The sim halts at the race WEEKEND (Friday = race Sunday minus 2), not the race itself, so the player
+  // enters the weekend on Friday with the mid-week pre-race preview already dropped.
   const nextRaceDate = nextRaceRound <= total
-    ? toISODate(raceDate(year, calendar[nextRaceRound - 1]))
+    ? toISODate(addDays(raceDate(year, calendar[nextRaceRound - 1]), -2))
     : null
 
   // Interrupting stories strictly after today and strictly before the next race (raceday wins ties).

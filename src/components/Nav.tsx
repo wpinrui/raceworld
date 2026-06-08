@@ -100,7 +100,8 @@ export default function Nav() {
   const total = calendar.length
   const completedRounds = raceResults.length
   const nextRaceRound = completedRounds + 1
-  const nextRaceDate = nextRaceRound <= total ? toISODate(raceDate(year, calendar[nextRaceRound - 1])) : null
+  // Race weekend opens on the Friday (race Sunday minus 2), so "Go to Race" appears from Friday on.
+  const nextRaceDate = nextRaceRound <= total ? toISODate(addDays(raceDate(year, calendar[nextRaceRound - 1]), -2)) : null
   const atRaceday = !!nextRaceDate && currentDate >= nextRaceDate
   const circuit = calendar[currentRound - 1]
   const dateLabel = currentDate ? formatDate(fromISODate(currentDate), { year: true }) : ''
