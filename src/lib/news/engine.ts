@@ -12,7 +12,6 @@
 //  - race_report      : one per race, consolidating result + start + attrition + title picture.
 //  - milestone        : per race, only on a genuine first (first win of the season, surprise
 //                       podium, team 1-2).
-//  - technical_upgrade : one ROUNDUP per race, and only when a team actually upgraded.
 //  - championship_state: only the clinch moments + a late-season title-fight watch.
 //  - feature          : a long state-of-the-season read at half-distance + a season review.
 //  - silly_season     : only at three points (mid / three-quarter / penultimate round), and the
@@ -325,17 +324,6 @@ function texture(seed: string, pool: string[], slots: Record<string, string | nu
   if (pool.length === 0 || !chance(`${seed}|tex`, pct)) return ''
   return fill(pick(pool, `${seed}|tex`), slots)
 }
-
-// Upgrades are fully abstracted in the data (we only know a team upgraded and whether it
-// worked), so naming the actual component and what it targets is pure unfalsifiable colour.
-const UPGRADE_PARTS = [
-  'front wing', 'floor', 'rear wing', 'diffuser', 'sidepod package', 'engine cover',
-  'suspension package', 'brake-duct package', 'beam wing', 'front-wing endplate',
-]
-const UPGRADE_AREAS = [
-  'low-speed balance', 'high-speed stability', 'tyre wear', 'straight-line speed',
-  'overall downforce', 'cooling', 'rear-end grip', 'front-end bite', 'kerb-riding',
-]
 
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
 // metadata, nationality) or a count derived from results, so it can never contradict the game.
@@ -1271,132 +1259,6 @@ function milestones(ctx: NewsContext): NewsArticle[] {
       ? fill(pick(milestoneCopy.connector, `${seed}|conn`), { circuit: circuitName }) + ' ' + lines.join(' ')
       : ''
     out.push({ id: seed, category: 'milestone', round: r, priority, headline, dek, body: paras(...lead, restPara) })
-  }
-  return out
-}
-
-// TRIGGER: any team delivered an upgrade this round (M3 dev cycles). ONE roundup per race,
-// grouping every team's package together — skipped entirely if nobody upgraded.
-function technicalRoundup(ctx: NewsContext): NewsArticle[] {
-  const out: NewsArticle[] = []
-  for (let r = 1; r <= ctx.completedRounds; r++) {
-    const evs = ctx.upgradeEvents.filter((e) => e.round === r)
-    if (evs.length === 0) continue
-    const delivered = evs.filter((e) => !e.failed).map((e) => teamName(ctx, e.teamId))
-    const missed = evs.filter((e) => e.failed).map((e) => teamName(ctx, e.teamId))
-    const circuitName = circuit(ctx, r)
-    const seed = `tech-${ctx.year}-${r}`
-    // A representative upgrading team: its real constructor position grounds the closing line,
-    // and one of its drivers carries the (invented, unfalsifiable) mood line.
-    // The representative team is the BIGGEST delivered upgrade this round (largest pace gain),
-    // so "the eye-catcher" genuinely is the most significant package; fall back to the biggest
-    // of the misfires if none delivered.
-    const repPool = evs.filter((e) => !e.failed).length ? evs.filter((e) => !e.failed) : evs
-    const repTeamId = [...repPool].sort((a, b) => b.paceDelta - a.paceDelta)[0].teamId
-    const repTeamDrivers = ctx.drivers.filter((d) => d.teamId === repTeamId)
-    const repDriver = repTeamDrivers.length ? pick(repTeamDrivers, `${seed}|updrv`) : undefined
-    const cstandTech = constructorStandingsAfter(ctx, r)
-    const repPosIdx = cstandTech.findIndex((c) => c.teamId === repTeamId)
-    const repPos = repPosIdx >= 0 ? ordinal(repPosIdx + 1) : ''
-    const repDelivered = delivered.length > 0 // rep is a delivered team if any delivered, else a misfire
-    const slots: Record<string, string | number> = {
-      circuit: circuitName, delivered: listJoin(delivered), missed: listJoin(missed),
-      n: evs.length, teams: plural(evs.length, 'team'),
-      up_driver: repDriver ? lastName(repDriver.name) : '',
-      rep_team: teamName(ctx, repTeamId), rep_team_poss: poss(teamName(ctx, repTeamId)), rep_pos: repPos,
-      part: pick(UPGRADE_PARTS, `${seed}|part`), area: pick(UPGRADE_AREAS, `${seed}|area`),
-    }
-    const intro = fill(pick(evs.length >= 2
-      ? [
-          'The {circuit} served as the latest proving ground for the development race, with {n} {teams} arriving with significant new components.',
-          'Car upgrades were a major subplot at the {circuit}, as {n} {teams} introduced fresh parts in search of a step forward.',
-          'Development was high on the agenda at the {circuit}, where {n} {teams} brought new parts hoping to find time over their rivals.',
-          'Factory work arrived at the track this weekend, with {n} {teams} running new components for the first time at the {circuit}.',
-        ]
-      : [
-          'Only one team came to the {circuit} carrying new parts, making their update the story of the garage.',
-          'The {circuit} was not a heavy upgrade weekend, with just one team rolling out meaningful new components.',
-          'Development was quiet at the {circuit}, with a single team breaking from the crowd to introduce fresh parts.',
-        ], `${seed}:intro`), slots)
-    const goodPara = delivered.length
-      ? fill(pick([
-          '{delivered} extracted real performance from the new parts, and it showed in the pace through the weekend.',
-          'For {delivered}, the new parts delivered, with a clear step up in competitiveness.',
-          '{delivered} left the {circuit} with data that confirmed what the simulations had promised.',
-          'The new components on the {delivered} car performed as intended and brought a tangible gain in race trim.',
-          '{delivered} came away confident the development direction is sound after a positive showing with the new parts.',
-        ], `${seed}:good`), slots)
-      : ''
-    const badPara = missed.length
-      ? fill(pick([
-          '{missed} found nothing from the new parts across the weekend, a frustrating return on the factory investment.',
-          'The upgrades on the {missed} car failed to translate, leaving the engineers with more questions than answers.',
-          '{missed} will be disappointed, with the new components producing no step and the weekend exposing the gap.',
-          'A difficult verdict for {missed}, whose new parts delivered no meaningful improvement on the timing screens.',
-          '{missed} head back to the factory to work out what went wrong after the package failed to fire at the {circuit}.',
-        ], `${seed}:bad`), slots)
-      : ''
-    // The specific (invented, unfalsifiable) component — different part/area/team each round.
-    const partPara = fill(pick(repDelivered
-      ? [
-          '{rep_team} brought the eye-catching change, a revised {part} aimed at {area}, and it delivered.',
-          '{rep_team} introduced a new {part} with {area} as the primary objective, and the data backed up the concept.',
-          'A redesigned {part} was the centrepiece of {rep_team_poss} package, with the team targeting {area} and finding the gains.',
-          'The new {part} on the {rep_team} car was built around gains in {area}, and it delivered on that brief.',
-        ]
-      : [
-          '{rep_team_poss} new {part} did not bring the {area} gains they were targeting, and the weekend numbers made that clear.',
-          'The revised {part} on the {rep_team} car was meant to unlock {area}, but that improvement did not materialise.',
-          '{rep_team_poss} {part} update promised gains in {area}, yet the track told a different story.',
-          'Despite the focus on {area} in the new {part}, {rep_team} found no reward at the {circuit}.',
-        ], `${seed}:part`), slots)
-    // Grounded close: the representative team's actual constructor position, not platitude.
-    const outlook = repPos
-      ? fill(pick(delivered.length
-          ? [
-              '{rep_team} sit {rep_pos} in the constructors\' championship and will want these gains to hold as the calendar moves on.',
-              'Sitting {rep_pos} in the standings, {rep_team} have given themselves fresh ammunition for the next phase of the season.',
-              '{rep_team} occupy {rep_pos} in the constructors\' championship and now have a confirmed step to build from.',
-              '{rep_team} are {rep_pos} in the constructors\' standings, and a working upgrade puts them in a stronger position to push higher.',
-            ]
-          : [
-              '{rep_team} remain {rep_pos} in the constructors\' championship and are still searching for the breakthrough the results need.',
-              'Stuck {rep_pos} in the standings, {rep_team} head back to the factory to regroup after a fruitless upgrade weekend.',
-              '{rep_team} are {rep_pos} in the constructors\' championship and cannot afford many more weekends where new parts fail to deliver.',
-              'The pressure on {rep_team} only grows, {rep_pos} in the constructors\' standings with parts that did not work.',
-            ], `${seed}:outlook`), slots)
-      : ''
-    // Driver mood is just one flavour of many, so keep it rare (a couple of times a season).
-    const techTexturePool = !repDriver
-      ? []
-      : delivered.length
-        ? [
-            '{up_driver} was upbeat afterwards, noting the car felt more responsive with the new parts.',
-            'The {rep_team} garage had a lighter mood, {up_driver} reporting a more planted feel through the high-speed sections.',
-            '{up_driver} said the update opened up options that had not been there in recent races.',
-            'There was a real lift around {rep_team}, {up_driver} offering positive words on how the car took the changes.',
-          ]
-        : [
-            'The mood inside {rep_team} was subdued, {up_driver} giving measured answers that told their own story.',
-            '{up_driver} chose words carefully afterwards, but the {rep_team} body language said enough about a wasted step.',
-            'There was little to celebrate for {rep_team}, {up_driver} admitting the parts had not done what was hoped.',
-          ]
-    const techTexture = texture(seed, techTexturePool, slots, 18)
-    out.push({
-      id: seed, category: 'technical_upgrade', round: r, priority: 45,
-      headline: fill(pick([
-        'Upgrade roundup from the {circuit}', '{n} {teams} brought new parts to the {circuit}', 'Development verdicts from the {circuit}',
-        'Who won and lost the upgrade battle at the {circuit}', '{rep_team} headline a {circuit} development push',
-        'The winners and losers of parts day at the {circuit}', 'Upgrades assessed at the {circuit}', 'Fresh bodywork at the {circuit}',
-      ], `${seed}|h`), slots),
-      dek: fill(pick([
-        '{n} {teams} arrived at the {circuit} with new parts, and not all of them left happy.',
-        'The {circuit} doubled as a development checkpoint, with {n} {teams} running fresh components.',
-        'Upgrade season hit the {circuit} hard, and the lap-time data has started to separate the gains from the gambles.',
-        'A busy weekend in the garages as {n} {teams} chased performance with new parts at the {circuit}.',
-      ], `${seed}|d`), slots),
-      body: paras(intro, goodPara, badPara, partPara, techTexture, outlook),
-    })
   }
   return out
 }
@@ -3309,7 +3171,6 @@ function midSeasonSwaps(ctx: NewsContext): NewsArticle[] {
 // Days a category's story drops relative to its round's race day (negative = before the race).
 const CATEGORY_DAY_OFFSET: Record<string, number> = {
   preview_schedule: -4,   // race-week preview
-  technical_upgrade: -2,  // upgrade reveal in practice
   car_launch_livery: 0,
   rookie_debut: 0,
   race_report: 0,         // race day (Sunday)
@@ -3739,7 +3600,6 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...preSeason(ctx),
     ...raceReports(ctx),
     ...milestones(ctx),
-    ...technicalRoundup(ctx),
     ...championship(ctx),
     ...championshipArc(ctx),
     ...constructorArc(ctx),
@@ -3775,7 +3635,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
 
 // Small helper so the page can label each card by category without importing the list.
 export const CATEGORY_LABELS: Record<string, string> = {
-  race_report: 'Race report', milestone: 'Milestone', technical_upgrade: 'Technical',
+  race_report: 'Race report', milestone: 'Milestone',
   championship_state: 'Championship', feature: 'Feature', preview_schedule: 'Preview',
   car_launch_livery: 'Launch', rookie_debut: 'Rookie', driver_signing: 'Transfer',
   driver_exit: 'Transfer', career_retirement: 'Retirement', silly_season: 'Silly season',
@@ -3790,7 +3650,6 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
   { label: 'Race report', categories: ['race_report'] },
   { label: 'Milestone', categories: ['milestone'] },
-  { label: 'Technical', categories: ['technical_upgrade'] },
   { label: 'Championship', categories: ['championship_state'] },
   { label: 'Feature', categories: ['feature'] },
   { label: 'Preview', categories: ['preview_schedule'] },

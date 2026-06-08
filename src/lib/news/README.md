@@ -21,7 +21,6 @@ deks pick from ~8–14 variants each. Net effect: the feed reads written, not st
 |---|---|---|
 | `race_report` | raceReports | **Every race.** One consolidated report: winner + podium + margin, the start, attrition (DNFs), the weather angle (wet races), and the title picture. Its closing line is **trajectory-aware** — the running championship coda (#88) when the gap is swinging, else the static state. |
 | `milestone` | milestones | **Per race, on a genuine first.** First win of the season for a driver, a surprise podium (live only), or a team 1-2. Naturally rare. |
-| `technical_upgrade` | technicalRoundup | **Per race, only if someone upgraded.** One roundup grouping every team's package that round (delivered vs misfired). |
 | `championship_state` | championship | The factual clinch + lead-change moments — driver + constructor titles, emitted at the round secured. |
 | `championship_state` | championshipArc | **Sparse, in-season (#88).** The drivers' title-fight narrative — fires only at trajectory inflections (a lead eroding/extending, a decider, a lead change), telling a comeback-on-merit apart from one handed over by leader DNFs. Absorbed the old titleFight + titleScenario. |
 | `championship_state` | constructorArc | **Sparse, in-season (#88).** Same inflection detection for the constructors' title (a shared arc-event core, `season-analysis.ts`). Priority just below the drivers' arc. |

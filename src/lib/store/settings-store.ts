@@ -7,7 +7,7 @@ import { persist } from 'zustand/middleware'
 // "Clear Save". Raceday ALWAYS interrupts and is not a category here (it's hardcoded in the loop).
 
 // Sensible defaults: only rare, consequential, factual events stop the sim. Routine race-weekend
-// coverage and opinion/rumour pieces (race reports, previews, analysis, features, technical, silly
+// coverage and opinion/rumour pieces (race reports, previews, analysis, features, silly
 // season, driver-watch, rookie debuts, launches) are left to read at leisure in the newsroom.
 export const DEFAULT_INTERRUPT_CATEGORIES: string[] = [
   'championship_state', // title clinched / title-fight state
