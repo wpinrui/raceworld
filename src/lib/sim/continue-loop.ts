@@ -36,8 +36,9 @@ export function computeNextStop(args: {
   year: number
   articles: NewsArticle[]
   settings: ContinueSettings
+  readIds?: string[] // already-read stories never re-interrupt (issue #114)
 }): NextStop {
-  const { currentDate, completedRounds, year, articles, settings } = args
+  const { currentDate, completedRounds, year, articles, settings, readIds = [] } = args
   const calendar = calendarForYear(year)
   const total = calendar.length
   const nextRaceRound = completedRounds + 1
@@ -46,8 +47,11 @@ export function computeNextStop(args: {
     : null
 
   // Interrupting stories strictly after today and strictly before the next race (raceday wins ties).
+  // Already-read stories are skipped, so Continue never halts on something the player has seen (#114).
+  const read = new Set(readIds)
   const interrupting = articles
     .filter((a) => !!a.date && a.date > currentDate && (nextRaceDate ? a.date < nextRaceDate : true))
+    .filter((a) => !read.has(a.id))
     .filter((a) => articleInterrupts(a, settings))
     .sort((a, b) => (a.date as string).localeCompare(b.date as string))
 

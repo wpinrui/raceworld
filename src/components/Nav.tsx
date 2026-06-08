@@ -11,7 +11,7 @@ import { useRaceStore } from '@/lib/store/race-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
-import { raceDate, toISODate, fromISODate, formatDate } from '@/lib/sim/calendar-dates'
+import { raceDate, toISODate, fromISODate, addDays, formatDate } from '@/lib/sim/calendar-dates'
 import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop } from '@/lib/sim/continue-loop'
@@ -24,6 +24,7 @@ import { pendingRealWorldChanges } from '@/lib/history/transitions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 import { RealWorldChangesModal } from '@/components/home/RealWorldChangesModal'
 import WorldSearch from '@/components/WorldSearch'
+import { SimCalendar } from '@/components/SimCalendar'
 
 const PRIMARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-50 transition-colors'
 const SECONDARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#2A3142] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#303848] disabled:opacity-50 transition-colors'
@@ -52,6 +53,7 @@ export default function Nav() {
   const [restartOpen, setRestartOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [simming, setSimming] = useState(false)
+  const [advancing, setAdvancing] = useState(false)
   const [newsStop, setNewsStop] = useState<{ date: string; articles: NewsArticle[] } | null>(null)
   const driverCard = useLiveDriverCards()
   // The gate is shown whenever there are pending real-world changes, unless the player dismissed it
@@ -134,27 +136,38 @@ export default function Nav() {
         await advanceOffSeason()
       } else {
         const settings = useSettingsStore.getState()
+        setAdvancing(true)
+        let dayCount = 0
         while (true) {
           const s = useSeasonStore.getState()
           const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
-          const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings })
-          if (stop.reason === 'news') { s.setCurrentDate(stop.date); stop.articles.forEach((a) => s.markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
-          if (stop.reason === 'race') {
-            if (settings.interruptOnRaceday) { s.setCurrentDate(stop.date); break }
-            const before = useSeasonStore.getState().raceResults.length
-            await simulateUntilRound(stop.round + 1)
-            // If the headless sim didn't actually record a round, bail rather than spin forever.
-            if (useSeasonStore.getState().raceResults.length === before) break
-            if (isOffSeason(useSeasonStore.getState().phase)) break
-            continue
+          const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
+          if (stop.reason === 'season-end') break
+          // Walk the clock to the stop ONE DAY at a time so the calendar overlay shows the days passing,
+          // accelerating on long runs so a fast-forward to the next race doesn't crawl.
+          let cur = s.currentDate
+          while (cur < stop.date) {
+            cur = toISODate(addDays(fromISODate(cur), 1))
+            useSeasonStore.getState().setCurrentDate(cur)
+            dayCount++
+            await new Promise((r) => setTimeout(r, dayCount < 8 ? 110 : dayCount < 20 ? 60 : 25))
           }
-          break // season-end
+          if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
+          // stop.reason === 'race': the clock now sits on race day.
+          if (settings.interruptOnRaceday) break // the player takes it from here (Go to Race)
+          const before = useSeasonStore.getState().raceResults.length
+          await simulateUntilRound(stop.round + 1)
+          // If the headless sim didn't actually record a round, bail rather than spin forever.
+          if (useSeasonStore.getState().raceResults.length === before) break
+          if (isOffSeason(useSeasonStore.getState().phase)) break
+          // loop: resume ticking from race day toward the next stop
         }
       }
       // The off-season recap modals live on Home; jump there so they're visible after Continue.
       if (isOffSeason(useSeasonStore.getState().phase)) router.push('/home')
     } finally {
       setBusy(false)
+      setAdvancing(false)
     }
   }
 
@@ -318,6 +331,7 @@ export default function Nav() {
 
       {/* News interrupt modal */}
       <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW} transition={pendingRW} />
+      {advancing && <SimCalendar />}
 
       {newsStop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setNewsStop(null)}>
