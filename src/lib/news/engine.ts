@@ -1642,17 +1642,40 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   // Constructors' title shape + the drivers-sealed-early modifier (#88).
   if (constructorChampion) {
     const consTitle = analysis.constructorTitle
-    let consWins = 0
-    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === constructorChampion && cc.finishPosition === 1) consWins++
     const consRunnerUp = consTitle.series[consTitle.series.length - 1]?.secondId ?? null
-    const champTeamDrivers = ctx.drivers.filter((d) => d.teamId === constructorChampion).map((d) => d.name)
+    // Team totals (by teamId, so a mid-season driver swap still counts) for the champion and the team it beat.
+    let consWins = 0, consPoints = 0, consRunnerUpPoints = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) {
+      if (cc.teamId === constructorChampion) { consPoints += cc.points; if (cc.finishPosition === 1) consWins++ }
+      else if (consRunnerUp && cc.teamId === consRunnerUp) consRunnerUpPoints += cc.points
+    }
+    // Champion team's seats by season points (lead seat first) for the one-car-carried framing.
+    const seatRows = ctx.drivers.filter((d) => d.teamId === constructorChampion).map((d) => {
+      let points = 0, wins = 0, podiums = 0
+      for (let r = 1; r <= analysis.completedRounds; r++) {
+        const res = (ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === d.id)
+        if (!res) continue
+        points += res.points
+        if (res.finishPosition === 1) wins++
+        if (res.finishPosition != null && res.finishPosition <= 3) podiums++
+      }
+      return { id: d.id, name: d.name, points, wins, podiums }
+    }).sort((a, b) => b.points - a.points)
+    const lead = seatRows[0], other = seatRows[1]
+    const cMax = constructorMaxPerRace(ctx.year)
+    const consBeat = consTitle.currentGap <= cMax ? 'edged out' : consTitle.currentGap <= cMax * 3 ? 'saw off' : 'comfortably beat'
     const consSlots = {
       ...slots,
       cons_other: cs.otherId ? tn(cs.otherId) : '',
-      carried_driver: cs.carriedDriverId ? dn(cs.carriedDriverId) : '', carried_driver_last: cs.carriedDriverId ? lastName(dn(cs.carriedDriverId)) : '',
-      cons_wins: consWins, cons_races: analysis.completedRounds, cons_margin: consTitle.currentGap,
-      cons_runner_up: consRunnerUp ? tn(consRunnerUp) : '',
-      champ_team_drivers: listJoin(champTeamDrivers),
+      carried_driver: lead ? lead.name : '', carried_driver_last: lead ? lastName(lead.name) : '',
+      carried_driver_points: lead?.points ?? 0,
+      carried_driver_wins: lead?.wins ?? 0, carried_driver_wins_str: `${lead?.wins ?? 0} ${plural(lead?.wins ?? 0, 'win')}`,
+      carried_driver_podiums: lead?.podiums ?? 0, carried_driver_podiums_str: `${lead?.podiums ?? 0} ${plural(lead?.podiums ?? 0, 'podium')}`,
+      other_driver: other ? other.name : '', other_driver_last: other ? lastName(other.name) : '', other_driver_points: other?.points ?? 0,
+      cons_wins: consWins, cons_races: analysis.completedRounds, cons_points: consPoints, cons_margin: consTitle.currentGap,
+      cons_runner_up: consRunnerUp ? tn(consRunnerUp) : '', cons_runner_up_points: consRunnerUpPoints,
+      champ_team_drivers: listJoin(seatRows.map((r) => r.name)),
+      cons_beat: consBeat,
     }
     let consSection = fill(pick(c[`cons${cs.shape}`], `${seed}|cons`), consSlots)
     if (cs.driversSealedEarly) consSection = `${consSection} ${fill(pick(c.consDriversSealedEarly, `${seed}|cse`), consSlots)}`

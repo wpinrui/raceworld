@@ -118,7 +118,13 @@
     "{constructor_champion} clinched the constructors' championship with {cons_wins} wins from {cons_races} races, finishing well clear of {cons_runner_up} as {champ_team_drivers} outpaced the field all year.",
     "With both {champ_team_drivers} consistently at the front, {constructor_champion} turned the constructors' title into a procession, accumulating {cons_wins} victories across {cons_races} rounds to leave {cons_runner_up} well adrift."
   ],
-  "consOneCarCarried": ["PLACEHOLDER {constructor_champion} took the constructors' title largely on {carried_driver_last}'s points."],
+  "consOneCarCarried": [
+    "{constructor_champion} were able to clinch the {year} constructors' championship largely owing to {carried_driver}'s {carried_driver_points} points, including {carried_driver_podiums_str}, even as {other_driver} struggled with consistency to only produce {other_driver_points} points for the team's campaign.",
+    "The season saw {constructor_champion} crowned as constructors' champions. {carried_driver}'s {carried_driver_points} points were enough to make up for {other_driver}'s less impressive tally of {other_driver_points} points, and the team as a whole {cons_beat} {cons_runner_up} by a final score of {cons_points} to {cons_runner_up_points}.",
+    "With {other_driver} mostly struggling throughout the year, {carried_driver} picked up the pieces by scoring {carried_driver_points} points, including {carried_driver_wins_str}, ensuring {constructor_champion} were able to secure the constructors' title by {cons_margin} points over {cons_runner_up}.",
+    "{constructor_champion} claimed the {year} constructors' title on the back of {carried_driver}'s {carried_driver_points} points, which accounted for the bulk of the team's {cons_points}-point haul, while {other_driver} contributed just {other_driver_points} points as the team {cons_beat} {cons_runner_up} by {cons_margin} points.",
+    "{carried_driver}'s {carried_driver_wins_str} and {carried_driver_podiums_str} gave {constructor_champion} enough of a cushion to secure the constructors' championship despite {other_driver_last} managing only {other_driver_points} points across the year, with {cons_runner_up} finishing {cons_margin} points adrift in the standings."
+  ],
   "consWinsVsPoints": ["PLACEHOLDER {constructor_champion} won the constructors' title on points; {cons_other} took more race wins."],
   "consLeadTradedLate": ["PLACEHOLDER {constructor_champion} and {cons_other} traded the constructors' lead all year, settled late."],
   "consRepeatChampion": ["PLACEHOLDER {constructor_champion} retained the constructors' title."],

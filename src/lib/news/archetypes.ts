@@ -460,8 +460,8 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
   if (champRow.wins >= Math.ceil(N / 2) && split.length >= 2 && topShare <= 0.65) {
     return { shape: 'BothCarsDominate', championId: champ, driversSealedEarly }
   }
-  // One car carried it: the title leaned overwhelmingly on a single seat.
-  if (split.length >= 2 && topShare >= 0.72) {
+  // One car carried it: the title leaned heavily on a single seat.
+  if (split.length >= 2 && topShare >= 0.65) {
     return { shape: 'OneCarCarried', championId: champ, carriedDriverId: split[0]?.id, driversSealedEarly }
   }
   // Wins on one team, the title on another (banked consistency beat raw speed).
