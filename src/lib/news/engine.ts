@@ -1641,7 +1641,19 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   if (ruArc) sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), { ...slots, peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins }))
   // Constructors' title shape + the drivers-sealed-early modifier (#88).
   if (constructorChampion) {
-    const consSlots = { ...slots, cons_other: cs.otherId ? tn(cs.otherId) : '', carried_driver: cs.carriedDriverId ? dn(cs.carriedDriverId) : '', carried_driver_last: cs.carriedDriverId ? lastName(dn(cs.carriedDriverId)) : '' }
+    const consTitle = analysis.constructorTitle
+    let consWins = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === constructorChampion && cc.finishPosition === 1) consWins++
+    const consRunnerUp = consTitle.series[consTitle.series.length - 1]?.secondId ?? null
+    const champTeamDrivers = ctx.drivers.filter((d) => d.teamId === constructorChampion).map((d) => d.name)
+    const consSlots = {
+      ...slots,
+      cons_other: cs.otherId ? tn(cs.otherId) : '',
+      carried_driver: cs.carriedDriverId ? dn(cs.carriedDriverId) : '', carried_driver_last: cs.carriedDriverId ? lastName(dn(cs.carriedDriverId)) : '',
+      cons_wins: consWins, cons_races: analysis.completedRounds, cons_margin: consTitle.currentGap,
+      cons_runner_up: consRunnerUp ? tn(consRunnerUp) : '',
+      champ_team_drivers: listJoin(champTeamDrivers),
+    }
     let consSection = fill(pick(c[`cons${cs.shape}`], `${seed}|cons`), consSlots)
     if (cs.driversSealedEarly) consSection = `${consSection} ${fill(pick(c.consDriversSealedEarly, `${seed}|cse`), consSlots)}`
     sections.push(consSection)

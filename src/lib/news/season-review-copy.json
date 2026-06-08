@@ -111,7 +111,13 @@
     "{team} missed its preseason target for the season.",
     "Against the winter projection, {team} came up short."
   ],
-  "consBothCarsDominate": ["PLACEHOLDER {constructor_champion} won the constructors' title with both cars at the front all year."],
+  "consBothCarsDominate": [
+    "From the first race of the season, it was apparent that {constructor_champion} were the quickest. Their domination showed with {cons_wins} wins in {cons_races} races, marking a landslide victory in the constructors' championship over {cons_runner_up}.",
+    "It was known from testing that {constructor_champion} were the class of the field. With {cons_wins} wins in {cons_races} races, there was no doubt that this was their year as they wrapped up the {year} constructors' championship in emphatic fashion.",
+    "{constructor_champion} were the team to beat all season as, race after race, they were the pace setters and unsurprisingly ran away with the {year} constructors' championship as both {champ_team_drivers} dominated the field.",
+    "{constructor_champion} clinched the constructors' championship with {cons_wins} wins from {cons_races} races, finishing well clear of {cons_runner_up} as {champ_team_drivers} outpaced the field all year.",
+    "With both {champ_team_drivers} consistently at the front, {constructor_champion} turned the constructors' title into a procession, accumulating {cons_wins} victories across {cons_races} rounds to leave {cons_runner_up} well adrift."
+  ],
   "consOneCarCarried": ["PLACEHOLDER {constructor_champion} took the constructors' title largely on {carried_driver_last}'s points."],
   "consWinsVsPoints": ["PLACEHOLDER {constructor_champion} won the constructors' title on points; {cons_other} took more race wins."],
   "consLeadTradedLate": ["PLACEHOLDER {constructor_champion} and {cons_other} traded the constructors' lead all year, settled late."],
