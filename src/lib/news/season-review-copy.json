@@ -91,18 +91,16 @@
     "{names} closed {year} below the level the preseason picture set."
   ],
   "teamOver": [
-    "{team} beat its preseason projection.",
-    "{team} finished {year} ahead of where the preseason picture placed it.",
-    "The forecast undersold {team}, which outscored it.",
-    "{team} cleared its preseason target for the season.",
-    "Against the winter projection, {team} came out ahead."
+    "{team} beat the winter forecast, a projected {team_expected_pos} in the constructors' becoming {team_final_pos} on {team_points} points.",
+    "{team} outran their preseason projection, finishing {team_final_pos} in the constructors' against an expected {team_expected_pos}.",
+    "Projected {team_expected_pos} before the season, {team} finished {team_final_pos} on {team_points} points.",
+    "{team} came out ahead of the forecast, {team_final_pos} in the constructors' from a projected {team_expected_pos}."
   ],
   "teamUnder": [
-    "{team} fell short of its preseason projection.",
-    "{team} finished {year} behind where the preseason picture placed it.",
-    "The forecast oversold {team}, which did not reach it.",
-    "{team} missed its preseason target for the season.",
-    "Against the winter projection, {team} came up short."
+    "{team} fell short of the winter forecast, a projected {team_expected_pos} sliding to {team_final_pos} on {team_points} points.",
+    "{team} missed their preseason projection, ending {team_final_pos} in the constructors' against an expected {team_expected_pos}.",
+    "Projected {team_expected_pos}, {team} finished only {team_final_pos} on {team_points} points.",
+    "{team} came up short of the forecast, {team_final_pos} in the constructors' from an expected {team_expected_pos}."
   ],
   "consBothCarsDominate": [
     "From the first race of the season, it was apparent that {constructor_champion} were the quickest. Their domination showed with {cons_wins} wins in {cons_races} races, marking a landslide victory in the constructors' championship over {cons_runner_up}.",

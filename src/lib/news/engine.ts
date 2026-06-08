@@ -1828,8 +1828,16 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   }
   // Driver over/under-performers are now the rich year-end expectation piece (expectationCheck at K=N), so the
   // review itself sticks to the title, constructors, and the standout team arc — no vague one-liners here.
-  if (teamOver) sections.push(fill(pick(c.teamOver, `${seed}|tover`), { ...slots, team: tn(teamOver) }))
-  if (teamUnder) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), { ...slots, team: tn(teamUnder) }))
+  // Biggest over/under-performing team vs its projection, grounded in projected vs final constructors' position
+  // and points. Skipped when it is the same team the standout team-arc already covered (no double-mention).
+  const teamStat = (id: string) => {
+    const d = analysis.teamDeltas.find((x) => x.id === id)
+    let pts = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === id) pts += cc.points
+    return { ...slots, team: tn(id), team_expected_pos: d ? ordinal(d.expectedRank) : '', team_final_pos: d ? ordinal(d.actualRank) : '', team_points: pts }
+  }
+  if (teamOver && teamOver !== arc?.teamId) sections.push(fill(pick(c.teamOver, `${seed}|tover`), teamStat(teamOver)))
+  if (teamUnder && teamUnder !== arc?.teamId) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), teamStat(teamUnder)))
   return [{
     id: seed, category: 'feature', round: ctx.completedRounds, priority: 88, dayOffset: 0,
     headline: fill(pick(c.headline, `${seed}|h`), slots),
