@@ -249,8 +249,11 @@ function championModifiers(ctx: NewsContext, analysis: SeasonAnalysis): { teamma
   const champTeam = ctx.drivers.find((d) => d.id === champ)?.teamId
   const ruTeam = ru ? ctx.drivers.find((d) => d.id === ru)?.teamId : null
   const teammatePair = !!champTeam && champTeam !== '' && champTeam === ruTeam
-  // Held a big lead (30+) that closed hard over the trailing window but didn't actually get overhauled.
-  const lateWobble = t.peakGap >= 30 && t.recentSlope <= -15 && t.currentGap > 0
+  // Held a 60+ point lead that shrank to single digits but still held on (a near-collapse, not a collapse).
+  // (Absolute points for now; era-scaling by driverMaxPerRace is a deferred follow-up.)
+  let champPeak = 0
+  for (const g of t.series) if (g.leaderId === champ && g.gap > champPeak) champPeak = g.gap
+  const lateWobble = champPeak >= 60 && t.currentGap > 0 && t.currentGap < 10
   let wins = 0, wetWins = 0
   for (let r = 1; r <= N; r++) {
     const res = (ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === champ)

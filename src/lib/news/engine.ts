@@ -1627,10 +1627,26 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const ruLast = runnerUp ? lastName(dn(runnerUp)) : ''
   // Top two shared a garage: name the runner-up as the champion's teammate inline (#88), no separate sentence.
   const runnerUpRef = sm.teammatePair && runnerUp ? `${pronouns(championDriver?.gender).their} ${champTeam} teammate ${ruLast}` : ruLast
+  // Champion's lead trajectory + identity, for the late-wobble modifier copy.
+  let peakLead = 0, peakRound = 0
+  for (const g of t.series) if (g.leaderId === champion && g.gap > peakLead) { peakLead = g.gap; peakRound = g.round }
+  let sdRound = 0
+  for (const g of t.series) if (g.round > peakRound && g.leaderId === champion && g.gap < 10) { sdRound = g.round; break }
+  let lowestLead = peakLead // the absolute low point the lead dipped to after its peak (while still leading)
+  for (const g of t.series) if (g.round >= peakRound && g.leaderId === champion) lowestLead = Math.min(lowestLead, g.gap)
+  const runnerUpDriver = runnerUp ? ctx.drivers.find((d) => d.id === runnerUp) : undefined
+  const champPron = pronouns(championDriver?.gender)
+  const championTitleOrdinal = ordinal((ctx.careers?.[champion]?.titleYears ?? []).filter((y) => y < ctx.year).length + 1)
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
     runner_up_ref: runnerUpRef, champ_team: champTeam,
+    peak_lead: peakLead, peak_round: peakRound, lowest_lead: lowestLead,
+    peak_gp: peakRound ? circuit(ctx, peakRound) : '',
+    single_digit_gp: sdRound ? circuit(ctx, sdRound) : '',
+    champion_subj: champPron.they, champion_poss: champPron.their,
+    runner_up_poss: pronouns(runnerUpDriver?.gender).their,
+    champion_title_ordinal: championTitleOrdinal,
     early_leader: sm.earlyLeaderId ? dn(sm.earlyLeaderId) : '', early_leader_last: sm.earlyLeaderId ? lastName(dn(sm.earlyLeaderId)) : '',
     gap: t.currentGap, gap_pts: plural(t.currentGap, 'point'),
     constructor_champion: constructorChampion ? tn(constructorChampion) : '',
