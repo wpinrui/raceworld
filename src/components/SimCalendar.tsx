@@ -5,20 +5,20 @@ import ReactCountryFlag from 'react-country-flag'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendarForYear } from '@/data/calendars'
 import { raceDate, toISODate, fromISODate, addDays, formatDate } from '@/lib/sim/calendar-dates'
+import type { NewsArticle } from '@/lib/news/engine'
 
 const PAST_DAYS = 2
 const FUTURE_DAYS = 7
 
-// FM-style calendar that fades in while the Continue loop advances the clock one day at a time. It shows
-// the dates rolling past and the important events on them (race weekends). Pointer-transparent so it never
-// blocks the page behind it; only mounted while advancing.
-// Mounted by the parent only while advancing, so each Continue gets a fresh fade-in.
-export function SimCalendar() {
+// FM-style calendar bar. Mounted by the nav only while the Continue loop advances the clock day by day:
+// it spans the full width flush under the top bar, dims and blurs the home screen behind it, and shows each
+// day's race weekend plus the news headlines that have dropped by the current date (future news stays hidden
+// until the clock reaches it).
+export function SimCalendar({ open, articles }: { open: boolean; articles: NewsArticle[] }) {
   const year = useSeasonStore((s) => s.year)
   const currentDate = useSeasonStore((s) => s.currentDate)
   const [shown, setShown] = useState(false)
 
-  // Fade/slide in one tick after mount.
   useEffect(() => {
     const t = setTimeout(() => setShown(true), 10)
     return () => clearTimeout(t)
@@ -31,49 +31,74 @@ export function SimCalendar() {
     return m
   }, [year])
 
+  // News bucketed by the ISO day it dropped.
+  const newsByDate = useMemo(() => {
+    const m = new Map<string, NewsArticle[]>()
+    for (const a of articles) {
+      if (!a.date) continue
+      const list = m.get(a.date)
+      if (list) list.push(a)
+      else m.set(a.date, [a])
+    }
+    return m
+  }, [articles])
+
   if (!currentDate) return null
+  const visible = open && shown // open flips false during the linger so the bar fades out before unmounting
   const base = fromISODate(currentDate)
   const days = Array.from({ length: PAST_DAYS + 1 + FUTURE_DAYS }, (_, i) => {
     const d = addDays(base, i - PAST_DAYS)
     const iso = toISODate(d)
-    return { iso, d, today: iso === currentDate, past: iso < currentDate, race: raceByDate.get(iso) }
+    const [wd, , mon] = formatDate(d, { weekday: true }).split(' ') // "Wed 22 Nov"
+    return {
+      iso, num: d.getUTCDate(), wd, mon,
+      today: iso === currentDate,
+      past: iso < currentDate,
+      race: raceByDate.get(iso),
+      news: iso <= currentDate ? (newsByDate.get(iso) ?? []) : [],
+    }
   })
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-20 pointer-events-none">
+    <>
+      {/* Dim + blur the home screen behind; absorbs clicks so nothing behind is interactable mid-sim. */}
+      <div className={`fixed inset-x-0 top-12 bottom-0 z-30 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`} />
+      {/* Full-width calendar bar, flush under the nav. */}
       <div
-        className={`w-full max-w-5xl rounded-xl border border-[#2A3142] bg-[#0F1419]/95 p-3 shadow-2xl backdrop-blur-sm transition-all duration-300 ease-out ${
-          shown ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+        className={`fixed inset-x-0 top-12 z-40 border-b border-[#2A3142] bg-[#1E2431] shadow-2xl transition-all duration-300 ease-out ${
+          visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
         }`}
       >
-        <div className="mb-2 flex items-center gap-2 px-1">
-          <span className="h-3 w-1 rounded-sm bg-[#DC143C]" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#FFFFFF]">{year} Season</span>
-          <span className="ml-auto text-[10px] font-bold uppercase tracking-widest tabular-nums text-[#00D9FF]">{formatDate(base, { weekday: true, year: true })}</span>
-        </div>
-        <div className="flex gap-1.5">
+        {/* Keyed by the day so each new day re-runs the slide-in animation. */}
+        <div key={currentDate} className="flex w-full divide-x divide-[#2A3142]" style={{ animation: 'simcal-day-in 280ms ease-out' }}>
           {days.map((day) => (
             <div
               key={day.iso}
-              className={`flex-1 min-w-0 rounded-lg border px-2 py-2 transition-colors duration-200 ${
-                day.today ? 'border-[#00D9FF] bg-[#00D9FF]/10' : day.past ? 'border-[#2A3142] bg-[#1E2431] opacity-40' : 'border-[#2A3142] bg-[#1E2431]'
-              }`}
+              className={`flex-1 min-w-0 min-h-[210px] px-3 py-2.5 ${day.today ? 'bg-[#00D9FF]/10' : day.past ? 'bg-[#181D27] opacity-60' : ''}`}
             >
-              <div className={`text-[10px] font-bold uppercase tracking-wider tabular-nums ${day.today ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>
-                {formatDate(day.d, { weekday: true })}
+              <div className="flex items-baseline gap-1.5 border-b border-[#2A3142] pb-1.5">
+                <span className={`text-base font-bold tabular-nums ${day.today ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{day.num}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${day.today ? 'text-[#00D9FF]' : 'text-[#9CA3AF]'}`}>{day.wd}</span>
+                <span className="ml-auto text-[9px] font-semibold uppercase tracking-widest text-[#6B7280]">{day.mon}</span>
               </div>
-              {day.race ? (
-                <div className="mt-1.5 flex items-center gap-1">
-                  <ReactCountryFlag countryCode={day.race.country} svg style={{ width: '0.9em', height: '0.9em', borderRadius: '2px', flexShrink: 0 }} />
-                  <span className="truncate text-[10px] font-semibold text-[#FFFFFF]">{day.race.name}</span>
-                </div>
-              ) : (
-                <div className="mt-1.5 h-3.5" />
-              )}
+              <div className="mt-2 space-y-1">
+                {day.race && (
+                  <div className="flex items-center gap-1.5 rounded border border-[#00D9FF]/30 bg-[#00D9FF]/15 px-1.5 py-1">
+                    <ReactCountryFlag countryCode={day.race.country} svg style={{ width: '0.9em', height: '0.9em', borderRadius: '2px', flexShrink: 0 }} />
+                    <span className="truncate text-[10px] font-bold uppercase tracking-wide text-[#00D9FF]">{day.race.name}</span>
+                  </div>
+                )}
+                {day.news.slice(0, 4).map((a) => (
+                  <div key={a.id} className="rounded border border-[#2A3142] bg-[#0F1419] px-1.5 py-1">
+                    <span className="block truncate text-[10px] font-semibold leading-snug text-[#FFFFFF]">{a.headline}</span>
+                  </div>
+                ))}
+                {day.news.length > 4 && <span className="block pl-0.5 text-[9px] text-[#6B7280]">+{day.news.length - 4} more</span>}
+              </div>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </>
   )
 }

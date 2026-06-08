@@ -28,6 +28,7 @@ import { SimCalendar } from '@/components/SimCalendar'
 
 const PRIMARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-50 transition-colors'
 const SECONDARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#2A3142] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#303848] disabled:opacity-50 transition-colors'
+const STOP_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#DC143C] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#B01030] transition-colors'
 const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] transition-colors'
 
 // Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
@@ -58,6 +59,10 @@ export default function Nav() {
   const [busy, setBusy] = useState(false)
   const [simming, setSimming] = useState(false)
   const [advancing, setAdvancing] = useState(false)
+  const [calMounted, setCalMounted] = useState(false) // keeps the calendar bar mounted briefly after a stop, for the fade-out linger
+  const [calendarArticles, setCalendarArticles] = useState<NewsArticle[]>([])
+  const stopRef = useRef(false)
+  const advancingRef = useRef(false)
   const [newsStop, setNewsStop] = useState<{ date: string; articles: NewsArticle[] } | null>(null)
   const driverCard = useLiveDriverCards()
   // The gate is shown whenever there are pending real-world changes, unless the player dismissed it
@@ -80,6 +85,14 @@ export default function Nav() {
     actionGetTeamDriverTallies(year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
   }, [year])
+  // Mirror `advancing` into a ref for the keyboard handler, and keep the calendar bar mounted for a short
+  // linger after the advance stops so it fades out rather than vanishing.
+  useEffect(() => { advancingRef.current = advancing }, [advancing])
+  useEffect(() => {
+    if (advancing) { const t = setTimeout(() => setCalMounted(true), 0); return () => clearTimeout(t) }
+    const t = setTimeout(() => setCalMounted(false), 1100)
+    return () => clearTimeout(t)
+  }, [advancing])
 
   const seasonActive = phase !== 'idle'
   const offSeason = isOffSeason(phase)
@@ -129,6 +142,9 @@ export default function Nav() {
   // Advance to the next stop. A news stop opens the interrupt modal; a raceday stop moves the clock
   // onto race day (CTA flips to "Go To Race"). If race day doesn't interrupt, the race auto-simulates
   // and the loop carries on to the next stop (next interrupting story, or the season's end).
+  // Space (the primary-CTA key) or Escape requests a stop; the day-ticker loop checks this each tick.
+  function handleStop() { stopRef.current = true }
+
   async function handleContinue() {
     if (busy) return
     setNewsStop(null)
@@ -141,21 +157,25 @@ export default function Nav() {
       } else {
         const settings = useSettingsStore.getState()
         setAdvancing(true)
+        stopRef.current = false
         let dayCount = 0
         while (true) {
           const s = useSeasonStore.getState()
           const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
+          setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
           const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
           if (stop.reason === 'season-end') break
           // Walk the clock to the stop ONE DAY at a time so the calendar overlay shows the days passing,
-          // accelerating on long runs so a fast-forward to the next race doesn't crawl.
+          // accelerating on long runs so a fast-forward to the next race doesn't crawl. Space/Esc set stopRef.
           let cur = s.currentDate
           while (cur < stop.date) {
+            if (stopRef.current) break
             cur = toISODate(addDays(fromISODate(cur), 1))
             useSeasonStore.getState().setCurrentDate(cur)
             dayCount++
             await new Promise((r) => setTimeout(r, dayTickMs(dayCount)))
           }
+          if (stopRef.current) break
           if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
           // stop.reason === 'race': the clock now sits on race day.
           if (settings.interruptOnRaceday) break // the player takes it from here (Go to Race)
@@ -164,6 +184,7 @@ export default function Nav() {
           // If the headless sim didn't actually record a round, bail rather than spin forever.
           if (useSeasonStore.getState().raceResults.length === before) break
           if (isOffSeason(useSeasonStore.getState().phase)) break
+          if (stopRef.current) break
           // loop: resume ticking from race day toward the next stop
         }
       }
@@ -206,6 +227,7 @@ export default function Nav() {
         ? <button onClick={setupCta.start} disabled={!setupCta.ready} className={PRIMARY_CTA}>Start Season {setupCta.year}<ChevronRight size={14} /></button>
         : null
     }
+    if (advancing) return <button onClick={handleStop} className={STOP_CTA}>Stop Simulating</button>
     if (offSeason) {
       return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA} title={`Next: ${nextOffSeasonStageLabel(phase)}`}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
     }
@@ -231,6 +253,7 @@ export default function Nav() {
       if (racePhase === 'qualifying' || racePhase === 'racing') return null
       return handleSimQualifying
     }
+    if (advancing) return handleStop
     if (!seasonActive) return setupCta && setupCta.ready ? setupCta.start : null
     if (offSeason) return busy ? null : handleContinue
     if (atRaceday && interruptOnRaceday) return () => router.push('/race')
@@ -242,10 +265,12 @@ export default function Nav() {
   useEffect(() => { ctaActionRef.current = ctaBlocked ? null : primaryCtaAction() })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== ' ' && e.code !== 'Space') return
-      if (e.repeat) return // one action per press; holding Space must not re-fire (e.g. double-init a season)
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      // Escape bails out of an in-progress day-by-day advance.
+      if (e.key === 'Escape') { if (advancingRef.current) { e.preventDefault(); stopRef.current = true } return }
+      if (e.key !== ' ' && e.code !== 'Space') return
+      if (e.repeat) return // one action per press; holding Space must not re-fire (e.g. double-init a season)
       const action = ctaActionRef.current
       if (!action) return
       e.preventDefault()
@@ -335,7 +360,7 @@ export default function Nav() {
 
       {/* News interrupt modal */}
       <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW} transition={pendingRW} />
-      {advancing && <SimCalendar />}
+      {calMounted && <SimCalendar open={advancing} articles={calendarArticles} />}
 
       {newsStop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setNewsStop(null)}>
