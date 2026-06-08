@@ -110,11 +110,11 @@ export function SimCalendar({ open, articles }: { open: boolean; articles: NewsA
               <div
                 key={day.iso}
                 style={{ width: 'calc(100% / 8)' }}
-                className={`shrink-0 min-h-[280px] px-3 py-3 ${day.today ? 'bg-[#00D9FF]/10' : day.past ? 'bg-[#181D27] opacity-60' : ''}`}
+                className={`shrink-0 min-h-[280px] px-3 py-3 transition duration-[520ms] ease-in-out ${day.today ? 'bg-[#00D9FF]/10' : day.past ? 'bg-[#181D27] opacity-60' : ''}`}
               >
                 <div className="flex items-baseline gap-1.5 border-b border-[#2A3142] pb-2">
-                  <span className={`text-lg font-bold tabular-nums ${day.today ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{day.num}</span>
-                  <span className={`text-[11px] font-bold uppercase tracking-widest ${day.today ? 'text-[#00D9FF]' : 'text-[#9CA3AF]'}`}>{day.wd}</span>
+                  <span className={`text-lg font-bold tabular-nums transition-colors duration-[520ms] ease-in-out ${day.today ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{day.num}</span>
+                  <span className={`text-[11px] font-bold uppercase tracking-widest transition-colors duration-[520ms] ease-in-out ${day.today ? 'text-[#00D9FF]' : 'text-[#9CA3AF]'}`}>{day.wd}</span>
                   <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-[#6B7280]">{day.mon}</span>
                 </div>
                 <div className="mt-2.5 space-y-1.5">
