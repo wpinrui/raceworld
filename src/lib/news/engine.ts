@@ -2320,27 +2320,25 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   if (resurgent.length) sections.push(fill(pick(c.veteransResurgent, `${seed}|vr`), { ...slots, names: listJoin(resurgent) }))
   if (twilight.length) sections.push(fill(pick(c.veteransTwilight, `${seed}|vt`), { ...slots, names: listJoin(twilight) }))
   if (cast.rookies.length) sections.push(fill(pick(c.rookies, `${seed}|rk`), { ...slots, names: listJoin(cast.rookies.map(dn)) }))
-  if (cast.newTeams.length) {
-    if (cast.newTeams.length >= ctx.teams.length) {
-      // Whole grid is new (first season of a save, no constructor history) — one line, not a bio per team.
-      sections.push(fill(pick(c.newTeams.allNew, `${seed}|nt-all`), slots))
-    } else {
-      const ntLine = (tid: string, i: number): string => {
-        const team = teamName(ctx, tid)
-        const ds = ctx.drivers.filter((d) => d.teamId === tid).map((d) => facts(d.id))
-        const anchors = ds.filter((f) => !f.rookie)
-        const rookies = ds.filter((f) => f.rookie)
-        const base = { ...slots, team }
-        if (anchors.length && rookies.length) return fill(pick(c.newTeams.anchorAndRookie, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)), rookies: listJoin(rookies.map(ntPhrase)) })
-        if (anchors.length) return fill(pick(c.newTeams.anchorLed, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)) })
-        return fill(pick(c.newTeams.allRookie, `${seed}|nt${i}`), { ...base, names: listJoin(ds.map((f) => f.name)) })
-      }
-      const shown = cast.newTeams.slice(0, 3)
-      let text = shown.map((tid, i) => ntLine(tid, i)).join(' ')
-      const extra = cast.newTeams.slice(3)
-      if (extra.length) text += ` ${listJoin(extra.map((id) => teamName(ctx, id)))} also join the grid for the first time.`
-      sections.push(text)
+  // New-team coverage fires only when SOME teams are new against an otherwise established grid — that
+  // contrast is the story. When the whole grid is new (first season of a save), there is no contrast to
+  // draw and the favourites / midfield / rookie sections already introduce the field, so this is skipped.
+  if (cast.newTeams.length && cast.newTeams.length < ctx.teams.length) {
+    const ntLine = (tid: string, i: number): string => {
+      const team = teamName(ctx, tid)
+      const ds = ctx.drivers.filter((d) => d.teamId === tid).map((d) => facts(d.id))
+      const anchors = ds.filter((f) => !f.rookie)
+      const rookies = ds.filter((f) => f.rookie)
+      const base = { ...slots, team }
+      if (anchors.length && rookies.length) return fill(pick(c.newTeams.anchorAndRookie, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)), rookies: listJoin(rookies.map(ntPhrase)) })
+      if (anchors.length) return fill(pick(c.newTeams.anchorLed, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)) })
+      return fill(pick(c.newTeams.allRookie, `${seed}|nt${i}`), { ...base, names: listJoin(ds.map((f) => f.name)) })
     }
+    const shown = cast.newTeams.slice(0, 3)
+    let text = shown.map((tid, i) => ntLine(tid, i)).join(' ')
+    const extra = cast.newTeams.slice(3)
+    if (extra.length) text += ` ${listJoin(extra.map((id) => teamName(ctx, id)))} also join the grid for the first time.`
+    sections.push(text)
   }
 
   const hArr = !champion ? c.headlineNoChamp : championIsTopFav ? c.headlineDefendingFav : c.headline
