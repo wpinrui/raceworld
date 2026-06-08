@@ -146,7 +146,13 @@
     "{constructor_champion} would not be moved, {cons_wins} wins carrying them to {cons_title_streak} and clear of {cons_runner_up} by {cons_margin} points in {year}.",
     "{constructor_champion} successfully defended the constructors' championship in {year}, {champ_driver1} and {champ_driver2} combining for {cons_wins} wins to keep {cons_runner_up} at arm's length, {cons_points} to {cons_runner_up_points}."
   ],
-  "consClear": ["PLACEHOLDER {constructor_champion} won the constructors' championship."],
+  "consClear": [
+    "{constructor_champion} won the {year} constructors' championship, {cons_wins} wins and {cons_points} points carrying them clear of {cons_runner_up}.",
+    "The {year} constructors' title went to {constructor_champion} on {cons_points} points, with {cons_runner_up} second on {cons_runner_up_points} and {cons_wins} wins telling the story for the champions.",
+    "{champ_driver1} and {champ_driver2} took {constructor_champion} to the {year} constructors' title, {cons_wins} wins enough to keep {cons_runner_up} at bay.",
+    "{constructor_champion} wrapped up the {year} constructors' championship, {cons_runner_up} finishing as runners-up {cons_margin} points adrift on {cons_runner_up_points}.",
+    "{constructor_champion} were the {year} constructors' champions, finishing {cons_margin} points ahead of {cons_runner_up}, {cons_points} to {cons_runner_up_points}."
+  ],
   "consDriversSealedEarly": ["PLACEHOLDER The drivers' title was settled well before the constructors' went to the wire."],
   "champTeammatePair": ["PLACEHOLDER The two title protagonists shared a garage."],
   "champLateWobble": ["PLACEHOLDER A commanding lead came under late pressure but held."],
