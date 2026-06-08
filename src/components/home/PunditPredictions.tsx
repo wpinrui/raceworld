@@ -139,7 +139,7 @@ function OffSeasonReview() {
               {open === 'contract-negotiations' && <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />}
               {open === 'driver-retirements' && <RetirementsPanel summary={summary} drivers={season.drivers} />}
               {open === 'pre-season-testing' && (
-                <TestingPanel summary={summary} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
+                <TestingPanel test={summary.preSeasonTest} year={summary.seasonYear} teams={season.pendingNextSeasonState?.teams ?? season.teams} constructorStandings={season.constructorStandings} />
               )}
             </div>
           </div>
@@ -157,8 +157,20 @@ export function PunditPredictions() {
   const currentRound = useSeasonStore((s) => s.currentRound)
   const year = useSeasonStore((s) => s.year)
   const raceResults = useSeasonStore((s) => s.raceResults)
+  const preSeasonTest = useSeasonStore((s) => s.preSeasonTest)
+  const constructorStandings = useSeasonStore((s) => s.constructorStandings)
 
   if (isOffSeason(phase)) return <OffSeasonReview />
+  // After the dated Testing stop (#126), before round 1 runs, the home surface is the test board.
+  if (preSeasonTest && raceResults.length === 0) {
+    return (
+      <Panel title={`${year} Pre-Season Testing`} flush fill>
+        <div className="p-4">
+          <TestingPanel test={preSeasonTest} year={year} teams={teams} constructorStandings={constructorStandings} />
+        </div>
+      </Panel>
+    )
+  }
 
   const nextRace = calendarForYear(year)[currentRound - 1]
   if (!nextRace) {

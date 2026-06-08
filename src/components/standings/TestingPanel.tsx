@@ -2,14 +2,15 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import type { EndOfSeasonSummary, Team, FuelBand, ConstructorStanding } from '@/lib/sim/types'
+import type { PreSeasonTest, Team, FuelBand, ConstructorStanding } from '@/lib/sim/types'
 import TyreIndicator from '@/components/race/TyreIndicator'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 
 interface Props {
-  summary: EndOfSeasonSummary
+  test: PreSeasonTest | null
+  year: number
   teams: Team[]
   constructorStandings: ConstructorStanding[]
 }
@@ -29,11 +30,10 @@ function fmtTime(t: number): string {
 
 type SortKey = 'time' | 'pace' | 'wcc'
 
-export function TestingPanel({ summary, teams, constructorStandings }: Props) {
+export function TestingPanel({ test, year, teams, constructorStandings }: Props) {
   const card = useLiveDriverCards()
   const [reveal, setReveal] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('time')
-  const test = summary.preSeasonTest
 
   if (!test || test.entries.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">No testing data.</p>
@@ -88,7 +88,7 @@ export function TestingPanel({ summary, teams, constructorStandings }: Props) {
                 </th>
               )}
               <th className={`text-right pb-2 pl-3 font-medium whitespace-nowrap ${headClass('wcc')}`} onClick={() => setSortKey('wcc')}>
-                {summary.seasonYear} WCC
+                {year} WCC
               </th>
             </tr>
           </thead>
