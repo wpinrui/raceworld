@@ -1674,6 +1674,20 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     if (runnerUp) { const u = rr.find((x) => x.driverId === runnerUp); if (u) ruWetPts += u.points }
   }
   const wetWinClause = wetWinGp ? `, including a crucial win at the ${wetWinGp}` : ''
+  // Champion + runner-up headline stats for the shape lines (wins, podiums, longest consecutive win streak).
+  const seasonStat = (id: string | null) => {
+    let w = 0, pod = 0, streak = 0, cur = 0
+    for (let r = 1; r <= analysis.completedRounds; r++) {
+      const res = id ? (ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === id) : undefined
+      if (res?.finishPosition === 1) { w++; cur++; if (cur > streak) streak = cur } else cur = 0
+      if (res?.finishPosition != null && res.finishPosition <= 3) pod++
+    }
+    return { w, pod, streak }
+  }
+  const champStat = seasonStat(champion)
+  const ruStat = seasonStat(runnerUp)
+  const finalStand = driverStandingsAfter(ctx, analysis.completedRounds)
+  const thirdLast = finalStand[2] ? lastName(finalStand[2].driverName) : ''
   const slots: Record<string, string | number> = {
     year: ctx.year, champion: dn(champion), champion_last: lastName(dn(champion)),
     runner_up: runnerUp ? dn(runnerUp) : '', runner_up_last: runnerUp ? lastName(dn(runnerUp)) : '',
@@ -1684,6 +1698,8 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     champion_subj: champPron.they, champion_poss: champPron.their, champion_obj: champPron.them,
     runner_up_poss: pronouns(runnerUpDriver?.gender).their,
     champion_title_ordinal: championTitleOrdinal,
+    champion_wins: champStat.w, champion_podiums: champStat.pod, win_streak: champStat.streak,
+    total_races: analysis.completedRounds, runner_up_wins: ruStat.w, third_last: thirdLast,
     wet_races_str: `${wetRaces} ${plural(wetRaces, 'race')}`,
     champion_wet_points: champWetPts, runner_up_wet_points: ruWetPts, wet_win_clause: wetWinClause,
     early_leader: sm.earlyLeaderId ? dn(sm.earlyLeaderId) : '', early_leader_last: sm.earlyLeaderId ? lastName(dn(sm.earlyLeaderId)) : '',
