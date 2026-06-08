@@ -147,7 +147,10 @@ export default function RacePage() {
   }
 
   if (!hydrated) return null
-  if (!raceState && endedRef.current) return null // race over, mid-navigation to Home: don't flash round N+1
+  // Race over and mid-navigation to Home: render nothing instead of flashing round N+1. The re-render here is
+  // driven by raceState going null (reactive); endedRef is just a latch read at that render, so this is safe.
+  // eslint-disable-next-line react-hooks/refs
+  if (!raceState && endedRef.current) return null
 
   const resultsForDisplay = phase === 'finished' ? computeResults() : []
   const selectedDriverId = godModeDriverId
