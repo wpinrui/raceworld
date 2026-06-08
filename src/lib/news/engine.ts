@@ -1937,53 +1937,81 @@ function openerPiece(ctx: NewsContext): string {
   return paras(...beats)
 }
 
-// Forward-looking development beat (#88 preview spec): the upgrade(s) due at the upcoming round and
-// how, on pace, they shift the competitive order. The outcome is pre-rolled and deterministic (the
-// devPlans pendingPaceDelta), so the "analyst projection" is genuinely accurate. The delta lands at
-// recordRaceResult and bites from the next race, so the framing is "due / once fitted", not "this
-// race". Omitted entirely when nothing is due that round.
+// Upgrade component names — invented flavour confined to the failed-part spokesperson quote below. We
+// only know a team upgraded and whether it worked, never the actual part, so this is colour, not claim.
+const UPGRADE_PARTS = ['front wing', 'floor', 'rear wing', 'diffuser', 'sidepod package', 'suspension package', 'beam wing', 'front-wing endplate']
+
+// Forward-looking development beat (#88 preview spec): the upgrade(s) due at the upcoming round and how,
+// on pace, they shift the order. Outcomes are pre-rolled and deterministic (devPlans), so the projection
+// is genuinely accurate. The delta lands at recordRaceResult and bites from the next race, so the framing
+// is "due / once fitted". A delivering upgrade that holds rank still gets a gap-closing line; a failed one
+// gets a spokesperson quote. Omitted only when nothing is due that round.
 function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
-  const due = (ctx.devPlans ?? []).filter((p) => p.nextUpgradeRound === r && !p.pendingFailed && (p.pendingPaceDelta ?? 0) > 0)
-  if (due.length === 0 || ctx.teams.length === 0) return ''
+  const allDue = (ctx.devPlans ?? []).filter((p) => p.nextUpgradeRound === r)
+  if (allDue.length === 0 || ctx.teams.length === 0) return ''
   const circuitName = circuit(ctx, r)
   const tn = (id: string) => teamName(ctx, id)
-  const curRank = new Map([...ctx.teams].sort((a, b) => b.carPace - a.carPace).map((t, i) => [t.id, i + 1]))
+  const curOrder = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
+  const curRank = new Map(curOrder.map((t, i) => [t.id, i + 1]))
+  const delivering = allDue.filter((p) => !p.pendingFailed && (p.pendingPaceDelta ?? 0) > 0)
   const bumped = new Map(ctx.teams.map((t) => [t.id, t.carPace]))
-  for (const p of due) bumped.set(p.teamId, (bumped.get(p.teamId) ?? 0) + (p.pendingPaceDelta ?? 0))
+  for (const p of delivering) bumped.set(p.teamId, (bumped.get(p.teamId) ?? 0) + (p.pendingPaceDelta ?? 0))
   const projOrder = [...ctx.teams].sort((a, b) => (bumped.get(b.id) ?? 0) - (bumped.get(a.id) ?? 0))
   const projRank = new Map(projOrder.map((t, i) => [t.id, i + 1]))
 
-  // Per due team: current vs projected rank, and the rival it leapfrogs (the team now directly
-  // behind it that used to be ahead). Biggest climber first.
-  const movers = due
-    .map((p) => {
-      const from = curRank.get(p.teamId) ?? ctx.teams.length
-      const to = projRank.get(p.teamId) ?? from
+  type Item = { kind: 'mover' | 'gap' | 'fail'; prio: number; text: string }
+  const items: Item[] = []
+  for (const p of allDue) {
+    const team = tn(p.teamId)
+    const sd = `upg-${ctx.year}-${r}-${p.teamId}`
+    // C: failed upgrade — a spokesperson conceding the new part has not given up its time.
+    if (p.pendingFailed || (p.pendingPaceDelta ?? 0) <= 0) {
+      const part = pick(UPGRADE_PARTS, `${sd}|part`)
+      items.push({ kind: 'fail', prio: 1, text: fill(pick([
+        'A {team} spokesperson admitted the team is still struggling to extract the time from its new {part}.',
+        'At {team}, a spokesperson conceded the new {part} has yet to give up the lap time they were chasing.',
+        '{team} arrive with a new {part}, though a spokesperson admitted it has not yet delivered the step on the stopwatch.',
+      ], sd), { team, part }) })
+      continue
+    }
+    const from = curRank.get(p.teamId) ?? ctx.teams.length
+    const to = projRank.get(p.teamId) ?? from
+    if (to < from) {
       const behind = projOrder[to] // team at projected rank to + 1
       const passed = behind && (curRank.get(behind.id) ?? 0) < from ? tn(behind.id) : ''
-      return { teamId: p.teamId, from, to, passed, gain: from - to }
-    })
-    .filter((m) => m.gain > 0)   // only an actual projected order change is a story
-    .sort((a, b) => b.gain - a.gain)
-  if (movers.length === 0) return ''
-
-  const sentence = (m: typeof movers[number]): string => {
-    const slots = { team: tn(m.teamId), team_poss: poss(tn(m.teamId)), circuit: circuitName, from: ordinal(m.from), to: ordinal(m.to), passed: m.passed }
-    const sd = `upg-${ctx.year}-${r}-${m.teamId}`
-    return m.passed
-      ? fill(pick([
-          '{team} bring their next development step to the {circuit}, a package the pace projection has lifting them from {from} to {to}, ahead of {passed} once it is fitted.',
-          'The {circuit} marks {team_poss} next upgrade, projected to move them from {from} to {to} on pace, clear of {passed}.',
-          '{team_poss} next package, due at the {circuit}, projects to climb them from {from} to {to}, past {passed}.',
-        ], sd), slots)
-      : fill(pick([
-          '{team} bring their next development step to the {circuit}, projected to climb from {from} to {to} in the order once it lands.',
-          'The {circuit} brings {team_poss} next upgrade, set to lift them from {from} to {to} on pace.',
-          '{team_poss} next package, due at the {circuit}, projects to lift them to {to} from {from}.',
-        ], sd), slots)
+      const slots = { team, team_poss: poss(team), circuit: circuitName, from: ordinal(from), to: ordinal(to), passed }
+      const text = passed
+        ? fill(pick([
+            '{team} bring their next development step to the {circuit}, a package the pace projection has lifting them from {from} to {to}, ahead of {passed} once it is fitted.',
+            'The {circuit} marks {team_poss} next upgrade, projected to move them from {from} to {to} on pace, clear of {passed}.',
+            '{team_poss} next package, due at the {circuit}, projects to climb them from {from} to {to}, past {passed}.',
+          ], sd), slots)
+        : fill(pick([
+            '{team} bring their next development step to the {circuit}, projected to climb from {from} to {to} in the order once it lands.',
+            'The {circuit} brings {team_poss} next upgrade, set to lift them from {from} to {to} on pace.',
+            '{team_poss} next package, due at the {circuit}, projects to lift them to {to} from {from}.',
+          ], sd), slots)
+      items.push({ kind: 'mover', prio: 3, text })
+    } else if (from > 1) {
+      // A: delivers but holds rank — aim the step at the car immediately ahead.
+      const ahead = tn(curOrder[from - 2].id)
+      const slots = { team, team_poss: poss(team), circuit: circuitName, ahead }
+      items.push({ kind: 'gap', prio: 2, text: fill(pick([
+        '{team} bring their next development step to the {circuit}, aimed at closing the gap to {ahead} ahead.',
+        '{team_poss} next upgrade, due at the {circuit}, is aimed at reeling in {ahead} in front.',
+        'The {circuit} brings {team_poss} next package, a step they hope narrows the gap to {ahead}.',
+      ], sd), slots) })
+    }
+    // from === 1 with no rank change: already top with nobody ahead to chase — omit.
   }
+  if (items.length === 0) return ''
 
-  return movers.slice(0, 2).map(sentence).join(' ')
+  // Cap at two sentences. Keep a failed-upgrade quote when present (alongside the best positive line);
+  // otherwise show the two strongest positives (mover before gap-closer).
+  const fails = items.filter((i) => i.kind === 'fail')
+  const positives = items.filter((i) => i.kind !== 'fail').sort((a, b) => b.prio - a.prio)
+  const chosen = (fails.length ? [positives[0], fails[0]] : positives.slice(0, 2)).filter((x): x is Item => !!x)
+  return chosen.map((it) => it.text).join(' ')
 }
 
 // Race-logistics beat (#88 preview spec): lap count, the forecast the race will actually run (weather
