@@ -469,8 +469,9 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
   if (winsLeader && winsLeader.id !== champ && winsLeader.wins - champRow.wins >= 3) {
     return { shape: 'WinsVsPoints', championId: champ, otherId: winsLeader.id, driversSealedEarly }
   }
-  // Lead traded all year, settled late.
-  if (ct.leadChanges >= 2 && ct.currentGap <= constructorMaxPerRace(ctx.year) * 1.5) {
+  // Lead genuinely traded hands across the season: a single, clear signal of 3+ round-to-round lead changes
+  // (a high count already implies a competitive year, so no separate closeness gate).
+  if (ct.leadChanges >= 3) {
     return { shape: 'LeadTradedLate', championId: champ, otherId: ct.series[ct.series.length - 1]?.secondId ?? undefined, driversSealedEarly }
   }
   return { shape: 'Clear', championId: champ, driversSealedEarly }

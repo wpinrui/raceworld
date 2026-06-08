@@ -132,7 +132,13 @@
     "{constructor_champion} claimed the {year} constructors' championship despite winning {cons_wins} races to {cons_other}'s {cons_other_wins}, with {champ_driver1} and {champ_driver2} accumulating points steadily enough across the season to finish on {cons_points}, clear of {cons_runner_up} on {cons_runner_up_points}.",
     "{cons_other} won {cons_wins_gap} more races than {constructor_champion} in {year}, but {champ_driver1} and {champ_driver2}'s reliability and consistency across the season told in the final standings, where {constructor_champion} took the constructors' title with {cons_points} points to {cons_other}'s {cons_other_points}."
   ],
-  "consLeadTradedLate": ["PLACEHOLDER {constructor_champion} and {cons_other} traded the constructors' lead all year, settled late."],
+  "consLeadTradedLate": [
+    "The {year} constructors' title was a back-and-forth affair, the lead changing hands {cons_lead_changes} times before {constructor_champion} settled it by {cons_margin} points over {cons_runner_up}.",
+    "{constructor_champion} and {cons_runner_up} traded the constructors' lead {cons_lead_changes} times through {year}, {constructor_champion} holding it at the flag, {cons_points} to {cons_runner_up_points}.",
+    "The constructors' lead changed hands {cons_lead_changes} times across {year}, {constructor_champion} and {cons_runner_up} pegging each other back before {constructor_champion} pulled clear at the close, {cons_points} points to {cons_runner_up_points}.",
+    "The constructors' lead in {year} changed hands {cons_lead_changes} times, {cons_runner_up} leading for long spells before {constructor_champion} took it back and closed the season out with a {cons_margin}-point advantage.",
+    "{cons_lead_changes} lead changes separated {constructor_champion} and {cons_runner_up} across the {year} constructors' fight, {champ_driver1} and {champ_driver2} ultimately delivering {cons_wins} wins to put {constructor_champion} clear by {cons_margin} points."
+  ],
   "consRepeatChampion": ["PLACEHOLDER {constructor_champion} retained the constructors' title."],
   "consClear": ["PLACEHOLDER {constructor_champion} won the constructors' championship."],
   "consDriversSealedEarly": ["PLACEHOLDER The drivers' title was settled well before the constructors' went to the wire."],
