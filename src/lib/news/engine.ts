@@ -2003,7 +2003,7 @@ function previewUpgradeOutlook(ctx: NewsContext, r: number): string {
       const slots = { team, team_poss: poss(team), circuit: circuitName, from: ordinal(from), to: ordinal(to), passed }
       const text = passed
         ? fill(pick([
-            '{team} bring their next development step to the {circuit}, a package the pace projection has lifting them from {from} to {to}, ahead of {passed} once it is fitted.',
+            '{team} bring their next development step to the {circuit}, a package projected to lift them from {from} to {to}, ahead of {passed} once it is fitted.',
             'The {circuit} marks {team_poss} next upgrade, projected to move them from {from} to {to} on pace, clear of {passed}.',
             '{team_poss} next package, due at the {circuit}, projects to climb them from {from} to {to}, past {passed}.',
           ], sd), slots)
