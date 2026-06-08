@@ -2,46 +2,46 @@
   "erosionMerit": {
     "h": [
       "{chaser_last} cuts the gap to {gap} {gap_pts} with {chaser_wins} wins in {rounds_ago} rounds",
-      "{gap} {gap_pts} now: {chaser_last} has taken {change} back from {leader_last} on track",
-      "{chaser_last}'s run of {chaser_wins} wins in {rounds_ago} rounds turns a {gap_ago}-point gap into {gap}",
-      "From {gap_ago} to {gap}: {chaser_last} earns {change} {gap_pts} back through results",
-      "{chaser_last} closes to {gap} {gap_pts} — {chaser_wins} wins over the last {rounds_ago} rounds, not {leader_last}'s mistakes"
+      "{chaser_last} takes {change} {gap_pts} back from {leader_last} on track, gap now {gap}",
+      "{chaser_last}'s {chaser_wins} wins in {rounds_ago} rounds cut a {gap_ago}-point gap to {gap}",
+      "{chaser_last} earns {change} {gap_pts} back through results over {rounds_ago} rounds",
+      "{chaser_last} closes to {gap} {gap_pts} on wins, not {leader_last}'s mistakes"
     ],
     "d": [
       "{chaser} has won {chaser_wins} of the last {rounds_ago} rounds. The gap is {gap} {gap_pts}.",
       "{gap_ago} points became {gap} as {chaser} outscored {leader} by {change} across {rounds_ago} rounds.",
       "{chaser_last}'s pace has turned a {gap_ago}-point deficit into {gap} {gap_pts}. {leader_last} has not gifted it.",
-      "{chaser} has done the scoring — {chaser_wins} wins in the last {rounds_ago} rounds, gap now {gap} {gap_pts}.",
+      "{chaser} has done the scoring: {chaser_wins} wins in the last {rounds_ago} rounds, gap now {gap} {gap_pts}.",
       "The {gap}-point gap is the result of {chaser_last} outscoring {leader_last} by {change} across {rounds_ago} rounds."
     ],
     "b": [
       "{chaser} scored {mom_chaser} points across the last {rounds_ago} rounds; {leader} scored {mom_leader}. The swing of {change} closes the gap from {gap_ago} to {gap} {gap_pts}.",
-      "{chaser_wins} wins in {rounds_ago} rounds from {chaser} have moved the championship from a {gap_ago}-point margin to {gap} {gap_pts}. {leader_last} has not retired — the points have been taken, not handed back.",
+      "{chaser_wins} wins in {rounds_ago} rounds from {chaser} have moved the championship from a {gap_ago}-point margin to {gap} {gap_pts}. {leader_last} has not retired; the points have been taken, not handed back.",
       "{chaser} has outscored {leader} {mom_chaser} to {mom_leader} over the last {rounds_ago} rounds. That swing of {change} brings the gap from {gap_ago} to {gap} {gap_pts} with {races_left} remaining.",
       "The gap at the top has moved from {gap_ago} to {gap} over {rounds_ago} rounds on the back of {chaser_wins} {chaser_last} wins. {leader_last} scored {mom_leader} in the same window; {chaser_last} scored {mom_chaser}.",
-      "{chaser_last} has {chaser_wins} victories in {rounds_ago} rounds and a swing of {change} to show for it. The championship lead is {gap} {gap_pts} — earned entirely through results."
+      "{chaser_last} has {chaser_wins} victories in {rounds_ago} rounds and a swing of {change} to show for it. The championship lead is {gap} {gap_pts}, earned entirely through results."
     ]
   },
   "erosionHanded": {
     "h": [
       "{leader_last}'s {leader_dnfs} retirements in {rounds_ago} rounds cut the lead from {gap_ago} to {gap}",
-      "Mechanical failures cost {leader_last} {change} {gap_pts} — the gap is now {gap}",
-      "{gap_ago} points to {gap}: {leader_last} has retired {leader_dnfs} times in {rounds_ago} rounds",
-      "{leader_last} hands back {change} {gap_pts} through {leader_dnfs} DNFs; {chaser_last} closes to {gap}",
-      "The gap shrinks to {gap} {gap_pts} — {leader_dnfs} {leader_last} retirements do the work, not {chaser_last}'s pace"
+      "Mechanical failures cost {leader_last} {change} {gap_pts}, the gap now {gap}",
+      "{leader_last} has retired {leader_dnfs} times in {rounds_ago} rounds, the lead down to {gap}",
+      "{leader_last} hands back {change} {gap_pts} through {leader_dnfs} DNFs as {chaser_last} closes to {gap}",
+      "{leader_dnfs} {leader_last} retirements cut the gap to {gap} {gap_pts}, not {chaser_last}'s pace"
     ],
     "d": [
       "{leader_last} has retired {leader_dnfs} times in the last {rounds_ago} rounds. The gap is now {gap} {gap_pts}.",
       "{leader} has scored {mom_leader} points across {rounds_ago} rounds; {leader_dnfs} retirements explain the gap falling to {gap}.",
       "The {change}-point swing from {gap_ago} to {gap} traces back to {leader_last}'s {leader_dnfs} DNFs, not a {chaser_last} surge.",
-      "{chaser} has closed from {gap_ago} to {gap} {gap_pts} — the gap is shrinking because {leader_last} keeps retiring.",
+      "{chaser} has closed from {gap_ago} to {gap} {gap_pts} because {leader_last} keeps retiring.",
       "{leader_last} has retired {leader_dnfs} times in {rounds_ago} rounds. The gap is {gap} {gap_pts}."
     ],
     "b": [
       "{leader} scored {mom_leader} points across the last {rounds_ago} rounds, against {mom_chaser} for {chaser}. The {change}-point swing comes from {leader_dnfs} {leader_last} retirements, not from {chaser_last} outpacing the field.",
       "{leader_last} has retired {leader_dnfs} times in {rounds_ago} rounds, leaving {change} points on the table. The gap falls from {gap_ago} to {gap} {gap_pts}; {chaser_last} scored {mom_chaser} in the same window.",
       "The gap from {gap_ago} to {gap} represents {leader_last}'s points lost to DNFs, not {chaser_last}'s gains. {leader} has scored {mom_leader} across {rounds_ago} rounds; the car has accounted for {leader_dnfs} of those results.",
-      "{leader_last}'s {leader_dnfs} retirements across {rounds_ago} rounds moved the gap from {gap_ago} to {gap} {gap_pts}. {chaser_last} scored {mom_chaser} in the same stretch — consistent, but not the reason the lead has shrunk.",
+      "{leader_last}'s {leader_dnfs} retirements across {rounds_ago} rounds moved the gap from {gap_ago} to {gap} {gap_pts}. {chaser_last} scored {mom_chaser} in the same stretch, consistent but not the reason the lead has shrunk.",
       "In {rounds_ago} rounds: {leader_last} retired {leader_dnfs} times and scored {mom_leader} points; {chaser_last} scored {mom_chaser}. The {change}-point swing puts the gap at {gap} {gap_pts}."
     ]
   },
@@ -49,12 +49,12 @@
     "h": [
       "{leader_last} leads by {gap} {gap_pts} after a {change}-point swing over {rounds_ago} rounds",
       "Dropped points and a charging {chaser_last} cut the lead from {gap_ago} to {gap}",
-      "The gap is {gap}: {leader_last} has lost ground both to {chaser_last}'s pace and to poor results",
-      "From {gap_ago} to {gap} in {rounds_ago} rounds — {leader_last}'s form and {chaser_last}'s results both contribute",
+      "{leader_last} loses ground to {chaser_last}'s pace and poor results, the lead now {gap}",
+      "{leader_last}'s form and {chaser_last}'s results cut the gap from {gap_ago} to {gap}",
       "{chaser_last} closes to within {gap} {gap_pts} as {leader_last}'s recent form slips"
     ],
     "d": [
-      "{leader} leads by {gap} {gap_pts} — down from {gap_ago} as both {chaser_last}'s results and {leader_last}'s results moved the gap.",
+      "{leader} leads by {gap} {gap_pts}, down from {gap_ago} as both {chaser_last}'s results and {leader_last}'s results moved the gap.",
       "The {gap_ago}-point lead is now {gap} after {rounds_ago} rounds in which {leader} scored {mom_leader} and {chaser} scored {mom_chaser}.",
       "{gap_ago} became {gap} over {rounds_ago} rounds. The swing came from both ends.",
       "{chaser_last} has closed from {gap_ago} to {gap} with a combination of better results and {leader_last}'s lost points.",
@@ -64,53 +64,53 @@
       "{leader} scored {mom_leader} points across the last {rounds_ago} rounds; {chaser} scored {mom_chaser}. That {change}-point swing draws on both {chaser_last}'s results and points {leader_last} did not collect. The gap stands at {gap} {gap_pts}.",
       "Over {rounds_ago} rounds the gap has moved from {gap_ago} to {gap}. {chaser} contributed {mom_chaser} points to the swing; {leader_last}'s tally of {mom_leader} in the same window accounts for the rest of the {change}-point difference.",
       "The championship gap has fallen {change} points to {gap} over {rounds_ago} rounds. {chaser_last} scored {mom_chaser} in that stretch; {leader_last} scored {mom_leader}. Both ends of that comparison drove the change.",
-      "{leader_last}'s {mom_leader} points in {rounds_ago} rounds and {chaser_last}'s {mom_chaser} produce a {change}-point swing. The gap is now {gap} {gap_pts} — down from {gap_ago}.",
+      "{leader_last}'s {mom_leader} points in {rounds_ago} rounds and {chaser_last}'s {mom_chaser} produce a {change}-point swing. The gap is now {gap} {gap_pts}, down from {gap_ago}.",
       "{chaser} has cut {change} {gap_pts} from {leader_last}'s advantage over {rounds_ago} rounds, scoring {mom_chaser} to {leader_last}'s {mom_leader}. The margin is {gap} {gap_pts}."
     ]
   },
   "extension": {
     "h": [
-      "{leader_last} extends to {gap} {gap_pts} — up from {gap_ago} across {rounds_ago} rounds",
-      "{leader_last} has scored {mom_leader} points in {rounds_ago} rounds; the gap is now {gap}",
-      "From {gap_ago} to {gap}: {leader_last} outscores {chaser_last} by {change} across {rounds_ago} rounds",
+      "{leader_last} now leads by {gap} {gap_pts}, having {prev_state} {rounds_ago} rounds ago",
+      "{leader_last} scores {mom_leader} points in {rounds_ago} rounds to lead by {gap}",
+      "{leader_last} outscores {chaser_last} by {change} over {rounds_ago} rounds, leading by {gap}",
       "{leader_last} pulls {change} {gap_pts} clear of {chaser_last} over the last {rounds_ago} rounds",
-      "{gap_ago} points became {gap} as {leader_last}'s run of form stretches the championship lead"
+      "A {change}-point swing puts {leader_last} {gap} {gap_pts} clear"
     ],
     "d": [
       "{leader} has scored {mom_leader} points in {rounds_ago} rounds, against {mom_chaser} for {chaser}. The lead is {gap} {gap_pts}.",
-      "{leader_last}'s recent form has moved the gap from {gap_ago} to {gap} across {rounds_ago} rounds.",
-      "The lead is {gap} {gap_pts} — up {change} from {gap_ago} after {rounds_ago} rounds in which {leader_last} outscored {chaser_last}.",
-      "{leader_last} has extended the gap to {gap} {gap_pts}: a {change}-point swing over {rounds_ago} rounds.",
-      "From {gap_ago} to {gap} {gap_pts}: {leader} has outscored {chaser} by {change} across the last {rounds_ago} rounds."
+      "{leader_last} now leads by {gap} {gap_pts}, having {prev_state} {rounds_ago} rounds ago.",
+      "The lead is {gap} {gap_pts}, up {change} over {rounds_ago} rounds in which {leader_last} outscored {chaser_last}.",
+      "{leader_last} has stretched the lead to {gap} {gap_pts}: a {change}-point swing over {rounds_ago} rounds.",
+      "{leader} has outscored {chaser} by {change} across the last {rounds_ago} rounds; the lead is now {gap} {gap_pts}."
     ],
     "b": [
-      "{leader} scored {mom_leader} points across the last {rounds_ago} rounds; {chaser} scored {mom_chaser}. That {change}-point swing stretches the gap from {gap_ago} to {gap} {gap_pts} with {races_left} still to run.",
-      "Over {rounds_ago} rounds {leader_last} has outscored {chaser_last} {mom_leader} to {mom_chaser}, building a {change}-point advantage in the window alone. The championship gap is now {gap} {gap_pts}.",
-      "{leader_last}'s {mom_leader} points across the last {rounds_ago} rounds, against {mom_chaser} for {chaser_last}, account for the gap moving from {gap_ago} to {gap}. {races_left} remain.",
-      "The gap has grown {change} points in {rounds_ago} rounds — {leader_last} scoring {mom_leader}, {chaser_last} scoring {mom_chaser}. The lead is now {gap} {gap_pts}.",
-      "{leader_last} has put {change} points between the two drivers over {rounds_ago} rounds, moving the gap from {gap_ago} to {gap}. {chaser_last} scored {mom_chaser} in the same window."
+      "{leader} scored {mom_leader} points across the last {rounds_ago} rounds; {chaser} scored {mom_chaser}. That {change}-point swing leaves {leader_last} {gap} {gap_pts} clear with {races_left} still to run.",
+      "Over {rounds_ago} rounds {leader_last} has outscored {chaser_last} {mom_leader} to {mom_chaser}, a {change}-point swing in the window alone. {leader_last} now leads by {gap} {gap_pts}, having {prev_state} {rounds_ago} rounds ago.",
+      "{leader_last}'s {mom_leader} points across the last {rounds_ago} rounds, against {mom_chaser} for {chaser_last}, open the lead to {gap} {gap_pts}. {races_left} remain.",
+      "The lead has grown {change} points in {rounds_ago} rounds, {leader_last} scoring {mom_leader} and {chaser_last} {mom_chaser}. {leader_last} now leads by {gap} {gap_pts}.",
+      "{leader_last} has put {change} points on {chaser_last} over {rounds_ago} rounds; the lead is {gap} {gap_pts}. {chaser_last} scored {mom_chaser} in the same window."
     ]
   },
   "decider": {
     "h": [
       "{gap} {gap_pts} separate them with {remaining} rounds left and {max_pts} still available",
       "{leader_last} leads {chaser_last} by {gap} {gap_pts}; the chaser needs {gap} back from {max_pts} available",
-      "{races_left}: {gap} {gap_pts} to close, {max_pts} on the table",
+      "{gap} {gap_pts} to close and {max_pts} on the table across {races_left}",
       "{chaser_last} trails by {gap} with {max_pts} left to recover across {races_left}",
-      "The {year} title run-in: {gap} {gap_pts}, {remaining} rounds, {max_pts} available"
+      "The {year} title comes down to {gap} {gap_pts}, {remaining} rounds and {max_pts} available"
     ],
     "d": [
-      "{leader} leads by {gap} {gap_pts} with {remaining} rounds left. {max_pts} points remain available — {chaser_last} must recover {gap} of them.",
+      "{leader} leads by {gap} {gap_pts} with {remaining} rounds left. {max_pts} points remain available, and {chaser_last} must recover {gap} of them.",
       "{races_left} and {max_pts} points left in the pool. {leader_last} needs only to outscore {chaser_last} by one; {chaser_last} must close {gap} {gap_pts}.",
       "{gap} {gap_pts} between them, {max_pts} still available across {races_left}. The head-to-head stands {h2h}.",
       "{chaser} is {gap} {gap_pts} back with {max_pts} left on offer across {races_left}.",
       "{leader_last} leads by {gap} with {remaining} rounds to go. {max_pts} points are still available."
     ],
     "b": [
-      "{leader_last} leads {chaser_last} by {gap} {gap_pts} with {remaining} rounds remaining. {max_pts} points are still available, meaning {chaser_last} can still overhaul the gap — but must take {gap} back without {leader_last} responding. Head-to-head this season stands {h2h}.",
+      "{leader_last} leads {chaser_last} by {gap} {gap_pts} with {remaining} rounds remaining. {max_pts} points are still available, so {chaser_last} can still overhaul the gap, but must take {gap} back without {leader_last} responding. Head-to-head this season stands {h2h}.",
       "There are {max_pts} points left across {races_left}. {chaser_last} needs to close {gap} {gap_pts}, and {leader_last} can settle the title by finishing each round ahead of {chaser_last} often enough to keep the gap above zero. The head-to-head is {h2h}.",
-      "{gap} {gap_pts} with {remaining} rounds left. {max_pts} points remain, so the gap is closeable — {chaser_last} needs {gap} back; {leader_last} needs only to outscore {chaser_last} by one over the full run-in. Recent momentum: {leader_last} scored {mom_leader} points in the last {rounds_ago} rounds, {chaser_last} {mom_chaser}.",
-      "{leader_last} holds {gap} {gap_pts} with {races_left} to run. The maximum {chaser_last} can recover is {max_pts} — enough to overhaul the lead, but {chaser_last} must net {gap} against {leader_last} across {remaining} rounds while the head-to-head sits {h2h}.",
+      "{gap} {gap_pts} with {remaining} rounds left and {max_pts} points still in the pool. {chaser_last} needs {gap} back; {leader_last} needs only to outscore {chaser_last} by one over the run-in. Recent momentum: {leader_last} scored {mom_leader} in the last {rounds_ago} rounds, {chaser_last} {mom_chaser}.",
+      "{leader_last} holds {gap} {gap_pts} with {races_left} to run. The most {chaser_last} can recover is {max_pts}, enough to overhaul the lead, but {chaser_last} must net {gap} against {leader_last} across {remaining} rounds while the head-to-head sits {h2h}.",
       "The numbers: {gap} {gap_pts} between them, {max_pts} available across {races_left}, head-to-head {h2h}. {chaser_last} must claw back {gap} of those {max_pts}; {leader_last} wins the title the moment {chaser_last} can no longer reach {gap_pts} in the remaining rounds."
     ]
   }

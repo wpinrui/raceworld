@@ -1,10 +1,10 @@
 {
   "compressed": {
     "h": [
-      "{year} best of the rest: {winner} tops a packed band, {gap} points clear of {runner_up}",
-      "{gap} points decide a compressed midfield — {winner} ahead of {runner_up}",
+      "{winner} tops a packed {year} best-of-the-rest band, {gap} points clear of {runner_up}",
+      "{gap} points decide a compressed midfield, {winner} ahead of {runner_up}",
       "{winner} leads the {year} best-of-the-rest band by {gap} from {runner_up}",
-      "A tight chase behind the front three: {winner} edges {runner_up} by {gap}",
+      "A tight chase behind the front three as {winner} edges {runner_up} by {gap}",
       "{winner} wins the {year} second-tier fight from {runner_up} by {gap} points"
     ],
     "d": [
@@ -27,12 +27,12 @@
       "{winner} surges from preseason also-ran to {year} best of the rest",
       "Projected well down the order, {winner} ends {year} as best of the rest",
       "{winner} defies the preseason form to lead the {year} best-of-the-rest band",
-      "From the back of the projections to best of the rest: {winner} in {year}",
+      "From the back of the projections to best of the rest, {winner} in {year}",
       "{winner} leaps the order to take the {year} best-of-the-rest honours from {runner_up}"
     ],
     "d": [
       "{winner} was projected well down the order before {year}, then surged to lead the best-of-the-rest band.",
-      "Few rated {winner} ahead of preseason — yet {winner} finished {year} as best of the rest.",
+      "Few rated {winner} ahead of preseason, yet {winner} finished {year} as best of the rest.",
       "{winner} defied a low preseason projection to top the {year} best-of-the-rest order over {runner_up}.",
       "Against the preseason form book, {winner} climbed to best of the rest in {year}.",
       "{winner} began {year} pegged near the back of the order and ended the season leading the best-of-the-rest band."
@@ -48,9 +48,9 @@
   "clear": {
     "h": [
       "{winner} leads the {year} best of the rest with ease, {gap} points clear of {runner_up}",
-      "{gap} points: {winner} runs away with the {year} second-tier fight from {runner_up}",
+      "{gap} points clear, {winner} runs away with the {year} second-tier fight from {runner_up}",
       "{winner} dominates the best-of-the-rest band in {year}, {gap} clear of {runner_up}",
-      "Comfortable behind the front three: {winner} beats {runner_up} by {gap}",
+      "Comfortable behind the front three, {winner} beats {runner_up} by {gap}",
       "{winner} controls the {year} best-of-the-rest order, {gap} points ahead of {runner_up}"
     ],
     "d": [

@@ -322,7 +322,16 @@ export function previewCast(ctx: NewsContext, analysis: SeasonAnalysis): Preview
   const champRec = (ctx.constructorHistory ?? []).find((h) => h.seasonYear === lastYear && h.finalPosition === 1)
   const reigningConstructor = champRec && ctx.teams.some((t) => t.id === champRec.teamId) ? champRec.teamId : undefined
 
-  return { titleFavourites, darkHorses, bestOfRest, rookies, veterans, newTeams, reigningChampion, reigningConstructor }
+  // A driver belongs to at most one cast section: claim by salience favourites > darkHorses > veterans >
+  // rookies, so no one is introduced twice (e.g. a title favourite who is also 35+ stays only a favourite).
+  const claimed = new Set<string>(titleFavourites)
+  const darkHorsesDedup = darkHorses.filter((id) => !claimed.has(id))
+  darkHorsesDedup.forEach((id) => claimed.add(id))
+  const veteransDedup = veterans.filter((v) => !claimed.has(v.driverId))
+  veteransDedup.forEach((v) => claimed.add(v.driverId))
+  const rookiesDedup = rookies.filter((id) => !claimed.has(id))
+
+  return { titleFavourites, darkHorses: darkHorsesDedup, bestOfRest, rookies: rookiesDedup, veterans: veteransDedup, newTeams, reigningChampion, reigningConstructor }
 }
 
 // A championship-arc inflection (#88): a notable shape event in the drivers' title fight that warrants a

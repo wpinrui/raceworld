@@ -31,19 +31,17 @@ import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 import { marketWatchRound, marketRenewalRound } from '@/lib/sim/driver-market'
 import { pick, chance, fill, ordinal, lastName, listJoin, plural, compose, mulberry32, clamp, pronouns } from './util'
-import { raceDate, toISODate, addDays } from '@/lib/sim/calendar-dates'
+import { raceDate, toISODate, addDays, daysBetween } from '@/lib/sim/calendar-dates'
 import { buildSeasonAnalysis, previewCast, titleArcEvents, constructorArcEvents } from './season-analysis'
 import seasonPreviewCopy from './season-preview-copy.json'
 import arcCopy from './title-arc-copy.json'
 import constructorArcCopy from './constructor-arc-copy.json'
-import raceCodaCopy from './race-coda-copy.json'
 import seasonReviewCopy from './season-review-copy.json'
 import milestoneCopy from './milestone-copy.json'
 import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
-import expectationCheckCopy from './expectation-check-copy.json'
 import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
@@ -578,17 +576,13 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const leadGap = leader ? leader.points - (afterR[1]?.points ?? 0) : 0
     const prevLeaderId = afterPrev[0]?.driverId
     const leadChanged = !!leader && !!prevLeaderId && leader.driverId !== prevLeaderId
+    // Constructors' standings, for the opening-round coda: after one race the WDC "lead" is just the win,
+    // so the first-round report speaks to the constructors' championship instead.
+    const cAfterR = constructorStandingsAfter(ctx, r)
+    const cLeaderTeam = cAfterR[0]
     const remaining = N - r
     const racesLeft = `${remaining} ${plural(remaining, 'race')}`
     const clinched = !!leader && afterR.length >= 2 && remaining > 0 && leadGap > remaining * driverMaxPerRace(ctx.year)
-    // Title trajectory for the coda (#88): how the CURRENT leader's gap has moved over the trailing window,
-    // so the report's closing line carries the running narrative instead of just the static gap.
-    const codaW = Math.min(4, r - 1)
-    const agoStand = driverStandingsAfter(ctx, r - codaW)
-    const ptsAgo = (id?: string) => (id ? agoStand.find((x) => x.driverId === id)?.points ?? 0 : 0)
-    const gapAgo = leader && afterR[1] ? ptsAgo(leader.driverId) - ptsAgo(afterR[1].driverId) : leadGap
-    const codaSwing = leadGap - gapAgo
-    const codaTrajectory = !clinched && !leadChanged && afterR.length >= 2 && codaW >= 2 && gapAgo > 0 && Math.abs(codaSwing) >= 10
 
     // Safe, specific colour.
     const winnerHome = isHomeRace(ctx, p1.driverId, r)
@@ -640,7 +634,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       mover_gain: moverGain, leader: leader?.driverName ?? '', second: afterR[1]?.driverName ?? '',
       leader_last: leader ? lastName(leader.driverName) : '', second_last: afterR[1] ? lastName(afterR[1].driverName) : '',
       lead_gap: leadGap, lead_gap_pts: plural(leadGap, 'point'), leader_points: leader?.points ?? 0, round: r, races_left: racesLeft,
-      gap_ago: gapAgo, rounds_ago: codaW, swing: Math.abs(codaSwing),
+      c_leader: cLeaderTeam?.teamName ?? '', c_second: cAfterR[1]?.teamName ?? '', prev_leader: afterPrev[0]?.driverName ?? '',
       dnf_list: listJoin(dnfNames), dnf_count: dnfs.length, cars: plural(dnfs.length, 'car'),
       dnf_reasoned: dnfReasoned, dnf_word: dnfs.length === 2 ? 'both' : 'all',
       dnf_solo_reason: dnfSolo ? pick(poolFor(dnfSolo), `${seed}|why-${dnfSolo.driverId}`) : '',
@@ -732,7 +726,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
     const qualiPool = pMargin && pole
       ? [
           '{pole_last} had split the field in qualifying, taking pole by {pole_margin}.',
-          'Qualifying had gone to {pole_last} by {pole_margin}, a margin that spoke of real single-lap pace.',
+          'Qualifying had gone to {pole_last} by {pole_margin}.',
           '{pole_last} had grabbed pole by {pole_margin} from {pole_runner_up}.',
         ]
       : ['']
@@ -780,7 +774,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       '{winner_last} pulled off {their} helmet on the slow-down lap to take in the reception from the grandstands.',
       'The {team} pit wall let the tension of the final laps drain away the instant the flag fell.',
       '{winner_last} drove the in-lap at a measured pace, in no rush to let the afternoon end.',
-      '{winner_last} stood on the podium with the look of someone who knew the result had been earned, not gifted.',
       'The {team} mechanics were at the pit-lane wall before the car had stopped, ready for the celebrations.',
       '{winner_last} held the trophy in both hands and looked out into the crowd before the formalities resumed.',
       '{winner_last} was treated for dehydration once the cameras had moved on, the cockpit a brutal place in the closing laps.',
@@ -806,31 +799,65 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       '"These points matter. Every race this season has felt like it counts, and today was no different," said {winner_last}.',
     ], slots, 72)
 
-    const champPool = !leader
-      ? ['']
-      : clinched
-      ? [
-          'With the win, {leader} can no longer be caught in the championship.',
-          'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
-          '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
-          'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
-        ]
-      : leadChanged
-      ? [
-          'The result swings the championship, and {leader} now leads.',
-          'There is a new name on top of the standings in {leader}, {lead_gap} {lead_gap_pts} clear of {second}.',
-          '{leader} takes over at the head of the table, {lead_gap} {lead_gap_pts} ahead of {second}.',
-          'The points lead changes hands, {leader} now in front of {second} by {lead_gap} {lead_gap_pts}.',
-        ]
-      : codaTrajectory
-      ? (codaSwing < 0 ? raceCodaCopy.closing : raceCodaCopy.extending)
-      : [
-          'In the championship, {leader} stays in front, {lead_gap} {lead_gap_pts} clear of {second}.',
-          '{leader} holds the points lead on {leader_points}, {lead_gap} {lead_gap_pts} up on {second}.',
-          'Atop the standings, {leader} keeps a {lead_gap}-point cushion over {second}.',
-          'No change at the top, {leader} on {leader_points} points with {second} {lead_gap} {lead_gap_pts} adrift.',
-        ]
-    const champPara = compose(`${seed}:champ`, slots, champPool)
+    // Championship coda (#88, reworked): tell the title fight as a story. Lead with what moved THIS race —
+    // the protagonists' actual results and the swing from one race ago — and reframe entirely when a new
+    // name takes the lead or climbs into the top two (the old margin is then irrelevant; positions moved).
+    const champPara = ((): string => {
+      if (!leader) return ''
+      if (clinched) return compose(`${seed}:champ`, slots, [
+        'With the win, {leader} can no longer be caught in the championship.',
+        'The result puts the title beyond doubt, {leader} now uncatchable with {lead_gap} {lead_gap_pts} in hand and {races_left} left.',
+        '{leader} has effectively wrapped up the championship, {lead_gap} {lead_gap_pts} clear with {races_left} to run.',
+        'The arithmetic is settled, {leader} now champion with {lead_gap} {lead_gap_pts} in hand and {races_left} remaining.',
+      ])
+      if (r === 1) return compose(`${seed}:champ`, slots, [
+        "{c_leader} lead the constructors' championship after the opening round.",
+        "Round one puts {c_leader} top of the constructors' standings, ahead of {c_second}.",
+        "The constructors' championship opens with {c_leader} on top.",
+        "{c_leader} take the early constructors' lead, {c_second} the nearest of the rest.",
+      ])
+      const second = afterR[1]
+      if (!second) return `${lastName(leader.driverName)} heads the championship after the ${circuitName}.`
+      if (remaining === 0) return `${lastName(leader.driverName)} is crowned ${ctx.year} World Drivers' Champion, ${leadGap} ${plural(leadGap, 'point')} clear of ${lastName(second.driverName)}.`
+      // A title protagonist's result THIS race, as a bare noun ("win") and a verb ("won").
+      const raceFin = (id: string): { noun: string; verb: string } => {
+        const res = results.find((x) => x.driverId === id)
+        if (!res || res.finishPosition == null) return res?.dnf ? { noun: 'retirement', verb: 'retired' } : { noun: 'absence', verb: 'did not start' }
+        if (res.dnf) return { noun: 'retirement', verb: 'retired' }
+        if (res.finishPosition === 1) return { noun: 'win', verb: 'won' }
+        return { noun: `${ordinal(res.finishPosition)}-place finish`, verb: `finished ${ordinal(res.finishPosition)}` }
+      }
+      const ld = lastName(leader.driverName), sd = lastName(second.driverName)
+      const prL = pronouns(ctx.drivers.find((d) => d.id === leader.driverId)?.gender)
+      const gapPts = plural(leadGap, 'point')
+      const priorRankOf = (id: string) => (afterPrev.findIndex((s) => s.driverId === id) + 1) || afterPrev.length + 1
+
+      // A new name has taken the championship lead: lead with the takeover and how far they have climbed.
+      if (leadChanged) {
+        const climbed = priorRankOf(leader.driverId)
+        const verb = climbed >= 4 ? 'catapults' : climbed === 3 ? 'lifts' : 'moves'
+        const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
+        return `${ld}'s ${raceFin(leader.driverId).noun} ${verb} ${prL.them} into the championship lead${from}. ${prL.they_cap} now leads ${sd}, who ${raceFin(second.driverId).verb}, by ${leadGap} ${gapPts} with ${racesLeft} remaining.`
+      }
+      // Same leader, but a new name has climbed into second: frame it as entering the conversation.
+      const prevSecondId = afterPrev[1]?.driverId
+      if (prevSecondId && prevSecondId !== second.driverId) {
+        const climbed = priorRankOf(second.driverId)
+        const prS = pronouns(ctx.drivers.find((d) => d.id === second.driverId)?.gender)
+        const from = climbed >= 3 ? `, up from ${ordinal(climbed)} before the ${circuitName}` : ''
+        return `${sd}'s ${raceFin(second.driverId).noun} lifts ${prS.them} into championship contention${from}. ${prS.they_cap} now sits ${leadGap} ${gapPts} behind ${ld} with ${racesLeft} remaining.`
+      }
+      // Same top two: how did the gap move this race, and why?
+      const leaderRacePts = results.find((x) => x.driverId === leader.driverId)?.points ?? 0
+      const secondRacePts = results.find((x) => x.driverId === second.driverId)?.points ?? 0
+      const raceSwing = leaderRacePts - secondRacePts
+      const prevGap = leadGap - raceSwing
+      if (Math.abs(raceSwing) >= 4) {
+        return `${sd}'s ${raceFin(second.driverId).noun} and ${ld}'s ${raceFin(leader.driverId).noun} ${raceSwing < 0 ? 'cut' : 'stretched'} the title gap from ${prevGap} to ${leadGap} ${gapPts}, ${ld} leading ${sd} with ${racesLeft} remaining.`
+      }
+      const moved = raceSwing !== 0 ? `, ${raceSwing < 0 ? 'down' : 'up'} from ${prevGap}` : ''
+      return `${ld} leads ${sd} by ${leadGap} ${gapPts}${moved} with ${racesLeft} remaining.`
+    })()
 
     // Notable non-DNF consistency mistake (issue #59): the single most significant one per race,
     // gated to a newsworthy magnitude — a wobble of 5 seconds or more. Crash-outs are not eligible
@@ -869,6 +896,28 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
       ? compose(`${seed}:wx`, { circuit: circuitName }, wx.forecastThreatenedRain ? wxCopy.dryThreatened : wxCopy.dryFlavour)
       : ''
 
+    // Win-streak / dense-stretch modifier for the dek (#88): a current run of wins is the story, so when one
+    // exists the dek leads with it ("to win his 4th race in a row", "for 6 wins in 7 races").
+    const streakDek = ((): string => {
+      const wonR = (k: number) => (ctx.raceResults[k - 1] ?? []).some((x) => x.driverId === p1.driverId && x.finishPosition === 1)
+      let streak = 0
+      for (let k = r; k >= 1 && wonR(k); k--) streak++
+      let tail = ''
+      if (streak >= 3) tail = `to win ${pronouns(ctx.drivers.find((d) => d.id === p1.driverId)?.gender).their} ${ordinal(streak)} race in a row`
+      else {
+        let best: { w: number; W: number } | null = null
+        for (let W = Math.min(r, 7); W >= 5; W--) {
+          let w = 0
+          for (let k = r - W + 1; k <= r; k++) if (wonR(k)) w++
+          if (w >= 4 && W - w <= 2 && (!best || w > best.w)) best = { w, W }
+        }
+        if (best) tail = `for ${best.w} wins in ${best.W} races`
+      }
+      if (!tail) return ''
+      const m = hasMargin ? `, finishing ${margin} clear of ${p2?.driverName ?? 'the field'},` : ''
+      return `${p1.driverName} won the ${circuitName}${m} ${tail}.`
+    })()
+
     out.push({
       id: seed, category: 'race_report', round: r, priority: 90,
       headline: fill(pick([
@@ -878,7 +927,7 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
         'Victory for {winner_last} at the {circuit_wx}', '{winner_last} moves clear after the {circuit_wx}', '{winner_last} delivers at the {circuit_wx}',
         '{team} claim the {circuit_wx} through {winner_last}', '{winner} masters the {circuit_wx}',
       ], `${seed}|h`), slots),
-      dek: fill(pick([
+      dek: streakDek || fill(pick([
         '{winner} took victory at the {circuit}, with {p2} and {p3} completing the podium.',
         ...(hasMargin ? ['{winner} won the {circuit}, finishing {margin} clear of {p2}.'] : []),
         '{winner_last} delivered a controlled drive to win the {circuit} ahead of {p2} and {p3}.',
@@ -1473,6 +1522,7 @@ function championshipArc(ctx: NewsContext): NewsArticle[] {
       leader_last: lastName(leader), chaser_last: lastName(chaser),
       leader_poss: poss(lastName(leader)), chaser_poss: poss(lastName(chaser)),
       gap: e.gap, gap_pts: plural(e.gap, 'point'), gap_ago: e.gapAgo, rounds_ago: e.roundsAgo, change: Math.abs(e.change),
+      prev_state: e.gapAgo > 0 ? `led by ${e.gapAgo} ${plural(e.gapAgo, 'point')}` : e.gapAgo < 0 ? `trailed by ${-e.gapAgo} ${plural(-e.gapAgo, 'point')}` : 'been level',
       remaining: e.remaining, races_left: `${e.remaining} ${plural(e.remaining, 'race')}`, max_pts: e.maxPts,
       h2h, mom_leader: e.momLeader, mom_chaser: e.momChaser, chaser_wins: e.chaserWins, leader_dnfs: e.leaderDnfs,
     }
@@ -1505,6 +1555,7 @@ function constructorArc(ctx: NewsContext): NewsArticle[] {
     const slots = {
       year: ctx.year, round: e.round, leader, chaser,
       gap: e.gap, gap_pts: plural(e.gap, 'point'), gap_ago: e.gapAgo, rounds_ago: e.roundsAgo, change: Math.abs(e.change),
+      prev_state: e.gapAgo > 0 ? `led by ${e.gapAgo} ${plural(e.gapAgo, 'point')}` : e.gapAgo < 0 ? `trailed by ${-e.gapAgo} ${plural(-e.gapAgo, 'point')}` : 'been level',
       remaining: e.remaining, races_left: `${e.remaining} ${plural(e.remaining, 'race')}`, max_pts: e.maxPts,
       h2h, mom_leader: e.momLeader, mom_chaser: e.momChaser, chaser_wins: e.chaserWins, leader_dnfs: e.leaderDnfs,
     }
@@ -1513,11 +1564,33 @@ function constructorArc(ctx: NewsContext): NewsArticle[] {
       : e.kind
     const cc = c[angle]
     const seed = `cons-arc-${ctx.year}-${e.round}`
+    // Enrich the body (#88 follow-up): the gap alone is thin. Add who actually scored the window's points for
+    // each team, and the development race between them (upgrades brought + which car is quicker now).
+    const fromR = e.round - e.roundsAgo + 1
+    const contribs = (teamId: string): string[] => {
+      const m = new Map<string, number>()
+      for (let k = fromR; k <= e.round; k++) for (const res of ctx.raceResults[k - 1] ?? []) if (res.teamId === teamId) m.set(res.driverId, (m.get(res.driverId) ?? 0) + res.points)
+      return [...m.entries()].filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1]).map(([id, p]) => `${lastName(ctx.drivers.find((d) => d.id === id)?.name ?? id)} (${p})`)
+    }
+    const contribPhrase = (cs: string[]) => (cs.length === 0 ? 'neither car scoring' : cs.length === 1 ? cs[0] : `${cs[0]} and ${cs[1]}`)
+    const upgrades = (teamId: string) => (ctx.upgradeEvents ?? []).filter((u) => u.teamId === teamId && !u.failed && u.round >= fromR && u.round <= e.round)
+    const lUp = upgrades(e.leaderId), cUp = upgrades(e.chaserId)
+    const lDev = lUp.reduce((s, u) => s + u.paceDelta, 0), cDev = cUp.reduce((s, u) => s + u.paceDelta, 0)
+    const dev =
+      lUp.length === 0 && cUp.length === 0 ? 'Neither has brought an upgrade across the window'
+      : lUp.length > cUp.length ? `${leader} have out-developed ${chaser}, ${lUp.length} ${plural(lUp.length, 'upgrade')} to ${cUp.length}`
+      : cUp.length > lUp.length ? `${chaser} have out-developed ${leader}, ${cUp.length} ${plural(cUp.length, 'upgrade')} to ${lUp.length}`
+      : lDev > cDev + 0.3 ? `${poss(leader)} upgrades have brought the bigger step`
+      : cDev > lDev + 0.3 ? `${poss(chaser)} upgrades have brought the bigger step`
+      : 'Both have developed at a similar rate'
+    const lPace = ctx.teams.find((t) => t.id === e.leaderId)?.carPace ?? 0, cPace = ctx.teams.find((t) => t.id === e.chaserId)?.carPace ?? 0
+    const paceClause = Math.abs(lPace - cPace) < 1 ? 'the two cars are now closely matched on pace' : `${poss(lPace > cPace ? leader : chaser)} car is the quicker of the two`
+    const details = `Across the window, ${poss(chaser)} points came through ${contribPhrase(contribs(e.chaserId))}, ${poss(leader)} through ${contribPhrase(contribs(e.leaderId))}. ${dev}, and ${paceClause}.`
     return {
       id: seed, category: 'championship_state', round: e.round, priority: 74,
       headline: fill(pick(cc.h, `${seed}|h`), slots),
       dek: fill(pick(cc.d, `${seed}|d`), slots),
-      body: fill(pick(cc.b, `${seed}|b`), slots),
+      body: paras(fill(pick(cc.b, `${seed}|b`), slots), details),
     }
   })
 }
@@ -1837,7 +1910,7 @@ const LAUNCH_COPY: {
       intro: [
         'The cars that will contest race victories in {year} are no longer a secret. {n} {teams_word} with credible championship ambitions have unveiled their contenders, and the engineering statements on show are striking.',
         'Pre-season proper is underway as {n} front-running {teams_word} bring their {year} machines into the open. {lead} arrives with the loudest statement, but the rest of the group have not come to make up the numbers.',
-        '{lead} and {n} other {teams_word} with genuine title intentions have launched their {year} cars within days of one another, compressing the field\'s design philosophies into a single revealing week.',
+        '{lead} and {others} other {others_word} with genuine title intentions have launched their {year} cars within days of one another, compressing the field\'s design philosophies into a single revealing week.',
         'The {year} campaign takes shape as {n} {teams_word} at the front of the expected order pull the covers off. Every one of them has been built to win, and the technical differences between them are already a talking point.',
         'Scrutiny falls on {n} {teams_word} as the fastest expected cars of {year} make their public debut. {lead} may lead the conversation, but the entire group has arrived with something to say.',
       ],
@@ -1862,7 +1935,7 @@ const LAUNCH_COPY: {
       dek: [
         '{n} {teams_word} scrapping for points positions have launched their {year} cars, with {lead} setting the tone.',
         'The midfield is rarely decided at the launch, but {n} {teams_word}, {lead} among them, have given the first clues.',
-        '{lead} leads {n} midfield {teams_word} into the open, each convinced its winter work has found time in the middle of the pack.',
+        '{lead} heads a group of {n} midfield {teams_word} into the open, each convinced its winter work has found time in the middle of the pack.',
         '{n} {teams_word} built to compete for every point on offer in {year} have now shown what they are bringing to the fight.',
         'From {lead} to the back of the group, {n} midfield {teams_word} have launched cars that could easily swap positions by the season\'s end.',
       ],
@@ -1927,7 +2000,6 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   const c = seasonPreviewCopy
   const seed = `season-preview-${ctx.year}`
   const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
-  const teamOf = (id: string) => ctx.drivers.find((d) => d.id === id)?.teamId ?? ''
   const champion = cast.reigningChampion ? dn(cast.reigningChampion) : ''
   const topExpected = [...analysis.driverExpectations.values()].sort((a, b) => a.expectedRank - b.expectedRank)[0]?.driverId
   const topFavId = cast.titleFavourites[0] ?? topExpected
@@ -1938,17 +2010,85 @@ function seasonPreview(ctx: NewsContext): NewsArticle[] {
   const fav = dn((championIsTopFav ? challengerId : topFavId) ?? '')
   const slots = { year: ctx.year, fav, champion, constructor: cast.reigningConstructor ? teamName(ctx, cast.reigningConstructor) : '' }
 
+  // Data-driven cast facts: every descriptor below is a real career/market figure, so the copy tracks the
+  // world rather than asserting a hardcoded label. Missing data degrades to the plainest TRUE label.
+  const draftBy = new Map((ctx.draft ?? []).map((p) => [p.driverId, p]))
+  const facts = (id: string) => {
+    const d = ctx.drivers.find((x) => x.id === id)
+    const car = ctx.careers?.[id]
+    const team = teamName(ctx, d?.teamId ?? '')
+    const prev = draftBy.get(id)?.prevTeamName ?? ''
+    return {
+      name: d?.name ?? id, team,
+      titles: car?.titles ?? 0, wins: car?.wins ?? 0, starts: car?.starts ?? 0, seasons: car?.seasons ?? 0, age: d?.age ?? 0,
+      rookie: (car?.starts ?? 0) === 0,
+      veteran: (car?.seasons ?? 0) >= 4,
+      fromTeam: prev && prev !== team ? prev : '', // prior team from the Signing Day draft ('' = pool/rookie/stayer)
+    }
+  }
+  type Facts = ReturnType<typeof facts>
+  // Favourite / dark-horse name: car always, plus the strongest career mark (champion > race-winner).
+  const favTag = (f: Facts) => (f.titles >= 2 ? `, ${f.titles}-time champion` : f.titles === 1 ? ', former champion' : f.wins > 0 ? ', race-winner' : '')
+  const favName = (f: Facts) => `${f.name} (${f.team}${favTag(f)})`
+  // Veteran name: age (always real, the defining veteran fact) plus the headline achievement when one
+  // exists. Never cites starts/seasons — in an early save those are near-zero and read as misleading.
+  const vetTag = (f: Facts, ageSeen: boolean) => {
+    const ach = f.titles >= 1 ? `${f.titles}-time champion` : f.wins > 0 ? `${f.wins} career ${plural(f.wins, 'win')}` : ''
+    return `${ageSeen ? `also ${f.age}` : `age ${f.age}`}${ach ? `, ${ach}` : ''}`
+  }
+  // A veteran name list that collapses a repeated age to "also N", so two same-age veterans in one
+  // sentence don't both read "age 37".
+  const vetNames = (vs: typeof cast.veterans): string[] => {
+    const seen = new Set<number>()
+    return vs.map((v) => {
+      const f = facts(v.driverId)
+      const out = `${f.name} (${vetTag(f, seen.has(f.age))})`
+      seen.add(f.age)
+      return out
+    })
+  }
+  // New-team driver: strongest framing — champion, then where they were signed from, then veteran/rookie.
+  const ntPhrase = (f: Facts) =>
+    f.titles >= 2 ? `${f.titles}-time champion ${f.name}`
+    : f.titles === 1 ? `former champion ${f.name}`
+    : f.fromTeam ? `ex-${f.fromTeam} driver ${f.name}`
+    : f.veteran ? `veteran ${f.name}`
+    : f.wins > 0 ? `race-winner ${f.name}`
+    : f.starts > 0 ? `the experienced ${f.name}`
+    : `rookie ${f.name}`
+
   const sections: string[] = []
   if (champion) sections.push(fill(pick(c.reigning, `${seed}|reign`), slots))
-  if (cast.titleFavourites.length) sections.push(fill(pick(c.favourites, `${seed}|fav`), { ...slots, names: listJoin(cast.titleFavourites.map(dn)) }))
-  if (cast.darkHorses.length) sections.push(fill(pick(c.darkHorses, `${seed}|dh`), { ...slots, names: listJoin(cast.darkHorses.map((id) => `${dn(id)} (${teamName(ctx, teamOf(id))})`)) }))
+  if (cast.titleFavourites.length) sections.push(fill(pick(c.favourites, `${seed}|fav`), { ...slots, names: listJoin(cast.titleFavourites.map((id) => favName(facts(id)))) }))
+  if (cast.darkHorses.length) sections.push(fill(pick(c.darkHorses, `${seed}|dh`), { ...slots, names: listJoin(cast.darkHorses.map((id) => favName(facts(id)))) }))
   if (cast.bestOfRest.length) sections.push(fill(pick(c.bestOfRest, `${seed}|bor`), { ...slots, teams: listJoin(cast.bestOfRest.map((id) => teamName(ctx, id))) }))
-  const resurgent = cast.veterans.filter((v) => v.kind === 'resurgent').map((v) => dn(v.driverId))
-  const twilight = cast.veterans.filter((v) => v.kind === 'twilight').map((v) => dn(v.driverId))
+  const resurgent = vetNames(cast.veterans.filter((v) => v.kind === 'resurgent'))
+  const twilight = vetNames(cast.veterans.filter((v) => v.kind === 'twilight'))
   if (resurgent.length) sections.push(fill(pick(c.veteransResurgent, `${seed}|vr`), { ...slots, names: listJoin(resurgent) }))
   if (twilight.length) sections.push(fill(pick(c.veteransTwilight, `${seed}|vt`), { ...slots, names: listJoin(twilight) }))
   if (cast.rookies.length) sections.push(fill(pick(c.rookies, `${seed}|rk`), { ...slots, names: listJoin(cast.rookies.map(dn)) }))
-  if (cast.newTeams.length) sections.push(fill(pick(c.newTeams, `${seed}|nt`), { ...slots, teams: listJoin(cast.newTeams.map((id) => teamName(ctx, id))) }))
+  if (cast.newTeams.length) {
+    if (cast.newTeams.length >= ctx.teams.length) {
+      // Whole grid is new (first season of a save, no constructor history) — one line, not a bio per team.
+      sections.push(fill(pick(c.newTeams.allNew, `${seed}|nt-all`), slots))
+    } else {
+      const ntLine = (tid: string, i: number): string => {
+        const team = teamName(ctx, tid)
+        const ds = ctx.drivers.filter((d) => d.teamId === tid).map((d) => facts(d.id))
+        const anchors = ds.filter((f) => !f.rookie)
+        const rookies = ds.filter((f) => f.rookie)
+        const base = { ...slots, team }
+        if (anchors.length && rookies.length) return fill(pick(c.newTeams.anchorAndRookie, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)), rookies: listJoin(rookies.map(ntPhrase)) })
+        if (anchors.length) return fill(pick(c.newTeams.anchorLed, `${seed}|nt${i}`), { ...base, anchors: listJoin(anchors.map(ntPhrase)) })
+        return fill(pick(c.newTeams.allRookie, `${seed}|nt${i}`), { ...base, names: listJoin(ds.map((f) => f.name)) })
+      }
+      const shown = cast.newTeams.slice(0, 3)
+      let text = shown.map((tid, i) => ntLine(tid, i)).join(' ')
+      const extra = cast.newTeams.slice(3)
+      if (extra.length) text += ` ${listJoin(extra.map((id) => teamName(ctx, id)))} also join the grid for the first time.`
+      sections.push(text)
+    }
+  }
 
   const hArr = !champion ? c.headlineNoChamp : championIsTopFav ? c.headlineDefendingFav : c.headline
   const dArr = !champion ? c.dekNoChamp : championIsTopFav ? c.dekDefendingFav : c.dek
@@ -1971,7 +2111,7 @@ function preSeason(ctx: NewsContext): NewsArticle[] {
       const group = [...ctx.teams].filter((t) => tierKey(t) === tier).sort((a, b) => b.carPace - a.carPace)
       if (group.length === 0) continue
       const lseed = `launch-${lyear}-${tier}`
-      const lslots = { year: lyear, lead: group[0]?.name ?? '', n: group.length, teams_word: plural(group.length, 'team') }
+      const lslots = { year: lyear, lead: group[0]?.name ?? '', n: group.length, teams_word: plural(group.length, 'team'), others: group.length - 1, others_word: plural(group.length - 1, 'team') }
       const C = LAUNCH_COPY.tiers[tier]
       const usedLine = new Set<string>()
       const usedRef = new Set<string>()
@@ -2561,7 +2701,10 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   const N = ctx.calendar.length
   const checkpoints = [...new Set([Math.round(N / 3), Math.round((2 * N) / 3)])].filter((k) => k >= 3)
   const dn = (id: string) => ctx.drivers.find((d) => d.id === id)?.name ?? id
-  const c = expectationCheckCopy
+  const CARD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+  const numWord = (n: number) => CARD[n] ?? String(n)
+  const numTimes = (n: number) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${numWord(n)} times`)
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
   const out: NewsArticle[] = []
   for (const K of checkpoints) {
     if (K > ctx.completedRounds) continue
@@ -2572,25 +2715,80 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
     const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, delta: e.expectedRank - dRank.get(e.driverId)! }))
     const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
     const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
-    const cStand = constructorStandingsAfter(ctx, K)
-    const cRank = new Map(cStand.map((s, i) => [s.teamId, i + 1]))
-    const tDelta = [...analysis.teamExpectations.values()].filter((e) => cRank.has(e.teamId)).map((e) => ({ id: e.teamId, delta: e.expectedRank - cRank.get(e.teamId)! }))
-    const tOver = tDelta.filter((x) => x.delta >= 2).sort((a, b) => b.delta - a.delta)[0]?.id
-    const tUnder = tDelta.filter((x) => x.delta <= -2).sort((a, b) => a.delta - b.delta)[0]?.id
-    if (!dOver.length && !dUnder.length && !tOver && !tUnder) continue // nothing notable this checkpoint
-    const seed = `expectation-${ctx.year}-${K}`
-    const slots = { year: ctx.year, round: K }
-    const sections: string[] = []
-    if (dOver.length) sections.push(fill(pick(c.driversOver, `${seed}|do`), { ...slots, names: listJoin(dOver.map(dn)) }))
-    if (dUnder.length) sections.push(fill(pick(c.driversUnder, `${seed}|du`), { ...slots, names: listJoin(dUnder.map(dn)) }))
-    if (tOver) sections.push(fill(pick(c.teamsOver, `${seed}|to`), { ...slots, team: teamName(ctx, tOver) }))
-    if (tUnder) sections.push(fill(pick(c.teamsUnder, `${seed}|tu`), { ...slots, team: teamName(ctx, tUnder) }))
-    out.push({
-      id: seed, category: 'analysis_opinion', round: K, priority: 33,
-      headline: fill(pick(c.headline, `${seed}|h`), slots),
-      dek: fill(pick(c.dek, `${seed}|d`), slots),
-      body: paras(fill(pick(c.intro, `${seed}|intro`), slots), ...sections),
-    })
+    if (!dOver.length && !dUnder.length) continue // nothing notable this checkpoint
+
+    // Per-driver facts at this checkpoint: where the winter ranked them (the projection, now SHOWN, not
+    // implied) vs where they actually sit, plus the concrete reason — retirements, a scoring drought.
+    const statsFor = (id: string) => {
+      let dnfs = 0, lastScored = 0, best = 99, starts = 0
+      for (let rr = 0; rr < K; rr++) {
+        const res = (ctx.raceResults[rr] ?? []).find((x) => x.driverId === id)
+        if (!res) continue
+        starts++
+        if (res.dnf) dnfs++
+        if (res.finishPosition != null && res.finishPosition < best) best = res.finishPosition
+        if (res.points > 0) lastScored = rr + 1
+      }
+      return { dnfs, lastScored, best: best === 99 ? null : best, starts }
+    }
+    const info = (id: string) => {
+      const proj = analysis.driverExpectations.get(id)!.expectedRank
+      const pos = dRank.get(id)!
+      return { name: dn(id), last: lastName(dn(id)), pos, proj, delta: proj - pos, gender: ctx.drivers.find((d) => d.id === id)?.gender, ...statsFor(id) }
+    }
+    type Info = ReturnType<typeof info>
+    const overs = dOver.map(info)
+    const unders = dUnder.map(info)
+
+    const overSentence = (f: Info, i: number): string => {
+      const pr = pronouns(f.gender)
+      return [
+        `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
+        `${f.name}, projected ${ordinal(f.proj)} over the winter, has climbed to ${ordinal(f.pos)}.`,
+        `${f.name} has turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} on the road.`,
+      ][i % 3]
+    }
+    const reason = (f: Info, i: number): string => {
+      if (f.dnfs >= 2) return i % 2 ? `has ${numTimes(f.dnfs)} retirements already` : `has retired ${numTimes(f.dnfs)} in ${numWord(f.starts)} starts`
+      if (f.lastScored === 0) return 'has yet to trouble the scorers'
+      if (K - f.lastScored >= 2) return i % 2 ? `last scored back in round ${f.lastScored}` : `has not scored since round ${f.lastScored}`
+      if (f.dnfs === 1) return i % 2 ? 'has lost a finish to retirement' : 'has already retired once'
+      return ''
+    }
+    const underSentence = (f: Info, i: number): string => {
+      const projP = [`ranked ${ordinal(f.proj)} in the preseason`, `${ordinal(f.proj)} in the winter ratings`, `a projected ${ordinal(f.proj)}`][i % 3]
+      const posP = ['sits', 'has slid to', 'now runs'][i % 3]
+      const r = reason(f, i)
+      return r ? `${f.name}, ${projP}, ${r} and ${posP} ${ordinal(f.pos)}.` : `${f.name}, ${projP}, has slipped to ${ordinal(f.pos)}.`
+    }
+
+    // Next-round signpost from the real calendar gap.
+    const nextC = ctx.calendar[K]
+    const closer = nextC
+      ? `${ctx.year} resumes in ${numWord(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)))} ${plural(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)), 'week')} at the ${circuit(ctx, K + 1)}.`
+      : ''
+
+    const paragraphs: string[] = []
+    if (overs.length) paragraphs.push(`${cap(numWord(K))} rounds in, ${ctx.year} has already broken from the winter form guide. ${overs.map(overSentence).join(' ')}`)
+    if (unders.length) {
+      const lead = overs.length ? 'The bigger story is how far the fancied names have fallen.' : `${cap(numWord(K))} rounds in, the names the winter rated highly have gone backwards.`
+      paragraphs.push(`${lead} ${unders.map(underSentence).join(' ')}`)
+    }
+    if (closer) paragraphs.push(closer)
+
+    // Headline + dek lead with the actual movers, not a restatement of the premise.
+    const headline = overs.length && unders.length
+      ? `${overs[0].last} climbs and ${unders[0].last} slides ${numWord(K)} rounds into ${ctx.year}`
+      : overs.length
+      ? `${overs[0].last} runs ${ordinal(overs[0].pos)}, well above the winter call, after ${numWord(K)} rounds`
+      : `${unders[0].last} slides to ${ordinal(unders[0].pos)} ${numWord(K)} rounds into ${ctx.year}`
+    const dek = overs.length && unders.length
+      ? `${overs[0].name} has climbed to ${ordinal(overs[0].pos)} from a projected ${ordinal(overs[0].proj)}; ${unders[0].name} has gone the other way, ${ordinal(unders[0].proj)} down to ${ordinal(unders[0].pos)}.`
+      : overs.length
+      ? `${overs[0].name} leads the names running clear of the winter projection ${numWord(K)} rounds into ${ctx.year}.`
+      : `${unders[0].name} heads the names trailing the winter projection ${numWord(K)} rounds into ${ctx.year}.`
+
+    out.push({ id: `expectation-${ctx.year}-${K}`, category: 'analysis_opinion', round: K, priority: 33, headline, dek, body: paras(...paragraphs) })
   }
   return out
 }
