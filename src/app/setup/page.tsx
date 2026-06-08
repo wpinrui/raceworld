@@ -20,8 +20,8 @@ function slugify(s: string): string {
 const DRIVERS_PER_TEAM = 2
 
 export default function SetupPage() {
-  const router = useRouter()
   const seasonStore = useSeasonStore()
+  const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Editable copies of the grid, seeded from the persisted store. zustand-persist rehydrates the
@@ -221,12 +221,6 @@ export default function SetupPage() {
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
               <Download size={13} /> Export JSON
             </button>
-            {isActive && (
-              <button onClick={() => router.push('/race')}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] transition-colors">
-                Back to Race <ChevronRight size={14} />
-              </button>
-            )}
           </div>
         </div>
 
