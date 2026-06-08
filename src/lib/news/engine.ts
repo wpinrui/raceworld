@@ -1643,12 +1643,26 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   if (constructorChampion) {
     const consTitle = analysis.constructorTitle
     const consRunnerUp = consTitle.series[consTitle.series.length - 1]?.secondId ?? null
-    // Team totals (by teamId, so a mid-season driver swap still counts) for the champion and the team it beat.
-    let consWins = 0, consPoints = 0, consRunnerUpPoints = 0
+    const otherTeamId = cs.otherId ?? null // the wins-leader (WinsVsPoints) or the title rival (LeadTradedLate)
+    // One pass over results: every team's points + wins, then the final constructors' order.
+    const teamAgg = new Map<string, { points: number; wins: number }>()
+    for (const tm of ctx.teams) teamAgg.set(tm.id, { points: 0, wins: 0 })
     for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) {
-      if (cc.teamId === constructorChampion) { consPoints += cc.points; if (cc.finishPosition === 1) consWins++ }
-      else if (consRunnerUp && cc.teamId === consRunnerUp) consRunnerUpPoints += cc.points
+      const a = teamAgg.get(cc.teamId)
+      if (a) { a.points += cc.points; if (cc.finishPosition === 1) a.wins++ }
     }
+    const teamOrder = [...teamAgg.entries()].map(([id, v]) => ({ id, ...v })).sort((a, b) => b.points - a.points)
+    const aggOf = (id: string | null) => (id ? teamAgg.get(id) ?? { points: 0, wins: 0 } : { points: 0, wins: 0 })
+    const consWins = aggOf(constructorChampion).wins
+    const consPoints = aggOf(constructorChampion).points
+    const consRunnerUpPoints = aggOf(consRunnerUp).points
+    const consOtherWins = aggOf(otherTeamId).wins
+    const consOtherPoints = aggOf(otherTeamId).points
+    const otherPos = otherTeamId ? teamOrder.findIndex((x) => x.id === otherTeamId) + 1 : 0
+    // The wins-leader's placing clause, used only when they were NOT the points runner-up (fast but unreliable).
+    const consOtherExtra = otherTeamId && consRunnerUp && otherTeamId !== consRunnerUp
+      ? ` ${tn(otherTeamId)} ended up ${ordinal(otherPos)} with ${consOtherPoints} ${plural(consOtherPoints, 'point')}.`
+      : ''
     // Champion team's seats by season points (lead seat first) for the one-car-carried framing.
     const seatRows = ctx.drivers.filter((d) => d.teamId === constructorChampion).map((d) => {
       let points = 0, wins = 0, podiums = 0
@@ -1666,7 +1680,11 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
     const consBeat = consTitle.currentGap <= cMax ? 'edged out' : consTitle.currentGap <= cMax * 3 ? 'saw off' : 'comfortably beat'
     const consSlots = {
       ...slots,
-      cons_other: cs.otherId ? tn(cs.otherId) : '',
+      cons_other: otherTeamId ? tn(otherTeamId) : '',
+      cons_other_wins: consOtherWins, cons_other_points: consOtherPoints,
+      cons_other_position: otherPos ? ordinal(otherPos) : '', cons_other_extra: consOtherExtra,
+      cons_wins_gap: Math.max(0, consOtherWins - consWins),
+      champ_driver1: lead ? lead.name : '', champ_driver2: other ? other.name : '',
       carried_driver: lead ? lead.name : '', carried_driver_last: lead ? lastName(lead.name) : '',
       carried_driver_points: lead?.points ?? 0,
       carried_driver_wins: lead?.wins ?? 0, carried_driver_wins_str: `${lead?.wins ?? 0} ${plural(lead?.wins ?? 0, 'win')}`,

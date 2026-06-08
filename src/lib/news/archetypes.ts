@@ -464,8 +464,9 @@ export function constructorShape(ctx: NewsContext, analysis: SeasonAnalysis): Co
   if (split.length >= 2 && topShare >= 0.65) {
     return { shape: 'OneCarCarried', championId: champ, carriedDriverId: split[0]?.id, driversSealedEarly }
   }
-  // Wins on one team, the title on another (banked consistency beat raw speed).
-  if (winsLeader && winsLeader.id !== champ && winsLeader.wins >= 2) {
+  // Wins on one team, the title on another (banked consistency beat raw speed). Only when the wins gap is a
+  // genuine 3+ — a one-win edge isn't a "fastest car lost the title" story.
+  if (winsLeader && winsLeader.id !== champ && winsLeader.wins - champRow.wins >= 3) {
     return { shape: 'WinsVsPoints', championId: champ, otherId: winsLeader.id, driversSealedEarly }
   }
   // Lead traded all year, settled late.
