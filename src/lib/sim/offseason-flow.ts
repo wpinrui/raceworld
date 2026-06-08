@@ -22,7 +22,7 @@ async function archiveAndRollover(): Promise<void> {
     ])
     const articles = generateNews(buildLiveNewsContext({
       year: s.year, saveSeed: s.saveSeed, phase: s.phase, raceResults: s.raceResults, drivers: s.drivers, teams: s.teams,
-      allUpgradeEvents: s.allUpgradeEvents, devPlans: s.devPlans, constructorHistory: s.constructorHistory,
+      allUpgradeEvents: s.allUpgradeEvents, devPlans: s.devPlans, preSeasonTest: s.preSeasonTest, constructorHistory: s.constructorHistory,
       endOfSeasonSummary: s.endOfSeasonSummary, approvedSeasonChanges: s.approvedSeasonChanges,
       seasonContractWatch: s.seasonContractWatch, seasonRenewals: s.seasonRenewals, seasonDraft: s.seasonDraft, signingDayRevealed: s.signingDayRevealed,
       priorSeasonDriverMediaScores: s.priorSeasonDriverMediaScores, carPaceHistory: s.carPaceHistory,

@@ -21,7 +21,7 @@
 //                       end-of-season teammate-battle verdicts. (The old single-per-round opinion column was removed.)
 
 import type {
-  Driver, Team, RaceResult, DevUpgradeEvent, TeamDevPlan,
+  Driver, Team, RaceResult, DevUpgradeEvent, TeamDevPlan, PreSeasonTest,
   EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord, RaceWeather,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
@@ -76,6 +76,7 @@ export interface NewsContext {
   upgradeEvents: DevUpgradeEvent[]
   devPlans?: TeamDevPlan[]         // pending dev plans (next upgrade round + pre-rolled outcome), for the
                                    // forward-looking upgrade beat in the preview. Live only — absent on archives.
+  preSeasonTest?: PreSeasonTest | null // this season's pre-season test result, for the dated testing recap (#126). Live only.
   constructorHistory: ConstructorSeasonRecord[]   // prior-season records (for silly-season team media)
   endOfSeason: EndOfSeasonSummary | null
   calendar: Circuit[]
@@ -2372,6 +2373,39 @@ const LAUNCH_COPY: {
 // expectation model (season-analysis), replacing the old pace-only preview blurb. Forward-looking, round 0.
 // Copy is Sonnet-authored (season-preview-copy.json); this only resolves the cast to name slots and assembles
 // the non-empty sections. The reigning champion's stature is always credited; every new team is named.
+// Pre-season testing recap (#126): a dated read on the test running order so the test board is
+// revisitable as news. Lap times are observable but true pace is hidden by fuel/tyre choices, so the
+// copy stays cautious. Drops at the testing stop (opener - 10) and persists through the season's feed.
+function preSeasonTesting(ctx: NewsContext): NewsArticle[] {
+  if (!ctx.live || !ctx.preSeasonTest) return []
+  const e = ctx.preSeasonTest.entries
+  if (e.length < 2) return []
+  const top = e[0]; const second = e[1]
+  const gap = Math.max(0, second.lapTime - top.lapTime).toFixed(3)
+  const seed = `pretest-${ctx.year}`
+  const slots = { year: ctx.year, circuit: ctx.preSeasonTest.circuitName, top: top.driverName, top_last: lastName(top.driverName), top_team: top.teamName, second: second.driverName, gap }
+  const headline = fill(pick([
+    '{top_last} sets the pace in {year} testing',
+    '{top_team} top the {year} testing times',
+    '{top_last} fastest as {year} testing wraps',
+  ], `${seed}|h`), slots)
+  const dek = fill(pick([
+    '{top} ended pre-season testing quickest at the {circuit}, though the timesheets only ever tell half the story.',
+    '{top_team} led the way at the {circuit}, with the real order still hidden behind fuel and tyres.',
+  ], `${seed}|d`), slots)
+  const body = paras(
+    fill(pick([
+      '{top} ended {year} pre-season testing on top at the {circuit}, {gap}s clear of {second}.',
+      'It was {top} quickest when testing closed at the {circuit}, {gap}s ahead of {second}.',
+    ], `${seed}|b1`), slots),
+    pick([
+      'Testing times come with the usual health warning: nobody declares their fuel load or tyre choice, so a headline lap can flatter as easily as it impresses. The honest picture arrives at the first race.',
+      'Read it with caution. With fuel and tyre runs nobody else can verify, the order on the timing screens is as much about programmes as outright pace. The opener settles it.',
+    ], `${seed}|b2`),
+  )
+  return [{ id: seed, category: 'feature', round: 1, dayOffset: -10, priority: 72, headline, dek, body }]
+}
+
 function seasonPreview(ctx: NewsContext): NewsArticle[] {
   if (!ctx.live || ctx.teams.length === 0 || ctx.completedRounds > 0) return []
   const analysis = buildSeasonAnalysis(ctx)
@@ -3861,6 +3895,7 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...seasonPreview(ctx),
+    ...preSeasonTesting(ctx),
     ...preSeason(ctx),
     ...raceReports(ctx),
     ...milestones(ctx),
