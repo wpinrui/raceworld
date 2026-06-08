@@ -178,7 +178,16 @@
     "Just as {runner_up_last} was reeling {champion_last} in, a DNF at the {dnf_gp} ended the comeback, the title bid undone by {runner_up_last}'s own car.",
     "{runner_up_last} had been closing on {champion_last}, the gap down to {final_gap}, before a retirement at the {dnf_gp} ended the title fight the hard way."
   ],
-  "runnerUpAliveToFlag": ["PLACEHOLDER {runner_up_last} kept the title alive to the final round."],
+  "runnerUpAliveToFlag": [
+    "{runner_up_last} went into the final round {gap_before_final} points behind {champion_last}, needing things to fall their way, but {champion_last} finished {champion_final_pos} at the {final_race_gp} to settle it, {runner_up_last} back in {runner_up_final_pos}.",
+    "The title was still alive at the {final_race_gp}, {runner_up_last} {gap_before_final} points adrift, but {champion_last} finished {champion_final_pos} to take it by {final_gap}, {runner_up_last} {runner_up_final_pos} on the day.",
+    "{runner_up_last} carried the fight to the {final_race_gp} {gap_before_final} points behind, but could only finish {runner_up_final_pos} while {champion_last} finished {champion_final_pos} to clinch the championship by {final_gap}."
+  ],
+  "runnerUpLedIntoFinale": [
+    "{runner_up_last} led the championship going into the final round, but {champion_last} finished {champion_final_pos} at the {final_race_gp} to snatch the title by {final_gap}, {runner_up_last} {runner_up_final_pos}.",
+    "The title was {runner_up_last}'s to lose heading to the {final_race_gp} with a {led_by}-point lead, but {champion_last} finished {champion_final_pos} to take it at the last, {runner_up_last} only {runner_up_final_pos}.",
+    "{runner_up_last} carried a {led_by}-point lead into the final round but surrendered it at the flag, {champion_last} finishing {champion_final_pos} to {runner_up_last}'s {runner_up_final_pos} and the title by {final_gap}."
+  ],
   "teamArcFlop": ["PLACEHOLDER {team} fell well short of preseason expectations."],
   "teamArcDevSurge": ["PLACEHOLDER {team} developed from the back of the grid to the front over the season."],
   "teamArcDevDecline": ["PLACEHOLDER {team} started near the front and faded as the year went on."],

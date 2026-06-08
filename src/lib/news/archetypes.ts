@@ -552,7 +552,7 @@ export function teamArcs(ctx: NewsContext, analysis: SeasonAnalysis): TeamArcMat
 // The runner-up's story (#88): the title's losing side, which the champion-centric shape can't tell — a
 // valiant late comeback that fell short, a charge ended by the chaser's own retirement, or a fight kept
 // alive to the final round that needed a leader DNF that never came. Returns the single defining one.
-export type RunnerUpKey = 'valiant' | 'lateChargeOwnDnf' | 'aliveToFlag'
+export type RunnerUpKey = 'valiant' | 'lateChargeOwnDnf' | 'ledIntoFinale' | 'aliveToFlag'
 export interface RunnerUpResult {
   driverId: string
   key: RunnerUpKey
@@ -560,6 +560,7 @@ export interface RunnerUpResult {
   finalGap: number
   lateWins: number // runner-up wins in the trailing window
   dnfRound?: number // lateChargeOwnDnf: the round of the charge-ending retirement
+  gapBeforeFinal?: number // champion minus runner-up points going into the final round (signed; <0 = runner-up led)
 }
 
 export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerUpResult | null {
@@ -580,10 +581,13 @@ export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerU
   let dnfRound = 0
   for (let r = Math.max(1, N - 2); r <= N; r++) if ((ctx.raceResults[r - 1] ?? []).find((x) => x.driverId === ru)?.dnf) dnfRound = r
   const closingLate = finalGap < champPts(Math.max(1, N - w)) - ruPts(Math.max(1, N - w))
-  const aliveBeforeFinal = N >= 2 && champPts(N - 1) - ruPts(N - 1) <= maxPer
+  const gapBeforeFinal = N >= 2 ? champPts(N - 1) - ruPts(N - 1) : finalGap // champ - ru going into the final round
 
   if (closingLate && dnfRound) return { driverId: ru, key: 'lateChargeOwnDnf', peakDeficit, finalGap, lateWins, dnfRound }
   if (peakDeficit >= 30 && finalGap <= 12 && lateWins >= 2) return { driverId: ru, key: 'valiant', peakDeficit, finalGap, lateWins }
-  if (aliveBeforeFinal) return { driverId: ru, key: 'aliveToFlag', peakDeficit, finalGap, lateWins }
+  // The runner-up actually LED going into the final round but lost it at the last (the title flipped at the flag).
+  if (gapBeforeFinal < 0) return { driverId: ru, key: 'ledIntoFinale', peakDeficit, finalGap, lateWins, gapBeforeFinal }
+  // Still mathematically alive but BEHIND going into the final round; the champion held on.
+  if (gapBeforeFinal >= 0 && gapBeforeFinal <= maxPer) return { driverId: ru, key: 'aliveToFlag', peakDeficit, finalGap, lateWins, gapBeforeFinal }
   return null
 }

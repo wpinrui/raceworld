@@ -1678,7 +1678,25 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   if (mod) champSection = `${champSection} ${fill(mod, slots)}`
   const sections: string[] = [champSection]
   // The runner-up's side of the title fight (#88).
-  if (ruArc) sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), { ...slots, peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins, dnf_gp: ruArc.dnfRound ? circuit(ctx, ruArc.dnfRound) : '' }))
+  if (ruArc) {
+    const fN = analysis.completedRounds
+    const finalRes = ctx.raceResults[fN - 1] ?? []
+    const finalWinner = finalRes.find((x) => x.finishPosition === 1)
+    const finalOrd = (id: string | null) => {
+      const r = id ? finalRes.find((x) => x.driverId === id) : undefined
+      return r ? (r.dnf || r.finishPosition == null ? 'down the order' : ordinal(r.finishPosition)) : ''
+    }
+    const gbf = ruArc.gapBeforeFinal ?? ruArc.finalGap
+    sections.push(fill(pick(c[`runnerUp${cap(ruArc.key)}`], `${seed}|ru`), {
+      ...slots,
+      peak_deficit: ruArc.peakDeficit, final_gap: ruArc.finalGap, late_wins: ruArc.lateWins,
+      dnf_gp: ruArc.dnfRound ? circuit(ctx, ruArc.dnfRound) : '',
+      gap_before_final: Math.max(0, gbf), led_by: Math.max(0, -gbf),
+      final_race_gp: circuit(ctx, fN),
+      final_winner_last: finalWinner ? lastName(ctx.drivers.find((d) => d.id === finalWinner.driverId)?.name ?? '') : '',
+      champion_final_pos: finalOrd(champion), runner_up_final_pos: finalOrd(runnerUp),
+    }))
+  }
   // Constructors' title shape + the drivers-sealed-early modifier (#88).
   if (constructorChampion) {
     const consTitle = analysis.constructorTitle
