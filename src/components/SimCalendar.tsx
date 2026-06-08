@@ -76,7 +76,7 @@ export function SimCalendar({ open, articles }: { open: boolean; articles: NewsA
         }`}
       >
         {/* Keyed by the day so each new day re-runs the slide-in animation. */}
-        <div key={currentDate} className="flex w-full divide-x divide-[#2A3142]" style={{ animation: 'simcal-day-in 280ms ease-out' }}>
+        <div key={currentDate} className="flex w-full divide-x divide-[#2A3142]" style={{ animation: 'simcal-day-in 320ms ease-out' }}>
           {days.map((day) => (
             <div
               key={day.iso}

@@ -91,6 +91,6 @@ button:disabled {
 
 /* FM-style sim calendar: each new day slides the strip in from the right. */
 @keyframes simcal-day-in {
-  from { transform: translateX(7%); opacity: 0.35; }
+  from { transform: translateX(3rem); opacity: 0.15; }
   to { transform: translateX(0); opacity: 1; }
 }
