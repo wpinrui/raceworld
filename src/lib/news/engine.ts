@@ -1636,8 +1636,12 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   const cs = constructorShape(ctx, analysis)
   const ruArc = runnerUpArc(ctx, analysis)
   const arc = teamArcs(ctx, analysis)[0] ?? null
-  const teamOver = analysis.teamDeltas.find((d) => d.delta > 0 && d.id !== constructorChampion)?.id
-  const teamUnder = analysis.teamDeltas.find((d) => d.delta < 0)?.id
+  const teamHalf = Math.ceil(ctx.teams.length / 2)
+  const teamPointsOf = (id: string) => { let p = 0; for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === id) p += cc.points; return p }
+  // Only a real over/under-performance: a 2+ place swing, and (over) the team actually scored, or (under) it
+  // was fancied with somewhere to fall. A 0-point backmarker creeping up one place is not a story.
+  const teamOver = analysis.teamDeltas.find((d) => d.delta >= 2 && d.id !== constructorChampion && teamPointsOf(d.id) > 0)?.id
+  const teamUnder = analysis.teamDeltas.find((d) => d.delta <= -2 && d.expectedRank <= teamHalf)?.id
   const c = seasonReviewCopy as Record<string, string[]>
   const seed = `season-review-${ctx.year}`
   const cap = (k: string) => k[0].toUpperCase() + k.slice(1)
@@ -1832,9 +1836,7 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
   // and points. Skipped when it is the same team the standout team-arc already covered (no double-mention).
   const teamStat = (id: string) => {
     const d = analysis.teamDeltas.find((x) => x.id === id)
-    let pts = 0
-    for (let r = 1; r <= analysis.completedRounds; r++) for (const cc of ctx.raceResults[r - 1] ?? []) if (cc.teamId === id) pts += cc.points
-    return { ...slots, team: tn(id), team_expected_pos: d ? ordinal(d.expectedRank) : '', team_final_pos: d ? ordinal(d.actualRank) : '', team_points: pts }
+    return { ...slots, team: tn(id), team_expected_pos: d ? ordinal(d.expectedRank) : '', team_final_pos: d ? ordinal(d.actualRank) : '', team_points: teamPointsOf(id) }
   }
   if (teamOver && teamOver !== arc?.teamId) sections.push(fill(pick(c.teamOver, `${seed}|tover`), teamStat(teamOver)))
   if (teamUnder && teamUnder !== arc?.teamId) sections.push(fill(pick(c.teamUnder, `${seed}|tunder`), teamStat(teamUnder)))
@@ -2920,9 +2922,12 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
     const dRank = new Map(dStand.map((s, i) => [s.driverId, i + 1]))
     // Only judge drivers who have actually raced by K — a seated mid-season joiner absent from the
     // standings isn't "under-performing", they simply weren't on the grid yet.
-    const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, delta: e.expectedRank - dRank.get(e.driverId)! }))
-    const dOver = dDelta.filter((x) => x.delta >= 3).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
-    const dUnder = dDelta.filter((x) => x.delta <= -3).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
+    const half = Math.ceil(dStand.length / 2)
+    const dDelta = [...analysis.driverExpectations.values()].filter((e) => dRank.has(e.driverId)).map((e) => ({ id: e.driverId, proj: e.expectedRank, pos: dRank.get(e.driverId)!, delta: e.expectedRank - dRank.get(e.driverId)! }))
+    // Over-performers must end up somewhere that matters (top half), not a backmarker creeping up the order;
+    // under-performers must have been fancied (projected top half) — otherwise there was nothing to fall from.
+    const dOver = dDelta.filter((x) => x.delta >= 3 && x.pos <= half).sort((a, b) => b.delta - a.delta).slice(0, 3).map((x) => x.id)
+    const dUnder = dDelta.filter((x) => x.delta <= -3 && x.proj <= half).sort((a, b) => a.delta - b.delta).slice(0, 3).map((x) => x.id)
     if (!dOver.length && !dUnder.length) continue // nothing notable this checkpoint
 
     // Per-driver facts at this checkpoint: where the winter ranked them (the projection, now SHOWN, not
@@ -2951,11 +2956,11 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
     const overSentence = (f: Info, i: number): string => {
       const pr = pronouns(f.gender)
       return (isEnd ? [
-        `${f.name} finished ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
+        `${f.name} finished ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where ${pr.they} was projected.`,
         `${f.name}, projected ${ordinal(f.proj)} over the winter, climbed to ${ordinal(f.pos)}.`,
         `${f.name} turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} by the flag.`,
       ] : [
-        `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where the winter ranked ${pr.them}.`,
+        `${f.name} sits ${ordinal(f.pos)}, ${numWord(f.delta)} ${plural(f.delta, 'place')} above where ${pr.they} was projected.`,
         `${f.name}, projected ${ordinal(f.proj)} over the winter, has climbed to ${ordinal(f.pos)}.`,
         `${f.name} has turned a preseason ${ordinal(f.proj)} into ${ordinal(f.pos)} on the road.`,
       ])[i % 3]
@@ -2977,18 +2982,34 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
     // Next-round signpost from the real calendar gap.
     const nextC = ctx.calendar[K]
     const closer = nextC
-      ? `${ctx.year} resumes in ${numWord(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)))} ${plural(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)), 'week')} at the ${circuit(ctx, K + 1)}.`
+      ? `The season resumes in ${numWord(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)))} ${plural(Math.max(1, Math.round(daysBetween(raceDate(ctx.year, ctx.calendar[K - 1]), raceDate(ctx.year, nextC)) / 7)), 'week')} at the ${circuit(ctx, K + 1)}.`
       : ''
 
+    const eseed = `expect-${ctx.year}-${K}`
     const paragraphs: string[] = []
     if (overs.length) {
-      const intro = isEnd ? `Across ${ctx.year}, the final order broke from the winter form guide.` : `${cap(numWord(K))} rounds in, ${ctx.year} has already broken from the winter form guide.`
+      const intro = isEnd
+        ? pick([
+            `By the end of ${ctx.year}, the order had pulled clear of the winter form guide.`,
+            `The ${ctx.year} season finished a long way from the winter projections.`,
+            `Several names ended ${ctx.year} clear of their winter ranking.`,
+          ], `${eseed}|oi`)
+        : pick([
+            `${cap(numWord(K))} rounds in, the season has already pulled away from the winter form guide.`,
+            `${cap(numWord(K))} rounds into the season, the winter projections are already being torn up.`,
+            `The opening ${numWord(K)} rounds have already diverged from the winter projections.`,
+            `${cap(numWord(K))} rounds in, several names are running clear of their winter ranking.`,
+          ], `${eseed}|oi`)
       paragraphs.push(`${intro} ${overs.map(overSentence).join(' ')}`)
     }
     if (unders.length) {
       const lead = overs.length
-        ? (isEnd ? 'The bigger story was how far the fancied names fell.' : 'The bigger story is how far the fancied names have fallen.')
-        : (isEnd ? `In ${ctx.year}, the names the winter rated highly went backwards.` : `${cap(numWord(K))} rounds in, the names the winter rated highly have gone backwards.`)
+        ? pick(isEnd
+            ? ['The bigger story was how far the fancied names fell.', 'More striking was how far the fancied names dropped.']
+            : ['The bigger story is how far the fancied names have fallen.', 'More striking is how far the fancied names have slid.'], `${eseed}|ul`)
+        : pick(isEnd
+            ? [`Across ${ctx.year}, the fancied names went backwards.`, `The names rated highly over the winter went the other way in ${ctx.year}.`]
+            : [`${cap(numWord(K))} rounds in, the fancied names have gone backwards.`, `${cap(numWord(K))} rounds in, the names rated highly over the winter have slid down the order.`], `${eseed}|ul`)
       paragraphs.push(`${lead} ${unders.map(underSentence).join(' ')}`)
     }
     if (closer) paragraphs.push(closer)
