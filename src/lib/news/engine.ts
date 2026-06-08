@@ -3477,14 +3477,17 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...renewalsFeature(ctx),
     ...offSeasonFeature(ctx),
   ]
-  // de-dupe by id, then newest round first, higher priority first
+  // de-dupe by id, then order the feed STRICTLY BY DATE (newest first), with priority as the within-day
+  // tiebreak (#116). Round+priority put a same-round preview (which drops pre-race) above the race report
+  // and technical pieces that actually follow it in time; date order fixes that.
   const seen = new Set<string>()
   const deduped = all.filter((a) => (seen.has(a.id) ? false : (seen.add(a.id), true)))
-  deduped.sort((a, b) => (b.round - a.round) || (b.priority - a.priority) || a.id.localeCompare(b.id))
-  // Stamp each surviving article with the date it drops and the entities it mentions (for the
-  // FM-style Continue loop's date-spread + name-follow interruption, and consistent hyperlinking).
+  const dated = deduped.map((a) => ({ ...a, date: articleDate(ctx, a) }))
+  dated.sort((a, b) => b.date.localeCompare(a.date) || (b.priority - a.priority) || a.id.localeCompare(b.id))
+  // Tag the surviving stories with the entities they mention (for the Continue loop's name-follow
+  // interruption and consistent hyperlinking).
   const matcher = buildEntityMatcher(ctx)
-  return deduped.slice(0, 400).map((a) => ({ ...a, date: articleDate(ctx, a), entities: entitiesFor(ctx, a, matcher) }))
+  return dated.slice(0, 400).map((a) => ({ ...a, entities: entitiesFor(ctx, a, matcher) }))
 }
 
 // Small helper so the page can label each card by category without importing the list.
