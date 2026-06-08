@@ -155,7 +155,7 @@ export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): Tea
     const hiPts = Math.max(sa.points, sb.points)
     const loPts = Math.min(sa.points, sb.points)
     // Dominant: ~2:1 or better on equal equipment (guard the loPts==0 case via a points floor).
-    if (hiPts >= 30 && hiPts >= loPts * 1.8 + 1) {
+    if (hiPts >= 1.2 * driverMaxPerRace(ctx.year) && hiPts >= loPts * 1.8 + 1) {
       out.push({ teamId: t.id, winnerId: hi.id, loserId: lo.id, key: 'dominant', strength: hiPts - loPts })
     }
     // Underdeliver: the more-fancied driver (better preseason expectation) finished behind the team-mate.
@@ -165,7 +165,7 @@ export function teammateBattles(ctx: NewsContext, analysis: SeasonAnalysis): Tea
     const other = fancied === a ? b : a
     const fancPts = fancied === a ? sa.points : sb.points
     const otherPts = other === a ? sa.points : sb.points
-    if (Math.abs(expA - expB) >= 2 && otherPts > fancPts * 1.15 && otherPts >= 20) {
+    if (Math.abs(expA - expB) >= 2 && otherPts > fancPts * 1.15 && otherPts >= 0.8 * driverMaxPerRace(ctx.year)) {
       out.push({ teamId: t.id, winnerId: other.id, loserId: fancied.id, key: 'underdeliver', strength: otherPts - fancPts })
     }
   }
@@ -209,7 +209,7 @@ export function crossTeamDuels(ctx: NewsContext, analysis: SeasonAnalysis): Cros
     const b = rows[i + 1]
     if (a.teamId === b.teamId) continue // must be a CROSS-team duel
     const gap = a.points - b.points
-    if (gap > 15) continue // close on points
+    if (gap > 0.6 * driverMaxPerRace(ctx.year)) continue // close on points (scales with the era's points system)
     const [h2hA, h2hB] = raceH2H(ctx, a.id, b.id, N)
     const total = h2hA + h2hB
     if (total < 4) continue // enough wheel-to-wheel meetings
@@ -249,11 +249,11 @@ function championModifiers(ctx: NewsContext, analysis: SeasonAnalysis): { teamma
   const champTeam = ctx.drivers.find((d) => d.id === champ)?.teamId
   const ruTeam = ru ? ctx.drivers.find((d) => d.id === ru)?.teamId : null
   const teammatePair = !!champTeam && champTeam !== '' && champTeam === ruTeam
-  // Held a 60+ point lead that shrank to single digits but still held on (a near-collapse, not a collapse).
-  // (Absolute points for now; era-scaling by driverMaxPerRace is a deferred follow-up.)
+  // Held a big lead (~60 in the modern era) that shrank to single digits but still held on (near-collapse).
   let champPeak = 0
   for (const g of t.series) if (g.leaderId === champ && g.gap > champPeak) champPeak = g.gap
-  const lateWobble = champPeak >= 60 && t.currentGap > 0 && t.currentGap < 10
+  const maxPer = driverMaxPerRace(ctx.year) // scale 60/10 by the era's points-per-win (preserves modern values)
+  const lateWobble = champPeak >= 2.4 * maxPer && t.currentGap > 0 && t.currentGap < 0.4 * maxPer
   // Wet-aided title: the champion outscored the runner-up by 1.5x+ in WET races while being outscored in the
   // DRY — wet-weather skill made the title difference, not just "some wins came in the rain".
   let champWet = 0, champDry = 0, ruWet = 0, ruDry = 0
@@ -364,7 +364,7 @@ export function bestOfRestBattle(ctx: NewsContext, analysis: SeasonAnalysis): Be
   const actualRank = front.size + 1 // the best-of-the-rest sits just behind the front tier
   const expRank = analysis.teamExpectations.get(bor.id)?.expectedRank ?? actualRank
   const surge = expRank - actualRank >= 3 // projected well down preseason, finished best-of-the-rest
-  const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= 25 ? 'compressed' : 'clear'
+  const kind: BestOfRestKind = surge ? 'surge' : bandSpread <= driverMaxPerRace(ctx.year) ? 'compressed' : 'clear'
   return { winnerId: bor.id, runnerUpId: runnerUp.id, gap, kind }
 }
 
@@ -535,7 +535,7 @@ export function teamArcs(ctx: NewsContext, analysis: SeasonAnalysis): TeamArcMat
     const split = teamDriverSplit(ctx, t.id, N)
     if (split.length >= 2) {
       const tot = split.reduce((s, d) => s + d.points, 0)
-      if (tot >= 20 && split[1].points <= Math.max(2, tot * 0.08)) {
+      if (tot >= 0.8 * driverMaxPerRace(ctx.year) && split[1].points <= Math.max(2, tot * 0.08)) {
         out.push({ teamId: t.id, key: 'deadSeat', strength: split[0].points - split[1].points, driverId: split[0].id, otherId: split[1].id })
       }
     }
@@ -586,7 +586,7 @@ export function runnerUpArc(ctx: NewsContext, analysis: SeasonAnalysis): RunnerU
   const gapBeforeFinal = N >= 2 ? champPts(N - 1) - ruPts(N - 1) : finalGap // champ - ru going into the final round
 
   if (closingLate && dnfRound) return { driverId: ru, key: 'lateChargeOwnDnf', peakDeficit, finalGap, lateWins, dnfRound }
-  if (peakDeficit >= 30 && finalGap <= 12 && lateWins >= 2) return { driverId: ru, key: 'valiant', peakDeficit, finalGap, lateWins }
+  if (peakDeficit >= 1.2 * maxPer && finalGap <= 0.5 * maxPer && lateWins >= 2) return { driverId: ru, key: 'valiant', peakDeficit, finalGap, lateWins }
   // The runner-up actually LED going into the final round but lost it at the last (the title flipped at the flag).
   if (gapBeforeFinal < 0) return { driverId: ru, key: 'ledIntoFinale', peakDeficit, finalGap, lateWins, gapBeforeFinal }
   // Still mathematically alive but BEHIND going into the final round; the champion held on.
