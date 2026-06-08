@@ -24,7 +24,7 @@ export function DriverHover({
   const c = card(id)
   if (!c) return <>{children}</>
   return (
-    <DriverTooltip driver={c.driver} year={c.year} wdcPosition={c.wdcPosition} wdcPoints={c.wdcPoints} career={c.career} side={side}>
+    <DriverTooltip driver={c.driver} year={c.year} wdcPosition={c.wdcPosition} wdcPoints={c.wdcPoints} career={c.career} teamName={c.teamName} teamColor={c.teamColor} side={side}>
       <span className={className}>{children}</span>
     </DriverTooltip>
   )
