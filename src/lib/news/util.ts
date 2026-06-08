@@ -53,7 +53,10 @@ export function ordinal(n: number): string {
 
 export function lastName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/)
-  return parts[parts.length - 1] || fullName
+  // Skip a trailing generational suffix so "Carlos Sainz Jr." reads as "Sainz", not "Jr.".
+  const last = parts[parts.length - 1] || fullName
+  if (parts.length >= 2 && /^(jr|sr|i{2,3}|iv)\.?$/i.test(last)) return parts[parts.length - 2]
+  return last
 }
 
 // "Lando, Oscar and Max" style join.

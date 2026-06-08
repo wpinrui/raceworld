@@ -1714,57 +1714,141 @@ function seasonReview(ctx: NewsContext): NewsArticle[] {
 // Surfaces the single most newsworthy angle from across the grid (one, never a pile-up):
 // win streaks, maiden wins, a title contender's horror show, a standout drive, a first-points
 // breakthrough, a notable retirement, or a fresh upgrade.
+// One form talking point from last time out, framed against CAR expectation (#88 preview spec):
+// either a standout who did well and might keep it going, OR (never both) a driver/team who fell
+// short and must turn it around. Omitted entirely when everyone ran roughly to their machinery.
 function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string {
   const prev = r - 1
   if (prev < 1 || prev > ctx.raceResults.length) return ''
   const results = ctx.raceResults[prev - 1] ?? []
   if (results.length === 0) return ''
-  const sorted = sortedResults(results)
-  const standings = driverStandingsAfter(ctx, prev)   // going into round r
-  const before = driverStandingsAfter(ctx, prev - 1)  // before the last race
-  const ptsBefore = (id: string) => before.find((s) => s.driverId === id)?.points ?? 0
+  const standings = driverStandingsAfter(ctx, prev)   // championship going into round r
   const prevCircuit = circuit(ctx, prev)
   const winner = results.find((x) => x.finishPosition === 1)
 
+  // Sharpest "did well, can it continue" hooks, named outright and outranking the form read: a win
+  // streak, or a maiden win of the season.
   let streak = 0
   if (winner) for (let k = prev; k >= 1; k--) { const w = (ctx.raceResults[k - 1] ?? []).find((x) => x.finishPosition === 1); if (w && w.driverId === winner.driverId) streak++; else break }
   const maiden = !!winner && prev >= 2 && !wonBefore(ctx, winner.driverId, prev)
-
-  let horror: { who: string; what: string } | null = null
-  for (const s of standings.slice(0, 2)) { const res = results.find((x) => x.driverId === s.driverId); if (res && (res.dnf || (res.finishPosition ?? 0) >= 8)) { horror = { who: lastName(s.driverName), what: res.dnf ? 'a retirement' : ordinal(res.finishPosition ?? 0) }; break } }
-
-  let mover: RaceResult | null = null; let gain = 0
-  for (const x of sorted) { if (x.dnf || x.finishPosition == null) continue; const g = x.gridPosition - x.finishPosition; if (g > gain) { gain = g; mover = x } }
-
-  // A genuine first-points drought-breaker, not everyone's opener (hence prev >= 4).
-  let firstPts: RaceResult | null = null
-  if (prev >= 4) for (const x of results) { if (x.points > 0 && ptsBefore(x.driverId) === 0) { firstPts = x; break } }
-
-  let faller: RaceResult | null = null
-  for (const x of results) { if (!x.dnf) continue; const rank = standings.findIndex((s) => s.driverId === x.driverId); if (rank >= 0 && rank < 8) { faller = x; break } }
-
-  const upg = ctx.upgradeEvents.find((e) => !e.failed && (e.round === prev || e.round === r))
-
-  const slots: Record<string, string | number> = {
-    prev_circuit: prevCircuit, streak,
-    w: winner ? lastName(winner.driverName) : '',
-    horror_who: horror?.who ?? '', horror_what: horror?.what ?? '',
-    mover: mover ? lastName(mover.driverName) : '', mover_from: ordinal(mover?.gridPosition ?? 0), mover_to: ordinal(mover?.finishPosition ?? 0),
-    first_pts: firstPts ? lastName(firstPts.driverName) : '',
-    faller: faller ? lastName(faller.driverName) : '',
-    upg_team: upg ? teamName(ctx, upg.teamId) : '', upg_team_poss: upg ? poss(teamName(ctx, upg.teamId)) : '',
+  if (winner && (streak >= 2 || maiden)) {
+    const wslots = { prev_circuit: prevCircuit, streak, w: lastName(winner.driverName) }
+    const wpool = streak >= 2
+      ? ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
+      : ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
+    return fill(pick(wpool, `${seed}|tp`), wslots)
   }
 
-  let pool: string[]
-  if (streak >= 2) pool = ['{w} arrives on a {streak}-race winning streak, and nobody has found an answer.', 'The question is whether anyone can halt {w}, winner of the last {streak}.']
-  else if (maiden) pool = ['{w} arrives fresh off a maiden win of the season at the {prev_circuit}.', 'Confidence will be sky-high in the {w} camp after a breakthrough win last time out.']
-  else if (horror) pool = ['{horror_who} endured a rare off-day last time out, {horror_what} at the {prev_circuit}, and badly needs a response.', 'All eyes are on {horror_who} after {horror_what} last time, a dent in the title bid.']
-  else if (gain >= 6 && mover && getPoints(mover.finishPosition ?? 99, ctx.year) > 0) pool = ['{mover} was the standout last time, charging from {mover_from} to {mover_to} and into the points, and will want more of the same.', 'Few impressed like {mover} at the {prev_circuit}, up from {mover_from} to a points finish in {mover_to}.']
-  else if (firstPts) pool = ['{first_pts} finally opened the account at the {prev_circuit} last time, and will look to build on it.', 'A first points finish for {first_pts} last time out was a long time coming.']
-  else if (faller) pool = ['{faller} retired at the {prev_circuit} last time and will be desperate for a bounce-back.', 'A bounce-back is the order of the day for {faller} after retiring last time.']
-  else if (upg) pool = ['Whether {upg_team_poss} recent upgrade bites here is one of the weekend\'s questions.', 'The paddock is watching to see if {upg_team_poss} new parts make a difference.']
-  else return ''
-  return fill(pick(pool, `${seed}|tp`), slots)
+  // Form vs car: a seated driver's expected finishing slot is their rank when the whole field is
+  // ordered by car pace. Last race's finish minus that slot says who beat their machinery (kept it
+  // up) and who fell short of it (needs a turnaround). A DNF counts as finishing last + 1.
+  const carPaceOf = (teamId: string) => ctx.teams.find((t) => t.id === teamId)?.carPace ?? 0
+  const seated = ctx.drivers.filter((d) => d.teamId)
+  const fieldSize = seated.length || results.length
+  const expSlot = new Map<string, number>([...seated].sort((a, b) => carPaceOf(b.teamId) - carPaceOf(a.teamId)).map((d, i) => [d.id, i + 1]))
+  const champPos = new Map<string, number>(standings.map((s, i) => [s.driverId, i + 1]))
+  const half = Math.ceil(fieldSize / 2)
+  const topCut = Math.max(5, Math.ceil(fieldSize / 3))   // "high in the championship"
+  const exp = (id: string) => expSlot.get(id) ?? fieldSize
+  const finSlot = (x: RaceResult) => (x.dnf || x.finishPosition == null ? fieldSize + 1 : x.finishPosition)
+  const dev = (x: RaceResult) => exp(x.driverId) - finSlot(x)            // + beat the car, - fell short
+  const scored = (x: RaceResult) => getPoints(x.finishPosition ?? 99, ctx.year) > 0
+
+  // Turnaround: a title-relevant driver (high in the championship, or a genuine front car) who fell
+  // well short of that car last time — a retirement, or a finish well below where the car belongs.
+  let turn: RaceResult | null = null; let turnStr = 0
+  for (const x of results) {
+    const high = (champPos.get(x.driverId) ?? fieldSize) <= topCut || exp(x.driverId) <= 6
+    if (!high) continue
+    const shortfall = x.dnf ? (fieldSize - exp(x.driverId)) + 4 : -dev(x)
+    const fellShort = x.dnf || (!scored(x) && exp(x.driverId) <= half) || dev(x) <= -4
+    if (fellShort && shortfall > turnStr) { turn = x; turnStr = shortfall }
+  }
+
+  // Keep-it-up: a driver low in the championship who dragged a slower car into the points, or
+  // otherwise clearly beat its level last time.
+  let keep: RaceResult | null = null; let keepStr = 0
+  for (const x of results) {
+    const low = (champPos.get(x.driverId) ?? fieldSize) > half
+    if (!low) continue
+    const beat = (scored(x) && exp(x.driverId) > half) || dev(x) >= 5
+    if (beat && dev(x) >= 4 && dev(x) > keepStr) { keep = x; keepStr = dev(x) }
+  }
+
+  // Team form: both cars pulling the same way — a slower team scoring twice, or a front team both
+  // out of the points — is a team story that competes with the driver candidates on strength.
+  let teamCand: { teamId: string; dir: 'over' | 'under'; cars: RaceResult[] } | null = null; let teamStr = 0
+  for (const tm of ctx.teams) {
+    const cars = results.filter((x) => x.teamId === tm.id)
+    if (cars.length < 2) continue
+    const rank = paceRank(ctx, tm.id)
+    const avgDev = cars.reduce((a, c) => a + dev(c), 0) / cars.length
+    if (cars.every(scored) && rank > Math.ceil(ctx.teams.length / 2) && avgDev >= 4 && avgDev > teamStr) {
+      teamCand = { teamId: tm.id, dir: 'over', cars }; teamStr = avgDev
+    } else if (cars.every((c) => c.dnf || !scored(c)) && rank <= 3 && -avgDev >= 4 && -avgDev > teamStr) {
+      teamCand = { teamId: tm.id, dir: 'under', cars }; teamStr = -avgDev
+    }
+  }
+
+  // Everyone ran roughly to their car — omit (no forced talking point).
+  const best = Math.max(turnStr, keepStr, teamStr)
+  if (best < 4) return ''
+
+  if (teamCand && teamStr === best) {
+    const cars = teamCand.cars.slice().sort((a, b) => finSlot(a) - finSlot(b))
+    const tslots = {
+      prev_circuit: prevCircuit, t_team: teamName(ctx, teamCand.teamId),
+      t_fins: listJoin(cars.map((c) => (c.dnf || c.finishPosition == null ? 'a retirement' : ordinal(c.finishPosition)))),
+      t_car_exp: ordinal(paceRank(ctx, teamCand.teamId)),
+    }
+    const tpool = teamCand.dir === 'over'
+      ? ['{t_team} scored with both cars at the {prev_circuit}, {t_fins}, a haul the {t_car_exp}-quickest car rarely delivers; the question is whether they can back it up.']
+      : ['{t_team} left the {prev_circuit} pointless with both cars, {t_fins}, despite running the {t_car_exp}-quickest car, and will want to put it right here.']
+    return fill(pick(tpool, `${seed}|tp`), tslots)
+  }
+
+  if (turn && turnStr >= keepStr) {
+    const byChamp = (champPos.get(turn.driverId) ?? fieldSize) <= topCut
+    const ord = ordinal(turn.finishPosition ?? fieldSize)
+    const dslots = {
+      prev_circuit: prevCircuit, d_last: lastName(turn.driverName), d_team: teamName(ctx, turn.teamId),
+      d_champ: ordinal(champPos.get(turn.driverId) ?? fieldSize), d_car_exp: ordinal(exp(turn.driverId)),
+      d_result: turn.dnf ? 'retired' : `could only finish ${ord}`,
+      d_result_after: turn.dnf ? 'retiring' : `finishing only ${ord}`,
+    }
+    // Lead on championship position only when it is genuinely high; otherwise the story is a fast
+    // car wasted, so stay on the car.
+    const dpool = byChamp
+      ? [
+          '{d_last}, {d_champ} in the championship, {d_result} at the {prev_circuit} from a car good enough for {d_car_exp}, and needs a response here.',
+          'All eyes on {d_last} after {d_result_after} last time out, a long way short of a car good enough for {d_car_exp}.',
+        ]
+      : [
+          '{d_last} {d_result} at the {prev_circuit}, a long way short of a {d_team} good enough for {d_car_exp}, and needs a response here.',
+          'All eyes on {d_last} after {d_result_after} last time out, well short of a {d_team} good enough for {d_car_exp}.',
+        ]
+    return fill(pick(dpool, `${seed}|tp`), dslots)
+  }
+
+  if (keep) {
+    const podium = (keep.finishPosition ?? 99) <= 3
+    const dslots = {
+      prev_circuit: prevCircuit, d_last: lastName(keep.driverName), d_team: teamName(ctx, keep.teamId),
+      d_fin: ordinal(keep.finishPosition ?? fieldSize), d_car_exp: ordinal(exp(keep.driverId)),
+    }
+    const dpool = podium
+      ? [
+          '{d_last} hauled {d_team} onto the podium at the {prev_circuit}, {d_fin} from a car rated nearer {d_car_exp}; the question is whether the run can continue.',
+          '{d_last} put a {d_team} rated {d_car_exp} on the podium last time, {d_fin} at the {prev_circuit}, and will fancy more of the same.',
+        ]
+      : [
+          '{d_last} dragged {d_team} into the points at the {prev_circuit}, {d_fin} from a car rated nearer {d_car_exp}; the question is whether the run can continue.',
+          '{d_last} was the over-achiever last time, {d_fin} at the {prev_circuit} in a {d_team} rated {d_car_exp}, and will fancy more of the same.',
+        ]
+    return fill(pick(dpool, `${seed}|tp`), dslots)
+  }
+
+  return ''
 }
 
 // TRIGGER: a preview for every round of the calendar (run-up coverage across the whole
