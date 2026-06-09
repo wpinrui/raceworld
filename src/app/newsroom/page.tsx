@@ -83,8 +83,8 @@ export default function NewsroomPage() {
     actionGetTeamCareers(s.year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
     actionGetTeamDriverTallies(s.year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
-    actionGetLegendData(s.year, s.saveSeed).then(setLegendData).catch(() => setLegendData(undefined))
-  }, [s.year, s.saveSeed])
+    actionGetLegendData(s.year, s.saveSeed, s.drivers.map((d) => d.id)).then(setLegendData).catch(() => setLegendData(undefined))
+  }, [s.year, s.saveSeed, s.drivers])
 
   const liveYear = s.year
   const isLive = selectedYear === liveYear

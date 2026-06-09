@@ -75,6 +75,7 @@ export interface LegendProfile {
   driverId: string
   name: string
   gender: string                 // for gendered pronouns; resolved server-side (history data / live capture)
+  teams: string[]                // distinct teams driven for, most-raced first
   firstYear: number
   lastYear: number               // last season raced
   seasons: number
@@ -4153,6 +4154,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
     const slots: Record<string, string | number> = {
       ...pronouns(p.gender),
       name: p.name, last: lastName(p.name), era, first_year: p.firstYear, last_year: p.lastYear,
+      teams_list: listJoin(p.teams), main_team: p.teams[0] ?? '', team_count: p.teams.length,
       seasons: p.seasons, seasons_word: plural(p.seasons, 'season'), starts: p.starts, starts_word: plural(p.starts, 'start'),
       wins: p.wins, wins_word: plural(p.wins, 'win'), podiums: p.podiums, podiums_word: plural(p.podiums, 'podium'),
       poles: p.poles, poles_word: plural(p.poles, 'pole'), points: p.points,
