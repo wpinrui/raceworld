@@ -103,6 +103,7 @@ export interface DriverCareer {
   teammateH2H: TeammateH2H[]              // complete career teammate head-to-head (DB archived + live merged)
   attributes: DriverAttributes | null     // live, from store, if on current grid
   currentResults: DriverCurrentResult[] | null  // live, from store
+  nationality?: string                    // resolved for archived drivers (live-captured / history data), for the flag
 }
 
 export interface TeamSeason {
@@ -148,7 +149,7 @@ export interface WorldOverview {
   teamsDirectory: { teamId: string; teamName: string }[]
 }
 
-export interface SearchEntry { id: string; name: string; kind: 'driver' | 'team' }
+export interface SearchEntry { id: string; name: string; kind: 'driver' | 'team'; nationality?: string }
 
 // --- Drill-down detail (one driver/team in one season, and one full race) ---
 

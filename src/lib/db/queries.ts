@@ -54,18 +54,26 @@ export function saveSeasonNews(seasonId: number, articlesJson: string): void {
     .run(seasonId, articlesJson)
 }
 
-// Capture each driver's gender while they're live, so the legends series (#93) can use gendered
-// pronouns once they retire (the archive itself stores only id + name).
-export function upsertDriverGenders(rows: { driverId: string; gender: string }[]): void {
+// Capture each driver's gender + nationality while they're live, so once they retire the legends series
+// (#93) can use gendered pronouns and the driver page can show the right flag (the archive stores only
+// id + name). Nationality may be empty for rows written before it was captured.
+export function upsertDriverGenders(rows: { driverId: string; gender: string; nationality?: string }[]): void {
   const db = getDb()
-  const stmt = db.prepare('INSERT INTO driver_genders (driver_id, gender) VALUES (?, ?) ON CONFLICT(driver_id) DO UPDATE SET gender = excluded.gender')
-  db.transaction((rs: { driverId: string; gender: string }[]) => { for (const r of rs) stmt.run(r.driverId, r.gender) })(rows)
+  const stmt = db.prepare('INSERT INTO driver_genders (driver_id, gender, nationality) VALUES (?, ?, ?) ON CONFLICT(driver_id) DO UPDATE SET gender = excluded.gender, nationality = COALESCE(excluded.nationality, driver_genders.nationality)')
+  db.transaction((rs: typeof rows) => { for (const r of rs) stmt.run(r.driverId, r.gender, r.nationality ?? null) })(rows)
 }
 
 export function getDriverGenders(): Record<string, string> {
   const rows = getDb().prepare('SELECT driver_id AS id, gender FROM driver_genders').all() as { id: string; gender: string }[]
   const out: Record<string, string> = {}
   for (const r of rows) out[r.id] = r.gender
+  return out
+}
+
+export function getDriverNationalities(): Record<string, string> {
+  const rows = getDb().prepare("SELECT driver_id AS id, nationality FROM driver_genders WHERE nationality IS NOT NULL AND nationality <> ''").all() as { id: string; nationality: string }[]
+  const out: Record<string, string> = {}
+  for (const r of rows) out[r.id] = r.nationality
   return out
 }
 

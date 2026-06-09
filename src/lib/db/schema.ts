@@ -77,11 +77,12 @@ CREATE TABLE IF NOT EXISTS season_news (
   articles_json TEXT NOT NULL
 );
 
--- Gender per driver, captured live (the archive stores only id + name). The legends series (#93) reads
--- it for gendered pronouns; real-roster drivers fall back to the static history data, so this only needs
--- to cover generated drivers.
+-- Gender + nationality per driver, captured live (the archive stores only id + name). The legends
+-- series (#93) reads gender for pronouns; the world driver page reads nationality for a retired driver's
+-- flag. Real-roster drivers fall back to static history data, so this only needs to cover generated ones.
 CREATE TABLE IF NOT EXISTS driver_genders (
   driver_id TEXT PRIMARY KEY,
-  gender TEXT NOT NULL
+  gender TEXT NOT NULL,
+  nationality TEXT
 );
 `
