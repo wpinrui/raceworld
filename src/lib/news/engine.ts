@@ -4236,9 +4236,13 @@ function legends(ctx: NewsContext): NewsArticle[] {
       if (g) g.parts.push(`${m} (${r.value})`); else rankGroups.push({ rank: r.rank, parts: [`${m} (${r.value})`] })
     }
     const asOf = `${LEGEND_MONTHS[Number(f.date.slice(5, 7)) - 1]} ${f.date.slice(0, 4)}`
-    const statsLine = rankList.length ? `As of ${asOf}, ${lastName(p.name)} is ${listJoin(rankGroups.map((g) => `${ordinal(g.rank)} all-time in ${listJoin(g.parts)}`))}.` : ''
-    const conclusion = (angle === 'great' || angle === 'nearly' || angle === 'loyal') && statsLine
-      ? statsLine
+    const statsRanks = listJoin(rankGroups.map((g) => `${ordinal(g.rank)} all-time in ${listJoin(g.parts)}`))
+    // The conclusion FRAMES the all-time standing (what the ranking means, tied to the angle's thesis)
+    // rather than appending a bare infobox; {stats_line}/{as_of} are the facts it wraps. Also-rans and
+    // footnotes (no win/podium/pole standing) get the angle's plain verdict instead.
+    const hasStanding = rankList.length > 0 && (angle === 'great' || angle === 'nearly' || angle === 'loyal')
+    const conclusion = hasStanding
+      ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks })
       : fill(pick(A.verdict, `${seed}|verdict`), slots)
 
     const body = paras(
