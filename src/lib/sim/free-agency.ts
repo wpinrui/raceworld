@@ -70,7 +70,9 @@ function contractLength(
   return Math.max(1, Math.min(maxLen, Math.round(sampleNormal(meanLen, 0.9, rng))))
 }
 
-const RETIREMENT_SEASONS_OUT = 5
+// Seasons a seatless driver lingers as a free agent before the market drops them for good — i.e. the
+// point at which they count as retired. Exported so the legends series (#93) shares one definition.
+export const RETIREMENT_SEASONS_OUT = 5
 
 // Ring rust: when a team weighs a free agent who is currently OUT of F1 (no seat
 // last season), their perceived value takes this flat hit. Keeps the grid from

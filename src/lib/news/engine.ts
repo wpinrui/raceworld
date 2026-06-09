@@ -44,6 +44,7 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
+import legendsCopy from './legends-copy.json'
 import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, constructorShape, teamArcs, runnerUpArc, clinchRound, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
@@ -4132,6 +4133,90 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
   })]
 }
 
+// "Remember this driver?" — the legends series (#93). One adaptive retrospective per retired driver,
+// whose beats flex with stature: a champion gets a moment of brilliance, the rivals who defined the era,
+// and a GOAT-debate close; a journeyman gets the ousting story (teammate head-to-head, who took the seat
+// and what they made of it). The near-miss beat is optional, skipped for genuine greats. Every fact is
+// pre-built server-side on ctx.legends (archive-backed); this only resolves them into prose, dropped on
+// the feature's absolute 4-month-grid date. Prose is pronoun-free (gender is not archived).
+function legends(ctx: NewsContext): NewsArticle[] {
+  const L = legendsCopy
+  const out: NewsArticle[] = []
+  for (const f of ctx.legends?.features ?? []) {
+    const p = f.profile
+    const year = Number(f.date.slice(0, 4))
+    const seed = `legend-${p.driverId}-${year}`
+    const tier: 'champion' | 'winner' | 'journeyman' | 'scrub' =
+      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : (p.podiums >= 1 || p.seasons >= 4) ? 'journeyman' : 'scrub'
+    const era = p.firstYear === p.lastYear ? `${p.firstYear}` : `${p.firstYear}–${p.lastYear}`
+    const slots: Record<string, string | number> = {
+      name: p.name, last: lastName(p.name), era, first_year: p.firstYear, last_year: p.lastYear,
+      seasons: p.seasons, seasons_word: plural(p.seasons, 'season'), starts: p.starts, starts_word: plural(p.starts, 'start'),
+      wins: p.wins, wins_word: plural(p.wins, 'win'), podiums: p.podiums, podiums_word: plural(p.podiums, 'podium'),
+      poles: p.poles, poles_word: plural(p.poles, 'pole'), points: p.points,
+      titles: p.titles, titles_word: plural(p.titles, 'title'), title_years: listJoin(p.titleYears.map(String)),
+    }
+
+    // Brilliance (winners) vs the ousting story (those who never won): the one defining middle beat.
+    let definingText = ''
+    if (p.wins >= 1) {
+      const parts: string[] = []
+      if (p.signatureWin && p.signatureWin.circuit) parts.push(fill(pick(L.brilliance, `${seed}|br`), { ...slots, sig_circuit: p.signatureWin.circuit, sig_year: p.signatureWin.year, sig_grid: ordinal(p.signatureWin.fromGrid) }))
+      if (p.bestSeason && p.bestSeason.wins >= 1) parts.push(fill(pick(L.bestSeason, `${seed}|bs`), { ...slots, best_year: p.bestSeason.year, best_team: p.bestSeason.team, best_wins: p.bestSeason.wins, best_wins_word: plural(p.bestSeason.wins, 'win') }))
+      definingText = parts.join(' ')
+    } else if (p.wins === 0) {
+      const h = p.teammateH2H
+      const htext = h
+        ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}` })
+        : ''
+      const stext = p.successor
+        ? fill(pick(p.successor.wins > 0 || p.successor.titles > 0 ? L.ousting.successorBetter : L.ousting.successorWorse, `${seed}|succ`), { succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
+        : ''
+      definingText = [htext, stext].filter(Boolean).join(' ')
+    }
+
+    // What could have been — optional; carried for near-men, skipped for multiple champions.
+    let wcbText = ''
+    if (p.titles < 2) {
+      if (p.runnerUpYears.length) wcbText = fill(pick(L.whatCouldHaveBeen.runnerUp, `${seed}|wcb`), { ...slots, ru_years: listJoin(p.runnerUpYears.map(String)), ru_count: p.runnerUpYears.length, ru_count_word: plural(p.runnerUpYears.length, 'time') })
+      else if (p.wins >= 1 && p.titles === 0) wcbText = fill(pick(L.whatCouldHaveBeen.winlessTitle, `${seed}|wcb`), slots)
+    }
+
+    // Rivals — the people who defined their era, each described from their own record.
+    const rivalPhrase = (r: LegendProfile['rivals'][number]): string => {
+      const rs = { rname: r.name, rtitles: r.titles, rtitles_word: plural(r.titles, 'title'), rwins: r.wins, rwins_word: plural(r.wins, 'win') }
+      if (r.relation === 'title') return fill(pick(r.titles >= 1 ? L.rivals.titleChamp : L.rivals.title, `${seed}|rv|${r.name}`), rs)
+      if (r.relation === 'teammate') return fill(pick(r.wins >= 1 ? L.rivals.teammateWinner : L.rivals.teammate, `${seed}|rv|${r.name}`), rs)
+      return r.name
+    }
+    const rivalsText = p.rivals.length ? fill(pick(L.rivals.intro, `${seed}|rvi`), { ...slots, rivals_list: listJoin(p.rivals.map(rivalPhrase)) }) : ''
+
+    // How they're remembered today — placed honestly on the spectrum, closed with a quote.
+    const band: 'goat' | 'loved' | 'footnote' =
+      (p.titles >= 2 || (p.allTimeRank?.metric === 'wins' && p.allTimeRank.rank <= 3)) ? 'goat'
+        : (p.wins >= 1 || p.titles >= 1 || (p.allTimeRank != null && p.allTimeRank.rank <= 10)) ? 'loved'
+          : 'footnote'
+    const remSlots = { ...slots, rank_ord: p.allTimeRank ? ordinal(p.allTimeRank.rank) : '', rank_metric: p.allTimeRank?.metric ?? '', rank_value: p.allTimeRank?.value ?? 0 }
+    const rememberedText = fill(pick(L.remembered[band], `${seed}|rem`), remSlots) + ' ' + fill(pick(L.quote[band], `${seed}|q`), slots)
+
+    const body = paras(
+      fill(pick(L.hook.body, `${seed}|hb`), slots),
+      fill(pick(L.careerLine[tier], `${seed}|cl`), slots),
+      definingText,
+      wcbText,
+      rivalsText,
+      rememberedText,
+    )
+    out.push({
+      id: seed, category: 'legends', round: 0, priority: 40, absoluteDate: f.date,
+      headline: fill(pick(L.hook.headline, `${seed}|h`), slots),
+      dek: fill(pick(L.hook.dek, `${seed}|d`), slots),
+      body,
+    })
+  }
+  return out
+}
+
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...seasonPreview(ctx),
@@ -4156,6 +4241,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...driverToWatch(ctx),
     ...midSeasonSwaps(ctx),
     ...recordNews(ctx),
+    ...legends(ctx),
     ...contractWatchFeature(ctx),
     ...renewalsFeature(ctx),
     ...offSeasonFeature(ctx),
