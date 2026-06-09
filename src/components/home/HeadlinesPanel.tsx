@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendarForYear } from '@/data/calendars'
 import { Panel } from '@/components/world/ui'
-import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type LegendDataset } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
-import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords } from '@/lib/news/actions'
+import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, actionGetLegendData } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs, type NewsIndex, type DriverCardResolver } from '@/components/news/LinkedText'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { fromISODate, formatDate } from '@/lib/sim/calendar-dates'
@@ -110,25 +110,27 @@ export function HeadlinesPanel() {
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
+  const [legendData, setLegendData] = useState<LegendDataset | undefined>(undefined)
   useEffect(() => {
     actionGetDriverCareers(year - 1).then(setCareerBase).catch(() => setCareerBase({}))
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
     actionGetTeamDriverTallies(year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
-  }, [year])
+    actionGetLegendData(year, saveSeed, drivers.map((d) => d.id)).then(setLegendData).catch(() => setLegendData(undefined))
+  }, [year, saveSeed, drivers])
 
   const headlines = useMemo(() => {
     // Use the SAME shared builder as the newsroom and the Continue loop, so the home feed can never
     // drift from them (it previously omitted the market beats: contract watch / renewals / draft).
     const ctx = buildLiveNewsContext(
       { year, saveSeed, phase, raceResults, drivers, teams, allUpgradeEvents, devPlans, preSeasonTest, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory },
-      careerBase, teamCareerBase, records, teamDriverTallies,
+      careerBase, teamCareerBase, records, teamDriverTallies, legendData,
     )
     // The feed is already newest-first (round desc, then priority); show the most recent 20
     // and let the panel scroll. FM-style gating: only what has happened by the current clock date —
     // future-dated previews and post-race stories never surface before their day (or before the race runs).
     return generateNews(ctx).filter((a) => !a.date || a.date <= currentDate).slice(0, 20)
-  }, [year, saveSeed, phase, raceResults, drivers, teams, allUpgradeEvents, devPlans, preSeasonTest, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory, careerBase, teamCareerBase, records, teamDriverTallies, currentDate])
+  }, [year, saveSeed, phase, raceResults, drivers, teams, allUpgradeEvents, devPlans, preSeasonTest, constructorHistory, endOfSeasonSummary, approvedSeasonChanges, seasonContractWatch, seasonRenewals, seasonDraft, signingDayRevealed, priorSeasonDriverMediaScores, carPaceHistory, careerBase, teamCareerBase, records, teamDriverTallies, currentDate, legendData])
 
   // Name-to-world-page matcher for hyperlinking the open article (home feed is always the live season).
   const newsIndex = useMemo(() => buildNewsIndex({
