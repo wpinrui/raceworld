@@ -4170,7 +4170,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
         ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}` })
         : ''
       const stext = p.successor
-        ? fill(pick(p.successor.wins > 0 || p.successor.titles > 0 ? L.ousting.successorBetter : L.ousting.successorWorse, `${seed}|succ`), { succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
+        ? fill(pick(p.successor.wins > 0 || p.successor.titles > 0 ? L.ousting.successorBetter : L.ousting.successorWorse, `${seed}|succ`), { ...slots, succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
         : ''
       definingText = [htext, stext].filter(Boolean).join(' ')
     }
@@ -4194,8 +4194,8 @@ function legends(ctx: NewsContext): NewsArticle[] {
     // How they're remembered today — placed honestly on the spectrum, closed with a quote.
     const band: 'goat' | 'loved' | 'footnote' =
       (p.titles >= 2 || (p.allTimeRank?.metric === 'wins' && p.allTimeRank.rank <= 3)) ? 'goat'
-        : (p.wins >= 1 || p.titles >= 1 || (p.allTimeRank != null && p.allTimeRank.rank <= 10)) ? 'loved'
-          : 'footnote'
+        : tier === 'scrub' ? 'footnote'
+          : 'loved'
     const remSlots = { ...slots, rank_ord: p.allTimeRank ? ordinal(p.allTimeRank.rank) : '', rank_metric: p.allTimeRank?.metric ?? '', rank_value: p.allTimeRank?.value ?? 0 }
     const rememberedText = fill(pick(L.remembered[band], `${seed}|rem`), remSlots) + ' ' + fill(pick(L.quote[band], `${seed}|q`), slots)
 

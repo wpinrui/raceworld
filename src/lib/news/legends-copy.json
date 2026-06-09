@@ -9,18 +9,18 @@
       "{last} revisited"
     ],
     "dek": [
-      "{last} spent {seasons} {seasons_word} in the sport before the door closed for good.",
-      "{name} raced through {era}, collecting {wins} {wins_word} and {points} points along the way.",
-      "A {era} name worth revisiting: {name}.",
+      "{last} spent {seasons} {seasons_word} in the sport, {starts} {starts_word} in all.",
+      "{name} raced through {era}, {seasons} {seasons_word} that brought {points} points.",
+      "{starts} {starts_word}, {seasons} {seasons_word}, and then {name} was gone.",
       "{last} put in {starts} {starts_word} across {seasons} {seasons_word} and then was gone.",
-      "Before the grid moved on, {last} left a record worth reading."
+      "{name}, {era}: {starts} {starts_word}, {points} points."
     ],
     "body": [
-      "{name} was a fixture in the field across {era}, taking {starts} {starts_word} over {seasons} {seasons_word}.",
-      "The {era} period had no shortage of names, and {last} was one of them: {starts} {starts_word} spread across {seasons} {seasons_word}.",
-      "Across {era}, {last} built a career that ran to {starts} {starts_word} and {seasons} {seasons_word} in the sport.",
-      "{name} arrived in {first_year} and was still on the grid in {last_year}, a run of {seasons} {seasons_word} that few manage.",
-      "{last} raced from {first_year} through {last_year}, making {starts} {starts_word} at a level most drivers never reach."
+      "{name} was on the grid across {era}, {starts} {starts_word} over {seasons} {seasons_word}.",
+      "The {era} grid had plenty of names, and {last} was one of them: {starts} {starts_word} across {seasons} {seasons_word}.",
+      "Across {era}, {last} ran up {starts} {starts_word} over {seasons} {seasons_word}.",
+      "{name} arrived in {first_year} and was gone by {last_year}, {starts} {starts_word} in between.",
+      "{last} raced from {first_year} through {last_year}, {starts} {starts_word} in all."
     ]
   },
   "careerLine": {
@@ -34,19 +34,19 @@
       "{last} took {wins} {wins_word} across {seasons} {seasons_word}, adding {podiums} {podiums_word}, {poles} {poles_word}, and {points} career points.",
       "The numbers across {seasons} {seasons_word}: {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, {points} points.",
       "{wins} {wins_word} and {podiums} {podiums_word} across {seasons} {seasons_word} sum to {points} career points.",
-      "No title, but {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points across {seasons} {seasons_word} tell their own story."
+      "No title, but {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points across {seasons} {seasons_word}."
     ],
     "journeyman": [
-      "{last} completed {starts} {starts_word} without a victory, but {podiums} {podiums_word} and {points} points mark a genuine career.",
-      "{starts} {starts_word}, {podiums} {podiums_word}, {points} points: no wins, but a real body of work.",
-      "Across {seasons} {seasons_word} and {starts} {starts_word}, {last} scored {podiums} {podiums_word} and {points} points without ever taking a win.",
-      "No wins came in {seasons} {seasons_word}, but {last} reached the podium {podiums} {podiums_word} and finished with {points} points."
+      "{last} completed {starts} {starts_word} without a win, scoring {podiums} {podiums_word} and {points} points.",
+      "{starts} {starts_word}, {podiums} {podiums_word}, {points} points, no wins.",
+      "Across {seasons} {seasons_word} and {starts} {starts_word}, {last} took {podiums} {podiums_word} and {points} points, never a win.",
+      "No wins in {seasons} {seasons_word}, but {podiums} {podiums_word} and {points} points for {last}."
     ],
     "scrub": [
-      "{last} managed {starts} {starts_word} across {seasons} {seasons_word}, with {points} points to show for it.",
-      "Across {seasons} {seasons_word}, {last} made {starts} {starts_word} and accumulated {points} points.",
-      "{starts} {starts_word} over {seasons} {seasons_word}: the record is modest, but the starts count for something.",
-      "{last} lasted {seasons} {seasons_word} and {starts} {starts_word} at the top level, a line on a real career."
+      "{last} made {starts} {starts_word} across {seasons} {seasons_word} for {points} points.",
+      "Across {seasons} {seasons_word}, {last} made {starts} {starts_word} and scored {points} points.",
+      "{starts} {starts_word} over {seasons} {seasons_word}, {points} points, no podiums.",
+      "{last} lasted {seasons} {seasons_word} and {starts} {starts_word} in the sport."
     ]
   },
   "brilliance": [
@@ -90,16 +90,16 @@
   },
   "whatCouldHaveBeen": {
     "runnerUp": [
-      "{last} finished runner-up {ru_count} {ru_count_word} ({ru_years}), the title always just out of reach.",
-      "The championship came close {ru_count} {ru_count_word} ({ru_years}), but never close enough.",
-      "{ru_count} runner-up finishes ({ru_years}) sum up a career that flirted repeatedly with the title and left without one.",
-      "Second in the standings in {ru_years}: {ru_count} {ru_count_word} the bridesmaid, never the champion."
+      "{last} finished championship runner-up {ru_count} {ru_count_word} ({ru_years}), but never took the title.",
+      "Runner-up in {ru_years}: second in the standings {ru_count} {ru_count_word}, champion none.",
+      "{ru_count} runner-up finishes ({ru_years}), and no title to go with them.",
+      "Second was as far as it went, {ru_count} {ru_count_word} ({ru_years})."
     ],
     "winlessTitle": [
-      "{wins} {wins_word} and no championship: the gap between the career and its ceiling.",
-      "{last} took {wins} {wins_word} but the title never arrived, which is the one line that changes the conversation.",
-      "A driver with {wins} {wins_word} who never held a trophy at a season's end.",
-      "{wins} {wins_word} point to a career that had the speed; the titles column reads zero."
+      "{wins} {wins_word}, but no championship.",
+      "{last} took {wins} {wins_word}; the title never came.",
+      "A driver with {wins} {wins_word} and no title.",
+      "{wins} {wins_word} and a titles column that reads zero."
     ]
   },
   "rivals": {
@@ -110,28 +110,26 @@
       "{last} raced against {rivals_list} across those years."
     ],
     "titleChamp": [
-      "{rname}, a {rtitles}-time champion",
-      "{rname}, {rtitles}-time champion with {rwins} {rwins_word}",
-      "{rname}, who took {rtitles} {rtitles_word} and {rwins} {rwins_word}",
-      "{rname}, winner of {rtitles} {rtitles_word}"
+      "{rtitles}-time champion {rname}",
+      "champion {rname}",
+      "{rtitles}-time title winner {rname}",
+      "{rname}"
     ],
     "title": [
       "title rival {rname}",
-      "{rname}, a regular title contender",
       "championship challenger {rname}",
-      "{rname}, never far from the front in that period"
+      "front-runner {rname}",
+      "{rname}"
     ],
     "teammate": [
       "teammate {rname}",
-      "{rname}, a teammate across those years",
-      "intra-team partner {rname}",
-      "{rname}, the other side of the garage"
+      "garage partner {rname}",
+      "{rname}"
     ],
     "teammateWinner": [
-      "teammate {rname}, a {rwins}-time winner",
-      "{rname}, a teammate with {rwins} {rwins_word} to the name",
-      "{rname}, sharing the garage while taking {rwins} {rwins_word}",
-      "winning teammate {rname}, {rwins} {rwins_word}"
+      "race-winner {rname}",
+      "{rwins}-time race-winner {rname}",
+      "teammate {rname}"
     ]
   },
   "remembered": {
