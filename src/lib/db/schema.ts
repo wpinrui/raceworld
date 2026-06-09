@@ -76,4 +76,12 @@ CREATE TABLE IF NOT EXISTS season_news (
   season_id INTEGER PRIMARY KEY REFERENCES seasons(id),
   articles_json TEXT NOT NULL
 );
+
+-- Gender per driver, captured live (the archive stores only id + name). The legends series (#93) reads
+-- it for gendered pronouns; real-roster drivers fall back to the static history data, so this only needs
+-- to cover generated drivers.
+CREATE TABLE IF NOT EXISTS driver_genders (
+  driver_id TEXT PRIMARY KEY,
+  gender TEXT NOT NULL
+);
 `

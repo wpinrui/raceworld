@@ -54,6 +54,21 @@ export function saveSeasonNews(seasonId: number, articlesJson: string): void {
     .run(seasonId, articlesJson)
 }
 
+// Capture each driver's gender while they're live, so the legends series (#93) can use gendered
+// pronouns once they retire (the archive itself stores only id + name).
+export function upsertDriverGenders(rows: { driverId: string; gender: string }[]): void {
+  const db = getDb()
+  const stmt = db.prepare('INSERT INTO driver_genders (driver_id, gender) VALUES (?, ?) ON CONFLICT(driver_id) DO UPDATE SET gender = excluded.gender')
+  db.transaction((rs: { driverId: string; gender: string }[]) => { for (const r of rs) stmt.run(r.driverId, r.gender) })(rows)
+}
+
+export function getDriverGenders(): Record<string, string> {
+  const rows = getDb().prepare('SELECT driver_id AS id, gender FROM driver_genders').all() as { id: string; gender: string }[]
+  const out: Record<string, string> = {}
+  for (const r of rows) out[r.id] = r.gender
+  return out
+}
+
 // The persisted news feed for a season, or null if none was snapshotted (e.g. archived pre-feature).
 export function getSeasonNews(seasonId: number): string | null {
   const row = getDb().prepare('SELECT articles_json FROM season_news WHERE season_id = ?').get(seasonId) as { articles_json: string } | undefined

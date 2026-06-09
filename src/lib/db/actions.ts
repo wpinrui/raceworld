@@ -35,6 +35,7 @@ import {
   getDriverRatingsHistory,
   getDriverRecentForm,
   getDriverTeammateRaces,
+  upsertDriverGenders,
   type DbSeason,
   type DbRaceResultRow,
   type DriverAttributeSnapshot,
@@ -300,6 +301,12 @@ export async function actionGetTeamSeason(teamId: string, year: number): Promise
     drivers: [...driverNames].map(([driverId, driverName]) => ({ driverId, driverName })),
     races: [...byRound.values()].sort((a, b) => a.round - b.round),
   }
+}
+
+// Persist the live roster's genders so retired drivers can be referred to with gendered pronouns in the
+// legends series (#93). Called at archive time with the current grid + the incoming season's drivers.
+export async function actionUpsertDriverGenders(rows: { driverId: string; gender: string }[]): Promise<void> {
+  upsertDriverGenders(rows)
 }
 
 export async function actionGetRaceClassification(year: number, round: number): Promise<RaceClassification | null> {

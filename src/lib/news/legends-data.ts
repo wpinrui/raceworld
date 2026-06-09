@@ -8,6 +8,7 @@ import { mulberry32 } from './util'
 import type { LegendDataset, LegendFeature, LegendProfile } from './engine'
 import { RETIREMENT_SEASONS_OUT } from '@/lib/sim/free-agency'
 import { calendarForYear } from '@/data/calendars'
+import { historicalDrivers } from '@/data/history/drivers'
 import {
   getAllTimeDriverStats,
   getAllSeasonChampions,
@@ -18,9 +19,19 @@ import {
   getArchivedSeasonIdByYear,
   getSeasonDriversForTeam,
   getSeasonStandings,
+  getDriverGenders,
   type AllTimeDriverStat,
   type SeasonChampions,
 } from '@/lib/db/queries'
+
+// Gender for a retired driver, for the producer's gendered pronouns. The archive stores none, so resolve
+// from the live-captured `driver_genders` table (covers generated drivers), then the static history data
+// (covers a real roster), defaulting to male (the generated split is ~95% male, and history is all male).
+function buildGenderResolver(): (id: string) => string {
+  const table = getDriverGenders()
+  const history = new Map(historicalDrivers.map((d) => [d.id, d.gender as string]))
+  return (id) => table[id] ?? history.get(id) ?? 'male'
+}
 
 // Three legends drop per year, on a fixed 4-month grid. The dates are ordering keys for the feed and
 // the Continue-loop interrupt; colliding with a race weekend is harmless (the feed sorts by date).
@@ -86,6 +97,7 @@ function buildLegendProfile(
   statsById: Map<string, AllTimeDriverStat>,
   champions: SeasonChampions[],
   championByYear: Map<number, SeasonChampions>,
+  gender: string,
 ): LegendProfile {
   const titleYears = champions.filter((c) => c.driverChampionId === s.id).map((c) => c.year).sort((a, b) => a - b)
   const byYear = perYear(s.id)
@@ -202,6 +214,7 @@ function buildLegendProfile(
   return {
     driverId: s.id,
     name: s.name,
+    gender,
     firstYear: s.firstYear,
     lastYear: s.lastYear,
     seasons: s.seasons,
@@ -232,11 +245,12 @@ export function buildLegendData(throughYear: number, saveSeed: string | undefine
   const statsById = new Map(stats.map((s) => [s.id, s]))
   const champions = getAllSeasonChampions()
   const championByYear = new Map(champions.map((c) => [c.year, c]))
+  const genderOf = buildGenderResolver()
   const features: LegendFeature[] = []
   for (const p of picks) {
     const s = statsById.get(p.driverId)
     if (!s) continue
-    features.push({ driverId: p.driverId, date: p.date, profile: buildLegendProfile(s, statsById, champions, championByYear) })
+    features.push({ driverId: p.driverId, date: p.date, profile: buildLegendProfile(s, statsById, champions, championByYear, genderOf(p.driverId)) })
   }
   return { features }
 }

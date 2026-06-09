@@ -74,6 +74,7 @@ export interface RecordsContext {
 export interface LegendProfile {
   driverId: string
   name: string
+  gender: string                 // for gendered pronouns; resolved server-side (history data / live capture)
   firstYear: number
   lastYear: number               // last season raced
   seasons: number
@@ -4147,9 +4148,10 @@ function legends(ctx: NewsContext): NewsArticle[] {
     const year = Number(f.date.slice(0, 4))
     const seed = `legend-${p.driverId}-${year}`
     const tier: 'champion' | 'winner' | 'journeyman' | 'scrub' =
-      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : (p.podiums >= 1 || p.seasons >= 4) ? 'journeyman' : 'scrub'
+      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : p.podiums >= 1 ? 'journeyman' : 'scrub'
     const era = p.firstYear === p.lastYear ? `${p.firstYear}` : `${p.firstYear}–${p.lastYear}`
     const slots: Record<string, string | number> = {
+      ...pronouns(p.gender),
       name: p.name, last: lastName(p.name), era, first_year: p.firstYear, last_year: p.lastYear,
       seasons: p.seasons, seasons_word: plural(p.seasons, 'season'), starts: p.starts, starts_word: plural(p.starts, 'start'),
       wins: p.wins, wins_word: plural(p.wins, 'win'), podiums: p.podiums, podiums_word: plural(p.podiums, 'podium'),

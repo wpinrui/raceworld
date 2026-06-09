@@ -3,6 +3,7 @@ import {
   actionArchiveSeason,
   actionInsertConstructorStandings,
   actionGetRecentConstructorHistory,
+  actionUpsertDriverGenders,
 } from '@/lib/db/actions'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, actionGetLegendData, actionSaveSeasonNews } from '@/lib/news/actions'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
@@ -13,6 +14,12 @@ import type { OffSeasonEvent } from './continue-loop'
 // then swap next season's grid live (keeping the clock). Was the final stage of the old wizard.
 async function archiveAndRollover(): Promise<void> {
   const s = useSeasonStore.getState()
+  // Capture every live driver's gender (current grid + the incoming season's roster + free agents) so
+  // the legends series can use gendered pronouns after they retire (#93). Idempotent upsert.
+  const genderRows = [...s.drivers, ...(s.pendingNextSeasonState?.drivers ?? [])]
+    .filter((d) => d.id && d.gender)
+    .map((d) => ({ driverId: d.id, gender: d.gender }))
+  if (genderRows.length) await actionUpsertDriverGenders(genderRows)
   if (s.dbSeasonId) {
     const [careerBase, teamCareerBase, records, teamDriverTalliesBase, legendData] = await Promise.all([
       actionGetDriverCareers(s.year - 1),

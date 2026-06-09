@@ -26,53 +26,53 @@
   "careerLine": {
     "champion": [
       "{last} won {titles} {titles_word} ({title_years}), backed by {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points.",
-      "{titles} {titles_word} ({title_years}) top a record that also includes {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points.",
+      "{they_cap} won {titles} {titles_word} ({title_years}), with {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points.",
       "The final ledger: {titles} {titles_word} ({title_years}), {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, {points} career points.",
-      "{wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, {points} points, and {titles} {titles_word} ({title_years}) make for an unambiguous record."
+      "Across {seasons} {seasons_word} {they} took {titles} {titles_word} ({title_years}), {wins} {wins_word}, {podiums} {podiums_word}, and {points} points."
     ],
     "winner": [
       "{last} took {wins} {wins_word} across {seasons} {seasons_word}, adding {podiums} {podiums_word}, {poles} {poles_word}, and {points} career points.",
-      "The numbers across {seasons} {seasons_word}: {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, {points} points.",
+      "Across {seasons} {seasons_word} {they} took {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} career points.",
       "{wins} {wins_word} and {podiums} {podiums_word} across {seasons} {seasons_word} sum to {points} career points.",
-      "No title, but {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points across {seasons} {seasons_word}."
+      "No title, but {they} put together {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points across {seasons} {seasons_word}."
     ],
     "journeyman": [
       "{last} completed {starts} {starts_word} without a win, scoring {podiums} {podiums_word} and {points} points.",
       "{starts} {starts_word}, {podiums} {podiums_word}, {points} points, no wins.",
-      "Across {seasons} {seasons_word} and {starts} {starts_word}, {last} took {podiums} {podiums_word} and {points} points, never a win.",
+      "Across {seasons} {seasons_word} and {starts} {starts_word}, {they} took {podiums} {podiums_word} and {points} points, never a win.",
       "No wins in {seasons} {seasons_word}, but {podiums} {podiums_word} and {points} points for {last}."
     ],
     "scrub": [
       "{last} made {starts} {starts_word} across {seasons} {seasons_word} for {points} points.",
-      "Across {seasons} {seasons_word}, {last} made {starts} {starts_word} and scored {points} points.",
+      "Across {seasons} {seasons_word}, {they} made {starts} {starts_word} and scored {points} points.",
       "{starts} {starts_word} over {seasons} {seasons_word}, {points} points, no podiums.",
       "{last} lasted {seasons} {seasons_word} and {starts} {starts_word} in the sport."
     ]
   },
   "brilliance": [
-    "{last}'s finest day came at the {sig_circuit} in {sig_year}, a win from {sig_grid} on the grid.",
-    "At {sig_circuit} in {sig_year}, {last} started {sig_grid} and took the flag first.",
+    "{their_cap} finest day came at the {sig_circuit} in {sig_year}, a win from {sig_grid} on the grid.",
+    "At {sig_circuit} in {sig_year}, {they} started {sig_grid} and took the flag first.",
     "The {sig_year} {sig_circuit} race, started from {sig_grid}, stood as the clearest proof of what {last} could do.",
     "A charge from {sig_grid} at {sig_circuit} in {sig_year} produced the win that most people remember first.",
-    "{sig_year} at {sig_circuit}: {last} qualified {sig_grid} and still crossed the line first."
+    "{sig_year} at {sig_circuit}: {they} qualified {sig_grid} and still crossed the line first."
   ],
   "bestSeason": [
     "{last} peaked in {best_year} with {best_wins} {best_wins_word} for {best_team}.",
     "The {best_year} season at {best_team} was the high point: {best_wins} {best_wins_word}.",
-    "{best_wins} {best_wins_word} for {best_team} in {best_year} represented the ceiling of the {last} career.",
+    "{best_wins} {best_wins_word} for {best_team} in {best_year} represented the ceiling of {their} career.",
     "{last} and {best_team} produced {best_wins} {best_wins_word} together in {best_year}, the best single-season return of the career."
   ],
   "ousting": {
     "h2hLost": [
       "Against {tm_name} ({tm_years}) the record was unkind: {tm_qual} in qualifying, {tm_race} on Sundays.",
-      "The internal battle with {tm_name} across {tm_years} told the story: {tm_qual} in qualifying, {tm_race} in races.",
+      "Against {tm_name} ({tm_years}) {they} came off worse: {tm_qual} in qualifying, {tm_race} on Sundays.",
       "{tm_name} had the upper hand throughout {tm_years}, {tm_qual} in qualifying and {tm_race} across the races.",
       "Over {tm_years}, {tm_name} outqualified {last} {tm_qual} and led the race head-to-head {tm_race}."
     ],
     "h2hHeld": [
       "Against {tm_name} ({tm_years}) the head-to-head was {tm_qual} in qualifying and {tm_race} in races, a respectable account by any measure.",
       "{last} more than matched {tm_name} across {tm_years}: {tm_qual} in qualifying, {tm_race} on Sundays.",
-      "The record against {tm_name} ({tm_years}) reads {tm_qual} in qualifying and {tm_race} in races, making the loss of the seat harder to explain.",
+      "Against {tm_name} across {tm_years}, {they} held {their} own: {tm_qual} in qualifying and {tm_race} in races, making the loss of the seat harder to explain.",
       "{tm_name} did not dominate: {tm_qual} in qualifying and {tm_race} in races over {tm_years} show a fight well held."
     ],
     "successorBetter": [
@@ -103,7 +103,7 @@
     ],
     "winlessTitle": [
       "{wins} {wins_word}, but no championship.",
-      "{last} took {wins} {wins_word}; the title never came.",
+      "{they_cap} took {wins} {wins_word}; the title never came.",
       "A driver with {wins} {wins_word} and no title.",
       "{wins} {wins_word} and a titles column that reads zero."
     ]
