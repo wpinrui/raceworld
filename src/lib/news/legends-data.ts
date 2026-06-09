@@ -8,6 +8,7 @@ import { mulberry32 } from './util'
 import type { LegendDataset, LegendFeature, LegendProfile } from './engine'
 import { RETIREMENT_SEASONS_OUT } from '@/lib/sim/free-agency'
 import { calendarForYear } from '@/data/calendars'
+import { historicalDrivers } from '@/data/history/drivers'
 import {
   getAllTimeDriverStats,
   getAllSeasonChampions,
@@ -18,19 +19,31 @@ import {
   getArchivedSeasonIdByYear,
   getSeasonDriversForTeam,
   getSeasonStandings,
+  getDriverGenders,
   type AllTimeDriverStat,
   type SeasonChampions,
 } from '@/lib/db/queries'
+
+// Gender for a retired driver, for the producer's gendered pronouns. The archive stores none, so resolve
+// from the live-captured `driver_genders` table (covers generated drivers), then the static history data
+// (covers a real roster), defaulting to male (the generated split is ~95% male, and history is all male).
+function buildGenderResolver(): (id: string) => string {
+  const table = getDriverGenders()
+  const history = new Map(historicalDrivers.map((d) => [d.id, d.gender as string]))
+  return (id) => table[id] ?? history.get(id) ?? 'male'
+}
 
 // Three legends drop per year, on a fixed 4-month grid. The dates are ordering keys for the feed and
 // the Continue-loop interrupt; colliding with a race weekend is harmless (the feed sorts by date).
 const SLOT_DATES = ['02-14', '06-14', '10-14'] as const
 
-// A driver is a legend candidate once they have been gone long enough to count as RETIRED — the same
-// RETIREMENT_SEASONS_OUT window the market uses. Derived purely from the archive's last-raced year, so
-// the whole schedule is replayable with no retirement bookkeeping. `races > 0` = actually raced in F1.
-function eligibleAsOf(stats: AllTimeDriverStat[], year: number): AllTimeDriverStat[] {
-  return stats.filter((s) => s.races > 0 && s.lastYear <= year - RETIREMENT_SEASONS_OUT)
+// A legend candidate must be OFFICIALLY RETIRED, not merely off the grid. The game retires a driver only
+// after RETIREMENT_SEASONS_OUT consecutive seasons without a seat, at which point it removes them from the
+// roster/market (`applyMarketAttrition`). So the authoritative test is "raced, and no longer in the live
+// driver pool" — a seatless free agent is NOT retired and stays in the pool. `activeIds` is that live pool
+// (s.drivers, which includes free agents). The lastYear distance is a secondary guard + the replay anchor.
+function eligibleAsOf(stats: AllTimeDriverStat[], year: number, activeIds: Set<string>): AllTimeDriverStat[] {
+  return stats.filter((s) => s.races > 0 && !activeIds.has(s.id) && s.lastYear <= year - RETIREMENT_SEASONS_OUT)
 }
 
 // Deterministic, replayable selection. Walk every year from the series' first eligible year up to
@@ -41,13 +54,14 @@ export function selectLegendPicks(
   stats: AllTimeDriverStat[],
   throughYear: number,
   saveSeed: string,
+  activeIds: Set<string>,
 ): { driverId: string; date: string }[] {
   // Sort by id FIRST: getAllTimeDriverStats() has no ORDER BY, so SQLite's GROUP BY row order is not
   // stable as seasons archive. The seeded index pick below indexes into this order, so without a fixed
   // sort a past year's pick could change after more seasons archive — diverging from the stored snapshot
   // and breaking the never-repeat invariant. A stable id sort makes selection fully replayable.
   const ordered = [...stats].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  const everEligible = eligibleAsOf(ordered, throughYear)
+  const everEligible = eligibleAsOf(ordered, throughYear, activeIds)
   if (everEligible.length === 0) return []
   const firstYear = Math.min(...everEligible.map((s) => s.lastYear)) + RETIREMENT_SEASONS_OUT
   const featured = new Set<string>()
@@ -55,7 +69,7 @@ export function selectLegendPicks(
   for (let y = firstYear; y <= throughYear; y++) {
     const yearPicks: { driverId: string; date: string }[] = []
     for (let slot = 0; slot < SLOT_DATES.length; slot++) {
-      const pool = eligibleAsOf(ordered, y).filter((s) => !featured.has(s.id))
+      const pool = eligibleAsOf(ordered, y, activeIds).filter((s) => !featured.has(s.id))
       if (pool.length === 0) break
       const rng = mulberry32(`${saveSeed}|legend|${y}|${slot}`)
       const chosen = pool[Math.floor(rng() * pool.length)]
@@ -69,9 +83,9 @@ export function selectLegendPicks(
 
 // Aggregate one driver's archived seasons into a per-year view (a season may hold >1 row when they
 // switched teams mid-year; sum the stats and credit the year's team to wherever they scored most).
-function perYear(driverId: string) {
+function perYear(rows: ReturnType<typeof getDriverCareerBySeason>) {
   const byYear = new Map<number, { seasonId: number; team: string; teamPoints: number; wins: number; points: number }>()
-  for (const row of getDriverCareerBySeason(driverId)) {
+  for (const row of rows) {
     const e = byYear.get(row.seasonYear) ?? { seasonId: row.seasonId, team: row.teamName, teamPoints: -1, wins: 0, points: 0 }
     e.wins += row.wins
     e.points += row.points
@@ -86,9 +100,16 @@ function buildLegendProfile(
   statsById: Map<string, AllTimeDriverStat>,
   champions: SeasonChampions[],
   championByYear: Map<number, SeasonChampions>,
+  gender: string,
 ): LegendProfile {
   const titleYears = champions.filter((c) => c.driverChampionId === s.id).map((c) => c.year).sort((a, b) => a - b)
-  const byYear = perYear(s.id)
+  const seasonRows = getDriverCareerBySeason(s.id) // year DESC, id DESC -> [0] is their most recent season+team
+  const byYear = perYear(seasonRows)
+
+  // Distinct teams driven for, most-raced first — so even a thin career names the team(s).
+  const teamRaces = new Map<string, number>()
+  for (const row of seasonRows) teamRaces.set(row.teamName, (teamRaces.get(row.teamName) ?? 0) + row.races)
+  const teams = [...teamRaces.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t)
 
   // Best season: most wins (points break ties). The defining year for the brilliance beat.
   let bestSeason: LegendProfile['bestSeason']
@@ -144,7 +165,6 @@ function buildLegendProfile(
 
   // Successor: whoever took their last seat the next season, and what they made of it.
   let successor: LegendProfile['successor']
-  const seasonRows = getDriverCareerBySeason(s.id) // year DESC, id DESC -> [0] is their most recent season+team
   if (seasonRows.length) {
     const last = seasonRows[0]
     const nextId = getArchivedSeasonIdByYear(last.seasonYear + 1)
@@ -202,6 +222,8 @@ function buildLegendProfile(
   return {
     driverId: s.id,
     name: s.name,
+    gender,
+    teams,
     firstYear: s.firstYear,
     lastYear: s.lastYear,
     seasons: s.seasons,
@@ -224,19 +246,20 @@ function buildLegendProfile(
 
 // Build this year's legends features: pick the retired drivers, then profile each. Empty until the
 // save has a driver who has been gone RETIREMENT_SEASONS_OUT years.
-export function buildLegendData(throughYear: number, saveSeed: string | undefined): LegendDataset {
+export function buildLegendData(throughYear: number, saveSeed: string | undefined, activeDriverIds: string[] = []): LegendDataset {
   if (!saveSeed) return { features: [] }
   const stats = getAllTimeDriverStats()
-  const picks = selectLegendPicks(stats, throughYear, saveSeed)
+  const picks = selectLegendPicks(stats, throughYear, saveSeed, new Set(activeDriverIds))
   if (picks.length === 0) return { features: [] }
   const statsById = new Map(stats.map((s) => [s.id, s]))
   const champions = getAllSeasonChampions()
   const championByYear = new Map(champions.map((c) => [c.year, c]))
+  const genderOf = buildGenderResolver()
   const features: LegendFeature[] = []
   for (const p of picks) {
     const s = statsById.get(p.driverId)
     if (!s) continue
-    features.push({ driverId: p.driverId, date: p.date, profile: buildLegendProfile(s, statsById, champions, championByYear) })
+    features.push({ driverId: p.driverId, date: p.date, profile: buildLegendProfile(s, statsById, champions, championByYear, genderOf(p.driverId)) })
   }
   return { features }
 }

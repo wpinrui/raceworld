@@ -74,6 +74,8 @@ export interface RecordsContext {
 export interface LegendProfile {
   driverId: string
   name: string
+  gender: string                 // for gendered pronouns; resolved server-side (history data / live capture)
+  teams: string[]                // distinct teams driven for, most-raced first
   firstYear: number
   lastYear: number               // last season raced
   seasons: number
@@ -4138,7 +4140,7 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
 // and a GOAT-debate close; a journeyman gets the ousting story (teammate head-to-head, who took the seat
 // and what they made of it). The near-miss beat is optional, skipped for genuine greats. Every fact is
 // pre-built server-side on ctx.legends (archive-backed); this only resolves them into prose, dropped on
-// the feature's absolute 4-month-grid date. Prose is pronoun-free (gender is not archived).
+// the feature's absolute 4-month-grid date. Gendered pronouns come from p.gender (resolved server-side).
 function legends(ctx: NewsContext): NewsArticle[] {
   const L = legendsCopy
   const out: NewsArticle[] = []
@@ -4147,10 +4149,12 @@ function legends(ctx: NewsContext): NewsArticle[] {
     const year = Number(f.date.slice(0, 4))
     const seed = `legend-${p.driverId}-${year}`
     const tier: 'champion' | 'winner' | 'journeyman' | 'scrub' =
-      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : (p.podiums >= 1 || p.seasons >= 4) ? 'journeyman' : 'scrub'
+      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : p.podiums >= 1 ? 'journeyman' : 'scrub'
     const era = p.firstYear === p.lastYear ? `${p.firstYear}` : `${p.firstYear}–${p.lastYear}`
     const slots: Record<string, string | number> = {
+      ...pronouns(p.gender),
       name: p.name, last: lastName(p.name), era, first_year: p.firstYear, last_year: p.lastYear,
+      teams_list: listJoin(p.teams), main_team: p.teams[0] ?? '', team_count: p.teams.length,
       seasons: p.seasons, seasons_word: plural(p.seasons, 'season'), starts: p.starts, starts_word: plural(p.starts, 'start'),
       wins: p.wins, wins_word: plural(p.wins, 'win'), podiums: p.podiums, podiums_word: plural(p.podiums, 'podium'),
       poles: p.poles, poles_word: plural(p.poles, 'pole'), points: p.points,
