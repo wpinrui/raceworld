@@ -240,8 +240,17 @@ export default function Nav() {
     try {
       for (let guard = 0; guard < 3000; guard++) {
         const s = useSeasonStore.getState()
-        // Grid-changes is a blocking product decision we can't auto-make — bail to Home for the player.
-        if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) { router.push('/home'); break }
+        // Grid changes would block the loop; auto-accept the full proposed set (same payload the modal's
+        // "Apply changes" sends with nothing overridden) and carry on.
+        const pendingRW = pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })
+        if (pendingRW) {
+          useSeasonStore.getState().applyRealWorldChanges({
+            joins: pendingRW.teamJoins,
+            leaves: pendingRW.teamLeaves.map((l) => l.id),
+            rebrands: pendingRW.teamRebrands.map((r) => ({ id: r.id, name: r.to.name, shortName: r.to.shortName, color: r.to.color, nationality: r.to.nationality })),
+          })
+          continue
+        }
         if (s.year !== legYear) { legData = await actionGetLegendData(s.year, s.saveSeed); legYear = s.year }
         const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legData))
         const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings: legendsOnly, readIds: s.readNewsIds })
