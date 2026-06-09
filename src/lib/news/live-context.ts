@@ -1,5 +1,5 @@
 import { calendarForYear } from '@/data/calendars'
-import { foldLiveSeason, foldLiveSeasonTeams, foldLiveSeasonTeamDrivers, type NewsContext, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from './engine'
+import { foldLiveSeason, foldLiveSeasonTeams, foldLiveSeasonTeamDrivers, type NewsContext, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type LegendDataset } from './engine'
 import type { Driver, Team, RaceResult, SeasonPhase, DevUpgradeEvent, TeamDevPlan, PreSeasonTest, ConstructorSeasonRecord, EndOfSeasonSummary } from '@/lib/sim/types'
 import type { RenewalResult, DraftPick, ContractWatch } from '@/lib/sim/driver-market'
 
@@ -41,6 +41,7 @@ export function buildLiveNewsContext(
   teamCareerBase: Record<string, TeamCareer>,
   records?: RecordsContext,
   teamDriverTalliesBase: Record<string, TeamDriverTally[]> = {},
+  legends?: LegendDataset,
 ): NewsContext {
   // Map the approved real-world changes (which carry the NEW identity) to the newsroom shape, pulling each
   // team's CURRENT name from the live grid for a rebrand's "from".
@@ -71,6 +72,7 @@ export function buildLiveNewsContext(
     priorDriverMediaScores: s.priorSeasonDriverMediaScores,
     live: true,
     records,
+    legends,
     careers: foldLiveSeason(careerBase, s.year, s.raceResults, s.endOfSeasonSummary?.driverChampion),
     teamCareers: foldLiveSeasonTeams(teamCareerBase, s.raceResults),
     teamDriverTallies: foldLiveSeasonTeamDrivers(teamDriverTalliesBase, s.year, s.raceResults),

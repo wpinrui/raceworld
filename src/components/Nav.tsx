@@ -12,13 +12,13 @@ import { useSettingsStore } from '@/lib/store/settings-store'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { raceDate, toISODate, fromISODate, addDays, formatDate } from '@/lib/sim/calendar-dates'
-import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type LegendDataset } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop, type ContinueSettings } from '@/lib/sim/continue-loop'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { runOffSeasonEvent } from '@/lib/sim/offseason-flow'
-import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords } from '@/lib/news/actions'
+import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, actionGetLegendData } from '@/lib/news/actions'
 import { useSetupCta } from '@/lib/store/setup-cta'
 import { pendingRealWorldChanges } from '@/lib/history/transitions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
@@ -83,6 +83,7 @@ export default function Nav() {
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
+  const [legendData, setLegendData] = useState<LegendDataset | undefined>(undefined)
 
   // Pre-season (no season started yet): Setup is the only reachable page.
   useEffect(() => {
@@ -93,6 +94,7 @@ export default function Nav() {
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
     actionGetTeamDriverTallies(year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
+    actionGetLegendData(year, useSeasonStore.getState().saveSeed).then(setLegendData).catch(() => setLegendData(undefined))
   }, [year])
   // Mirror `advancing` into a ref for the keyboard handler, and keep the calendar bar mounted for a short
   // linger after the advance stops so it fades out rather than vanishing.
@@ -174,7 +176,7 @@ export default function Nav() {
       // call, so stop the sim for it (the modal is render-driven; breaking here keeps the loop from
       // running past an unmade decision now that the off-season flows through this same loop) (#126).
       if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) break
-      const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies))
+      const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legendData))
       setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
       const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
       if (stop.reason === 'idle') break
@@ -203,7 +205,7 @@ export default function Nav() {
         if (stop.event === 'retirements') {
           const retired = useSeasonStore.getState().endOfSeasonSummary?.retiredDriverIds ?? []
           if (retired.length === 0) continue
-          const refreshed = generateNews(buildLiveNewsContext(useSeasonStore.getState(), careerBase, teamCareerBase, records, teamDriverTallies))
+          const refreshed = generateNews(buildLiveNewsContext(useSeasonStore.getState(), careerBase, teamCareerBase, records, teamDriverTallies, legendData))
           const retNews = refreshed.filter((a) => a.category === 'career_retirement')
           if (retNews.length) { retNews.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: retNews }); break }
           continue // retired but no story (unreachable in practice) — keep advancing, don't open a board
