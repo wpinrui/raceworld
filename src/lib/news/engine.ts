@@ -44,6 +44,7 @@ import recordsCopy from './records-copy.json'
 import marketFeatureCopy from './market-feature-copy.json'
 import teamnewsCopy from './teamnews-copy.json'
 import wxCopy from './weather-report-copy.json'
+import legendsCopy from './legends-copy.json'
 import { driverArcs, teammateBattles, crossTeamDuels, championshipShape, constructorShape, teamArcs, runnerUpArc, clinchRound, bestOfRestBattle, backmarkerStory } from './archetypes'
 import driverArcCopy from './driver-arc-copy.json'
 import crossTeamDuelCopy from './cross-team-duel-copy.json'
@@ -65,6 +66,34 @@ export interface RecordsContext {
   driverNames: Record<string, string>
   teamNames: Record<string, string>
 }
+
+// "Remember this driver?" legends series (#93). One retired driver's career, assembled SERVER-SIDE
+// from the archive (it spans per-race / per-season / all-time queries the client cannot run), so the
+// engine producer only renders prose from these facts. A driver is eligible once retired — i.e. their
+// last season raced is RETIREMENT_SEASONS_OUT years behind the context year. See buildLegendData.
+export interface LegendProfile {
+  driverId: string
+  name: string
+  firstYear: number
+  lastYear: number               // last season raced
+  seasons: number
+  starts: number
+  wins: number
+  podiums: number
+  poles: number
+  points: number
+  titles: number
+  titleYears: number[]
+  bestSeason?: { year: number; team: string; wins: number; points: number; wccPos: number | null }
+  signatureWin?: { year: number; circuit: string; fromGrid: number }  // a standout win (biggest grid-to-win charge)
+  runnerUpYears: number[]        // seasons finished championship runner-up — the near-misses
+  teammateH2H?: { teammate: string; years: string; qualWins: number; qualLosses: number; raceWins: number; raceLosses: number }
+  successor?: { name: string; wins: number; titles: number }  // who took their last seat, and what they made of it
+  rivals: { name: string; relation: 'teammate' | 'title' | 'peer'; titles: number; wins: number }[]
+  allTimeRank: { metric: 'wins' | 'podiums' | 'points' | 'titles'; rank: number; value: number } | null  // best all-time standing
+}
+export interface LegendFeature { driverId: string; date: string; profile: LegendProfile }  // date = the 4-month-grid slot
+export interface LegendDataset { features: LegendFeature[] }
 
 export interface NewsContext {
   year: number
@@ -89,6 +118,7 @@ export interface NewsContext {
                                    // false = an archived season rebuilt from the DB (results only — the
                                    // attribute-dependent producers, e.g. trajectory/silly-season, stand down)
   records?: RecordsContext  // prior single-season records + entity name maps, for the records producer
+  legends?: LegendDataset   // this year's "remember this driver?" features (#93), assembled server-side. Optional —
   careers?: Record<string, DriverCareer>  // F1 career totals per driver, as of this season. Optional —
                                           // producers that lean on it (retirement, driver-to-watch) degrade
                                           // gracefully when it is absent. starts === 0 (or no entry) means
@@ -171,6 +201,9 @@ export interface NewsArticle {
   // Overrides the category's default day offset (e.g. the season review + year-end expectation piece drop ON
   // finale day so they are there the moment the off-season Season Review is reached, not two days later).
   dayOffset?: number
+  // An exact ISO drop date, bypassing the round + offset derivation entirely. Used by the legends series
+  // (#93), whose 4-month cadence is independent of the race calendar. See articleDate.
+  absoluteDate?: string
 }
 
 // Join composed paragraphs, dropping any that collapsed to empty.
@@ -3687,6 +3720,7 @@ const CATEGORY_DAY_OFFSET: Record<string, number> = {
   driver_exit: 14,
   career_retirement: 7,
   team_entry: 21, team_exit: 21, team_rebrand: 21,
+  legends: 0,             // unused in practice — legends carry an absoluteDate (their 4-month-grid slot)
 }
 
 function raceDayOf(ctx: NewsContext, round: number): Date {
@@ -3698,6 +3732,9 @@ function raceDayOf(ctx: NewsContext, round: number): Date {
 // off-season (round > N) anchors to the finale; in-season rounds to their race day + offset.
 function articleDate(ctx: NewsContext, a: NewsArticle): string {
   const n = ctx.calendar.length
+  // Legends (#93) are scheduled on an absolute 4-month grid that does not align to any round, so they
+  // carry their own date; use it verbatim rather than deriving from a round + offset.
+  if (a.absoluteDate) return a.absoluteDate
   if (a.round <= 0) return toISODate(addDays(raceDayOf(ctx, 1), a.category === 'car_launch_livery' ? -24 : -14))
   const anchor = a.round > n ? n : a.round
   // Forward-looking previews (title-scenario clinch/finale pieces, `a.preview`) share the
@@ -4096,6 +4133,95 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
   })]
 }
 
+// "Remember this driver?" — the legends series (#93). One adaptive retrospective per retired driver,
+// whose beats flex with stature: a champion gets a moment of brilliance, the rivals who defined the era,
+// and a GOAT-debate close; a journeyman gets the ousting story (teammate head-to-head, who took the seat
+// and what they made of it). The near-miss beat is optional, skipped for genuine greats. Every fact is
+// pre-built server-side on ctx.legends (archive-backed); this only resolves them into prose, dropped on
+// the feature's absolute 4-month-grid date. Prose is pronoun-free (gender is not archived).
+function legends(ctx: NewsContext): NewsArticle[] {
+  const L = legendsCopy
+  const out: NewsArticle[] = []
+  for (const f of ctx.legends?.features ?? []) {
+    const p = f.profile
+    const year = Number(f.date.slice(0, 4))
+    const seed = `legend-${p.driverId}-${year}`
+    const tier: 'champion' | 'winner' | 'journeyman' | 'scrub' =
+      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : (p.podiums >= 1 || p.seasons >= 4) ? 'journeyman' : 'scrub'
+    const era = p.firstYear === p.lastYear ? `${p.firstYear}` : `${p.firstYear}–${p.lastYear}`
+    const slots: Record<string, string | number> = {
+      name: p.name, last: lastName(p.name), era, first_year: p.firstYear, last_year: p.lastYear,
+      seasons: p.seasons, seasons_word: plural(p.seasons, 'season'), starts: p.starts, starts_word: plural(p.starts, 'start'),
+      wins: p.wins, wins_word: plural(p.wins, 'win'), podiums: p.podiums, podiums_word: plural(p.podiums, 'podium'),
+      poles: p.poles, poles_word: plural(p.poles, 'pole'), points: p.points,
+      titles: p.titles, titles_word: plural(p.titles, 'title'), title_years: listJoin(p.titleYears.map(String)),
+    }
+
+    // Brilliance (winners) vs the ousting story (those who never won): the one defining middle beat.
+    let definingText = ''
+    if (p.wins >= 1) {
+      const parts: string[] = []
+      if (p.signatureWin && p.signatureWin.circuit) parts.push(fill(pick(L.brilliance, `${seed}|br`), { ...slots, sig_circuit: p.signatureWin.circuit, sig_year: p.signatureWin.year, sig_grid: ordinal(p.signatureWin.fromGrid) }))
+      if (p.bestSeason && p.bestSeason.wins >= 1) parts.push(fill(pick(L.bestSeason, `${seed}|bs`), { ...slots, best_year: p.bestSeason.year, best_team: p.bestSeason.team, best_wins: p.bestSeason.wins, best_wins_word: plural(p.bestSeason.wins, 'win') }))
+      definingText = parts.join(' ')
+    } else if (p.wins === 0) {
+      const h = p.teammateH2H
+      const htext = h
+        ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}` })
+        : ''
+      // A title-winning successor must use the titles-based pool (a champion can have 0 race wins, so the
+      // wins-based pool would falsely read "went on to record 0 wins").
+      const succPool = p.successor
+        ? (p.successor.titles > 0 ? L.ousting.successorChampion : p.successor.wins > 0 ? L.ousting.successorBetter : L.ousting.successorWorse)
+        : null
+      const stext = p.successor && succPool
+        ? fill(pick(succPool, `${seed}|succ`), { ...slots, succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
+        : ''
+      definingText = [htext, stext].filter(Boolean).join(' ')
+    }
+
+    // What could have been — optional; carried for near-men, skipped for multiple champions.
+    let wcbText = ''
+    if (p.titles < 2) {
+      if (p.runnerUpYears.length) wcbText = fill(pick(L.whatCouldHaveBeen.runnerUp, `${seed}|wcb`), { ...slots, ru_years: listJoin(p.runnerUpYears.map(String)), ru_count: p.runnerUpYears.length, ru_count_word: plural(p.runnerUpYears.length, 'time') })
+      else if (p.wins >= 1 && p.titles === 0) wcbText = fill(pick(L.whatCouldHaveBeen.winlessTitle, `${seed}|wcb`), slots)
+    }
+
+    // Rivals — the people who defined their era, each described from their own record.
+    const rivalPhrase = (r: LegendProfile['rivals'][number]): string => {
+      const rs = { rname: r.name, rtitles: r.titles, rtitles_word: plural(r.titles, 'title'), rwins: r.wins, rwins_word: plural(r.wins, 'win') }
+      if (r.relation === 'title') return fill(pick(r.titles >= 1 ? L.rivals.titleChamp : L.rivals.title, `${seed}|rv|${r.name}`), rs)
+      if (r.relation === 'teammate') return fill(pick(r.wins >= 1 ? L.rivals.teammateWinner : L.rivals.teammate, `${seed}|rv|${r.name}`), rs)
+      return r.name
+    }
+    const rivalsText = p.rivals.length ? fill(pick(L.rivals.intro, `${seed}|rvi`), { ...slots, rivals_list: listJoin(p.rivals.map(rivalPhrase)) }) : ''
+
+    // How they're remembered today — placed honestly on the spectrum, closed with a quote.
+    const band: 'goat' | 'loved' | 'footnote' =
+      (p.titles >= 2 || (p.allTimeRank?.metric === 'wins' && p.allTimeRank.rank <= 3)) ? 'goat'
+        : tier === 'scrub' ? 'footnote'
+          : 'loved'
+    const remSlots = { ...slots, rank_ord: p.allTimeRank ? ordinal(p.allTimeRank.rank) : '', rank_metric: p.allTimeRank?.metric ?? '', rank_value: p.allTimeRank?.value ?? 0 }
+    const rememberedText = fill(pick(L.remembered[band], `${seed}|rem`), remSlots) + ' ' + fill(pick(L.quote[band], `${seed}|q`), slots)
+
+    const body = paras(
+      fill(pick(L.hook.body, `${seed}|hb`), slots),
+      fill(pick(L.careerLine[tier], `${seed}|cl`), slots),
+      definingText,
+      wcbText,
+      rivalsText,
+      rememberedText,
+    )
+    out.push({
+      id: seed, category: 'legends', round: 0, priority: 40, absoluteDate: f.date,
+      headline: fill(pick(L.hook.headline, `${seed}|h`), slots),
+      dek: fill(pick(L.hook.dek, `${seed}|d`), slots),
+      body,
+    })
+  }
+  return out
+}
+
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
     ...seasonPreview(ctx),
@@ -4120,6 +4246,7 @@ export function generateNews(ctx: NewsContext): NewsArticle[] {
     ...driverToWatch(ctx),
     ...midSeasonSwaps(ctx),
     ...recordNews(ctx),
+    ...legends(ctx),
     ...contractWatchFeature(ctx),
     ...renewalsFeature(ctx),
     ...offSeasonFeature(ctx),
@@ -4145,7 +4272,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   driver_exit: 'Transfer', career_retirement: 'Retirement', silly_season: 'Silly season',
   analysis_opinion: 'Analysis', driver_to_watch: 'Driver watch',
   team_entry: 'New team', team_exit: 'Team exit', team_rebrand: 'Rebrand', mid_season_swap: 'Driver change',
-  record: 'Record',
+  record: 'Record', legends: 'Legends',
 }
 
 // The complete, ordered filter taxonomy. The page renders one chip per entry (always, so
@@ -4167,4 +4294,5 @@ export const NEWS_FILTERS: { label: string; categories: string[] }[] = [
   { label: 'Grid change', categories: ['team_entry', 'team_exit', 'team_rebrand'] },
   { label: 'Driver change', categories: ['mid_season_swap'] },
   { label: 'Record', categories: ['record'] },
+  { label: 'Legends', categories: ['legends'] },
 ]

@@ -8,9 +8,9 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendarForYear } from '@/data/calendars'
 import { Panel } from '@/components/world/ui'
-import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext } from '@/lib/news/engine'
+import { generateNews, CATEGORY_LABELS, NEWS_FILTERS, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type LegendDataset } from '@/lib/news/engine'
 import { buildLiveNewsContext } from '@/lib/news/live-context'
-import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetAllSeasonNews, actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, type AllSeasonNews } from '@/lib/news/actions'
+import { actionGetNewsSeasonYears, actionGetSeasonNews, actionGetAllSeasonNews, actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, actionGetLegendData, type AllSeasonNews } from '@/lib/news/actions'
 import { buildNewsIndex, LinkedText, LinkedParagraphs } from '@/components/news/LinkedText'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import EntityFilter, { type EntityValue } from '@/components/news/EntityFilter'
@@ -58,6 +58,7 @@ export default function NewsroomPage() {
   const [teamCareerBase, setTeamCareerBase] = useState<Record<string, TeamCareer>>({})
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
+  const [legendData, setLegendData] = useState<LegendDataset | undefined>(undefined)
   const pageScrollRef = useScrollRestore<HTMLDivElement>('newsroom:page')
   const listScrollRef = useScrollRestore<HTMLDivElement>('newsroom:list')
   const driverCard = useLiveDriverCards()
@@ -82,7 +83,8 @@ export default function NewsroomPage() {
     actionGetTeamCareers(s.year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
     actionGetTeamDriverTallies(s.year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
-  }, [s.year])
+    actionGetLegendData(s.year, s.saveSeed).then(setLegendData).catch(() => setLegendData(undefined))
+  }, [s.year, s.saveSeed])
 
   const liveYear = s.year
   const isLive = selectedYear === liveYear
@@ -96,8 +98,8 @@ export default function NewsroomPage() {
   // Live season: generated client-side from the store (full attributes available).
   const liveArticles = useMemo(
     // FM-style gating: only stories at or before the current clock date (no future previews / pre-race spoilers).
-    () => generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies)).filter((a) => !a.date || a.date <= s.currentDate),
-    [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, s.currentDate, careerBase, teamCareerBase, records, teamDriverTallies], // eslint-disable-line react-hooks/exhaustive-deps
+    () => generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legendData)).filter((a) => !a.date || a.date <= s.currentDate),
+    [s.year, s.phase, s.raceResults, s.drivers, s.teams, s.allUpgradeEvents, s.constructorHistory, s.endOfSeasonSummary, s.currentDate, careerBase, teamCareerBase, records, teamDriverTallies, legendData], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Past season: fetched from the archive DB on demand.

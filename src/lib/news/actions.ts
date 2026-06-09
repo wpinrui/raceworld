@@ -13,9 +13,10 @@ import {
   saveSeasonNews, getSeasonNews, getAllDriverSeasonTallies, getAllTeamSeasonTallies,
   type DbRaceResult,
 } from '@/lib/db/queries'
-import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type RecordMetric, type SeasonRecordMark } from './engine'
+import { generateNews, type NewsArticle, type DriverCareer, type TeamCareer, type TeamDriverTally, type RecordsContext, type RecordMetric, type SeasonRecordMark, type LegendDataset } from './engine'
 import type { Driver, Team, RaceResult, Circuit, RaceWeather } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
+import { buildLegendData } from './legends-data'
 
 // Reconstruct the grid changes from an archived season to the NEXT one by diffing rosters: a team gone
 // next year departed, a team new next year joined, a same-id team with a new name rebranded. Fed to the
@@ -74,6 +75,13 @@ function buildCareers(throughYear: number): Record<string, DriverCareer> {
 // to `throughYear`, which the live store's drivers/free agents are keyed against.
 export async function actionGetDriverCareers(throughYear: number): Promise<Record<string, DriverCareer>> {
   return buildCareers(throughYear)
+}
+
+// This year's "remember this driver?" legends features (#93): the retired drivers chosen for the
+// 4-month-grid slots, each with the archive-derived facts the producer renders. `throughYear` is the
+// live year; selection is seeded by `saveSeed` so the same save always picks the same legends.
+export async function actionGetLegendData(throughYear: number, saveSeed: string | undefined): Promise<LegendDataset> {
+  return buildLegendData(throughYear, saveSeed)
 }
 
 // Per-team constructor career totals from the archive, up to and including `throughYear`. The basis

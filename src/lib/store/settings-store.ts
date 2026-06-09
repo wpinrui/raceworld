@@ -18,6 +18,7 @@ export const DEFAULT_INTERRUPT_CATEGORIES: string[] = [
   'team_entry',         // a constructor joins
   'team_exit',          // a constructor leaves
   'mid_season_swap',    // mid-season driver change
+  'legends',            // "remember this driver?" retrospectives (#93)
 ]
 
 interface SettingsStore {
