@@ -93,6 +93,7 @@ export interface LegendProfile {
   successor?: { name: string; wins: number; titles: number }  // who took their last seat, and what they made of it
   rivals: { name: string; relation: 'teammate' | 'title' | 'peer'; titles: number; wins: number }[]
   allTimeRank: { metric: 'wins' | 'podiums' | 'points' | 'titles'; rank: number; value: number } | null  // best all-time standing
+  allTimeRanks: Record<'wins' | 'poles' | 'podiums' | 'points', { rank: number; value: number } | null>  // per-metric, for the conclusion
 }
 export interface LegendFeature { driverId: string; date: string; profile: LegendProfile }  // date = the 4-month-grid slot
 export interface LegendDataset { features: LegendFeature[] }
@@ -4141,16 +4142,49 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
 // and what they made of it). The near-miss beat is optional, skipped for genuine greats. Every fact is
 // pre-built server-side on ctx.legends (archive-backed); this only resolves them into prose, dropped on
 // the feature's absolute 4-month-grid date. Gendered pronouns come from p.gender (resolved server-side).
+const LEGEND_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+type LegendPools = Record<string, string[]>
+const LEGEND_COPY = legendsCopy as unknown as {
+  headline: string[]
+  rivalPhrase: LegendPools
+  great: LegendPools; nearly: LegendPools; loyal: LegendPools; outpaced: LegendPools; footnote: LegendPools
+}
+
 function legends(ctx: NewsContext): NewsArticle[] {
-  const L = legendsCopy
+  const L = LEGEND_COPY
   const out: NewsArticle[] = []
   for (const f of ctx.legends?.features ?? []) {
     const p = f.profile
     const year = Number(f.date.slice(0, 4))
     const seed = `legend-${p.driverId}-${year}`
-    const tier: 'champion' | 'winner' | 'journeyman' | 'scrub' =
-      p.titles >= 1 ? 'champion' : p.wins >= 1 ? 'winner' : p.podiums >= 1 ? 'journeyman' : 'scrub'
     const era = p.firstYear === p.lastYear ? `${p.firstYear}` : `${p.firstYear}–${p.lastYear}`
+    const h = p.teammateH2H
+
+    // Classify the career into ONE story angle, so the piece argues a point of view (lead → evidence →
+    // verdict) instead of stacking independent beats. Each angle has its own purpose-written copy.
+    const crushed = !!h && h.qualLosses >= Math.max(1, h.qualWins) * 2 && p.seasons <= 3
+    const angle: 'great' | 'nearly' | 'loyal' | 'outpaced' | 'footnote' =
+      p.titles >= 1 ? 'great'
+        : p.wins >= 1 ? 'nearly'
+          : crushed ? 'outpaced'
+            : (p.podiums >= 1 || p.seasons >= 4) ? 'loyal'
+              : 'footnote'
+    const A = L[angle]
+
+    // Each rival described from their OWN record, joined for the angle's "where they fit" line.
+    const rivalPhrase = (r: LegendProfile['rivals'][number]): string => {
+      const rs = { rname: r.name, rtitles: r.titles, rtitles_word: plural(r.titles, 'title'), rwins: r.wins, rwins_word: plural(r.wins, 'win') }
+      if (r.relation === 'title') return fill(pick(r.titles >= 1 ? L.rivalPhrase.titleChamp : L.rivalPhrase.title, `${seed}|rv|${r.name}`), rs)
+      return r.name
+    }
+    // The "where they fit" line names the CHAMPIONS/contenders of the era, never teammates — listing a
+    // team-mate as a "contemporary" is meaningless (everyone shares a grid with everyone). Teammates live
+    // in the head-to-head beat instead.
+    const eraRivals = (() => {
+      const titles = p.rivals.filter((r) => r.relation === 'title')
+      return titles.length ? titles : p.rivals.filter((r) => r.relation === 'peer')
+    })()
+
     const slots: Record<string, string | number> = {
       ...pronouns(p.gender),
       name: p.name, last: lastName(p.name), era, first_year: p.firstYear, last_year: p.lastYear,
@@ -4159,69 +4193,63 @@ function legends(ctx: NewsContext): NewsArticle[] {
       wins: p.wins, wins_word: plural(p.wins, 'win'), podiums: p.podiums, podiums_word: plural(p.podiums, 'podium'),
       poles: p.poles, poles_word: plural(p.poles, 'pole'), points: p.points,
       titles: p.titles, titles_word: plural(p.titles, 'title'), title_years: listJoin(p.titleYears.map(String)),
+      rivals_list: eraRivals.length ? listJoin(eraRivals.map(rivalPhrase)) : '',
+      rank_ord: p.allTimeRank ? ordinal(p.allTimeRank.rank) : '', rank_metric: p.allTimeRank?.metric ?? '', rank_value: p.allTimeRank?.value ?? 0,
+      best_year: p.bestSeason?.year ?? '', best_team: p.bestSeason?.team ?? '', best_wins: p.bestSeason?.wins ?? 0, best_wins_word: plural(p.bestSeason?.wins ?? 0, 'win'),
+      sig_circuit: p.signatureWin?.circuit ?? '', sig_year: p.signatureWin?.year ?? '', sig_grid: p.signatureWin ? ordinal(p.signatureWin.fromGrid) : '',
+      ru_years: listJoin(p.runnerUpYears.map(String)), ru_count: p.runnerUpYears.length, ru_finish_word: plural(p.runnerUpYears.length, 'finish', 'finishes'),
+      tm_name: h?.teammate ?? '', tm_years: h?.years ?? '',
+      // tm_qualv/tm_racev = teammate's wins–losses (for "{tm_name} beat {last} 16–0"); tm_qual/tm_race = the legend's.
+      tm_qualv: h ? `${h.qualLosses}–${h.qualWins}` : '', tm_racev: h ? `${h.raceLosses}–${h.raceWins}` : '',
+      tm_qual: h ? `${h.qualWins}–${h.qualLosses}` : '', tm_race: h ? `${h.raceWins}–${h.raceLosses}` : '',
+      succ_name: p.successor?.name ?? '', succ_wins: p.successor?.wins ?? 0, succ_wins_word: plural(p.successor?.wins ?? 0, 'win'), succ_titles: p.successor?.titles ?? 0, succ_titles_word: plural(p.successor?.titles ?? 0, 'title'),
     }
 
-    // Brilliance (winners) vs the ousting story (those who never won): the one defining middle beat.
-    let definingText = ''
-    if (p.wins >= 1) {
-      const parts: string[] = []
-      if (p.signatureWin && p.signatureWin.circuit) parts.push(fill(pick(L.brilliance, `${seed}|br`), { ...slots, sig_circuit: p.signatureWin.circuit, sig_year: p.signatureWin.year, sig_grid: ordinal(p.signatureWin.fromGrid) }))
-      if (p.bestSeason && p.bestSeason.wins >= 1) parts.push(fill(pick(L.bestSeason, `${seed}|bs`), { ...slots, best_year: p.bestSeason.year, best_team: p.bestSeason.team, best_wins: p.bestSeason.wins, best_wins_word: plural(p.bestSeason.wins, 'win') }))
-      definingText = parts.join(' ')
-    } else if (p.wins === 0) {
-      const h = p.teammateH2H
-      const htext = h
-        // tm_qual/tm_race are the legend's wins–losses (for legend-subject sentences); tm_qualv/tm_racev
-        // are flipped to the teammate's perspective (for "{tm_name} outqualified {last} …"-style lines).
-        ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}`, tm_qualv: `${h.qualLosses}–${h.qualWins}`, tm_racev: `${h.raceLosses}–${h.raceWins}` })
-        : ''
-      // A title-winning successor must use the titles-based pool (a champion can have 0 race wins, so the
-      // wins-based pool would falsely read "went on to record 0 wins").
-      const succPool = p.successor
-        ? (p.successor.titles > 0 ? L.ousting.successorChampion : p.successor.wins > 0 ? L.ousting.successorBetter : L.ousting.successorWorse)
-        : null
-      const stext = p.successor && succPool
-        ? fill(pick(succPool, `${seed}|succ`), { ...slots, succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
-        : ''
-      definingText = [htext, stext].filter(Boolean).join(' ')
+    // Build the EVIDENCE paragraph from the facts that serve THIS angle, woven with transitions in the
+    // copy and each fact used once. A segment is dropped when its data is absent.
+    const seg = (pool: string[] | undefined, key: string, when = true): string =>
+      pool && when ? fill(pick(pool, `${seed}|${key}`), slots) : ''
+    const hasSig = !!(p.signatureWin && p.signatureWin.circuit)
+    const join = (...xs: string[]) => xs.filter(Boolean).join(' ')
+    let evidence = ''
+    if (angle === 'great') {
+      evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.signature, 'sig', hasSig), seg(A.peers, 'peers', !!slots.rivals_list))
+    } else if (angle === 'nearly') {
+      evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.signature, 'sig', hasSig), seg(A.runnerup, 'ru', p.runnerUpYears.length > 0), seg(A.peers, 'peers', !!slots.rivals_list))
+    } else if (angle === 'loyal') {
+      evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.peers, 'peers', !!slots.rivals_list))
+    } else if (angle === 'outpaced') {
+      const succPool = p.successor && p.successor.wins > 0 ? A.successorWon : A.successorGone
+      evidence = join(seg(A.h2h, 'h2h', !!h), seg(succPool, 'succ', !!p.successor), seg(A.flicker, 'fl', p.podiums >= 1))
+    } else {
+      evidence = seg(A.h2h, 'h2h', !!h)
     }
 
-    // What could have been — optional; carried for near-men, skipped for multiple champions.
-    let wcbText = ''
-    if (p.titles < 2) {
-      if (p.runnerUpYears.length) wcbText = fill(pick(L.whatCouldHaveBeen.runnerUp, `${seed}|wcb`), { ...slots, ru_years: listJoin(p.runnerUpYears.map(String)), ru_count: p.runnerUpYears.length, ru_count_word: plural(p.runnerUpYears.length, 'time') })
-      else if (p.wins >= 1 && p.titles === 0) wcbText = fill(pick(L.whatCouldHaveBeen.winlessTitle, `${seed}|wcb`), slots)
+    // Conclusion: for drivers who built a real record, state their all-time standing "as of" the piece's
+    // date, grouping metrics that share a rank ("8th all-time in wins (17) and poles (14)"). Also-rans and
+    // footnotes get the angle's plain verdict instead (an all-time rank in points alone says little).
+    const rankList = (['wins', 'poles', 'podiums', 'points'] as const)
+      .map((m) => ({ m, r: p.allTimeRanks[m] })).filter((x): x is { m: typeof x.m; r: { rank: number; value: number } } => !!x.r)
+    const rankGroups: { rank: number; parts: string[] }[] = []
+    for (const { m, r } of rankList) {
+      const g = rankGroups.find((g) => g.rank === r.rank)
+      if (g) g.parts.push(`${m} (${r.value})`); else rankGroups.push({ rank: r.rank, parts: [`${m} (${r.value})`] })
     }
-
-    // Rivals — the people who defined their era, each described from their own record.
-    const rivalPhrase = (r: LegendProfile['rivals'][number]): string => {
-      const rs = { rname: r.name, rtitles: r.titles, rtitles_word: plural(r.titles, 'title'), rwins: r.wins, rwins_word: plural(r.wins, 'win') }
-      if (r.relation === 'title') return fill(pick(r.titles >= 1 ? L.rivals.titleChamp : L.rivals.title, `${seed}|rv|${r.name}`), rs)
-      if (r.relation === 'teammate') return fill(pick(r.wins >= 1 ? L.rivals.teammateWinner : L.rivals.teammate, `${seed}|rv|${r.name}`), rs)
-      return r.name
-    }
-    const rivalsText = p.rivals.length ? fill(pick(L.rivals.intro, `${seed}|rvi`), { ...slots, rivals_list: listJoin(p.rivals.map(rivalPhrase)) }) : ''
-
-    // How they're remembered today — placed honestly on the spectrum, closed with a quote.
-    const band: 'goat' | 'loved' | 'footnote' =
-      (p.titles >= 2 || (p.allTimeRank?.metric === 'wins' && p.allTimeRank.rank <= 3)) ? 'goat'
-        : tier === 'scrub' ? 'footnote'
-          : 'loved'
-    const remSlots = { ...slots, rank_ord: p.allTimeRank ? ordinal(p.allTimeRank.rank) : '', rank_metric: p.allTimeRank?.metric ?? '', rank_value: p.allTimeRank?.value ?? 0 }
-    const rememberedText = fill(pick(L.remembered[band], `${seed}|rem`), remSlots) + ' ' + fill(pick(L.quote[band], `${seed}|q`), slots)
+    const asOf = `${LEGEND_MONTHS[Number(f.date.slice(5, 7)) - 1]} ${f.date.slice(0, 4)}`
+    const statsLine = rankList.length ? `As of ${asOf}, ${lastName(p.name)} is ${listJoin(rankGroups.map((g) => `${ordinal(g.rank)} all-time in ${listJoin(g.parts)}`))}.` : ''
+    const conclusion = (angle === 'great' || angle === 'nearly' || angle === 'loyal') && statsLine
+      ? statsLine
+      : fill(pick(A.verdict, `${seed}|verdict`), slots)
 
     const body = paras(
-      fill(pick(L.hook.body, `${seed}|hb`), slots),
-      fill(pick(L.careerLine[tier], `${seed}|cl`), slots),
-      definingText,
-      wcbText,
-      rivalsText,
-      rememberedText,
+      fill(pick(A.lead, `${seed}|lead`), slots),
+      evidence,
+      conclusion,
     )
     out.push({
       id: seed, category: 'legends', round: 0, priority: 40, absoluteDate: f.date,
-      headline: fill(pick(L.hook.headline, `${seed}|h`), slots),
-      dek: fill(pick(L.hook.dek, `${seed}|d`), slots),
+      headline: fill(pick(L.headline, `${seed}|h`), slots),
+      dek: fill(pick(A.dek, `${seed}|d`), slots),
       body,
     })
   }

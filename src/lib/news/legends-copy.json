@@ -1,120 +1,14 @@
 {
-  "hook": {
-    "headline": [
-      "Whatever happened to {last}",
-      "Remembering {name}",
-      "{last}, {era}",
-      "{name} and the {era} era",
-      "Looking back at {last}",
-      "{last} revisited"
-    ],
-    "dek": [
-      "{last} spent {seasons} {seasons_word} in the sport, {starts} {starts_word} in all.",
-      "{name} raced through {era}, {seasons} {seasons_word} that brought {points} points.",
-      "{starts} {starts_word}, {seasons} {seasons_word}, and then {name} was gone.",
-      "{last} put in {starts} {starts_word} across {seasons} {seasons_word} and then was gone.",
-      "{name}, {era}: {starts} {starts_word}, {points} points."
-    ],
-    "body": [
-      "{name} drove for {teams_list} across {era}, {starts} {starts_word} over {seasons} {seasons_word}.",
-      "{name} raced for {teams_list} from {first_year} to {last_year}, {starts} {starts_word} in all.",
-      "Across {era}, {last} ran up {starts} {starts_word} for {teams_list} over {seasons} {seasons_word}.",
-      "{name} turned out for {teams_list} across {era}, {seasons} {seasons_word} and {starts} {starts_word}.",
-      "{last} spent {seasons} {seasons_word} with {teams_list}, {starts} {starts_word} from {first_year} through {last_year}."
-    ]
-  },
-  "careerLine": {
-    "champion": [
-      "{last} won {titles} {titles_word} ({title_years}) with {main_team}, backed by {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points.",
-      "{they_cap} won {titles} {titles_word} ({title_years}) at {main_team}, with {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points.",
-      "The final ledger: {titles} {titles_word} ({title_years}), {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, {points} career points.",
-      "Across {seasons} {seasons_word} {they} took {titles} {titles_word} ({title_years}), {wins} {wins_word}, {podiums} {podiums_word}, and {points} points."
-    ],
-    "winner": [
-      "{last} took {wins} {wins_word} with {teams_list} across {seasons} {seasons_word}, adding {podiums} {podiums_word}, {poles} {poles_word}, and {points} career points.",
-      "Across {seasons} {seasons_word} {they} took {wins} {wins_word} for {teams_list}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} career points.",
-      "{wins} {wins_word} and {podiums} {podiums_word} across {seasons} {seasons_word} sum to {points} career points.",
-      "No title, but {they} put together {wins} {wins_word}, {podiums} {podiums_word}, {poles} {poles_word}, and {points} points across {seasons} {seasons_word}."
-    ],
-    "journeyman": [
-      "{last} completed {starts} {starts_word} for {teams_list} without a win, scoring {podiums} {podiums_word} and {points} points.",
-      "{starts} {starts_word}, {podiums} {podiums_word}, {points} points, no wins.",
-      "Across {seasons} {seasons_word} and {starts} {starts_word} at {main_team}, {they} took {podiums} {podiums_word} and {points} points, never a win.",
-      "No wins in {seasons} {seasons_word}, but {podiums} {podiums_word} and {points} points for {last}."
-    ],
-    "scrub": [
-      "{last} made {starts} {starts_word} across {seasons} {seasons_word} for {teams_list}, scoring {points} points.",
-      "Across {seasons} {seasons_word} with {main_team}, {they} made {starts} {starts_word} and scored {points} points.",
-      "{starts} {starts_word} over {seasons} {seasons_word}, {points} points, no podiums.",
-      "{last} lasted {seasons} {seasons_word} and {starts} {starts_word} in the sport."
-    ]
-  },
-  "brilliance": [
-    "{their_cap} finest day came at the {sig_circuit} in {sig_year}, a win from {sig_grid} on the grid.",
-    "At {sig_circuit} in {sig_year}, {they} started {sig_grid} and took the flag first.",
-    "The {sig_year} {sig_circuit} race, started from {sig_grid}, stood as the clearest proof of what {last} could do.",
-    "A charge from {sig_grid} at {sig_circuit} in {sig_year} produced the win that most people remember first.",
-    "{sig_year} at {sig_circuit}: {they} qualified {sig_grid} and still crossed the line first."
+  "headline": [
+    "Remembering {name}",
+    "Whatever happened to {last}",
+    "{last}, {era}",
+    "Looking back at {last}",
+    "{last} in {era}",
+    "Where did {last} go"
   ],
-  "bestSeason": [
-    "{last} peaked in {best_year} with {best_wins} {best_wins_word} for {best_team}.",
-    "The {best_year} season at {best_team} was the high point: {best_wins} {best_wins_word}.",
-    "{best_wins} {best_wins_word} for {best_team} in {best_year} represented the ceiling of {their} career.",
-    "{last} and {best_team} produced {best_wins} {best_wins_word} together in {best_year}, the best single-season return of the career."
-  ],
-  "ousting": {
-    "h2hLost": [
-      "Against {tm_name} ({tm_years}) the record was unkind: {tm_qual} in qualifying, {tm_race} on Sundays.",
-      "Against {tm_name} ({tm_years}) {they} came off worse: {tm_qual} in qualifying, {tm_race} on Sundays.",
-      "{tm_name} had the upper hand throughout {tm_years}, {tm_qualv} in qualifying and {tm_racev} across the races.",
-      "Over {tm_years}, {tm_name} outqualified {last} {tm_qualv} and led the race head-to-head {tm_racev}."
-    ],
-    "h2hHeld": [
-      "Against {tm_name} ({tm_years}) the head-to-head was {tm_qual} in qualifying and {tm_race} in races, a respectable account by any measure.",
-      "{last} more than matched {tm_name} across {tm_years}: {tm_qual} in qualifying, {tm_race} on Sundays.",
-      "Against {tm_name} across {tm_years}, {they} held {their} own: {tm_qual} in qualifying and {tm_race} in races, making the loss of the seat harder to explain.",
-      "{tm_name} did not dominate: {tm_qualv} in qualifying and {tm_racev} in races over {tm_years} show a fight well held."
-    ],
-    "successorBetter": [
-      "The seat went to {succ_name}, who would take {succ_wins} {succ_wins_word}.",
-      "{succ_name} replaced {last} and went on to record {succ_wins} {succ_wins_word}.",
-      "Whoever made that call found the answer in {succ_name}: {succ_wins} {succ_wins_word} followed.",
-      "{succ_name} stepped into the seat that had moved {last} on, and delivered {succ_wins} {succ_wins_word}."
-    ],
-    "successorChampion": [
-      "The seat went to {succ_name}, a future champion.",
-      "{succ_name} took the seat and went on to win the title.",
-      "{succ_name} replaced {last} and turned the drive into {succ_titles} {succ_titles_word}.",
-      "The driver who took over, {succ_name}, would go on to be champion."
-    ],
-    "successorWorse": [
-      "{succ_name} replaced {last} and failed to do more with the same machinery.",
-      "The driver who took the seat, {succ_name}, produced little to justify the change.",
-      "{succ_name} stepped in and the results did not improve, leaving the decision looking questionable.",
-      "A season or two of {succ_name} in the car answered little, and the question of why {last} left lingered."
-    ]
-  },
-  "whatCouldHaveBeen": {
-    "runnerUp": [
-      "{last} finished championship runner-up {ru_count} {ru_count_word} ({ru_years}), but never took the title.",
-      "Runner-up in {ru_years}: second in the standings {ru_count} {ru_count_word}, champion none.",
-      "{ru_count} runner-up finishes ({ru_years}), and no title to go with them.",
-      "Second was as far as it went, {ru_count} {ru_count_word} ({ru_years})."
-    ],
-    "winlessTitle": [
-      "{wins} {wins_word}, but no championship.",
-      "{they_cap} took {wins} {wins_word}; the title never came.",
-      "A driver with {wins} {wins_word} and no title.",
-      "{wins} {wins_word} and a titles column that reads zero."
-    ]
-  },
-  "rivals": {
-    "intro": [
-      "{last} shared a grid with {rivals_list}.",
-      "The contemporaries included {rivals_list}.",
-      "Among those on the grid in the same era: {rivals_list}.",
-      "{last} raced against {rivals_list} across those years."
-    ],
+
+  "rivalPhrase": {
     "titleChamp": [
       "{rtitles}-time champion {rname}",
       "champion {rname}",
@@ -122,63 +16,173 @@
       "{rname}"
     ],
     "title": [
-      "title rival {rname}",
-      "championship challenger {rname}",
-      "front-runner {rname}",
-      "{rname}"
-    ],
-    "teammate": [
-      "teammate {rname}",
-      "garage partner {rname}",
-      "{rname}"
-    ],
-    "teammateWinner": [
-      "race-winner {rname}",
-      "{rwins}-time race-winner {rname}",
-      "teammate {rname}"
+      "{rname}",
+      "title contender {rname}",
+      "championship challenger {rname}"
     ]
   },
-  "remembered": {
-    "goat": [
-      "{last} sits {rank_ord} all-time in {rank_metric} with {rank_value}, which puts the career in the very top bracket.",
-      "{rank_ord} in all-time {rank_metric} ({rank_value}) is not a number that disappears from the record books.",
-      "The {rank_ord} all-time mark in {rank_metric} at {rank_value} settles where {last} belongs in the history of the sport.",
-      "Any serious accounting of the greatest to drive in this era includes {last}: {rank_ord} all-time in {rank_metric} at {rank_value}."
+
+  "great": {
+    "dek": [
+      "{titles} {titles_word} and a place among the greats.",
+      "{titles} {titles_word} ({title_years}) and {wins} {wins_word}.",
+      "{wins} {wins_word}, {podiums} {podiums_word}, {titles} {titles_word}.",
+      "{titles} {titles_word}, {wins} {wins_word}, and {poles} {poles_word}."
     ],
-    "loved": [
-      "Not quite an all-time great, but {last} was a racer respected across the paddock for {seasons} {seasons_word}.",
-      "The career sits outside the all-time debates, but {last} earned genuine regard among those who watched that era.",
-      "Short of the greatest-ever bracket, but a proper driver who earned the respect of the people in the garage.",
-      "{last} never threatened the record books, but earned a solid reputation along the way."
+    "lead": [
+      "{name} won {titles} {titles_word} ({title_years}) across {era}, with {wins} {wins_word} and {podiums} {podiums_word} for {teams_list}.",
+      "Across {era}, {name} collected {titles} {titles_word} ({title_years}), {wins} {wins_word}, and {podiums} {podiums_word} racing for {teams_list}.",
+      "{name} built a career of {titles} {titles_word} ({title_years}), {wins} {wins_word}, and {podiums} {podiums_word} across {era} with {teams_list}."
     ],
-    "footnote": [
-      "{last} is a footnote now: remembered by the dedicated few, anonymous to most.",
-      "A small career by the numbers: {last} made {starts} {starts_word} and then was gone.",
-      "The diehards remember {last}; a wider audience largely does not, and that is an honest read of {starts} {starts_word} without a win.",
-      "Years on, the name rings a faint bell at best. {last} was there, and the starts are on the record."
+    "peak": [
+      "{their_cap} best year was {best_year}: {best_wins} {best_wins_word} for {best_team}.",
+      "In {best_year}, {they} took {best_wins} {best_wins_word} with {best_team}.",
+      "{best_year} was {their} peak: {best_wins} {best_wins_word} for {best_team}."
+    ],
+    "signature": [
+      "{they_cap} won the {sig_year} {sig_circuit} from {sig_grid} on the grid.",
+      "At the {sig_year} {sig_circuit}, {they} started {sig_grid} and won.",
+      "The {sig_year} {sig_circuit} saw {them} go from {sig_grid} on the grid to the win."
+    ],
+    "peers": [
+      "{their_cap} titles came against {rivals_list}.",
+      "The era also held {rivals_list}.",
+      "{they_cap} beat out {rivals_list} to take those championships."
+    ],
+    "verdict": [
+      "{rank_ord} all-time in {rank_metric} with {rank_value}, {last} sits among the greatest to race.",
+      "With {rank_value} {rank_metric}, {last} stands {rank_ord} all-time.",
+      "{last} is {rank_ord} all-time in {rank_metric} ({rank_value}), among the sport's finest."
     ]
   },
-  "quote": {
-    "goat": [
-      "\"You measured yourself against {last},\" one rival said years later.",
-      "\"There was a period where {last} simply could not be touched,\" a former engineer recalled.",
-      "\"The numbers do not lie, and {last}'s numbers were extraordinary,\" one paddock veteran observed.",
-      "\"Racing against {last} at the peak raised everyone else's level,\" a contemporary noted.",
-      "\"You knew when {last} was on a lap. You just knew,\" one team principal said."
+
+  "nearly": {
+    "dek": [
+      "{wins} {wins_word}, but never a championship.",
+      "{wins} {wins_word} and no title: the story of {last}.",
+      "The championship that never came: {wins} {wins_word} for {last}.",
+      "{last} took {wins} {wins_word} and never won the title."
     ],
-    "loved": [
-      "\"Every paddock had a soft spot for {last},\" a former mechanic recalled.",
-      "\"A genuine racer. The sport was better for having {last} in it,\" one ex-teammate said.",
-      "\"The results do not capture what {last} was worth to a team,\" a former engineer noted.",
-      "\"You wanted {last} on your side of the garage. Always prepared, always honest,\" one crew member remembered.",
-      "\"The car was never quite good enough, but {last} never used that as an excuse,\" a former rival said."
+    "lead": [
+      "{name} took {wins} {wins_word} across {era} but never a championship. Driving mostly for {main_team}, {they} took {podiums} {podiums_word} and {points} points.",
+      "Across {era}, {name} raced mostly for {main_team} and took {wins} {wins_word}, adding {podiums} {podiums_word} and {points} points, but no title.",
+      "{name} spent {era} mainly at {main_team}, taking {wins} {wins_word}, {podiums} {podiums_word}, and {points} points without a championship to show for it."
     ],
-    "footnote": [
-      "\"{last} never had the car,\" one old hand shrugged.",
-      "\"The timing was wrong for {last}. A different season and the story reads differently,\" a paddock observer recalled.",
-      "\"Most people have forgotten, but {last} was there and gave it everything,\" a former mechanic said.",
-      "\"Not every driver gets the machinery. {last} was one of those cases,\" a contemporary noted.",
-      "\"The results were thin, but {last} was not a passenger. The car just was not there,\" one engineer said."
+    "peak": [
+      "{their_cap} best season was {best_year}, {best_wins} {best_wins_word} for {best_team}.",
+      "In {best_year} {they} took {best_wins} {best_wins_word} with {best_team}, {their} strongest run at a title.",
+      "{best_year} produced {best_wins} {best_wins_word} for {best_team}, {their} best single season."
+    ],
+    "signature": [
+      "{they_cap} won the {sig_year} {sig_circuit} from {sig_grid} on the grid.",
+      "At the {sig_year} {sig_circuit}, {they} started {sig_grid} and took the win.",
+      "The {sig_year} {sig_circuit}: {they} started {sig_grid} on the grid and crossed the line first."
+    ],
+    "runnerup": [
+      "{they_cap} finished runner-up in the championship in {ru_years}.",
+      "In {ru_years}, {they} finished second in the championship.",
+      "The championship runner-up spot in {ru_years} was as close as {they} got."
+    ],
+    "peers": [
+      "The championships {they} chased went to {rivals_list}.",
+      "Those titles went to {rivals_list}.",
+      "{rivals_list} took the championships {last} was racing for."
+    ],
+    "verdict": [
+      "{wins} {wins_word} without a title leave {last} among the best never to be champion.",
+      "{last} is {rank_ord} all-time in {rank_metric} with {rank_value} and no championship, a short and unlucky list.",
+      "{wins} {wins_word} and a championship runner-up finish put {last} among the fastest never to take the title."
+    ]
+  },
+
+  "loyal": {
+    "dek": [
+      "{seasons} {seasons_word} on the grid, the odd podium, no win.",
+      "No win in {seasons} {seasons_word}, but {podiums} {podiums_word} and a steady hand.",
+      "{seasons} {seasons_word}, {podiums} {podiums_word}, zero wins.",
+      "A career built on reliability: {seasons} {seasons_word} and {podiums} {podiums_word}."
+    ],
+    "lead": [
+      "{name} raced {era} for {teams_list}, {starts} {starts_word} without a win but {podiums} {podiums_word} and {points} points.",
+      "From {era}, {name} put in {starts} {starts_word} across {teams_list}, scoring {podiums} {podiums_word} and {points} points, never winning.",
+      "{name} spent {era} at {teams_list}: {starts} {starts_word}, {podiums} {podiums_word}, {points} points, and no victory."
+    ],
+    "peak": [
+      "{their_cap} best year was {best_year} with {best_team}.",
+      "In {best_year} with {best_team}, {they} had {their} strongest season.",
+      "{best_year} at {best_team} was the high point of {their} career."
+    ],
+    "peers": [
+      "{they_cap} raced in the era of {rivals_list}, mostly behind them.",
+      "Up front were {rivals_list}; {last} made the midfield {their} own.",
+      "The front runners were {rivals_list}; {last} contested the races behind them."
+    ],
+    "verdict": [
+      "No win came in {seasons} {seasons_word}, but {podiums} {podiums_word} and {points} points mark a real career; {last} was a dependable hand.",
+      "{last} never won, but {podiums} {podiums_word} and {points} points across {seasons} {seasons_word} show someone who belonged on the grid.",
+      "A career of {seasons} {seasons_word}, {podiums} {podiums_word}, and {points} points: no win, but {last} was no passenger."
+    ]
+  },
+
+  "outpaced": {
+    "dek": [
+      "Outqualified by {tm_name} all the way, gone in {seasons} {seasons_word}.",
+      "{tm_name} had the pace; the seat was gone in {seasons} {seasons_word}.",
+      "A career of {seasons} {seasons_word}, spent behind {tm_name}.",
+      "{seasons} {seasons_word}, never a match for {tm_name} on pace."
+    ],
+    "lead": [
+      "{name} spent {era} at {main_team}, {starts} {starts_word} for {points} points, and was outpaced by {tm_name} in qualifying throughout.",
+      "At {main_team} across {era}, {name} managed {starts} {starts_word} and {points} points, but never matched {tm_name} for one-lap pace.",
+      "From {era}, {name} raced {starts} {starts_word} at {main_team} for {points} points, with {tm_name} the quicker over a lap."
+    ],
+    "h2h": [
+      "{tm_name} out-qualified {them} {tm_qualv} across {tm_years}.",
+      "In qualifying across {tm_years}, {tm_name} beat {them} {tm_qualv}.",
+      "The qualifying record over {tm_years} read {tm_qualv} to {tm_name}."
+    ],
+    "successorWon": [
+      "When {main_team} moved {them} on, the seat went to {succ_name}, who took {succ_wins} {succ_wins_word} in the same car.",
+      "{main_team} replaced {them} with {succ_name}, who managed {succ_wins} {succ_wins_word} where {last} had none.",
+      "The seat passed to {succ_name}, good for {succ_wins} {succ_wins_word} in the car {last} had left."
+    ],
+    "successorGone": [
+      "The seat soon passed to {succ_name}, and {last} did not race in F1 again.",
+      "{main_team} moved {them} on, and {last} never found another competitive drive.",
+      "{succ_name} took over the seat; {last} did not return to the grid."
+    ],
+    "flicker": [
+      "There was {podiums} {podiums_word}, a glimpse of more.",
+      "{podiums} {podiums_word} showed {they} had the pace on the right day."
+    ],
+    "verdict": [
+      "{last} never got another front-line seat, and is little remembered now.",
+      "After {main_team}, no competitive drive came, and {last} faded from the paddock.",
+      "{last} left without a win and without a second chance."
+    ]
+  },
+
+  "footnote": {
+    "dek": [
+      "{starts} {starts_word}, then gone.",
+      "Came, raced {starts} {starts_word}, left no mark.",
+      "{starts} {starts_word} and nothing to show for them.",
+      "A stint of {starts} {starts_word} the grid barely noticed."
+    ],
+    "lead": [
+      "{name} raced {era} for {teams_list}, {starts} {starts_word} and {points} points, no podiums.",
+      "From {era}, {name} put in {starts} {starts_word} for {teams_list}: {points} points and no podiums.",
+      "{name} appeared on the grid {era} with {teams_list}, {starts} {starts_word}, {points} points, no podiums."
+    ],
+    "h2h": [
+      "Alongside {tm_name}, {they} were out-qualified {tm_qualv} across {tm_years}.",
+      "{tm_name} beat {them} {tm_qualv} in qualifying across {tm_years}, and the races went the same way.",
+      "Against {tm_name} across {tm_years}, the qualifying record read {tm_qualv} the wrong way for {last}."
+    ],
+    "verdict": [
+      "{last} came and went without a result of note, remembered now only by the most devoted.",
+      "No podium, no standout result: {last} is a name in the entry lists and little more.",
+      "{last} left the sport with {points} points from {starts} {starts_word}, a career the record books all but ignore."
     ]
   }
 }
