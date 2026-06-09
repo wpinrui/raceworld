@@ -95,7 +95,7 @@ export interface LegendProfile {
   allTimeRank: { metric: 'wins' | 'podiums' | 'points' | 'titles'; rank: number; value: number } | null  // best all-time standing
   allTimeRanks: Record<'wins' | 'poles' | 'podiums' | 'points', { rank: number; value: number } | null>  // per-metric, for the conclusion
   peak: { wdc: number; year: number; team: string; teamWcc: number | null } | null  // best championship finish + car level
-  lastSeason: { year: number; team: string; wdc: number | null; teamWcc: number | null; wins: number; tm: { name: string; qual: string; race: string; beaten: boolean } | null } | null
+  lastSeason: { year: number; team: string; wdc: number | null; teamWcc: number | null; wins: number; replacedBy: string | null; tm: { name: string; qual: string; race: string; beaten: boolean } | null } | null
   marqueeRival: { name: string; kind: 'title' | 'teammate' | 'peer'; detail: string } | null  // the rival that matters most, + why
 }
 export interface LegendFeature { driverId: string; date: string; profile: LegendProfile }  // date = the 4-month-grid slot
@@ -4153,7 +4153,7 @@ const LEGEND_COPY = legendsCopy as unknown as {
   stature: LegendPools
   texture: LegendPools
   retro: LegendPools
-  rivalQuote: LegendPools
+  rivalQuote: { intro: LegendPools; assessment: LegendPools }
   lastSeason: LegendPools
   immortal: LegendPools; champion: LegendPools; nearly: LegendPools; winner: LegendPools; bestOfRest: LegendPools; midfield: LegendPools; footnote: LegendPools
 }
@@ -4225,6 +4225,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
       peak_ord: p.peak ? ordinal(p.peak.wdc) : '', peak_year: p.peak?.year ?? '', peak_team: p.peak?.team ?? '', peak_wcc_ord: p.peak?.teamWcc ? ordinal(p.peak.teamWcc) : '',
       last_team: p.lastSeason?.team ?? '', last_wdc_ord: p.lastSeason?.wdc ? ordinal(p.lastSeason.wdc) : '',
       last_tm: p.lastSeason?.tm?.name ?? '', last_tm_qual: p.lastSeason?.tm ? `${p.lastSeason.tm.qual.split('–')[1]}–${p.lastSeason.tm.qual.split('–')[0]}` : '',
+      last_replacement: p.lastSeason?.replacedBy ?? '',
       riv_name: p.marqueeRival?.name ?? '', riv_detail: p.marqueeRival?.detail ?? '',
     }
 
@@ -4243,11 +4244,16 @@ function legends(ctx: NewsContext): NewsArticle[] {
           : ''
     const retro = join(seg(L.retro.bestSeason, 'best', p.wins >= 1 && !!p.bestSeason), battle, seg(L.retro.race, 'race', hasSig))
 
-    // 3) RIVAL QUOTE — from the rival who matters most, with the reason they were a rival stated.
-    const quote = p.marqueeRival ? seg(L.rivalQuote[p.marqueeRival.kind], 'q') : ''
+    // 3) RIVAL QUOTE — the rival who matters most (intro = the relationship) + an assessment GRADED BY TIER,
+    //    so a back-marker's rival doesn't call them the fastest they faced. intro × assessment combine.
+    const quote = p.marqueeRival
+      ? join(seg(L.rivalQuote.intro[p.marqueeRival.kind], 'qi'), seg(L.rivalQuote.assessment[tier], 'qa'))
+      : ''
 
-    // 4) LAST SEASON — how it ended: still had it, or outshone by the team-mate and time to go.
-    const last = ending ? seg(L.lastSeason[ending], 'last') : ''
+    // 4) LAST SEASON — how it ended. When they were pushed out / faded, name who took the seat; fall back to
+    //    the anonymous wording when the team folded or kept the same line-up (no known replacement).
+    const endKey = (ending === 'pushedOut' || ending === 'faded') && !slots.last_replacement ? `${ending}Anon` : ending
+    const last = ending ? seg(L.lastSeason[endKey], 'last') : ''
 
     // 5) CONCLUSION — all-time standing, framed + a wins/podiums stature, or a plain verdict for footnotes.
     const rankList = (['wins', 'poles', 'podiums', 'points'] as const)

@@ -120,27 +120,61 @@
     ]
   },
   "rivalQuote": {
-    "title": [
-      "{riv_name}, who took the {riv_detail} title off {them}, never forgot it: \"You did not get a clean lap near {last}. Every qualifying session was a fight before the race even started.\"",
-      "{riv_name}, who edged {them} to the {riv_detail} crown, was blunt about it years later: \"If {last} had the car I had that year, I think the table turns. Simple as that.\"",
-      "{riv_name}, who closed the {riv_detail} championship ahead of {them}, acknowledged what it cost: \"{last} pushed me to the final race. I had nothing spare by the end.\"",
-      "{riv_name}, who beat {them} to the {riv_detail} title, was generous in hindsight: \"{last} made me earn every point. I never once relaxed with {them} on the road.\"",
-      "Years on, {riv_name}, the {riv_detail} champion, still rated {them}: \"On pure pace, there were days {last} had me covered. The title flattered me a little.\"",
-      "{riv_name}, who denied {them} the {riv_detail} crown, kept it plain: \"Beating {last} meant beating the best of that field. I knew it at the time.\""
-    ],
-    "teammate": [
-      "{riv_name}, alongside {them} from {riv_detail}, put it plainly: \"On {their} day, {last} was as quick as anyone I raced.\"",
-      "{riv_name}, who shared the garage with {them} through {riv_detail}, had no illusions: \"{last} was not easy to live with as a team-mate. Every tenth was contested.\"",
-      "{riv_name}, partnered with {them} during {riv_detail}, was direct: \"I had to raise my game the whole time. {last} never let a gap stay a gap.\""
-    ],
-    "peer": [
-      "{riv_name}, who fought {them} for {riv_detail}th most weekends, recalled: \"We banged wheels for years. {last} never gave an inch.\"",
-      "{riv_name}, scrapping with {them} for {riv_detail}th race after race, remembered it this way: \"You knew where {last} was going to be every Sunday. Right behind you, right on your gearbox.\"",
-      "{riv_name}, who traded {riv_detail}th with {them} across those years, was honest: \"{last} cost me points I never got back. But I gave a few back too.\""
-    ]
+    "intro": {
+      "title": [
+        "{riv_name}, who pipped {them} to the {riv_detail} title, looked back honestly:",
+        "{riv_name} took the {riv_detail} championship ahead of {them}, and was candid about it:",
+        "{riv_name}, who edged {them} out for the {riv_detail} crown, gave an honest assessment:"
+      ],
+      "teammate": [
+        "{riv_name}, who shared a garage with {them} during {riv_detail}, put it plainly:",
+        "{riv_name}, alongside {them} from {riv_detail}, was direct about it:",
+        "{riv_name}, who was {their} team-mate through {riv_detail}, didn't mince words:"
+      ],
+      "peer": [
+        "{riv_name}, who raced {them} season after season, recalled:",
+        "{riv_name}, a long-standing rival on the grid, was straightforward:",
+        "{riv_name}, who lined up against {them} across many seasons, put it simply:"
+      ]
+    },
+    "assessment": {
+      "immortal": [
+        "\"{last} was the best I ever lined up against. On pure pace, nobody in that era came close.\"",
+        "\"{last} set the standard for everyone. You benchmarked yourself against {them}, not the other way around.\""
+      ],
+      "champion": [
+        "\"{last} made every championship a proper fight. {they_cap} never gave you an inch.\"",
+        "\"{last} was a worthy champion. {they_cap} elevated the level whenever {they} was in contention.\""
+      ],
+      "nearly": [
+        "\"{last} had the pace of a champion. The title just never fell {their} way.\"",
+        "\"{last} was as quick as anyone I raced. {they_cap} is probably the fastest never to win it.\""
+      ],
+      "winner": [
+        "\"{last} could beat anyone when the car was there. Not a consistent title threat, but dangerous on {their} day.\"",
+        "\"{last} had race-winning pace. You couldn't afford to give {them} a sniff when conditions suited.\""
+      ],
+      "bestOfRest": [
+        "\"{last} was always in the fight for the podium and the top six. You never relaxed with {them} in your mirrors.\"",
+        "\"{last} was a fixture just outside the top step. Consistent, hard to shake, never quite there for the win.\""
+      ],
+      "midfield": [
+        "\"{last} was a proper midfield racer. Tough to pass, good for every point {they} could get.\"",
+        "\"{last} knew what {their} car could do and extracted it every time. Never near the rostrum, but never a soft touch either.\""
+      ],
+      "footnote": [
+        "\"{last} was clean and honest to race. You knew where {they} was, no surprises.\"",
+        "\"{last} was fair out there. A reliable benchmark, never troublesome to get past.\""
+      ]
+    }
   },
   "lastSeason": {
     "pushedOut": [
+      "By {last_year} it was over: {last_tm} had out-qualified {them} {last_tm_qual} at {last_team}, the seat was gone, and {last_replacement} was announced as {their} replacement.",
+      "The numbers at {last_team} told the story: {last_tm} out-qualified {them} {last_tm_qual} across {last_year}, and {last_replacement} took the seat the following season.",
+      "By {last_year} {last_tm} had out-qualified {them} {last_tm_qual} at {last_team}, leaving little room for debate. {last_replacement} came in for the next campaign."
+    ],
+    "pushedOutAnon": [
       "By {last_year} it was over: at {last_team}, {last_tm} out-qualified {them} {last_tm_qual}, and the seat went elsewhere.",
       "The {last_year} numbers told the story clearly. {last_tm} beat {them} {last_tm_qual} in qualifying at {last_team}, and the contract was not renewed.",
       "At {last_team} in {last_year}, {last_tm} had the edge in qualifying {last_tm_qual}, and {their} time was up."
@@ -156,6 +190,11 @@
       "{last_year} with {last_team} was a clean exit: {they} kept {last_tm} honest throughout, and chose when to go."
     ],
     "faded": [
+      "By {last_year} the results had dried up, {last_replacement} took {their} seat at {last_team}, and {they} stepped away from the grid.",
+      "The points stopped coming in {last_year}, and {last_team} moved on: {last_replacement} came in, and {they} were gone.",
+      "By {last_year} it was a quiet end: {last_replacement} replaced {them} at {last_team} and {last} left the grid without fanfare."
+    ],
+    "fadedAnon": [
       "By {last_year} the results had dried up, and {they} stepped away.",
       "The final seasons thinned to almost nothing, and {last_year} was the quiet end of it.",
       "There was no dramatic finale; by {last_year} the points had stopped coming and {they} retired without ceremony."

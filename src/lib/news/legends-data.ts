@@ -244,10 +244,22 @@ function buildLegendProfile(
   let lastSeason: LegendProfile['lastSeason'] = null
   if (seasonRows.length) {
     const lr = seasonRows[0]
+    // Who took the seat: a genuinely NEW face at the same team the following season (present then, absent in
+    // the driver's final year), and not the driver. Pick deterministically; null if the team folded or kept
+    // its line-up. Lets the close name the replacement instead of "the seat went elsewhere".
+    let replacedBy: string | null = null
+    const nextId = getArchivedSeasonIdByYear(lr.seasonYear + 1)
+    if (nextId != null) {
+      const before = new Set(getSeasonDriversForTeam(lr.seasonId, lr.teamId).map((d) => d.driverId))
+      const arrivals = getSeasonDriversForTeam(nextId, lr.teamId)
+        .filter((d) => d.driverId !== s.id && !before.has(d.driverId))
+        .sort((a, b) => (a.driverId < b.driverId ? -1 : 1))
+      replacedBy = arrivals[0]?.driverName ?? null
+    }
     lastSeason = {
       year: lr.seasonYear, team: lr.teamName, wdc: wdcOf(lr.seasonId),
       teamWcc: getTeamFinalPositionInSeason(lr.seasonId, lr.teamId),
-      wins: byYear.get(lr.seasonYear)?.wins ?? 0, tm: tmH2HForYear(lr.seasonYear),
+      wins: byYear.get(lr.seasonYear)?.wins ?? 0, replacedBy, tm: tmH2HForYear(lr.seasonYear),
     }
   }
 
