@@ -116,8 +116,8 @@ export function HeadlinesPanel() {
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
     actionGetTeamDriverTallies(year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
-    actionGetLegendData(year, saveSeed, drivers.map((d) => d.id)).then(setLegendData).catch(() => setLegendData(undefined))
-  }, [year, saveSeed, drivers])
+    actionGetLegendData(year, saveSeed).then(setLegendData).catch(() => setLegendData(undefined))
+  }, [year, saveSeed])
 
   const headlines = useMemo(() => {
     // Use the SAME shared builder as the newsroom and the Continue loop, so the home feed can never

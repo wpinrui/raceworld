@@ -80,8 +80,8 @@ export async function actionGetDriverCareers(throughYear: number): Promise<Recor
 // This year's "remember this driver?" legends features (#93): the retired drivers chosen for the
 // 4-month-grid slots, each with the archive-derived facts the producer renders. `throughYear` is the
 // live year; selection is seeded by `saveSeed` so the same save always picks the same legends.
-export async function actionGetLegendData(throughYear: number, saveSeed: string | undefined, activeDriverIds: string[]): Promise<LegendDataset> {
-  return buildLegendData(throughYear, saveSeed, activeDriverIds)
+export async function actionGetLegendData(throughYear: number, saveSeed: string | undefined): Promise<LegendDataset> {
+  return buildLegendData(throughYear, saveSeed)
 }
 
 // Per-team constructor career totals from the archive, up to and including `throughYear`. The basis

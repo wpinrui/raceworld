@@ -26,7 +26,7 @@ async function archiveAndRollover(): Promise<void> {
       actionGetTeamCareers(s.year - 1),
       actionGetSeasonRecords(),
       actionGetTeamDriverTallies(s.year - 1),
-      actionGetLegendData(s.year, s.saveSeed, s.drivers.map((d) => d.id)),
+      actionGetLegendData(s.year, s.saveSeed),
     ])
     const articles = generateNews(buildLiveNewsContext({
       year: s.year, saveSeed: s.saveSeed, phase: s.phase, raceResults: s.raceResults, drivers: s.drivers, teams: s.teams,

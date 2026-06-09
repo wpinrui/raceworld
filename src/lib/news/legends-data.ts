@@ -38,13 +38,16 @@ function buildGenderResolver(): (id: string) => string {
 // the Continue-loop interrupt; colliding with a race weekend is harmless (the feed sorts by date).
 const SLOT_DATES = ['02-14', '06-14', '10-14'] as const
 
-// A legend candidate must be OFFICIALLY RETIRED, not merely off the grid. The game retires a driver only
-// after RETIREMENT_SEASONS_OUT consecutive seasons without a seat, at which point it removes them from the
-// roster/market (`applyMarketAttrition`). So the authoritative test is "raced, and no longer in the live
-// driver pool" — a seatless free agent is NOT retired and stays in the pool. `activeIds` is that live pool
-// (s.drivers, which includes free agents). The lastYear distance is a secondary guard + the replay anchor.
-function eligibleAsOf(stats: AllTimeDriverStat[], year: number, activeIds: Set<string>): AllTimeDriverStat[] {
-  return stats.filter((s) => s.races > 0 && !activeIds.has(s.id) && s.lastYear <= year - RETIREMENT_SEASONS_OUT)
+// A legend candidate is a driver who RACED and then stopped for at least RETIREMENT_SEASONS_OUT seasons.
+// This is read PURELY FROM THE ARCHIVE (lastYear is their final race), never from the live roster. Tying
+// it to s.drivers (an earlier mistake) made selection depend on a mutable, lumpy input: the game removes
+// seatless drivers from the pool erratically via applyMarketAttrition, which both starved the series for
+// years at a stretch and — because the roster shifts every season — reshuffled past picks and re-featured
+// drivers already shown. An archive-only test is stable: a retired driver's lastYear never moves, so the
+// whole schedule replays identically every season. (An active driver's lastYear is recent, so the distance
+// guard already excludes them; there is no need to consult the live pool.)
+function eligibleAsOf(stats: AllTimeDriverStat[], year: number): AllTimeDriverStat[] {
+  return stats.filter((s) => s.races > 0 && s.lastYear <= year - RETIREMENT_SEASONS_OUT)
 }
 
 // Deterministic, replayable selection. Walk every year from the series' first eligible year up to
@@ -55,14 +58,13 @@ export function selectLegendPicks(
   stats: AllTimeDriverStat[],
   throughYear: number,
   saveSeed: string,
-  activeIds: Set<string>,
 ): { driverId: string; date: string }[] {
   // Sort by id FIRST: getAllTimeDriverStats() has no ORDER BY, so SQLite's GROUP BY row order is not
   // stable as seasons archive. The seeded index pick below indexes into this order, so without a fixed
   // sort a past year's pick could change after more seasons archive — diverging from the stored snapshot
   // and breaking the never-repeat invariant. A stable id sort makes selection fully replayable.
   const ordered = [...stats].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  const everEligible = eligibleAsOf(ordered, throughYear, activeIds)
+  const everEligible = eligibleAsOf(ordered, throughYear)
   if (everEligible.length === 0) return []
   const firstYear = Math.min(...everEligible.map((s) => s.lastYear)) + RETIREMENT_SEASONS_OUT
   const featured = new Set<string>()
@@ -70,7 +72,7 @@ export function selectLegendPicks(
   for (let y = firstYear; y <= throughYear; y++) {
     const yearPicks: { driverId: string; date: string }[] = []
     for (let slot = 0; slot < SLOT_DATES.length; slot++) {
-      const pool = eligibleAsOf(ordered, y, activeIds).filter((s) => !featured.has(s.id))
+      const pool = eligibleAsOf(ordered, y).filter((s) => !featured.has(s.id))
       if (pool.length === 0) break
       const rng = mulberry32(`${saveSeed}|legend|${y}|${slot}`)
       const chosen = pool[Math.floor(rng() * pool.length)]
@@ -317,10 +319,10 @@ function buildLegendProfile(
 
 // Build this year's legends features: pick the retired drivers, then profile each. Empty until the
 // save has a driver who has been gone RETIREMENT_SEASONS_OUT years.
-export function buildLegendData(throughYear: number, saveSeed: string | undefined, activeDriverIds: string[] = []): LegendDataset {
+export function buildLegendData(throughYear: number, saveSeed: string | undefined): LegendDataset {
   if (!saveSeed) return { features: [] }
   const stats = getAllTimeDriverStats()
-  const picks = selectLegendPicks(stats, throughYear, saveSeed, new Set(activeDriverIds))
+  const picks = selectLegendPicks(stats, throughYear, saveSeed)
   if (picks.length === 0) return { features: [] }
   const statsById = new Map(stats.map((s) => [s.id, s]))
   const champions = getAllSeasonChampions()
