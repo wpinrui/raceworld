@@ -4148,7 +4148,7 @@ const LEGEND_COPY = legendsCopy as unknown as {
   headline: string[]
   rivalPhrase: LegendPools
   stature: LegendPools
-  great: LegendPools; nearly: LegendPools; loyal: LegendPools; outpaced: LegendPools; footnote: LegendPools
+  great: LegendPools; nearly: LegendPools; winner: LegendPools; loyal: LegendPools; outpaced: LegendPools; footnote: LegendPools
 }
 
 // A driver's standing as a phrase, gated on career wins then podiums — the "tier" the conclusion states
@@ -4171,9 +4171,13 @@ function legends(ctx: NewsContext): NewsArticle[] {
     // Classify the career into ONE story angle, so the piece argues a point of view (lead → evidence →
     // verdict) instead of stacking independent beats. Each angle has its own purpose-written copy.
     const crushed = !!h && h.qualLosses >= Math.max(1, h.qualWins) * 2 && p.seasons <= 3
-    const angle: 'great' | 'nearly' | 'loyal' | 'outpaced' | 'footnote' =
+    // A genuine title contender (the "nearly-man" story) needs real weight — many wins or more than one
+    // championship runner-up. A driver with a couple of wins is a race-winner, not a nearly-champion, and
+    // gets the lighter `winner` angle (no forced "the missing championship" narrative).
+    const contender = p.wins >= 6 || p.runnerUpYears.length >= 2
+    const angle: 'great' | 'nearly' | 'winner' | 'loyal' | 'outpaced' | 'footnote' =
       p.titles >= 1 ? 'great'
-        : p.wins >= 1 ? 'nearly'
+        : p.wins >= 1 ? (contender ? 'nearly' : 'winner')
           : crushed ? 'outpaced'
             : p.podiums >= 1 ? 'loyal'  // loyal celebrates the podium(s); a podiumless career is a footnote
               : 'footnote'
@@ -4222,7 +4226,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
     let evidence = ''
     if (angle === 'great') {
       evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.signature, 'sig', hasSig), seg(A.peers, 'peers', !!slots.rivals_list))
-    } else if (angle === 'nearly') {
+    } else if (angle === 'nearly' || angle === 'winner') {
       evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.signature, 'sig', hasSig), seg(A.runnerup, 'ru', p.runnerUpYears.length > 0), seg(A.peers, 'peers', !!slots.rivals_list))
     } else if (angle === 'loyal') {
       evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.peers, 'peers', !!slots.rivals_list))
@@ -4248,7 +4252,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
     // The conclusion FRAMES the all-time standing (what the ranking means, tied to the angle's thesis)
     // rather than appending a bare infobox; {stats_line}/{as_of} are the facts it wraps. Also-rans and
     // footnotes (no win/podium/pole standing) get the angle's plain verdict instead.
-    const hasStanding = rankList.length > 0 && (angle === 'great' || angle === 'nearly' || angle === 'loyal')
+    const hasStanding = rankList.length > 0 && (angle === 'great' || angle === 'nearly' || angle === 'winner' || angle === 'loyal')
     const stature = fill(pick(L.stature[legendStature(p.wins, p.podiums)], `${seed}|stat`), slots)
     const conclusion = hasStanding
       ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks, stature })
