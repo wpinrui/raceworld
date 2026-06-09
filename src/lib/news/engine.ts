@@ -4169,8 +4169,13 @@ function legends(ctx: NewsContext): NewsArticle[] {
       const htext = h
         ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}` })
         : ''
-      const stext = p.successor
-        ? fill(pick(p.successor.wins > 0 || p.successor.titles > 0 ? L.ousting.successorBetter : L.ousting.successorWorse, `${seed}|succ`), { ...slots, succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
+      // A title-winning successor must use the titles-based pool (a champion can have 0 race wins, so the
+      // wins-based pool would falsely read "went on to record 0 wins").
+      const succPool = p.successor
+        ? (p.successor.titles > 0 ? L.ousting.successorChampion : p.successor.wins > 0 ? L.ousting.successorBetter : L.ousting.successorWorse)
+        : null
+      const stext = p.successor && succPool
+        ? fill(pick(succPool, `${seed}|succ`), { ...slots, succ_name: p.successor.name, succ_wins: p.successor.wins, succ_wins_word: plural(p.successor.wins, 'win'), succ_titles: p.successor.titles, succ_titles_word: plural(p.successor.titles, 'title') })
         : ''
       definingText = [htext, stext].filter(Boolean).join(' ')
     }

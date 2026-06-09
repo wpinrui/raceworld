@@ -42,7 +42,12 @@ export function selectLegendPicks(
   throughYear: number,
   saveSeed: string,
 ): { driverId: string; date: string }[] {
-  const everEligible = eligibleAsOf(stats, throughYear)
+  // Sort by id FIRST: getAllTimeDriverStats() has no ORDER BY, so SQLite's GROUP BY row order is not
+  // stable as seasons archive. The seeded index pick below indexes into this order, so without a fixed
+  // sort a past year's pick could change after more seasons archive — diverging from the stored snapshot
+  // and breaking the never-repeat invariant. A stable id sort makes selection fully replayable.
+  const ordered = [...stats].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const everEligible = eligibleAsOf(ordered, throughYear)
   if (everEligible.length === 0) return []
   const firstYear = Math.min(...everEligible.map((s) => s.lastYear)) + RETIREMENT_SEASONS_OUT
   const featured = new Set<string>()
@@ -50,7 +55,7 @@ export function selectLegendPicks(
   for (let y = firstYear; y <= throughYear; y++) {
     const yearPicks: { driverId: string; date: string }[] = []
     for (let slot = 0; slot < SLOT_DATES.length; slot++) {
-      const pool = eligibleAsOf(stats, y).filter((s) => !featured.has(s.id))
+      const pool = eligibleAsOf(ordered, y).filter((s) => !featured.has(s.id))
       if (pool.length === 0) break
       const rng = mulberry32(`${saveSeed}|legend|${y}|${slot}`)
       const chosen = pool[Math.floor(rng() * pool.length)]
@@ -102,7 +107,7 @@ function buildLegendProfile(
 
   // Signature win: a victory from the furthest back on the grid (the biggest charge); latest breaks ties.
   let signatureWin: LegendProfile['signatureWin']
-  const wins = getDriverArchivedRaces(s.id).filter((r) => r.finishPosition === 1)
+  const wins = getDriverArchivedRaces(s.id).filter((r) => r.finishPosition === 1 && r.gridPosition > 0)
   if (wins.length) {
     const top = wins.reduce((a, b) => (b.gridPosition >= a.gridPosition ? b : a))
     const circuit = calendarForYear(top.year)[top.round - 1]?.name ?? ''
@@ -166,7 +171,8 @@ function buildLegendProfile(
     rivals.push({ name: r.name, relation, titles: r.wdc, wins: r.wins })
   }
   for (const [y, e] of byYear) {
-    if (getDriverFinishInSeason(e.seasonId, s.id) != null && getDriverFinishInSeason(e.seasonId, s.id)! <= 3) {
+    const finish = getDriverFinishInSeason(e.seasonId, s.id)
+    if (finish != null && finish <= 3) {
       const champ = championByYear.get(y)
       if (champ && champ.driverChampionId !== s.id) addRival(champ.driverChampionId, 'title')
     }

@@ -81,6 +81,12 @@
       "Whoever made that call found the answer in {succ_name}: {succ_wins} {succ_wins_word} followed.",
       "{succ_name} stepped into the seat that had moved {last} on, and delivered {succ_wins} {succ_wins_word}."
     ],
+    "successorChampion": [
+      "The seat went to {succ_name}, a future champion.",
+      "{succ_name} took the seat and went on to win the title.",
+      "{succ_name} replaced {last} and turned the drive into {succ_titles} {succ_titles_word}.",
+      "The driver who took over, {succ_name}, would go on to be champion."
+    ],
     "successorWorse": [
       "{succ_name} replaced {last} and failed to do more with the same machinery.",
       "The driver who took the seat, {succ_name}, produced little to justify the change.",
@@ -140,14 +146,14 @@
       "Any serious accounting of the greatest to drive in this era includes {last}: {rank_ord} all-time in {rank_metric} at {rank_value}."
     ],
     "loved": [
-      "No GOAT case, but {last} was a racer respected across the paddock for {seasons} honest {seasons_word}.",
-      "The career sits outside the all-time debates, but {last} earned genuine regard and a place in the memories of anyone who watched that era.",
-      "Not in the conversation for greatest ever, but a proper driver who earned the respect of the people in the garage.",
-      "{last} never threatened the record books, but left the sport with a cleaner reputation than most."
+      "Not quite an all-time great, but {last} was a racer respected across the paddock for {seasons} {seasons_word}.",
+      "The career sits outside the all-time debates, but {last} earned genuine regard among those who watched that era.",
+      "Short of the greatest-ever bracket, but a proper driver who earned the respect of the people in the garage.",
+      "{last} never threatened the record books, but earned a solid reputation along the way."
     ],
     "footnote": [
       "{last} is a footnote now: remembered by the dedicated few, anonymous to most.",
-      "A small career by the numbers, but {last} made it to the top level and raced, which is more than most ever manage.",
+      "A small career by the numbers: {last} made {starts} {starts_word} and then was gone.",
       "The diehards remember {last}; a wider audience largely does not, and that is an honest read of {starts} {starts_word} without a win.",
       "Years on, the name rings a faint bell at best. {last} was there, and the starts are on the record."
     ]
