@@ -66,14 +66,14 @@
     "h2hLost": [
       "Against {tm_name} ({tm_years}) the record was unkind: {tm_qual} in qualifying, {tm_race} on Sundays.",
       "Against {tm_name} ({tm_years}) {they} came off worse: {tm_qual} in qualifying, {tm_race} on Sundays.",
-      "{tm_name} had the upper hand throughout {tm_years}, {tm_qual} in qualifying and {tm_race} across the races.",
-      "Over {tm_years}, {tm_name} outqualified {last} {tm_qual} and led the race head-to-head {tm_race}."
+      "{tm_name} had the upper hand throughout {tm_years}, {tm_qualv} in qualifying and {tm_racev} across the races.",
+      "Over {tm_years}, {tm_name} outqualified {last} {tm_qualv} and led the race head-to-head {tm_racev}."
     ],
     "h2hHeld": [
       "Against {tm_name} ({tm_years}) the head-to-head was {tm_qual} in qualifying and {tm_race} in races, a respectable account by any measure.",
       "{last} more than matched {tm_name} across {tm_years}: {tm_qual} in qualifying, {tm_race} on Sundays.",
       "Against {tm_name} across {tm_years}, {they} held {their} own: {tm_qual} in qualifying and {tm_race} in races, making the loss of the seat harder to explain.",
-      "{tm_name} did not dominate: {tm_qual} in qualifying and {tm_race} in races over {tm_years} show a fight well held."
+      "{tm_name} did not dominate: {tm_qualv} in qualifying and {tm_racev} in races over {tm_years} show a fight well held."
     ],
     "successorBetter": [
       "The seat went to {succ_name}, who would take {succ_wins} {succ_wins_word}.",

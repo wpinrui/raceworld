@@ -4171,7 +4171,9 @@ function legends(ctx: NewsContext): NewsArticle[] {
     } else if (p.wins === 0) {
       const h = p.teammateH2H
       const htext = h
-        ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}` })
+        // tm_qual/tm_race are the legend's wins–losses (for legend-subject sentences); tm_qualv/tm_racev
+        // are flipped to the teammate's perspective (for "{tm_name} outqualified {last} …"-style lines).
+        ? fill(pick(h.raceLosses > h.raceWins ? L.ousting.h2hLost : L.ousting.h2hHeld, `${seed}|h2h`), { ...slots, tm_name: h.teammate, tm_years: h.years, tm_qual: `${h.qualWins}–${h.qualLosses}`, tm_race: `${h.raceWins}–${h.raceLosses}`, tm_qualv: `${h.qualLosses}–${h.qualWins}`, tm_racev: `${h.raceLosses}–${h.raceWins}` })
         : ''
       // A title-winning successor must use the titles-based pool (a champion can have 0 race wins, so the
       // wins-based pool would falsely read "went on to record 0 wins").
