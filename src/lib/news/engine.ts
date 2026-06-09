@@ -4147,7 +4147,15 @@ type LegendPools = Record<string, string[]>
 const LEGEND_COPY = legendsCopy as unknown as {
   headline: string[]
   rivalPhrase: LegendPools
+  stature: LegendPools
   great: LegendPools; nearly: LegendPools; loyal: LegendPools; outpaced: LegendPools; footnote: LegendPools
+}
+
+// A driver's standing as a phrase, gated on career wins then podiums — the "tier" the conclusion states
+// before tying back to the angle (e.g. "among the sport's genuine winners", then "but no title").
+function legendStature(wins: number, podiums: number): string {
+  return wins >= 20 ? 'elite' : wins >= 8 ? 'major' : wins >= 3 ? 'winner' : wins >= 1 ? 'occasionalWinner'
+    : podiums >= 10 ? 'podiumRegular' : podiums >= 3 ? 'podium' : podiums >= 1 ? 'podiumRare' : 'minor'
 }
 
 function legends(ctx: NewsContext): NewsArticle[] {
@@ -4167,7 +4175,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
       p.titles >= 1 ? 'great'
         : p.wins >= 1 ? 'nearly'
           : crushed ? 'outpaced'
-            : (p.podiums >= 1 || p.seasons >= 4) ? 'loyal'
+            : p.podiums >= 1 ? 'loyal'  // loyal celebrates the podium(s); a podiumless career is a footnote
               : 'footnote'
     const A = L[angle]
 
@@ -4241,8 +4249,9 @@ function legends(ctx: NewsContext): NewsArticle[] {
     // rather than appending a bare infobox; {stats_line}/{as_of} are the facts it wraps. Also-rans and
     // footnotes (no win/podium/pole standing) get the angle's plain verdict instead.
     const hasStanding = rankList.length > 0 && (angle === 'great' || angle === 'nearly' || angle === 'loyal')
+    const stature = fill(pick(L.stature[legendStature(p.wins, p.podiums)], `${seed}|stat`), slots)
     const conclusion = hasStanding
-      ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks })
+      ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks, stature })
       : fill(pick(A.verdict, `${seed}|verdict`), slots)
 
     const body = paras(
