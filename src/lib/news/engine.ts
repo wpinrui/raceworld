@@ -4237,8 +4237,8 @@ function legends(ctx: NewsContext): NewsArticle[] {
 
     // 2) RETROSPECTIVE, by ORDER OF SIGNIFICANCE: best season, then the biggest battle available
     //    (a title fight → a fight for a midfield position → a single great race), each used once.
-    const battle = p.titleYears.length ? seg(L.retro.titleWon, 'bt')
-      : p.runnerUpYears.length ? seg(L.retro.titleLost, 'bt')
+    const battle = p.titleYears.length && slots.rivals_list ? seg(L.retro.titleWon, 'bt')
+      : p.runnerUpYears.length && slots.rivals_list ? seg(L.retro.titleLost, 'bt')
         : (p.peak && p.peak.wdc <= 12 && slots.rivals_list) ? seg(L.retro.position, 'bt')
           : ''
     const retro = join(seg(L.retro.bestSeason, 'best', p.wins >= 1 && !!p.bestSeason), battle, seg(L.retro.race, 'race', hasSig))

@@ -98,9 +98,10 @@
       "{best_year} stood apart from everything else in {their} career: {best_wins} {best_wins_word} for {best_team}."
     ],
     "titleWon": [
-      "{they_cap} won {titles} {titles_word} ({title_years}), seeing off {rivals_list}.",
-      "{titles} {titles_word} came {their} way, {title_years}, with {rivals_list} left behind.",
-      "The {titles_word} ({title_years}) went to {them}, {rivals_list} unable to match {them}."
+      "The {titles_word} came at the expense of {rivals_list}, who {they} outscored when it mattered.",
+      "{they_cap} settled the title fight by seeing off {rivals_list}.",
+      "{rivals_list} pushed hard, but {they} had the measure of the championship when it counted.",
+      "In the battle for the {titles_word}, {rivals_list} finished second-best to {them}."
     ],
     "titleLost": [
       "{they_cap} carried the {ru_years} title fight to the end against {rivals_list}, but fell short.",
