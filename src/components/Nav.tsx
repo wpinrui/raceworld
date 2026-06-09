@@ -84,7 +84,6 @@ export default function Nav() {
   const [teamDriverTallies, setTeamDriverTallies] = useState<Record<string, TeamDriverTally[]>>({})
   const [records, setRecords] = useState<RecordsContext | undefined>(undefined)
   const [legendData, setLegendData] = useState<LegendDataset | undefined>(undefined)
-  const [simToLegend, setSimToLegend] = useState(false) // TEMP (#93): "sim until a legend drops" dev aid
 
   // Pre-season (no season started yet): Setup is the only reachable page.
   useEffect(() => {
@@ -225,42 +224,6 @@ export default function Nav() {
       if (isOffSeason(useSeasonStore.getState().phase)) break
       if (stopRef.current) break
     }
-  }
-
-  // TEMP (#93 dev aid): blast through races + off-seasons, stopping only when a legends article drops.
-  // Self-contained (does not reuse the visible Continue loop): legends-only interrupts, instant clock
-  // jumps, auto-sims races and runs each off-season beat. Re-fetches legend data on every year change
-  // (it is archive-derived and per-year). Delete this once the legends series is dialled in.
-  async function runSimToLegend() {
-    if (busy || advancing || simToLegend) return
-    setMenuOpen(false); setNewsStop(null); setSimToLegend(true)
-    const legendsOnly: ContinueSettings = { interruptCategories: ['legends'], followedDriverIds: [], followedTeamIds: [], interruptOnFollowed: false }
-    let legYear = -1
-    let legData = legendData
-    try {
-      for (let guard = 0; guard < 3000; guard++) {
-        const s = useSeasonStore.getState()
-        // Grid changes would block the loop; auto-accept the full proposed set (same payload the modal's
-        // "Apply changes" sends with nothing overridden) and carry on.
-        const pendingRW = pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })
-        if (pendingRW) {
-          useSeasonStore.getState().applyRealWorldChanges({
-            joins: pendingRW.teamJoins,
-            leaves: pendingRW.teamLeaves.map((l) => l.id),
-            rebrands: pendingRW.teamRebrands.map((r) => ({ id: r.id, name: r.to.name, shortName: r.to.shortName, color: r.to.color, nationality: r.to.nationality })),
-          })
-          continue
-        }
-        if (s.year !== legYear) { legData = await actionGetLegendData(s.year, s.saveSeed); legYear = s.year }
-        const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legData))
-        const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings: legendsOnly, readIds: s.readNewsIds })
-        if (stop.reason === 'idle') break
-        useSeasonStore.getState().setCurrentDate(stop.date)
-        if (stop.reason === 'news') { stop.articles.forEach((a) => useSeasonStore.getState().markNewsRead(a.id)); setNewsStop({ date: stop.date, articles: stop.articles }); break }
-        if (stop.reason === 'offseason') { await runOffSeasonEvent(stop.event); continue }
-        await simulateUntilRound(stop.round + 1) // race weekend — auto-sim and carry on
-      }
-    } finally { setSimToLegend(false) }
   }
 
   // Simulate just the current race, behind the race-sim modal.
@@ -476,11 +439,6 @@ export default function Nav() {
               </>
             )}
             <Link href="/settings" onClick={() => setMenuOpen(false)} className={`${MENU_ITEM} hover:text-[#00D9FF]`}>Settings</Link>
-            {phase !== 'idle' && (
-              <button onClick={runSimToLegend} disabled={simToLegend} className={`${MENU_ITEM} hover:text-[#00D9FF] disabled:opacity-50`}>
-                {simToLegend ? 'Simming to legend…' : 'Sim to legend (temp)'}
-              </button>
-            )}
           </div>
         )}
       </div>
