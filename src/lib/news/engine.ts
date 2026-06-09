@@ -94,6 +94,9 @@ export interface LegendProfile {
   rivals: { name: string; relation: 'teammate' | 'title' | 'peer'; titles: number; wins: number }[]
   allTimeRank: { metric: 'wins' | 'podiums' | 'points' | 'titles'; rank: number; value: number } | null  // best all-time standing
   allTimeRanks: Record<'wins' | 'poles' | 'podiums' | 'points', { rank: number; value: number } | null>  // per-metric, for the conclusion
+  peak: { wdc: number; year: number; team: string; teamWcc: number | null } | null  // best championship finish + car level
+  lastSeason: { year: number; team: string; wdc: number | null; teamWcc: number | null; wins: number; replacedBy: string | null; tm: { name: string; qual: string; race: string; beaten: boolean } | null } | null
+  marqueeRival: { name: string; kind: 'title' | 'teammate' | 'peer'; detail: string } | null  // the rival that matters most, + why
 }
 export interface LegendFeature { driverId: string; date: string; profile: LegendProfile }  // date = the 4-month-grid slot
 export interface LegendDataset { features: LegendFeature[] }
@@ -4148,7 +4151,11 @@ const LEGEND_COPY = legendsCopy as unknown as {
   headline: string[]
   rivalPhrase: LegendPools
   stature: LegendPools
-  great: LegendPools; nearly: LegendPools; loyal: LegendPools; outpaced: LegendPools; footnote: LegendPools
+  texture: LegendPools
+  retro: LegendPools
+  rivalQuote: { intro: LegendPools; assessment: LegendPools }
+  lastSeason: LegendPools
+  immortal: LegendPools; champion: LegendPools; nearly: LegendPools; winner: LegendPools; bestOfRest: LegendPools; midfield: LegendPools; footnote: LegendPools
 }
 
 // A driver's standing as a phrase, gated on career wins then podiums — the "tier" the conclusion states
@@ -4163,35 +4170,45 @@ function legends(ctx: NewsContext): NewsArticle[] {
   const out: NewsArticle[] = []
   for (const f of ctx.legends?.features ?? []) {
     const p = f.profile
-    const year = Number(f.date.slice(0, 4))
-    const seed = `legend-${p.driverId}-${year}`
+    const seed = `legend-${p.driverId}-${f.date.slice(0, 4)}`
     const era = p.firstYear === p.lastYear ? `${p.firstYear}` : `${p.firstYear}–${p.lastYear}`
-    const h = p.teammateH2H
 
-    // Classify the career into ONE story angle, so the piece argues a point of view (lead → evidence →
-    // verdict) instead of stacking independent beats. Each angle has its own purpose-written copy.
-    const crushed = !!h && h.qualLosses >= Math.max(1, h.qualWins) * 2 && p.seasons <= 3
-    const angle: 'great' | 'nearly' | 'loyal' | 'outpaced' | 'footnote' =
-      p.titles >= 1 ? 'great'
-        : p.wins >= 1 ? 'nearly'
-          : crushed ? 'outpaced'
-            : p.podiums >= 1 ? 'loyal'  // loyal celebrates the podium(s); a podiumless career is a footnote
-              : 'footnote'
-    const A = L[angle]
+    // STATURE TIER — the primary bracket (multiple qualify/disqualify routes, not a binary win count).
+    const winsRank = p.allTimeRanks.wins, polesRank = p.allTimeRanks.poles
+    const immortal = p.titles >= 2 || (p.titles >= 1 && ((winsRank?.rank ?? 99) <= 3 || (polesRank?.rank ?? 99) <= 3)) || p.wins >= 30
+    const contender = p.wins >= 6 || p.runnerUpYears.length >= 2 || (p.wins >= 3 && p.runnerUpYears.length >= 1)
+    const bestOfRest = p.podiums >= 3 || p.poles >= 1 || (p.peak != null && p.peak.wdc <= 6)
+    const tier: 'immortal' | 'champion' | 'nearly' | 'winner' | 'bestOfRest' | 'midfield' | 'footnote' =
+      immortal ? 'immortal'
+        : p.titles >= 1 ? 'champion'
+          : p.wins >= 1 ? (contender ? 'nearly' : 'winner')
+            : bestOfRest ? 'bestOfRest'
+              : (p.points >= 20 || (p.seasons >= 4 && p.points > 0)) ? 'midfield'
+                : 'footnote'
+    const A = L[tier]
 
-    // Each rival described from their OWN record, joined for the angle's "where they fit" line.
+    // MODIFIERS (orthogonal continuums) → one "texture" sentence so two same-tier drivers still read apart:
+    // dominance, machinery (over/under-performed the car), trajectory (peaked early/late), longevity.
+    const carGap = p.peak && p.peak.teamWcc != null ? p.peak.teamWcc - p.peak.wdc : 0
+    const machinery = p.peak && p.peak.teamWcc != null
+      ? (p.peak.teamWcc >= 5 && carGap >= 4 ? 'draggedUp' : p.wins >= 3 && p.peak.teamWcc <= 2 ? 'goodCar' : '')
+      : ''
+    const span = Math.max(1, p.lastYear - p.firstYear)
+    const bestPos = p.bestSeason ? (p.bestSeason.year - p.firstYear) / span : 0.5
+    const trajectory = !p.bestSeason || p.seasons < 5 ? ''
+      : (bestPos <= 0.34 && p.lastYear - p.bestSeason.year >= 3) ? 'faded' : (bestPos >= 0.66 ? 'lateBloom' : '')
+    const textureKind = (p.titles >= 2 || (p.bestSeason != null && p.bestSeason.wins >= 8)) ? 'dominant'
+      : machinery || trajectory || (p.seasons >= 15 ? 'marathon' : p.seasons <= 2 ? 'fleeting' : '')
+    const ending = !p.lastSeason ? '' : p.lastSeason.tm?.beaten ? 'pushedOut'
+      : p.lastSeason.wins > 0 ? 'wonLast' : p.lastSeason.tm ? 'heldUp' : 'faded'
+
+    // Era peers = the CHAMPIONS/contenders they raced (never team-mates), each from their own record.
     const rivalPhrase = (r: LegendProfile['rivals'][number]): string => {
       const rs = { rname: r.name, rtitles: r.titles, rtitles_word: plural(r.titles, 'title'), rwins: r.wins, rwins_word: plural(r.wins, 'win') }
       if (r.relation === 'title') return fill(pick(r.titles >= 1 ? L.rivalPhrase.titleChamp : L.rivalPhrase.title, `${seed}|rv|${r.name}`), rs)
       return r.name
     }
-    // The "where they fit" line names the CHAMPIONS/contenders of the era, never teammates — listing a
-    // team-mate as a "contemporary" is meaningless (everyone shares a grid with everyone). Teammates live
-    // in the head-to-head beat instead.
-    const eraRivals = (() => {
-      const titles = p.rivals.filter((r) => r.relation === 'title')
-      return titles.length ? titles : p.rivals.filter((r) => r.relation === 'peer')
-    })()
+    const eraRivals = p.rivals.filter((r) => r.relation === 'title').length ? p.rivals.filter((r) => r.relation === 'title') : p.rivals.filter((r) => r.relation === 'peer')
 
     const slots: Record<string, string | number> = {
       ...pronouns(p.gender),
@@ -4202,40 +4219,43 @@ function legends(ctx: NewsContext): NewsArticle[] {
       poles: p.poles, poles_word: plural(p.poles, 'pole'), points: p.points,
       titles: p.titles, titles_word: plural(p.titles, 'title'), title_years: listJoin(p.titleYears.map(String)),
       rivals_list: eraRivals.length ? listJoin(eraRivals.map(rivalPhrase)) : '',
-      rank_ord: p.allTimeRank ? ordinal(p.allTimeRank.rank) : '', rank_metric: p.allTimeRank?.metric ?? '', rank_value: p.allTimeRank?.value ?? 0,
       best_year: p.bestSeason?.year ?? '', best_team: p.bestSeason?.team ?? '', best_wins: p.bestSeason?.wins ?? 0, best_wins_word: plural(p.bestSeason?.wins ?? 0, 'win'),
       sig_circuit: p.signatureWin?.circuit ?? '', sig_year: p.signatureWin?.year ?? '', sig_grid: p.signatureWin ? ordinal(p.signatureWin.fromGrid) : '',
-      ru_years: listJoin(p.runnerUpYears.map(String)), ru_count: p.runnerUpYears.length, ru_finish_word: plural(p.runnerUpYears.length, 'finish', 'finishes'),
-      tm_name: h?.teammate ?? '', tm_years: h?.years ?? '',
-      // tm_qualv/tm_racev = teammate's wins–losses (for "{tm_name} beat {last} 16–0"); tm_qual/tm_race = the legend's.
-      tm_qualv: h ? `${h.qualLosses}–${h.qualWins}` : '', tm_racev: h ? `${h.raceLosses}–${h.raceWins}` : '',
-      tm_qual: h ? `${h.qualWins}–${h.qualLosses}` : '', tm_race: h ? `${h.raceWins}–${h.raceLosses}` : '',
-      succ_name: p.successor?.name ?? '', succ_wins: p.successor?.wins ?? 0, succ_wins_word: plural(p.successor?.wins ?? 0, 'win'), succ_titles: p.successor?.titles ?? 0, succ_titles_word: plural(p.successor?.titles ?? 0, 'title'),
+      ru_years: listJoin(p.runnerUpYears.map(String)),
+      peak_ord: p.peak ? ordinal(p.peak.wdc) : '', peak_year: p.peak?.year ?? '', peak_team: p.peak?.team ?? '', peak_wcc_ord: p.peak?.teamWcc ? ordinal(p.peak.teamWcc) : '',
+      last_team: p.lastSeason?.team ?? '', last_wdc_ord: p.lastSeason?.wdc ? ordinal(p.lastSeason.wdc) : '',
+      last_tm: p.lastSeason?.tm?.name ?? '', last_tm_qual: p.lastSeason?.tm ? `${p.lastSeason.tm.qual.split('–')[1]}–${p.lastSeason.tm.qual.split('–')[0]}` : '',
+      last_replacement: p.lastSeason?.replacedBy ?? '',
+      riv_name: p.marqueeRival?.name ?? '', riv_detail: p.marqueeRival?.detail ?? '',
     }
 
-    // Build the EVIDENCE paragraph from the facts that serve THIS angle, woven with transitions in the
-    // copy and each fact used once. A segment is dropped when its data is absent.
-    const seg = (pool: string[] | undefined, key: string, when = true): string =>
-      pool && when ? fill(pick(pool, `${seed}|${key}`), slots) : ''
-    const hasSig = !!(p.signatureWin && p.signatureWin.circuit)
+    const seg = (pool: string[] | undefined, key: string, when = true): string => pool && when ? fill(pick(pool, `${seed}|${key}`), slots) : ''
     const join = (...xs: string[]) => xs.filter(Boolean).join(' ')
-    let evidence = ''
-    if (angle === 'great') {
-      evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.signature, 'sig', hasSig), seg(A.peers, 'peers', !!slots.rivals_list))
-    } else if (angle === 'nearly') {
-      evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.signature, 'sig', hasSig), seg(A.runnerup, 'ru', p.runnerUpYears.length > 0), seg(A.peers, 'peers', !!slots.rivals_list))
-    } else if (angle === 'loyal') {
-      evidence = join(seg(A.peak, 'peak', !!p.bestSeason), seg(A.peers, 'peers', !!slots.rivals_list))
-    } else if (angle === 'outpaced') {
-      const succPool = p.successor && p.successor.wins > 0 ? A.successorWon : A.successorGone
-      evidence = join(seg(A.h2h, 'h2h', !!h), seg(succPool, 'succ', !!p.successor), seg(A.flicker, 'fl', p.podiums >= 1))
-    } else {
-      evidence = seg(A.h2h, 'h2h', !!h)
-    }
+    const hasSig = !!(p.signatureWin && p.signatureWin.circuit)
 
-    // Conclusion: for drivers who built a real record, state their all-time standing "as of" the piece's
-    // date, grouping metrics that share a rank ("8th all-time in wins (17) and poles (14)"). Also-rans and
-    // footnotes get the angle's plain verdict instead (an all-time rank in points alone says little).
+    // 1) LEAD — the tier's thesis, plus one modifier "texture" sentence so each driver reads distinctly.
+    const lead = join(fill(pick(A.lead, `${seed}|lead`), slots), seg(L.texture[textureKind], 'tex', !!textureKind))
+
+    // 2) RETROSPECTIVE, by ORDER OF SIGNIFICANCE: best season, then the biggest battle available
+    //    (a title fight → a fight for a midfield position → a single great race), each used once.
+    const battle = p.titleYears.length && slots.rivals_list ? seg(L.retro.titleWon, 'bt')
+      : p.runnerUpYears.length && slots.rivals_list ? seg(L.retro.titleLost, 'bt')
+        : (p.peak && p.peak.wdc <= 12 && slots.rivals_list) ? seg(L.retro.position, 'bt')
+          : ''
+    const retro = join(seg(L.retro.bestSeason, 'best', p.wins >= 1 && !!p.bestSeason), battle, seg(L.retro.race, 'race', hasSig))
+
+    // 3) RIVAL QUOTE — the rival who matters most (intro = the relationship) + an assessment GRADED BY TIER,
+    //    so a back-marker's rival doesn't call them the fastest they faced. intro × assessment combine.
+    const quote = p.marqueeRival
+      ? join(seg(L.rivalQuote.intro[p.marqueeRival.kind], 'qi'), seg(L.rivalQuote.assessment[tier], 'qa'))
+      : ''
+
+    // 4) LAST SEASON — how it ended. When they were pushed out / faded, name who took the seat; fall back to
+    //    the anonymous wording when the team folded or kept the same line-up (no known replacement).
+    const endKey = (ending === 'pushedOut' || ending === 'faded') && !slots.last_replacement ? `${ending}Anon` : ending
+    const last = ending ? seg(L.lastSeason[endKey], 'last') : ''
+
+    // 5) CONCLUSION — all-time standing, framed + a wins/podiums stature, or a plain verdict for footnotes.
     const rankList = (['wins', 'poles', 'podiums', 'points'] as const)
       .map((m) => ({ m, r: p.allTimeRanks[m] })).filter((x): x is { m: typeof x.m; r: { rank: number; value: number } } => !!x.r)
     const rankGroups: { rank: number; parts: string[] }[] = []
@@ -4245,25 +4265,16 @@ function legends(ctx: NewsContext): NewsArticle[] {
     }
     const asOf = `${LEGEND_MONTHS[Number(f.date.slice(5, 7)) - 1]} ${f.date.slice(0, 4)}`
     const statsRanks = listJoin(rankGroups.map((g) => `${ordinal(g.rank)} all-time in ${listJoin(g.parts)}`))
-    // The conclusion FRAMES the all-time standing (what the ranking means, tied to the angle's thesis)
-    // rather than appending a bare infobox; {stats_line}/{as_of} are the facts it wraps. Also-rans and
-    // footnotes (no win/podium/pole standing) get the angle's plain verdict instead.
-    const hasStanding = rankList.length > 0 && (angle === 'great' || angle === 'nearly' || angle === 'loyal')
     const stature = fill(pick(L.stature[legendStature(p.wins, p.podiums)], `${seed}|stat`), slots)
-    const conclusion = hasStanding
+    const conclusion = rankList.length > 0 && tier !== 'footnote'
       ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks, stature })
       : fill(pick(A.verdict, `${seed}|verdict`), slots)
 
-    const body = paras(
-      fill(pick(A.lead, `${seed}|lead`), slots),
-      evidence,
-      conclusion,
-    )
     out.push({
       id: seed, category: 'legends', round: 0, priority: 40, absoluteDate: f.date,
       headline: fill(pick(L.headline, `${seed}|h`), slots),
       dek: fill(pick(A.dek, `${seed}|d`), slots),
-      body,
+      body: paras(lead, retro, quote, last, conclusion),
     })
   }
   return out

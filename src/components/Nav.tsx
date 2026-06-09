@@ -95,7 +95,7 @@ export default function Nav() {
     actionGetTeamCareers(year - 1).then(setTeamCareerBase).catch(() => setTeamCareerBase({}))
     actionGetTeamDriverTallies(year - 1).then(setTeamDriverTallies).catch(() => setTeamDriverTallies({}))
     actionGetSeasonRecords().then(setRecords).catch(() => setRecords(undefined))
-    actionGetLegendData(year, useSeasonStore.getState().saveSeed, useSeasonStore.getState().drivers.map((d) => d.id)).then(setLegendData).catch(() => setLegendData(undefined))
+    actionGetLegendData(year, useSeasonStore.getState().saveSeed).then(setLegendData).catch(() => setLegendData(undefined))
   }, [year])
   // Mirror `advancing` into a ref for the keyboard handler, and keep the calendar bar mounted for a short
   // linger after the advance stops so it fades out rather than vanishing.
@@ -251,7 +251,7 @@ export default function Nav() {
           })
           continue
         }
-        if (s.year !== legYear) { legData = await actionGetLegendData(s.year, s.saveSeed, s.drivers.map((d) => d.id)); legYear = s.year }
+        if (s.year !== legYear) { legData = await actionGetLegendData(s.year, s.saveSeed); legYear = s.year }
         const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legData))
         const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings: legendsOnly, readIds: s.readNewsIds })
         if (stop.reason === 'idle') break
