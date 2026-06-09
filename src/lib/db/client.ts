@@ -25,6 +25,11 @@ export function getDb(): Database.Database {
     if (!raceCols.some((c) => c.name === 'weather_json')) {
       db.exec('ALTER TABLE races ADD COLUMN weather_json TEXT')
     }
+    // driver_genders.nationality (retired-driver flag, #93) is a nullable add on a carried-over table.
+    const genderCols = db.prepare('PRAGMA table_info(driver_genders)').all() as { name: string }[]
+    if (genderCols.length && !genderCols.some((c) => c.name === 'nationality')) {
+      db.exec('ALTER TABLE driver_genders ADD COLUMN nationality TEXT')
+    }
   }
   return db
 }

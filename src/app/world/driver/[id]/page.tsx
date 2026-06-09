@@ -146,7 +146,7 @@ export default function DriverPage() {
           const avatarDriver = {
             id: career.driverId,
             name: career.driverName,
-            nationality: a?.nationality ?? 'GB',
+            nationality: a?.nationality ?? career.nationality ?? 'GB',
             gender: a?.gender ?? ('male' as const),
             photoUrl: liveDriver?.photoUrl,
           }
@@ -191,7 +191,7 @@ export default function DriverPage() {
                 <DriverAvatar driver={avatarDriver} teamColor={teamColor} size={88} className="border-2" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
-                    <ReactCountryFlag countryCode={(a?.nationality) || 'GB'} svg style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }} />
+                    <ReactCountryFlag countryCode={a?.nationality ?? career.nationality ?? 'GB'} svg style={{ width: '1.4em', height: '1.4em', borderRadius: '2px' }} />
                     <h1 className="font-display text-2xl tracking-wider uppercase">{career.driverName}</h1>
                   </div>
                   {a ? (

@@ -36,6 +36,7 @@ import {
   getDriverRecentForm,
   getDriverTeammateRaces,
   upsertDriverGenders,
+  getDriverNationalities,
   type DbSeason,
   type DbRaceResultRow,
   type DriverAttributeSnapshot,
@@ -44,6 +45,14 @@ import {
 } from './queries'
 import { overall } from '@/lib/sim/progression'
 import { aggregateTeammateH2H, type H2HRaceRow } from '@/lib/world/h2h'
+import { historicalDrivers } from '@/data/history/drivers'
+
+// Nationality for a driver no longer on the live grid: the live-captured table first (covers generated
+// drivers), then the static history data (covers a real roster). Undefined falls through to the page default.
+const HISTORY_NATIONALITY = new Map(historicalDrivers.map((d) => [d.id, d.nationality]))
+function archivedNationality(driverId: string): string | undefined {
+  return getDriverNationalities()[driverId] ?? HISTORY_NATIONALITY.get(driverId)
+}
 import type { DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import type {
   DriverCareer, TeamCareer, WorldOverview, SearchEntry, CareerSeason, TeamSeason,
@@ -134,6 +143,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
       driverId, driverName: driverId,
       totals: { races: 0, wins: 0, podiums: 0, points: 0, poles: 0, titles: 0, seasons: 0 },
       seasons: [], ratingsHistory: [], recentForm: [], teammateH2H: [], attributes: null, currentResults: null,
+      nationality: archivedNationality(driverId),
     }
   }
   const champions = getAllSeasonChampions()
@@ -176,6 +186,7 @@ export async function actionGetDriverCareer(driverId: string): Promise<DriverCar
       points: totals.points, poles: totals.poles, titles, seasons: totals.seasons,
     },
     seasons, ratingsHistory, recentForm, teammateH2H: aggregateTeammateH2H(h2hRows), attributes: null, currentResults: null,
+    nationality: archivedNationality(driverId),
   }
 }
 
@@ -220,7 +231,9 @@ export async function actionGetWorldOverview(): Promise<WorldOverview> {
 }
 
 export async function actionGetSearchIndex(): Promise<SearchEntry[]> {
-  return getSearchIndex()
+  // Attach each archived driver's nationality so the search dropdown shows the right flag (the index
+  // itself is built from race_results, which has no nationality). Live drivers carry their own.
+  return getSearchIndex().map((e) => (e.kind === 'driver' ? { ...e, nationality: archivedNationality(e.id) } : e))
 }
 
 export async function actionGetAllTimeDriverStats(): Promise<AllTimeDriverStat[]> {
@@ -305,7 +318,7 @@ export async function actionGetTeamSeason(teamId: string, year: number): Promise
 
 // Persist the live roster's genders so retired drivers can be referred to with gendered pronouns in the
 // legends series (#93). Called at archive time with the current grid + the incoming season's drivers.
-export async function actionUpsertDriverGenders(rows: { driverId: string; gender: string }[]): Promise<void> {
+export async function actionUpsertDriverGenders(rows: { driverId: string; gender: string; nationality?: string }[]): Promise<void> {
   upsertDriverGenders(rows)
 }
 

@@ -18,7 +18,7 @@ async function archiveAndRollover(): Promise<void> {
   // the legends series can use gendered pronouns after they retire (#93). Idempotent upsert.
   const genderRows = [...s.drivers, ...(s.pendingNextSeasonState?.drivers ?? [])]
     .filter((d) => d.id && d.gender)
-    .map((d) => ({ driverId: d.id, gender: d.gender }))
+    .map((d) => ({ driverId: d.id, gender: d.gender, nationality: d.nationality }))
   if (genderRows.length) await actionUpsertDriverGenders(genderRows)
   if (s.dbSeasonId) {
     const [careerBase, teamCareerBase, records, teamDriverTalliesBase, legendData] = await Promise.all([
