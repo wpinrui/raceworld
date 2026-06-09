@@ -205,12 +205,13 @@ function buildLegendProfile(
     if (i >= 0) for (const j of [i - 1, i + 1, i - 2, i + 2]) if (order[j]) addRival(order[j].driverId, 'peer')
   }
 
-  // Best all-time standing across the marquee metrics, for the "how they're remembered" placement.
-  const rankIn = (key: 'wins' | 'podiums' | 'points' | 'wdc') => {
+  // All-time standing per marquee metric — both the single best (for a one-line callout) and the full
+  // set (wins/poles/podiums/points) for the "as of <date>, ranks Nth in …" conclusion.
+  const rankIn = (key: 'wins' | 'poles' | 'podiums' | 'points' | 'wdc') => {
     const value = s[key]
     if (value <= 0) return null
     const rank = [...statsById.values()].filter((o) => o[key] > value).length + 1
-    return { rank, value }
+    return { rank, value: Math.round(value) }
   }
   let allTimeRank: LegendProfile['allTimeRank'] = null
   for (const metric of ['titles', 'wins', 'podiums', 'points'] as const) {
@@ -218,6 +219,7 @@ function buildLegendProfile(
     const r = rankIn(key)
     if (r && (!allTimeRank || r.rank < allTimeRank.rank)) allTimeRank = { metric, rank: r.rank, value: r.value }
   }
+  const allTimeRanks = { wins: rankIn('wins'), poles: rankIn('poles'), podiums: rankIn('podiums'), points: rankIn('points') }
 
   return {
     driverId: s.id,
@@ -241,6 +243,7 @@ function buildLegendProfile(
     successor,
     rivals,
     allTimeRank,
+    allTimeRanks,
   }
 }
 
