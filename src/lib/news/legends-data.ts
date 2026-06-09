@@ -19,6 +19,7 @@ import {
   getArchivedSeasonIdByYear,
   getSeasonDriversForTeam,
   getSeasonStandings,
+  getTeamFinalPositionInSeason,
   getDriverGenders,
   type AllTimeDriverStat,
   type SeasonChampions,
@@ -84,12 +85,12 @@ export function selectLegendPicks(
 // Aggregate one driver's archived seasons into a per-year view (a season may hold >1 row when they
 // switched teams mid-year; sum the stats and credit the year's team to wherever they scored most).
 function perYear(rows: ReturnType<typeof getDriverCareerBySeason>) {
-  const byYear = new Map<number, { seasonId: number; team: string; teamPoints: number; wins: number; points: number }>()
+  const byYear = new Map<number, { seasonId: number; teamId: string; team: string; teamPoints: number; wins: number; points: number }>()
   for (const row of rows) {
-    const e = byYear.get(row.seasonYear) ?? { seasonId: row.seasonId, team: row.teamName, teamPoints: -1, wins: 0, points: 0 }
+    const e = byYear.get(row.seasonYear) ?? { seasonId: row.seasonId, teamId: row.teamId, team: row.teamName, teamPoints: -1, wins: 0, points: 0 }
     e.wins += row.wins
     e.points += row.points
-    if (row.points > e.teamPoints) { e.team = row.teamName; e.teamPoints = row.points }
+    if (row.points > e.teamPoints) { e.team = row.teamName; e.teamId = row.teamId; e.teamPoints = row.points }
     byYear.set(row.seasonYear, e)
   }
   return byYear
@@ -105,6 +106,12 @@ function buildLegendProfile(
   const titleYears = champions.filter((c) => c.driverChampionId === s.id).map((c) => c.year).sort((a, b) => a - b)
   const seasonRows = getDriverCareerBySeason(s.id) // year DESC, id DESC -> [0] is their most recent season+team
   const byYear = perYear(seasonRows)
+  // Championship finish per season, memoised (each call rebuilds the whole season's standings).
+  const wdcCache = new Map<number, number | null>()
+  const wdcOf = (seasonId: number): number | null => {
+    if (!wdcCache.has(seasonId)) wdcCache.set(seasonId, getDriverFinishInSeason(seasonId, s.id))
+    return wdcCache.get(seasonId)!
+  }
 
   // Distinct teams driven for, most-raced first — so even a thin career names the team(s).
   const teamRaces = new Map<string, number>()
@@ -123,7 +130,7 @@ function buildLegendProfile(
   }
   if (bestY > 0) {
     const e = byYear.get(bestY)!
-    bestSeason = { year: bestY, team: e.team, wins: e.wins, points: Math.round(e.points), wccPos: getDriverFinishInSeason(e.seasonId, s.id) }
+    bestSeason = { year: bestY, team: e.team, wins: e.wins, points: Math.round(e.points), wccPos: wdcOf(e.seasonId) }
   }
 
   // Signature win: a victory from the furthest back on the grid (the biggest charge); latest breaks ties.
@@ -139,7 +146,7 @@ function buildLegendProfile(
   const runnerUpYears: number[] = []
   for (const [y, e] of byYear) {
     if (titleYears.includes(y)) continue
-    if (getDriverFinishInSeason(e.seasonId, s.id) === 2) runnerUpYears.push(y)
+    if (wdcOf(e.seasonId) === 2) runnerUpYears.push(y)
   }
   runnerUpYears.sort((a, b) => a - b)
 
@@ -191,7 +198,7 @@ function buildLegendProfile(
     rivals.push({ name: r.name, relation, titles: r.wdc, wins: r.wins })
   }
   for (const [y, e] of byYear) {
-    const finish = getDriverFinishInSeason(e.seasonId, s.id)
+    const finish = wdcOf(e.seasonId)
     if (finish != null && finish <= 3) {
       const champ = championByYear.get(y)
       if (champ && champ.driverChampionId !== s.id) addRival(champ.driverChampionId, 'title')
@@ -203,6 +210,64 @@ function buildLegendProfile(
     const order = getSeasonStandings(byYear.get(bestSeason.year)!.seasonId).driverStandings
     const i = order.findIndex((d) => d.driverId === s.id)
     if (i >= 0) for (const j of [i - 1, i + 1, i - 2, i + 2]) if (order[j]) addRival(order[j].driverId, 'peer')
+  }
+
+  // Peak championship finish (lower = better) with the car's WCC level that year — the "fought for Nth"
+  // position story plus the machinery read (a high driver finish in a weak car means they dragged it up).
+  let peak: LegendProfile['peak'] = null
+  for (const [y, e] of byYear) {
+    const wdc = wdcOf(e.seasonId)
+    if (wdc != null && (!peak || wdc < peak.wdc)) peak = { wdc, year: y, team: e.team, teamWcc: getTeamFinalPositionInSeason(e.seasonId, e.teamId) }
+  }
+
+  // The most-shared team-mate head-to-head WITHIN one year — used for the final-season read.
+  const tmH2HForYear = (yr: number): { name: string; qual: string; race: string; beaten: boolean } | null => {
+    const races = tmRaces.filter((r) => r.year === yr)
+    if (!races.length) return null
+    const grp = new Map<string, typeof races>()
+    for (const r of races) { const g = grp.get(r.teammateId) ?? []; g.push(r); grp.set(r.teammateId, g) }
+    let main: typeof races = []
+    for (const g of grp.values()) if (g.length > main.length) main = g
+    let qW = 0, qL = 0, rW = 0, rL = 0
+    for (const r of main) {
+      if (r.myGrid && r.mateGrid) { if (r.myGrid < r.mateGrid) qW++; else if (r.myGrid > r.mateGrid) qL++ }
+      const mo = r.myDnf || r.myFinish == null, bo = r.mateDnf || r.mateFinish == null
+      if (!mo && !bo) { if (r.myFinish! < r.mateFinish!) rW++; else if (r.myFinish! > r.mateFinish!) rL++ }
+    }
+    return { name: main[0].teammateName, qual: `${qW}–${qL}`, race: `${rW}–${rL}`, beaten: qL + rL > (qW + rW) * 1.5 + 1 }
+  }
+
+  // Final season: the team, where they finished, the car's level, and that year's team-mate battle —
+  // for the "still had it" vs "outshone by the team-mate, time to go" close.
+  let lastSeason: LegendProfile['lastSeason'] = null
+  if (seasonRows.length) {
+    const lr = seasonRows[0]
+    lastSeason = {
+      year: lr.seasonYear, team: lr.teamName, wdc: wdcOf(lr.seasonId),
+      teamWcc: getTeamFinalPositionInSeason(lr.seasonId, lr.teamId),
+      wins: byYear.get(lr.seasonYear)?.wins ?? 0, tm: tmH2HForYear(lr.seasonYear),
+    }
+  }
+
+  // The rival who matters most, and WHY — for an attributed quote. Prefer the rival who beat the driver
+  // to a crown they chased, paired with the YEAR it happened (their closest near-miss they did NOT win, and
+  // whoever took it). Falls back to the toughest team-mate, then a points-order peer.
+  let marqueeRival: LegendProfile['marqueeRival'] = null
+  let lostFin = 99, lostYear = -1, lostChampName: string | null = null
+  for (const [y, e] of byYear) {
+    if (titleYears.includes(y)) continue
+    const fin = wdcOf(e.seasonId)
+    if (fin == null || fin > 3) continue
+    const champ = championByYear.get(y)
+    if (!champ?.driverChampionId || champ.driverChampionId === s.id || !champ.driverChampionName) continue
+    if (fin < lostFin) { lostFin = fin; lostYear = y; lostChampName = champ.driverChampionName }
+  }
+  if (lostChampName) {
+    marqueeRival = { name: lostChampName, kind: 'title', detail: String(lostYear) }
+  } else if (teammateH2H) {
+    marqueeRival = { name: teammateH2H.teammate, kind: 'teammate', detail: teammateH2H.years }
+  } else if (rivals.length) {
+    marqueeRival = { name: rivals[0].name, kind: 'peer', detail: peak ? String(peak.wdc) : '' }
   }
 
   // All-time standing per marquee metric — both the single best (for a one-line callout) and the full
@@ -244,6 +309,9 @@ function buildLegendProfile(
     rivals,
     allTimeRank,
     allTimeRanks,
+    peak,
+    lastSeason,
+    marqueeRival,
   }
 }
 
