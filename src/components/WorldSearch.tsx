@@ -14,12 +14,16 @@ export default function WorldSearch() {
   const router = useRouter()
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
+  const year = useSeasonStore((s) => s.year)
   const [historical, setHistorical] = useState<SearchEntry[]>([])
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { actionGetSearchIndex().then(setHistorical).catch(() => {}) }, [])
+  // Re-fetch on year change: each rollover archives a season, so newly-retired drivers (no longer on the
+  // live grid) only become searchable once their results are in the archive. Without this the index is
+  // frozen at whatever the archive held when the search first mounted.
+  useEffect(() => { actionGetSearchIndex().then(setHistorical).catch(() => {}) }, [year])
 
   // Current grid ∪ historical entities, deduped by kind+id.
   const index = useMemo<Entry[]>(() => {
