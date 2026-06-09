@@ -86,6 +86,7 @@ export function resetDatabase(): void {
     db.prepare('DELETE FROM races').run()
     db.prepare('DELETE FROM season_constructor_standings').run()
     db.prepare('DELETE FROM season_news').run()
+    db.prepare('DELETE FROM driver_genders').run()
     db.prepare('DELETE FROM seasons').run()
   })()
 }

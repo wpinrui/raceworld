@@ -4139,7 +4139,7 @@ function offSeasonFeature(ctx: NewsContext): NewsArticle[] {
 // and a GOAT-debate close; a journeyman gets the ousting story (teammate head-to-head, who took the seat
 // and what they made of it). The near-miss beat is optional, skipped for genuine greats. Every fact is
 // pre-built server-side on ctx.legends (archive-backed); this only resolves them into prose, dropped on
-// the feature's absolute 4-month-grid date. Prose is pronoun-free (gender is not archived).
+// the feature's absolute 4-month-grid date. Gendered pronouns come from p.gender (resolved server-side).
 function legends(ctx: NewsContext): NewsArticle[] {
   const L = legendsCopy
   const out: NewsArticle[] = []
