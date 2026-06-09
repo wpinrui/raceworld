@@ -14,6 +14,9 @@ const NO_INTERRUPTS: ContinueSettings = { interruptCategories: [], followedDrive
 // over to `targetYear` with no rounds run yet, leaving the player at a clean season start. No-op if already
 // at or past that point. Pass `shouldStop` to bail early; the game is left consistent at wherever it halts.
 export async function simUntilYear(targetYear: number, shouldStop?: () => boolean): Promise<void> {
+  // Already in or past the target year: there is no future "start of targetYear" to reach, so no-op rather
+  // than sim out the current season and overshoot. (The Settings control also blocks target <= current.)
+  if (useSeasonStore.getState().year >= targetYear) return
   // Guard is a runaway backstop only; the year/round break below is the real terminator. ~30 iterations a
   // season comfortably covers centuries of fast-forward.
   for (let guard = 0; guard < 20000; guard++) {

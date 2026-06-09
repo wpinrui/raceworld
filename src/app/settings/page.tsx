@@ -78,9 +78,10 @@ export default function SettingsPage() {
     DEFAULT_INTERRUPT_CATEGORIES.every((c) => catSet.has(c))
 
   const minSimYear = year + 1
+  const maxSimYear = year + 200 // well within the fast-forward guard, so the target is always reachable
   const parsedTarget = parseInt(simTargetStr, 10)
   const simTargetYear = Number.isInteger(parsedTarget) ? parsedTarget : minSimYear
-  const canSim = simTargetYear > year
+  const canSim = simTargetYear > year && simTargetYear <= maxSimYear
 
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
@@ -145,6 +146,7 @@ export default function SettingsPage() {
               <input
                 type="number"
                 min={minSimYear}
+                max={maxSimYear}
                 value={simTargetStr}
                 placeholder={String(minSimYear)}
                 disabled={simming}
