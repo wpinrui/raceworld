@@ -98,6 +98,8 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
   // Team Manager: when the off-season draft is paused for the player to fill their own seat(s).
   const playerDraft = useSeasonStore((s) => s.pendingPlayerDraft)
 
+  // Team Manager: the contract length you're offering the next free agent you sign (your call, 1-4 years).
+  const [offerYears, setOfferYears] = useState(2)
   // Career totals (archived base + the season just run), for the free-agent hover cards.
   const [careers, setCareers] = useState<Record<string, DriverCareer>>({})
   useEffect(() => {
@@ -246,13 +248,29 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
             Free agents{playerDraft && playerDraft.rejected.length > 0 ? <> · <span className="text-[#DC143C]">{playerDraft.rejected.length} turned you down</span></> : complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}
           </p>
+          {playerDraft && playerPool.length > 0 && (
+            <div className="flex items-center gap-2 mb-1.5 shrink-0">
+              <span className="text-[10px] uppercase tracking-wide text-[#FFFFFF]">Offer length</span>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map((y) => (
+                  <button
+                    key={y}
+                    onClick={() => setOfferYears(y)}
+                    className={`px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${offerYears === y ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
+                  >
+                    {y}yr
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
             {playerDraft
               ? playerPool.length > 0
                 ? playerPool.map((d) => (
                     <button
                       key={d.id}
-                      onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
+                      onClick={() => useSeasonStore.getState().playerDraftSign(d.id, offerYears)}
                       className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
                     >
                       <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{playerDraft.faRankOf[d.id] ?? ''}</span>
@@ -260,7 +278,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
                       <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(d.id) ?? null} wdcPoints={wdcPtsOf.get(d.id)} career={careers[d.id]}>
                         <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>
                       </DriverTooltip>
-                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
+                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign {offerYears}yr (50%)</span>
                     </button>
                   ))
                 : <button onClick={() => useSeasonStore.getState().finishPlayerDraft()} className="m-3 self-start px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]">No free agents left — take rookies</button>

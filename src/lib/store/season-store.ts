@@ -366,7 +366,7 @@ interface SeasonStore {
   endSeason: () => void
   runContractNegotiations: () => void
   decidePlayerRenewal: (driverId: string, offer: boolean) => void  // Team Manager: offer your expiring driver a renewal, or let them go
-  playerDraftSign: (driverId: string) => void   // Team Manager: attempt to sign a free agent to your open seat (50%)
+  playerDraftSign: (driverId: string, years: number) => void   // Team Manager: offer a free agent a contract of `years` for your open seat (50% accept)
   finishPlayerDraft: () => void                  // Team Manager: resolve rival seats below yours and close the draft
   runDriverRetirements: () => void
   runPreSeasonTesting: () => void
@@ -981,7 +981,7 @@ export const useSeasonStore = create<SeasonStore>()(
       // Team Manager: try to sign a free agent to your next open seat (50% accept). A driver who declines is
       // locked out of THIS seat (retryable for the other); if every remaining agent has declined, the slate
       // clears (soft-lock guard). When your last seat fills, the draft auto-finishes.
-      playerDraftSign: (driverId) => {
+      playerDraftSign: (driverId, years) => {
         const ppd = get().pendingPlayerDraft
         if (!ppd) return
         const seatIdx = ppd.playerPicks.length
@@ -990,7 +990,7 @@ export const useSeasonStore = create<SeasonStore>()(
         if (!driver || ppd.rejected.includes(driverId)) return
         if (Math.random() < 0.5) {
           const seat = ppd.playerSeats[seatIdx]
-          const playerPicks = [...ppd.playerPicks, { teamId: seat.teamId, driverId: driver.id, driverName: driver.name, years: 2 }]
+          const playerPicks = [...ppd.playerPicks, { teamId: seat.teamId, driverId: driver.id, driverName: driver.name, years: Math.max(1, Math.min(4, Math.round(years))) }]
           set({ pendingPlayerDraft: { ...ppd, playerPicks, pool: ppd.pool.filter((d) => d.id !== driver.id), rejected: [] } })
           if (playerPicks.length >= ppd.playerSeats.length) get().finishPlayerDraft()
         } else {
