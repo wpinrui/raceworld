@@ -31,6 +31,7 @@ export interface LapResult {
 // Traffic / dirty-air model (make qualifying matter — overtaking was far too easy). Tunables:
 const DIRTY_RANGE = 1.0       // s: a follower within this loses pace to dirty air
 const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fades to 0 at DIRTY_RANGE
+const SLIPSTREAM = 0.3        // s: tow a chasing car gets within DIRTY_RANGE — eases the pass, offsets dirty air
 const STRIKE_RANGE = 1.0      // s: within this (~DRS range) a faster car gets a per-lap chance to pass
 const PASS_MARGIN = 3.0       // s: only a car whose pace would leave it this far AHEAD blows straight by (rare)
 const CONTEST_GAP = 0.15      // s: a car closing past this from beyond range arrives right behind, contests next lap
@@ -128,9 +129,13 @@ export function computeLapTime(input: LapInput): LapResult {
   // quicker has its edge eaten and settles into a train; a much-quicker car keeps enough to reach the car
   // ahead and contest. This is the emergent "trains form unless you're much faster" mechanism.
   const dirty = gapToCarAhead < DIRTY_RANGE ? MAX_DIRTY * (1 - gapToCarAhead / DIRTY_RANGE) : 0
-  const dirtyLapTime = rawTime + dirty
-  const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this pace
-  const paceEdge = input.carAheadFreeAir - freeAir                  // clean-air pace advantage over the car ahead
+  // SLIPSTREAM: a chasing car within DIRTY_RANGE gets a tow off the car ahead, applied BEFORE the overtake
+  // calculations — it runs this much faster, easing the pass (bigger pace edge, closes the gap quicker) and
+  // partly offsetting dirty air. Its own clean-air pace (freeAir, what the next car back gates on) is unchanged.
+  const tow = gapToCarAhead < DIRTY_RANGE ? SLIPSTREAM : 0
+  const dirtyLapTime = rawTime + dirty - tow
+  const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this (towed) pace
+  const paceEdge = input.carAheadFreeAir - freeAir + tow            // clean-air pace edge, plus the tow
 
   // A pass happens this lap in one of two ways:
   //  (a) BLOW-PAST (rare) — the car is so much faster than the gap that running its own pace leaves it
