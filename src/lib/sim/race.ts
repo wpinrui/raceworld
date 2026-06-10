@@ -371,7 +371,14 @@ export function simulateLap(
     let gapToCarAhead: number = Infinity
     let carAheadLapTime: number | null = null
 
-    if (carAheadState) {
+    // A car that PITS this lap dives into the pit lane and rejoins ~20s down the order — it's no longer an
+    // obstacle ahead on track. Clamping the follower to its pit-inflated lap time (engine.ts "hold station")
+    // would drag the follower down with it (a ~10s phantom lap to sit a few tenths behind a car that pitted).
+    // So treat the follower as in clear air this lap; the gap recompute moves it up past the pitted car.
+    const aheadPittedThisLap = carAheadState != null
+      && updatedStates.get(carAheadState.driverId)?.lastPitLap === state.currentLap
+
+    if (carAheadState && !aheadPittedThisLap) {
       gapToCarAhead = current.gap
       carAheadLapTime = lapTimesThisLap.get(carAheadState.driverId) ?? null
     }
