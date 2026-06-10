@@ -3490,7 +3490,7 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
 // journeyman. Slots are filled from DriverCareer.
 const VETERAN_CAREER: Record<string, string[]> = {
   champion: [
-    '{champ_label} with the {title_years} {titles_word} to {their} name, {driver_last} accumulated {wins} {wins_word} and {poles} {poles_word} across {seasons} {seasons_word} at the top level.',
+    '{champ_label_cap} with the {title_years} {titles_word} to {their} name, {driver_last} accumulated {wins} {wins_word} and {poles} {poles_word} across {seasons} {seasons_word} at the top level.',
     '{driver_last} is {champ_label}, the {title_years} {titles_word} backed by {wins} {wins_word} and {poles} {poles_word} in {seasons} {seasons_word} of top-flight racing.',
   ],
   winner: [
@@ -3599,6 +3599,7 @@ function driverToWatch(ctx: NewsContext): NewsArticle[] {
       titles: c?.titles ?? 0, titles_word: plural(c?.titles ?? 0, 'title'),
       title_years: c?.titleYears.length ? listJoin(c.titleYears.map(String)) : '',
       champ_label: (c?.titles ?? 0) === 1 ? 'a former World Champion' : `a ${c?.titles ?? 0}-time World Champion`,
+      champ_label_cap: (c?.titles ?? 0) === 1 ? 'A former World Champion' : `A ${c?.titles ?? 0}-time World Champion`,
       best_finish: c?.bestFinish ? ordinal(c.bestFinish) : '',
       debut_year: c?.debutYear ?? '',
       pot: fa.peakPotential >= 88 ? 'one of the hottest properties in the junior ranks' : fa.peakPotential >= 80 ? 'a genuine prospect' : 'an intriguing talent',
@@ -4157,6 +4158,7 @@ const LEGEND_COPY = legendsCopy as unknown as {
   rivalQuote: { intro: LegendPools; assessment: LegendPools }
   lastSeason: LegendPools
   immortal: LegendPools; champion: LegendPools; nearly: LegendPools; winner: LegendPools; bestOfRest: LegendPools; midfield: LegendPools; footnote: LegendPools
+  podiumTally: LegendPools; podiumCoda: LegendPools
 }
 
 // A driver's standing as a phrase, gated on career wins then podiums — the "tier" the conclusion states
@@ -4184,7 +4186,7 @@ function legends(ctx: NewsContext): NewsArticle[] {
         : p.titles >= 1 ? 'champion'
           : p.wins >= 1 ? (contender ? 'nearly' : 'winner')
             : bestOfRest ? 'bestOfRest'
-              : (p.points >= 20 || (p.seasons >= 4 && p.points > 0)) ? 'midfield'
+              : (p.points >= 20 || (p.seasons >= 4 && p.points > 0) || p.podiums >= 1) ? 'midfield'
                 : 'footnote'
     const A = L[tier]
 
@@ -4229,6 +4231,10 @@ function legends(ctx: NewsContext): NewsArticle[] {
       last_replacement: p.lastSeason?.replacedBy ?? '',
       riv_name: p.marqueeRival?.name ?? '', riv_detail: p.marqueeRival?.detail ?? '',
     }
+    // Podium count as a count-correct phrase, so the midfield tier (now able to hold 0–2 podium drivers)
+    // never states the wrong tally. zero -> "no podium", one -> "a lone podium", many -> "{n} podiums".
+    const podiumBracket = p.podiums === 0 ? 'zero' : p.podiums === 1 ? 'one' : 'many'
+    slots.podium_tally = fill(pick(L.podiumTally[podiumBracket], `${seed}|ptally`), slots)
 
     const seg = (pool: string[] | undefined, key: string, when = true): string => pool && when ? fill(pick(pool, `${seed}|${key}`), slots) : ''
     const join = (...xs: string[]) => xs.filter(Boolean).join(' ')
@@ -4267,8 +4273,10 @@ function legends(ctx: NewsContext): NewsArticle[] {
     const asOf = `${LEGEND_MONTHS[Number(f.date.slice(5, 7)) - 1]} ${f.date.slice(0, 4)}`
     const statsRanks = listJoin(rankGroups.map((g) => `${ordinal(g.rank)} all-time in ${listJoin(g.parts)}`))
     const stature = fill(pick(L.stature[legendStature(p.wins, p.podiums)], `${seed}|stat`), slots)
+    // The "no podium" flourish only for genuine zero-podium drivers; the stature line carries it otherwise.
+    const podiumCoda = p.podiums === 0 ? fill(pick(L.podiumCoda.zero, `${seed}|coda`), slots) : ''
     const conclusion = rankList.length > 0 && tier !== 'footnote'
-      ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks, stature })
+      ? fill(pick(A.conclusion, `${seed}|concl`), { ...slots, as_of: asOf, stats_line: statsRanks, stature, podium_coda: podiumCoda })
       : fill(pick(A.verdict, `${seed}|verdict`), slots)
 
     out.push({
