@@ -67,15 +67,20 @@ export function rollUpgrade(
   cycleLength: number,
   deficit: number,
   rng: () => number,
+  opts?: { noFail?: boolean; paceBonusPerRace?: number },
 ): { paceDelta: number; failed: boolean } {
-  if (rng() < 0.05) return { paceDelta: 0, failed: true }
+  // Team Manager talents (player only): noFail (Chief Engineer) suppresses the 5% failure; paceBonusPerRace
+  // (Chief Aerodynamicist) adds a flat bonus per race of development (× cycleLength). The fail roll is always
+  // drawn first so the rng stream stays stable whether or not noFail is on.
+  if (rng() < 0.05 && !opts?.noFail) return { paceDelta: 0, failed: true }
   // Median base gain scales LINEARLY with the cycle (a longer cycle is more dev time) and compounds 5%
   // per race over the 3-race floor: cycleLength · 1.05^(cycleLength − 3). (The old constant base dropped
   // the linear cycle term — a bug.) Spread keeps the cycle-3 shape via its coefficient of variation.
   const median = cycleLength * Math.pow(1.05, cycleLength - 3)
   const raw = Math.max(0, sampleNormal(median, median * (BASE_SIGMA / BASE_MEDIAN), rng))
   const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT_PER_RACE * cycleLength
-  return { paceDelta: round1(raw + catchUp), failed: false }
+  const bonus = (opts?.paceBonusPerRace ?? 0) * cycleLength
+  return { paceDelta: round1(raw + catchUp + bonus), failed: false }
 }
 
 export function computeFundingTiers(
@@ -168,6 +173,7 @@ export function initDevPlans(
 // (no pending upgrade, no delivery) until they pick again. No-op outside Team Manager mode (no playerTeamId).
 export function applyPlayerCycle(
   devPlans: TeamDevPlan[], teams: Team[], playerTeamId: string | null, cycle: number | null, fromRound: number, rng: () => number, packageName?: string,
+  upgradeOpts?: { noFail?: boolean; paceBonusPerRace?: number },
 ): TeamDevPlan[] {
   if (!playerTeamId) return devPlans
   const leaderPace = Math.max(...teams.map((t) => t.carPace))
@@ -177,7 +183,7 @@ export function applyPlayerCycle(
     if (cycle == null) {
       return { ...p, playerControlled: true, nextUpgradeRound: null, pendingPaceDelta: undefined, pendingFailed: undefined, pendingPackageName: undefined }
     }
-    const pending = rollUpgrade(cycle, leaderPace - myPace, rng)
+    const pending = rollUpgrade(cycle, leaderPace - myPace, rng, upgradeOpts)
     return { ...p, playerControlled: true, cycleLength: cycle, nextUpgradeRound: fromRound + cycle, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed, pendingPackageName: packageName }
   })
 }

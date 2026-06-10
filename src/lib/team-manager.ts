@@ -11,6 +11,8 @@ export type TalentId =
   | 'scout-network'   // reveal exact Overall / Potential / ratings of EVERY driver
   | 'data-room'       // reveal power-ranking media breakdown + true pre-season test pace
   | 'met-office'      // reveal the true weather forecast
+  | 'chief-engineer'  // your car upgrades never fail
+  | 'chief-aero'      // each upgrade adds 0.5 car pace per race of development
 
 // `icon` is a lucide-react export name; the Settings UI maps it to the component.
 export const TALENTS: { id: TalentId; name: string; icon: string; tooltip: string }[] = [
@@ -20,6 +22,8 @@ export const TALENTS: { id: TalentId; name: string; icon: string; tooltip: strin
   { id: 'scout-network', name: 'Scout Network', icon: 'Telescope', tooltip: 'Reveal the exact Overall, Potential and underlying ratings of every driver on the grid.' },
   { id: 'data-room', name: 'Data Room', icon: 'BarChart3', tooltip: 'Reveal the power-ranking media breakdown and the true pre-season test pace.' },
   { id: 'met-office', name: 'Met Office', icon: 'CloudSun', tooltip: 'Reveal the true weather forecast instead of the imperfect outlook.' },
+  { id: 'chief-engineer', name: 'Chief Engineer', icon: 'Wrench', tooltip: 'Your car upgrades never fail.' },
+  { id: 'chief-aero', name: 'Chief Aerodynamicist', icon: 'Wind', tooltip: 'Every upgrade gains 0.5 car pace per race of development (a 3-race upgrade gains 1.5, a 6-race upgrade 3.0).' },
 ]
 
 // ---- Fog of war (ratings hidden unless Scout Network is on) ---------------------------------------------

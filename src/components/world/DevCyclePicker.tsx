@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendarForYear } from '@/data/calendars'
 import { drawPackages } from '@/lib/sim/development'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -13,11 +14,13 @@ const SECONDS_PER_PACE = 0.04
 const CATCHUP_PER_POINT_PER_RACE = 0.027
 
 // Expected lap-time gain (seconds) for an upgrade of the given cycle, for a car `deficit` pace points off
-// the leader: median = cycle·1.05^(cycle−3), plus the per-race catch-up bonus, converted to seconds.
-function expectedSeconds(cycle: number, deficit: number): number {
+// the leader: median = cycle·1.05^(cycle−3), plus the per-race catch-up bonus and the Chief Aerodynamicist
+// per-race bonus, converted to seconds.
+function expectedSeconds(cycle: number, deficit: number, aeroPerRace: number): number {
   const median = cycle * Math.pow(1.05, cycle - 3)
   const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT_PER_RACE * cycle
-  return (median + catchUp) * SECONDS_PER_PACE
+  const bonus = aeroPerRace * cycle
+  return (median + catchUp + bonus) * SECONDS_PER_PACE
 }
 
 // Team Manager: the upgrade-development picker for the player's own car. The player picks a PART to develop
@@ -32,6 +35,9 @@ export function DevCyclePicker({ className }: { className?: string }) {
   const allUpgradeEvents = useSeasonStore((s) => s.allUpgradeEvents)
   const seasonYear = useSeasonStore((s) => s.year)
   const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
+  const talents = useSettingsStore((s) => s.talents)
+  const noFail = !!talents['chief-engineer']
+  const aeroPerRace = talents['chief-aero'] ? 0.5 : 0
 
   const [pendingSwitch, setPendingSwitch] = useState<{ cycle: number; name: string } | null>(null)
 
@@ -76,14 +82,16 @@ export function DevCyclePicker({ className }: { className?: string }) {
       <div className="mt-3 grid w-[46rem] max-w-full grid-cols-2 gap-2">
         {packages.map(({ cycle, name }) => {
           const selected = cycle === activeCycle
-          const sec = expectedSeconds(cycle, deficit)
+          const sec = expectedSeconds(cycle, deficit, aeroPerRace)
           return (
             <Tooltip
               key={cycle}
               content={
                 <div className="space-y-0.5 font-bold">
                   <div className="text-[#34D399]">≈ {sec.toFixed(2)}s/lap faster</div>
-                  <div className="text-[#F87171]">5% chance of failure</div>
+                  {noFail
+                    ? <div className="text-[#34D399]">No failure risk</div>
+                    : <div className="text-[#F87171]">5% chance of failure</div>}
                 </div>
               }
             >

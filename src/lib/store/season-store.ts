@@ -21,6 +21,7 @@ import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade, applyPlayerCycle } from '@/lib/sim/development'
+import { useSettingsStore } from './settings-store'
 import { applyRaceProgression, ageDrivers, rollSeasonForm, shownStats } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
@@ -497,7 +498,11 @@ export const useSeasonStore = create<SeasonStore>()(
 
       setPlayerUpgrade: (cycle, packageName) => {
         const { playerTeamId, devPlans, teams, currentRound } = get()
-        set({ devPlans: applyPlayerCycle(devPlans, teams, playerTeamId, cycle, currentRound, Math.random, packageName) })
+        // Team Manager talents bend the player's upgrade roll: Chief Engineer guarantees no failure, Chief
+        // Aerodynamicist adds 0.5 car pace per race of development. Applied when the upgrade is commissioned.
+        const talents = useSettingsStore.getState().talents
+        const upgradeOpts = { noFail: !!talents['chief-engineer'], paceBonusPerRace: talents['chief-aero'] ? 0.5 : 0 }
+        set({ devPlans: applyPlayerCycle(devPlans, teams, playerTeamId, cycle, currentRound, Math.random, packageName, upgradeOpts) })
       },
 
       // Real-world season-end: apply the approved team changes to the next-season grid (built by
