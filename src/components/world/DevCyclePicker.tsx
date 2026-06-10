@@ -73,7 +73,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
         </div>
       )}
 
-      <div className={`mt-3 w-72 max-w-full space-y-2 ${!active ? 'rounded-xl border border-[#00D9FF]/50 p-2' : ''}`}>
+      <div className={`mt-3 grid w-[36rem] max-w-full grid-cols-2 gap-2 ${!active ? 'rounded-xl border border-[#00D9FF]/50 p-2' : ''}`}>
         {packages.map(({ cycle, name }) => {
           const selected = cycle === activeCycle
           const sec = expectedSeconds(cycle, deficit)
@@ -95,8 +95,8 @@ export function DevCyclePicker({ className }: { className?: string }) {
                     : 'bg-[#0F1419] text-[#FFFFFF] border border-[#303848] hover:border-[#00D9FF] cursor-pointer'
                 }`}
               >
-                <span>{name}</span>
-                <span className={`text-xs uppercase tracking-widest ${selected ? 'text-[#0F1419]' : 'text-[#FFFFFF]'}`}>
+                <span className="min-w-0 flex-1">{name}</span>
+                <span className={`shrink-0 whitespace-nowrap text-xs uppercase tracking-widest ${selected ? 'text-[#0F1419]' : 'text-[#FFFFFF]'}`}>
                   {cycle} races
                 </span>
               </button>
