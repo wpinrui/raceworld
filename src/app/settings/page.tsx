@@ -2,13 +2,17 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useHydrated } from '@/lib/ui/use-hydrated'
-import { Star } from 'lucide-react'
+import { Star, SlidersHorizontal, Handshake, Flame, Telescope, BarChart3, CloudSun, type LucideIcon } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore, DEFAULT_INTERRUPT_CATEGORIES } from '@/lib/store/settings-store'
 import { NEWS_FILTERS } from '@/lib/news/engine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { actionResetDatabase } from '@/lib/db/actions'
 import { simUntilYear } from '@/lib/sim/sim-until-year'
+import { TALENTS } from '@/lib/team-manager'
+import { Tooltip } from '@/components/ui/Tooltip'
+
+const TALENT_ICONS: Record<string, LucideIcon> = { SlidersHorizontal, Handshake, Flame, Telescope, BarChart3, CloudSun }
 
 // Player settings for the "Continue" loop: which news interrupts the sim, plus the drivers/teams
 // you follow (any story mentioning them interrupts too). Reached from the top-right overflow menu.
@@ -16,9 +20,11 @@ export default function SettingsPage() {
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
   const year = useSeasonStore((s) => s.year)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
   const {
     interruptOnRaceday, interruptCategories, followedDriverIds, followedTeamIds, interruptOnFollowed,
     setInterruptOnRaceday, setCategoryInterrupt, toggleFollowDriver, toggleFollowTeam, setInterruptOnFollowed, resetInterruptsToDefault,
+    talents, setTalent,
   } = useSettingsStore()
 
   const hydrated = useHydrated()
@@ -252,6 +258,30 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {/* Team Manager talents — re-enable god-mode powers, your team only. Only shown in Team Manager mode. */}
+        {teamManagerMode && (
+          <section className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#2A3142]">
+              <h2 className="font-semibold text-sm tracking-wide uppercase text-[#FFFFFF]">Team Manager Talents</h2>
+              <p className="text-xs text-[#9CA3AF] mt-0.5">God-mode powers, off by default. Each applies to your team only.</p>
+            </div>
+            <div className="p-4 space-y-1.5">
+              {TALENTS.map((t) => {
+                const Icon = TALENT_ICONS[t.icon]
+                return (
+                  <Tooltip key={t.id} content={t.tooltip}>
+                    <label className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#2A3142] cursor-pointer">
+                      {Icon && <Icon size={16} className="text-[#00D9FF] shrink-0" />}
+                      <span className="flex-1 text-sm font-medium text-[#FFFFFF]">{t.name}</span>
+                      <input type="checkbox" checked={talents[t.id] ?? false} onChange={(e) => setTalent(t.id, e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                    </label>
+                  </Tooltip>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Danger zone */}
         <section className="rounded-xl bg-[#1E2431] border border-[#DC143C]/40 overflow-hidden">
