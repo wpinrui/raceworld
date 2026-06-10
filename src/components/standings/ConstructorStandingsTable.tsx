@@ -7,6 +7,8 @@ import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useFollowed } from '@/lib/store/useFollowed'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { teamHighlightSolid } from '@/lib/team-manager'
 
 interface Props {
   standings: ConstructorStanding[]
@@ -20,6 +22,7 @@ interface Props {
 export function ConstructorStandingsTable({ standings, drivers, teams, totalRounds, completedRounds, year }: Props) {
   const card = useLiveDriverCards()
   const followed = useFollowed()
+  const highlight = useTeamHighlight()
   return (
     <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
       <table className="w-full border-collapse text-sm">
@@ -40,6 +43,8 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
           {standings.map((standing, idx) => {
             const team = teams.find((t) => t.id === standing.teamId)
             const teamColor = team?.color ?? '#FFFFFF'
+            const hl = highlight(standing.teamId, teamColor)
+            const solid = hl ? teamHighlightSolid(teamColor) : undefined
             const teamDrivers = drivers.filter((d) => d.teamId === standing.teamId)
 
             return teamDrivers.map((driver, driverIdx) => {
@@ -50,12 +55,14 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
               return (
                 <tr
                   key={`${standing.teamId}-${driver.id}`}
+                  style={hl}
                   className={`${isLast ? 'border-b border-[#2A3142]' : 'border-b border-[#2A3142]/20'} hover:bg-[#2A3142]/40 transition-colors`}
                 >
                   {isFirst && (
                     <td
                       rowSpan={teamDrivers.length}
-                      className="py-2 px-3 font-bold text-[#FFFFFF] sticky left-0 bg-[#1E2431] align-middle"
+                      className={`py-2 px-3 font-bold text-[#FFFFFF] sticky left-0 align-middle ${solid ? '' : 'bg-[#1E2431]'}`}
+                      style={solid ? { backgroundColor: solid, boxShadow: `inset 3px 0 0 ${teamColor}` } : undefined}
                     >
                       {idx + 1}
                     </td>
@@ -63,7 +70,8 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
                   {isFirst && (
                     <td
                       rowSpan={teamDrivers.length}
-                      className="py-2 px-3 sticky left-8 bg-[#1E2431] align-middle"
+                      className={`py-2 px-3 sticky left-8 align-middle ${solid ? '' : 'bg-[#1E2431]'}`}
+                      style={solid ? { backgroundColor: solid } : undefined}
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-1 h-8 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />

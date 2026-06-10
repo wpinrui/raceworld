@@ -54,9 +54,23 @@ function hexToRgb(hex: string): [number, number, number] {
 
 // A subtle team-colour wash for the player's rows. Alpha scales DOWN for brighter team colours so the
 // blended row stays dark enough for white text to read; a solid colour bar pins the left edge.
+function tintAlpha(r: number, g: number, b: number): number {
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255 // 0 (dark) – 1 (bright)
+  return 0.12 + (1 - lum) * 0.14 // 0.12 for bright colours, up to ~0.26 for dark ones
+}
+
 export function teamHighlightStyle(color: string): { backgroundColor: string; boxShadow: string } {
   const [r, g, b] = hexToRgb(color)
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255 // 0 (dark) – 1 (bright)
-  const alpha = 0.12 + (1 - lum) * 0.14 // 0.12 for bright colours, up to ~0.26 for dark ones
-  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`, boxShadow: `inset 3px 0 0 ${color}` }
+  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${tintAlpha(r, g, b).toFixed(3)})`, boxShadow: `inset 3px 0 0 ${color}` }
+}
+
+// Opaque equivalent of the row tint, for sticky cells that need a solid background (they'd otherwise let
+// horizontally-scrolled content show through). Blends the same tint over the panel base so it matches the
+// semi-transparent wash on the rest of the row exactly.
+export function teamHighlightSolid(color: string, baseHex = '#1E2431'): string {
+  const [r, g, b] = hexToRgb(color)
+  const [br, bg, bb] = hexToRgb(baseHex)
+  const a = tintAlpha(r, g, b)
+  const mix = (c: number, base: number) => Math.round(base * (1 - a) + c * a)
+  return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`
 }
