@@ -959,18 +959,23 @@ export const useSeasonStore = create<SeasonStore>()(
       // Team Manager: offer your expiring driver a renewal (auto-accept unless they outclass the seat, then
       // a half-strength decline roll), or let them go (they enter the off-season free-agency draft).
       decidePlayerRenewal: (driverId, offer) => {
-        const { pendingPlayerRenewals, drivers, year } = get()
+        const { pendingPlayerRenewals, drivers, teams, year, seasonRenewals } = get()
         const pr = pendingPlayerRenewals.find((p) => p.driverId === driverId)
         if (!pr) return
         let nextDrivers = drivers
+        let nextRenewals = seasonRenewals
         if (offer) {
           const accept = pr.diff <= 0 || Math.random() >= (1 - renewalChance(pr.diff)) * 0.5
           if (accept) {
             const years = renewalYears(Math.abs(pr.diff), Math.random)
             nextDrivers = drivers.map((d) => (d.id === driverId ? { ...d, contractExpiresAfterSeason: year + years } : d))
+            // Record it like an AI renewal so the news/history reports the re-signing (not a silent outcome).
+            const driver = drivers.find((d) => d.id === driverId)
+            const team = teams.find((t) => t.id === driver?.teamId)
+            nextRenewals = [...seasonRenewals, { driverId, driverName: pr.driverName, teamId: driver?.teamId ?? '', teamName: team?.name ?? '', years, driverPct: 50 + pr.diff, teamPct: 50, diff: Math.abs(pr.diff) }]
           }
         }
-        set({ drivers: nextDrivers, pendingPlayerRenewals: pendingPlayerRenewals.filter((p) => p.driverId !== driverId) })
+        set({ drivers: nextDrivers, seasonRenewals: nextRenewals, pendingPlayerRenewals: pendingPlayerRenewals.filter((p) => p.driverId !== driverId) })
       },
 
       // Team Manager: try to sign a free agent to your next open seat (50% accept). A driver who declines is
