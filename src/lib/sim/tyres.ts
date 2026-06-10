@@ -45,8 +45,8 @@ export function degradeTyre(tyre: TyreState): number {
 
 // Actual per-lap wear: the baseline drop jittered ±30% so the real condition path is noisy and the
 // exact cliff lap can't be predicted. degradeTyre stays the deterministic preview for the UI.
-export function wearTyre(tyre: TyreState, wearMult = 1): number {
-  const baseline = (100 / tyre.maxLifeLaps) * wearMult // wearMult > 1 for dirty air (running close behind)
+export function wearTyre(tyre: TyreState): number {
+  const baseline = 100 / tyre.maxLifeLaps
   return Math.max(0, Math.round(tyre.condition - baseline * (0.7 + Math.random() * 0.6)))
 }
 
