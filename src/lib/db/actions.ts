@@ -222,7 +222,7 @@ export async function actionGetWorldOverview(): Promise<WorldOverview> {
     championsRoll: champions.map((c) => ({
       year: c.year,
       driverChampionId: c.driverChampionId, driverChampionName: c.driverChampionName,
-      driverChampionTeamId: c.driverChampionTeamId,
+      driverChampionTeamId: c.driverChampionTeamId, driverChampionTeamName: c.driverChampionTeamName,
       constructorChampionId: c.constructorChampionId, constructorChampionName: c.constructorChampionName,
     })),
     leaders: getAllTimeLeaders(champions),

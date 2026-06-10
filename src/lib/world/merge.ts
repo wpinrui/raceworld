@@ -260,6 +260,7 @@ export function liveChampionRow(store: LiveStore): SeasonChampionRow | null {
     driverChampionId: dChamp,
     driverChampionName: ds?.driverName ?? null,
     driverChampionTeamId: ds?.teamId ?? null,
+    driverChampionTeamName: ds?.teamName ?? null,
     constructorChampionId: cChamp,
     constructorChampionName: cs?.teamName ?? null,
   }

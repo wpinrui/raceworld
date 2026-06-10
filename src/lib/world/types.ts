@@ -133,6 +133,7 @@ export interface SeasonChampionRow {
   driverChampionId: string | null
   driverChampionName: string | null
   driverChampionTeamId: string | null
+  driverChampionTeamName: string | null
   constructorChampionId: string | null
   constructorChampionName: string | null
 }

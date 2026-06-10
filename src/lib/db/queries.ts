@@ -664,7 +664,7 @@ export function getSeasonTeamIds(seasonId: number): { teamId: string; teamName: 
 
 export interface SeasonChampions {
   seasonId: number; year: number
-  driverChampionId: string | null; driverChampionName: string | null; driverChampionTeamId: string | null
+  driverChampionId: string | null; driverChampionName: string | null; driverChampionTeamId: string | null; driverChampionTeamName: string | null
   constructorChampionId: string | null; constructorChampionName: string | null
 }
 
@@ -682,6 +682,9 @@ export function getAllSeasonChampions(): SeasonChampions[] {
       driverChampionId: dc?.driverId ?? null,
       driverChampionName: dc?.driverName ?? null,
       driverChampionTeamId: dc?.teamId ?? null,
+      // Resolve via the same name source as the constructor champion so the two columns never disagree
+      // (e.g. "Arrows" in both, not "Footwork" here and "Arrows" there).
+      driverChampionTeamName: dc?.teamId ? getMostRecentTeamName(dc.teamId) : null,
       constructorChampionId: cc?.team_id ?? null,
       constructorChampionName: cc ? getMostRecentTeamName(cc.team_id) : null,
     }

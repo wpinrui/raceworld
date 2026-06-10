@@ -38,8 +38,8 @@ export function DevCyclePicker({ className }: { className?: string }) {
       {devPlan && (
         <p className="mt-3 text-xs text-[#FFFFFF]">
           {devPlan.nextUpgradeRound <= totalRounds
-            ? <>Next upgrade lands round {devPlan.nextUpgradeRound}, {calendarForYear(seasonYear)[devPlan.nextUpgradeRound - 1]?.name ?? `round ${devPlan.nextUpgradeRound}`}.</>
-            : 'Next upgrade lands next season.'}
+            ? <>Next upgrade arrival: {(calendarForYear(seasonYear)[devPlan.nextUpgradeRound - 1]?.name ?? `Round ${devPlan.nextUpgradeRound}`).replace(/\bGP\b/, 'Grand Prix')} (Round {devPlan.nextUpgradeRound})</>
+            : 'Next upgrade arrival: next season'}
         </p>
       )}
     </div>
