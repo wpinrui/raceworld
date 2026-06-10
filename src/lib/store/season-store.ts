@@ -1014,7 +1014,7 @@ export const useSeasonStore = create<SeasonStore>()(
           endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests: [], droppedDrivers },
           pendingNextSeasonState: { drivers: updatedDrivers, teams },
           seasonDraft: allPicks,
-          signingDayRevealed: 0,
+          signingDayRevealed: allPicks.length, // already lived the draft — show it complete, don't replay it
           pendingPlayerDraft: null,
         })
       },
