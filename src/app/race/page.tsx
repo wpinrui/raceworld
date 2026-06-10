@@ -81,6 +81,13 @@ export default function RacePage() {
         if (e.key === '3') handleSpeedClick(3)
         if (e.key === '4') handleSpeedClick(4)
       }
+      if (phase === 'qualifying') {
+        // qualifying speed 4 is 8x (still animated), so it skips the racing "sim to end" confirm modal
+        if (e.key === '1') setSpeed(1)
+        if (e.key === '2') setSpeed(2)
+        if (e.key === '3') setSpeed(3)
+        if (e.key === '4') setSpeed(4)
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
