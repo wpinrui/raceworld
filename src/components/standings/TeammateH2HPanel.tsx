@@ -4,6 +4,7 @@ import type { RaceResult, Driver, Team } from '@/lib/sim/types'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 interface Props {
   raceResults: RaceResult[][]
@@ -110,6 +111,7 @@ function Bar({ label, leftText, rightText, leftPct, c1, c2 }: {
 
 export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
   const card = useLiveDriverCards()
+  const highlight = useTeamHighlight()
   if (raceResults.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">No races completed yet — head-to-head opens after round one.</p>
   }
@@ -136,8 +138,9 @@ export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
       {cards.map(({ team, a, b, s1, s2, c1, c2 }) => {
         const g1 = avg(s1.gridSum, s1.gridN), g2 = avg(s2.gridSum, s2.gridN)
         const f1 = avg(s1.finSum, s1.finN), f2 = avg(s2.finSum, s2.finN)
+        const hl = highlight(team.id, team.color)
         return (
-          <div key={team.id} className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 space-y-3">
+          <div key={team.id} style={hl ? { boxShadow: hl.boxShadow } : undefined} className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 space-y-3">
             <div className="flex items-center gap-2.5">
               <div className="w-1 h-5 rounded-sm" style={{ backgroundColor: team.color }} />
               <TeamLink id={team.id} className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{team.name}</TeamLink>

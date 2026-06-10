@@ -9,6 +9,7 @@ import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 interface Props {
   test: PreSeasonTest | null
@@ -34,6 +35,7 @@ type SortKey = 'time' | 'pace' | 'wcc'
 
 export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
   const card = useLiveDriverCards()
+  const highlight = useTeamHighlight()
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
   const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
   // In Team Manager mode the true-pace reveal is a Data Room talent; without it, keep pace hidden.
@@ -101,7 +103,7 @@ export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
           </thead>
           <tbody>
             {rows.map((e, i) => (
-              <tr key={e.teamId} className="border-b border-[#2A3142]/50">
+              <tr key={e.teamId} style={highlight(e.teamId, colorOf(e.teamId))} className="border-b border-[#2A3142]/50">
                 <td className="py-2 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
                 <td className="py-2 pr-4"><DriverHover id={e.driverId} card={card}><DriverLink id={e.driverId} className="text-[#FFFFFF] font-medium">{e.driverName}</DriverLink></DriverHover></td>
                 <td className="py-2 px-3">

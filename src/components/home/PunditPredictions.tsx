@@ -9,6 +9,7 @@ import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 import { positionPalette } from '@/components/world/pills'
 import { SigningDayBoard } from '@/components/home/SigningDayBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
@@ -134,6 +135,7 @@ function PreSeasonTestingSurface({ test, year, prevFinish, teams }: { test: PreS
 
 export function PunditPredictions() {
   const card = useLiveDriverCards()
+  const highlight = useTeamHighlight()
   const phase = useSeasonStore((s) => s.phase)
   const drivers = useSeasonStore((s) => s.drivers)
   const teams = useSeasonStore((s) => s.teams)
@@ -168,7 +170,7 @@ export function PunditPredictions() {
       {/* Show ~10; the rest of the grid scrolls. */}
       <ul className="max-h-[23rem] overflow-y-auto">
         {predictions.map((p, i) => (
-          <li key={p.driver.id} className="flex items-center gap-3 border-b border-[#2A3142] px-5 py-2 last:border-b-0">
+          <li key={p.driver.id} style={highlight(p.team.id, p.team.color)} className="flex items-center gap-3 border-b border-[#2A3142] px-5 py-2 last:border-b-0">
             <span className="w-6 text-sm font-bold tabular-nums text-[#FFFFFF]">P{i + 1}</span>
             <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: p.team.color }} />
             <DriverHover id={p.driver.id} card={card} className="min-w-0 flex-1 truncate">
