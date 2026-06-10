@@ -9,16 +9,15 @@ export function LightsOverlay({ onComplete }: { onComplete: () => void }) {
   const [out, setOut] = useState(false)  // all extinguished -> go
 
   useEffect(() => {
+    // All timers scheduled up-front so cleanup clears every pending one on unmount (no nested scheduling).
     const timers: ReturnType<typeof setTimeout>[] = []
     for (let i = 1; i <= 5; i++) timers.push(setTimeout(() => setLit(i), i * 1000))
-    // After the fifth light (5s), hold a random 1–3s, then drop them all and green-flag.
+    // After the fifth light (5s), hold a random 1–3s, then drop them all simultaneously and green-flag.
     const hold = 1000 + Math.random() * 2000
-    timers.push(setTimeout(() => {
-      setOut(true)
-      timers.push(setTimeout(onComplete, 250))
-    }, 5000 + hold))
+    timers.push(setTimeout(() => setOut(true), 5000 + hold))
+    timers.push(setTimeout(onComplete, 5000 + hold + 250))
     return () => timers.forEach(clearTimeout)
-    // mount-only: onComplete is stable from the store
+    // mount-only one-shot; onComplete is captured once and always green-flags the race
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
