@@ -24,7 +24,7 @@ import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuf
 import { applyRaceProgression, ageDrivers, rollSeasonForm, shownStats } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
-import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, renewalChance, renewalYears, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
+import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, renewalChance, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
 
 // Team Manager: an expiring driver of the player's, awaiting the player's renewal decision (offer or let
 // expire). `diff` = driver media percentile − team WCC percentile: >0 = outdriving the seat (a decline risk).
@@ -365,7 +365,7 @@ interface SeasonStore {
   advanceRound: () => void
   endSeason: () => void
   runContractNegotiations: () => void
-  decidePlayerRenewal: (driverId: string, offer: boolean) => void  // Team Manager: offer your expiring driver a renewal, or let them go
+  decidePlayerRenewal: (driverId: string, offer: boolean, years?: number) => void  // Team Manager: offer your expiring driver a renewal of `years` (1-4), or let them go
   playerDraftSign: (driverId: string, years: number) => void   // Team Manager: offer a free agent a contract of `years` for your open seat (50% accept)
   finishPlayerDraft: () => void                  // Team Manager: resolve rival seats below yours and close the draft
   runDriverRetirements: () => void
@@ -958,7 +958,7 @@ export const useSeasonStore = create<SeasonStore>()(
 
       // Team Manager: offer your expiring driver a renewal (auto-accept unless they outclass the seat, then
       // a half-strength decline roll), or let them go (they enter the off-season free-agency draft).
-      decidePlayerRenewal: (driverId, offer) => {
+      decidePlayerRenewal: (driverId, offer, years = 2) => {
         const { pendingPlayerRenewals, drivers, teams, year, seasonRenewals } = get()
         const pr = pendingPlayerRenewals.find((p) => p.driverId === driverId)
         if (!pr) return
@@ -967,12 +967,12 @@ export const useSeasonStore = create<SeasonStore>()(
         if (offer) {
           const accept = pr.diff <= 0 || Math.random() >= (1 - renewalChance(pr.diff)) * 0.5
           if (accept) {
-            const years = renewalYears(Math.abs(pr.diff), Math.random)
-            nextDrivers = drivers.map((d) => (d.id === driverId ? { ...d, contractExpiresAfterSeason: year + years } : d))
+            const term = Math.max(1, Math.min(4, Math.round(years)))
+            nextDrivers = drivers.map((d) => (d.id === driverId ? { ...d, contractExpiresAfterSeason: year + term } : d))
             // Record it like an AI renewal so the news/history reports the re-signing (not a silent outcome).
             const driver = drivers.find((d) => d.id === driverId)
             const team = teams.find((t) => t.id === driver?.teamId)
-            nextRenewals = [...seasonRenewals, { driverId, driverName: pr.driverName, teamId: driver?.teamId ?? '', teamName: team?.name ?? '', years, driverPct: 50 + pr.diff, teamPct: 50, diff: Math.abs(pr.diff) }]
+            nextRenewals = [...seasonRenewals, { driverId, driverName: pr.driverName, teamId: driver?.teamId ?? '', teamName: team?.name ?? '', years: term, driverPct: 50 + pr.diff, teamPct: 50, diff: Math.abs(pr.diff) }]
           }
         }
         set({ drivers: nextDrivers, seasonRenewals: nextRenewals, pendingPlayerRenewals: pendingPlayerRenewals.filter((p) => p.driverId !== driverId) })

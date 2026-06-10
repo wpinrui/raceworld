@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 
 // Team Manager: the player's mid-season renewal call for their own expiring drivers. Shown on the home
@@ -16,11 +17,13 @@ function renewalHint(diff: number): string {
 
 export function RenewalDecisionPanel() {
   const pending = useSeasonStore((s) => s.pendingPlayerRenewals)
+  // The contract length you're offering each driver (your call, 1-4 years), keyed by driver.
+  const [terms, setTerms] = useState<Record<string, number>>({})
 
   if (pending.length === 0) return null
 
   const decide = (driverId: string, offer: boolean) =>
-    useSeasonStore.getState().decidePlayerRenewal(driverId, offer)
+    useSeasonStore.getState().decidePlayerRenewal(driverId, offer, terms[driverId] ?? 2)
 
   return (
     <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
@@ -38,11 +41,22 @@ export function RenewalDecisionPanel() {
               <span className="block text-[11px] text-[#FFFFFF] mt-0.5">{renewalHint(p.diff)}</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map((y) => (
+                  <button
+                    key={y}
+                    onClick={() => setTerms((t) => ({ ...t, [p.driverId]: y }))}
+                    className={`px-2 py-0.5 rounded text-xs font-semibold tabular-nums cursor-pointer ${(terms[p.driverId] ?? 2) === y ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
+                  >
+                    {y}yr
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={() => decide(p.driverId, true)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF] transition-colors cursor-pointer"
               >
-                Offer renewal
+                Offer {terms[p.driverId] ?? 2}yr
               </button>
               <button
                 onClick={() => decide(p.driverId, false)}
