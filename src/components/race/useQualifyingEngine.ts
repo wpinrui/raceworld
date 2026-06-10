@@ -175,7 +175,9 @@ export function useQualifyingEngine(
   // Board from revealed events: each car's latest-lap sectors + best completed lap time.
   const rows = useMemo<BoardRow[]>(() => {
     const state = new Map<string, { sectors: (number | null)[]; best: number | null }>()
-    for (let i = 0; i < revealed; i++) {
+    // `revealed` can momentarily exceed the (shorter) next session's events when the session advances —
+    // bound by events.length so we never index past the array.
+    for (let i = 0; i < revealed && i < events.length; i++) {
       const e = events[i]
       let st = state.get(e.carId)
       if (!st) { st = { sectors: [null, null, null], best: null }; state.set(e.carId, st) }

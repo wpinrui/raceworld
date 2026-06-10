@@ -203,9 +203,9 @@ export default function RacePage() {
               <RaceTable
                 drivers={drivers} teams={teams} states={raceState.drivers}
                 currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
+                gridPos={Object.fromEntries(raceState.qualifyingResults.map((q) => [q.driverId, q.gridPosition]))}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
-                animate={speed !== 4}
               />
             </div>
           )}
