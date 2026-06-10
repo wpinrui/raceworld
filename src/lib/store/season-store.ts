@@ -46,6 +46,7 @@ export interface PendingPlayerDraft {
   playerSeats: DraftSeat[]
   belowSeats: DraftSeat[]
   pool: Driver[]
+  faRankOf: Record<string, number> // driverId -> free-agent rank (1 = best) in the full pool, for the board label
   playerPicks: { teamId: string; driverId: string; driverName: string; years: number }[]
   rejected: string[] // declined for the seat currently being filled
 }
@@ -933,9 +934,11 @@ export const useSeasonStore = create<SeasonStore>()(
           const belowSeats = seats.filter((s, i) => i >= firstIdx && s.teamId !== playerTeamId)
           const picksAbove = runDraft({ seats: aboveSeats, pool, teams, currentYear: year, rng: Math.random })
           const takenAbove = new Set(picksAbove.map((p) => p.driverId))
+          const faRankOf: Record<string, number> = {}
+          pool.forEach((d, i) => { faRankOf[d.id] = i + 1 }) // rank in the full pool, fixed for the window
           set({
             phase: 'contract-negotiations',
-            pendingPlayerDraft: { year, newYear, allDrivers, stayingIds: [...stayingIds], aboveSeats, picksAbove, playerSeats, belowSeats, pool: pool.filter((d) => !takenAbove.has(d.id)), playerPicks: [], rejected: [] },
+            pendingPlayerDraft: { year, newYear, allDrivers, stayingIds: [...stayingIds], aboveSeats, picksAbove, playerSeats, belowSeats, pool: pool.filter((d) => !takenAbove.has(d.id)), faRankOf, playerPicks: [], rejected: [] },
           })
           return
         }
@@ -1000,7 +1003,7 @@ export const useSeasonStore = create<SeasonStore>()(
         const mediaMap = new Map(endOfSeasonSummary.driverMediaScores.map((s) => [s.driverId, s.score]))
         const playerPicks: DraftPick[] = ppd.playerPicks.map((pp, i) => {
           const seat = ppd.playerSeats[i]
-          return { teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor, driverId: pp.driverId, driverName: pp.driverName, prevTeamName: '', faRank: 0, seatRank: 0, pickPct: 50, realizedProb: 0.5, years: pp.years, flavour: 'chalk', odds: [] }
+          return { teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor, driverId: pp.driverId, driverName: pp.driverName, prevTeamName: '', faRank: ppd.faRankOf[pp.driverId] ?? 0, seatRank: 0, pickPct: 50, realizedProb: 0.5, years: pp.years, flavour: 'chalk', odds: [] }
         })
         const usedIds = new Set(ppd.playerPicks.map((p) => p.driverId))
         const picksBelow = runDraft({ seats: ppd.belowSeats, pool: ppd.pool.filter((d) => !usedIds.has(d.id)), teams, currentYear: ppd.year, rng: Math.random })
