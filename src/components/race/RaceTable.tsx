@@ -1,7 +1,10 @@
 'use client'
 
+import { useLayoutEffect, useRef } from 'react'
 import type { Driver, Team, DriverRaceState } from '@/lib/sim/types'
+import type { DriverCareer } from '@/lib/news/engine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
+import { DriverTooltip } from '@/components/world/DriverTooltip'
 import TyreIndicator from './TyreIndicator'
 
 interface RaceTableProps {
@@ -11,8 +14,13 @@ interface RaceTableProps {
   currentLap: number
   totalLaps: number
   gridPos?: Record<string, number>   // starting grid position per driver
+  year?: number                      // for the driver hover card (championship line + career fold)
+  careers?: Record<string, DriverCareer>
+  wdcPosOf?: Map<string, number>
+  wdcPtsOf?: Map<string, number>
   selectedDriverId?: string | null
   onSelectDriver?: (id: string) => void
+  animate?: boolean
 }
 
 function formatGap(gap: number, retired: boolean): string {
@@ -29,7 +37,7 @@ function formatLapTime(lapTimes: number[]): string {
   return `${mins}:${secs}`
 }
 
-export default function RaceTable({ drivers, teams, states, gridPos, selectedDriverId, onSelectDriver }: RaceTableProps) {
+export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, animate = true }: RaceTableProps) {
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
 
@@ -39,9 +47,61 @@ export default function RaceTable({ drivers, teams, states, gridPos, selectedDri
     return a.position - b.position
   })
 
+  const tableRef = useRef<HTMLTableElement>(null)
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
+  const prevTops = useRef(new Map<string, number>())
+  const prevOrder = useRef('')
+  const rafRef = useRef(0)
+
+  // FLIP: slide each moved row from its old slot to its new one when the order changes (an overtake).
+  // Robust to interruption: (1) re-renders that DON'T change the running order (clock ticks, selection)
+  // are skipped, so in-flight slides finish untouched; (2) on a real change we CLEAR every row's leftover
+  // transform BEFORE measuring, so getBoundingClientRect reports each row's true new slot, never a mid-slide
+  // position. Measuring through a live transform is what made offsets compound and rows shoot off-screen
+  // ("vanish") when many cars swapped at once.
+  useLayoutEffect(() => {
+    const rows = rowRefs.current
+    const order = sorted.map((s) => s.driverId).join(',')
+    if (!animate) {
+      rows.forEach((el) => { el.style.transition = ''; el.style.transform = '' })
+      prevTops.current = new Map()
+      prevOrder.current = order
+      return
+    }
+    if (order === prevOrder.current) return // same running order — leave any running slide alone
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    const tableTop = tableRef.current?.getBoundingClientRect().top ?? 0
+    // Clear leftover/in-flight transforms first so the reads below are true layout positions.
+    rows.forEach((el) => { el.style.transition = 'none'; el.style.transform = '' })
+    const newTops = new Map<string, number>()
+    rows.forEach((el, id) => newTops.set(id, el.getBoundingClientRect().top - tableTop))
+
+    let moved = false
+    rows.forEach((el, id) => {
+      const oldTop = prevTops.current.get(id)
+      const newTop = newTops.get(id)!
+      if (oldTop !== undefined && Math.abs(oldTop - newTop) > 0.5) {
+        el.style.transform = `translateY(${oldTop - newTop}px)` // invert: snap back to the old slot
+        moved = true
+      }
+    })
+    if (moved) rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0
+      rows.forEach((el) => {
+        if (el.style.transform) {
+          el.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.2,1)'
+          el.style.transform = '' // play: slide to the new slot
+        }
+      })
+    })
+    prevTops.current = newTops
+    prevOrder.current = order
+  })
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
+      <table ref={tableRef} className="w-full border-collapse">
         <thead>
           <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
             <th className="text-left py-1.5 px-2 w-8">P</th>
@@ -60,11 +120,18 @@ export default function RaceTable({ drivers, teams, states, gridPos, selectedDri
             const team = driver ? teamMap.get(driver.teamId) : undefined
             const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#FFFFFF]'
 
+            const nameSpan = (
+              <span className="text-sm font-medium truncate max-w-[130px]">
+                {driver?.name ?? ds.driverId}
+              </span>
+            )
+
             return (
               <tr
                 key={ds.driverId}
+                ref={(el) => { if (el) rowRefs.current.set(ds.driverId, el); else rowRefs.current.delete(ds.driverId) }}
                 onClick={() => onSelectDriver?.(ds.driverId)}
-                className={`border-b border-[#1a2030] text-[#FFFFFF] transition-colors cursor-pointer ${
+                className={`border-b border-[#1a2030] text-[#FFFFFF] cursor-pointer ${
                   ds.driverId === selectedDriverId
                     ? 'bg-[#1a2d3a] border-l-2 border-l-[#00D9FF]'
                     : 'hover:bg-[#1E2431]'
@@ -76,9 +143,22 @@ export default function RaceTable({ drivers, teams, states, gridPos, selectedDri
                   <div className="flex items-center gap-2">
                     {team && <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color }} />}
                     <NationalityFlag code={driver?.nationality} />
-                    <span className="text-sm font-medium truncate max-w-[130px]">
-                      {driver?.name ?? ds.driverId}
-                    </span>
+                    {driver && year != null ? (
+                      <DriverTooltip
+                        driver={driver}
+                        year={year}
+                        wdcPosition={wdcPosOf?.get(driver.id) ?? null}
+                        wdcPoints={wdcPtsOf?.get(driver.id)}
+                        career={careers?.[driver.id]}
+                        teamName={team?.name}
+                        teamColor={team?.color}
+                        side="right"
+                      >
+                        {nameSpan}
+                      </DriverTooltip>
+                    ) : (
+                      nameSpan
+                    )}
                   </div>
                 </td>
                 <td className="py-1 px-2 text-xs text-[#FFFFFF]">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
@@ -9,6 +9,8 @@ import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
+import { actionGetDriverCareers } from '@/lib/news/actions'
+import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import RaceTable from '@/components/race/RaceTable'
 import GodModePanel from '@/components/race/GodModePanel'
 import CommentaryFeed from '@/components/race/CommentaryFeed'
@@ -56,6 +58,17 @@ export default function RacePage() {
 
   const currentCircuit = calendarForYear(season.year)[season.currentRound - 1]
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
+
+  // Driver hover card data: career totals (through last season, folded with this season's results) + this
+  // year's WDC standing, so a name in the race table opens the same expanded card used around the app.
+  const [careers, setCareers] = useState<Record<string, DriverCareer>>({})
+  useEffect(() => {
+    actionGetDriverCareers(season.year - 1)
+      .then((base) => setCareers(foldLiveSeason(base, season.year, season.raceResults, season.endOfSeasonSummary?.driverChampion)))
+      .catch(() => setCareers({}))
+  }, [season.year, season.raceResults, season.endOfSeasonSummary])
+  const wdcPosOf = useMemo(() => new Map(season.driverStandings.map((s, i) => [s.driverId, i + 1])), [season.driverStandings])
+  const wdcPtsOf = useMemo(() => new Map(season.driverStandings.map((s) => [s.driverId, s.points])), [season.driverStandings])
 
   useEffect(() => {
     if (season.phase === 'idle') { router.replace('/setup'); return }
@@ -204,6 +217,7 @@ export default function RacePage() {
                 drivers={drivers} teams={teams} states={raceState.drivers}
                 currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
                 gridPos={Object.fromEntries(raceState.qualifyingResults.map((q) => [q.driverId, q.gridPosition]))}
+                year={season.year} careers={careers} wdcPosOf={wdcPosOf} wdcPtsOf={wdcPtsOf}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
               />
