@@ -275,9 +275,9 @@ export default function RacePage() {
                   <div className="flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-                      <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">God Mode</h2>
+                      <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">{season.teamManagerMode ? 'Pit Wall' : 'God Mode'}</h2>
                     </div>
-                    <p className="text-[#FFFFFF] text-sm">Available during race.</p>
+                    <p className="text-[#FFFFFF] text-sm">{season.teamManagerMode ? 'Pit strategy control opens when the race starts.' : 'Available during race.'}</p>
                   </div>
                 )}
               </div>

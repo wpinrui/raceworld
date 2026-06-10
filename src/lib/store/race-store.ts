@@ -4,6 +4,16 @@ import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { runQualifying } from '@/lib/sim/qualifying'
 import { shownStats } from '@/lib/sim/progression'
 import { useSeasonStore } from './season-store'
+import { useSettingsStore } from './settings-store'
+
+// Team Manager + Peak Form talent: the player's own drivers run at maximum form (10) every weekend.
+function applyPeakForm(forms: Record<string, number>, drivers: Driver[]): Record<string, number> {
+  const { teamManagerMode, playerTeamId } = useSeasonStore.getState()
+  if (!teamManagerMode || !playerTeamId || !useSettingsStore.getState().talents['peak-form']) return forms
+  const out = { ...forms }
+  for (const d of drivers) if (d.teamId === playerTeamId) out[d.id] = 10
+  return out
+}
 
 // The sim races the SHOWN ratings (true + season form, #66). Bake them in as drivers enter the race
 // store and zero the offset on the copy, so the form applies exactly once (a re-bake is then a no-op).
@@ -54,7 +64,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       drivers: drivers.map(toRaceDriver),
       teams: teams.map((t) => ({ ...t })),
       selectedCircuit: circuit,
-      forms: rollForms(drivers),
+      forms: applyPeakForm(rollForms(drivers), drivers),
       godModeDriverId: stillExists ? godModeDriverId : null,
     })
   },

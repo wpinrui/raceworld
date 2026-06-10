@@ -7,6 +7,18 @@ import type { Driver, Team, Circuit } from '@/lib/sim/types'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useRatingsHidden } from '@/lib/useRatingsHidden'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { normalisedRatingFill } from '@/lib/team-manager'
+
+// Fog-of-war bar: a driver's stat shown as a fill (no number) when ratings are hidden in Team Manager.
+function FogBar({ fill }: { fill: number }) {
+  return (
+    <div className="inline-block w-16 h-1.5 rounded-full bg-[#2A3142] align-middle overflow-hidden">
+      <div className="h-full rounded-full bg-[#00D9FF]" style={{ width: `${Math.round(Math.max(0, Math.min(1, fill)) * 100)}%` }} />
+    </div>
+  )
+}
 
 interface Props {
   drivers: Driver[]
@@ -89,6 +101,10 @@ export function PreQualPanel({
   drivers, teams, forms, currentCircuit, onFormChange,
 }: Props) {
   const card = useLiveDriverCards()
+  const hidden = useRatingsHidden()
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const maxCarPace = Math.max(1, ...teams.map((t) => t.carPace))
   const [sortKey, setSortKey] = useState<SortKey>('car')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -141,6 +157,7 @@ export function PreQualPanel({
             {sorted.map((d) => {
               const team = teams.find((t) => t.id === d.teamId)
               const form = forms[d.id] ?? 5
+              const isMine = teamManagerMode && d.teamId === playerTeamId
               return (
                 <tr key={d.id} className="border-b border-[#1a2030] hover:bg-[#1E2431] transition-colors">
                   <td className="py-1 pr-2">
@@ -152,21 +169,34 @@ export function PreQualPanel({
                   </td>
                   <td className="py-1 px-2 text-sm text-[#FFFFFF]"><TeamLink id={d.teamId} className="text-[#FFFFFF]">{team?.name ?? '—'}</TeamLink></td>
                   <td className="py-1 px-2">
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="range" min={0} max={10} step={0.5}
-                        value={form}
-                        onChange={(e) => onFormChange(d.id, Number(e.target.value))}
-                        className="w-20 accent-[#00D9FF]"
-                      />
-                      <span className={`text-xs w-6 text-right ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}`}>
-                        {form.toFixed(1)}
-                      </span>
-                    </div>
+                    {!teamManagerMode ? (
+                      // Sandbox: god-mode editable form slider.
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="range" min={0} max={10} step={0.5}
+                          value={form}
+                          onChange={(e) => onFormChange(d.id, Number(e.target.value))}
+                          className="w-20 accent-[#00D9FF]"
+                        />
+                        <span className={`text-xs w-6 text-right ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}`}>
+                          {form.toFixed(1)}
+                        </span>
+                      </div>
+                    ) : isMine ? (
+                      // Team Manager, your driver: read-only (Peak Form talent maxes it to 10.0).
+                      <span className={`text-sm font-semibold ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}`}>{form.toFixed(1)}</span>
+                    ) : (
+                      // Team Manager, a rival: form is hidden information.
+                      <FogBar fill={form / 10} />
+                    )}
                   </td>
-                  <td className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">{team?.carPace ?? '—'}</td>
+                  <td className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">
+                    {hidden ? <FogBar fill={(team?.carPace ?? 0) / maxCarPace} /> : (team?.carPace ?? '—')}
+                  </td>
                   {(['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const).map((stat) => (
-                    <td key={stat} className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">{d[stat]}</td>
+                    <td key={stat} className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">
+                      {hidden ? <FogBar fill={normalisedRatingFill(d, stat)} /> : d[stat]}
+                    </td>
                   ))}
                 </tr>
               )
