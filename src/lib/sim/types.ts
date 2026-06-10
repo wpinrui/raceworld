@@ -1,8 +1,9 @@
 import type { TeamBelief } from './pit-ai'
 
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
-export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'lights' | 'racing' | 'finished'
-export type SimSpeed = 1 | 2 | 3 | 4
+export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
+// 1-4 are real-time speeds (slow -> fast); 5 is the fast-forward "skip to the end" (instant, confirmed).
+export type SimSpeed = 1 | 2 | 3 | 4 | 5
 
 // A specific technical/mechanical failure (issue #61). Picked uniformly on a technical DNF.
 export type TechnicalFailure =

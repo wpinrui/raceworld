@@ -115,12 +115,11 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set({ raceState: { ...raceState, phase: 'pre-race', paused: false } })
   },
 
-  // Lights out — the 5-light countdown completed; green-flag the race at 1x (the qualifying speed, where
-  // 4 is instant, must not carry over) and unpaused so the tick loop runs from the start.
+  // Start the race: go green at speed 1 but PAUSED, so the player picks a speed / hits Resume to set off.
   beginRacing: () => {
     const { raceState } = get()
     if (!raceState) return
-    set({ raceState: { ...raceState, phase: 'racing', speed: 1, paused: false } })
+    set({ raceState: { ...raceState, phase: 'racing', speed: 1, paused: true } })
   },
 
   // Advance to the next qualifying session (Q1→Q2→Q3). In the store so a mid-Q3 Quit resumes at Q3.

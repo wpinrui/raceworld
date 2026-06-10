@@ -157,8 +157,8 @@ export default function Nav() {
   // Raceday progression — the single CTA walks pre-qualifying → pre-race → finished.
   function handleSimQualifying() { useRaceStore.getState().initSession() }
   function handleStartRace() {
-    const rs = useRaceStore.getState().raceState
-    if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'lights' } })
+    // Go straight to a paused green flag (no lights-out countdown); the player resumes to set off.
+    useRaceStore.getState().beginRacing()
   }
   function handleQuit() {
     // Keep the weekend's state (raceState) so you can resume where you left off. Only a normal End Race
@@ -312,8 +312,8 @@ export default function Nav() {
   const cta = (() => {
     if (!hydrated) return null
     if (matchMode) {
-      // Qualifying and the lights countdown drive themselves (SpeedBar / overlay) — no top-right CTA.
-      if (racePhase === 'qualifying' || racePhase === 'lights') return null
+      // Qualifying drives itself (SpeedBar) — no top-right CTA.
+      if (racePhase === 'qualifying') return null
       if (racePhase === 'pre-race') return <button onClick={handleStartRace} className={PRIMARY_CTA}>Start Race<ChevronRight size={14} /></button>
       if (racePhase === 'finished') return <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
       if (racePhase === 'racing') return null

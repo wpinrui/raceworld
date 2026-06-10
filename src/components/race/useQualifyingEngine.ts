@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Driver, Team, RaceState, QualifyingLap, ConstructorStanding } from '@/lib/sim/types'
 import { useRaceStore } from '@/lib/store/race-store'
 
-// Qualifying speed levels are real-time multipliers (2x / 4x / 8x / instant). Speed 4 fast-forwards the
-// rest of the session with no delay (like race mode's 4x). Cars launch STAGGER seconds apart (between
-// launches, not finishes) and run two laps.
-const SPEED_MULT: Record<number, number> = { 1: 2, 2: 4, 3: 8, 4: 8 } // speed 4 handled as instant below
+// Qualifying speed levels are real-time multipliers (2x / 4x / 8x / 16x). FF (speed 5) fast-forwards the
+// rest of the session with no delay. Cars launch STAGGER seconds apart (between launches, not finishes)
+// and run two laps.
+const SPEED_MULT: Record<number, number> = { 1: 2, 2: 4, 3: 8, 4: 16 } // speed 5 (FF) handled as instant below
 const STAGGER = 10
 // Super-speed the first car's opening out-lap so the board fills fast. Disabled by default — the track
 // map should make the opening watchable; flip to true to re-enable.
@@ -146,8 +146,8 @@ export function useQualifyingEngine(
     let raf = 0
     let last = performance.now()
     const step = (now: number) => {
-      // Speed 4 = instant: jump the clock far enough to process the rest of the session this frame.
-      clockRef.current += speedRef.current >= 4 ? 1e9 : ((now - last) / 1000) * (SPEED_MULT[speedRef.current] ?? 1)
+      // FF (speed 5) = instant: jump the clock far enough to process the rest of the session this frame.
+      clockRef.current += speedRef.current >= 5 ? 1e9 : ((now - last) / 1000) * (SPEED_MULT[speedRef.current] ?? 1)
       last = now
       let p = processedRef.current
       while (p < events.length && events[p].t <= clockRef.current) p++
