@@ -32,19 +32,6 @@ function racesBetween(from: number, toExclusive: number): number {
   return n
 }
 
-// Fold the Team Manager team choice into the grid being started: an existing team just names the player's
-// team; a new team is appended (its signed drivers moved out of free agency onto it).
-function applyTmSelection(drivers: Driver[], teams: Team[], sel: TmSelection): { drivers: Driver[]; teams: Team[]; playerTeamId: string | null } {
-  if (!sel) return { drivers, teams, playerTeamId: null }
-  if (sel.kind === 'existing') return { drivers, teams, playerTeamId: sel.teamId }
-  const signed = new Set(sel.drivers.map((d) => d.id))
-  return {
-    drivers: [...drivers.filter((d) => !signed.has(d.id)), ...sel.drivers],
-    teams: [...teams, sel.team],
-    playerTeamId: sel.team.id,
-  }
-}
-
 export default function SetupPage() {
   const seasonStore = useSeasonStore()
   const router = useRouter()
@@ -176,26 +163,50 @@ export default function SetupPage() {
     setNewTeamColor('#888888')
   }
 
-  // Fast-forward the world from the earliest year up to startYear, then drop the player in. The simulated
-  // seasons become the world's history (careers, champions, records in the DB); the grid the player starts
-  // on is HARD-RESET to the real-world lineup of the year reached, so it's exactly a fresh-game grid.
+  // Sandbox "sim the world": fast-forward 1996 → startYear, then hard-reset to the real-world grid of the
+  // year reached (the simulated seasons become the world's history).
   async function runSimWorld() {
     cancelSimRef.current = false
     setRacesTotal(racesBetween(EARLIEST_YEAR, startYear))
     setSimulating(true)
     const earliest = composeSeason(EARLIEST_YEAR)
     if (!earliest) { setSimulating(false); setImportError(`No historical data for ${EARLIEST_YEAR}`); return }
-    // The fast-forward follows real history, so it runs in real-world mode regardless of the final setting.
     useSeasonStore.getState().setRealWorldMode(true)
     useSeasonStore.getState().initSeason(earliest.drivers, earliest.teams, EARLIEST_YEAR)
     await simUntilYear(startYear, () => cancelSimRef.current)
-    // Reset to the real-world grid of wherever we landed (startYear on completion, earlier if cancelled).
     const landed = useSeasonStore.getState().year
     const real = composeSeason(landed)
-    if (real) {
-      const tm = applyTmSelection(real.drivers, real.teams, teamManager ? tmSelection : null)
-      useSeasonStore.getState().setTeamManager(teamManager, tm.playerTeamId)
-      useSeasonStore.getState().initSeason(tm.drivers, tm.teams, landed)
+    if (real) useSeasonStore.getState().initSeason(real.drivers, real.teams, landed)
+    useSeasonStore.getState().setRealWorldMode(realWorld)
+    useRaceStore.getState().resetSession()
+    setSimulating(false)
+    router.push('/home')
+  }
+
+  // Team Manager: history ALWAYS simulates from 1996. An existing team -> sim to your start year, reset to
+  // its real-world grid, take over. A NEW team -> sim to (entry year − 1), queue the team to JOIN at the
+  // entry year (free agency auto-fills its seats in that off-season), sim through to entry, take over.
+  async function startTeamManager(sel: NonNullable<TmSelection>) {
+    const target = sel.kind === 'new' ? sel.entryYear : startYear
+    cancelSimRef.current = false
+    setRacesTotal(racesBetween(EARLIEST_YEAR, target))
+    setSimulating(true)
+    const earliest = composeSeason(EARLIEST_YEAR)
+    if (!earliest) { setSimulating(false); setImportError(`No historical data for ${EARLIEST_YEAR}`); return }
+    useSeasonStore.getState().setTeamManager(false, null) // auto-resolve the market during the fast-forward
+    useSeasonStore.getState().setRealWorldMode(true)
+    useSeasonStore.getState().initSeason(earliest.drivers, earliest.teams, EARLIEST_YEAR)
+    if (sel.kind === 'new') {
+      if (sel.entryYear - 1 > EARLIEST_YEAR) await simUntilYear(sel.entryYear - 1, () => cancelSimRef.current)
+      useSeasonStore.getState().queueTeamAddition(sel.team)
+      await simUntilYear(sel.entryYear, () => cancelSimRef.current)
+      useSeasonStore.getState().setTeamManager(true, sel.team.id)
+    } else {
+      await simUntilYear(startYear, () => cancelSimRef.current)
+      const landed = useSeasonStore.getState().year
+      const real = composeSeason(landed)
+      useSeasonStore.getState().setTeamManager(true, sel.teamId)
+      if (real) useSeasonStore.getState().initSeason(real.drivers, real.teams, landed)
     }
     useSeasonStore.getState().setRealWorldMode(realWorld)
     useRaceStore.getState().resetSession()
@@ -204,11 +215,11 @@ export default function SetupPage() {
   }
 
   async function handleStartSeason() {
+    if (teamManager && tmSelection) { await startTeamManager(tmSelection); return }
     if (simWorld && startYear > EARLIEST_YEAR) { await runSimWorld(); return }
-    const tm = applyTmSelection(localDrivers, localTeams, teamManager ? tmSelection : null)
     seasonStore.setRealWorldMode(realWorld)
-    seasonStore.setTeamManager(teamManager, tm.playerTeamId)
-    seasonStore.initSeason(tm.drivers, tm.teams, startYear)
+    seasonStore.setTeamManager(false, null)
+    seasonStore.initSeason(localDrivers, localTeams, startYear)
     useRaceStore.getState().resetSession()
     router.push('/home') // land on Home; the Continue CTA drives forward to the opening race
   }
@@ -321,7 +332,7 @@ export default function SetupPage() {
 
         {!isActive && teamManager && (
           <div className="mb-6">
-            <TeamManagerSetup teams={localTeams} freeAgents={freeAgents} onChange={setTmSelection} />
+            <TeamManagerSetup teams={localTeams} minEntryYear={EARLIEST_YEAR + 1} maxEntryYear={DEFAULT_START_YEAR} onChange={setTmSelection} />
           </div>
         )}
 
