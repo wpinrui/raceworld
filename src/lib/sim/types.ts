@@ -112,6 +112,8 @@ export interface QualifyingLap {
   lap1: number | null
   lap2: number | null
   best: number | null
+  lap1Sectors?: [number, number, number]   // S1/S2/S3 of lap 1, summing to lap1 (qualifying playback)
+  lap2Sectors?: [number, number, number]   // S1/S2/S3 of lap 2, summing to lap2
 }
 
 export interface QualifyingSessionResult {

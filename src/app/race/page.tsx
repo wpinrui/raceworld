@@ -21,6 +21,8 @@ import { SpeedBar } from '@/components/race/SpeedBar'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
 import { QualifyingPanel } from '@/components/race/QualifyingPanel'
 import { LightsOverlay } from '@/components/race/LightsOverlay'
+import { TrackMap } from '@/components/race/TrackMap'
+import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 
 const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 5000, 2: 2000, 3: 500, 4: 0 }
 
@@ -36,6 +38,8 @@ export default function RacePage() {
   const phase = raceState?.phase ?? 'pre-qualifying'
   const speed = raceState?.speed ?? 1
   const paused = raceState?.paused ?? false
+
+  const qe = useQualifyingEngine(raceState, drivers, teams, season.constructorStandings, season.currentRound)
 
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
   const [showSpeed4Modal, setShowSpeed4Modal] = useState(false)
@@ -176,8 +180,9 @@ export default function RacePage() {
           )}
           {phase === 'qualifying' && raceState && (
             <QualifyingPanel
-              raceState={raceState} drivers={drivers} teams={teams}
-              currentCircuit={currentCircuit}
+              rows={qe.rows} sessionName={qe.sessionName} cutSize={qe.cutSize} dropFrom={qe.dropFrom}
+              progress={qe.progress} showElim={qe.showElim} eliminated={qe.eliminated} closeElim={qe.closeElim}
+              drivers={drivers} teams={teams} currentCircuit={currentCircuit}
             />
           )}
           {(phase === 'pre-race' || phase === 'lights') && raceState && (
@@ -202,6 +207,8 @@ export default function RacePage() {
         <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
           {phase === 'finished' ? (
             <PostRacePanel results={resultsForDisplay} teams={teams} />
+          ) : phase === 'qualifying' ? (
+            <TrackMap clockRef={qe.clockRef} schedule={qe.schedule} rows={qe.rows} drivers={drivers} teams={teams} />
           ) : (
             <>
               <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">

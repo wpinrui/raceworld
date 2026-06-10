@@ -34,12 +34,28 @@ function qualifyingNoise(consistency: number, rng: () => number = Math.random): 
   return baseline + compromisedLap
 }
 
+type Sectors = [number, number, number]
+
+// Sector boundaries are 30% / 40% / 30% of the lap by distance, so the PERFECT (noise-free) lap splits in
+// those proportions. The lap's deviation from perfect (the noise, plus any out-lap penalty) is shared
+// across the three sectors with jittered ~equal weights so the loss is somewhat even, and S3 takes the
+// exact remainder so the three sectors always sum back to the final lap time.
+function splitSectors(perfect: number, deviation: number, total: number): Sectors {
+  const j = () => 1 + (Math.random() - 0.5) * 0.8
+  const w = [j(), j(), j()]
+  const wsum = w[0] + w[1] + w[2]
+  const s1 = perfect * 0.3 + deviation * (w[0] / wsum)
+  const s2 = perfect * 0.4 + deviation * (w[1] / wsum)
+  return [s1, s2, total - s1 - s2]
+}
+
 function simulateQualifyingLap(
   driver: Driver,
   team: Team,
   circuit: Circuit,
   form: number,
-): number {
+  lapPenalty: number,
+): { time: number; sectors: Sectors } {
   const tyre: TyreState = {
     compound: selectQualifyingTyre(),
     condition: 100,
@@ -47,16 +63,19 @@ function simulateQualifyingLap(
   }
   const weather: WeatherPoint[] = [{ lap: 1, moisture: 0 }]
 
+  const noiseVal = qualifyingNoise(driver.consistency)
   const result = computeLapTime({
     driver, team, tyre, form,
     fuelLaps: 0, lap: 1,
     weather, compoundDeltas: DEFAULT_COMPOUND_DELTAS,
     gapToCarAhead: Infinity, carAheadLapTime: null,
     circuitFlatModifier: circuit.flatModifier,
-    noiseOverride: qualifyingNoise(driver.consistency),
+    noiseOverride: noiseVal,
   })
 
-  return result.lapTime
+  const time = result.lapTime + lapPenalty
+  const perfect = result.lapTime - noiseVal // computeLapTime with the noise removed = the deterministic lap
+  return { time, sectors: splitSectors(perfect, time - perfect, time) }
 }
 
 export function runQualifying(
@@ -102,11 +121,13 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, form) + LAP_ONE_PENALTY
-    const lap2 = simulateQualifyingLap(driver, team, circuit, form)
+    const r1 = simulateQualifyingLap(driver, team, circuit, form, LAP_ONE_PENALTY)
+    const r2 = simulateQualifyingLap(driver, team, circuit, form, 0)
+    const lap1 = r1.time
+    const lap2 = r2.time
     const best = Math.min(lap1, lap2)
 
-    q1SessionLaps.push({ driverId, lap1, lap2, best })
+    q1SessionLaps.push({ driverId, lap1, lap2, best, lap1Sectors: r1.sectors, lap2Sectors: r2.sectors })
 
     const result = qualResults.get(driverId)!
     result.q1Time = best
@@ -143,11 +164,13 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, form) + LAP_ONE_PENALTY
-    const lap2 = simulateQualifyingLap(driver, team, circuit, form)
+    const r1 = simulateQualifyingLap(driver, team, circuit, form, LAP_ONE_PENALTY)
+    const r2 = simulateQualifyingLap(driver, team, circuit, form, 0)
+    const lap1 = r1.time
+    const lap2 = r2.time
     const best = Math.min(lap1, lap2)
 
-    q2SessionLaps.push({ driverId, lap1, lap2, best })
+    q2SessionLaps.push({ driverId, lap1, lap2, best, lap1Sectors: r1.sectors, lap2Sectors: r2.sectors })
 
     const result = qualResults.get(driverId)!
     result.q2Time = best
@@ -183,11 +206,13 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, form) + LAP_ONE_PENALTY
-    const lap2 = simulateQualifyingLap(driver, team, circuit, form)
+    const r1 = simulateQualifyingLap(driver, team, circuit, form, LAP_ONE_PENALTY)
+    const r2 = simulateQualifyingLap(driver, team, circuit, form, 0)
+    const lap1 = r1.time
+    const lap2 = r2.time
     const best = Math.min(lap1, lap2)
 
-    q3SessionLaps.push({ driverId, lap1, lap2, best })
+    q3SessionLaps.push({ driverId, lap1, lap2, best, lap1Sectors: r1.sectors, lap2Sectors: r2.sectors })
 
     const result = qualResults.get(driverId)!
     result.q3Time = best
