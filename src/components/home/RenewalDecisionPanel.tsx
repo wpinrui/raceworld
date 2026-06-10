@@ -23,7 +23,7 @@ export function RenewalDecisionPanel() {
   if (pending.length === 0) return null
 
   const decide = (driverId: string, offer: boolean) =>
-    useSeasonStore.getState().decidePlayerRenewal(driverId, offer, terms[driverId] ?? 2)
+    useSeasonStore.getState().decidePlayerRenewal(driverId, offer, terms[driverId] ?? 1)
 
   return (
     <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
@@ -46,7 +46,7 @@ export function RenewalDecisionPanel() {
                   <button
                     key={y}
                     onClick={() => setTerms((t) => ({ ...t, [p.driverId]: y }))}
-                    className={`px-2 py-0.5 rounded text-xs font-semibold tabular-nums cursor-pointer ${(terms[p.driverId] ?? 2) === y ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
+                    className={`px-2 py-0.5 rounded text-xs font-semibold tabular-nums cursor-pointer ${(terms[p.driverId] ?? 1) === y ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
                   >
                     {y}yr
                   </button>
@@ -56,7 +56,7 @@ export function RenewalDecisionPanel() {
                 onClick={() => decide(p.driverId, true)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF] transition-colors cursor-pointer"
               >
-                Offer {terms[p.driverId] ?? 2}yr
+                Offer {terms[p.driverId] ?? 1}yr
               </button>
               <button
                 onClick={() => decide(p.driverId, false)}

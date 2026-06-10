@@ -938,6 +938,7 @@ export const useSeasonStore = create<SeasonStore>()(
           pool.forEach((d, i) => { faRankOf[d.id] = i + 1 }) // rank in the full pool, fixed for the window
           set({
             phase: 'contract-negotiations',
+            signingDayRevealed: 0, // start hidden so the player reveals the rivals above one at a time up to their turn
             pendingPlayerDraft: { year, newYear, allDrivers, stayingIds: [...stayingIds], aboveSeats, picksAbove, playerSeats, belowSeats, pool: pool.filter((d) => !takenAbove.has(d.id)), faRankOf, playerPicks: [], rejected: [] },
           })
           return
@@ -958,7 +959,7 @@ export const useSeasonStore = create<SeasonStore>()(
 
       // Team Manager: offer your expiring driver a renewal (auto-accept unless they outclass the seat, then
       // a half-strength decline roll), or let them go (they enter the off-season free-agency draft).
-      decidePlayerRenewal: (driverId, offer, years = 2) => {
+      decidePlayerRenewal: (driverId, offer, years = 1) => {
         const { pendingPlayerRenewals, drivers, teams, year, seasonRenewals } = get()
         const pr = pendingPlayerRenewals.find((p) => p.driverId === driverId)
         if (!pr) return

@@ -99,7 +99,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
   const playerDraft = useSeasonStore((s) => s.pendingPlayerDraft)
 
   // Team Manager: the contract length you're offering the next free agent you sign (your call, 1-4 years).
-  const [offerYears, setOfferYears] = useState(2)
+  const [offerYears, setOfferYears] = useState(1)
   // Career totals (archived base + the season just run), for the free-agent hover cards.
   const [careers, setCareers] = useState<Record<string, DriverCareer>>({})
   useEffect(() => {
@@ -122,12 +122,14 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
   }
 
   const total = picks.length
-  // In draft mode the board reveals everything up to the player's seat on the clock (above signings +
-  // seats already filled); the rest stay pending. Otherwise the manual reveal counter drives it.
-  const revealed = playerDraft ? playerDraft.picksAbove.length + playerDraft.playerPicks.length : Math.min(stored, total)
+  // Draft mode: the player reveals the rivals ABOVE their seat one at a time (manual reveal, capped at the
+  // above count), then it's their turn. revealed = (rivals above revealed so far) + (own seats filled).
+  const aboveCount = playerDraft ? playerDraft.picksAbove.length : 0
+  const revealed = playerDraft ? Math.min(stored, aboveCount) + playerDraft.playerPicks.length : Math.min(stored, total)
+  const playerTurn = playerDraft != null && stored >= aboveCount // every rival above is revealed -> you pick
   const onClock = revealed < total ? picks[revealed] : null
   const complete = !draftMode && !onClock
-  // The pool the player is choosing from for the seat on the clock (draft mode only).
+  // The pool you're choosing from once it's your turn.
   const playerPool = playerDraft ? playerDraft.pool.filter((d) => !playerDraft.rejected.includes(d.id)) : []
   // This-season drivers win over next-season copies (correct age/form at signing time); next-season
   // entries cover any promoted rookie not on the current grid.
@@ -171,22 +173,20 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* Controls (fixed): manual reveal when watching, a prompt while it's your pick. */}
+      {/* Controls (fixed): reveal signings one at a time, up to your seat. Hidden once it's your pick. */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        {playerDraft ? (
-          <p className="text-sm font-semibold text-[#00D9FF]">Your pick — sign a driver for {playerDraft.playerSeats[0]?.teamName ?? 'your team'}</p>
-        ) : (
+        {!playerTurn && (
           <>
             <button
-              onClick={() => setRevealed(Math.min(total, revealed + 1))}
-              disabled={complete}
+              onClick={() => setRevealed(playerDraft ? Math.min(aboveCount, stored + 1) : Math.min(total, revealed + 1))}
+              disabled={!playerDraft && complete}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Reveal next signing
             </button>
             <button
-              onClick={() => setRevealed(total)}
-              disabled={complete}
+              onClick={() => setRevealed(playerDraft ? aboveCount : total)}
+              disabled={!playerDraft && complete}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Reveal all
@@ -232,7 +232,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (
-                    <span className="text-xs italic text-[#00D9FF] flex-1">{draftMode ? 'Your pick — choose from the pool →' : 'Up next…'}</span>
+                    <span className="text-xs italic text-[#00D9FF] flex-1">{playerTurn ? 'Your pick' : 'Up next…'}</span>
                   ) : (
                     <span className="text-xs text-[#FFFFFF] flex-1">Seat open</span>
                   )}
@@ -248,7 +248,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
             Free agents{playerDraft && playerDraft.rejected.length > 0 ? <> · <span className="text-[#DC143C]">{playerDraft.rejected.length} turned you down</span></> : complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}
           </p>
-          {playerDraft && playerPool.length > 0 && (
+          {playerTurn && playerPool.length > 0 && (
             <div className="flex items-center gap-2 mb-1.5 shrink-0">
               <span className="text-[10px] uppercase tracking-wide text-[#FFFFFF]">Offer length</span>
               <div className="flex gap-1">
@@ -265,7 +265,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
             </div>
           )}
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
-            {playerDraft
+            {playerTurn
               ? playerPool.length > 0
                 ? playerPool.map((d) => (
                     <button
@@ -278,10 +278,10 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
                       <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(d.id) ?? null} wdcPoints={wdcPtsOf.get(d.id)} career={careers[d.id]}>
                         <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>
                       </DriverTooltip>
-                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign {offerYears}yr (50%)</span>
+                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign {offerYears}yr</span>
                     </button>
                   ))
-                : <button onClick={() => useSeasonStore.getState().finishPlayerDraft()} className="m-3 self-start px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]">No free agents left — take rookies</button>
+                : <button onClick={() => useSeasonStore.getState().finishPlayerDraft()} className="m-3 self-start px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]">No free agents left, take rookies</button>
               : onClock
               ? onClock.odds.map((o, i) => {
                   const d = driverById.get(o.driverId)
