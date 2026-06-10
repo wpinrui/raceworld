@@ -73,7 +73,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
         </div>
       )}
 
-      <div className={`mt-3 grid w-[36rem] max-w-full grid-cols-2 gap-2 ${!active ? 'rounded-xl border border-[#00D9FF]/50 p-2' : ''}`}>
+      <div className="mt-3 grid w-[46rem] max-w-full grid-cols-2 gap-2">
         {packages.map(({ cycle, name }) => {
           const selected = cycle === activeCycle
           const sec = expectedSeconds(cycle, deficit)
