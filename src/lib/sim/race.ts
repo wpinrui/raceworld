@@ -31,6 +31,12 @@ export function rollForms(drivers: Driver[]): Record<string, number> {
   return forms
 }
 
+// Standing-grid spacing: the time interval between adjacent grid slots at lights-out. Seeded into BOTH
+// totalTime (so a car starts physically where its slot is) and gap (the interval to the car ahead), so the
+// field begins properly bunched. Without this, lap 1 read each car as seconds clear of the car ahead, ran
+// the whole field in clean air, and re-sorted it by raw pace in a single lap (the lap-1 overtake flood).
+const GRID_SPACING = 0.5
+
 export function initRaceState(
   drivers: Driver[],
   teams: Team[],
@@ -89,7 +95,7 @@ export function initRaceState(
     return {
       driverId: driver.id,
       position: qr.gridPosition,
-      totalTime: 0,
+      totalTime: (qr.gridPosition - 1) * GRID_SPACING,
       lapTimes: [],
       currentTyre: tyre,
       stintLap: 0,
@@ -105,7 +111,7 @@ export function initRaceState(
       stintHistory: [],
       targetPitLap: initialPlan.targetPitLap,
       targetNextCompound: initialPlan.targetNextCompound,
-      gap: (qr.gridPosition - 1) * 0.5,
+      gap: qr.gridPosition === 1 ? 0 : GRID_SPACING,
       dsq: false,
     }
   })

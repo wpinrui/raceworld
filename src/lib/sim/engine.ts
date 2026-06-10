@@ -31,12 +31,17 @@ export interface LapResult {
 // Traffic / dirty-air model (make qualifying matter — overtaking was far too easy). Tunables:
 const DIRTY_RANGE = 1.0       // s: a follower within this loses pace to dirty air
 const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fades to 0 at DIRTY_RANGE
-const STRIKE_RANGE = 0.6      // s: must be at least this close to attempt a pass
-const CONTEST_GAP = 0.15      // s: a pass is contested when the running pace would close inside this
-const OVERTAKE_SENS = 0.8     // pass prob per second of clean-air pace edge
+const SLIPSTREAM = 0.3        // s: tow a chasing car gets within DIRTY_RANGE — eases the pass, offsets dirty air
+const STRIKE_RANGE = 1.0      // s: within this (~DRS range) a faster car gets a per-lap chance to pass
+const PASS_MARGIN = 3.0       // s: only a car whose pace would leave it this far AHEAD blows straight by (rare)
+const CONTEST_GAP = 0.15      // s: a car closing past this from beyond range arrives right behind, contests next lap
+const OVERTAKE_SENS = 0.12    // per-lap pass chance per second of clean-air pace edge (overtaking is HARD:
+                             //   a 0.4s/lap edge ≈ 5%/lap ≈ 20 laps to clear; a 2s edge ≈ 24%/lap ≈ 4 laps)
+const MAX_CONTEST = 0.5       // cap on the per-lap pass chance from within range (no certain passes)
 const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
 const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
-const HOLD_BACK = 0.15        // s: a failed move sits this far back, at the car-ahead's pace
+const HOLD_GAP = 0.3          // s: a car that can't get by harries around this far behind, tyres cooking
+const HOLD_JITTER = 0.3       // s: spread on the harry distance so a train isn't a column of identical +0.300s
 
 export function computeLapTime(input: LapInput): LapResult {
   const {
@@ -124,12 +129,28 @@ export function computeLapTime(input: LapInput): LapResult {
   // quicker has its edge eaten and settles into a train; a much-quicker car keeps enough to reach the car
   // ahead and contest. This is the emergent "trains form unless you're much faster" mechanism.
   const dirty = gapToCarAhead < DIRTY_RANGE ? MAX_DIRTY * (1 - gapToCarAhead / DIRTY_RANGE) : 0
-  const dirtyLapTime = rawTime + dirty
-  const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this pace
-  const paceEdge = input.carAheadFreeAir - freeAir                  // clean-air pace advantage over the car ahead
+  // SLIPSTREAM: a chasing car within DIRTY_RANGE gets a tow off the car ahead, applied BEFORE the overtake
+  // calculations — it runs this much faster, easing the pass (bigger pace edge, closes the gap quicker) and
+  // partly offsetting dirty air. Its own clean-air pace (freeAir, what the next car back gates on) is unchanged.
+  const tow = gapToCarAhead < DIRTY_RANGE ? SLIPSTREAM : 0
+  const dirtyLapTime = rawTime + dirty - tow
+  const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this (towed) pace
+  const paceEdge = input.carAheadFreeAir - freeAir + tow            // clean-air pace edge, plus the tow
 
-  // On the gearbox AND genuinely quicker → contest the pass.
-  if (gapToCarAhead <= STRIKE_RANGE && wouldGap < CONTEST_GAP && paceEdge > 0) {
+  // A pass happens this lap in one of two ways:
+  //  (a) BLOW-PAST (rare) — the car is so much faster than the gap that running its own pace leaves it
+  //      well AHEAD of the car in front (past PASS_MARGIN). It just drives by, from any distance: a
+  //      backmarker being lapped, or a car on the wrong tyres. The big overshoot makes this rare.
+  //  (b) CONTEST — it's within striking range (~1s) and quicker. Passing is HARD: a LOW per-lap chance
+  //      that scales with how much faster it is (and its overtaking), capped well under 1. A marginally
+  //      quicker car still gets a small chance every lap (never walled to zero); a clearly-but-not-hugely
+  //      faster car doesn't simply breeze by. It harries in the dirty air until a chance comes off.
+  const blowPast = wouldGap < -PASS_MARGIN && paceEdge > 0
+  const inRange = gapToCarAhead <= STRIKE_RANGE && paceEdge > 0
+  // Where a car that can't pass settles: HOLD_GAP with per-lap jitter, so a train shows living, varied
+  // intervals (+0.27, +0.41, +0.19…) instead of every car pinned to an identical +0.300.
+  const harryGap = HOLD_GAP + (Math.random() - 0.5) * HOLD_JITTER
+  if (blowPast || inRange) {
     // Crash roll (issue #60), driven by both drivers' consistency (f(c) = 2e-6·(100-c)²).
     if (input.defenderDriver) {
       const k = 0.000002
@@ -141,20 +162,21 @@ export function computeLapTime(input: LapInput): LapResult {
         return { lapTime: dirtyLapTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 }, freeAir }
       }
     }
-    // Pass chance scales with the clean-air pace edge (you must be clearly faster), nudged by overtaking.
-    const prob = Math.min(0.92, paceEdge * OVERTAKE_SENS + (driver.overtaking / 100) * 0.2)
-    if (Math.random() < prob) {
+    // Blow-past goes through; a contest is a hard, edge-scaled roll (overtaking rated against a 75 baseline).
+    const prob = Math.min(MAX_CONTEST, paceEdge * OVERTAKE_SENS * (driver.overtaking / 75))
+    if (blowPast || Math.random() < prob) {
       // A completed pass costs both cars time: the attacker a little, the defender more.
       return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
     }
-    // Failed move: hold station right behind, at the car-ahead's pace.
-    return { lapTime: carAheadLapTime + HOLD_BACK, overtook: false, freeAir }
+    // No way through this lap: hold station in the dirty air, no closer than the (jittered) harry gap.
+    const heldGap = Math.max(harryGap, wouldGap)
+    return { lapTime: carAheadLapTime + heldGap - gapToCarAhead, overtook: false, freeAir }
   }
 
-  // Closing from beyond the strike zone but this pace would slip past → clamp to the strike boundary so a
-  // pass still requires a contest next lap (no free passes from a single fast lap).
-  if (gapToCarAhead > STRIKE_RANGE && wouldGap < CONTEST_GAP) {
-    return { lapTime: carAheadLapTime + STRIKE_RANGE - gapToCarAhead, overtook: false, freeAir }
+  // Closing from beyond striking range and this pace would overshoot the car ahead → arrive right behind
+  // instead (no pass this lap; it gets its chances next lap, now in range).
+  if (wouldGap < CONTEST_GAP) {
+    return { lapTime: carAheadLapTime + harryGap - gapToCarAhead, overtook: false, freeAir }
   }
 
   // Approaching slowly, or sitting at the dirty-air equilibrium (a train).

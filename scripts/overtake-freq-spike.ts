@@ -37,20 +37,24 @@ function onTrackPasses(prev: string[], curr: string[], excluded: Set<string>): n
   return n
 }
 
-let totalOt = 0, totalChurn = 0, totalFrontChurn = 0, totalLaps = 0
+let totalOt = 0, totalLap1Ot = 0, totalChurn = 0, totalFrontChurn = 0, totalLaps = 0
 for (let r = 0; r < RACES; r++) {
   const { results: qr, sessions } = runQualifying(drivers, teams, circuit, forms)
   let state = initRaceState(drivers, teams, circuit, qr, sessions, forms, YEAR)
   let g = 0; while (!isDry(state) && g++ < 30) state = initRaceState(drivers, teams, circuit, qr, sessions, forms, YEAR)
   const grid = new Map(qr.map((q) => [q.driverId, q.gridPosition]))
   state = { ...state, phase: 'racing' }
-  let prev: string[] | null = null, lap = 0
-  while (state.phase === 'racing' && lap++ < circuit.laps + 10) {
+  // Seed prev with the GRID order so the first lap's passes (grid -> end of lap 1) are counted too.
+  let prev: string[] = [...qr].sort((a, b) => a.gridPosition - b.gridPosition).map((q) => q.driverId)
+  let simLap = 0
+  while (state.phase === 'racing' && simLap < circuit.laps + 10) {
     state = simulateLap(state, drivers, teams, circuit, YEAR)
+    simLap++
     const active = state.drivers.filter((d) => !d.retired)
     const order = [...active].sort((a, b) => a.position - b.position).map((d) => d.driverId)
     const justPitted = new Set(active.filter((d) => d.lastPitLap > 0 && state.currentLap - d.lastPitLap <= 1).map((d) => d.driverId))
-    if (prev) totalOt += onTrackPasses(prev, order, justPitted)
+    const passes = onTrackPasses(prev, order, justPitted)
+    if (simLap === 1) totalLap1Ot += passes; else totalOt += passes
     prev = order
   }
   totalLaps += state.currentLap
@@ -68,8 +72,9 @@ for (let r = 0; r < RACES; r++) {
 }
 
 console.log(`${RACES} races on ${circuit.name} (${circuit.laps} laps), 20 cars, consistency 88\n`)
-console.log(`on-track passes / race:        ${(totalOt / RACES).toFixed(1)}`)
-console.log(`passes / car / race:           ${(totalOt / RACES / 20).toFixed(1)}`)
+console.log(`LAP 1 passes / race (the start):${(totalLap1Ot / RACES).toFixed(1)}`)
+console.log(`laps 2+ passes / race:         ${(totalOt / RACES).toFixed(1)}`)
+console.log(`passes / car / race (laps 2+): ${(totalOt / RACES / 20).toFixed(1)}`)
 console.log(`mean |grid - finish| (all):    ${(totalChurn / RACES).toFixed(2)} places  (0 = grid holds)`)
 console.log(`mean |grid - finish| (front 6):${(totalFrontChurn / RACES).toFixed(2)} places  (qualifying matters most here)`)
 console.log(`avg laps completed:            ${(totalLaps / RACES).toFixed(0)}`)
