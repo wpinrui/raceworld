@@ -8,15 +8,15 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
 
 // 1 car-pace point = 0.04s/lap (engine.ts: carMod = (75 − carPace)/25, added to the base lap). The 5% flat
-// failure and the median/catch-up gain mirror rollUpgrade in development.ts.
+// failure and the median/catch-up gain mirror rollUpgrade in development.ts (catch-up accrues per race).
 const SECONDS_PER_PACE = 0.04
-const CATCHUP_PER_POINT = 0.125
+const CATCHUP_PER_POINT_PER_RACE = 0.027
 
 // Expected lap-time gain (seconds) for an upgrade of the given cycle, for a car `deficit` pace points off
-// the leader: median = cycle·1.05^(cycle−3), plus the catch-up bonus, converted to seconds.
+// the leader: median = cycle·1.05^(cycle−3), plus the per-race catch-up bonus, converted to seconds.
 function expectedSeconds(cycle: number, deficit: number): number {
   const median = cycle * Math.pow(1.05, cycle - 3)
-  const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT
+  const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT_PER_RACE * cycle
   return (median + catchUp) * SECONDS_PER_PACE
 }
 

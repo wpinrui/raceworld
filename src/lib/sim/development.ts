@@ -39,10 +39,12 @@ const BASE_MEDIAN = 3
 const BASE_SIGMA = 1.5 / 0.6745
 
 // Catch-up development: a car's expected upgrade grows with how far it sits BEHIND the fastest car
-// (deficit in pace points), so slower teams gain more and the field converges over a season. Replaces
-// the old funding-tier penalty. 0.125 closes a 1.8s opening spread to ~1.15s by season end (10-team,
-// 24-round; see scripts/catchup-sim.ts).
-const CATCHUP_PER_POINT = 0.125
+// (deficit in pace points), so slower teams gain more and the field converges over a season. The bonus
+// accrues PER RACE of development (× cycleLength), so total season catch-up is cadence-NEUTRAL — a flat
+// per-upgrade bonus would hand short cycles strictly more catch-up and make them always better for a slow
+// car. 0.027/race (≈0.121 at the mean 4.5-race cycle) closes a 1.8s opening spread to ~1.15s by season end
+// (10-team, 24-round; see scripts/catchup-sim.ts).
+const CATCHUP_PER_POINT_PER_RACE = 0.027
 
 // Financial tier's nudge in the end-of-season reshuffle: a small per-tier bonus to the sort so richer
 // teams (tier 1) drift up the order. At 0.4 the tier1↔tier4 swing is worth ~1.2 grid slots — enough to
@@ -59,8 +61,8 @@ function randomCycleLength(rng: () => number): number {
 
 // Roll the outcome of a single upgrade ahead of time so the player can inspect and god-mode edit it
 // before it lands. `deficit` is the car's pace points behind the current fastest car: a bigger deficit
-// adds a bigger catch-up bonus, so the returned paceDelta is the final pace gain. 5% chance of a total
-// failure (no benefit at all).
+// (and a longer cycle) adds a bigger catch-up bonus, so the returned paceDelta is the final pace gain.
+// 5% chance of a total failure (no benefit at all).
 export function rollUpgrade(
   cycleLength: number,
   deficit: number,
@@ -72,7 +74,7 @@ export function rollUpgrade(
   // the linear cycle term — a bug.) Spread keeps the cycle-3 shape via its coefficient of variation.
   const median = cycleLength * Math.pow(1.05, cycleLength - 3)
   const raw = Math.max(0, sampleNormal(median, median * (BASE_SIGMA / BASE_MEDIAN), rng))
-  const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT
+  const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT_PER_RACE * cycleLength
   return { paceDelta: round1(raw + catchUp), failed: false }
 }
 
