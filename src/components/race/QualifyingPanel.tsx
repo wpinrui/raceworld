@@ -3,6 +3,7 @@
 import type { Driver, Team, Circuit } from '@/lib/sim/types'
 import type { BoardRow } from './useQualifyingEngine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 const ROW_H = 30
 const COLS = '30px minmax(104px,1.3fr) minmax(52px,0.9fr) 84px 56px 56px 56px'
@@ -32,6 +33,7 @@ interface Props {
 export function QualifyingPanel({ rows, sessionName, cutSize, dropFrom, progress, showElim, eliminated, closeElim, drivers, teams, currentCircuit }: Props) {
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
+  const highlight = useTeamHighlight()
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -56,11 +58,16 @@ export function QualifyingPanel({ rows, sessionName, cutSize, dropFrom, progress
             const driver = driverMap.get(row.carId)
             const team = driver ? teamMap.get(driver.teamId) : undefined
             const inDrop = cutSize > 0 && idx >= dropFrom
+            const hl = highlight(driver?.teamId, team?.color)
             return (
               <div
                 key={row.carId}
                 className={`absolute left-0 right-0 grid items-center px-2 text-[#FFFFFF] border-b border-[#1E2431] ${inDrop ? 'bg-[#3D141B]' : ''}`}
-                style={{ gridTemplateColumns: COLS, height: ROW_H, transform: `translateY(${idx * ROW_H}px)`, transition: 'transform 0.4s cubic-bezier(0.4,0,0.2,1)' }}
+                style={{
+                  gridTemplateColumns: COLS, height: ROW_H, transform: `translateY(${idx * ROW_H}px)`, transition: 'transform 0.4s cubic-bezier(0.4,0,0.2,1)',
+                  // Your-team highlight. On an elimination-zone row keep its red fill, just add the colour bar.
+                  ...(hl ? (inDrop ? { boxShadow: hl.boxShadow } : hl) : {}),
+                }}
               >
                 <div className="font-bold text-sm">{idx + 1}</div>
                 <div className="flex items-center gap-2 min-w-0">
