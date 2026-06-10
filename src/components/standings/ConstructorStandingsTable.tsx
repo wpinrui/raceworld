@@ -9,6 +9,7 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useFollowed } from '@/lib/store/useFollowed'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
 import { teamHighlightSolid } from '@/lib/team-manager'
+import { resolveTeamColor } from '@/lib/world/historical-team'
 
 interface Props {
   standings: ConstructorStanding[]
@@ -43,8 +44,7 @@ export function ConstructorStandingsTable({ standings, drivers, teams, totalRoun
         </thead>
         <tbody>
           {standings.map((standing, idx) => {
-            const team = teams.find((t) => t.id === standing.teamId)
-            const teamColor = team?.color ?? '#FFFFFF'
+            const teamColor = resolveTeamColor(standing.teamId, teams)
             const hl = highlight(standing.teamId, teamColor)
             const solid = hl ? teamHighlightSolid(teamColor) : undefined
             const teamDrivers = drivers.filter((d) => d.teamId === standing.teamId)
