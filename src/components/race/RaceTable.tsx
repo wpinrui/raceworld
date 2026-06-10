@@ -23,10 +23,12 @@ interface RaceTableProps {
   animate?: boolean
 }
 
-function formatGap(gap: number, retired: boolean): string {
-  if (retired) return 'DNF'
-  if (gap === 0) return 'LEADER'
-  return `+${gap.toFixed(3)}s`
+// The leader's running race time, e.g. "1h 23min 04.567s" (hours dropped before the one-hour mark).
+function formatTotalTime(t: number): string {
+  const h = Math.floor(t / 3600)
+  const m = Math.floor((t % 3600) / 60)
+  const s = (t % 60).toFixed(3).padStart(6, '0')
+  return h > 0 ? `${h}h ${m}min ${s}s` : `${m}min ${s}s`
 }
 
 function formatLapTime(lapTimes: number[]): string {
@@ -46,6 +48,7 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
     if (!a.retired && b.retired) return -1
     return a.position - b.position
   })
+  const leaderTime = sorted.find((s) => !s.retired)?.totalTime ?? 0
 
   const tableRef = useRef<HTMLTableElement>(null)
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
@@ -105,11 +108,13 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
         <thead>
           <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
             <th className="text-left py-1.5 px-2 w-8">P</th>
-            <th className="text-left py-1.5 px-2 w-10">Grid</th>
+            <th className="text-left py-1.5 px-2 w-16">Grid</th>
             <th className="text-left py-1.5 px-2">Driver</th>
             <th className="text-left py-1.5 px-2">Team</th>
             <th className="text-right py-1.5 px-2">Gap</th>
+            <th className="text-right py-1.5 px-2">Interval</th>
             <th className="text-center py-1.5 px-2">Tyre</th>
+            <th className="text-center py-1.5 px-2">Stops</th>
             <th className="text-right py-1.5 px-2">Last Lap</th>
             <th className="text-left py-1.5 px-2">Stints</th>
           </tr>
@@ -119,6 +124,8 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
             const driver = driverMap.get(ds.driverId)
             const team = driver ? teamMap.get(driver.teamId) : undefined
             const condColor = ds.currentTyre.condition < 20 ? 'text-red-400' : 'text-[#FFFFFF]'
+            const gp = gridPos?.[ds.driverId]
+            const delta = gp != null ? gp - ds.position : null // places improved (grid -> now); + is up
 
             const nameSpan = (
               <span className="text-sm font-medium truncate max-w-[130px]">
@@ -138,7 +145,14 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                 }`}
               >
                 <td className="py-1 px-2 font-bold text-sm">{ds.position}</td>
-                <td className="py-1 px-2 tabular-nums text-sm text-[#9CA3AF]">{gridPos?.[ds.driverId] ?? '—'}</td>
+                <td className="py-1 px-2 tabular-nums text-sm whitespace-nowrap">
+                  <span className="text-[#9CA3AF]">{gp ?? '—'}</span>
+                  {!ds.retired && delta != null && delta !== 0 && (
+                    <span className={`ml-1 text-xs font-semibold ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ({delta > 0 ? '+' : ''}{delta})
+                    </span>
+                  )}
+                </td>
                 <td className="py-1 px-2">
                   <div className="flex items-center gap-2">
                     {team && <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color }} />}
@@ -164,8 +178,11 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                 <td className="py-1 px-2 text-xs text-[#FFFFFF]">
                   {team?.name ?? '---'}
                 </td>
+                <td className={`py-1 px-2 text-right font-mono text-sm whitespace-nowrap ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
+                  {ds.retired ? 'DNF' : ds.position === 1 ? formatTotalTime(ds.totalTime) : `+${(ds.totalTime - leaderTime).toFixed(3)}s`}
+                </td>
                 <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
-                  {formatGap(ds.gap, ds.retired)}
+                  {ds.retired ? 'DNF' : ds.position === 1 ? <span className="text-[#6B7280]">—</span> : `+${ds.gap.toFixed(3)}s`}
                 </td>
                 <td className="py-1 px-2">
                   <div className="flex items-center gap-1.5 justify-center">
@@ -177,6 +194,7 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                     )}
                   </div>
                 </td>
+                <td className="py-1 px-2 text-center text-sm tabular-nums">{ds.pitStops}</td>
                 <td className="py-1 px-2 text-right font-mono text-sm">
                   {formatLapTime(ds.lapTimes)}
                 </td>
