@@ -15,6 +15,7 @@ import { useSetupCta } from '@/lib/store/setup-cta'
 import { calendarForYear } from '@/data/calendars'
 import { simUntilYear } from '@/lib/sim/sim-until-year'
 import { SimulatingWorldModal } from '@/components/SimulatingWorldModal'
+import { TeamManagerSetup, type TmSelection } from '@/components/setup/TeamManagerSetup'
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -29,6 +30,19 @@ function racesBetween(from: number, toExclusive: number): number {
   let n = 0
   for (let y = from; y < toExclusive; y++) n += calendarForYear(y).length
   return n
+}
+
+// Fold the Team Manager team choice into the grid being started: an existing team just names the player's
+// team; a new team is appended (its signed drivers moved out of free agency onto it).
+function applyTmSelection(drivers: Driver[], teams: Team[], sel: TmSelection): { drivers: Driver[]; teams: Team[]; playerTeamId: string | null } {
+  if (!sel) return { drivers, teams, playerTeamId: null }
+  if (sel.kind === 'existing') return { drivers, teams, playerTeamId: sel.teamId }
+  const signed = new Set(sel.drivers.map((d) => d.id))
+  return {
+    drivers: [...drivers.filter((d) => !signed.has(d.id)), ...sel.drivers],
+    teams: [...teams, sel.team],
+    playerTeamId: sel.team.id,
+  }
 }
 
 export default function SetupPage() {
@@ -54,6 +68,9 @@ export default function SetupPage() {
   const [simulating, setSimulating] = useState(false)
   const [racesTotal, setRacesTotal] = useState(0)
   const cancelSimRef = useRef(false)
+  // Team Manager: run one team only, god-mode off (re-enableable as Settings talents).
+  const [teamManager, setTeamManager] = useState(false)
+  const [tmSelection, setTmSelection] = useState<TmSelection>(null)
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any
@@ -175,7 +192,11 @@ export default function SetupPage() {
     // Reset to the real-world grid of wherever we landed (startYear on completion, earlier if cancelled).
     const landed = useSeasonStore.getState().year
     const real = composeSeason(landed)
-    if (real) useSeasonStore.getState().initSeason(real.drivers, real.teams, landed)
+    if (real) {
+      const tm = applyTmSelection(real.drivers, real.teams, teamManager ? tmSelection : null)
+      useSeasonStore.getState().setTeamManager(teamManager, tm.playerTeamId)
+      useSeasonStore.getState().initSeason(tm.drivers, tm.teams, landed)
+    }
     useSeasonStore.getState().setRealWorldMode(realWorld)
     useRaceStore.getState().resetSession()
     setSimulating(false)
@@ -184,8 +205,10 @@ export default function SetupPage() {
 
   async function handleStartSeason() {
     if (simWorld && startYear > EARLIEST_YEAR) { await runSimWorld(); return }
+    const tm = applyTmSelection(localDrivers, localTeams, teamManager ? tmSelection : null)
     seasonStore.setRealWorldMode(realWorld)
-    seasonStore.initSeason(localDrivers, localTeams, startYear)
+    seasonStore.setTeamManager(teamManager, tm.playerTeamId)
+    seasonStore.initSeason(tm.drivers, tm.teams, startYear)
     useRaceStore.getState().resetSession()
     router.push('/home') // land on Home; the Continue CTA drives forward to the opening race
   }
@@ -195,9 +218,9 @@ export default function SetupPage() {
   const setSetupCta = useSetupCta((s) => s.setCta)
   useEffect(() => {
     if (isActive) { setSetupCta(null); return }
-    setSetupCta({ ready: localDrivers.length > 0, year: startYear, start: handleStartSeason })
+    setSetupCta({ ready: localDrivers.length > 0 && (!teamManager || tmSelection != null), year: startYear, start: handleStartSeason })
     return () => setSetupCta(null)
-  }, [isActive, localDrivers, localTeams, startYear, realWorld, simWorld]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, localDrivers, localTeams, startYear, realWorld, simWorld, teamManager, tmSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!hydrated) return null
 
@@ -270,6 +293,10 @@ export default function SetupPage() {
                         Sim history from {EARLIEST_YEAR}
                       </label>
                     )}
+                    <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                      <input type="checkbox" checked={teamManager} onChange={(e) => { setTeamManager(e.target.checked); if (!e.target.checked) setTmSelection(null) }} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                      Team Manager
+                    </label>
                   </>
                 )}
                 <button onClick={() => fileInputRef.current?.click()}
@@ -289,6 +316,12 @@ export default function SetupPage() {
         {importError && (
           <div className="mb-4 px-4 py-3 rounded-lg bg-[#3A1A1A] text-[#F87171] text-sm">
             Import error: {importError}
+          </div>
+        )}
+
+        {!isActive && teamManager && (
+          <div className="mb-6">
+            <TeamManagerSetup teams={localTeams} freeAgents={freeAgents} onChange={setTmSelection} />
           </div>
         )}
 
@@ -460,7 +493,7 @@ export default function SetupPage() {
 
         {!isActive && (
           <div className="mt-8 flex justify-end">
-            <button onClick={handleStartSeason} disabled={localDrivers.length === 0}
+            <button onClick={handleStartSeason} disabled={localDrivers.length === 0 || (teamManager && !tmSelection)}
               className="flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-sm uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               Start Season {seasonStore.year} <ChevronRight size={16} />
             </button>
