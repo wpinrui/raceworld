@@ -123,7 +123,7 @@ function PreSeasonTestingSurface({ test, year, prevFinish, teams }: { test: PreS
               <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{year} Pre-Season Testing</h2>
               <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
-            <div className="flex-1 min-h-0 p-5 overflow-y-auto">
+            <div className="flex-1 min-h-0 py-5 overflow-y-auto">
               <TestingPanel test={test} wccYear={year - 1} prevFinish={prevFinish} teams={teams} />
             </div>
           </div>
