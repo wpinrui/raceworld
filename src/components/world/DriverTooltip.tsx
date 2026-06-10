@@ -5,6 +5,8 @@ import type { Driver } from '@/lib/sim/types'
 import type { DriverCareer } from '@/lib/news/engine'
 import { shownOverall } from '@/lib/sim/progression'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
+import { useRatingsHidden } from '@/lib/useRatingsHidden'
+import { ratingGrade } from '@/lib/team-manager'
 
 // An expanded hover card for a driver: rating (overall + potential), career totals, age, nationality,
 // and this year's championship position (if they raced). Wrap any trigger element with it.
@@ -15,7 +17,7 @@ const ordinal = (n: number): string => {
   return `${n}${s[(r - 20) % 10] || s[r] || s[0]}`
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <span className="flex flex-col">
       <span className="text-[9px] uppercase tracking-wide text-[#FFFFFF]">{label}</span>
@@ -45,6 +47,7 @@ export function DriverTooltip({
   children: React.ReactNode
   side?: 'top' | 'right' | 'bottom' | 'left'
 }) {
+  const hidden = useRatingsHidden()
   const ov = Math.round(shownOverall(driver))
   const pot = Math.round(driver.peakPotential)
   return (
@@ -76,8 +79,8 @@ export function DriverTooltip({
             </p>
 
             <div className="mt-2 grid grid-cols-2 gap-x-4 border-t border-[#303848] pt-2">
-              <Stat label="Overall" value={ov} />
-              <Stat label="Potential" value={pot} />
+              <Stat label="Overall" value={hidden ? ratingGrade(ov) : ov} />
+              <Stat label="Potential" value={hidden ? ratingGrade(pot) : pot} />
             </div>
 
             <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-[#303848] pt-2">
