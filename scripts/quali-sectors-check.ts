@@ -15,7 +15,8 @@ const drivers: Driver[] = teams.flatMap((t, i) => [0, 1].map((j) => ({
 const forms: Record<string, number> = {}; for (const d of drivers) forms[d.id] = 5
 
 const { sessions } = runQualifying(drivers, teams, circuit, forms)
-let maxErr = 0, n = 0, fracSum = [0, 0, 0]
+let maxErr = 0, n = 0
+const fracSum = [0, 0, 0]
 for (const s of sessions) for (const l of s.results) {
   for (const [time, sec] of [[l.lap1, l.lap1Sectors], [l.lap2, l.lap2Sectors]] as Array<[number, [number, number, number]]>) {
     const sum = sec[0] + sec[1] + sec[2]

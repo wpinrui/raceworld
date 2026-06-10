@@ -7,6 +7,8 @@ import { computeDriverMediaBreakdowns } from '@/lib/sim/media-scores'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 
 interface Props {
   drivers: Driver[]
@@ -51,7 +53,12 @@ function Th({ k, label, right, sortKey, sortDir, onSort }: {
 
 export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings, driverStandings }: Props) {
   const card = useLiveDriverCards()
-  const [godMode, setGodMode] = useState(false)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
+  // In Team Manager mode the breakdown reveal is a Data Room talent; without it, force the public view.
+  const gateAllowsReveal = !teamManagerMode || talentOn
+  const [godModeToggle, setGodModeToggle] = useState(false)
+  const godMode = godModeToggle && gateAllowsReveal
   const [sortKey, setSortKey] = useState<SortKey>('media')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -105,15 +112,17 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
 
   return (
     <div>
-      <div className="flex justify-end mb-3">
-        <button
-          onClick={() => setGodMode((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
-        >
-          {godMode ? <EyeOff size={13} /> : <Eye size={13} />}
-          {godMode ? 'Hide breakdown' : 'God mode: breakdown'}
-        </button>
-      </div>
+      {gateAllowsReveal && (
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={() => setGodModeToggle((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+          >
+            {godMode ? <EyeOff size={13} /> : <Eye size={13} />}
+            {godMode ? 'Hide breakdown' : 'God mode: breakdown'}
+          </button>
+        </div>
+      )}
       <div className={`overflow-x-auto ${godMode ? 'max-w-5xl' : 'max-w-2xl'}`}>
         <table className="w-full text-sm">
           <thead>

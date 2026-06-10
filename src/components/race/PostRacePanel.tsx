@@ -4,6 +4,7 @@ import type { RaceResult, Team } from '@/lib/sim/types'
 import { DriverLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 interface Props {
   results: RaceResult[]
@@ -12,6 +13,7 @@ interface Props {
 
 export function PostRacePanel({ results, teams }: Props) {
   const card = useLiveDriverCards()
+  const highlight = useTeamHighlight()
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
@@ -32,7 +34,7 @@ export function PostRacePanel({ results, teams }: Props) {
             {results.map((r) => {
               const team = teams.find((t) => t.id === r.teamId)
               return (
-                <tr key={r.driverId} className="border-b border-[#1a2030]">
+                <tr key={r.driverId} style={highlight(r.teamId, team?.color)} className="border-b border-[#1a2030]">
                   <td className="py-1 px-1 font-bold text-[#FFFFFF]">
                     {r.dnf ? <span className="text-[#C084FC] text-xs">DNF</span> : r.finishPosition}
                   </td>

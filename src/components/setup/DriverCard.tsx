@@ -4,12 +4,54 @@ import { useState } from 'react'
 import { Trash2, ChevronDown } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team } from '@/lib/sim/types'
-import { STAT_KEYS, STAT_LABELS, computeOverall } from './stat-utils'
+import { STAT_KEYS, STAT_LABELS, computeOverall, statColor } from './stat-utils'
 import { DriverLink } from '@/components/world/EntityLink'
 import { OverallRing } from './OverallRing'
 import { StatBar } from './StatBar'
 import { StatSlider } from './StatSlider'
 import { ContractBadge } from './ContractBadge'
+import { useRatingsHidden } from '@/lib/useRatingsHidden'
+import { ratingGrade, normalisedRatingFill } from '@/lib/team-manager'
+
+// Fog-of-war Overall: the computed Overall collapses to its A–D grade letter, no number leaked.
+function OverallGrade({ overall }: { overall: number }) {
+  const grade = ratingGrade(overall)
+  const color = statColor(overall)
+  return (
+    <div className="relative shrink-0 flex items-center justify-center rounded-full border-2" style={{ width: 44, height: 44, borderColor: color }}>
+      <span className="text-base font-bold" style={{ color }}>{grade}</span>
+    </div>
+  )
+}
+
+// Fog-of-war stat bar: fills to the driver's own normalised profile, no absolute number.
+function HiddenStatBar({ label, fill }: { label: string; fill: number }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[#FFFFFF] w-20 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-[#2A3142] overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${fill * 100}%`, backgroundColor: '#6B7280' }} />
+      </div>
+      <span className="w-8 shrink-0" aria-hidden />
+    </div>
+  )
+}
+
+// Fog-of-war edit slider: editing still works against the real value; the numeric label is suppressed.
+function HiddenStatSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[#FFFFFF] w-20 shrink-0">{label}</span>
+      <input
+        type="range" min={0} max={100} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 h-1 cursor-pointer"
+        style={{ accentColor: '#6B7280' }}
+      />
+      <span className="w-8 shrink-0" aria-hidden />
+    </div>
+  )
+}
 
 export function makeDefaultDriver(teamId: string): Driver {
   return {
@@ -40,13 +82,14 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
 }) {
   const [expanded, setExpanded] = useState(false)
   const overall = computeOverall(driver)
+  const ratingsHidden = useRatingsHidden()
 
   return (
     <div className="rounded-xl bg-[#2A3142] overflow-hidden">
       <div className="p-4">
         {/* Header: ring + name + flag + controls */}
         <div className="flex items-center gap-3 mb-4">
-          <OverallRing overall={overall} />
+          {ratingsHidden ? <OverallGrade overall={overall} /> : <OverallRing overall={overall} />}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <DriverLink id={driver.id} className="text-base font-semibold text-[#FFFFFF] truncate">{driver.name}</DriverLink>
@@ -79,7 +122,9 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
         {/* Stat bars */}
         <div className="space-y-2">
           {STAT_KEYS.map((k) => (
-            <StatBar key={k} label={STAT_LABELS[k]} value={driver[k]} />
+            ratingsHidden
+              ? <HiddenStatBar key={k} label={STAT_LABELS[k]} fill={normalisedRatingFill(driver, k)} />
+              : <StatBar key={k} label={STAT_LABELS[k]} value={driver[k]} />
           ))}
         </div>
       </div>
@@ -125,12 +170,19 @@ export function DriverCard({ driver, teams, onUpdate, onRemove, currentYear }: {
 
           <div className="space-y-2.5">
             {STAT_KEYS.map((k) => (
-              <StatSlider
-                key={k}
-                label={STAT_LABELS[k]}
-                value={driver[k]}
-                onChange={(v) => onUpdate({ [k]: v })}
-              />
+              ratingsHidden
+                ? <HiddenStatSlider
+                    key={k}
+                    label={STAT_LABELS[k]}
+                    value={driver[k]}
+                    onChange={(v) => onUpdate({ [k]: v })}
+                  />
+                : <StatSlider
+                    key={k}
+                    label={STAT_LABELS[k]}
+                    value={driver[k]}
+                    onChange={(v) => onUpdate({ [k]: v })}
+                  />
             ))}
             <div className="flex items-center gap-3">
               <span className="text-xs text-[#FFFFFF] w-20 shrink-0">Narrative</span>

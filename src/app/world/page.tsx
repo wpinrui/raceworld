@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useWorldOverview } from '@/lib/world/hooks'
+import { resolveTeamColor } from '@/lib/world/historical-team'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
@@ -51,7 +52,7 @@ export default function WorldPage() {
   for (const t of data?.teamsDirectory ?? []) dir.set(t.teamId, t.teamName)
   for (const t of season.teams) dir.set(t.id, t.name)
   const teams = [...dir.entries()].map(([teamId, teamName]) => ({ teamId, teamName })).sort((a, b) => a.teamName.localeCompare(b.teamName))
-  const teamColor = (id: string) => season.teams.find((t) => t.id === id)?.color ?? '#6B7280'
+  const teamColor = (id: string) => resolveTeamColor(id, season.teams)
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
@@ -130,7 +131,7 @@ export default function WorldPage() {
                       <td className="py-2 px-3 text-[#FFFFFF]">
                         {c.driverChampionId
                           ? <><DriverHover id={c.driverChampionId} card={card}><DriverLink id={c.driverChampionId} className="font-semibold text-[#FFFFFF]">{c.driverChampionName}</DriverLink></DriverHover>
-                              {c.driverChampionTeamId && <span className="text-[#FFFFFF]"> · <TeamLink id={c.driverChampionTeamId} className="text-[#FFFFFF]">{season.teams.find((t) => t.id === c.driverChampionTeamId)?.name ?? c.driverChampionTeamId}</TeamLink></span>}</>
+                              {c.driverChampionTeamId && <span className="text-[#FFFFFF]"> · <TeamLink id={c.driverChampionTeamId} className="text-[#FFFFFF]">{c.driverChampionTeamName ?? dir.get(c.driverChampionTeamId) ?? c.driverChampionTeamId}</TeamLink></span>}</>
                           : '—'}
                       </td>
                       <td className="py-2 px-5 text-[#FFFFFF]">

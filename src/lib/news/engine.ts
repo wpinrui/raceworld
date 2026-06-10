@@ -2004,8 +2004,9 @@ function previewTalkingPoint(ctx: NewsContext, r: number, seed: string): string 
   // Form vs car: a seated driver's expected finishing slot is their rank when the whole field is
   // ordered by car pace. Last race's finish minus that slot says who beat their machinery (kept it
   // up) and who fell short of it (needs a turnaround). A DNF counts as finishing last + 1.
-  // Car pace as it stood for the LAST race (round prev), so this beat reads the same on every rebuild.
-  const paceBefore = carPaceBeforeRound(ctx, prev)
+  // Car pace as it stood for the LAST race (round prev): upgrades are live from the round they're
+  // delivered, so round prev's pace INCLUDES round-prev's upgrade — hence carPaceBeforeRound(prev + 1).
+  const paceBefore = carPaceBeforeRound(ctx, prev + 1)
   const carPaceOf = (teamId: string) => paceBefore.get(teamId) ?? 0
   const seated = ctx.drivers.filter((d) => d.teamId)
   const fieldSize = seated.length || results.length

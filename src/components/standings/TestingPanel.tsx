@@ -7,6 +7,9 @@ import TyreIndicator from '@/components/race/TyreIndicator'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 interface Props {
   test: PreSeasonTest | null
@@ -32,7 +35,13 @@ type SortKey = 'time' | 'pace' | 'wcc'
 
 export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
   const card = useLiveDriverCards()
-  const [reveal, setReveal] = useState(false)
+  const highlight = useTeamHighlight()
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
+  // In Team Manager mode the true-pace reveal is a Data Room talent; without it, keep pace hidden.
+  const gateAllowsReveal = !teamManagerMode || talentOn
+  const [revealToggle, setRevealToggle] = useState(false)
+  const reveal = revealToggle && gateAllowsReveal
   const [sortKey, setSortKey] = useState<SortKey>('time')
 
   if (!test || test.entries.length === 0) {
@@ -56,24 +65,26 @@ export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 px-5">
         <p className="text-sm text-[#FFFFFF]">
           Pre-season test · <span className="text-[#FFFFFF]">{test.circuitName}</span>
         </p>
-        <button
-          onClick={() => setReveal((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
-        >
-          {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
-          {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
-        </button>
+        {gateAllowsReveal && (
+          <button
+            onClick={() => setRevealToggle((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+          >
+            {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+            {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-              <th className="text-left pb-2 pr-3 font-medium w-8">#</th>
+              <th className="text-left pb-2 pl-5 pr-3 font-medium w-12">#</th>
               <th className="text-left pb-2 pr-4 font-medium">Driver</th>
               <th className="text-left pb-2 px-3 font-medium">Team</th>
               <th className="text-center pb-2 px-3 font-medium">Tyre</th>
@@ -85,15 +96,15 @@ export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
                   True Pace
                 </th>
               )}
-              <th className={`text-right pb-2 pl-3 font-medium whitespace-nowrap ${headClass('wcc')}`} onClick={() => setSortKey('wcc')}>
+              <th className={`text-right pb-2 pl-3 pr-5 font-medium whitespace-nowrap ${headClass('wcc')}`} onClick={() => setSortKey('wcc')}>
                 {wccYear} WCC
               </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((e, i) => (
-              <tr key={e.teamId} className="border-b border-[#2A3142]/50">
-                <td className="py-2 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
+              <tr key={e.teamId} style={highlight(e.teamId, colorOf(e.teamId))} className="border-b border-[#2A3142]/50">
+                <td className="py-2 pl-5 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
                 <td className="py-2 pr-4"><DriverHover id={e.driverId} card={card}><DriverLink id={e.driverId} className="text-[#FFFFFF] font-medium">{e.driverName}</DriverLink></DriverHover></td>
                 <td className="py-2 px-3">
                   <span className="flex items-center gap-2">
@@ -114,7 +125,7 @@ export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
                 {reveal && (
                   <td className="py-2 px-3 text-right tabular-nums text-[#00D9FF] font-semibold">{e.carPace.toFixed(1)}</td>
                 )}
-                <td className="py-2 pl-3 text-right tabular-nums text-[#FFFFFF]">
+                <td className="py-2 pl-3 pr-5 text-right tabular-nums text-[#FFFFFF]">
                   {prevFinish.has(e.teamId) ? `P${prevFinish.get(e.teamId)}` : '—'}
                 </td>
               </tr>

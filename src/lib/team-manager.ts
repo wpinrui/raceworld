@@ -1,0 +1,80 @@
+import type { Driver } from '@/lib/sim/types'
+
+// Team Manager mode: shared, framework-agnostic helpers. The mode itself (teamManagerMode + playerTeamId)
+// lives on the season store; the per-talent on/off toggles live on the settings store.
+
+// ---- Talents (Settings toggles that re-enable a god-mode power, default OFF) -----------------------------
+export type TalentId =
+  | 'driver-tuning'   // edit your own drivers' ratings/age/potential/narrative
+  | 'contract-desk'   // extend / release / sign to your seats outside the market windows
+  | 'peak-form'       // set your drivers to maximum form
+  | 'scout-network'   // reveal exact Overall / Potential / ratings of EVERY driver
+  | 'data-room'       // reveal power-ranking media breakdown + true pre-season test pace
+  | 'met-office'      // reveal the true weather forecast
+  | 'chief-engineer'  // your car upgrades never fail
+  | 'chief-aero'      // each upgrade adds 0.5 car pace per race of development
+
+// `icon` is a lucide-react export name; the Settings UI maps it to the component.
+export const TALENTS: { id: TalentId; name: string; icon: string; tooltip: string }[] = [
+  { id: 'driver-tuning', name: 'Driver Tuning', icon: 'SlidersHorizontal', tooltip: "Directly adjust your own drivers' ratings, age, potential and narrative." },
+  { id: 'contract-desk', name: 'Contract Desk', icon: 'Handshake', tooltip: 'Extend, release or sign drivers to your seats outside the normal market windows.' },
+  { id: 'peak-form', name: 'Peak Form', icon: 'Flame', tooltip: 'Set your drivers to maximum form before a session.' },
+  { id: 'scout-network', name: 'Scout Network', icon: 'Telescope', tooltip: 'Reveal the exact Overall, Potential and underlying ratings of every driver on the grid.' },
+  { id: 'data-room', name: 'Data Room', icon: 'BarChart3', tooltip: 'Reveal the power-ranking media breakdown and the true pre-season test pace.' },
+  { id: 'met-office', name: 'Met Office', icon: 'CloudSun', tooltip: 'Reveal the true weather forecast instead of the imperfect outlook.' },
+  { id: 'chief-engineer', name: 'Chief Engineer', icon: 'Wrench', tooltip: 'Your car upgrades never fail.' },
+  { id: 'chief-aero', name: 'Chief Aerodynamicist', icon: 'Wind', tooltip: 'Every upgrade gains 0.5 car pace per race of development (a 3-race upgrade gains 1.5, a 6-race upgrade 3.0).' },
+]
+
+// ---- Fog of war (ratings hidden unless Scout Network is on) ---------------------------------------------
+export type RatingGrade = 'A' | 'B' | 'C' | 'D'
+
+// Overall / Potential collapse to a letter band: 90+ A, 80+ B, 70+ C, else D.
+export function ratingGrade(value: number): RatingGrade {
+  if (value >= 90) return 'A'
+  if (value >= 80) return 'B'
+  if (value >= 70) return 'C'
+  return 'D'
+}
+
+export const RATING_KEYS = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness', 'consistency'] as const
+export type RatingKey = (typeof RATING_KEYS)[number]
+
+// A de-numbered slider normalises to the driver's OWN best rating: a full bar = this driver's strongest
+// attribute, the rest scaled to it. Shows the profile (where they're strong/weak) without leaking the
+// absolute level. Returns a 0–1 fill.
+export function normalisedRatingFill(driver: Driver, key: RatingKey): number {
+  const best = Math.max(...RATING_KEYS.map((k) => driver[k]))
+  if (best <= 0) return 0
+  return Math.max(0, Math.min(1, driver[key] / best))
+}
+
+// ---- Your-team highlight (colour-tinted row, contrast-checked) ------------------------------------------
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6).padEnd(6, '0')
+  return [parseInt(n.slice(0, 2), 16) || 0, parseInt(n.slice(2, 4), 16) || 0, parseInt(n.slice(4, 6), 16) || 0]
+}
+
+// A subtle team-colour wash for the player's rows. Alpha scales DOWN for brighter team colours so the
+// blended row stays dark enough for white text to read; a solid colour bar pins the left edge.
+function tintAlpha(r: number, g: number, b: number): number {
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255 // 0 (dark) – 1 (bright)
+  return 0.12 + (1 - lum) * 0.14 // 0.12 for bright colours, up to ~0.26 for dark ones
+}
+
+export function teamHighlightStyle(color: string): { backgroundColor: string; boxShadow: string } {
+  const [r, g, b] = hexToRgb(color)
+  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${tintAlpha(r, g, b).toFixed(3)})`, boxShadow: `inset 3px 0 0 ${color}` }
+}
+
+// Opaque equivalent of the row tint, for sticky cells that need a solid background (they'd otherwise let
+// horizontally-scrolled content show through). Blends the same tint over the panel base so it matches the
+// semi-transparent wash on the rest of the row exactly.
+export function teamHighlightSolid(color: string, baseHex = '#1E2431'): string {
+  const [r, g, b] = hexToRgb(color)
+  const [br, bg, bb] = hexToRgb(baseHex)
+  const a = tintAlpha(r, g, b)
+  const mix = (c: number, base: number) => Math.round(base * (1 - a) + c * a)
+  return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`
+}

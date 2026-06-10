@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { DraftPick } from '@/lib/sim/driver-market'
+import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
 import type { Driver, DroppedDriver } from '@/lib/sim/types'
-import { useSeasonStore } from '@/lib/store/season-store'
+import { useSeasonStore, type PendingPlayerDraft } from '@/lib/store/season-store'
 import { signingDayReactions } from '@/lib/news/signing-day-reactions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import { actionGetDriverCareers } from '@/lib/news/actions'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverTooltip } from '@/components/world/DriverTooltip'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
 
 const ordinal = (n: number): string => {
@@ -60,7 +61,32 @@ function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
   )
 }
 
-export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPick[]; year: number; dropped?: DroppedDriver[] }) {
+// Team Manager: while the off-season draft is paused for the player, their interactive pick is laid over
+// the SAME signing-day board — no second screen. Synthesize the full rank-ordered picks list: rivals
+// ABOVE already signed, the player's seat(s) as their confirmed pick or an empty placeholder, rivals
+// BELOW as placeholders (they draft from what's left once the player confirms). The board reveals up to
+// (above + filled), so the player's next open seat is the one "on the clock" and the free-agent column
+// turns clickable for it.
+function buildPlayerDraftPicks(pd: PendingPlayerDraft): DraftPick[] {
+  const ph = (seat: DraftSeat): DraftPick => ({
+    teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
+    driverId: '', driverName: '', prevTeamName: '', faRank: 0, seatRank: 0,
+    pickPct: 0, realizedProb: 0, years: 0, flavour: 'chalk', odds: [],
+  })
+  const mine = (pp: PendingPlayerDraft['playerPicks'][number], seat: DraftSeat): DraftPick => ({
+    teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
+    driverId: pp.driverId, driverName: pp.driverName, prevTeamName: '',
+    faRank: pd.faRankOf[pp.driverId] ?? 0, seatRank: 0, pickPct: 50, realizedProb: 0.5,
+    years: pp.years, flavour: 'chalk', odds: [],
+  })
+  return [
+    ...pd.picksAbove,
+    ...pd.playerSeats.map((seat, i) => (pd.playerPicks[i] ? mine(pd.playerPicks[i], seat) : ph(seat))),
+    ...pd.belowSeats.map((seat) => ph(seat)),
+  ]
+}
+
+export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { picks: DraftPick[]; year: number; dropped?: DroppedDriver[] }) {
   const stored = useSeasonStore((s) => s.signingDayRevealed)
   const setRevealed = useSeasonStore((s) => s.setSigningDayRevealed)
   const standings = useSeasonStore((s) => s.constructorStandings)
@@ -69,7 +95,11 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const driverStandings = useSeasonStore((s) => s.driverStandings)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const eos = useSeasonStore((s) => s.endOfSeasonSummary)
+  // Team Manager: when the off-season draft is paused for the player to fill their own seat(s).
+  const playerDraft = useSeasonStore((s) => s.pendingPlayerDraft)
 
+  // Team Manager: the contract length you're offering the next free agent you sign (your call, 1-4 years).
+  const [offerYears, setOfferYears] = useState(1)
   // Career totals (archived base + the season just run), for the free-agent hover cards.
   const [careers, setCareers] = useState<Record<string, DriverCareer>>({})
   useEffect(() => {
@@ -78,18 +108,33 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
       .catch(() => setCareers({}))
   }, [year, raceResults, eos])
 
+  // Team Manager: fold the player's interactive pick INTO this one board (rivals above signed, your seat
+  // on the clock with a clickable pool, rivals below pending). Otherwise it's just the resolved draft.
+  const draftMode = playerDraft != null
+  const picks: DraftPick[] = playerDraft ? buildPlayerDraftPicks(playerDraft) : seasonPicks
+
   if (picks.length === 0) {
-    return <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
+    return (
+      <div className="flex h-full flex-col gap-3">
+        <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
+      </div>
+    )
   }
 
   const total = picks.length
-  const revealed = Math.min(stored, total)
+  // Draft mode: the player reveals the rivals ABOVE their seat one at a time (manual reveal, capped at the
+  // above count), then it's their turn. revealed = (rivals above revealed so far) + (own seats filled).
+  const aboveCount = playerDraft ? playerDraft.picksAbove.length : 0
+  const revealed = playerDraft ? Math.min(stored, aboveCount) + playerDraft.playerPicks.length : Math.min(stored, total)
+  const playerTurn = playerDraft != null && stored >= aboveCount // every rival above is revealed -> you pick
   const onClock = revealed < total ? picks[revealed] : null
-  const complete = !onClock
+  const complete = !draftMode && !onClock
+  // The pool you're choosing from once it's your turn.
+  const playerPool = playerDraft ? playerDraft.pool.filter((d) => !playerDraft.rejected.includes(d.id)) : []
   // This-season drivers win over next-season copies (correct age/form at signing time); next-season
   // entries cover any promoted rookie not on the current grid.
   const reactionDrivers = [...(pending?.drivers ?? []), ...drivers]
-  const posts = signingDayReactions(picks, reactionDrivers).filter((p) => p.pickIndex < revealed).sort((a, b) => b.pickIndex - a.pickIndex)
+  const posts = draftMode ? [] : signingDayReactions(picks, reactionDrivers).filter((p) => p.pickIndex < revealed).sort((a, b) => b.pickIndex - a.pickIndex)
 
   // Free-agent rank is fixed for the window: the first seat's contender list is the full pool in ranked
   // order, so each driver keeps their original rank on the board even after higher names sign off the list.
@@ -128,22 +173,26 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* Controls (fixed) */}
+      {/* Controls (fixed): reveal signings one at a time, up to your seat. Hidden once it's your pick. */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        <button
-          onClick={() => setRevealed(Math.min(total, revealed + 1))}
-          disabled={complete}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF] disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Reveal next signing
-        </button>
-        <button
-          onClick={() => setRevealed(total)}
-          disabled={complete}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Reveal all
-        </button>
+        {!playerTurn && (
+          <>
+            <button
+              onClick={() => setRevealed(playerDraft ? Math.min(aboveCount, stored + 1) : Math.min(total, revealed + 1))}
+              disabled={!playerDraft && complete}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Reveal next signing
+            </button>
+            <button
+              onClick={() => setRevealed(playerDraft ? aboveCount : total)}
+              disabled={!playerDraft && complete}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Reveal all
+            </button>
+          </>
+        )}
         <span className="ml-auto text-xs text-[#FFFFFF] tabular-nums">{revealed} / {total} seats filled</span>
       </div>
 
@@ -183,7 +232,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (
-                    <span className="text-xs italic text-[#00D9FF] flex-1">Up next…</span>
+                    <span className="text-xs italic text-[#00D9FF] flex-1">{playerTurn ? 'Your pick' : 'Up next…'}</span>
                   ) : (
                     <span className="text-xs text-[#FFFFFF] flex-1">Seat open</span>
                   )}
@@ -197,10 +246,43 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
             unsigned once every seat is settled. Always visible, so it's clear who missed out. */}
         <div className="flex flex-col min-h-0">
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
-            Free agents{complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}
+            Free agents{playerDraft && playerDraft.rejected.length > 0 ? <> · <span className="text-[#DC143C]">{playerDraft.rejected.length} turned you down</span></> : complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}
           </p>
+          {playerTurn && playerPool.length > 0 && (
+            <div className="flex items-center gap-2 mb-1.5 shrink-0">
+              <span className="text-[10px] uppercase tracking-wide text-[#FFFFFF]">Offer length</span>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map((y) => (
+                  <button
+                    key={y}
+                    onClick={() => setOfferYears(y)}
+                    className={`px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${offerYears === y ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
+                  >
+                    {y}yr
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
-            {onClock
+            {playerTurn
+              ? playerPool.length > 0
+                ? playerPool.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => useSeasonStore.getState().playerDraftSign(d.id, offerYears)}
+                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
+                    >
+                      <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{playerDraft.faRankOf[d.id] ?? ''}</span>
+                      <NationalityFlag code={d.nationality} />
+                      <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(d.id) ?? null} wdcPoints={wdcPtsOf.get(d.id)} career={careers[d.id]}>
+                        <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>
+                      </DriverTooltip>
+                      <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign {offerYears}yr</span>
+                    </button>
+                  ))
+                : <button onClick={() => useSeasonStore.getState().finishPlayerDraft()} className="m-3 self-start px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]">No free agents left, take rookies</button>
+              : onClock
               ? onClock.odds.map((o, i) => {
                   const d = driverById.get(o.driverId)
                   const row = (

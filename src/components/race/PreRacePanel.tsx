@@ -2,6 +2,7 @@
 
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, RaceState, Circuit } from '@/lib/sim/types'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 function formatQualTime(t: number | null): string {
   if (t === null) return '--'
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function PreRacePanel({ raceState, drivers, teams, currentCircuit }: Props) {
+  const highlight = useTeamHighlight()
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#2A3142]">
@@ -43,7 +45,7 @@ export function PreRacePanel({ raceState, drivers, teams, currentCircuit }: Prop
               const driver = drivers.find((d) => d.id === qr.driverId)
               const team = driver ? teams.find((t) => t.id === driver.teamId) : undefined
               return (
-                <tr key={qr.driverId} className="border-b border-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142] transition-colors">
+                <tr key={qr.driverId} style={highlight(driver?.teamId, team?.color)} className="border-b border-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142] transition-colors">
                   <td className="py-1 px-2 font-bold">{qr.gridPosition}</td>
                   <td className="py-1 px-2">
                     <div className="flex items-center gap-2.5">

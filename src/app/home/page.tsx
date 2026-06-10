@@ -8,6 +8,8 @@ import { PunditPredictions } from '@/components/home/PunditPredictions'
 import { CompactStandings } from '@/components/home/CompactStandings'
 import { HeadlinesPanel } from '@/components/home/HeadlinesPanel'
 import { CarDevelopmentChart } from '@/components/home/CarDevelopmentChart'
+import { RenewalDecisionPanel } from '@/components/home/RenewalDecisionPanel'
+import { TeamManagerPanel } from '@/components/home/TeamManagerPanel'
 
 // The home dashboard fits the viewport without the page scrolling: a combined title + calendar bar on
 // top, then a two-column grid where each panel (headlines, standings, car development) scrolls inside
@@ -35,9 +37,14 @@ export default function HomePage() {
           <RaceBanner />
         </div>
 
+        {/* Team Manager: your-team control strip (upgrade cycle, championship line, team-page shortcut). */}
+        <TeamManagerPanel />
+
         <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[45fr_55fr]">
-          {/* Left: off-season stage review (off-season only) sits above the headlines feed. */}
+          {/* Left: the renewal decision (when pending) sits at the top, then the off-season stage review
+              (off-season only) above the headlines feed. */}
           <div className="flex flex-col gap-3 min-h-0">
+            <RenewalDecisionPanel />
             {showLeftPanel && <div className="flex-1 min-h-0"><PunditPredictions /></div>}
             <div className="flex-1 min-h-0"><HeadlinesPanel /></div>
           </div>

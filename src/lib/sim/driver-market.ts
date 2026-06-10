@@ -49,7 +49,7 @@ export function renewalChance(diff: number): number {
 }
 
 // Closer match => longer deal, but skewed low so 1-2 year deals dominate and 3-4 are rare (F1-realistic).
-function renewalYears(diff: number, rng: () => number): number {
+export function renewalYears(diff: number, rng: () => number): number {
   const closeness = Math.max(0, 1 - diff / 30) // 1 at a perfect match, 0 at the 30-pt edge
   const meanLen = 1 + 1.5 * closeness          // <= 2.5
   return clamp(Math.round(sampleNormal(meanLen, 0.7, rng)), 1, 4)

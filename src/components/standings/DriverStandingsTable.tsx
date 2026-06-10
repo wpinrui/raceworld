@@ -7,6 +7,9 @@ import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useFollowed } from '@/lib/store/useFollowed'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { teamHighlightSolid } from '@/lib/team-manager'
+import { resolveTeamColor } from '@/lib/world/historical-team'
 
 interface Props {
   standings: DriverStanding[]
@@ -19,6 +22,7 @@ interface Props {
 export function DriverStandingsTable({ standings, teams, totalRounds, completedRounds, year }: Props) {
   const followed = useFollowed()
   const card = useLiveDriverCards()
+  const highlight = useTeamHighlight()
   return (
     <div className="overflow-x-auto rounded-xl bg-[#1E2431]">
       <table className="w-full border-collapse text-sm">
@@ -37,18 +41,20 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
         </thead>
         <tbody>
           {standings.map((standing, idx) => {
-            const team = teams.find((t) => t.id === standing.teamId)
-            const teamColor = team?.color ?? '#FFFFFF'
+            const teamColor = resolveTeamColor(standing.teamId, teams)
             const isFollowed = followed.drivers.has(standing.driverId)
+            const hl = highlight(standing.teamId, teamColor)
+            const solid = hl ? teamHighlightSolid(teamColor) : undefined
             return (
               <tr
                 key={standing.driverId}
+                style={hl}
                 className="border-b border-[#2A3142]/50 hover:bg-[#2A3142]/40 transition-colors"
               >
-                <td className="py-1.5 px-3 font-bold text-[#FFFFFF] sticky left-0 bg-[#1E2431]">
+                <td className={`py-1.5 px-3 font-bold text-[#FFFFFF] sticky left-0 ${solid ? '' : 'bg-[#1E2431]'}`} style={solid ? { backgroundColor: solid, boxShadow: `inset 3px 0 0 ${teamColor}` } : undefined}>
                   {idx + 1}
                 </td>
-                <td className="py-1.5 px-3 sticky left-8 bg-[#1E2431]">
+                <td className={`py-1.5 px-3 sticky left-8 ${solid ? '' : 'bg-[#1E2431]'}`} style={solid ? { backgroundColor: solid } : undefined}>
                   <div className="flex items-center gap-2">
                     <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: teamColor }} />
                     <DriverHover id={standing.driverId} card={card}><DriverLink id={standing.driverId} className={`font-semibold whitespace-nowrap ${isFollowed ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}>{standing.driverName}</DriverLink></DriverHover>

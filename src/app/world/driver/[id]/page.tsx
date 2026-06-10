@@ -9,6 +9,9 @@ import { Pencil, Check } from 'lucide-react'
 import ReactCountryFlag from 'react-country-flag'
 import { useDriverCareer, useEntityHonours, useDriverSeason } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
+import { useRatingsHidden } from '@/lib/useRatingsHidden'
+import { ratingGrade, normalisedRatingFill, RATING_KEYS } from '@/lib/team-manager'
 import { HonoursPanel } from '@/components/world/HonoursPanel'
 import { StatBar } from '@/components/setup/StatBar'
 import { StatSlider } from '@/components/setup/StatSlider'
@@ -36,12 +39,25 @@ type Tab = 'overview' | 'development' | 'results' | 'milestones' | 'form' | 'h2h
 
 // Compact white stat for the header band (replaces the per-page rating ring). `tier`
 // drives visual hierarchy: 1 = headline ratings, 2 = marquee achievements, 3 = volume.
-function HeaderStat({ label, value, tier = 3 }: { label: string; value: number; tier?: 1 | 2 | 3 }) {
+function HeaderStat({ label, value, tier = 3, display }: { label: string; value: number; tier?: 1 | 2 | 3; display?: string }) {
   const size = tier === 1 ? 'text-4xl' : tier === 2 ? 'text-2xl' : 'text-lg'
   return (
     <div className="text-center">
-      <p className={`${size} font-bold tabular-nums leading-none text-[#FFFFFF]`}>{value.toLocaleString()}</p>
+      <p className={`${size} font-bold tabular-nums leading-none text-[#FFFFFF]`}>{display ?? value.toLocaleString()}</p>
       <p className={`${tier === 3 ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-widest text-[#FFFFFF] mt-1`}>{label}</p>
+    </div>
+  )
+}
+
+// Fog-of-war stat bar: same look as StatBar but with NO number and a 0–1 fraction fill,
+// so the profile (relative strengths) shows without leaking the absolute rating.
+function FoggedStatBar({ label, fill }: { label: string; fill: number }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[#FFFFFF] w-20 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-[#2A3142] overflow-hidden">
+        <div className="h-full rounded-full bg-[#6B7280] transition-all" style={{ width: `${Math.round(fill * 100)}%` }} />
+      </div>
     </div>
   )
 }
@@ -113,6 +129,12 @@ export default function DriverPage() {
   const releaseDriver = useSeasonStore((s) => s.releaseDriver)
   const extendContract = useSeasonStore((s) => s.extendContract)
   const assignDriverToTeam = useSeasonStore((s) => s.assignDriverToTeam)
+  // Team Manager: fog-of-war display + god-mode gating (own-team only, per-talent).
+  const ratingsHidden = useRatingsHidden()
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const driverTuning = useSettingsStore((s) => s.talents['driver-tuning'] ?? false)
+  const contractDesk = useSettingsStore((s) => s.talents['contract-desk'] ?? false)
   const [assignTeam, setAssignTeam] = useState('')
   const [tab, setTab] = useRetainedState<Tab>(`driver:${id}:tab`, 'overview')
   // Results tab accordion: which sections are expanded (an open section fills + scrolls internally).
@@ -185,6 +207,14 @@ export default function DriverPage() {
           const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength, knownFor, overallRank) : null
           const milestones = buildMilestones(career)
 
+          // God-mode gating. Sandbox (teamManagerMode false) = everything as before, ungated. In Team
+          // Manager mode, god mode only exists for the player's OWN driver, and is further split:
+          // attribute edits need Driver Tuning, contract actions need Contract Desk.
+          const isOwnDriver = !teamManagerMode || (!!liveDriver && liveDriver.teamId === playerTeamId)
+          const showGodMode = !!liveDriver && isOwnDriver
+          const canEditAttributes = !teamManagerMode || driverTuning
+          const canEditContract = !teamManagerMode || contractDesk
+
           return (
             <>
               {/* Header band — identity on the left, career totals + ratings filling the width */}
@@ -217,8 +247,8 @@ export default function DriverPage() {
                   {a && (
                     <>
                       <span className="w-px h-10 bg-[#2A3142]" />
-                      <HeaderStat label="Overall" value={a.overall} tier={1} />
-                      <HeaderStat label="Potential" value={a.peakPotential} tier={1} />
+                      <HeaderStat label="Overall" value={a.overall} tier={1} display={ratingsHidden ? ratingGrade(a.overall) : undefined} />
+                      <HeaderStat label="Potential" value={a.peakPotential} tier={1} display={ratingsHidden ? ratingGrade(a.peakPotential) : undefined} />
                     </>
                   )}
                 </div>
@@ -246,7 +276,7 @@ export default function DriverPage() {
                       <Panel fill className="lg:col-span-4">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Attributes</p>
-                          {liveDriver && (
+                          {showGodMode && (canEditAttributes || canEditContract) && (
                             <button
                               onClick={() => setEditing((v) => !v)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
@@ -257,8 +287,9 @@ export default function DriverPage() {
                           )}
                         </div>
 
-                        {editing && liveDriver ? (
+                        {editing && showGodMode && (canEditAttributes || canEditContract) ? (
                           <div className="space-y-4">
+                            {canEditAttributes && (<>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="text-xs text-[#FFFFFF] block mb-1">Name</label>
@@ -302,8 +333,10 @@ export default function DriverPage() {
                                 </span>
                               </div>
                             </div>
+                            </>)}
 
                             {/* God-mode contract & seat overrides */}
+                            {canEditContract && (
                             <div className="pt-3 border-t border-[#2A3142] space-y-2">
                               <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Contract &amp; seat</p>
                               {liveDriver.teamId !== '' ? (
@@ -326,6 +359,17 @@ export default function DriverPage() {
                                   >Sign</button>
                                 </div>
                               )}
+                            </div>
+                            )}
+                          </div>
+                        ) : ratingsHidden && liveDriver ? (
+                          <div className="space-y-2">
+                            {RATING_KEYS.map((k) => (
+                              <FoggedStatBar key={k} label={STAT_LABELS[k]} fill={normalisedRatingFill(liveDriver, k)} />
+                            ))}
+                            <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#2A3142] text-xs text-[#FFFFFF]">
+                              <span className="uppercase tracking-widest text-[10px]">Peak age</span>
+                              <span className="font-semibold tabular-nums">{a.primeEnd}</span>
                             </div>
                           </div>
                         ) : (

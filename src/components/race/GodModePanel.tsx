@@ -5,6 +5,7 @@ import type { Driver, Team, DriverRaceState, GodModeAction, TyreCompound, RaceSt
 import { planStrategy, truthBelief, type StrategyStint } from '@/lib/sim/pit-ai'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { degradeTyre } from '@/lib/sim/tyres'
+import { useSeasonStore } from '@/lib/store/season-store'
 import TyreIndicator from './TyreIndicator'
 
 interface GodModePanelProps {
@@ -28,6 +29,14 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
   const ds = states.find(s => s.driverId === selectedDriverId)
   const driver = drivers.find(d => d.id === selectedDriverId)
   const team = teams.find(t => t.id === driver?.teamId)
+  // Team Manager gating: race control acts on YOUR drivers only; tyre-condition and form sliders are gone
+  // (Peak Form maxes form automatically), and the perfect-strategy reveal (true-data) is hidden. Sandbox is
+  // unchanged.
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const isMine = !teamManagerMode || driver?.teamId === playerTeamId
+  // In Team Manager it's the pit wall (own-driver strategy control), not the sandbox's god mode.
+  const title = teamManagerMode ? 'Pit Wall' : 'God Mode'
 
   const nextLapCond = ds ? degradeTyre(ds.currentTyre) : 100
   const [nextCond, setNextCond] = useState(nextLapCond)
@@ -112,7 +121,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-          <h2 className="font-semibold text-sm tracking-wider text-[#FFFFFF] uppercase">God Mode</h2>
+          <h2 className="font-semibold text-sm tracking-wider text-[#FFFFFF] uppercase">{title}</h2>
         </div>
       </div>
     )
@@ -127,7 +136,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
       {/* Header */}
       <div className="flex items-center gap-2.5">
         <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-        <h2 className="font-semibold text-sm tracking-wider text-[#FFFFFF] uppercase">God Mode</h2>
+        <h2 className="font-semibold text-sm tracking-wider text-[#FFFFFF] uppercase">{title}</h2>
         <div className="ml-2 flex items-center gap-1.5">
           <div className="w-1 h-4 rounded-full" style={{ backgroundColor: team.color }} />
           <span className="text-sm font-bold text-[#FFFFFF]">{driver.name}</span>
@@ -180,10 +189,12 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
           </div>
         </div>
 
-        {/* Next lap overrides */}
+        {/* Next lap overrides — your drivers only in Team Manager mode */}
+        {isMine && (
         <div className="bg-[#1E2431] rounded p-2.5">
           <div className="text-xs font-bold tracking-widest text-[#FFFFFF] uppercase mb-2">Next lap</div>
           <div className="flex flex-col gap-2">
+            {!teamManagerMode && (
             <div>
               <div className="flex justify-between mb-0.5">
                 <label className="text-xs text-[#FFFFFF]">Tyre cond.</label>
@@ -195,6 +206,8 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
                 className="w-full accent-[#00D9FF]"
               />
             </div>
+            )}
+            {!teamManagerMode && (
             <div>
               <div className="flex justify-between mb-0.5">
                 <label className="text-xs text-[#FFFFFF]">Form</label>
@@ -206,6 +219,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
                 className="w-full accent-[#00D9FF]"
               />
             </div>
+            )}
             <div>
               <label className="text-xs text-[#FFFFFF] block mb-1">This lap</label>
               <div className="flex gap-1.5">
@@ -237,10 +251,11 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             )}
           </div>
         </div>
+        )}
       </div>
 
-      {/* Perfect strategy */}
-      {perfectPit && (
+      {/* Perfect strategy — hidden in Team Manager mode (true-data reveal). */}
+      {!teamManagerMode && perfectPit && (
         <div className="bg-[#0d2230] rounded p-2.5 border border-[#00D9FF]/20">
           <div className="text-xs font-bold tracking-widest text-[#FFFFFF] uppercase mb-2">Perfect strategy</div>
           <div className="flex flex-col gap-1">
@@ -258,12 +273,14 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
         </div>
       )}
 
-      {/* Retire */}
-      <button onClick={() => onAction([{ type: 'force-retire', driverId: selectedDriverId }])}
-        className="w-full py-2 bg-[#DC143C] hover:bg-[#b01030] text-white text-sm font-bold tracking-widest uppercase rounded transition-colors"
-      >
-        Retire Driver
-      </button>
+      {/* Retire — your drivers only in Team Manager mode */}
+      {isMine && (
+        <button onClick={() => onAction([{ type: 'force-retire', driverId: selectedDriverId }])}
+          className="w-full py-2 bg-[#DC143C] hover:bg-[#b01030] text-white text-sm font-bold tracking-widest uppercase rounded transition-colors"
+        >
+          Retire Driver
+        </button>
+      )}
     </div>
   )
 }
