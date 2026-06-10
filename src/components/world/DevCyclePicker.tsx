@@ -37,7 +37,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
   const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
   const talents = useSettingsStore((s) => s.talents)
   const noFail = !!talents['chief-engineer']
-  const aeroPerRace = talents['chief-aero'] ? 0.5 : 0
+  const aeroPerRace = talents['chief-aero'] ? 1.25 : 0
 
   const [pendingSwitch, setPendingSwitch] = useState<{ cycle: number; name: string } | null>(null)
 
