@@ -24,7 +24,11 @@ import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuf
 import { applyRaceProgression, ageDrivers, rollSeasonForm, shownStats } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
-import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
+import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, renewalChance, renewalYears, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
+
+// Team Manager: an expiring driver of the player's, awaiting the player's renewal decision (offer or let
+// expire). `diff` = driver media percentile − team WCC percentile: >0 = outdriving the seat (a decline risk).
+export interface PendingPlayerRenewal { driverId: string; driverName: string; diff: number }
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
@@ -317,6 +321,8 @@ interface SeasonStore {
   // Team Manager free agency: when the off-season draft reaches the player's seat(s), it pauses here so the
   // player picks (rivals above already signed; rivals below sign on confirm). null outside that window.
   pendingPlayerDraft: PendingPlayerDraft | null
+  // Team Manager: the player's own expiring drivers at the renewal round, awaiting an offer/let-expire call.
+  pendingPlayerRenewals: PendingPlayerRenewal[]
   // Round-18 contract renewals this season, for the renewals round-up feature.
   seasonRenewals: RenewalResult[]
   // Round-15 verdicts on the expiring contracts, for the contract-watch feature.
@@ -358,6 +364,7 @@ interface SeasonStore {
   advanceRound: () => void
   endSeason: () => void
   runContractNegotiations: () => void
+  decidePlayerRenewal: (driverId: string, offer: boolean) => void  // Team Manager: offer your expiring driver a renewal, or let them go
   playerDraftSign: (driverId: string) => void   // Team Manager: attempt to sign a free agent to your open seat (50%)
   finishPlayerDraft: () => void                  // Team Manager: resolve rival seats below yours and close the draft
   runDriverRetirements: () => void
@@ -388,6 +395,7 @@ export const useSeasonStore = create<SeasonStore>()(
       playerTeamId: null,
       playerDevCycle: null,
       pendingPlayerDraft: null,
+      pendingPlayerRenewals: [],
       realWorldChangesResolved: false,
       approvedSeasonChanges: null,
       raceResults: [],
@@ -678,9 +686,27 @@ export const useSeasonStore = create<SeasonStore>()(
           if (currentRound === watchRound) {
             seasonContractWatch = assessExpiringContracts({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year })
           } else {
+            const preById = new Map(updatedDrivers.map((d) => [d.id, d]))
             const result = negotiateRenewals({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year, rng: Math.random })
             updatedDrivers = result.drivers
             seasonRenewals = result.renewals
+            // Team Manager: the player's own expiring drivers are the player's call — undo any auto-renewal
+            // of theirs and queue them for an offer/let-expire decision (model b acceptance on offer).
+            const { teamManagerMode, playerTeamId } = get()
+            if (teamManagerMode && playerTeamId) {
+              const seated = updatedDrivers.filter((d) => d.teamId !== '')
+              const dOrder = [...seated].sort((a, b) => (mediaMap.get(b.id) ?? 0) - (mediaMap.get(a.id) ?? 0)).map((d) => d.id)
+              const nD = dOrder.length, nT = wccOrderBestFirst.length
+              const dPct = (id: string) => { const i = dOrder.indexOf(id); return nD > 1 ? ((nD - 1 - i) / (nD - 1)) * 100 : 50 }
+              const tPct = nT > 1 ? ((nT - 1 - wccOrderBestFirst.indexOf(playerTeamId)) / (nT - 1)) * 100 : 50
+              const mine = updatedDrivers.filter((d) => d.teamId === playerTeamId && (preById.get(d.id)?.contractExpiresAfterSeason ?? year + 1) <= year)
+              if (mine.length) {
+                const mineIds = new Set(mine.map((d) => d.id))
+                updatedDrivers = updatedDrivers.map((d) => mineIds.has(d.id) ? preById.get(d.id)! : d) // restore expiring
+                seasonRenewals = seasonRenewals.filter((r) => !mineIds.has(r.driverId))
+                set({ pendingPlayerRenewals: mine.map((d) => ({ driverId: d.id, driverName: d.name, diff: Math.round(dPct(d.id) - tPct) })) })
+              }
+            }
           }
         }
 
@@ -925,6 +951,23 @@ export const useSeasonStore = create<SeasonStore>()(
           signingDayRevealed: 0,
           pendingPlayerDraft: null,
         })
+      },
+
+      // Team Manager: offer your expiring driver a renewal (auto-accept unless they outclass the seat, then
+      // a half-strength decline roll), or let them go (they enter the off-season free-agency draft).
+      decidePlayerRenewal: (driverId, offer) => {
+        const { pendingPlayerRenewals, drivers, year } = get()
+        const pr = pendingPlayerRenewals.find((p) => p.driverId === driverId)
+        if (!pr) return
+        let nextDrivers = drivers
+        if (offer) {
+          const accept = pr.diff <= 0 || Math.random() >= (1 - renewalChance(pr.diff)) * 0.5
+          if (accept) {
+            const years = renewalYears(Math.abs(pr.diff), Math.random)
+            nextDrivers = drivers.map((d) => (d.id === driverId ? { ...d, contractExpiresAfterSeason: year + years } : d))
+          }
+        }
+        set({ drivers: nextDrivers, pendingPlayerRenewals: pendingPlayerRenewals.filter((p) => p.driverId !== driverId) })
       },
 
       // Team Manager: try to sign a free agent to your next open seat (50% accept). A driver who declines is
@@ -1222,6 +1265,7 @@ export const useSeasonStore = create<SeasonStore>()(
         priorSeasonDriverMediaScores: state.priorSeasonDriverMediaScores,
         seasonDraft: state.seasonDraft,
         pendingPlayerDraft: state.pendingPlayerDraft,
+        pendingPlayerRenewals: state.pendingPlayerRenewals,
         seasonRenewals: state.seasonRenewals,
         seasonContractWatch: state.seasonContractWatch,
         signingDayRevealed: state.signingDayRevealed,
