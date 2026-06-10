@@ -127,9 +127,9 @@ function PlayerSigningsPanel({ draft, year, careers, driverStandings }: {
                 career={careers[d.id]}
                 side="right"
               >
-                <span className="text-sm text-[#FFFFFF] truncate flex-1">{d.name}</span>
+                <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>
               </DriverTooltip>
-              <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
+              <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
             </button>
           ))}
         </div>
