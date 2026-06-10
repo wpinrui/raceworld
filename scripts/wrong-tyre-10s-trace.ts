@@ -1,6 +1,9 @@
-// Trace the overtake model lap-by-lap across pace/gap scenarios. Rule under test: a pass only COMPLETES
-// from within ~1s at the start of the lap; a faster car drawing in from further back arrives behind first,
-// then passes the next lap. Run: tsx scripts/wrong-tyre-10s-trace.ts
+// Trace the overtake model lap-by-lap. Rule under test:
+//  - BLOW-PAST: so much faster than the gap you'd end up clearly ahead -> pass THIS lap, from any distance.
+//  - DRAW-IN:  only fast enough to close to the car (not end up ahead) -> arrive behind, pass NEXT lap.
+//  - CONTEST:  already within ~1s -> contested move (roll).
+// Pace gap is driven directly (the car ahead's lap time = B's mean + gap), so we can test 10s, 5s, 2s.
+// Run: tsx scripts/wrong-tyre-10s-trace.ts
 import type { Driver, Team, TyreState, WeatherPoint } from '@/lib/sim/types'
 import { computeLapTime } from '@/lib/sim/engine'
 import { DEFAULT_COMPOUND_DELTAS } from '@/lib/sim/tyres'
@@ -11,29 +14,31 @@ const mk = (id: string): Driver => ({ id, name: id, teamId: 't', nationality: 'G
 const A = mk('A'), B = mk('B')
 const dry: WeatherPoint[] = [{ lap: 1, moisture: 0 }]
 const soft: TyreState = { compound: 'soft', condition: 100, maxLifeLaps: 999 }
-const inter: TyreState = { compound: 'intermediate', condition: 100, maxLifeLaps: 999 }
-const bTeam: Team = { id: 't', name: 'T', shortName: 'T', nationality: 'GB', color: '#888', carPace: 75 }
+const team: Team = { id: 't', name: 'T', shortName: 'T', nationality: 'GB', color: '#888', carPace: 75 }
 const base = { form: 5, fuelLaps: 0, lap: 1, weather: dry, compoundDeltas: DEFAULT_COMPOUND_DELTAS, circuitFlatModifier: 0 }
 
-// A's setup controls the pace gap: an inter tyre on dry (~17.5s slower) or a slow car (carPace lower).
-function trace(label: string, aTyre: TyreState, aCarPace: number, startGap: number) {
-  const aTeam: Team = { ...bTeam, carPace: aCarPace }
+// B's mean clean-air lap, so we can place a car ahead exactly `paceGap` slower.
+const bMean = (() => { let s = 0; for (let i = 0; i < 5000; i++) s += computeLapTime({ ...base, driver: B, team, tyre: soft, gapToCarAhead: Infinity, carAheadLapTime: null }).freeAir; return s / 5000 })()
+
+// Car ahead is `paceGap` s/lap slower than B; B starts `startGap` behind. Walk the gap lap by lap.
+function trace(label: string, paceGap: number, startGap: number) {
+  const aheadTime = bMean + paceGap
   let gap = startGap
   const parts: string[] = []
   for (let lap = 1; lap <= 6; lap++) {
-    const aLap = computeLapTime({ ...base, driver: A, team: aTeam, tyre: aTyre, gapToCarAhead: Infinity, carAheadLapTime: null }).lapTime
-    const r = computeLapTime({ ...base, driver: B, team: bTeam, tyre: soft, gapToCarAhead: gap, carAheadLapTime: aLap, carAheadFreeAir: aLap, defenderDriver: A })
+    const r = computeLapTime({ ...base, driver: B, team, tyre: soft, gapToCarAhead: gap, carAheadLapTime: aheadTime, carAheadFreeAir: aheadTime, defenderDriver: A })
     if (r.overtook) { parts.push(`L${lap} PASS✅`); break }
-    gap = gap + (r.lapTime - aLap)
+    gap = gap + (r.lapTime - aheadTime)
     parts.push(`L${lap}→${gap.toFixed(2)}s`)
     if (gap < 0) { parts.push('(passed)'); break }
   }
   console.log(`${label.padEnd(34)} ${parts.join('  ')}`)
 }
 
-console.log('Expect: not within 1s at the start => no pass that lap (arrive ~0.3s first, pass next lap)\n')
-trace('sitting duck (inters), 10s behind', inter, 75, 10)
-trace('sitting duck (inters), 0.8s behind', inter, 75, 0.8)
-trace('2s/lap faster, 2.0s behind', soft, 25, 2.0)
-trace('2s/lap faster, 0.9s behind', soft, 25, 0.9)
-trace('0.4s/lap faster, 0.5s behind', soft, 65, 0.5)
+console.log('Blow-past (end up clearly ahead) = pass THIS lap; only-closing = draw in, pass NEXT lap\n')
+trace('10s/lap faster, 5s behind', 10, 5)    // blow-past -> PASS lap 1
+trace('5s/lap faster, 5s behind', 5, 5)      // only closes -> draw in, pass lap 2
+trace('2s/lap faster, 2s behind', 2, 2)      // only closes -> draw in, pass lap 2
+trace('2s/lap faster, 0.8s behind', 2, 0.8)  // within 1s -> contest lap 1
+trace('17.5/lap faster (wrong tyre), 10s', 17.5, 10) // blow-past -> PASS lap 1
+trace('0.4s/lap faster, 0.5s behind', 0.4, 0.5)      // not enough -> train, no pass
