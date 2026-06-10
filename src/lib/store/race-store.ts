@@ -20,6 +20,7 @@ interface RaceStore {
   forms: Record<string, number>
   strategyNoise: number
   godModeDriverId: string | null  // persists across races
+  qualSessionIdx: number          // which qualifying session (0=Q1) — in the store so a Quit resumes it
 
   loadFromSeason: (drivers: Driver[], teams: Team[], circuit: Circuit) => void
   setGodModeDriver: (driverId: string) => void
@@ -31,6 +32,7 @@ interface RaceStore {
   setPaused: (paused: boolean) => void
   finishQualifying: () => void
   beginRacing: () => void
+  advanceQualSession: () => void
   resetSession: (drivers?: Driver[], teams?: Team[], circuit?: Circuit) => void
 }
 
@@ -42,6 +44,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   forms: {},
   strategyNoise: 0.35,
   godModeDriverId: null,
+  qualSessionIdx: 0,
 
   loadFromSeason: (drivers, teams, circuit) => {
     const { godModeDriverId } = get()
@@ -73,7 +76,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const { results, sessions } = runQualifying(drivers, teams, selectedCircuit, forms)
     const raceState = initRaceState(drivers, teams, selectedCircuit, results, sessions, forms, year, strategyNoise, saveSeed)
     // Enter the playable qualifying phase, paused — the player presses play to run each session (Q1→Q2→Q3).
-    set({ raceState: { ...raceState, phase: 'qualifying', paused: true } })
+    set({ raceState: { ...raceState, phase: 'qualifying', paused: true }, qualSessionIdx: 0 })
   },
 
   tickLap: (godModeActions) => {
@@ -109,6 +112,9 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set({ raceState: { ...raceState, phase: 'racing' } })
   },
 
+  // Advance to the next qualifying session (Q1→Q2→Q3). In the store so a mid-Q3 Quit resumes at Q3.
+  advanceQualSession: () => set((s) => ({ qualSessionIdx: s.qualSessionIdx + 1 })),
+
   resetSession: (drivers, teams, circuit) => {
     const nextDrivers = (drivers ?? get().drivers).map(toRaceDriver)
     set({
@@ -117,6 +123,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       teams: teams ? teams.map((t) => ({ ...t })) : get().teams,
       selectedCircuit: circuit ?? get().selectedCircuit,
       forms: rollForms(nextDrivers),
+      qualSessionIdx: 0,
     })
   },
 }))

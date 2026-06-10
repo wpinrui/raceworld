@@ -48,6 +48,8 @@ export function useQualifyingEngine(
 ): QualifyingEngine {
   const finishQualifying = useRaceStore((s) => s.finishQualifying)
   const setPaused = useRaceStore((s) => s.setPaused)
+  const advanceQualSession = useRaceStore((s) => s.advanceQualSession)
+  const sessionIdx = useRaceStore((s) => s.qualSessionIdx)
 
   const active = raceState?.phase === 'qualifying'
   const sessions = raceState?.qualifyingSessions ?? []
@@ -55,7 +57,6 @@ export function useQualifyingEngine(
   const speed = raceState?.speed ?? 1
   const circuitId = raceState?.circuitId ?? ''
 
-  const [sessionIdx, setSessionIdx] = useState(0)
   const [revealed, setRevealed] = useState(0)
   const [showElim, setShowElim] = useState(false)
 
@@ -64,11 +65,12 @@ export function useQualifyingEngine(
   const speedRef = useRef(speed)
   useEffect(() => { speedRef.current = speed }, [speed])
 
-  // Reset to Q1 whenever we (re-)enter qualifying, so each race weekend starts clean.
+  // On (re-)entering qualifying, reset the WITHIN-session playback. The session index itself lives in the
+  // store (qualSessionIdx), so a mid-Q3 Quit resumes at the start of Q3 rather than all the way back at Q1.
   const wasActive = useRef(false)
   useEffect(() => {
     if (active && !wasActive.current) {
-      setSessionIdx(0); setRevealed(0); setShowElim(false)
+      setRevealed(0); setShowElim(false)
       clockRef.current = 0; processedRef.current = 0
     }
     wasActive.current = active
@@ -166,7 +168,7 @@ export function useQualifyingEngine(
     clockRef.current = 0
     processedRef.current = 0
     setRevealed(0)
-    setSessionIdx((i) => i + 1) // stays paused; the player resumes to run the next session
+    advanceQualSession() // store-backed; stays paused, the player resumes to run the next session
   }
 
   // Board from revealed events: each car's latest-lap sectors + best completed lap time.
