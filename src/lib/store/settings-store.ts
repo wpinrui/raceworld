@@ -27,6 +27,8 @@ interface SettingsStore {
   followedDriverIds: string[]
   followedTeamIds: string[]
   interruptOnFollowed: boolean     // master switch: stop on any story mentioning a followed entity
+  // Team Manager "talents": per-power god-mode toggles (talent id -> enabled), default off.
+  talents: Record<string, boolean>
 
   setInterruptOnRaceday: (on: boolean) => void
   setCategoryInterrupt: (category: string, on: boolean) => void
@@ -34,6 +36,7 @@ interface SettingsStore {
   toggleFollowTeam: (id: string) => void
   setInterruptOnFollowed: (on: boolean) => void
   resetInterruptsToDefault: () => void
+  setTalent: (id: string, on: boolean) => void
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -44,6 +47,7 @@ export const useSettingsStore = create<SettingsStore>()(
       followedDriverIds: [],
       followedTeamIds: [],
       interruptOnFollowed: true,
+      talents: {},
 
       setInterruptOnRaceday: (on) => set({ interruptOnRaceday: on }),
 
@@ -65,6 +69,7 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       setInterruptOnFollowed: (on) => set({ interruptOnFollowed: on }),
       resetInterruptsToDefault: () => set({ interruptCategories: [...DEFAULT_INTERRUPT_CATEGORIES] }),
+      setTalent: (id, on) => set({ talents: { ...get().talents, [id]: on } }),
     }),
     { name: 'raceworld-settings' },
   ),

@@ -222,6 +222,11 @@ interface SeasonStore {
   // When true, the season was started from the historical timeline: the market draws real free
   // agents (until the dataset runs out) and season-ends apply real team changes (with consent).
   realWorldMode: boolean
+  // Team Manager mode: the player runs ONE team (playerTeamId) instead of the god-mode sandbox. God-mode
+  // powers are off unless re-enabled as Settings "talents", ratings are hidden, and contracts are the
+  // player's to make. null playerTeamId / false mode = the classic sandbox (everything below is gated on it).
+  teamManagerMode: boolean
+  playerTeamId: string | null
   // Start-of-season gate: true once the player has acted on the team changes taking effect NEXT season
   // (Apply, with whatever overrides). Surfaced when a season begins; reset each time a season starts.
   realWorldChangesResolved: boolean
@@ -274,6 +279,7 @@ interface SeasonStore {
   updateGrid: (drivers: Driver[], teams: Team[]) => void
   setCurrentDate: (date: string) => void
   setRealWorldMode: (on: boolean) => void
+  setTeamManager: (mode: boolean, playerTeamId: string | null) => void
   // Apply the player-approved subset of a season's real-world team changes to the next-season grid.
   applyRealWorldChanges: (approved: {
     joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
@@ -318,6 +324,8 @@ export const useSeasonStore = create<SeasonStore>()(
       currentRound: 1,
       currentDate: seasonStartDate(DEFAULT_START_YEAR),
       realWorldMode: false,
+      teamManagerMode: false,
+      playerTeamId: null,
       realWorldChangesResolved: false,
       approvedSeasonChanges: null,
       raceResults: [],
@@ -413,6 +421,8 @@ export const useSeasonStore = create<SeasonStore>()(
       setCurrentDate: (date) => set({ currentDate: date }),
 
       setRealWorldMode: (on) => set({ realWorldMode: on }),
+
+      setTeamManager: (mode, playerTeamId) => set({ teamManagerMode: mode, playerTeamId: mode ? playerTeamId : null }),
 
       // Real-world season-end: apply the approved team changes to the next-season grid (built by
       // endSeason into pendingNextSeasonState), BEFORE contract negotiations fill the seats. Leaving
@@ -1087,6 +1097,8 @@ export const useSeasonStore = create<SeasonStore>()(
         currentRound: state.currentRound,
         currentDate: state.currentDate,
         realWorldMode: state.realWorldMode,
+        teamManagerMode: state.teamManagerMode,
+        playerTeamId: state.playerTeamId,
         realWorldChangesResolved: state.realWorldChangesResolved,
         // MUST persist alongside `resolved`: it holds WHAT was approved at the season opener and is
         // applied at the season-end rollover. Persisting `resolved` without this dropped the approved
