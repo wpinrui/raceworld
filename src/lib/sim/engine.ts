@@ -34,7 +34,8 @@ const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fade
 const STRIKE_RANGE = 1.0      // s: within this (~DRS range) a faster car gets a per-lap chance to pass
 const PASS_MARGIN = 3.0       // s: only a car whose pace would leave it this far AHEAD blows straight by (rare)
 const CONTEST_GAP = 0.15      // s: a car closing past this from beyond range arrives right behind, contests next lap
-const OVERTAKE_SENS = 0.2     // per-lap pass chance per second of clean-air pace edge (overtaking is HARD)
+const OVERTAKE_SENS = 0.12    // per-lap pass chance per second of clean-air pace edge (overtaking is HARD:
+                             //   a 0.4s/lap edge ≈ 5%/lap ≈ 20 laps to clear; a 2s edge ≈ 24%/lap ≈ 4 laps)
 const MAX_CONTEST = 0.5       // cap on the per-lap pass chance from within range (no certain passes)
 const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
 const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
