@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { DraftPick } from '@/lib/sim/driver-market'
+import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
 import type { Driver, DroppedDriver } from '@/lib/sim/types'
 import { useSeasonStore, type PendingPlayerDraft } from '@/lib/store/season-store'
 import { signingDayReactions } from '@/lib/news/signing-day-reactions'
@@ -61,87 +61,135 @@ function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
   )
 }
 
-// Team Manager: the interactive free-agency panel shown at the top of the board while the off-season
-// draft is paused for the player. The player fills their own open seat(s) one at a time by clicking a
-// pool driver (50% accept); a decline soft-locks that driver out of the current seat. When the last
-// seat fills, the store auto-finishes the draft and this panel disappears.
-function PlayerSigningsPanel({ draft, year, careers, driverStandings, fill = false }: {
+// Team Manager: the full signing-day board while the off-season draft is paused for the player. It shows
+// the WHOLE picture in seat-rank order, so there's no two-phase surprise: rivals ABOVE your seat have
+// already signed (revealed), your seat(s) are interactive, and rivals BELOW you are pending (they draft
+// from what's left the moment you confirm). The free-agent column is your live contender pool; click a
+// driver to sign (50% accept), a decline soft-locks them out of the current seat. When your last seat
+// fills, the store auto-finishes the draft and the completed board takes over.
+function PlayerDraftBoard({ draft, year, careers, standings, driverStandings }: {
   draft: PendingPlayerDraft
   year: number
   careers: Record<string, DriverCareer>
+  standings: { teamId: string }[]
   driverStandings: { driverId: string; points: number }[]
-  fill?: boolean // when this panel is the only content, let the pool grow to fill the modal instead of capping
 }) {
-  const filling = draft.playerPicks.length // index of the seat currently being filled
+  const filling = draft.playerPicks.length // index of the player seat currently on the clock
   const available = draft.pool.filter((d) => !draft.rejected.includes(d.id))
-  // This year's WDC standing for each free agent, so the scouting hover card can show it.
   const wdcPosOf = new Map(driverStandings.map((s, i) => [s.driverId, i + 1]))
   const wdcPtsOf = new Map(driverStandings.map((s) => [s.driverId, s.points]))
+  const driverById = new Map(draft.allDrivers.map((d) => [d.id, d]))
+
+  // WCC badge, matching the completed board: an established team's just-ended finish, or a new team
+  // projected below the field. Player/below seats reuse it so the rank context reads the same throughout.
+  const finishOf = new Map(standings.map((cs, i) => [cs.teamId, i + 1]))
+  const n = standings.length
+  const projected = new Map<string, number>()
+  let newCount = 0
+  for (const seat of [...draft.aboveSeats, ...draft.playerSeats, ...draft.belowSeats]) {
+    if (!finishOf.has(seat.teamId) && !projected.has(seat.teamId)) projected.set(seat.teamId, n + ++newCount)
+  }
+  const Badge = ({ teamId }: { teamId: string }) => {
+    const pos = finishOf.get(teamId)
+    const tip = pos ? `${ordinal(pos)} in the ${year} constructors' championship` : `Projected to finish ${ordinal(projected.get(teamId) ?? n + 1)} in ${year + 1}`
+    return (
+      <Tooltip content={tip}>
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2A3142] text-[10px] font-bold tabular-nums text-[#FFFFFF] cursor-default">{pos ?? projected.get(teamId) ?? n + 1}</span>
+      </Tooltip>
+    )
+  }
+  const SeatShell = ({ seat, highlight, children }: { seat: DraftSeat; highlight?: boolean; children: React.ReactNode }) => (
+    <div className={`flex items-center gap-2.5 px-3 py-2 ${highlight ? 'bg-[#00D9FF]/10 ring-1 ring-inset ring-[#00D9FF]/40' : ''}`}>
+      <Badge teamId={seat.teamId} />
+      <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: seat.teamColor }} />
+      <TeamLink id={seat.teamId} className="text-xs font-semibold text-[#FFFFFF] truncate w-24 shrink-0">{seat.teamName}</TeamLink>
+      {children}
+    </div>
+  )
+  const signedRow = (seat: DraftSeat, pick: DraftPick) => {
+    const d = driverById.get(pick.driverId)
+    const name = <DriverLink id={pick.driverId} className="text-sm font-semibold text-[#FFFFFF]">{pick.driverName}</DriverLink>
+    return (
+      <span className="flex items-center gap-2 min-w-0 flex-1">
+        {d
+          ? <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(pick.driverId) ?? null} wdcPoints={wdcPtsOf.get(pick.driverId)} career={careers[pick.driverId]} side="right"><span className="truncate min-w-0">{name}</span></DriverTooltip>
+          : <span className="truncate min-w-0">{name}</span>}
+        <Tooltip content={`${faLabel(pick.faRank)} free agent of ${year}`}>
+          <span className="text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 shrink-0 bg-[#2A3142] text-[#FFFFFF] cursor-default">{faLabel(pick.faRank)}</span>
+        </Tooltip>
+        <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{pick.years}yr</span>
+      </span>
+    )
+  }
+  const remaining = draft.playerSeats.length - filling
 
   return (
-    <div className={`rounded-lg bg-[#1E2431] p-3 ${fill ? 'flex flex-col min-h-0 flex-1' : 'shrink-0'}`}>
-      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2 shrink-0">Your signings</p>
-
-      {/* Your seats: each filled pick, then the open seats, with the one on the clock highlighted. */}
-      <div className="space-y-1.5 mb-3 shrink-0">
-        {draft.playerSeats.map((seat, i) => {
-          const pick = draft.playerPicks[i]
-          const isFilling = !pick && i === filling
-          return (
-            <div
-              key={`${seat.teamId}-${i}`}
-              className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded ${isFilling ? 'bg-[#00D9FF]/10 ring-1 ring-inset ring-[#00D9FF]/40' : 'bg-[#0F1419]/40'}`}
-            >
-              <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: seat.teamColor }} />
-              <span className="text-xs font-semibold text-[#FFFFFF] truncate w-28 shrink-0">{seat.teamName}</span>
-              {pick ? (
-                <span className="text-sm font-semibold text-[#FFFFFF] truncate flex-1">{pick.driverName}</span>
-              ) : isFilling ? (
-                <span className="text-xs italic text-[#00D9FF] flex-1">Choose a driver…</span>
-              ) : (
-                <span className="text-xs text-[#FFFFFF] flex-1">Seat open</span>
-              )}
-            </div>
-          )
-        })}
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <p className="text-sm font-semibold text-[#00D9FF]">Your turn to sign — pick {remaining} more for {draft.playerSeats[0]?.teamName ?? 'your team'}</p>
+        <span className="ml-auto text-xs text-[#FFFFFF] tabular-nums">{filling} / {draft.playerSeats.length} of your seats filled</span>
       </div>
 
-      {draft.rejected.length > 0 && (
-        <p className="text-[11px] text-[#FFFFFF] mb-2">{draft.rejected.length} turned you down for this seat.</p>
-      )}
-
-      {/* The free-agent pool: clickable rows. When empty (can't sign anyone), fall back to rookies. */}
-      {available.length > 0 ? (
-        <div className={`${fill ? 'flex-1 min-h-0' : 'max-h-48'} overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40`}>
-          {available.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
-              className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
-            >
-              <NationalityFlag code={d.nationality} />
-              <DriverTooltip
-                driver={d}
-                year={year}
-                wdcPosition={wdcPosOf.get(d.id) ?? null}
-                wdcPoints={wdcPtsOf.get(d.id)}
-                career={careers[d.id]}
-                side="right"
-              >
-                <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>
-              </DriverTooltip>
-              <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
-            </button>
-          ))}
+      <div className="flex-1 min-h-0 grid gap-4 lg:grid-cols-[3fr_2fr]">
+        {/* Open seats, in rank order: above (signed) → yours (interactive) → below (pending). */}
+        <div className="flex flex-col min-h-0">
+          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">Open seats</p>
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
+            {draft.aboveSeats.map((seat, i) => (
+              <SeatShell key={`a-${seat.teamId}-${i}`} seat={seat}>{signedRow(seat, draft.picksAbove[i])}</SeatShell>
+            ))}
+            {draft.playerSeats.map((seat, i) => {
+              const pick = draft.playerPicks[i]
+              const onClock = !pick && i === filling
+              return (
+                <SeatShell key={`p-${seat.teamId}-${i}`} seat={seat} highlight={onClock}>
+                  {pick
+                    ? <span className="text-sm font-semibold text-[#FFFFFF] truncate flex-1">{pick.driverName}</span>
+                    : onClock
+                      ? <span className="text-xs italic text-[#00D9FF] flex-1">Choose a driver…</span>
+                      : <span className="text-xs text-[#FFFFFF] flex-1">Your seat</span>}
+                </SeatShell>
+              )
+            })}
+            {draft.belowSeats.map((seat, i) => (
+              <SeatShell key={`b-${seat.teamId}-${i}`} seat={seat}>
+                <span className="text-xs text-[#FFFFFF]/70 italic flex-1">Signs after you</span>
+              </SeatShell>
+            ))}
+          </div>
         </div>
-      ) : (
-        <button
-          onClick={() => useSeasonStore.getState().finishPlayerDraft()}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]"
-        >
-          No free agents left — take rookies
-        </button>
-      )}
+
+        {/* Free agents: your live contender pool, clickable to sign the seat on the clock. */}
+        <div className="flex flex-col min-h-0">
+          <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
+            Free agents{draft.rejected.length > 0 ? <> · <span className="text-[#DC143C]">{draft.rejected.length} turned you down</span></> : ''}
+          </p>
+          {available.length > 0 ? (
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
+              {available.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
+                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
+                >
+                  <NationalityFlag code={d.nationality} />
+                  <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(d.id) ?? null} wdcPoints={wdcPtsOf.get(d.id)} career={careers[d.id]} side="left">
+                    <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>
+                  </DriverTooltip>
+                  <span className="ml-auto text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <button
+              onClick={() => useSeasonStore.getState().finishPlayerDraft()}
+              className="self-start px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]"
+            >
+              No free agents left — take rookies
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -166,12 +214,15 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
       .catch(() => setCareers({}))
   }, [year, raceResults, eos])
 
+  // Team Manager: while the draft is paused for the player, the interactive board owns the whole modal.
+  if (playerDraft) {
+    return <PlayerDraftBoard draft={playerDraft} year={year} careers={careers} standings={standings} driverStandings={driverStandings} />
+  }
+
   if (picks.length === 0) {
     return (
       <div className="flex h-full flex-col gap-3">
-        {playerDraft
-          ? <PlayerSigningsPanel draft={playerDraft} year={year} careers={careers} driverStandings={driverStandings} fill />
-          : <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>}
+        <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
       </div>
     )
   }
@@ -222,9 +273,6 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* Team Manager: your interactive free-agency picks, before the reveal content. */}
-      {playerDraft && <PlayerSigningsPanel draft={playerDraft} year={year} careers={careers} driverStandings={driverStandings} />}
-
       {/* Controls (fixed) */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         <button
