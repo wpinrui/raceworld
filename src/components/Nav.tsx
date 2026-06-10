@@ -59,7 +59,9 @@ export default function Nav() {
   const realWorldMode = useSeasonStore((s) => s.realWorldMode)
   const realWorldChangesResolved = useSeasonStore((s) => s.realWorldChangesResolved)
   // Team Manager: an unresolved free-agency draft or renewal call blocks Continue until the player acts.
-  const pendingPlayerCall = useSeasonStore((s) => s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0)
+  const pendingDraft = useSeasonStore((s) => s.pendingPlayerDraft != null)
+  const pendingRenewals = useSeasonStore((s) => s.pendingPlayerRenewals.length > 0)
+  const pendingPlayerCall = pendingDraft || pendingRenewals
 
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -333,7 +335,7 @@ export default function Nav() {
         </div>
       )
     }
-    return <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>{pendingPlayerCall ? 'Decide signings' : busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
+    return <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>{pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
   })()
 
   // Spacebar activates the primary CTA (Football-Manager style). The current action mirrors the `cta`
