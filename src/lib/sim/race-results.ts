@@ -104,6 +104,10 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
       const isFastestLap = ds.driverId === flDriverId
       // Era base points + the fastest-lap bonus (only in FL eras, only for a top-10 finisher).
       const flBonus = isFastestLap && flPointEra && !ds.retired && ds.position <= 10 ? 1 : 0
+      // Lapped runners take the flag when the leader finishes: credited totalLaps - lapsDown laps (they
+      // don't drive the rest), with their time trimmed to that distance. Retirees keep their actual count.
+      const lapsCompleted = ds.retired ? ds.lapTimes.length : Math.max(0, raceState.totalLaps - ds.lapsDown)
+      const finishTime = ds.retired ? null : ds.totalTime - ds.lapTimes.slice(lapsCompleted).reduce((a, b) => a + b, 0)
       return {
         driverId: ds.driverId, driverName: driver?.name ?? ds.driverId,
         teamId: driver?.teamId ?? '', teamName: team?.name ?? '',
@@ -112,7 +116,7 @@ export function buildRaceResults(raceState: RaceState, drivers: Driver[], teams:
         points: getPoints(ds.retired ? null : ds.position, year) + flBonus,
         fastestLap: isFastestLap,
         form: ds.form,
-        lapsCompleted: ds.lapTimes.length, totalTime: ds.retired ? null : ds.totalTime,
+        lapsCompleted, totalTime: finishTime,
         dnf: ds.retired, stints,
         q1Time: qr?.q1Time ?? null, q2Time: qr?.q2Time ?? null, q3Time: qr?.q3Time ?? null,
         // Consistency-mistake stats (issue #59): count, worst single time loss, and whether the

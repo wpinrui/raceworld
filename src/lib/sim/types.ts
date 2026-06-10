@@ -104,6 +104,8 @@ export interface DriverRaceState {
   targetPitLap: number | null   // lap the team plans to pit; null = no planned stop
   targetNextCompound: TyreCompound
   gap: number            // gap to car directly ahead in seconds; leader = 0
+  lapsDown: number       // whole laps behind the leader (0 = lead lap); drives the +N LAP display, the
+                         // finish truncation, and a lapped car's shortened pit strategy
   dsq: boolean
 }
 

@@ -179,7 +179,13 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                   {team?.name ?? '---'}
                 </td>
                 <td className={`py-1 px-2 text-right font-mono text-sm whitespace-nowrap ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
-                  {ds.retired ? 'DNF' : ds.position === 1 ? formatTotalTime(ds.totalTime) : `+${(ds.totalTime - leaderTime).toFixed(3)}s`}
+                  {ds.retired
+                    ? 'DNF'
+                    : ds.position === 1
+                      ? formatTotalTime(ds.totalTime)
+                      : ds.lapsDown >= 1
+                        ? `+${ds.lapsDown} LAP${ds.lapsDown > 1 ? 'S' : ''}`
+                        : `+${(ds.totalTime - leaderTime).toFixed(3)}s`}
                 </td>
                 <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
                   {ds.retired ? 'DNF' : ds.position === 1 ? <span className="text-[#6B7280]">—</span> : `+${ds.gap.toFixed(3)}s`}
