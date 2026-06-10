@@ -65,11 +65,12 @@ function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
 // draft is paused for the player. The player fills their own open seat(s) one at a time by clicking a
 // pool driver (50% accept); a decline soft-locks that driver out of the current seat. When the last
 // seat fills, the store auto-finishes the draft and this panel disappears.
-function PlayerSigningsPanel({ draft, year, careers, driverStandings }: {
+function PlayerSigningsPanel({ draft, year, careers, driverStandings, fill = false }: {
   draft: PendingPlayerDraft
   year: number
   careers: Record<string, DriverCareer>
   driverStandings: { driverId: string; points: number }[]
+  fill?: boolean // when this panel is the only content, let the pool grow to fill the modal instead of capping
 }) {
   const filling = draft.playerPicks.length // index of the seat currently being filled
   const available = draft.pool.filter((d) => !draft.rejected.includes(d.id))
@@ -78,11 +79,11 @@ function PlayerSigningsPanel({ draft, year, careers, driverStandings }: {
   const wdcPtsOf = new Map(driverStandings.map((s) => [s.driverId, s.points]))
 
   return (
-    <div className="shrink-0 rounded-lg bg-[#1E2431] p-3">
-      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2">Your signings</p>
+    <div className={`rounded-lg bg-[#1E2431] p-3 ${fill ? 'flex flex-col min-h-0 flex-1' : 'shrink-0'}`}>
+      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2 shrink-0">Your signings</p>
 
       {/* Your seats: each filled pick, then the open seats, with the one on the clock highlighted. */}
-      <div className="space-y-1.5 mb-3">
+      <div className="space-y-1.5 mb-3 shrink-0">
         {draft.playerSeats.map((seat, i) => {
           const pick = draft.playerPicks[i]
           const isFilling = !pick && i === filling
@@ -111,7 +112,7 @@ function PlayerSigningsPanel({ draft, year, careers, driverStandings }: {
 
       {/* The free-agent pool: clickable rows. When empty (can't sign anyone), fall back to rookies. */}
       {available.length > 0 ? (
-        <div className="max-h-48 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
+        <div className={`${fill ? 'flex-1 min-h-0' : 'max-h-48'} overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40`}>
           {available.map((d) => (
             <button
               key={d.id}
@@ -168,8 +169,9 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   if (picks.length === 0) {
     return (
       <div className="flex h-full flex-col gap-3">
-        {playerDraft && <PlayerSigningsPanel draft={playerDraft} year={year} careers={careers} driverStandings={driverStandings} />}
-        <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
+        {playerDraft
+          ? <PlayerSigningsPanel draft={playerDraft} year={year} careers={careers} driverStandings={driverStandings} fill />
+          : <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>}
       </div>
     )
   }
