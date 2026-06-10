@@ -2,7 +2,8 @@ import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeason
 import { sampleNormal } from './rng-utils'
 
 // 3-race cycle base gain: median +3, Q1 +1.5, Q3 +4.5. For a normal curve Q1 = μ − 0.6745σ,
-// so σ = (3 − 1.5) / 0.6745 ≈ 2.224. This is the gain for a car already ON the pace.
+// so σ = (3 − 1.5) / 0.6745 ≈ 2.224. This anchors a car ON the pace at a 3-race cycle; longer cycles
+// scale the median up linearly with the cycle length (see rollUpgrade).
 const BASE_MEDIAN = 3
 const BASE_SIGMA = 1.5 / 0.6745
 
@@ -35,8 +36,11 @@ export function rollUpgrade(
   rng: () => number,
 ): { paceDelta: number; failed: boolean } {
   if (rng() < 0.05) return { paceDelta: 0, failed: true }
-  const scale = Math.pow(1.05, cycleLength - 3)
-  const raw = Math.max(0, sampleNormal(BASE_MEDIAN, BASE_SIGMA, rng)) * scale
+  // Median base gain scales LINEARLY with the cycle (a longer cycle is more dev time) and compounds 5%
+  // per race over the 3-race floor: cycleLength · 1.05^(cycleLength − 3). (The old constant base dropped
+  // the linear cycle term — a bug.) Spread keeps the cycle-3 shape via its coefficient of variation.
+  const median = cycleLength * Math.pow(1.05, cycleLength - 3)
+  const raw = Math.max(0, sampleNormal(median, median * (BASE_SIGMA / BASE_MEDIAN), rng))
   const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT
   return { paceDelta: round1(raw + catchUp), failed: false }
 }
