@@ -18,14 +18,16 @@ function slugify(s: string): string {
 }
 
 export function TeamManagerSetup({
-  teams, minEntryYear, maxEntryYear, onChange,
+  teams, minEntryYear, maxEntryYear, onChange, onModeChange,
 }: {
   teams: Team[]
   minEntryYear: number
   maxEntryYear: number
   onChange: (sel: TmSelection) => void
+  onModeChange?: (mode: 'existing' | 'new') => void
 }) {
   const [mode, setMode] = useState<'existing' | 'new'>('existing')
+  useEffect(() => { onModeChange?.(mode) }, [mode, onModeChange])
   const [existingId, setExistingId] = useState(teams[0]?.id ?? '')
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#00D9FF')

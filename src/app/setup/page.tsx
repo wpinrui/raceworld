@@ -58,6 +58,7 @@ export default function SetupPage() {
   // Team Manager: run one team only, god-mode off (re-enableable as Settings talents).
   const [teamManager, setTeamManager] = useState(false)
   const [tmSelection, setTmSelection] = useState<TmSelection>(null)
+  const [tmMode, setTmMode] = useState<'existing' | 'new'>('existing')
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any
@@ -286,12 +287,16 @@ export default function SetupPage() {
               <>
                 {isFreshGame && (
                   <>
-                    <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
-                      className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
-                      {historyYears().slice().reverse().map((y) => (
-                        <option key={y} value={y}>{y}{y === DEFAULT_START_YEAR ? ' (default)' : ''}</option>
-                      ))}
-                    </select>
+                    {/* The start-year dropdown is your START year (existing team). A new team sets its own
+                        entry year in the panel below, so the dropdown is hidden then. */}
+                    {!(teamManager && tmMode === 'new') && (
+                      <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
+                        className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
+                        {historyYears().slice().reverse().map((y) => (
+                          <option key={y} value={y}>{y}{y === DEFAULT_START_YEAR ? ' (default)' : ''}</option>
+                        ))}
+                      </select>
+                    )}
                     {startYear !== DEFAULT_START_YEAR && (
                       <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
                         <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
@@ -333,7 +338,7 @@ export default function SetupPage() {
 
         {!isActive && teamManager && (
           <div className="mb-6">
-            <TeamManagerSetup teams={localTeams} minEntryYear={EARLIEST_YEAR + 1} maxEntryYear={DEFAULT_START_YEAR} onChange={setTmSelection} />
+            <TeamManagerSetup teams={localTeams} minEntryYear={EARLIEST_YEAR + 1} maxEntryYear={DEFAULT_START_YEAR} onChange={setTmSelection} onModeChange={setTmMode} />
           </div>
         )}
 
