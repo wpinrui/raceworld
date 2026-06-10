@@ -1325,6 +1325,10 @@ export const useSeasonStore = create<SeasonStore>()(
         // Saves from before M4: default the grid-change queue and backfill each dev
         // plan's pre-rolled pending upgrade so the override UI always has a value.
         if (!state.pendingGridChanges) state.pendingGridChanges = { additions: [], removals: [] }
+        // Team Manager is inherently real-world (real F1 history). Restore real-world mode on older TM saves
+        // that lost it (TM onboarding used to reset the flag), so real team changes and the season-end
+        // accept/reject modal resume on the next off-season, no restart needed.
+        if (state.teamManagerMode && !state.realWorldMode) state.realWorldMode = true
         if (state.devPlans) {
           const teamsForDeficit = state.teams ?? []
           const leaderPace = teamsForDeficit.length ? Math.max(...teamsForDeficit.map((t) => t.carPace)) : 75
