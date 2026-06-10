@@ -42,7 +42,7 @@ export function TeamManagerSetup({
       return
     }
     const y = Math.max(minEntryYear, Math.min(maxEntryYear, entryYear))
-    if (newName.trim() && Number.isFinite(y)) {
+    if (newName.trim() && newNat && newColor && Number.isFinite(entryYear) && Number.isFinite(y)) {
       const id = `tm-${slugify(newName) || 'team'}`
       const team: Team = {
         id, name: newName.trim(), shortName: newName.trim().slice(0, 4).toUpperCase(),

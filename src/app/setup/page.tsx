@@ -227,14 +227,18 @@ export default function SetupPage() {
     router.push('/home') // land on Home; the Continue CTA drives forward to the opening race
   }
 
+  // The year the season actually begins when you hit Start: a new team's entry year, otherwise the chosen
+  // start year. (seasonStore.year is the store default before any season exists, so it can't drive this.)
+  const startSeasonYear = teamManager && tmSelection?.kind === 'new' ? tmSelection.entryYear : startYear
+
   // Surface "Start Season" up in the nav top bar (the only CTA before a season exists). The staged
   // grid lives in this page's local state, so we register the action here for the nav to invoke.
   const setSetupCta = useSetupCta((s) => s.setCta)
   useEffect(() => {
     if (isActive) { setSetupCta(null); return }
-    setSetupCta({ ready: localDrivers.length > 0 && (!teamManager || tmSelection != null), year: startYear, start: handleStartSeason })
+    setSetupCta({ ready: localDrivers.length > 0 && (!teamManager || tmSelection != null), year: startSeasonYear, start: handleStartSeason })
     return () => setSetupCta(null)
-  }, [isActive, localDrivers, localTeams, startYear, realWorld, simWorld, teamManager, tmSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, localDrivers, localTeams, startSeasonYear, realWorld, simWorld, teamManager, tmSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!hydrated) return null
 
@@ -516,7 +520,7 @@ export default function SetupPage() {
           <div className="mt-8 flex justify-end">
             <button onClick={handleStartSeason} disabled={localDrivers.length === 0 || (teamManager && !tmSelection)}
               className="flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-sm uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              Start Season {seasonStore.year} <ChevronRight size={16} />
+              Start Season {startSeasonYear} <ChevronRight size={16} />
             </button>
           </div>
         )}
