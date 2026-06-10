@@ -32,7 +32,7 @@ import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound,
 export interface PendingPlayerRenewal { driverId: string; driverName: string; diff: number }
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { sortDriverStandings, sortConstructorStandings } from '@/lib/sim/standings-calc'
-import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
+import { dueDriversForYear, lastDriverEntryYear } from '@/lib/history/compose'
 
 // Team Manager free-agency pause: everything needed to finish the off-season draft once the player has
 // filled their seat(s). Rivals ABOVE the player's seat rank are already signed (picksAbove); the player
@@ -924,12 +924,13 @@ export const useSeasonStore = create<SeasonStore>()(
         const { teams } = pendingNextSeasonState
         const newYear = year + 1
 
-        // Real-world mode (while the dataset still has entrants): seed next year's real rookies into the
-        // pool so the draft signs real drivers, never fictional fill-ins, before 2026.
+        // Real-world mode (while the dataset still has entrants): seed next year's real drivers (debutants,
+        // plus any earlier ones a past real-world-off spell skipped) into the pool so the draft signs real
+        // drivers, never fictional fill-ins. Deduped by id below, so no one already in the save is doubled.
         let allDrivers = pendingNextSeasonState.drivers
         if (realWorldMode && newYear <= lastDriverEntryYear()) {
           const have = new Set(allDrivers.map((d) => d.id))
-          allDrivers = [...allDrivers, ...rookiesForYear(newYear).filter((d) => !have.has(d.id))]
+          allDrivers = [...allDrivers, ...dueDriversForYear(newYear).filter((d) => !have.has(d.id))]
         }
 
         // Under contract for next year (incl. round-18 renewals) -> keeps the seat.
@@ -1132,12 +1133,13 @@ export const useSeasonStore = create<SeasonStore>()(
         }
 
         const { drivers: pendingDrivers, teams } = pendingNextSeasonState
-        // Top up the free-agent pool. Real-world mode brings in that year's real rookies (until the
-        // dataset is exhausted past the last entry year); otherwise generate fictional drivers.
+        // Top up the free-agent pool. Real-world mode brings in that year's real drivers (debutants, plus any
+        // earlier ones a real-world-off spell skipped; until the dataset is exhausted past the last entry
+        // year); otherwise generate fictional drivers.
         const existingIds = new Set(pendingDrivers.map((d) => d.id))
         let topUp: Driver[]
         if (get().realWorldMode && newYear <= lastDriverEntryYear()) {
-          topUp = rookiesForYear(newYear).filter((d) => !existingIds.has(d.id))
+          topUp = dueDriversForYear(newYear).filter((d) => !existingIds.has(d.id))
         } else {
           const poolSize = pendingDrivers.filter((d) => d.teamId === '').length
           topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
@@ -1191,7 +1193,7 @@ export const useSeasonStore = create<SeasonStore>()(
         const existingIds = new Set(pendingDrivers.map((d) => d.id))
         let topUp: Driver[]
         if (realWorldMode && newYear <= lastDriverEntryYear()) {
-          topUp = rookiesForYear(newYear).filter((d) => !existingIds.has(d.id))
+          topUp = dueDriversForYear(newYear).filter((d) => !existingIds.has(d.id))
         } else {
           const poolSize = pendingDrivers.filter((d) => d.teamId === '').length
           topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []

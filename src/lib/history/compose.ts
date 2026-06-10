@@ -141,8 +141,20 @@ export function lastDriverEntryYear(): number {
   return historicalDrivers.reduce((max, d) => Math.max(max, d.marketEntryYear), 0)
 }
 
-// The real drivers entering the market in `year`, as free agents (projected to that year). Used to
-// feed the pool each season instead of generating fictional drivers, while the timeline has data.
+// Every real driver whose market entry has come by `year`, each projected to THEIR OWN entry year so they
+// arrive at their correct starting age and rookie form (not aged forward to `year`). Real-world mode tops
+// the market up with this; the caller dedupes by id, so anyone already in the save is dropped and no
+// duplicates are produced. This backfills real drivers a past real-world-off spell skipped (e.g. a save that
+// never got Lewis Hamilton): the first off-season after the fix floods the pool with the missing names, then
+// the id dedupe keeps it steady.
+export function dueDriversForYear(year: number): Driver[] {
+  return historicalDrivers
+    .filter((h) => h.marketEntryYear <= year)
+    .map((h) => toDriver(h, '', h.marketEntryYear))
+}
+
+// The real drivers entering the market in exactly `year`, as free agents projected to that year. Kept for
+// dev/history scripts that inspect each season's incoming class.
 export function rookiesForYear(year: number): Driver[] {
   return historicalDrivers.filter((d) => d.marketEntryYear === year).map((d) => toDriver(d, '', year))
 }
