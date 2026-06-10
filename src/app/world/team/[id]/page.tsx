@@ -19,6 +19,7 @@ import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
 import { UpgradeOverride } from '@/components/world/UpgradeOverride'
+import { DevCyclePicker } from '@/components/world/DevCyclePicker'
 
 type Tab = 'overview' | 'seasons'
 
@@ -30,16 +31,13 @@ export default function TeamPage() {
   const currentRound = useSeasonStore((s) => s.currentRound)
   // The live season's round count drives the in-season upgrade timeline.
   const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
-  const seasonYear = useSeasonStore((s) => s.year)
   const liveTeam = useSeasonStore((s) => s.teams.find((t) => t.id === id))
   const updateTeam = useSeasonStore((s) => s.updateTeam)
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
-  const playerDevCycle = useSeasonStore((s) => s.playerDevCycle)
   const onGrid = !!liveTeam
   // Team Manager: the player picks the upgrade cadence for their own team only.
   const isPlayerTeam = teamManagerMode && id === playerTeamId
-  const selectedCycle = playerDevCycle ?? devPlan?.cycleLength ?? null
   // God-mode team edits: always available in sandbox; in Team Manager mode only for the player's own team.
   const canEditTeam = !!liveTeam && (!teamManagerMode || id === playerTeamId)
   // Only editable while the season is running: upgrades are delivered during races, and
@@ -128,36 +126,7 @@ export default function TeamPage() {
               {tab === 'overview' && (
                 <div className="space-y-5">
                   {isPlayerTeam && (
-                    <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5">
-                      <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF]">Development cycle</h2>
-                      <div className="mt-3 flex gap-2">
-                        {[3, 4, 5, 6].map((n) => {
-                          const active = selectedCycle === n
-                          return (
-                            <button
-                              key={n}
-                              onClick={() => useSeasonStore.getState().setPlayerDevCycle(n)}
-                              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                active
-                                  ? 'bg-[#00D9FF] text-[#0F1419]'
-                                  : 'bg-[#0F1419] text-[#FFFFFF] border border-[#303848] hover:border-[#00D9FF]'
-                              }`}
-                            >
-                              {n}
-                            </button>
-                          )
-                        })}
-                        <span className="self-center ml-1 text-xs uppercase tracking-widest text-[#FFFFFF]">races</span>
-                      </div>
-                      <p className="mt-3 text-xs text-[#FFFFFF]">Longer cycles deliver bigger but rarer upgrades.</p>
-                      {devPlan && (
-                        <p className="mt-1 text-xs text-[#FFFFFF]">
-                          {devPlan.nextUpgradeRound <= totalRounds
-                            ? <>Next upgrade lands round {devPlan.nextUpgradeRound}, {calendarForYear(seasonYear)[devPlan.nextUpgradeRound - 1]?.name ?? `round ${devPlan.nextUpgradeRound}`}.</>
-                            : 'Next upgrade lands next season.'}
-                        </p>
-                      )}
-                    </div>
+                    <DevCyclePicker className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5" />
                   )}
 
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
