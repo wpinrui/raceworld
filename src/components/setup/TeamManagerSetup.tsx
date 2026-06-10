@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Team } from '@/lib/sim/types'
+import { CountrySelect } from '@/components/CountrySelect'
 
 // Pick the team you'll manage in Team Manager mode: an EXISTING grid team (you start the year you chose),
 // or a NEW team that JOINS the grid at a future entry year. A new team isn't given a roster here — the
@@ -31,6 +32,7 @@ export function TeamManagerSetup({
   const [existingId, setExistingId] = useState(teams[0]?.id ?? '')
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#00D9FF')
+  const [newNat, setNewNat] = useState('')
   const [entryYear, setEntryYear] = useState(minEntryYear)
 
   // Report the current selection upward whenever the inputs change.
@@ -44,13 +46,13 @@ export function TeamManagerSetup({
       const id = `tm-${slugify(newName) || 'team'}`
       const team: Team = {
         id, name: newName.trim(), shortName: newName.trim().slice(0, 4).toUpperCase(),
-        nationality: '', color: newColor, carPace: 0, // pace is set to lowest-on-grid − 5 when the team joins
+        nationality: newNat, color: newColor, carPace: 0, // pace is set to lowest-on-grid − 5 when the team joins
       }
       onChange({ kind: 'new', team, entryYear: y })
     } else {
       onChange(null)
     }
-  }, [mode, existingId, newName, newColor, entryYear, minEntryYear, maxEntryYear, onChange])
+  }, [mode, existingId, newName, newColor, newNat, entryYear, minEntryYear, maxEntryYear, onChange])
 
   return (
     <div className="mt-3 rounded-xl bg-[#1E2431] border border-[#2A3142] p-4 space-y-4">
@@ -84,6 +86,10 @@ export function TeamManagerSetup({
             <label className="text-xs text-[#FFFFFF] block mb-1">Colour</label>
             <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)}
               className="w-10 h-9 rounded bg-[#0F1419] border border-[#303848] cursor-pointer" />
+          </div>
+          <div>
+            <label className="text-xs text-[#FFFFFF] block mb-1">Nationality</label>
+            <CountrySelect value={newNat} onChange={(code) => setNewNat(code)} />
           </div>
           <div>
             <label className="text-xs text-[#FFFFFF] block mb-1">Entry year</label>

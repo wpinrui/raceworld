@@ -200,8 +200,10 @@ export default function SetupPage() {
     if (sel.kind === 'new') {
       if (sel.entryYear - 1 > EARLIEST_YEAR) await simUntilYear(sel.entryYear - 1, () => cancelSimRef.current)
       useSeasonStore.getState().queueTeamAddition(sel.team)
-      await simUntilYear(sel.entryYear, () => cancelSimRef.current)
+      // Take over BEFORE the entry off-season, so when the new team's seats open the free-agency draft
+      // PAUSES for the player to pick its drivers — the fast-forward halts the moment that draft opens.
       useSeasonStore.getState().setTeamManager(true, sel.team.id)
+      await simUntilYear(sel.entryYear, () => cancelSimRef.current || useSeasonStore.getState().pendingPlayerDraft != null)
     } else {
       await simUntilYear(startYear, () => cancelSimRef.current)
       const landed = useSeasonStore.getState().year
