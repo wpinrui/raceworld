@@ -7,7 +7,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 
 const VB_W = 320, VB_H = 220
 // Rounded-rectangle "Indianapolis" oval, drawn CLOCKWISE from top-centre (= the start/finish line).
-const RX = 30, RY = 35, RW = 260, RH = 150, CR = 52
+const RX = 26, RY = 30, RW = 268, RH = 160, CR = 56
 const CX = RX + RW / 2
 const OVAL_PATH = [
   `M ${CX} ${RY}`,
@@ -26,19 +26,31 @@ interface Props {
   teams: Team[]
 }
 
+// Where a car is at time t: which lap of its run, whether it's a timed (flying) lap, and progress 0..1.
+function carAt(sc: CarSchedule, t: number): { timed: boolean; prog: number } | null {
+  if (t < sc.launch || t >= sc.end) return null
+  let acc = sc.launch
+  for (const seg of sc.segs) {
+    if (t < acc + seg.dur) return { timed: seg.timed, prog: (t - acc) / seg.dur }
+    acc += seg.dur
+  }
+  return null
+}
+
 export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
-  const onTrackRef = useRef<string[]>([])
-  const [onTrack, setOnTrack] = useState<string[]>([])
+  const posRef = useRef(new Map<string, { left: number; top: number }>())
+  const stateRef = useRef('')
+  const [markers, setMarkers] = useState<{ carId: string; timed: boolean }[]>([])
 
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
   const posOf = new Map(rows.map((r, i) => [r.carId, i + 1]))
 
-  // Smooth motion: a private rAF reads the shared clock and mutates marker positions directly (no React
-  // re-render per frame). The rendered marker SET only changes when a car joins/leaves the track.
+  // Private rAF: read the shared clock, move markers via direct DOM writes (no per-frame React render).
+  // The rendered marker list only changes when a car joins/leaves the track or flips flying<->cruising.
   useEffect(() => {
     let raf = 0
     const tick = () => {
@@ -47,21 +59,19 @@ export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
         if (!lenRef.current) lenRef.current = path.getTotalLength()
         const len = lenRef.current
         const t = clockRef.current
-        const current: string[] = []
+        const current: { carId: string; timed: boolean }[] = []
         for (const sc of schedule) {
-          if (t < sc.launch || t >= sc.end) continue
-          current.push(sc.carId)
-          const inLap1 = t < sc.launch + sc.lap1Dur
-          const prog = inLap1 ? (t - sc.launch) / sc.lap1Dur : (t - (sc.launch + sc.lap1Dur)) / sc.lap2Dur
-          const pt = path.getPointAtLength((Math.min(0.9999, Math.max(0, prog))) * len)
+          const at = carAt(sc, t)
+          if (!at) continue
+          current.push({ carId: sc.carId, timed: at.timed })
+          const pt = path.getPointAtLength(Math.min(0.9999, Math.max(0, at.prog)) * len)
+          const left = (pt.x / VB_W) * 100, top = (pt.y / VB_H) * 100
+          posRef.current.set(sc.carId, { left, top })
           const el = elRefs.current.get(sc.carId)
-          if (el) { el.style.left = `${(pt.x / VB_W) * 100}%`; el.style.top = `${(pt.y / VB_H) * 100}%` }
+          if (el) { el.style.left = `${left}%`; el.style.top = `${top}%` }
         }
-        const prev = onTrackRef.current
-        if (current.length !== prev.length || current.some((id, i) => id !== prev[i])) {
-          onTrackRef.current = current
-          setOnTrack(current)
-        }
+        const key = current.map((c) => `${c.carId}:${c.timed ? 1 : 0}`).join(',')
+        if (key !== stateRef.current) { stateRef.current = key; setMarkers(current) }
       }
       raf = requestAnimationFrame(tick)
     }
@@ -76,24 +86,41 @@ export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
         <div className="w-1 h-5 bg-[#DC143C] rounded-sm" />
         <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">Track</h2>
       </div>
-      <div className="relative w-full max-w-[460px] mx-auto" style={{ aspectRatio: `${VB_W} / ${VB_H}` }}>
+      <div className="relative w-full max-w-[620px] mx-auto" style={{ aspectRatio: `${VB_W} / ${VB_H}` }}>
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="absolute inset-0 w-full h-full">
-          <path ref={pathRef} d={OVAL_PATH} fill="none" stroke="#3A4252" strokeWidth={11} strokeLinejoin="round" />
+          <path ref={pathRef} d={OVAL_PATH} fill="none" stroke="#3A4252" strokeWidth={12} strokeLinejoin="round" />
           <path d={OVAL_PATH} fill="none" stroke="#1E2431" strokeWidth={5} strokeLinejoin="round" strokeDasharray="2 6" />
-          <line x1={CX} y1={RY - 9} x2={CX} y2={RY + 9} stroke="#FFFFFF" strokeWidth={2.5} />
+          <line x1={CX} y1={RY - 10} x2={CX} y2={RY + 10} stroke="#FFFFFF" strokeWidth={2.5} />
         </svg>
-        {onTrack.map((carId) => {
+        {markers.map(({ carId, timed }) => {
           const d = driverMap.get(carId)
           const team = d ? teamMap.get(d.teamId) : undefined
           const pos = posOf.get(carId) ?? 0
+          const inner = timed ? (
+            <div
+              className="flex items-center justify-center rounded-full text-[11px] font-bold text-[#FFFFFF]"
+              style={{ width: 26, height: 26, backgroundColor: team?.color ?? '#888', border: '1.5px solid rgba(0,0,0,0.5)' }}
+            >
+              <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{pos > 0 ? pos : ''}</span>
+            </div>
+          ) : (
+            // cruising (in-lap / out-lap): a small grey ring, no number
+            <div className="rounded-full" style={{ width: 14, height: 14, border: '2px solid #6B7280', backgroundColor: 'rgba(15,20,25,0.6)' }} />
+          )
           return (
             <Tooltip key={carId} content={<div><div className="font-semibold">{d?.name ?? carId}</div><div className="text-[#9CA3AF]">{team?.name ?? ''}</div></div>}>
               <div
-                ref={(el) => { if (el) elRefs.current.set(carId, el); else elRefs.current.delete(carId) }}
-                className="absolute flex items-center justify-center rounded-full text-[9px] font-bold text-[#FFFFFF] cursor-default shadow shadow-black/40"
-                style={{ left: '50%', top: `${(RY / VB_H) * 100}%`, width: 18, height: 18, transform: 'translate(-50%, -50%)', backgroundColor: team?.color ?? '#888', border: '1px solid rgba(0,0,0,0.45)' }}
+                ref={(el) => {
+                  if (!el) { elRefs.current.delete(carId); return }
+                  elRefs.current.set(carId, el)
+                  const p = posRef.current.get(carId)        // set initial spot in the ref callback (commit, not render)
+                  el.style.left = p ? `${p.left}%` : '50%'
+                  el.style.top = p ? `${p.top}%` : `${(RY / VB_H) * 100}%`
+                }}
+                className="absolute cursor-default shadow shadow-black/40"
+                style={{ transform: 'translate(-50%, -50%)' }}
               >
-                {pos > 0 ? pos : ''}
+                {inner}
               </div>
             </Tooltip>
           )

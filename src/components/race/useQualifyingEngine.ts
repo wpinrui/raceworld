@@ -15,11 +15,11 @@ const OUTLAP_FAST = 6
 type Sectors = [number, number, number]
 const hash = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
 
+export type Seg = { timed: boolean; dur: number } // one lap of the run; timed = a flying (counting) lap
 export type CarSchedule = {
   carId: string
   launch: number
-  lap1Dur: number   // timeline duration of lap 1 (compressed for the first car's out-lap)
-  lap2Dur: number
+  segs: Seg[]       // flying 1, in-lap, out-lap, flying 2
   end: number
 }
 type SectorEvt = { t: number; carId: string; sector: 1 | 2 | 3; sectorTime: number; lapTime: number | null }
@@ -98,13 +98,21 @@ export function useQualifyingEngine(
     return meta.map((m) => m.l)
   }, [session, sessionName, driverMap, rank, currentRound, circuitId])
 
-  // Per-car timeline (launches + lap durations); the first car's lap-1 duration is compressed.
+  // Each run: flying lap 1 (timed) → in-lap → out-lap (both untimed cruise) → flying lap 2 (timed). The
+  // cruise laps make the two timed laps non-consecutive and clearly separable on the track map.
   const schedule = useMemo<CarSchedule[]>(() => ordered.map((l, k) => {
     const launch = k * STAGGER
     const lap1 = l.lap1 ?? l.best ?? 90
     const lap2 = l.lap2 ?? l.best ?? 90
-    const lap1Dur = SUPERSPEED_OUTLAP && k === 0 ? OUTLAP_FAST : lap1
-    return { carId: l.driverId, launch, lap1Dur, lap2Dur: lap2, end: launch + lap1Dur + lap2 }
+    const cruise = lap2 * 0.8
+    const fly1 = SUPERSPEED_OUTLAP && k === 0 ? OUTLAP_FAST : lap1
+    const segs: Seg[] = [
+      { timed: true, dur: fly1 },
+      { timed: false, dur: cruise },
+      { timed: false, dur: cruise },
+      { timed: true, dur: lap2 },
+    ]
+    return { carId: l.driverId, launch, segs, end: launch + fly1 + 2 * cruise + lap2 }
   }), [ordered])
 
   // Sector-completion events: real sector times, placed on the (possibly compressed) lap timeline.
@@ -112,9 +120,9 @@ export function useQualifyingEngine(
     const evts: SectorEvt[] = []
     ordered.forEach((l, k) => {
       const sc = schedule[k]
-      const s1: Sectors = l.lap1Sectors ?? [ (l.lap1 ?? 90) * 0.3, (l.lap1 ?? 90) * 0.4, (l.lap1 ?? 90) * 0.3 ]
-      const s2: Sectors = l.lap2Sectors ?? [ (l.lap2 ?? 90) * 0.3, (l.lap2 ?? 90) * 0.4, (l.lap2 ?? 90) * 0.3 ]
       const lap1 = l.lap1 ?? 90, lap2 = l.lap2 ?? 90
+      const s1: Sectors = l.lap1Sectors ?? [lap1 * 0.3, lap1 * 0.4, lap1 * 0.3]
+      const s2: Sectors = l.lap2Sectors ?? [lap2 * 0.3, lap2 * 0.4, lap2 * 0.3]
       const push = (laps: Sectors, lapTotal: number, lapStart: number, lapDur: number) => {
         const scale = lapDur / lapTotal
         let cum = 0
@@ -123,8 +131,9 @@ export function useQualifyingEngine(
           evts.push({ t: lapStart + cum * scale, carId: l.driverId, sector: (i + 1) as 1 | 2 | 3, sectorTime: laps[i], lapTime: i === 2 ? lapTotal : null })
         }
       }
-      push(s1, lap1, sc.launch, sc.lap1Dur)
-      push(s2, lap2, sc.launch + sc.lap1Dur, sc.lap2Dur)
+      const fly2Start = sc.launch + sc.segs[0].dur + sc.segs[1].dur + sc.segs[2].dur
+      push(s1, lap1, sc.launch, sc.segs[0].dur)
+      push(s2, lap2, fly2Start, sc.segs[3].dur)
     })
     return evts.sort((a, b) => a.t - b.t)
   }, [ordered, schedule])
