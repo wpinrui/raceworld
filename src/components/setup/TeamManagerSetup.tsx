@@ -19,13 +19,14 @@ function slugify(s: string): string {
 }
 
 export function TeamManagerSetup({
-  teams, minEntryYear, maxEntryYear, onChange, onModeChange,
+  teams, minEntryYear, maxEntryYear, onChange, onModeChange, onEntryYearChange,
 }: {
   teams: Team[]
   minEntryYear: number
   maxEntryYear: number
   onChange: (sel: TmSelection) => void
   onModeChange?: (mode: 'existing' | 'new') => void
+  onEntryYearChange?: (year: number) => void // the in-progress entry year, reported even before the form validates
 }) {
   const [mode, setMode] = useState<'existing' | 'new'>('existing')
   useEffect(() => { onModeChange?.(mode) }, [mode, onModeChange])
@@ -34,6 +35,7 @@ export function TeamManagerSetup({
   const [newColor, setNewColor] = useState('#00D9FF')
   const [newNat, setNewNat] = useState('')
   const [entryYear, setEntryYear] = useState(minEntryYear)
+  useEffect(() => { onEntryYearChange?.(entryYear) }, [entryYear, onEntryYearChange])
 
   // Report the current selection upward whenever the inputs change.
   useEffect(() => {

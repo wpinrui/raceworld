@@ -59,6 +59,7 @@ export default function SetupPage() {
   const [teamManager, setTeamManager] = useState(false)
   const [tmSelection, setTmSelection] = useState<TmSelection>(null)
   const [tmMode, setTmMode] = useState<'existing' | 'new'>('existing')
+  const [tmEntryYear, setTmEntryYear] = useState(EARLIEST_YEAR + 1)
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any
@@ -229,7 +230,9 @@ export default function SetupPage() {
 
   // The year the season actually begins when you hit Start: a new team's entry year, otherwise the chosen
   // start year. (seasonStore.year is the store default before any season exists, so it can't drive this.)
-  const startSeasonYear = teamManager && tmSelection?.kind === 'new' ? tmSelection.entryYear : startYear
+  const startSeasonYear = teamManager && tmMode === 'new'
+    ? (Number.isFinite(tmEntryYear) ? tmEntryYear : EARLIEST_YEAR + 1)
+    : startYear
 
   // Surface "Start Season" up in the nav top bar (the only CTA before a season exists). The staged
   // grid lives in this page's local state, so we register the action here for the nav to invoke.
@@ -344,7 +347,7 @@ export default function SetupPage() {
 
         {!isActive && teamManager && (
           <div className="mb-6">
-            <TeamManagerSetup teams={localTeams} minEntryYear={EARLIEST_YEAR + 1} maxEntryYear={DEFAULT_START_YEAR} onChange={setTmSelection} onModeChange={setTmMode} />
+            <TeamManagerSetup teams={localTeams} minEntryYear={EARLIEST_YEAR + 1} maxEntryYear={DEFAULT_START_YEAR} onChange={setTmSelection} onModeChange={setTmMode} onEntryYearChange={setTmEntryYear} />
           </div>
         )}
 
