@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Driver, Team } from '@/lib/sim/types'
 import type { CarSchedule, BoardRow } from './useQualifyingEngine'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { useSeasonStore } from '@/lib/store/season-store'
 
 const VB_W = 320, VB_H = 220
 // Rounded-rectangle "Indianapolis" oval, drawn CLOCKWISE from top-centre (= the start/finish line).
@@ -48,6 +49,7 @@ export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
   const posOf = new Map(rows.map((r, i) => [r.carId, i + 1]))
+  const playerTeamId = useSeasonStore((s) => (s.teamManagerMode ? s.playerTeamId : null))
 
   // Private rAF: read the shared clock, move markers via direct DOM writes (no per-frame React render).
   // The rendered marker list only changes when a car joins/leaves the track or flips flying<->cruising.
@@ -96,16 +98,19 @@ export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
           const d = driverMap.get(carId)
           const team = d ? teamMap.get(d.teamId) : undefined
           const pos = posOf.get(carId) ?? 0
+          const isMine = !!playerTeamId && d?.teamId === playerTeamId
+          // Your-team cars get a bright white ring so they stand out on the map.
+          const myRing = isMine ? '0 0 0 2.5px #FFFFFF, 0 0 7px rgba(255,255,255,0.7)' : undefined
           const inner = timed ? (
             <div
               className="flex items-center justify-center rounded-full text-[11px] font-bold text-[#FFFFFF]"
-              style={{ width: 26, height: 26, backgroundColor: team?.color ?? '#888', border: '1.5px solid rgba(0,0,0,0.5)' }}
+              style={{ width: 26, height: 26, backgroundColor: team?.color ?? '#888', border: '1.5px solid rgba(0,0,0,0.5)', boxShadow: myRing }}
             >
               <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{pos > 0 ? pos : ''}</span>
             </div>
           ) : (
             // cruising (in-lap / out-lap): a small grey ring, no number
-            <div className="rounded-full" style={{ width: 14, height: 14, border: '2px solid #6B7280', backgroundColor: 'rgba(15,20,25,0.6)' }} />
+            <div className="rounded-full" style={{ width: 14, height: 14, border: isMine ? '2px solid #FFFFFF' : '2px solid #6B7280', backgroundColor: 'rgba(15,20,25,0.6)', boxShadow: myRing }} />
           )
           return (
             <Tooltip key={carId} content={<div><div className="font-semibold">{d?.name ?? carId}</div><div className="text-[#9CA3AF]">{team?.name ?? ''}</div></div>}>
