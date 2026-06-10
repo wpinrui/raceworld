@@ -653,13 +653,12 @@ export const useSeasonStore = create<SeasonStore>()(
       },
 
       recordRaceResult: (results) => {
-        const { drivers, teams, raceResults, currentRound, devPlans, allUpgradeEvents, statHistory, carPaceHistory, year } = get()
+        const { drivers, teams, raceResults, currentRound, statHistory, carPaceHistory, year } = get()
         const updated = [...raceResults]
         updated[currentRound - 1] = results
 
-        // Deliver any car upgrades due this round (funding penalty is baked into the upgrade).
-        const { upgradeEvents, updatedTeams, updatedDevPlans } =
-          applyUpgradeEvents(currentRound, teams, devPlans, Math.random)
+        // Car upgrades for this round were already delivered when advanceRound rolled into it (before the
+        // weekend), so `teams` already carries this round's pace. Nothing to apply post-race here.
 
         // Driver development applies after each race.
         let { updatedDrivers } = applyRaceProgression(drivers, Math.random)
@@ -679,16 +678,16 @@ export const useSeasonStore = create<SeasonStore>()(
         const watchRound = marketWatchRound(calendarForYear(year).length)
         const renewalRound = marketRenewalRound(calendarForYear(year).length)
         if (currentRound === watchRound || currentRound === renewalRound) {
-          const standings = computeConstructorStandings(updatedTeams, updatedDrivers, updated)
+          const standings = computeConstructorStandings(teams, updatedDrivers, updated)
           const rankInfo = standings.map((cs, idx) => ({ teamId: cs.teamId, points: cs.points, finalPosition: idx + 1 }))
-          const mediaScores = computeDriverMediaScores(updatedDrivers, updatedTeams, updated, rankInfo, updatedTeams.length)
+          const mediaScores = computeDriverMediaScores(updatedDrivers, teams, updated, rankInfo, teams.length)
           const mediaMap = new Map(mediaScores.map((s) => [s.driverId, s.score]))
           const wccOrderBestFirst = standings.map((cs) => cs.teamId)
           if (currentRound === watchRound) {
-            seasonContractWatch = assessExpiringContracts({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year })
+            seasonContractWatch = assessExpiringContracts({ drivers: updatedDrivers, teams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year })
           } else {
             const preById = new Map(updatedDrivers.map((d) => [d.id, d]))
-            const result = negotiateRenewals({ drivers: updatedDrivers, teams: updatedTeams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year, rng: Math.random })
+            const result = negotiateRenewals({ drivers: updatedDrivers, teams, mediaScore: mediaMap, wccOrderBestFirst, currentYear: year, rng: Math.random })
             updatedDrivers = result.drivers
             seasonRenewals = result.renewals
             // Team Manager: the player's own expiring drivers are the player's call — undo any auto-renewal
@@ -716,27 +715,38 @@ export const useSeasonStore = create<SeasonStore>()(
           phase: 'post-race',
           // The clock catches up to race day for the round just run (keeps live + headless sim truthful).
           currentDate: roundDate(year, currentRound),
-          teams: updatedTeams,
+          teams,
           drivers: updatedDrivers,
-          devPlans: updatedDevPlans,
-          allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
           seasonRenewals,
           seasonContractWatch,
           // Capture the post-race attributes for this round's progression chart.
           statHistory: appendStatHistory(statHistory, updatedDrivers, currentRound),
-          // Capture each car's post-upgrade pace for the Car Development chart.
-          carPaceHistory: [...carPaceHistory.filter((h) => h.round !== currentRound), { round: currentRound, paces: snapshotCarPaces(updatedTeams) }],
-          driverStandings: computeDriverStandings(updatedDrivers, updatedTeams, updated),
-          constructorStandings: computeConstructorStandings(updatedTeams, updatedDrivers, updated),
+          // Capture each car's pace this round for the Car Development chart (the round's upgrade was
+          // already baked into `teams` when advanceRound rolled into the round).
+          carPaceHistory: [...carPaceHistory.filter((h) => h.round !== currentRound), { round: currentRound, paces: snapshotCarPaces(teams) }],
+          driverStandings: computeDriverStandings(updatedDrivers, teams, updated),
+          constructorStandings: computeConstructorStandings(teams, updatedDrivers, updated),
         })
       },
 
       advanceRound: () => {
-        const { currentRound, endSeason, year } = get()
+        const { currentRound, endSeason, year, teams, devPlans, allUpgradeEvents } = get()
         if (currentRound >= calendarForYear(year).length) {
           endSeason()
         } else {
-          set({ currentRound: currentRound + 1, phase: 'pre-race' })
+          // Deliver any car upgrades due for the round we're entering BEFORE its weekend runs, so the
+          // upgrade is on the car for qualifying and the race (not a round late). advanceRound is the
+          // single round-increment point, fired as the next weekend becomes ready — before loadFromSeason.
+          const newRound = currentRound + 1
+          const { upgradeEvents, updatedTeams, updatedDevPlans } =
+            applyUpgradeEvents(newRound, teams, devPlans, Math.random)
+          set({
+            currentRound: newRound,
+            phase: 'pre-race',
+            teams: updatedTeams,
+            devPlans: updatedDevPlans,
+            allUpgradeEvents: [...allUpgradeEvents, ...upgradeEvents],
+          })
         }
       },
 

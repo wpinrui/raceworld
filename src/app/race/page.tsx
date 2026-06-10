@@ -184,16 +184,15 @@ export default function RacePage() {
   const resultsForDisplay = phase === 'finished' ? computeResults() : []
   const selectedDriverId = godModeDriverId
 
-  // Team Manager: surface the pre-race upgrade reveal when the player team's upgrade is due this round
-  // and the outcome has been rolled. Shown once per upgrade (dismissal latches acknowledgedRound).
-  const playerPlan = season.teamManagerMode
-    ? season.devPlans.find((p) => p.teamId === season.playerTeamId)
+  // Team Manager: the player's upgrade for this round was delivered when the weekend began (advanceRound),
+  // recorded in allUpgradeEvents. Reveal it once per round, as early as the Friday (pre-qualifying) screen.
+  const deliveredUpgrade = season.teamManagerMode
+    ? season.allUpgradeEvents.find((e) => e.round === season.currentRound && e.teamId === season.playerTeamId)
     : undefined
   const showUpgradeReveal =
-    !!playerPlan &&
-    (phase === 'pre-race' || phase === 'lights') &&
-    playerPlan.nextUpgradeRound === season.currentRound &&
-    playerPlan.pendingPaceDelta !== undefined &&
+    !!deliveredUpgrade &&
+    phase !== 'racing' &&
+    phase !== 'finished' &&
     acknowledgedRound !== season.currentRound
 
   return (
@@ -316,10 +315,10 @@ export default function RacePage() {
         />
       )}
 
-      {showUpgradeReveal && playerPlan && (
+      {showUpgradeReveal && deliveredUpgrade && (
         <UpgradeRevealModal
-          paceDelta={playerPlan.pendingPaceDelta ?? 0}
-          failed={playerPlan.pendingFailed ?? false}
+          paceDelta={deliveredUpgrade.paceDelta}
+          failed={deliveredUpgrade.failed}
           onDismiss={() => setAcknowledgedRound(season.currentRound)}
         />
       )}
