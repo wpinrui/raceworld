@@ -15,6 +15,7 @@ export interface LapInput {
   carAheadLapTime: number | null
   circuitFlatModifier: number
   defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
+  noiseOverride?: number      // qualifying supplies its own noise model (more quali variation); races use the default
 }
 
 export interface LapResult {
