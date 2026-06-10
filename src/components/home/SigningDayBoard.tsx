@@ -113,24 +113,24 @@ function PlayerSigningsPanel({ draft, year, careers, driverStandings }: {
       {available.length > 0 ? (
         <div className="max-h-48 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
           {available.map((d) => (
-            <DriverTooltip
+            <button
               key={d.id}
-              driver={d}
-              year={year}
-              wdcPosition={wdcPosOf.get(d.id) ?? null}
-              wdcPoints={wdcPtsOf.get(d.id)}
-              career={careers[d.id]}
-              side="right"
+              onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
+              className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
             >
-              <button
-                onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
-                className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
+              <NationalityFlag code={d.nationality} />
+              <DriverTooltip
+                driver={d}
+                year={year}
+                wdcPosition={wdcPosOf.get(d.id) ?? null}
+                wdcPoints={wdcPtsOf.get(d.id)}
+                career={careers[d.id]}
+                side="right"
               >
-                <NationalityFlag code={d.nationality} />
                 <span className="text-sm text-[#FFFFFF] truncate flex-1">{d.name}</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
-              </button>
-            </DriverTooltip>
+              </DriverTooltip>
+              <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
+            </button>
           ))}
         </div>
       ) : (
