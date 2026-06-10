@@ -112,6 +112,7 @@ export function initRaceState(
       targetPitLap: initialPlan.targetPitLap,
       targetNextCompound: initialPlan.targetNextCompound,
       gap: qr.gridPosition === 1 ? 0 : GRID_SPACING,
+      lapsDown: 0,
       dsq: false,
     }
   })
@@ -282,9 +283,12 @@ export function simulateLap(
     // Clamp the rate-based guess to the bucket the pit wall actually reads — it can't believe the tyre
     // is fresher (or deader) than the visible bucket allows.
     const projectedCond = Math.max(0, Math.min(100, Math.max(bkt - 12.5, Math.min(bkt + 12.5, rateProj))))
+    // A lapped runner takes the flag when the leader finishes, so it only races to totalLaps - lapsDown.
+    // Plan its tyres to THAT distance (fewer laps to cover), never to a lap it has already passed.
+    const effectiveLaps = Math.max(state.currentLap, state.totalLaps - current.lapsDown)
     const plan = planStrategy(
       state.currentLap,
-      state.totalLaps,
+      effectiveLaps,
       projectedCond,
       current.currentTyre.compound,
       driver.smoothness,
@@ -480,6 +484,17 @@ export function simulateLap(
     return { ...d, gap }
   })
 
+  // Step 5b: Lapped-runner accounting — whole laps behind the leader, from the time deficit ÷ the leader's
+  // average lap. The engine still runs every car in lockstep; this is the illusion of lapping, and at the
+  // flag it credits a lapped car totalLaps - lapsDown laps (see buildRaceResults).
+  const leaderTotal = withGaps.find((d) => !d.retired)?.totalTime ?? 0
+  const leaderAvgLap = leaderTotal / Math.max(1, state.currentLap)
+  const withGapsAndLaps = leaderAvgLap <= 0
+    ? withGaps
+    : withGaps.map((d) =>
+        d.retired ? d : { ...d, lapsDown: Math.max(0, Math.floor((d.totalTime - leaderTotal) / leaderAvgLap)) },
+      )
+
   // Step 6: Generate commentary
   const driverNames: Record<string, string> = {}
   for (const driver of drivers) {
@@ -490,7 +505,7 @@ export function simulateLap(
   const newCommentary = generateCommentary(
     state.currentLap,
     prevStates,
-    withGaps,
+    withGapsAndLaps,
     driverNames,
     state.totalLaps,
     prevMoisture,
@@ -505,7 +520,7 @@ export function simulateLap(
     ...state,
     teamBeliefs,
     currentLap: nextLap,
-    drivers: withGaps,
+    drivers: withGapsAndLaps,
     commentary: [...state.commentary, ...newCommentary],
     phase: finished ? 'finished' : 'racing',
   }
