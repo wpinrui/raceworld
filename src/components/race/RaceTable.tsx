@@ -5,6 +5,7 @@ import type { Driver, Team, DriverRaceState } from '@/lib/sim/types'
 import type { DriverCareer } from '@/lib/news/engine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { DriverTooltip } from '@/components/world/DriverTooltip'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 import TyreIndicator from './TyreIndicator'
 
 interface RaceTableProps {
@@ -40,6 +41,7 @@ function formatLapTime(lapTimes: number[]): string {
 }
 
 export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, animate = true }: RaceTableProps) {
+  const highlight = useTeamHighlight()
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
 
@@ -138,6 +140,7 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                 key={ds.driverId}
                 ref={(el) => { if (el) rowRefs.current.set(ds.driverId, el); else rowRefs.current.delete(ds.driverId) }}
                 onClick={() => onSelectDriver?.(ds.driverId)}
+                style={highlight(driver?.teamId, team?.color)}
                 className={`border-b border-[#1a2030] text-[#FFFFFF] cursor-pointer ${
                   ds.driverId === selectedDriverId
                     ? 'bg-[#1a2d3a] border-l-2 border-l-[#00D9FF]'

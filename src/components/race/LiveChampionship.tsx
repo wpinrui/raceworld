@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronUp, ChevronDown, Minus } from 'lucide-react'
 import type { Driver, Team, DriverRaceState, DriverStanding, ConstructorStanding } from '@/lib/sim/types'
 import { getPoints } from '@/lib/sim/points'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 interface Props {
   states: DriverRaceState[]
@@ -35,6 +36,8 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
   for (const s of states) posById.set(s.driverId, s.retired ? null : s.position)
 
   const teamMap = new Map(teams.map((t) => [t.id, t]))
+  const driverTeam = new Map(drivers.map((d) => [d.id, d.teamId]))
+  const highlight = useTeamHighlight()
 
   // ── Live drivers' championship ──
   const driverBaselineRank = new Map(baselineDrivers.map((d, i) => [d.driverId, i]))
@@ -97,7 +100,8 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
         <table className="w-full border-collapse text-sm">
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.id} className="border-b border-[#1a2030]">
+              <tr key={r.id} className="border-b border-[#1a2030]"
+                style={highlight(tab === 'constructors' ? r.id : driverTeam.get(r.id), r.color)}>
                 <td className="py-1 pr-1 font-bold text-[#FFFFFF] w-5 text-right">{i + 1}</td>
                 <td className="py-1 px-1 w-8"><DeltaArrow delta={r.delta} /></td>
                 <td className="py-1 px-1">
