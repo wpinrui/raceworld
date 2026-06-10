@@ -160,7 +160,7 @@
       ],
       "midfield": [
         "\"{last} was a proper midfield racer. Tough to pass, good for every point {they} could get.\"",
-        "\"{last} knew what {their} car could do and extracted it every time. Never near the rostrum, but never a soft touch either.\""
+        "\"{last} knew what {their} car could do and extracted it every time. Hard to get past, hard to rattle.\""
       ],
       "footnote": [
         "\"{last} was clean and honest to race. You knew where {they} was, no surprises.\"",
@@ -292,20 +292,44 @@
   },
   "midfield": {
     "dek": [
-      "{starts} {starts_word}, {points} points, no podium: {name}, {era}.",
-      "{name} in {era}: solid, {points} points, never the rostrum.",
+      "{starts} {starts_word}, {points} points, {podium_tally}: {name}, {era}.",
+      "{name} in {era}: solid, {points} points, {podium_tally}.",
       "{starts} {starts_word} for {teams_list}: {name}, {era}.",
       "{name}: {era}, {points} points, {starts} {starts_word}."
     ],
     "lead": [
-      "{name} spent {era} in the midfield for {teams_list}: {starts} {starts_word}, {points} points, no podium.",
-      "Across {era}, {name} raced for {teams_list} in the points and the battles just behind the front: {starts} {starts_word}, {points} points, never a podium.",
-      "{name} logged {starts} {starts_word} across {era} for {teams_list}, collecting {points} points and racing in the midfield without ever reaching a podium."
+      "{name} spent {era} in the midfield for {teams_list}: {starts} {starts_word}, {points} points, {podium_tally}.",
+      "Across {era}, {name} raced for {teams_list} in the points and the battles just behind the front: {starts} {starts_word}, {points} points, {podium_tally}.",
+      "{name} logged {starts} {starts_word} across {era} for {teams_list} in the midfield, collecting {points} points and {podium_tally}."
     ],
     "conclusion": [
-      "As of {as_of}, {last} sits {stats_line}, {stature}, and not a single podium.",
-      "At {as_of}: {stats_line}, {stature}, and not a single podium.",
-      "The career total at {as_of}: {stats_line}, {stature}, and not a single podium."
+      "As of {as_of}, {last} sits {stats_line}, {stature}{podium_coda}.",
+      "At {as_of}: {stats_line}, {stature}{podium_coda}.",
+      "The career total at {as_of}: {stats_line}, {stature}{podium_coda}."
+    ]
+  },
+  "podiumTally": {
+    "zero": [
+      "no podium",
+      "never a podium",
+      "no rostrum"
+    ],
+    "one": [
+      "a lone podium",
+      "one podium",
+      "a single rostrum"
+    ],
+    "many": [
+      "{podiums} {podiums_word}",
+      "{podiums} {podiums_word} in all",
+      "{podiums} {podiums_word} to show for it"
+    ]
+  },
+  "podiumCoda": {
+    "zero": [
+      ", and not a single podium",
+      ", and never a rostrum to show for it",
+      ", and no podium across the lot"
     ]
   },
   "footnote": {
