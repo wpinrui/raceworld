@@ -153,15 +153,19 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
 
     const next = simulateLap(raceState, drivers, teams, selectedCircuit, year, merged)
 
-    // Consume a commanded PIT once the stop has landed (lastPitLap caught up) or the car is gone — it reverts
-    // to auto. HOLD persists until the player changes it (or fast-forward clears it).
+    // Once a commanded PIT has landed (lastPitLap caught up), keep manual control: fall back to HOLD, not
+    // auto — the player took the wheel, so don't hand the car back to the AI behind their back. A retired or
+    // missing car just clears. HOLD persists until the player changes it (or fast-forward clears it).
     let nextCommands = pitCommands
     for (const [driverId, cmd] of Object.entries(pitCommands)) {
       if (cmd === 'auto' || cmd === 'hold') continue
       const ds = next.drivers.find((d) => d.driverId === driverId)
-      if (!ds || ds.retired || ds.lastPitLap === lapBeing) {
+      if (!ds || ds.retired) {
         if (nextCommands === pitCommands) nextCommands = { ...pitCommands }
         delete nextCommands[driverId]
+      } else if (ds.lastPitLap === lapBeing) {
+        if (nextCommands === pitCommands) nextCommands = { ...pitCommands }
+        nextCommands[driverId] = 'hold'
       }
     }
 
