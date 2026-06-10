@@ -26,7 +26,7 @@ export function RenewalDecisionPanel() {
     useSeasonStore.getState().decidePlayerRenewal(driverId, offer, terms[driverId] ?? 1)
 
   return (
-    <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
+    <div className="shrink-0 rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
       <p className="px-5 py-2.5 border-b border-[#2A3142] text-[10px] uppercase tracking-widest text-[#FFFFFF]">
         Contract Renewals
       </p>

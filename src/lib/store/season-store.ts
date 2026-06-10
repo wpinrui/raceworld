@@ -837,6 +837,15 @@ export const useSeasonStore = create<SeasonStore>()(
           })
         }
 
+        // Team Manager: a brand-new player team enters as the strictly slowest car on the grid (exempt from
+        // the historical pace assignment), and stays slowest even if real-world teams join the same year.
+        // Only on its inaugural rollover (when it's actually among the additions); after that it develops.
+        const { teamManagerMode: tmModeRollover, playerTeamId: tmTeamId } = get()
+        if (tmModeRollover && tmTeamId && additions.some((t) => t.id === tmTeamId)) {
+          const slowestOther = nextTeams.reduce((m, t) => (t.id === tmTeamId ? m : Math.min(m, t.carPace)), 75)
+          nextTeams = nextTeams.map((t) => (t.id === tmTeamId ? { ...t, carPace: Math.max(1, slowestOther - 5) } : t))
+        }
+
         // 4. Build the partial summary; later phases fill in their slices.
         const summary: EndOfSeasonSummary = {
           seasonYear: year,

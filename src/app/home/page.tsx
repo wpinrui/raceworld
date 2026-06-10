@@ -40,7 +40,7 @@ export default function HomePage() {
           {/* Left: the renewal decision (when pending) sits at the top, then the off-season stage review
               (off-season only) above the headlines feed. */}
           <div className="flex flex-col gap-3 min-h-0">
-            <div className="shrink-0"><RenewalDecisionPanel /></div>
+            <RenewalDecisionPanel />
             {showLeftPanel && <div className="flex-1 min-h-0"><PunditPredictions /></div>}
             <div className="flex-1 min-h-0"><HeadlinesPanel /></div>
           </div>
