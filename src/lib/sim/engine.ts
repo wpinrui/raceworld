@@ -39,7 +39,8 @@ const OVERTAKE_SENS = 0.12    // per-lap pass chance per second of clean-air pac
 const MAX_CONTEST = 0.5       // cap on the per-lap pass chance from within range (no certain passes)
 const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
 const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
-const HOLD_GAP = 0.3          // s: a car that can't get by harries no closer than this, tyres cooking
+const HOLD_GAP = 0.3          // s: a car that can't get by harries around this far behind, tyres cooking
+const HOLD_JITTER = 0.3       // s: spread on the harry distance so a train isn't a column of identical +0.300s
 
 export function computeLapTime(input: LapInput): LapResult {
   const {
@@ -141,6 +142,9 @@ export function computeLapTime(input: LapInput): LapResult {
   //      faster car doesn't simply breeze by. It harries in the dirty air until a chance comes off.
   const blowPast = wouldGap < -PASS_MARGIN && paceEdge > 0
   const inRange = gapToCarAhead <= STRIKE_RANGE && paceEdge > 0
+  // Where a car that can't pass settles: HOLD_GAP with per-lap jitter, so a train shows living, varied
+  // intervals (+0.27, +0.41, +0.19…) instead of every car pinned to an identical +0.300.
+  const harryGap = HOLD_GAP + (Math.random() - 0.5) * HOLD_JITTER
   if (blowPast || inRange) {
     // Crash roll (issue #60), driven by both drivers' consistency (f(c) = 2e-6·(100-c)²).
     if (input.defenderDriver) {
@@ -159,15 +163,15 @@ export function computeLapTime(input: LapInput): LapResult {
       // A completed pass costs both cars time: the attacker a little, the defender more.
       return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
     }
-    // No way through this lap: hold station in the dirty air, no closer than HOLD_GAP (harrying, tyres cooking).
-    const heldGap = Math.max(HOLD_GAP, wouldGap)
+    // No way through this lap: hold station in the dirty air, no closer than the (jittered) harry gap.
+    const heldGap = Math.max(harryGap, wouldGap)
     return { lapTime: carAheadLapTime + heldGap - gapToCarAhead, overtook: false, freeAir }
   }
 
   // Closing from beyond striking range and this pace would overshoot the car ahead → arrive right behind
   // instead (no pass this lap; it gets its chances next lap, now in range).
   if (wouldGap < CONTEST_GAP) {
-    return { lapTime: carAheadLapTime + HOLD_GAP - gapToCarAhead, overtook: false, freeAir }
+    return { lapTime: carAheadLapTime + harryGap - gapToCarAhead, overtook: false, freeAir }
   }
 
   // Approaching slowly, or sitting at the dirty-air equilibrium (a train).
