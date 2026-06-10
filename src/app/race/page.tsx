@@ -205,6 +205,7 @@ export default function RacePage() {
                 currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
+                animate={speed !== 4}
               />
             </div>
           )}
