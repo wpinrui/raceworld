@@ -7,7 +7,7 @@ const RACES = 24, SEASONS = 4000, CONS = 80, LAP1 = 0.35
 const PACE_W = 0.03, FORM_W = 0.02
 function bm() { const u1 = Math.max(1e-10, rng()); const u2 = rng(); return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) }
 const rollForm = () => Math.min(10, Math.max(0, 5 + 1.8 * bm()))
-// mirrors qualifyingNoise() in qualifying.ts; `baseFactor` is the tunable baseline-width knob (shipped 0.6)
+// mirrors qualifyingNoise() in qualifying.ts; `baseFactor` is the tunable baseline-width knob (shipped 0.75)
 function qNoise(con: number, baseFactor: number): number {
   const r = 1.2 - 0.01 * con
   return (rng() * 2 - 1) * baseFactor * r + (rng() < 0.25 * r ? 0.5 + rng() * 0.5 : 0)
