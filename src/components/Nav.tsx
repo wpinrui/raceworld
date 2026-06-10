@@ -157,7 +157,8 @@ export default function Nav() {
     if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'lights' } })
   }
   function handleQuit() {
-    useRaceStore.getState().resetSession()
+    // Keep the weekend's state (raceState) so you can resume where you left off. Only a normal End Race
+    // (commitCurrentRace) or an explicit Restart Weekend clears it.
     setMenuOpen(false)
     router.push('/home')
   }
