@@ -499,9 +499,9 @@ export const useSeasonStore = create<SeasonStore>()(
       setPlayerUpgrade: (cycle, packageName) => {
         const { playerTeamId, devPlans, teams, currentRound } = get()
         // Team Manager talents bend the player's upgrade roll: Chief Engineer guarantees no failure, Chief
-        // Aerodynamicist adds 0.5 car pace per race of development. Applied when the upgrade is commissioned.
+        // Aerodynamicist adds 1.25 car pace per race of development. Applied when the upgrade is commissioned.
         const talents = useSettingsStore.getState().talents
-        const upgradeOpts = { noFail: !!talents['chief-engineer'], paceBonusPerRace: talents['chief-aero'] ? 0.5 : 0 }
+        const upgradeOpts = { noFail: !!talents['chief-engineer'], paceBonusPerRace: talents['chief-aero'] ? 1.25 : 0 }
         set({ devPlans: applyPlayerCycle(devPlans, teams, playerTeamId, cycle, currentRound, Math.random, packageName, upgradeOpts) })
       },
 
