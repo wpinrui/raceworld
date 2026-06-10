@@ -5,7 +5,6 @@ import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRetainedState } from '@/lib/ui/retained-state'
 import { useScrollRestore } from '@/lib/ui/use-scroll-restore'
 import { useParams } from 'next/navigation'
-import Link from 'next/link'
 import { Pencil, Check } from 'lucide-react'
 import { useTeamCareer, useEntityHonours } from '@/lib/world/hooks'
 import { useSeasonStore } from '@/lib/store/season-store'
@@ -16,7 +15,8 @@ import { OverallRing } from '@/components/setup/OverallRing'
 import { DriverLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
-import { ChampPill } from '@/components/world/pills'
+import { ChampRank } from '@/components/world/pills'
+import { ResultCell } from '@/components/standings/ResultCell'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
 import { UpgradeOverride } from '@/components/world/UpgradeOverride'
 import { DevCyclePicker } from '@/components/world/DevCyclePicker'
@@ -177,7 +177,6 @@ export default function TeamPage() {
                             <p className="text-2xl font-bold tabular-nums text-[#FFFFFF]">{current.wins}</p>
                             <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Wins</p>
                           </div>
-                          <Link href={`/world/team/${id}/${current.year}`} className="ml-auto text-xs text-[#FFFFFF] hover:text-[#00D9FF]">race by race →</Link>
                         </div>
                       </Panel>
                     )}
@@ -193,48 +192,53 @@ export default function TeamPage() {
                 </div>
               )}
 
-              {tab === 'seasons' && (
-                <Panel title="History" flush>
-                  {career.seasons.length === 0 ? (
-                    <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
-                            <th className="text-left py-2 px-4 font-medium">Season</th>
-                            <th className="text-center py-2 px-3 font-medium">Pos</th>
-                            <th className="text-right py-2 px-3 font-medium">Points</th>
-                            <th className="text-right py-2 px-3 font-medium">Wins</th>
-                            <th className="text-left py-2 px-4 font-medium">Drivers</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {career.seasons.map((s) => (
-                            <tr key={s.year} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
-                              <td className="py-2 px-4 tabular-nums">
-                                <Link href={`/world/team/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
-                                {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
-                              </td>
-                              <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.inProgress ? career.currentPosition : s.finalPosition} /></span></td>
-                              <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.points}</td>
-                              <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.wins}</td>
-                              <td className="py-2 px-4 text-[#FFFFFF]">
-                                {s.drivers.map((d, i) => (
-                                  <span key={d.driverId}>
-                                    {i > 0 && ', '}
-                                    <DriverLink id={d.driverId} className="text-[#FFFFFF]">{d.driverName}</DriverLink>
-                                  </span>
-                                ))}
-                              </td>
+              {tab === 'seasons' && (() => {
+                const maxRounds = Math.max(1, ...career.seasons.flatMap((s) => s.drivers.map((d) => d.results.length)))
+                return (
+                  <Panel title="History" flush>
+                    {career.seasons.length === 0 ? (
+                      <p className="px-5 py-4 text-sm text-[#FFFFFF]">No seasons yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
+                          <thead>
+                            <tr className="text-[#FFFFFF] text-xs uppercase tracking-wide border-b border-[#2A3142]">
+                              <th className="text-left py-2 px-4 font-medium sticky left-0 bg-[#1E2431]">Year</th>
+                              <th className="text-left py-2 px-3 font-medium">Driver</th>
+                              {Array.from({ length: maxRounds }, (_, i) => (
+                                <th key={i} className="text-center py-2 px-0.5 w-9 text-[10px] tabular-nums font-medium">{i + 1}</th>
+                              ))}
+                              <th className="text-right py-2 px-4 font-medium">Points</th>
+                              <th className="text-center py-2 px-3 font-medium">Pos</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Panel>
-              )}
+                          </thead>
+                          <tbody>
+                            {[...career.seasons].sort((a, b) => a.year - b.year).map((s) =>
+                              s.drivers.map((d, di) => (
+                                <tr key={`${s.year}-${d.driverId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
+                                  {di === 0 && (
+                                    <td rowSpan={s.drivers.length} className="py-2 px-4 tabular-nums font-medium align-middle sticky left-0 bg-[#1E2431]">{s.year}</td>
+                                  )}
+                                  <td className="py-2 px-3 whitespace-nowrap"><DriverLink id={d.driverId} className="text-[#FFFFFF]">{d.driverName}</DriverLink></td>
+                                  {Array.from({ length: maxRounds }, (_, i) => (
+                                    <ResultCell key={i} position={i < d.results.length ? d.results[i] : undefined} year={s.year} code={calendarForYear(s.year)[i]?.code} />
+                                  ))}
+                                  {di === 0 && (
+                                    <td rowSpan={s.drivers.length} className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF] align-middle">{s.points}</td>
+                                  )}
+                                  {di === 0 && (
+                                    <td rowSpan={s.drivers.length} className="py-2 px-3 text-center align-middle"><ChampRank position={s.inProgress ? career.currentPosition : s.finalPosition} /></td>
+                                  )}
+                                </tr>
+                              )),
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </Panel>
+                )
+              })()}
             </>
           )
         })()}

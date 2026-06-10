@@ -30,7 +30,7 @@ export default function DriverSeasonPage() {
           <>
             <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center justify-between gap-4 flex-wrap">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">{detail.year} Season{detail.inProgress && <span className="ml-1.5 text-[#00D9FF]">LIVE</span>}</p>
+                <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">{detail.year} Season</p>
                 <h1 className="font-display text-2xl tracking-wider uppercase mt-1">
                   <DriverLink id={detail.driverId} className="text-[#FFFFFF]">{detail.driverName}</DriverLink>
                 </h1>

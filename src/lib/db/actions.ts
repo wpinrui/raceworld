@@ -16,7 +16,6 @@ import {
   getDriverFinishInSeason,
   getTeamTotals,
   getTeamCareerBySeason,
-  getSeasonDriversForTeam,
   getMostRecentTeamName,
   getDistinctTeamIds,
   getAllSeasonChampions,
@@ -196,7 +195,10 @@ export async function actionGetTeamCareer(teamId: string): Promise<TeamCareer> {
   const seasons: TeamSeason[] = rows.map((r) => ({
     year: r.seasonYear, finalPosition: r.finalPosition, points: r.points,
     wins: r.wins, podiums: r.podiums,
-    drivers: getSeasonDriversForTeam(r.seasonId, teamId),
+    // The season's per-round results matrix, keyed by driver (same source the driver career uses).
+    drivers: getSeasonStandings(r.seasonId).driverStandings
+      .filter((d) => d.teamId === teamId)
+      .map((d) => ({ driverId: d.driverId, driverName: d.driverName, results: d.results })),
     inProgress: false,
   }))
   return {

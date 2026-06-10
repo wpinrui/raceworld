@@ -112,7 +112,7 @@ export interface TeamSeason {
   points: number
   wins: number
   podiums: number
-  drivers: { driverId: string; driverName: string }[]
+  drivers: { driverId: string; driverName: string; results: (number | null)[] }[] // per-round finish (null = DNF)
   inProgress: boolean
 }
 

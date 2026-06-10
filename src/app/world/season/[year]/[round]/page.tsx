@@ -36,7 +36,6 @@ export default function RaceClassificationPage() {
                 <h1 className="font-display text-2xl tracking-wider uppercase">
                   {classification.circuitName}
                 </h1>
-                {classification.inProgress && <span className="text-[10px] text-[#00D9FF]">LIVE</span>}
               </div>
               <p className="text-sm text-[#FFFFFF] ml-3.5">
                 {classification.year} · Round {classification.round}

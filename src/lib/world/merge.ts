@@ -198,9 +198,13 @@ export function mergeTeamCareer(db: TeamCareer, store: LiveStore): TeamCareer {
   const ci = store.constructorStandings.findIndex((s) => s.teamId === live.id)
 
   const liveSeason: TeamSeason = {
-    year: store.year, finalPosition: null, points,
+    year: store.year, finalPosition: ci >= 0 ? ci + 1 : null, points,
     wins, podiums,
-    drivers: squad.map((d) => ({ driverId: d.id, driverName: d.name })),
+    drivers: squad.map((d) => ({
+      driverId: d.id,
+      driverName: d.name,
+      results: store.driverStandings.find((s) => s.driverId === d.id)?.results ?? [],
+    })),
     inProgress: true,
   }
 
