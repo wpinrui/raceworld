@@ -15,6 +15,7 @@ export interface LapInput {
   carAheadLapTime: number | null
   circuitFlatModifier: number
   defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
+  noiseOverride?: number      // qualifying supplies its own noise model (more quali variation); races use the default
 }
 
 export interface LapResult {
@@ -78,7 +79,9 @@ export function computeLapTime(input: LapInput): LapResult {
   // 12. noise: a per-lap time PENALTY scaled by consistency (issue #59). Uniform over
   //     [0, 1.2 - 0.01*c]: c=90 -> 0-0.30s (the old flat range), c=75 -> 0-0.45s, c=65 -> 0-0.55s.
   //     Always a slow-down, so low consistency is systematically slower, not just noisier.
-  const noise = Math.random() * (1.2 - 0.01 * driver.consistency)
+  //     Qualifying supplies its own symmetric + compromised-lap model via noiseOverride (can be 0 or
+  //     negative, so this must be ?? not ||); races leave it undefined and use the default.
+  const noise = input.noiseOverride ?? Math.random() * (1.2 - 0.01 * driver.consistency)
 
   // 13. rawTime
   const flatModifier = circuitFlatModifier

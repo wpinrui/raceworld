@@ -17,6 +17,23 @@ function selectQualifyingTyre(): TyreCompound {
   return 'soft' // M1: always dry, always softs in qualifying
 }
 
+// Out-lap penalty: the first qualifying run is a touch slower than the second (warm-up / track evolution),
+// so lap 1 is generated exactly like lap 2 plus this offset. Best-of-2 still counts, so lap 1 mostly acts
+// as a banker the driver falls back on only if they botch lap 2.
+const LAP_ONE_PENALTY = 0.35
+
+// Qualifying gets its own noise model (issue: more teammate variation). A symmetric baseline keeps near-
+// equal teammates close to a coin-flip, and an occasional one-sided "compromised lap" (a mistake / traffic
+// / yellow) lets even a much faster driver drop the odd session. Both scale off the same consistency
+// spread the race uses (R = 1.2 - 0.01*consistency): at consistency 80, ~±0.30s baseline plus a 10% chance
+// of losing 0.5–1.0s.
+function qualifyingNoise(consistency: number, rng: () => number = Math.random): number {
+  const r = 1.2 - 0.01 * consistency
+  const baseline = (rng() * 2 - 1) * 0.75 * r // symmetric: tight for close teammates
+  const compromisedLap = rng() < 0.25 * r ? 0.5 + rng() * 0.5 : 0 // occasional botched lap: 0.5–1.0s, one-sided
+  return baseline + compromisedLap
+}
+
 function simulateQualifyingLap(
   driver: Driver,
   team: Team,
@@ -36,6 +53,7 @@ function simulateQualifyingLap(
     weather, compoundDeltas: DEFAULT_COMPOUND_DELTAS,
     gapToCarAhead: Infinity, carAheadLapTime: null,
     circuitFlatModifier: circuit.flatModifier,
+    noiseOverride: qualifyingNoise(driver.consistency),
   })
 
   return result.lapTime
@@ -84,7 +102,7 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, form)
+    const lap1 = simulateQualifyingLap(driver, team, circuit, form) + LAP_ONE_PENALTY
     const lap2 = simulateQualifyingLap(driver, team, circuit, form)
     const best = Math.min(lap1, lap2)
 
@@ -125,7 +143,7 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, form)
+    const lap1 = simulateQualifyingLap(driver, team, circuit, form) + LAP_ONE_PENALTY
     const lap2 = simulateQualifyingLap(driver, team, circuit, form)
     const best = Math.min(lap1, lap2)
 
@@ -165,7 +183,7 @@ export function runQualifying(
     const team = teamMap.get(driver.teamId)!
     const form = forms[driverId] ?? 5
 
-    const lap1 = simulateQualifyingLap(driver, team, circuit, form)
+    const lap1 = simulateQualifyingLap(driver, team, circuit, form) + LAP_ONE_PENALTY
     const lap2 = simulateQualifyingLap(driver, team, circuit, form)
     const best = Math.min(lap1, lap2)
 

@@ -260,10 +260,10 @@ export interface TeamDevPlan {
   teamId: string
   cycleLength: number          // 3–6 races per upgrade
   nextUpgradeRound: number
-  fundingTier: FundingTier
-  cumulativePenalty: number
+  fundingTier: FundingTier      // funding tier (1-4); now informational — drives the reshuffle nudge, not upgrade size
+  cumulativePenalty: number     // legacy field, always 0 since the tier penalty was replaced by catch-up upgrades
   // Pre-rolled outcome of the upgrade due at nextUpgradeRound, so the player can
-  // view and god-mode edit it before it lands. The penalty is already baked in,
+  // view and god-mode edit it before it lands. The catch-up bonus is already baked in,
   // so pendingPaceDelta is the final pace gain that will be applied.
   // Optional: saves serialized before this field existed won't have it (migrated
   // on rehydrate; applyUpgradeEvents also rolls lazily if still missing).

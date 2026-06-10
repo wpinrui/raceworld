@@ -879,12 +879,13 @@ export const useSeasonStore = create<SeasonStore>()(
 
       // Phase 4: car reshuffle for next season, revealed obliquely via a test session.
       runPreSeasonTesting: () => {
-        const { pendingNextSeasonState, endOfSeasonSummary } = get()
+        const { pendingNextSeasonState, endOfSeasonSummary, constructorHistory } = get()
         if (!pendingNextSeasonState || !endOfSeasonSummary) return
         const { drivers, teams } = pendingNextSeasonState
 
+        const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const { updatedTeams: reshuffledTeams, oldPaces, newPaces } =
-          computeCarReshuffle(teams, Math.random)
+          computeCarReshuffle(teams, fundingTiers, Math.random)
         const preSeasonTest = runPreSeasonTest(drivers, reshuffledTeams, TEST_CIRCUIT, Math.random)
 
         set({
@@ -997,7 +998,8 @@ export const useSeasonStore = create<SeasonStore>()(
         const priorSeasonDriverMediaScores = Object.fromEntries(
           (get().endOfSeasonSummary?.driverMediaScores ?? []).map((s) => [s.driverId, s.score]),
         )
-        const { updatedTeams: teams } = computeCarReshuffle(pendingNextSeasonState.teams, Math.random)
+        const fundingTiers = computeFundingTiers(pendingNextSeasonState.teams, constructorHistory)
+        const { updatedTeams: teams } = computeCarReshuffle(pendingNextSeasonState.teams, fundingTiers, Math.random)
         const pendingDrivers = pendingNextSeasonState.drivers
         const existingIds = new Set(pendingDrivers.map((d) => d.id))
         let topUp: Driver[]
@@ -1008,7 +1010,7 @@ export const useSeasonStore = create<SeasonStore>()(
           topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
         }
         const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
-        const devPlans = initDevPlans(teams, computeFundingTiers(teams, constructorHistory), Math.random)
+        const devPlans = initDevPlans(teams, fundingTiers, Math.random)
         set({
           phase: 'pre-race',
           year: newYear,
@@ -1133,9 +1135,12 @@ export const useSeasonStore = create<SeasonStore>()(
         // plan's pre-rolled pending upgrade so the override UI always has a value.
         if (!state.pendingGridChanges) state.pendingGridChanges = { additions: [], removals: [] }
         if (state.devPlans) {
+          const teamsForDeficit = state.teams ?? []
+          const leaderPace = teamsForDeficit.length ? Math.max(...teamsForDeficit.map((t) => t.carPace)) : 75
           state.devPlans = state.devPlans.map((p) => {
             if (p.pendingPaceDelta !== undefined && p.pendingFailed !== undefined) return p
-            const rolled = rollUpgrade(p.cycleLength, p.fundingTier, Math.random)
+            const carPace = teamsForDeficit.find((t) => t.id === p.teamId)?.carPace ?? leaderPace
+            const rolled = rollUpgrade(p.cycleLength, leaderPace - carPace, Math.random)
             return { ...p, pendingPaceDelta: rolled.paceDelta, pendingFailed: rolled.failed }
           })
         }

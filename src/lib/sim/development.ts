@@ -1,13 +1,21 @@
 import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeasonRecord } from './types'
 import { sampleNormal } from './rng-utils'
 
-// Per-race funding penalty (subtracted from the upgrade delta as penalty × cycleLength).
-const TIER_PENALTY_PER_RACE: Record<FundingTier, number> = { 1: 0, 2: 0.1, 3: 0.15, 4: 0.2 }
-
-// 3-race cycle: median +3, Q1 +1.5, Q3 +4.5. For a normal curve Q1 = μ − 0.6745σ,
-// so σ = (3 − 1.5) / 0.6745 ≈ 2.224.
+// 3-race cycle base gain: median +3, Q1 +1.5, Q3 +4.5. For a normal curve Q1 = μ − 0.6745σ,
+// so σ = (3 − 1.5) / 0.6745 ≈ 2.224. This is the gain for a car already ON the pace.
 const BASE_MEDIAN = 3
 const BASE_SIGMA = 1.5 / 0.6745
+
+// Catch-up development: a car's expected upgrade grows with how far it sits BEHIND the fastest car
+// (deficit in pace points), so slower teams gain more and the field converges over a season. Replaces
+// the old funding-tier penalty. 0.125 closes a 1.8s opening spread to ~1.15s by season end (10-team,
+// 24-round; see scripts/catchup-sim.ts).
+const CATCHUP_PER_POINT = 0.125
+
+// Financial tier's nudge in the end-of-season reshuffle: a small per-tier bonus to the sort so richer
+// teams (tier 1) drift up the order. At 0.4 the tier1↔tier4 swing is worth ~1.2 grid slots — enough to
+// claw back a one-place on-track result, not a two-place one. Tier only TILTS the jitter, never dictates.
+const FUNDING_TIER_STEP = 0.4
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
@@ -17,20 +25,20 @@ function randomCycleLength(rng: () => number): number {
   return Math.floor(rng() * 4) + 3 // 3–6
 }
 
-// Roll the outcome of a single upgrade ahead of time so the player can inspect and
-// god-mode edit it before it lands. The funding-tier penalty is baked in, so the
-// returned paceDelta is the final pace gain (clamped ≥ 0). 5% chance of a total
+// Roll the outcome of a single upgrade ahead of time so the player can inspect and god-mode edit it
+// before it lands. `deficit` is the car's pace points behind the current fastest car: a bigger deficit
+// adds a bigger catch-up bonus, so the returned paceDelta is the final pace gain. 5% chance of a total
 // failure (no benefit at all).
 export function rollUpgrade(
   cycleLength: number,
-  fundingTier: FundingTier,
+  deficit: number,
   rng: () => number,
 ): { paceDelta: number; failed: boolean } {
   if (rng() < 0.05) return { paceDelta: 0, failed: true }
   const scale = Math.pow(1.05, cycleLength - 3)
   const raw = Math.max(0, sampleNormal(BASE_MEDIAN, BASE_SIGMA, rng)) * scale
-  const penalty = TIER_PENALTY_PER_RACE[fundingTier] * cycleLength
-  return { paceDelta: round1(Math.max(0, raw - penalty)), failed: false }
+  const catchUp = Math.max(0, deficit) * CATCHUP_PER_POINT
+  return { paceDelta: round1(raw + catchUp), failed: false }
 }
 
 export function computeFundingTiers(
@@ -98,11 +106,13 @@ export function initDevPlans(
   tiers: Map<string, FundingTier>,
   rng: () => number,
 ): TeamDevPlan[] {
-  // Counter starts in Australia (round 1); the first upgrade lands cycleLength races later.
+  // Counter starts in Australia (round 1); the first upgrade lands cycleLength races later. The catch-up
+  // bonus is measured against the fastest car, so the cars further back pre-roll bigger gains.
+  const leaderPace = Math.max(...teams.map((t) => t.carPace))
   return teams.map((team) => {
     const cycleLength = randomCycleLength(rng)
     const fundingTier = tiers.get(team.id) ?? 2
-    const pending = rollUpgrade(cycleLength, fundingTier, rng)
+    const pending = rollUpgrade(cycleLength, leaderPace - team.carPace, rng)
     return {
       teamId: team.id,
       cycleLength,
@@ -125,34 +135,37 @@ export function applyUpgradeEvents(
 ): { upgradeEvents: DevUpgradeEvent[]; updatedTeams: Team[]; updatedDevPlans: TeamDevPlan[] } {
   const upgradeEvents: DevUpgradeEvent[] = []
   const teamMap = new Map(teams.map((t) => [t.id, { ...t }]))
+  const leaderPace = () => Math.max(...[...teamMap.values()].map((t) => t.carPace))
 
   const updatedDevPlans = devPlans.map((plan) => {
     if (round !== plan.nextUpgradeRound) return plan
 
-    // Deliver the upgrade rolled ahead of time (and possibly god-mode edited).
-    // Saves from before pre-rolling won't have it — roll lazily as a fallback.
+    const team = teamMap.get(plan.teamId)
+
+    // Deliver the upgrade rolled ahead of time (and possibly god-mode edited). Saves from before
+    // pre-rolling won't have it — roll lazily as a fallback, against the current pace deficit.
     const prerolled = plan.pendingPaceDelta === undefined || plan.pendingFailed === undefined
-      ? rollUpgrade(plan.cycleLength, plan.fundingTier, rng)
+      ? rollUpgrade(plan.cycleLength, leaderPace() - (team?.carPace ?? 75), rng)
       : { paceDelta: plan.pendingPaceDelta, failed: plan.pendingFailed }
     const failed = prerolled.failed
     const paceDelta = failed ? 0 : prerolled.paceDelta
 
     upgradeEvents.push({ teamId: plan.teamId, round, paceDelta, failed })
 
-    const team = teamMap.get(plan.teamId)
     if (team && paceDelta > 0) {
       team.carPace = round1(team.carPace + paceDelta)
       teamMap.set(plan.teamId, team)
     }
 
-    // Pick a fresh cycle for the next upgrade and pre-roll its outcome.
+    // Pick a fresh cycle for the next upgrade and pre-roll its outcome against the freshly-updated
+    // deficit, so a car that has caught up rolls a smaller catch-up next time (it self-limits).
     const nextCycle = randomCycleLength(rng)
-    const nextPending = rollUpgrade(nextCycle, plan.fundingTier, rng)
+    const nextPending = rollUpgrade(nextCycle, leaderPace() - (team?.carPace ?? 75), rng)
     return {
       ...plan,
       cycleLength: nextCycle,
       nextUpgradeRound: plan.nextUpgradeRound + nextCycle,
-      cumulativePenalty: plan.cumulativePenalty + TIER_PENALTY_PER_RACE[plan.fundingTier] * plan.cycleLength,
+      cumulativePenalty: 0,
       pendingPaceDelta: nextPending.paceDelta,
       pendingFailed: nextPending.failed,
     }
@@ -165,10 +178,12 @@ export function applyUpgradeEvents(
   }
 }
 
-// End of season: number teams by car pace (fastest = 1), add a Uniform(−1.5, +3) modifier
-// to that rank, re-rank by the total (smallest = best), then redistribute 75/70/65…
+// End of season: number teams by car pace (fastest = 1), add a Uniform(−1.5, +3) modifier to that rank
+// PLUS a small financial-tier nudge (richer teams drift up), re-rank by the total (smallest = best),
+// then redistribute 75/70/65… Tier only tilts the existing jitter; it does not dictate the order.
 export function computeCarReshuffle(
   teams: Team[],
+  tiers: Map<string, FundingTier>,
   rng: () => number,
 ): { updatedTeams: Team[]; oldPaces: Record<string, number>; newPaces: Record<string, number> } {
   const oldPaces: Record<string, number> = {}
@@ -177,7 +192,7 @@ export function computeCarReshuffle(
   const byPace = [...teams].sort((a, b) => b.carPace - a.carPace)
   const scored = byPace.map((t, i) => ({
     id: t.id,
-    total: (i + 1) + (rng() * 4.5 - 1.5), // rank + Uniform(−1.5, +3)
+    total: (i + 1) + (rng() * 4.5 - 1.5) + (tiers.get(t.id) ?? 2) * FUNDING_TIER_STEP, // rank + jitter + tier nudge
   }))
   scored.sort((a, b) => a.total - b.total)
 
