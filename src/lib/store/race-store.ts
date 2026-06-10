@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import type { Driver, Team, Circuit, RaceState, GodModeAction, SimSpeed } from '@/lib/sim/types'
+import type { Driver, Team, Circuit, RaceState, GodModeAction, SimSpeed, TyreCompound } from '@/lib/sim/types'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
+import { computeTyreLife } from '@/lib/sim/tyres'
 import { runQualifying } from '@/lib/sim/qualifying'
 import { shownStats } from '@/lib/sim/progression'
 import { useSeasonStore } from './season-store'
@@ -35,6 +36,7 @@ interface RaceStore {
   loadFromSeason: (drivers: Driver[], teams: Team[], circuit: Circuit) => void
   setGodModeDriver: (driverId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
+  setStartingTyre: (driverId: string, compound: TyreCompound) => void // pre-race: choose a car's grid tyre
   setStrategyNoise: (n: number) => void
   initSession: () => void
   tickLap: (godModeActions?: GodModeAction[]) => void
@@ -75,6 +77,26 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set((state) => ({
       forms: { ...state.forms, [driverId]: Math.min(10, Math.max(0, value)) },
     }))
+  },
+
+  // Pre-race only: put a driver on a fresh set of the chosen compound for the start, recomputing its life
+  // from the race's base tyre wear and the driver's smoothness (same maths as a pit stop).
+  setStartingTyre: (driverId, compound) => {
+    set((state) => {
+      const { raceState, selectedCircuit } = state
+      if (!raceState || raceState.phase !== 'pre-race' || !selectedCircuit) return state
+      const driver = state.drivers.find((d) => d.id === driverId)
+      if (!driver) return state
+      const maxLifeLaps = computeTyreLife(raceState.tyreBaseLife[compound], driver.smoothness, selectedCircuit.laps)
+      return {
+        raceState: {
+          ...raceState,
+          drivers: raceState.drivers.map((ds) =>
+            ds.driverId === driverId ? { ...ds, currentTyre: { compound, condition: 100, maxLifeLaps } } : ds,
+          ),
+        },
+      }
+    })
   },
 
   setStrategyNoise: (n) => set({ strategyNoise: Math.min(1, Math.max(0, n)) }),

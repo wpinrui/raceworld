@@ -21,6 +21,7 @@ import { PreRacePanel } from '@/components/race/PreRacePanel'
 import { PostRacePanel } from '@/components/race/PostRacePanel'
 import { SpeedBar } from '@/components/race/SpeedBar'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
+import { StartingTyrePanel } from '@/components/race/StartingTyrePanel'
 import { QualifyingPanel } from '@/components/race/QualifyingPanel'
 import { TrackMap } from '@/components/race/TrackMap'
 import { UpgradeRevealModal } from '@/components/race/UpgradeRevealModal'
@@ -279,6 +280,8 @@ export default function RacePage() {
                     selectedDriverId={selectedDriverId ?? drivers[0]?.id ?? ''}
                     onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
                   />
+                ) : raceState && phase === 'pre-race' && season.teamManagerMode ? (
+                  <StartingTyrePanel />
                 ) : (
                   <div className="flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-3">
