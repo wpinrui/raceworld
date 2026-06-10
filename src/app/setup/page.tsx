@@ -337,7 +337,9 @@ export default function SetupPage() {
           </div>
         )}
 
-        <div className="space-y-6">
+        {/* In Team Manager mode the grid is rebuilt by the simulated history + your team choice, so editing
+            it here is moot — hide the roster at setup (it still drives the live Driver Market once playing). */}
+        <div className={`space-y-6 ${teamManager && !isActive ? 'hidden' : ''}`}>
           {driversByTeam.map(({ team, drivers: teamDrivers }) => (
             <div key={team.id} className="rounded-xl bg-[#1E2431] overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
@@ -381,7 +383,7 @@ export default function SetupPage() {
         </div>
 
         {/* Free agents */}
-        {freeAgents.length > 0 && (
+        {freeAgents.length > 0 && !(teamManager && !isActive) && (
           <div className="mt-6 rounded-xl bg-[#1E2431] overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
               <div className="w-1.5 h-8 rounded-full bg-[#6B7280]" />
