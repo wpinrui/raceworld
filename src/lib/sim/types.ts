@@ -1,7 +1,7 @@
 import type { TeamBelief } from './pit-ai'
 
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
-export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
+export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'lights' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
 
 // A specific technical/mechanical failure (issue #61). Picked uniformly on a technical DNF.
@@ -112,6 +112,8 @@ export interface QualifyingLap {
   lap1: number | null
   lap2: number | null
   best: number | null
+  lap1Sectors?: [number, number, number]   // S1/S2/S3 of lap 1, summing to lap1 (qualifying playback)
+  lap2Sectors?: [number, number, number]   // S1/S2/S3 of lap 2, summing to lap2
 }
 
 export interface QualifyingSessionResult {

@@ -19,6 +19,10 @@ import { PreRacePanel } from '@/components/race/PreRacePanel'
 import { PostRacePanel } from '@/components/race/PostRacePanel'
 import { SpeedBar } from '@/components/race/SpeedBar'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
+import { QualifyingPanel } from '@/components/race/QualifyingPanel'
+import { LightsOverlay } from '@/components/race/LightsOverlay'
+import { TrackMap } from '@/components/race/TrackMap'
+import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 
 const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 5000, 2: 2000, 3: 500, 4: 0 }
 
@@ -34,6 +38,8 @@ export default function RacePage() {
   const phase = raceState?.phase ?? 'pre-qualifying'
   const speed = raceState?.speed ?? 1
   const paused = raceState?.paused ?? false
+
+  const qe = useQualifyingEngine(raceState, drivers, teams, season.constructorStandings, season.currentRound)
 
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
   const [showSpeed4Modal, setShowSpeed4Modal] = useState(false)
@@ -68,12 +74,19 @@ export default function RacePage() {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
-      if (e.key === ' ' && (phase === 'racing' || phase === 'finished')) { e.preventDefault(); setPaused(!paused) }
+      if (e.key === ' ' && (phase === 'racing' || phase === 'finished' || phase === 'qualifying')) { e.preventDefault(); setPaused(!paused) }
       if (phase === 'racing') {
         if (e.key === '1') handleSpeedClick(1)
         if (e.key === '2') handleSpeedClick(2)
         if (e.key === '3') handleSpeedClick(3)
         if (e.key === '4') handleSpeedClick(4)
+      }
+      if (phase === 'qualifying') {
+        // qualifying speed 4 is 8x (still animated), so it skips the racing "sim to end" confirm modal
+        if (e.key === '1') setSpeed(1)
+        if (e.key === '2') setSpeed(2)
+        if (e.key === '3') setSpeed(3)
+        if (e.key === '4') setSpeed(4)
       }
     }
     window.addEventListener('keydown', handler)
@@ -172,12 +185,14 @@ export default function RacePage() {
               onFormChange={updateDriverForm}
             />
           )}
-          {phase === 'qualifying' && (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-[#FFFFFF] text-xl tracking-widest uppercase animate-pulse">Qualifying in progress...</p>
-            </div>
+          {phase === 'qualifying' && raceState && (
+            <QualifyingPanel
+              rows={qe.rows} sessionName={qe.sessionName} cutSize={qe.cutSize} dropFrom={qe.dropFrom}
+              progress={qe.progress} showElim={qe.showElim} eliminated={qe.eliminated} closeElim={qe.closeElim}
+              drivers={drivers} teams={teams} currentCircuit={currentCircuit}
+            />
           )}
-          {phase === 'pre-race' && raceState && (
+          {(phase === 'pre-race' || phase === 'lights') && raceState && (
             <PreRacePanel
               raceState={raceState} drivers={drivers} teams={teams}
               currentCircuit={currentCircuit}
@@ -190,6 +205,7 @@ export default function RacePage() {
                 currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
+                animate={speed !== 4}
               />
             </div>
           )}
@@ -199,6 +215,8 @@ export default function RacePage() {
         <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
           {phase === 'finished' ? (
             <PostRacePanel results={resultsForDisplay} teams={teams} />
+          ) : phase === 'qualifying' ? (
+            <TrackMap clockRef={qe.clockRef} schedule={qe.schedule} rows={qe.rows} drivers={drivers} teams={teams} />
           ) : (
             <>
               <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">
@@ -245,6 +263,18 @@ export default function RacePage() {
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
         />
+      )}
+
+      {phase === 'qualifying' && raceState && (
+        <SpeedBar
+          speed={speed} paused={paused}
+          onSpeedClick={(s) => setSpeed(s)}
+          onTogglePause={() => setPaused(!paused)}
+        />
+      )}
+
+      {phase === 'lights' && raceState && (
+        <LightsOverlay onComplete={() => useRaceStore.getState().beginRacing()} />
       )}
 
       {showSpeed4Modal && (
