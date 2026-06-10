@@ -20,7 +20,7 @@ import type {
 import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
-import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade } from '@/lib/sim/development'
+import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade, applyPlayerCycle } from '@/lib/sim/development'
 import { applyRaceProgression, ageDrivers, rollSeasonForm, shownStats } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
@@ -227,6 +227,7 @@ interface SeasonStore {
   // player's to make. null playerTeamId / false mode = the classic sandbox (everything below is gated on it).
   teamManagerMode: boolean
   playerTeamId: string | null
+  playerDevCycle: number | null  // Team Manager: the player's chosen upgrade cycle (3-6 races); null = unset
   // Start-of-season gate: true once the player has acted on the team changes taking effect NEXT season
   // (Apply, with whatever overrides). Surfaced when a season begins; reset each time a season starts.
   realWorldChangesResolved: boolean
@@ -280,6 +281,7 @@ interface SeasonStore {
   setCurrentDate: (date: string) => void
   setRealWorldMode: (on: boolean) => void
   setTeamManager: (mode: boolean, playerTeamId: string | null) => void
+  setPlayerDevCycle: (cycle: number) => void
   // Apply the player-approved subset of a season's real-world team changes to the next-season grid.
   applyRealWorldChanges: (approved: {
     joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
@@ -326,6 +328,7 @@ export const useSeasonStore = create<SeasonStore>()(
       realWorldMode: false,
       teamManagerMode: false,
       playerTeamId: null,
+      playerDevCycle: null,
       realWorldChangesResolved: false,
       approvedSeasonChanges: null,
       raceResults: [],
@@ -352,7 +355,7 @@ export const useSeasonStore = create<SeasonStore>()(
       initSeason: (drivers, teams, year) => {
         const { constructorHistory } = get()
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
-        const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+        const devPlans = applyPlayerCycle(initDevPlans(teams, fundingTiers, Math.random), teams, get().teamManagerMode ? get().playerTeamId : null, get().playerDevCycle, get().currentRound, Math.random)
         // Real-world mode: the pool is the real free agents in the composed grid (no fictional drivers).
         // Otherwise keep existing free agents from the store, or generate a pool if none present.
         const poolDrivers = get().realWorldMode
@@ -422,7 +425,12 @@ export const useSeasonStore = create<SeasonStore>()(
 
       setRealWorldMode: (on) => set({ realWorldMode: on }),
 
-      setTeamManager: (mode, playerTeamId) => set({ teamManagerMode: mode, playerTeamId: mode ? playerTeamId : null }),
+      setTeamManager: (mode, playerTeamId) => set({ teamManagerMode: mode, playerTeamId: mode ? playerTeamId : null, playerDevCycle: null }),
+
+      setPlayerDevCycle: (cycle) => {
+        const { playerTeamId, devPlans, teams, currentRound } = get()
+        set({ playerDevCycle: cycle, devPlans: applyPlayerCycle(devPlans, teams, playerTeamId, cycle, currentRound, Math.random) })
+      },
 
       // Real-world season-end: apply the approved team changes to the next-season grid (built by
       // endSeason into pendingNextSeasonState), BEFORE contract negotiations fill the seats. Leaving
@@ -929,7 +937,7 @@ export const useSeasonStore = create<SeasonStore>()(
           const { teams } = get()
           const drivers = get().drivers.map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
           const fundingTiers = computeFundingTiers(teams, constructorHistory)
-          const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+          const devPlans = applyPlayerCycle(initDevPlans(teams, fundingTiers, Math.random), teams, get().teamManagerMode ? get().playerTeamId : null, get().playerDevCycle, get().currentRound, Math.random)
           set({
             phase: 'idle',
             year: newYear,
@@ -968,7 +976,7 @@ export const useSeasonStore = create<SeasonStore>()(
         // Roll season form (#66) for the new season — seated drivers only (free agents carry no wobble).
         const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
-        const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+        const devPlans = applyPlayerCycle(initDevPlans(teams, fundingTiers, Math.random), teams, get().teamManagerMode ? get().playerTeamId : null, get().playerDevCycle, get().currentRound, Math.random)
 
         set({
           phase: 'idle',
@@ -1020,7 +1028,7 @@ export const useSeasonStore = create<SeasonStore>()(
           topUp = poolSize < 15 ? generateFreeAgentPool(15 - poolSize, newYear, pendingDrivers, Math.random) : []
         }
         const drivers = [...pendingDrivers, ...topUp].map((d) => ({ ...d, seasonForm: d.teamId !== '' ? rollSeasonForm(Math.random) : 0 }))
-        const devPlans = initDevPlans(teams, fundingTiers, Math.random)
+        const devPlans = applyPlayerCycle(initDevPlans(teams, fundingTiers, Math.random), teams, get().teamManagerMode ? get().playerTeamId : null, get().playerDevCycle, get().currentRound, Math.random)
         set({
           phase: 'pre-race',
           year: newYear,
@@ -1099,6 +1107,7 @@ export const useSeasonStore = create<SeasonStore>()(
         realWorldMode: state.realWorldMode,
         teamManagerMode: state.teamManagerMode,
         playerTeamId: state.playerTeamId,
+        playerDevCycle: state.playerDevCycle,
         realWorldChangesResolved: state.realWorldChangesResolved,
         // MUST persist alongside `resolved`: it holds WHAT was approved at the season opener and is
         // applied at the season-end rollover. Persisting `resolved` without this dropped the approved

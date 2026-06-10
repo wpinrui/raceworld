@@ -129,6 +129,23 @@ export function initDevPlans(
   })
 }
 
+// Team Manager: mark the player team's dev plan player-controlled (so it isn't re-randomised) and, if the
+// player has chosen a cycle, apply it — re-pre-rolling the pending upgrade for the new cadence, with the
+// next upgrade landing `cycle` races out. No-op outside Team Manager mode (no playerTeamId).
+export function applyPlayerCycle(
+  devPlans: TeamDevPlan[], teams: Team[], playerTeamId: string | null, cycle: number | null, fromRound: number, rng: () => number,
+): TeamDevPlan[] {
+  if (!playerTeamId) return devPlans
+  const leaderPace = Math.max(...teams.map((t) => t.carPace))
+  const myPace = teams.find((t) => t.id === playerTeamId)?.carPace ?? 75
+  return devPlans.map((p) => {
+    if (p.teamId !== playerTeamId) return p
+    const cycleLength = cycle ?? p.cycleLength
+    const pending = rollUpgrade(cycleLength, leaderPace - myPace, rng)
+    return { ...p, playerControlled: true, cycleLength, nextUpgradeRound: fromRound + cycleLength, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed }
+  })
+}
+
 // Deliver any upgrades due this round. The funding-tier penalty is applied to the
 // upgrade amount (not the raw car pace), and the cycle length is re-randomised per upgrade.
 export function applyUpgradeEvents(
@@ -162,8 +179,9 @@ export function applyUpgradeEvents(
     }
 
     // Pick a fresh cycle for the next upgrade and pre-roll its outcome against the freshly-updated
-    // deficit, so a car that has caught up rolls a smaller catch-up next time (it self-limits).
-    const nextCycle = randomCycleLength(rng)
+    // deficit, so a car that has caught up rolls a smaller catch-up next time (it self-limits). A
+    // player-controlled team (Team Manager) keeps the cycle the player chose instead of re-randomising.
+    const nextCycle = plan.playerControlled ? plan.cycleLength : randomCycleLength(rng)
     const nextPending = rollUpgrade(nextCycle, leaderPace() - (team?.carPace ?? 75), rng)
     return {
       ...plan,

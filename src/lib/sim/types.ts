@@ -273,6 +273,7 @@ export interface TeamDevPlan {
   // on rehydrate; applyUpgradeEvents also rolls lazily if still missing).
   pendingPaceDelta?: number
   pendingFailed?: boolean       // the upcoming upgrade will deliver nothing (5% base chance)
+  playerControlled?: boolean    // Team Manager: the player sets this team's cycle, so it isn't re-randomised
 }
 
 export interface DevUpgradeEvent {
