@@ -5,6 +5,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { WeatherPoint } from '@/lib/sim/types'
 import { getMoistureAtLap, forecastMoistureAtLap } from '@/lib/sim/weather'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 
 interface Props {
   weather: WeatherPoint[] // the true curve
@@ -32,7 +34,12 @@ function path(from: number, to: number, totalLaps: number, value: (lap: number) 
 // weather, revealed lap by lap; the dashed line ahead is the (imperfect) forecast, which homes onto
 // reality as each lap nears. The eye toggle is a god-mode cheat that reveals the true future.
 export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props) {
-  const [reveal, setReveal] = useState(false)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const talentOn = useSettingsStore((s) => s.talents['met-office'] ?? false)
+  // In Team Manager mode the true-weather reveal is a Met Office talent; without it, only the forecast shows.
+  const gateAllowsReveal = !teamManagerMode || talentOn
+  const [revealToggle, setRevealToggle] = useState(false)
+  const reveal = revealToggle && gateAllowsReveal
   const [hover, setHover] = useState<{ lap: number; pct: number; xView: number; yView: number; actual: boolean } | null>(null)
 
   const now = Math.max(1, Math.min(currentLap, totalLaps))
@@ -113,18 +120,20 @@ export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props
         )}
       </div>
 
-      <Tooltip content={reveal ? 'Showing the true weather ahead (god mode)' : 'Future is the forecast. Reveal the true weather ahead (god mode)'}>
-        <button
-          type="button"
-          onClick={() => setReveal((r) => !r)}
-          className={`flex items-center gap-1 px-1.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors ${
-            reveal ? 'text-[#00D9FF] bg-[#00D9FF]/10' : 'text-[#6B7280] hover:text-[#A0A9B8]'
-          }`}
-        >
-          {reveal ? <Eye size={12} /> : <EyeOff size={12} />}
-          <span>{reveal ? 'Actual' : 'Forecast'}</span>
-        </button>
-      </Tooltip>
+      {gateAllowsReveal && (
+        <Tooltip content={reveal ? 'Showing the true weather ahead (god mode)' : 'Future is the forecast. Reveal the true weather ahead (god mode)'}>
+          <button
+            type="button"
+            onClick={() => setRevealToggle((r) => !r)}
+            className={`flex items-center gap-1 px-1.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+              reveal ? 'text-[#00D9FF] bg-[#00D9FF]/10' : 'text-[#6B7280] hover:text-[#A0A9B8]'
+            }`}
+          >
+            {reveal ? <Eye size={12} /> : <EyeOff size={12} />}
+            <span>{reveal ? 'Actual' : 'Forecast'}</span>
+          </button>
+        </Tooltip>
+      )}
     </div>
   )
 }

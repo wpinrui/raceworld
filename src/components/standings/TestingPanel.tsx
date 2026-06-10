@@ -7,6 +7,8 @@ import TyreIndicator from '@/components/race/TyreIndicator'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 
 interface Props {
   test: PreSeasonTest | null
@@ -32,7 +34,12 @@ type SortKey = 'time' | 'pace' | 'wcc'
 
 export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
   const card = useLiveDriverCards()
-  const [reveal, setReveal] = useState(false)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
+  // In Team Manager mode the true-pace reveal is a Data Room talent; without it, keep pace hidden.
+  const gateAllowsReveal = !teamManagerMode || talentOn
+  const [revealToggle, setRevealToggle] = useState(false)
+  const reveal = revealToggle && gateAllowsReveal
   const [sortKey, setSortKey] = useState<SortKey>('time')
 
   if (!test || test.entries.length === 0) {
@@ -60,13 +67,15 @@ export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
         <p className="text-sm text-[#FFFFFF]">
           Pre-season test · <span className="text-[#FFFFFF]">{test.circuitName}</span>
         </p>
-        <button
-          onClick={() => setReveal((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
-        >
-          {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
-          {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
-        </button>
+        {gateAllowsReveal && (
+          <button
+            onClick={() => setRevealToggle((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+          >
+            {reveal ? <EyeOff size={13} /> : <Eye size={13} />}
+            {reveal ? 'Hide true pace' : 'God mode: reveal pace'}
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">

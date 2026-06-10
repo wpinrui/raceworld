@@ -32,7 +32,11 @@ export default function TeamPage() {
   const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
   const liveTeam = useSeasonStore((s) => s.teams.find((t) => t.id === id))
   const updateTeam = useSeasonStore((s) => s.updateTeam)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const playerTeamId = useSeasonStore((s) => s.playerTeamId)
   const onGrid = !!liveTeam
+  // God-mode team edits: always available in sandbox; in Team Manager mode only for the player's own team.
+  const canEditTeam = !!liveTeam && (!teamManagerMode || id === playerTeamId)
   // Only editable while the season is running: upgrades are delivered during races, and
   // startNewSeason re-rolls every dev plan from scratch, so off-season edits wouldn't survive.
   const upgradeEditable = useSeasonStore((s) => !isOffSeason(s.phase))
@@ -57,7 +61,7 @@ export default function TeamPage() {
               {/* Header band */}
               <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 flex items-center gap-4 flex-wrap">
                 <div className="w-1.5 h-10 rounded-sm" style={{ backgroundColor: liveTeam?.color ?? career.teamColor ?? '#6B7280' }} />
-                {editing && liveTeam ? (
+                {editing && canEditTeam && liveTeam ? (
                   <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-4 gap-3">
                     <div>
                       <label className="text-xs text-[#FFFFFF] block mb-1">Name</label>
@@ -74,14 +78,17 @@ export default function TeamPage() {
                       <label className="text-xs text-[#FFFFFF] block mb-1">Nationality</label>
                       <CountrySelect value={liveTeam.nationality} onChange={(code) => updateTeam(id, { nationality: code })} />
                     </div>
-                    <div>
-                      <label className="text-xs text-[#FFFFFF] block mb-1">Car pace</label>
-                      <input
-                        type="number" min={0} max={100} step={1} value={liveTeam.carPace}
-                        onChange={(e) => { if (e.target.value !== '') updateTeam(id, { carPace: Number(e.target.value) }) }}
-                        className={inputClass}
-                      />
-                    </div>
+                    {/* Car pace is direct-editable only in sandbox; in Team Manager it changes solely via the upgrade cycle. */}
+                    {!teamManagerMode && (
+                      <div>
+                        <label className="text-xs text-[#FFFFFF] block mb-1">Car pace</label>
+                        <input
+                          type="number" min={0} max={100} step={1} value={liveTeam.carPace}
+                          onChange={(e) => { if (e.target.value !== '') updateTeam(id, { carPace: Number(e.target.value) }) }}
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex-1 min-w-0">
@@ -96,7 +103,7 @@ export default function TeamPage() {
                     </p>
                   </div>
                 )}
-                {liveTeam && (
+                {canEditTeam && (
                   <button
                     onClick={() => setEditing((v) => !v)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
