@@ -20,6 +20,9 @@ function applyPeakForm(forms: Record<string, number>, drivers: Driver[]): Record
 // store and zero the offset on the copy, so the form applies exactly once (a re-bake is then a no-op).
 const toRaceDriver = (d: Driver): Driver => ({ ...d, ...shownStats(d), seasonForm: 0 })
 
+// Team Manager pit wall: the player's standing instruction for a car each lap. Absent = auto (AI decides).
+export type PitCommand = 'auto' | 'hold' | { pit: TyreCompound }
+
 interface RaceStore {
   raceState: RaceState | null
   drivers: Driver[]
@@ -32,11 +35,14 @@ interface RaceStore {
   strategyNoise: number
   godModeDriverId: string | null  // persists across races
   qualSessionIdx: number          // which qualifying session (0=Q1) — in the store so a Quit resumes it
+  pitCommands: Record<string, PitCommand>  // Team Manager pit-wall instructions, per driver (absent = auto)
 
   loadFromSeason: (drivers: Driver[], teams: Team[], circuit: Circuit) => void
   setGodModeDriver: (driverId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
   setStartingTyre: (driverId: string, compound: TyreCompound) => void // pre-race: choose a car's grid tyre
+  setPitCommand: (driverId: string, cmd: PitCommand) => void          // pit wall: auto / hold / pit(compound)
+  clearHolds: () => void                                              // drop all HOLDs back to auto (FF)
   setStrategyNoise: (n: number) => void
   initSession: () => void
   tickLap: (godModeActions?: GodModeAction[]) => void
@@ -57,6 +63,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   strategyNoise: 0.35,
   godModeDriverId: null,
   qualSessionIdx: 0,
+  pitCommands: {},
 
   loadFromSeason: (drivers, teams, circuit) => {
     const { godModeDriverId } = get()
@@ -68,6 +75,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       selectedCircuit: circuit,
       forms: applyPeakForm(rollForms(drivers), drivers),
       godModeDriverId: stillExists ? godModeDriverId : null,
+      pitCommands: {},
     })
   },
 
@@ -99,6 +107,23 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     })
   },
 
+  setPitCommand: (driverId, cmd) => {
+    set((state) => {
+      const next = { ...state.pitCommands }
+      if (cmd === 'auto') delete next[driverId] // auto = no standing instruction (also the cancel/unset)
+      else next[driverId] = cmd
+      return { pitCommands: next }
+    })
+  },
+
+  clearHolds: () => {
+    set((state) => {
+      const next: Record<string, PitCommand> = {}
+      for (const [id, cmd] of Object.entries(state.pitCommands)) if (cmd !== 'hold') next[id] = cmd
+      return { pitCommands: next }
+    })
+  },
+
   setStrategyNoise: (n) => set({ strategyNoise: Math.min(1, Math.max(0, n)) }),
 
   initSession: () => {
@@ -112,10 +137,35 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   },
 
   tickLap: (godModeActions) => {
-    const { raceState, drivers, teams, selectedCircuit } = get()
+    const { raceState, drivers, teams, selectedCircuit, pitCommands } = get()
     if (!raceState || raceState.phase !== 'racing' || !selectedCircuit) return
     const year = useSeasonStore.getState().year
-    set({ raceState: simulateLap(raceState, drivers, teams, selectedCircuit, year, godModeActions) })
+    const lapBeing = raceState.currentLap
+
+    // Pit-wall instructions become per-lap pit overrides (hold -> cancel-pit, pit -> force-pit). They live in
+    // the store so they apply on the scheduled tick AND under fast-forward (which calls tickLap directly).
+    const commandActions: GodModeAction[] = []
+    for (const [driverId, cmd] of Object.entries(pitCommands)) {
+      if (cmd === 'hold') commandActions.push({ type: 'cancel-pit', driverId })
+      else if (cmd !== 'auto') commandActions.push({ type: 'force-pit', driverId, compound: cmd.pit })
+    }
+    const merged = commandActions.length || godModeActions ? [...commandActions, ...(godModeActions ?? [])] : undefined
+
+    const next = simulateLap(raceState, drivers, teams, selectedCircuit, year, merged)
+
+    // Consume a commanded PIT once the stop has landed (lastPitLap caught up) or the car is gone — it reverts
+    // to auto. HOLD persists until the player changes it (or fast-forward clears it).
+    let nextCommands = pitCommands
+    for (const [driverId, cmd] of Object.entries(pitCommands)) {
+      if (cmd === 'auto' || cmd === 'hold') continue
+      const ds = next.drivers.find((d) => d.driverId === driverId)
+      if (!ds || ds.retired || ds.lastPitLap === lapBeing) {
+        if (nextCommands === pitCommands) nextCommands = { ...pitCommands }
+        delete nextCommands[driverId]
+      }
+    }
+
+    set(nextCommands === pitCommands ? { raceState: next } : { raceState: next, pitCommands: nextCommands })
   },
 
   setSpeed: (speed) => {
@@ -156,6 +206,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       selectedCircuit: circuit ?? get().selectedCircuit,
       forms: rollForms(nextDrivers),
       qualSessionIdx: 0,
+      pitCommands: {},
     })
   },
 }))

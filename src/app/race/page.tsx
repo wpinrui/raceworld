@@ -13,6 +13,7 @@ import { actionGetDriverCareers } from '@/lib/news/actions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import RaceTable from '@/components/race/RaceTable'
 import GodModePanel from '@/components/race/GodModePanel'
+import PitWallPanel from '@/components/race/PitWallPanel'
 import CommentaryFeed from '@/components/race/CommentaryFeed'
 import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { RaceHeader } from '@/components/race/RaceHeader'
@@ -176,8 +177,9 @@ export default function RacePage() {
     return () => clearInterval(timer)
   }, [phase, paused, speed])
 
-  // Confirming FF runs it immediately (unpause), since the race/session starts paused.
-  const confirmRaceFF = () => { setShowRaceFFModal(false); setFFConfirmed(true); setSpeed(5); setPaused(false) }
+  // Confirming FF runs it immediately (unpause), since the race/session starts paused. Held cars go back to
+  // automatic strategy so a standing HOLD doesn't ride dead tyres to the flag while fast-forwarding.
+  const confirmRaceFF = () => { setShowRaceFFModal(false); setFFConfirmed(true); useRaceStore.getState().clearHolds(); setSpeed(5); setPaused(false) }
   const confirmQualyFF = () => { setShowQualyFFModal(false); setSpeed(5); setPaused(false) }
 
   function computeResults(): RaceResult[] {
@@ -274,12 +276,20 @@ export default function RacePage() {
               </div>
               <div className="h-[55%] min-h-0 p-4 overflow-y-auto">
                 {raceState && phase === 'racing' ? (
-                  <GodModePanel
-                    drivers={drivers} teams={teams} states={raceState.drivers}
-                    raceState={raceState}
-                    selectedDriverId={selectedDriverId ?? drivers[0]?.id ?? ''}
-                    onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
-                  />
+                  season.teamManagerMode ? (
+                    <PitWallPanel
+                      drivers={drivers} teams={teams} states={raceState.drivers}
+                      raceState={raceState}
+                      onRetire={(driverId) => setPendingGodModeActions((prev) => [...prev, { type: 'force-retire', driverId }])}
+                    />
+                  ) : (
+                    <GodModePanel
+                      drivers={drivers} teams={teams} states={raceState.drivers}
+                      raceState={raceState}
+                      selectedDriverId={selectedDriverId ?? drivers[0]?.id ?? ''}
+                      onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
+                    />
+                  )
                 ) : raceState && phase === 'pre-race' && season.teamManagerMode ? (
                   <StartingTyrePanel />
                 ) : (
@@ -316,7 +326,7 @@ export default function RacePage() {
       {showRaceFFModal && (
         <ConfirmModal
           title="Fast-forward to the end?"
-          body="The rest of the race will be simulated instantly."
+          body={season.teamManagerMode ? 'The rest of the race will be simulated instantly. Held cars return to automatic strategy.' : 'The rest of the race will be simulated instantly.'}
           confirmLabel="Fast-forward"
           onConfirm={confirmRaceFF}
           onCancel={() => setShowRaceFFModal(false)}
