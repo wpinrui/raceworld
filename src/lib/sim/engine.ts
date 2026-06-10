@@ -31,11 +31,12 @@ export interface LapResult {
 // Traffic / dirty-air model (make qualifying matter — overtaking was far too easy). Tunables:
 const DIRTY_RANGE = 1.0       // s: a follower within this loses pace to dirty air
 const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fades to 0 at DIRTY_RANGE
+const STRIKE_RANGE = 1.0      // s: a pass can only be COMPLETED from within this (~DRS range) at lap start
 const CONTEST_GAP = 0.15      // s: a pass is contested when the running pace would close inside this
 const OVERTAKE_SENS = 0.8     // pass prob per second of clean-air pace edge
 const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
 const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
-const HOLD_GAP = 0.3          // s: a failed move tucks in this far behind (no free pass)
+const HOLD_GAP = 0.3          // s: a failed move / a from-range catch-up tucks in this far behind (no pass)
 
 export function computeLapTime(input: LapInput): LapResult {
   const {
@@ -127,11 +128,10 @@ export function computeLapTime(input: LapInput): LapResult {
   const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this pace
   const paceEdge = input.carAheadFreeAir - freeAir                  // clean-air pace advantage over the car ahead
 
-  // If this pace would bring the car onto or past the one ahead THIS lap — already on the gearbox, or
-  // having just caught it from range — and it's genuinely quicker, contest the pass NOW. A much-faster
-  // car (e.g. a sitting duck on the wrong tyres) catches AND passes in the same lap; a marginally-quicker
-  // car settles at the dirty-air equilibrium and never reaches this branch.
-  if (wouldGap < CONTEST_GAP && paceEdge > 0) {
+  // A pass can only be COMPLETED from within striking range (~1s) at the START of the lap. So: already in
+  // range AND the running pace would bring it onto/past the car ahead AND it's genuinely quicker → contest
+  // the pass now. A car drawing in from further back can't pass this lap, however quick it is — see below.
+  if (gapToCarAhead <= STRIKE_RANGE && wouldGap < CONTEST_GAP && paceEdge > 0) {
     // Crash roll (issue #60), driven by both drivers' consistency (f(c) = 2e-6·(100-c)²).
     if (input.defenderDriver) {
       const k = 0.000002
@@ -150,6 +150,12 @@ export function computeLapTime(input: LapInput): LapResult {
       return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
     }
     // Failed move: tuck in right behind (no free pass — must contest again next lap).
+    return { lapTime: carAheadLapTime + HOLD_GAP - gapToCarAhead, overtook: false, freeAir }
+  }
+
+  // Drawing in from beyond striking range and this pace would overshoot → arrive right behind (no pass
+  // this lap; it wasn't within ~1s at the start). It contests next lap, now in range.
+  if (wouldGap < CONTEST_GAP) {
     return { lapTime: carAheadLapTime + HOLD_GAP - gapToCarAhead, overtook: false, freeAir }
   }
 
