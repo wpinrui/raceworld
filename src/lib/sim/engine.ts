@@ -12,7 +12,8 @@ export interface LapInput {
   weather: WeatherPoint[]
   compoundDeltas: Record<TyreCompound, number>  // this race's per-compound pace deltas
   gapToCarAhead: number       // Infinity if leading
-  carAheadLapTime: number | null
+  carAheadLapTime: number | null  // the car ahead's EFFECTIVE lap time this lap (drives the gap evolution)
+  carAheadFreeAir?: number | null // the car ahead's CLEAN-AIR pace this lap (drives the pace-edge gate)
   circuitFlatModifier: number
   defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
   noiseOverride?: number      // qualifying supplies its own noise model (more quali variation); races use the default
@@ -21,9 +22,21 @@ export interface LapInput {
 export interface LapResult {
   lapTime: number
   overtook: boolean
+  freeAir: number             // this car's clean-air pace this lap (the next car back gates its pass on it)
+  defenderPenalty?: number    // on a completed pass, the time the overtaken car loses (race.ts applies it)
   // A contested-overtake collision (issue #60). attacker/defender flag who retires (33/33/33).
   crash?: { happened: boolean; attacker: boolean; defender: boolean }
 }
+
+// Traffic / dirty-air model (make qualifying matter — overtaking was far too easy). Tunables:
+const DIRTY_RANGE = 1.0       // s: a follower within this loses pace to dirty air
+const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fades to 0 at DIRTY_RANGE
+const STRIKE_RANGE = 0.6      // s: must be at least this close to attempt a pass
+const CONTEST_GAP = 0.15      // s: a pass is contested when the running pace would close inside this
+const OVERTAKE_SENS = 0.8     // pass prob per second of clean-air pace edge
+const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
+const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
+const HOLD_BACK = 0.15        // s: a failed move sits this far back, at the car-ahead's pace
 
 export function computeLapTime(input: LapInput): LapResult {
   const {
@@ -98,54 +111,52 @@ export function computeLapTime(input: LapInput): LapResult {
     flatModifier +
     noise
 
-  // GAP LOGIC
-  if (gapToCarAhead === Infinity || carAheadLapTime === null) {
-    return { lapTime: rawTime, overtook: false }
+  // FREE-AIR PACE is rawTime. Traffic — dirty air, the contested pass, its crash roll, and the time a
+  // pass costs both cars — is resolved here from the car AHEAD's clean-air pace, which race.ts threads in
+  // (carAheadFreeAir) as it walks the field front-to-back.
+  const freeAir = rawTime
+
+  if (gapToCarAhead === Infinity || carAheadLapTime === null || input.carAheadFreeAir == null) {
+    return { lapTime: rawTime, overtook: false, freeAir }
   }
 
-  if (gapToCarAhead > 2) {
-    return { lapTime: rawTime, overtook: false }
-  }
+  // DIRTY AIR: a follower within DIRTY_RANGE loses pace, worse the closer it sits. A car only slightly
+  // quicker has its edge eaten and settles into a train; a much-quicker car keeps enough to reach the car
+  // ahead and contest. This is the emergent "trains form unless you're much faster" mechanism.
+  const dirty = gapToCarAhead < DIRTY_RANGE ? MAX_DIRTY * (1 - gapToCarAhead / DIRTY_RANGE) : 0
+  const dirtyLapTime = rawTime + dirty
+  const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this pace
+  const paceEdge = input.carAheadFreeAir - freeAir                  // clean-air pace advantage over the car ahead
 
-  if (gapToCarAhead > 1) {
-    // 1 < gap <= 2
-    const timeDiff = carAheadLapTime - rawTime
-    if (timeDiff > 2 * gapToCarAhead) {
-      return { lapTime: rawTime, overtook: false }
-    } else {
-      const clampedTime = carAheadLapTime + 0.5 + Math.random() * 0.5
-      return { lapTime: clampedTime, overtook: false }
-    }
-  }
-
-  // gap <= 1: a contested overtake attempt.
-  if (rawTime < carAheadLapTime) {
-    // Crash roll (issue #60), driven purely by BOTH drivers' consistency (not overtaking). Either
-    // unsafe driver can cause it; it's only clean when both are: P = f(a) + f(d) - f(a)·f(d), with
-    // f(c) = k·(100 - c)². k=2e-6 calibrated by headless measurement to ~1 / 0.5 / 0.1 overtake
-    // crash-outs per 24-race season at consistency 65 / 75 / 90 (the sim produces ~150 contested
-    // attempts per driver-season, so the per-attempt rate is small and the (100-c)² keeps the tiers
-    // ~12:6:1, close to the budget's 10:5:1).
+  // On the gearbox AND genuinely quicker → contest the pass.
+  if (gapToCarAhead <= STRIKE_RANGE && wouldGap < CONTEST_GAP && paceEdge > 0) {
+    // Crash roll (issue #60), driven by both drivers' consistency (f(c) = 2e-6·(100-c)²).
     if (input.defenderDriver) {
       const k = 0.000002
       const f = (c: number) => k * (100 - c) ** 2
       const fa = f(driver.consistency)
       const fd = f(input.defenderDriver.consistency)
       if (Math.random() < fa + fd - fa * fd) {
-        // Equal thirds: attacker out / defender out / both out.
         const r = Math.random()
-        return { lapTime: rawTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 } }
+        return { lapTime: dirtyLapTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 }, freeAir }
       }
     }
-    const prob = ((1 - gapToCarAhead) + driver.overtaking / 100) / 2
-    const overtook = Math.random() < prob
-    if (overtook) {
-      return { lapTime: rawTime, overtook: true }
-    } else {
-      const clampedTime = carAheadLapTime + Math.random() * 0.5
-      return { lapTime: clampedTime, overtook: false }
+    // Pass chance scales with the clean-air pace edge (you must be clearly faster), nudged by overtaking.
+    const prob = Math.min(0.92, paceEdge * OVERTAKE_SENS + (driver.overtaking / 100) * 0.2)
+    if (Math.random() < prob) {
+      // A completed pass costs both cars time: the attacker a little, the defender more.
+      return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
     }
+    // Failed move: hold station right behind, at the car-ahead's pace.
+    return { lapTime: carAheadLapTime + HOLD_BACK, overtook: false, freeAir }
   }
 
-  return { lapTime: rawTime, overtook: false }
+  // Closing from beyond the strike zone but this pace would slip past → clamp to the strike boundary so a
+  // pass still requires a contest next lap (no free passes from a single fast lap).
+  if (gapToCarAhead > STRIKE_RANGE && wouldGap < CONTEST_GAP) {
+    return { lapTime: carAheadLapTime + STRIKE_RANGE - gapToCarAhead, overtook: false, freeAir }
+  }
+
+  // Approaching slowly, or sitting at the dirty-air equilibrium (a train).
+  return { lapTime: dirtyLapTime, overtook: false, freeAir }
 }
