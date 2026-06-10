@@ -12,12 +12,24 @@ import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
 import { TeamLink } from '@/components/world/EntityLink'
 import { composeSeason, historyYears, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { useSetupCta } from '@/lib/store/setup-cta'
+import { calendarForYear } from '@/data/calendars'
+import { simUntilYear } from '@/lib/sim/sim-until-year'
+import { SimulatingWorldModal } from '@/components/SimulatingWorldModal'
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
 const DRIVERS_PER_TEAM = 2
+// Earliest season with historical data; derived (not hardcoded), so it tracks any earlier years added.
+const EARLIEST_YEAR = Math.min(...historyYears())
+
+// Total championship races across [from, toExclusive) — the "sim the world" progress bar is keyed by these.
+function racesBetween(from: number, toExclusive: number): number {
+  let n = 0
+  for (let y = from; y < toExclusive; y++) n += calendarForYear(y).length
+  return n
+}
 
 export default function SetupPage() {
   const seasonStore = useSeasonStore()
@@ -37,6 +49,11 @@ export default function SetupPage() {
   // Which season to start from, and whether real-world changes apply each season-end.
   const [startYear, setStartYear] = useState(DEFAULT_START_YEAR)
   const [realWorld, setRealWorld] = useState(false)
+  // "Sim the world": fast-forward from the earliest year up to startYear before the player begins.
+  const [simWorld, setSimWorld] = useState(false)
+  const [simulating, setSimulating] = useState(false)
+  const [racesTotal, setRacesTotal] = useState(0)
+  const cancelSimRef = useRef(false)
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any
@@ -97,7 +114,8 @@ export default function SetupPage() {
   // Drive updateGrid from committed React state rather than from inside setters,
   // so the store always receives the latest localDrivers + localTeams together.
   useEffect(() => {
-    if (isActive && hydrated) seasonStore.updateGrid(localDrivers, localTeams)
+    // Never push the local grid while the world is being fast-forwarded — the store grid is the live sim.
+    if (isActive && hydrated && !simulating) seasonStore.updateGrid(localDrivers, localTeams)
   }, [localDrivers, localTeams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateTeam(id: string, patch: Partial<Team>) {
@@ -141,7 +159,31 @@ export default function SetupPage() {
     setNewTeamColor('#888888')
   }
 
-  function handleStartSeason() {
+  // Fast-forward the world from the earliest year up to startYear, then drop the player in. The simulated
+  // seasons become the world's history (careers, champions, records in the DB); the grid the player starts
+  // on is HARD-RESET to the real-world lineup of the year reached, so it's exactly a fresh-game grid.
+  async function runSimWorld() {
+    cancelSimRef.current = false
+    setRacesTotal(racesBetween(EARLIEST_YEAR, startYear))
+    setSimulating(true)
+    const earliest = composeSeason(EARLIEST_YEAR)
+    if (!earliest) { setSimulating(false); setImportError(`No historical data for ${EARLIEST_YEAR}`); return }
+    // The fast-forward follows real history, so it runs in real-world mode regardless of the final setting.
+    useSeasonStore.getState().setRealWorldMode(true)
+    useSeasonStore.getState().initSeason(earliest.drivers, earliest.teams, EARLIEST_YEAR)
+    await simUntilYear(startYear, () => cancelSimRef.current)
+    // Reset to the real-world grid of wherever we landed (startYear on completion, earlier if cancelled).
+    const landed = useSeasonStore.getState().year
+    const real = composeSeason(landed)
+    if (real) useSeasonStore.getState().initSeason(real.drivers, real.teams, landed)
+    useSeasonStore.getState().setRealWorldMode(realWorld)
+    useRaceStore.getState().resetSession()
+    setSimulating(false)
+    router.push('/home')
+  }
+
+  async function handleStartSeason() {
+    if (simWorld && startYear > EARLIEST_YEAR) { await runSimWorld(); return }
     seasonStore.setRealWorldMode(realWorld)
     seasonStore.initSeason(localDrivers, localTeams, startYear)
     useRaceStore.getState().resetSession()
@@ -155,7 +197,7 @@ export default function SetupPage() {
     if (isActive) { setSetupCta(null); return }
     setSetupCta({ ready: localDrivers.length > 0, year: startYear, start: handleStartSeason })
     return () => setSetupCta(null)
-  }, [isActive, localDrivers, localTeams, startYear, realWorld]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, localDrivers, localTeams, startYear, realWorld, simWorld]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!hydrated) return null
 
@@ -172,8 +214,22 @@ export default function SetupPage() {
     drivers: localDrivers.filter((d) => d.teamId === team.id),
   }))
 
+  // Progress = races simmed so far (completed seasons + the in-progress one) over the total to the target.
+  const racesSimmed = simulating
+    ? Math.min(racesTotal, racesBetween(EARLIEST_YEAR, seasonStore.year) + seasonStore.raceResults.length)
+    : 0
+
   return (
     <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+      {simulating && (
+        <SimulatingWorldModal
+          open={simulating}
+          year={seasonStore.year}
+          racesSimmed={racesSimmed}
+          racesTotal={racesTotal}
+          onCancel={() => { cancelSimRef.current = true }}
+        />
+      )}
       <div className="max-w-5xl mx-auto px-6 py-8">
 
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
@@ -206,6 +262,12 @@ export default function SetupPage() {
                       <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
                         <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
                         Real-world changes
+                      </label>
+                    )}
+                    {startYear > EARLIEST_YEAR && (
+                      <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                        <input type="checkbox" checked={simWorld} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                        Sim history from {EARLIEST_YEAR}
                       </label>
                     )}
                   </>
