@@ -10,6 +10,9 @@ import { ResultChip } from '@/components/standings/ResultCell'
 import { StintBar } from '@/components/world/StintBar'
 import { Panel } from '@/components/world/ui'
 import { formatLapTime, formatRaceTime, formatGap } from '@/components/world/format'
+import { useSeasonStore } from '@/lib/store/season-store'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { resolveTeamColor } from '@/lib/world/historical-team'
 
 export default function RaceClassificationPage() {
   const { year: yearStr, round: roundStr } = useParams<{ year: string; round: string }>()
@@ -18,6 +21,8 @@ export default function RaceClassificationPage() {
   const { classification, loading } = useRaceClassification(year, round)
   const hydrated = useHydrated()
   const scrollRef = useScrollRestore<HTMLDivElement>(`season:${year}:${round}:scroll`)
+  const highlight = useTeamHighlight()
+  const teams = useSeasonStore((s) => s.teams)
   if (!hydrated) return null
 
   const winnerTime = classification?.rows.find((r) => !r.dnf)?.totalTime ?? null
@@ -60,8 +65,10 @@ export default function RaceClassificationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {classification.rows.map((r) => (
-                      <tr key={r.driverId} className="border-b border-[#2A3142]/50">
+                    {classification.rows.map((r) => {
+                      const hl = highlight(r.teamId, resolveTeamColor(r.teamId, teams))
+                      return (
+                      <tr key={r.driverId} style={hl} className="border-b border-[#2A3142]/50">
                         <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.dnf ? null : r.finishPosition} year={year} /></span></td>
                         <td className="py-1.5 px-3"><DriverLink id={r.driverId} className="text-[#FFFFFF] font-medium">{r.driverName}</DriverLink></td>
                         <td className="py-1.5 px-3"><TeamLink id={r.teamId} className="text-[#FFFFFF]">{r.teamName}</TeamLink></td>
@@ -81,7 +88,8 @@ export default function RaceClassificationPage() {
                         <td className="py-1.5 px-3 text-right tabular-nums text-[#FFFFFF]">{r.points || ''}</td>
                         <td className="py-1.5 px-3 w-48"><StintBar stints={r.stints} /></td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
