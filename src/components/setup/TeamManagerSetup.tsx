@@ -85,8 +85,8 @@ export function TeamManagerSetup({
           </div>
           <div>
             <label className="text-xs text-[#FFFFFF] block mb-1">Entry year</label>
-            <input type="number" min={minEntryYear} max={maxEntryYear} value={entryYear}
-              onChange={(e) => setEntryYear(Number(e.target.value))}
+            <input type="number" min={minEntryYear} max={maxEntryYear} value={Number.isFinite(entryYear) ? entryYear : ''}
+              onChange={(e) => setEntryYear(e.target.value === '' ? NaN : Number(e.target.value))}
               className="w-24 px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none" />
           </div>
           <span className="text-xs text-[#9CA3AF] pb-2">Joins at the back of the grid; free agency fills its seats before it enters.</span>

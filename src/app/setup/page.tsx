@@ -299,8 +299,9 @@ export default function SetupPage() {
                       </label>
                     )}
                     {startYear > EARLIEST_YEAR && (
-                      <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
-                        <input type="checkbox" checked={simWorld} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                      <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] ${teamManager ? 'opacity-60' : ''}`}>
+                        {/* Team Manager always simulates history from the earliest year, so the toggle is forced on. */}
+                        <input type="checkbox" checked={teamManager || simWorld} disabled={teamManager} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
                         Sim history from {EARLIEST_YEAR}
                       </label>
                     )}
