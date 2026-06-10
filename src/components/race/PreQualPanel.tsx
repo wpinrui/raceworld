@@ -103,7 +103,6 @@ export function PreQualPanel({
   const card = useLiveDriverCards()
   const hidden = useRatingsHidden()
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
-  const playerTeamId = useSeasonStore((s) => s.playerTeamId)
   const maxCarPace = Math.max(1, ...teams.map((t) => t.carPace))
   const [sortKey, setSortKey] = useState<SortKey>('car')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -145,7 +144,7 @@ export function PreQualPanel({
             <tr className="text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
               <Th col="driver" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Driver</Th>
               <Th col="team" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Team</Th>
-              <Th col="form" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Form</Th>
+              {!teamManagerMode && <Th col="form" activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Form</Th>}
               <Th col="car" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Car</Th>
               <Th col="pace" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Pace</Th>
               <Th col="wet" right activeSortKey={sortKey} sortDir={sortDir} onSort={handleSort}>Wet</Th>
@@ -157,7 +156,6 @@ export function PreQualPanel({
             {sorted.map((d) => {
               const team = teams.find((t) => t.id === d.teamId)
               const form = forms[d.id] ?? 5
-              const isMine = teamManagerMode && d.teamId === playerTeamId
               return (
                 <tr key={d.id} className="border-b border-[#1a2030] hover:bg-[#1E2431] transition-colors">
                   <td className="py-1 pr-2">
@@ -168,9 +166,9 @@ export function PreQualPanel({
                     </div>
                   </td>
                   <td className="py-1 px-2 text-sm text-[#FFFFFF]"><TeamLink id={d.teamId} className="text-[#FFFFFF]">{team?.name ?? '—'}</TeamLink></td>
-                  <td className="py-1 px-2">
-                    {!teamManagerMode ? (
-                      // Sandbox: god-mode editable form slider.
+                  {/* Form is god-mode only — hidden entirely in Team Manager (Peak Form talent maxes your own). */}
+                  {!teamManagerMode && (
+                    <td className="py-1 px-2">
                       <div className="flex items-center gap-1.5">
                         <input
                           type="range" min={0} max={10} step={0.5}
@@ -182,14 +180,8 @@ export function PreQualPanel({
                           {form.toFixed(1)}
                         </span>
                       </div>
-                    ) : isMine ? (
-                      // Team Manager, your driver: read-only (Peak Form talent maxes it to 10.0).
-                      <span className={`text-sm font-semibold ${form > 5 ? 'text-[#10B981]' : form < 5 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}`}>{form.toFixed(1)}</span>
-                    ) : (
-                      // Team Manager, a rival: form is hidden information.
-                      <FogBar fill={form / 10} />
-                    )}
-                  </td>
+                    </td>
+                  )}
                   <td className="py-1 px-2 text-right text-sm font-semibold text-[#FFFFFF]">
                     {hidden ? <FogBar fill={(team?.carPace ?? 0) / maxCarPace} /> : (team?.carPace ?? '—')}
                   </td>
