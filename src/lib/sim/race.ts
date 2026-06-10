@@ -198,6 +198,7 @@ export function simulateLap(
 
   // Track lap times this lap for gap logic
   const lapTimesThisLap = new Map<string, number>()
+  const freeAirThisLap = new Map<string, number>() // each car's clean-air pace this lap, for the next car's pass gate
 
   // Update each team's tyre belief from BOTH its cars' (bucketed) condition — pooled, learned by
   // running. Then snapshot the field by track position (last lap's gaps) for undercut / clear-air.
@@ -386,12 +387,14 @@ export function simulateLap(
       compoundDeltas: state.compoundDeltas,
       gapToCarAhead,
       carAheadLapTime,
+      carAheadFreeAir: carAheadState ? (freeAirThisLap.get(carAheadState.driverId) ?? null) : null,
       circuitFlatModifier: circuit.flatModifier,
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
     })
 
     const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
     lapTimesThisLap.set(current.driverId, finalLapTime)
+    freeAirThisLap.set(current.driverId, lapResult.freeAir)
 
     // 2f. Overtake collision (issue #60): retire whoever the crash took out, reason 'collision-damage'.
     if (lapResult.crash?.happened && carAheadState) {
@@ -408,18 +411,26 @@ export function simulateLap(
       }
     }
 
-    // 2g. If overtook: swap positions with car ahead
+    // 2g. If overtook: swap positions with the car ahead, and the overtaken car loses time too (the fight
+    // costs both). The defender penalty also drives the cascade — the next car back then sees it slower.
     if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
+      const pen = lapResult.defenderPenalty ?? 0
+      const aheadLaps = pen > 0 && aheadUpdated.lapTimes.length
+        ? aheadUpdated.lapTimes.map((t, i) => (i === aheadUpdated.lapTimes.length - 1 ? t + pen : t))
+        : aheadUpdated.lapTimes
       updatedStates.set(carAheadState.driverId, {
         ...aheadUpdated,
         position: current.position,
+        totalTime: aheadUpdated.totalTime + pen,
+        lapTimes: aheadLaps,
       })
+      if (pen > 0) lapTimesThisLap.set(carAheadState.driverId, (lapTimesThisLap.get(carAheadState.driverId) ?? 0) + pen)
       current = { ...current, position: aheadUpdated.position }
     }
 
-    // 2h. Degrade tyre
-    const newCondition = wearTyre(current.currentTyre)
+    // 2h. Degrade tyre — dirty air (running within ~1s of the car ahead) wears it a touch faster.
+    const newCondition = wearTyre(current.currentTyre, gapToCarAhead < 1.0 ? 1.1 : 1)
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },
