@@ -130,7 +130,7 @@ export default function WorldPage() {
                       <td className="py-2 px-3 text-[#FFFFFF]">
                         {c.driverChampionId
                           ? <><DriverHover id={c.driverChampionId} card={card}><DriverLink id={c.driverChampionId} className="font-semibold text-[#FFFFFF]">{c.driverChampionName}</DriverLink></DriverHover>
-                              {c.driverChampionTeamId && <span className="text-[#FFFFFF]"> · <TeamLink id={c.driverChampionTeamId} className="text-[#FFFFFF]">{season.teams.find((t) => t.id === c.driverChampionTeamId)?.name ?? c.driverChampionTeamId}</TeamLink></span>}</>
+                              {c.driverChampionTeamId && <span className="text-[#FFFFFF]"> · <TeamLink id={c.driverChampionTeamId} className="text-[#FFFFFF]">{dir.get(c.driverChampionTeamId) ?? c.driverChampionTeamId}</TeamLink></span>}</>
                           : '—'}
                       </td>
                       <td className="py-2 px-5 text-[#FFFFFF]">

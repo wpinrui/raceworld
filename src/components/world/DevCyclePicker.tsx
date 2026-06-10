@@ -2,6 +2,7 @@
 
 import { useSeasonStore } from '@/lib/store/season-store'
 import { calendarForYear } from '@/data/calendars'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 // Team Manager: the upgrade-cadence picker for the player's own car. Reads the player team's dev plan, so
 // the delivery line (which round + race the next upgrade lands) updates live as the cycle is changed.
@@ -19,23 +20,23 @@ export function DevCyclePicker({ className }: { className?: string }) {
       <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF]">Development cycle</h2>
       <div className="mt-3 flex gap-2">
         {[3, 4, 5, 6].map((n) => (
-          <button
-            key={n}
-            onClick={() => useSeasonStore.getState().setPlayerDevCycle(n)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              selectedCycle === n
-                ? 'bg-[#00D9FF] text-[#0F1419]'
-                : 'bg-[#0F1419] text-[#FFFFFF] border border-[#303848] hover:border-[#00D9FF]'
-            }`}
-          >
-            {n}
-          </button>
+          <Tooltip key={n} content="Longer cycles deliver bigger but rarer upgrades.">
+            <button
+              onClick={() => useSeasonStore.getState().setPlayerDevCycle(n)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                selectedCycle === n
+                  ? 'bg-[#00D9FF] text-[#0F1419]'
+                  : 'bg-[#0F1419] text-[#FFFFFF] border border-[#303848] hover:border-[#00D9FF]'
+              }`}
+            >
+              {n}
+            </button>
+          </Tooltip>
         ))}
         <span className="self-center ml-1 text-xs uppercase tracking-widest text-[#FFFFFF]">races</span>
       </div>
-      <p className="mt-3 text-xs text-[#FFFFFF]">Longer cycles deliver bigger but rarer upgrades.</p>
       {devPlan && (
-        <p className="mt-1 text-xs text-[#FFFFFF]">
+        <p className="mt-3 text-xs text-[#FFFFFF]">
           {devPlan.nextUpgradeRound <= totalRounds
             ? <>Next upgrade lands round {devPlan.nextUpgradeRound}, {calendarForYear(seasonYear)[devPlan.nextUpgradeRound - 1]?.name ?? `round ${devPlan.nextUpgradeRound}`}.</>
             : 'Next upgrade lands next season.'}

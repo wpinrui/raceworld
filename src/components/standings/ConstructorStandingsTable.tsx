@@ -12,7 +12,9 @@ import { teamHighlightSolid } from '@/lib/team-manager'
 
 interface Props {
   standings: ConstructorStanding[]
-  drivers: Driver[]
+  // Only id/name/teamId are read, so an archived season can pass rows derived from its own driver
+  // standings (departed teams have no live Driver records, which would otherwise collapse their row).
+  drivers: Pick<Driver, 'id' | 'name' | 'teamId'>[]
   teams: Team[]
   totalRounds: number
   completedRounds: number

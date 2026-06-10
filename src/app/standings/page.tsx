@@ -138,6 +138,12 @@ export default function StandingsPage() {
   const displayDrivers = selectedArchive ? selectedArchive.driverStandings : season.driverStandings
   const displayConstructors = selectedArchive ? selectedArchive.constructorStandings : season.constructorStandings
   const displayYear = selectedArchive ? selectedArchive.year : season.year
+  // The constructor table builds its rows from the drivers of each team. For an archived season we must
+  // use THAT season's drivers (from its driver standings), not the live grid, or teams that have since
+  // left the grid would render no rows at all.
+  const constructorDrivers = selectedArchive
+    ? selectedArchive.driverStandings.map((d) => ({ id: d.driverId, name: d.driverName, teamId: d.teamId }))
+    : season.drivers
 
   // At year end the standings are final — celebrate the two champions.
   const showChampions = isOffSeason(season.phase) && !selectedArchive
@@ -249,7 +255,7 @@ export default function StandingsPage() {
         {tab === 'constructors' && (
           <ConstructorStandingsTable
             standings={displayConstructors}
-            drivers={season.drivers}
+            drivers={constructorDrivers}
             teams={season.teams}
             totalRounds={totalRounds}
             completedRounds={completedRounds}
