@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import type { DraftPick } from '@/lib/sim/driver-market'
 import type { Driver, DroppedDriver } from '@/lib/sim/types'
-import { useSeasonStore } from '@/lib/store/season-store'
+import { useSeasonStore, type PendingPlayerDraft } from '@/lib/store/season-store'
 import { signingDayReactions } from '@/lib/news/signing-day-reactions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import { actionGetDriverCareers } from '@/lib/news/actions'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverTooltip } from '@/components/world/DriverTooltip'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
 
 const ordinal = (n: number): string => {
@@ -60,6 +61,73 @@ function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
   )
 }
 
+// Team Manager: the interactive free-agency panel shown at the top of the board while the off-season
+// draft is paused for the player. The player fills their own open seat(s) one at a time by clicking a
+// pool driver (50% accept); a decline soft-locks that driver out of the current seat. When the last
+// seat fills, the store auto-finishes the draft and this panel disappears.
+function PlayerSigningsPanel({ draft }: { draft: PendingPlayerDraft }) {
+  const filling = draft.playerPicks.length // index of the seat currently being filled
+  const available = draft.pool.filter((d) => !draft.rejected.includes(d.id))
+
+  return (
+    <div className="shrink-0 rounded-lg bg-[#1E2431] p-3">
+      <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-2">Your signings</p>
+
+      {/* Your seats: each filled pick, then the open seats, with the one on the clock highlighted. */}
+      <div className="space-y-1.5 mb-3">
+        {draft.playerSeats.map((seat, i) => {
+          const pick = draft.playerPicks[i]
+          const isFilling = !pick && i === filling
+          return (
+            <div
+              key={`${seat.teamId}-${i}`}
+              className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded ${isFilling ? 'bg-[#00D9FF]/10 ring-1 ring-inset ring-[#00D9FF]/40' : 'bg-[#0F1419]/40'}`}
+            >
+              <span className="h-5 w-1 shrink-0 rounded-sm" style={{ backgroundColor: seat.teamColor }} />
+              <span className="text-xs font-semibold text-[#FFFFFF] truncate w-28 shrink-0">{seat.teamName}</span>
+              {pick ? (
+                <span className="text-sm font-semibold text-[#FFFFFF] truncate flex-1">{pick.driverName}</span>
+              ) : isFilling ? (
+                <span className="text-xs italic text-[#00D9FF] flex-1">Choose a driver…</span>
+              ) : (
+                <span className="text-xs text-[#FFFFFF] flex-1">Seat open</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {draft.rejected.length > 0 && (
+        <p className="text-[11px] text-[#FFFFFF] mb-2">{draft.rejected.length} turned you down for this seat.</p>
+      )}
+
+      {/* The free-agent pool: clickable rows. When empty (can't sign anyone), fall back to rookies. */}
+      {available.length > 0 ? (
+        <div className="max-h-48 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
+          {available.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
+              className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
+            >
+              <NationalityFlag code={d.nationality} />
+              <span className="text-sm text-[#FFFFFF] truncate flex-1">{d.name}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <button
+          onClick={() => useSeasonStore.getState().finishPlayerDraft()}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]"
+        >
+          No free agents left — take rookies
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPick[]; year: number; dropped?: DroppedDriver[] }) {
   const stored = useSeasonStore((s) => s.signingDayRevealed)
   const setRevealed = useSeasonStore((s) => s.setSigningDayRevealed)
@@ -69,6 +137,8 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   const driverStandings = useSeasonStore((s) => s.driverStandings)
   const raceResults = useSeasonStore((s) => s.raceResults)
   const eos = useSeasonStore((s) => s.endOfSeasonSummary)
+  // Team Manager: when the off-season draft is paused for the player to fill their own seat(s).
+  const playerDraft = useSeasonStore((s) => s.pendingPlayerDraft)
 
   // Career totals (archived base + the season just run), for the free-agent hover cards.
   const [careers, setCareers] = useState<Record<string, DriverCareer>>({})
@@ -79,7 +149,12 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   }, [year, raceResults, eos])
 
   if (picks.length === 0) {
-    return <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
+    return (
+      <div className="flex h-full flex-col gap-3">
+        {playerDraft && <PlayerSigningsPanel draft={playerDraft} />}
+        <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
+      </div>
+    )
   }
 
   const total = picks.length
@@ -128,6 +203,9 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
 
   return (
     <div className="flex h-full flex-col gap-3">
+      {/* Team Manager: your interactive free-agency picks, before the reveal content. */}
+      {playerDraft && <PlayerSigningsPanel draft={playerDraft} />}
+
       {/* Controls (fixed) */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         <button
