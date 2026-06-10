@@ -212,7 +212,10 @@ export default function SetupPage() {
       useSeasonStore.getState().setTeamManager(true, sel.teamId)
       if (real) useSeasonStore.getState().initSeason(real.drivers, real.teams, landed)
     }
-    useSeasonStore.getState().setRealWorldMode(realWorld)
+    // Team Manager is always real F1 history: keep real-world mode ON so real team changes (and the
+    // season-end accept/reject modal) apply, exactly like sandbox real-world mode. The fast-forward above
+    // already ran in real-world mode; don't drop back to the sandbox `realWorld` setup flag here.
+    useSeasonStore.getState().setRealWorldMode(true)
     useRaceStore.getState().resetSession()
     setSimulating(false)
     router.push('/home')
@@ -307,8 +310,9 @@ export default function SetupPage() {
                       </select>
                     )}
                     {startYear !== DEFAULT_START_YEAR && (
-                      <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
-                        <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                      <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] ${teamManager ? 'opacity-60' : ''}`}>
+                        {/* Team Manager always plays real F1 history, so real-world changes are forced on. */}
+                        <input type="checkbox" checked={teamManager || realWorld} disabled={teamManager} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
                         Real-world changes
                       </label>
                     )}
