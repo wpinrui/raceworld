@@ -30,6 +30,7 @@ export default function TeamPage() {
   const currentRound = useSeasonStore((s) => s.currentRound)
   // The live season's round count drives the in-season upgrade timeline.
   const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
+  const seasonYear = useSeasonStore((s) => s.year)
   const liveTeam = useSeasonStore((s) => s.teams.find((t) => t.id === id))
   const updateTeam = useSeasonStore((s) => s.updateTeam)
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
@@ -149,6 +150,13 @@ export default function TeamPage() {
                         <span className="self-center ml-1 text-xs uppercase tracking-widest text-[#FFFFFF]">races</span>
                       </div>
                       <p className="mt-3 text-xs text-[#FFFFFF]">Longer cycles deliver bigger but rarer upgrades.</p>
+                      {devPlan && (
+                        <p className="mt-1 text-xs text-[#FFFFFF]">
+                          {devPlan.nextUpgradeRound <= totalRounds
+                            ? <>Next upgrade lands round {devPlan.nextUpgradeRound}, {calendarForYear(seasonYear)[devPlan.nextUpgradeRound - 1]?.name ?? `round ${devPlan.nextUpgradeRound}`}.</>
+                            : 'Next upgrade lands next season.'}
+                        </p>
+                      )}
                     </div>
                   )}
 
