@@ -154,7 +154,7 @@ export default function Nav() {
   function handleSimQualifying() { useRaceStore.getState().initSession() }
   function handleStartRace() {
     const rs = useRaceStore.getState().raceState
-    if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'racing' } })
+    if (rs) useRaceStore.setState({ raceState: { ...rs, phase: 'lights' } })
   }
   function handleQuit() {
     useRaceStore.getState().resetSession()
@@ -305,11 +305,12 @@ export default function Nav() {
   const cta = (() => {
     if (!hydrated) return null
     if (matchMode) {
-      if (racePhase === 'qualifying') return <button disabled className={PRIMARY_CTA}>Qualifying…</button>
+      // Qualifying and the lights countdown drive themselves (SpeedBar / overlay) — no top-right CTA.
+      if (racePhase === 'qualifying' || racePhase === 'lights') return null
       if (racePhase === 'pre-race') return <button onClick={handleStartRace} className={PRIMARY_CTA}>Start Race<ChevronRight size={14} /></button>
       if (racePhase === 'finished') return <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
       if (racePhase === 'racing') return null
-      return <button onClick={handleSimQualifying} className={PRIMARY_CTA}>Simulate Qualifying<ChevronRight size={14} /></button>
+      return <button onClick={handleSimQualifying} className={PRIMARY_CTA}>Start Qualifying<ChevronRight size={14} /></button>
     }
     if (!seasonActive) {
       // Pre-season: the Setup page registers its "Start Season" action here.

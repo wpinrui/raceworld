@@ -19,6 +19,8 @@ import { PreRacePanel } from '@/components/race/PreRacePanel'
 import { PostRacePanel } from '@/components/race/PostRacePanel'
 import { SpeedBar } from '@/components/race/SpeedBar'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
+import { QualifyingPanel } from '@/components/race/QualifyingPanel'
+import { LightsOverlay } from '@/components/race/LightsOverlay'
 
 const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 5000, 2: 2000, 3: 500, 4: 0 }
 
@@ -68,7 +70,7 @@ export default function RacePage() {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
-      if (e.key === ' ' && (phase === 'racing' || phase === 'finished')) { e.preventDefault(); setPaused(!paused) }
+      if (e.key === ' ' && (phase === 'racing' || phase === 'finished' || phase === 'qualifying')) { e.preventDefault(); setPaused(!paused) }
       if (phase === 'racing') {
         if (e.key === '1') handleSpeedClick(1)
         if (e.key === '2') handleSpeedClick(2)
@@ -172,12 +174,13 @@ export default function RacePage() {
               onFormChange={updateDriverForm}
             />
           )}
-          {phase === 'qualifying' && (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-[#FFFFFF] text-xl tracking-widest uppercase animate-pulse">Qualifying in progress...</p>
-            </div>
+          {phase === 'qualifying' && raceState && (
+            <QualifyingPanel
+              raceState={raceState} drivers={drivers} teams={teams}
+              currentCircuit={currentCircuit}
+            />
           )}
-          {phase === 'pre-race' && raceState && (
+          {(phase === 'pre-race' || phase === 'lights') && raceState && (
             <PreRacePanel
               raceState={raceState} drivers={drivers} teams={teams}
               currentCircuit={currentCircuit}
@@ -245,6 +248,18 @@ export default function RacePage() {
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
         />
+      )}
+
+      {phase === 'qualifying' && raceState && (
+        <SpeedBar
+          speed={speed} paused={paused}
+          onSpeedClick={(s) => setSpeed(s)}
+          onTogglePause={() => setPaused(!paused)}
+        />
+      )}
+
+      {phase === 'lights' && raceState && (
+        <LightsOverlay onComplete={() => useRaceStore.getState().beginRacing()} />
       )}
 
       {showSpeed4Modal && (

@@ -1,7 +1,7 @@
 import type { TeamBelief } from './pit-ai'
 
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet'
-export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'racing' | 'finished'
+export type RacePhase = 'pre-qualifying' | 'qualifying' | 'pre-race' | 'lights' | 'racing' | 'finished'
 export type SimSpeed = 1 | 2 | 3 | 4
 
 // A specific technical/mechanical failure (issue #61). Picked uniformly on a technical DNF.

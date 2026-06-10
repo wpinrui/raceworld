@@ -29,6 +29,8 @@ interface RaceStore {
   tickLap: (godModeActions?: GodModeAction[]) => void
   setSpeed: (speed: SimSpeed) => void
   setPaused: (paused: boolean) => void
+  finishQualifying: () => void
+  beginRacing: () => void
   resetSession: (drivers?: Driver[], teams?: Team[], circuit?: Circuit) => void
 }
 
@@ -70,7 +72,8 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const { year, saveSeed } = useSeasonStore.getState()
     const { results, sessions } = runQualifying(drivers, teams, selectedCircuit, forms)
     const raceState = initRaceState(drivers, teams, selectedCircuit, results, sessions, forms, year, strategyNoise, saveSeed)
-    set({ raceState })
+    // Enter the playable qualifying phase, paused — the player presses play to run each session (Q1→Q2→Q3).
+    set({ raceState: { ...raceState, phase: 'qualifying', paused: true } })
   },
 
   tickLap: (godModeActions) => {
@@ -90,6 +93,20 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const { raceState } = get()
     if (!raceState) return
     set({ raceState: { ...raceState, paused } })
+  },
+
+  // Qualifying playback finished (after Q3): drop into the existing pre-race grid screen.
+  finishQualifying: () => {
+    const { raceState } = get()
+    if (!raceState) return
+    set({ raceState: { ...raceState, phase: 'pre-race', paused: false } })
+  },
+
+  // Lights out — the 5-light countdown completed; green-flag the race so the tick loop runs.
+  beginRacing: () => {
+    const { raceState } = get()
+    if (!raceState) return
+    set({ raceState: { ...raceState, phase: 'racing' } })
   },
 
   resetSession: (drivers, teams, circuit) => {
