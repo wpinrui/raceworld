@@ -24,6 +24,7 @@ import { ConfirmModal } from '@/components/race/ConfirmModal'
 import { QualifyingPanel } from '@/components/race/QualifyingPanel'
 import { LightsOverlay } from '@/components/race/LightsOverlay'
 import { TrackMap } from '@/components/race/TrackMap'
+import { UpgradeRevealModal } from '@/components/race/UpgradeRevealModal'
 import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 
 const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 5000, 2: 2000, 3: 500, 4: 0 }
@@ -48,6 +49,8 @@ export default function RacePage() {
   const [speed4Confirmed, setSpeed4Confirmed] = useState(false)
   const hydrated = useHydrated()
   const [lapProgress, setLapProgress] = useState(0)
+  // Team Manager: the pre-race upgrade reveal shows once per upgrade; dismissing latches this round.
+  const [acknowledgedRound, setAcknowledgedRound] = useState<number | null>(null)
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextTickAtRef = useRef<number>(0)
@@ -181,6 +184,18 @@ export default function RacePage() {
   const resultsForDisplay = phase === 'finished' ? computeResults() : []
   const selectedDriverId = godModeDriverId
 
+  // Team Manager: surface the pre-race upgrade reveal when the player team's upgrade is due this round
+  // and the outcome has been rolled. Shown once per upgrade (dismissal latches acknowledgedRound).
+  const playerPlan = season.teamManagerMode
+    ? season.devPlans.find((p) => p.teamId === season.playerTeamId)
+    : undefined
+  const showUpgradeReveal =
+    !!playerPlan &&
+    (phase === 'pre-race' || phase === 'lights') &&
+    playerPlan.nextUpgradeRound === season.currentRound &&
+    playerPlan.pendingPaceDelta !== undefined &&
+    acknowledgedRound !== season.currentRound
+
   return (
     <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
       <RaceHeader
@@ -298,6 +313,14 @@ export default function RacePage() {
           confirmLabel="Confirm"
           onConfirm={confirmSpeed4}
           onCancel={() => setShowSpeed4Modal(false)}
+        />
+      )}
+
+      {showUpgradeReveal && playerPlan && (
+        <UpgradeRevealModal
+          paceDelta={playerPlan.pendingPaceDelta ?? 0}
+          failed={playerPlan.pendingFailed ?? false}
+          onDismiss={() => setAcknowledgedRound(season.currentRound)}
         />
       )}
     </div>

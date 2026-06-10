@@ -34,7 +34,11 @@ export default function TeamPage() {
   const updateTeam = useSeasonStore((s) => s.updateTeam)
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const playerDevCycle = useSeasonStore((s) => s.playerDevCycle)
   const onGrid = !!liveTeam
+  // Team Manager: the player picks the upgrade cadence for their own team only.
+  const isPlayerTeam = teamManagerMode && id === playerTeamId
+  const selectedCycle = playerDevCycle ?? devPlan?.cycleLength ?? null
   // God-mode team edits: always available in sandbox; in Team Manager mode only for the player's own team.
   const canEditTeam = !!liveTeam && (!teamManagerMode || id === playerTeamId)
   // Only editable while the season is running: upgrades are delivered during races, and
@@ -122,6 +126,32 @@ export default function TeamPage() {
 
               {tab === 'overview' && (
                 <div className="space-y-5">
+                  {isPlayerTeam && (
+                    <div className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5">
+                      <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF]">Development cycle</h2>
+                      <div className="mt-3 flex gap-2">
+                        {[3, 4, 5, 6].map((n) => {
+                          const active = selectedCycle === n
+                          return (
+                            <button
+                              key={n}
+                              onClick={() => useSeasonStore.getState().setPlayerDevCycle(n)}
+                              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                active
+                                  ? 'bg-[#00D9FF] text-[#0F1419]'
+                                  : 'bg-[#0F1419] text-[#FFFFFF] border border-[#303848] hover:border-[#00D9FF]'
+                              }`}
+                            >
+                              {n}
+                            </button>
+                          )
+                        })}
+                        <span className="self-center ml-1 text-xs uppercase tracking-widest text-[#FFFFFF]">races</span>
+                      </div>
+                      <p className="mt-3 text-xs text-[#FFFFFF]">Longer cycles deliver bigger but rarer upgrades.</p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                     <StatTile label="Titles" value={career.honours.constructorTitles} />
                     <StatTile label="Best" value={career.honours.bestFinish != null ? `P${career.honours.bestFinish}` : '—'} />
