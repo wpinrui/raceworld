@@ -31,13 +31,14 @@ export interface LapResult {
 // Traffic / dirty-air model (make qualifying matter — overtaking was far too easy). Tunables:
 const DIRTY_RANGE = 1.0       // s: a follower within this loses pace to dirty air
 const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fades to 0 at DIRTY_RANGE
-const STRIKE_RANGE = 1.0      // s: a contested pass needs the car within this (~DRS range) at lap start
-const PASS_MARGIN = 1.5       // s: if this lap's pace would leave it this far AHEAD, it blows straight past
-const CONTEST_GAP = 0.15      // s: a pass is contested when the running pace would close inside this
-const OVERTAKE_SENS = 0.8     // pass prob per second of clean-air pace edge
+const STRIKE_RANGE = 1.0      // s: within this (~DRS range) a faster car gets a per-lap chance to pass
+const PASS_MARGIN = 3.0       // s: only a car whose pace would leave it this far AHEAD blows straight by (rare)
+const CONTEST_GAP = 0.15      // s: a car closing past this from beyond range arrives right behind, contests next lap
+const OVERTAKE_SENS = 0.2     // per-lap pass chance per second of clean-air pace edge (overtaking is HARD)
+const MAX_CONTEST = 0.5       // cap on the per-lap pass chance from within range (no certain passes)
 const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
 const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
-const HOLD_GAP = 0.3          // s: a failed move / a from-range catch-up tucks in this far behind (no pass)
+const HOLD_GAP = 0.3          // s: a car that can't get by harries no closer than this, tyres cooking
 
 export function computeLapTime(input: LapInput): LapResult {
   const {
@@ -129,17 +130,17 @@ export function computeLapTime(input: LapInput): LapResult {
   const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this pace
   const paceEdge = input.carAheadFreeAir - freeAir                  // clean-air pace advantage over the car ahead
 
-  // A pass happens this lap when EITHER:
-  //  (a) BLOW-PAST — the car is so much faster than the gap that running its own pace leaves it clearly
-  //      AHEAD of the car in front (wouldGap past -PASS_MARGIN). It just drives by, from any distance:
-  //      10s/lap faster and 5s back, or a backmarker on the wrong tyres. No striking-range needed.
-  //  (b) CONTEST — already within striking range (~1s) at the start of the lap and its pace would close
-  //      onto the car ahead. A move it has to make stick (a roll), not a clean drive-by.
-  // A car merely DRAWING IN from beyond ~1s (closes the gap but wouldn't end up ahead) can't pass yet — it
-  // arrives right behind and contests next lap.
+  // A pass happens this lap in one of two ways:
+  //  (a) BLOW-PAST (rare) — the car is so much faster than the gap that running its own pace leaves it
+  //      well AHEAD of the car in front (past PASS_MARGIN). It just drives by, from any distance: a
+  //      backmarker being lapped, or a car on the wrong tyres. The big overshoot makes this rare.
+  //  (b) CONTEST — it's within striking range (~1s) and quicker. Passing is HARD: a LOW per-lap chance
+  //      that scales with how much faster it is (and its overtaking), capped well under 1. A marginally
+  //      quicker car still gets a small chance every lap (never walled to zero); a clearly-but-not-hugely
+  //      faster car doesn't simply breeze by. It harries in the dirty air until a chance comes off.
   const blowPast = wouldGap < -PASS_MARGIN && paceEdge > 0
-  const contest = gapToCarAhead <= STRIKE_RANGE && wouldGap < CONTEST_GAP && paceEdge > 0
-  if (blowPast || contest) {
+  const inRange = gapToCarAhead <= STRIKE_RANGE && paceEdge > 0
+  if (blowPast || inRange) {
     // Crash roll (issue #60), driven by both drivers' consistency (f(c) = 2e-6·(100-c)²).
     if (input.defenderDriver) {
       const k = 0.000002
@@ -151,18 +152,19 @@ export function computeLapTime(input: LapInput): LapResult {
         return { lapTime: dirtyLapTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 }, freeAir }
       }
     }
-    // A blow-past just goes through; a contest is a move whose chance scales with the clean-air pace edge.
-    const passes = blowPast || Math.random() < Math.min(0.92, paceEdge * OVERTAKE_SENS + (driver.overtaking / 100) * 0.2)
-    if (passes) {
+    // Blow-past goes through; a contest is a hard, edge-scaled roll (overtaking rated against a 75 baseline).
+    const prob = Math.min(MAX_CONTEST, paceEdge * OVERTAKE_SENS * (driver.overtaking / 75))
+    if (blowPast || Math.random() < prob) {
       // A completed pass costs both cars time: the attacker a little, the defender more.
       return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
     }
-    // Failed move: tuck in right behind (no free pass — must contest again next lap).
-    return { lapTime: carAheadLapTime + HOLD_GAP - gapToCarAhead, overtook: false, freeAir }
+    // No way through this lap: hold station in the dirty air, no closer than HOLD_GAP (harrying, tyres cooking).
+    const heldGap = Math.max(HOLD_GAP, wouldGap)
+    return { lapTime: carAheadLapTime + heldGap - gapToCarAhead, overtook: false, freeAir }
   }
 
-  // Drawing into range this lap but wouldn't end up ahead → arrive right behind (no pass this lap; it
-  // wasn't within ~1s at the start and isn't fast enough to blow by). It contests next lap, now in range.
+  // Closing from beyond striking range and this pace would overshoot the car ahead → arrive right behind
+  // instead (no pass this lap; it gets its chances next lap, now in range).
   if (wouldGap < CONTEST_GAP) {
     return { lapTime: carAheadLapTime + HOLD_GAP - gapToCarAhead, overtook: false, freeAir }
   }

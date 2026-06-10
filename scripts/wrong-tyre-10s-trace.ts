@@ -1,9 +1,7 @@
-// Trace the overtake model lap-by-lap. Rule under test:
-//  - BLOW-PAST: so much faster than the gap you'd end up clearly ahead -> pass THIS lap, from any distance.
-//  - DRAW-IN:  only fast enough to close to the car (not end up ahead) -> arrive behind, pass NEXT lap.
-//  - CONTEST:  already within ~1s -> contested move (roll).
-// Pace gap is driven directly (the car ahead's lap time = B's mean + gap), so we can test 10s, 5s, 2s.
-// Run: tsx scripts/wrong-tyre-10s-trace.ts
+// Probe the overtake model. Two questions:
+//  - per-lap pass CHANCE within range (is a faster car ever walled to zero? is a 2s car a near-certainty?)
+//  - lap-by-lap behaviour (does a much-faster car blow by this lap; does a closer car draw in first?)
+// Pace gap is driven directly (car ahead's lap time = B's mean + gap). Run: tsx scripts/wrong-tyre-10s-trace.ts
 import type { Driver, Team, TyreState, WeatherPoint } from '@/lib/sim/types'
 import { computeLapTime } from '@/lib/sim/engine'
 import { DEFAULT_COMPOUND_DELTAS } from '@/lib/sim/tyres'
@@ -17,28 +15,40 @@ const soft: TyreState = { compound: 'soft', condition: 100, maxLifeLaps: 999 }
 const team: Team = { id: 't', name: 'T', shortName: 'T', nationality: 'GB', color: '#888', carPace: 75 }
 const base = { form: 5, fuelLaps: 0, lap: 1, weather: dry, compoundDeltas: DEFAULT_COMPOUND_DELTAS, circuitFlatModifier: 0 }
 
-// B's mean clean-air lap, so we can place a car ahead exactly `paceGap` slower.
 const bMean = (() => { let s = 0; for (let i = 0; i < 5000; i++) s += computeLapTime({ ...base, driver: B, team, tyre: soft, gapToCarAhead: Infinity, carAheadLapTime: null }).freeAir; return s / 5000 })()
+const lap = (paceGap: number, gap: number) => computeLapTime({ ...base, driver: B, team, tyre: soft, gapToCarAhead: gap, carAheadLapTime: bMean + paceGap, carAheadFreeAir: bMean + paceGap, defenderDriver: A })
 
-// Car ahead is `paceGap` s/lap slower than B; B starts `startGap` behind. Walk the gap lap by lap.
-function trace(label: string, paceGap: number, startGap: number) {
-  const aheadTime = bMean + paceGap
-  let gap = startGap
-  const parts: string[] = []
-  for (let lap = 1; lap <= 6; lap++) {
-    const r = computeLapTime({ ...base, driver: B, team, tyre: soft, gapToCarAhead: gap, carAheadLapTime: aheadTime, carAheadFreeAir: aheadTime, defenderDriver: A })
-    if (r.overtook) { parts.push(`L${lap} PASS✅`); break }
-    gap = gap + (r.lapTime - aheadTime)
-    parts.push(`L${lap}→${gap.toFixed(2)}s`)
-    if (gap < 0) { parts.push('(passed)'); break }
-  }
-  console.log(`${label.padEnd(34)} ${parts.join('  ')}`)
+// Per-lap pass chance at a fixed (paceGap, gap), and the implied laps to clear.
+function chance(label: string, paceGap: number, gap: number, N = 30000) {
+  let pass = 0
+  for (let i = 0; i < N; i++) if (lap(paceGap, gap).overtook) pass++
+  const p = pass / N
+  const within = (k: number) => `${((1 - (1 - p) ** k) * 100).toFixed(0)}%`
+  console.log(`${label.padEnd(30)} ${(p * 100).toFixed(1).padStart(5)}% / lap   (clears within 5 laps ${within(5)}, 15 laps ${within(15)})`)
 }
 
-console.log('Blow-past (end up clearly ahead) = pass THIS lap; only-closing = draw in, pass NEXT lap\n')
-trace('10s/lap faster, 5s behind', 10, 5)    // blow-past -> PASS lap 1
-trace('5s/lap faster, 5s behind', 5, 5)      // only closes -> draw in, pass lap 2
-trace('2s/lap faster, 2s behind', 2, 2)      // only closes -> draw in, pass lap 2
-trace('2s/lap faster, 0.8s behind', 2, 0.8)  // within 1s -> contest lap 1
-trace('17.5/lap faster (wrong tyre), 10s', 17.5, 10) // blow-past -> PASS lap 1
-trace('0.4s/lap faster, 0.5s behind', 0.4, 0.5)      // not enough -> train, no pass
+// Lap-by-lap gap walk (does it pass this lap, or draw in first?).
+function walk(label: string, paceGap: number, startGap: number) {
+  let gap = startGap
+  const parts: string[] = []
+  for (let l = 1; l <= 6; l++) {
+    const r = lap(paceGap, gap)
+    if (r.overtook) { parts.push(`L${l} PASS✅`); break }
+    gap = gap + (r.lapTime - (bMean + paceGap))
+    parts.push(`L${l}→${gap.toFixed(2)}s`)
+  }
+  console.log(`${label.padEnd(30)} ${parts.join('  ')}`)
+}
+
+console.log('PER-LAP PASS CHANCE within range (faster car, harrying behind):\n')
+chance('0.4s faster, harrying', 0.4, 0.3)
+chance('1.0s faster, harrying', 1.0, 0.3)
+chance('2.0s faster, harrying', 2.0, 0.3)
+chance('0.4s faster, sat at 0.5s', 0.4, 0.5)
+
+console.log('\nLAP-BY-LAP (blow-past should be RARE — only the genuinely huge mismatch):\n')
+walk('10s faster, 5s behind', 10, 5)        // blow-past -> pass lap 1
+walk('5s faster, 5s behind', 5, 5)          // draws in, then through
+walk('2s faster, 2s behind', 2, 2)          // draws in, then harries/contests
+walk('2s faster, 0.8s behind', 2, 0.8)      // within 1s -> contests (NOT instant)
+walk('17.5 faster (wrong tyre), 10s', 17.5, 10) // blow-past -> pass lap 1
