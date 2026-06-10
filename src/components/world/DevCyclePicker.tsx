@@ -4,14 +4,14 @@ import { useState } from 'react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendarForYear } from '@/data/calendars'
-import { drawPackages } from '@/lib/sim/development'
+import { drawPackages, CATCHUP_PER_POINT_PER_RACE } from '@/lib/sim/development'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
 
 // 1 car-pace point = 0.04s/lap (engine.ts: carMod = (75 − carPace)/25, added to the base lap). The 5% flat
-// failure and the median/catch-up gain mirror rollUpgrade in development.ts (catch-up accrues per race).
+// failure and the median/catch-up gain mirror rollUpgrade in development.ts (catch-up accrues per race); the
+// catch-up rate is imported from there so the tooltip can't drift from the engine.
 const SECONDS_PER_PACE = 0.04
-const CATCHUP_PER_POINT_PER_RACE = 0.027
 
 // Expected lap-time gain (seconds) for an upgrade of the given cycle, for a car `deficit` pace points off
 // the leader: median = cycle·1.05^(cycle−3), plus the per-race catch-up bonus and the Chief Aerodynamicist

@@ -44,7 +44,7 @@ const BASE_SIGMA = 1.5 / 0.6745
 // per-upgrade bonus would hand short cycles strictly more catch-up and make them always better for a slow
 // car. 0.027/race (≈0.121 at the mean 4.5-race cycle) closes a 1.8s opening spread to ~1.15s by season end
 // (10-team, 24-round; see scripts/catchup-sim.ts).
-const CATCHUP_PER_POINT_PER_RACE = 0.027
+export const CATCHUP_PER_POINT_PER_RACE = 0.027
 
 // Financial tier's nudge in the end-of-season reshuffle: a small per-tier bonus to the sort so richer
 // teams (tier 1) drift up the order. At 0.4 the tier1↔tier4 swing is worth ~1.2 grid slots — enough to

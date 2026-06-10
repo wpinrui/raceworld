@@ -27,7 +27,8 @@ console.log(`car BEHIND (slicks):             ${bFree.toFixed(2)} s/lap`)
 console.log(`pace edge to the slick car:      ${(aFree - bFree).toFixed(2)} s/lap\n`)
 
 // B contesting A on the gearbox (gap 0.4s). carAheadLapTime/FreeAir = A's (slow) clean-air pace.
-let pass = 0, crash = 0, N = 20000
+let pass = 0, crash = 0
+const N = 20000
 for (let i = 0; i < N; i++) {
   const r = computeLapTime({ ...base, driver: B, team, tyre: soft, gapToCarAhead: 0.4, carAheadLapTime: aFree, carAheadFreeAir: aFree, defenderDriver: A })
   if (r.overtook) pass++
