@@ -264,7 +264,10 @@ export type FundingTier = 1 | 2 | 3 | 4
 export interface TeamDevPlan {
   teamId: string
   cycleLength: number          // 3–6 races per upgrade
-  nextUpgradeRound: number
+  // The round the in-progress upgrade lands. null = no active upgrade — Team Manager player only: after a
+  // delivery the player's plan goes idle until they pick the next package (the car stagnates meanwhile).
+  // AI plans are never null (they develop continuously).
+  nextUpgradeRound: number | null
   fundingTier: FundingTier      // funding tier (1-4); now informational — drives the reshuffle nudge, not upgrade size
   cumulativePenalty: number     // legacy field, always 0 since the tier penalty was replaced by catch-up upgrades
   // Pre-rolled outcome of the upgrade due at nextUpgradeRound, so the player can
@@ -274,6 +277,7 @@ export interface TeamDevPlan {
   // on rehydrate; applyUpgradeEvents also rolls lazily if still missing).
   pendingPaceDelta?: number
   pendingFailed?: boolean       // the upcoming upgrade will deliver nothing (5% base chance)
+  pendingPackageName?: string   // Team Manager: the part the player chose to develop, echoed in the reveal
   playerControlled?: boolean    // Team Manager: the player sets this team's cycle, so it isn't re-randomised
 }
 
@@ -282,6 +286,7 @@ export interface DevUpgradeEvent {
   round: number
   paceDelta: number
   failed: boolean
+  packageName?: string          // Team Manager: the player's chosen package, shown in the upgrade-reveal modal
 }
 
 // God-mode grid changes (add/remove a team) queued during a season, applied at the

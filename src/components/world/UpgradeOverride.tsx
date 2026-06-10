@@ -23,8 +23,10 @@ export function UpgradeOverride({
 
   const failed = devPlan.pendingFailed ?? false
   const paceDelta = devPlan.pendingPaceDelta ?? 0
-  const thisSeason = devPlan.nextUpgradeRound <= totalRounds
-  const racesAway = devPlan.nextUpgradeRound - currentRound
+  // Sandbox (non-Team-Manager) plans always have a numeric round; the ?? guards the shared null type only.
+  const nextUpgradeRound = devPlan.nextUpgradeRound ?? totalRounds + 1
+  const thisSeason = nextUpgradeRound <= totalRounds
+  const racesAway = nextUpgradeRound - currentRound
 
   const inputClass = 'w-24 px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
 
@@ -46,7 +48,7 @@ export function UpgradeOverride({
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Next upgrade</p>
           <p className="text-sm font-semibold text-[#FFFFFF] mt-0.5">
             {thisSeason
-              ? <>Round {devPlan.nextUpgradeRound}{' '}
+              ? <>Round {nextUpgradeRound}{' '}
                   <span className="font-normal text-[#FFFFFF]">
                     {racesAway <= 0 ? '(due now)' : `(in ${racesAway} race${racesAway > 1 ? 's' : ''})`}
                   </span>

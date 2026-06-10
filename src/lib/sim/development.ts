@@ -1,5 +1,36 @@
 import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeasonRecord } from './types'
-import { sampleNormal } from './rng-utils'
+import { sampleNormal, seededRng } from './rng-utils'
+
+// Team Manager: the pool of upgrade-package names the player picks from. Each pick maps to a cycle length
+// (3–6 races) with NO connection to the name — a longer name isn't a longer cycle; the mapping is a seeded
+// shuffle (see drawPackages). Terse, plausible F1 parts.
+export const UPGRADE_PACKAGES = [
+  'Front wing upgrade',
+  'Barge boards redesign',
+  'Chassis weight reduction',
+  'Floor edge revision',
+  'Diffuser upgrade',
+  'Sidepod repackaging',
+  'Rear wing assembly',
+  'Suspension geometry rework',
+  'Brake duct redesign',
+  'Underfloor tunnel revision',
+  'Engine cover slimming',
+  'Nose cone reshape',
+]
+
+// Draw four distinct package names from the pool and pin them to cycles [3,4,5,6] in draw order, so the
+// name↔length pairing is random (and stable for a given seed). Seed per development offer so the four
+// options hold steady while one upgrade is in progress, then refresh once the next offer comes up.
+export function drawPackages(seed: string): { cycle: number; name: string }[] {
+  const rng = seededRng(seed)
+  const pool = [...UPGRADE_PACKAGES]
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  return [3, 4, 5, 6].map((cycle, i) => ({ cycle, name: pool[i] }))
+}
 
 // 3-race cycle base gain: median +3, Q1 +1.5, Q3 +4.5. For a normal curve Q1 = μ − 0.6745σ,
 // so σ = (3 − 1.5) / 0.6745 ≈ 2.224. This anchors a car ON the pace at a 3-race cycle; longer cycles
@@ -129,20 +160,23 @@ export function initDevPlans(
   })
 }
 
-// Team Manager: mark the player team's dev plan player-controlled (so it isn't re-randomised) and, if the
-// player has chosen a cycle, apply it — re-pre-rolling the pending upgrade for the new cadence, with the
-// next upgrade landing `cycle` races out. No-op outside Team Manager mode (no playerTeamId).
+// Team Manager: mark the player team's dev plan player-controlled (so it isn't re-randomised). With a
+// chosen cycle, start that upgrade — pre-rolling its outcome, landing `cycle` races out, and recording the
+// package the player picked. With `cycle == null` the player has nothing in development: the plan goes idle
+// (no pending upgrade, no delivery) until they pick again. No-op outside Team Manager mode (no playerTeamId).
 export function applyPlayerCycle(
-  devPlans: TeamDevPlan[], teams: Team[], playerTeamId: string | null, cycle: number | null, fromRound: number, rng: () => number,
+  devPlans: TeamDevPlan[], teams: Team[], playerTeamId: string | null, cycle: number | null, fromRound: number, rng: () => number, packageName?: string,
 ): TeamDevPlan[] {
   if (!playerTeamId) return devPlans
   const leaderPace = Math.max(...teams.map((t) => t.carPace))
   const myPace = teams.find((t) => t.id === playerTeamId)?.carPace ?? 75
   return devPlans.map((p) => {
     if (p.teamId !== playerTeamId) return p
-    const cycleLength = cycle ?? p.cycleLength
-    const pending = rollUpgrade(cycleLength, leaderPace - myPace, rng)
-    return { ...p, playerControlled: true, cycleLength, nextUpgradeRound: fromRound + cycleLength, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed }
+    if (cycle == null) {
+      return { ...p, playerControlled: true, nextUpgradeRound: null, pendingPaceDelta: undefined, pendingFailed: undefined, pendingPackageName: undefined }
+    }
+    const pending = rollUpgrade(cycle, leaderPace - myPace, rng)
+    return { ...p, playerControlled: true, cycleLength: cycle, nextUpgradeRound: fromRound + cycle, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed, pendingPackageName: packageName }
   })
 }
 
@@ -159,7 +193,9 @@ export function applyUpgradeEvents(
   const leaderPace = () => Math.max(...[...teamMap.values()].map((t) => t.carPace))
 
   const updatedDevPlans = devPlans.map((plan) => {
-    if (round !== plan.nextUpgradeRound) return plan
+    // An idle player plan (nextUpgradeRound null) has nothing to deliver. The `!= null` also narrows the
+    // type so the arithmetic below stays on a number.
+    if (plan.nextUpgradeRound == null || round !== plan.nextUpgradeRound) return plan
 
     const team = teamMap.get(plan.teamId)
 
@@ -171,17 +207,22 @@ export function applyUpgradeEvents(
     const failed = prerolled.failed
     const paceDelta = failed ? 0 : prerolled.paceDelta
 
-    upgradeEvents.push({ teamId: plan.teamId, round, paceDelta, failed })
+    upgradeEvents.push({ teamId: plan.teamId, round, paceDelta, failed, packageName: plan.pendingPackageName })
 
     if (team && paceDelta > 0) {
       team.carPace = round1(team.carPace + paceDelta)
       teamMap.set(plan.teamId, team)
     }
 
-    // Pick a fresh cycle for the next upgrade and pre-roll its outcome against the freshly-updated
-    // deficit, so a car that has caught up rolls a smaller catch-up next time (it self-limits). A
-    // player-controlled team (Team Manager) keeps the cycle the player chose instead of re-randomising.
-    const nextCycle = plan.playerControlled ? plan.cycleLength : randomCycleLength(rng)
+    // A player-controlled team (Team Manager) does NOT auto-continue: once an upgrade lands its plan goes
+    // idle (no pending upgrade) until the player picks the next package — the car stagnates in between.
+    if (plan.playerControlled) {
+      return { ...plan, cumulativePenalty: 0, nextUpgradeRound: null, pendingPaceDelta: undefined, pendingFailed: undefined, pendingPackageName: undefined }
+    }
+
+    // AI teams pick a fresh cycle for the next upgrade and pre-roll its outcome against the freshly-updated
+    // deficit, so a car that has caught up rolls a smaller catch-up next time (it self-limits).
+    const nextCycle = randomCycleLength(rng)
     const nextPending = rollUpgrade(nextCycle, leaderPace() - (team?.carPace ?? 75), rng)
     return {
       ...plan,

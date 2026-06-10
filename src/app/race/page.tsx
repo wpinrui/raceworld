@@ -347,6 +347,7 @@ export default function RacePage() {
         <UpgradeRevealModal
           paceDelta={deliveredUpgrade.paceDelta}
           failed={deliveredUpgrade.failed}
+          packageName={deliveredUpgrade.packageName}
           onDismiss={() => setAcknowledgedRound(season.currentRound)}
         />
       )}

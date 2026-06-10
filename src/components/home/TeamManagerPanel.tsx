@@ -47,23 +47,33 @@ export function TeamManagerPanel() {
     }
   }
 
-  return (
-    <div className="shrink-0 rounded-xl bg-[#1E2431] border border-[#2A3142] p-4 flex flex-wrap items-center gap-x-10 gap-y-4">
-      <DevCyclePicker />
+  const cardClass = 'rounded-xl bg-[#1E2431] border border-[#2A3142] p-5'
 
-      <div className="flex items-center gap-8">
-        <Stat label="Position" value={idx >= 0 ? ordinal(idx + 1) : '—'} />
-        <Stat label="Wins" value={wins} />
-        <Stat label="Podiums" value={podiums} />
-        <Stat label="Points" value={standing?.points ?? 0} />
+  return (
+    // Two height-matching cards (items-stretch takes the taller): car development on the left, team info on
+    // the right. They wrap to a stack on narrow screens.
+    <div className="shrink-0 flex flex-wrap items-stretch gap-4">
+      <div className={cardClass}>
+        <DevCyclePicker />
       </div>
 
-      <Link
-        href={`/world/team/${playerTeamId}`}
-        className="ml-auto inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
-      >
-        {team?.name ?? 'Your team'} page<ChevronRight size={13} />
-      </Link>
+      <div className={`${cardClass} flex grow flex-col gap-5 min-w-[18rem]`}>
+        <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF]">{team?.name ?? 'Your team'}</h2>
+
+        <div className="flex flex-wrap gap-x-10 gap-y-4">
+          <Stat label="Position" value={idx >= 0 ? ordinal(idx + 1) : '—'} />
+          <Stat label="Wins" value={wins} />
+          <Stat label="Podiums" value={podiums} />
+          <Stat label="Points" value={standing?.points ?? 0} />
+        </div>
+
+        <Link
+          href={`/world/team/${playerTeamId}`}
+          className="mt-auto self-start inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+        >
+          Team page<ChevronRight size={13} />
+        </Link>
+      </div>
     </div>
   )
 }
