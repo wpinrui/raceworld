@@ -58,6 +58,8 @@ export default function Nav() {
   const setupCta = useSetupCta((s) => s.cta)
   const realWorldMode = useSeasonStore((s) => s.realWorldMode)
   const realWorldChangesResolved = useSeasonStore((s) => s.realWorldChangesResolved)
+  // Team Manager: an unresolved free-agency draft or renewal call blocks Continue until the player acts.
+  const pendingPlayerCall = useSeasonStore((s) => s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0)
 
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -177,6 +179,8 @@ export default function Nav() {
       // call, so stop the sim for it (the modal is render-driven; breaking here keeps the loop from
       // running past an unmade decision now that the off-season flows through this same loop) (#126).
       if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) break
+      // Team Manager: never advance past an unmade signing / renewal call (the draft pause, the renewal round).
+      if (s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0) break
       const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legendData))
       setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
       const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
@@ -329,7 +333,7 @@ export default function Nav() {
         </div>
       )
     }
-    return <button onClick={handleContinue} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
+    return <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>{pendingPlayerCall ? 'Decide signings' : busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
   })()
 
   // Spacebar activates the primary CTA (Football-Manager style). The current action mirrors the `cta`

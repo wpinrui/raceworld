@@ -65,9 +65,17 @@ function Tag({ flavour }: { flavour: DraftPick['flavour'] }) {
 // draft is paused for the player. The player fills their own open seat(s) one at a time by clicking a
 // pool driver (50% accept); a decline soft-locks that driver out of the current seat. When the last
 // seat fills, the store auto-finishes the draft and this panel disappears.
-function PlayerSigningsPanel({ draft }: { draft: PendingPlayerDraft }) {
+function PlayerSigningsPanel({ draft, year, careers, driverStandings }: {
+  draft: PendingPlayerDraft
+  year: number
+  careers: Record<string, DriverCareer>
+  driverStandings: { driverId: string; points: number }[]
+}) {
   const filling = draft.playerPicks.length // index of the seat currently being filled
   const available = draft.pool.filter((d) => !draft.rejected.includes(d.id))
+  // This year's WDC standing for each free agent, so the scouting hover card can show it.
+  const wdcPosOf = new Map(driverStandings.map((s, i) => [s.driverId, i + 1]))
+  const wdcPtsOf = new Map(driverStandings.map((s) => [s.driverId, s.points]))
 
   return (
     <div className="shrink-0 rounded-lg bg-[#1E2431] p-3">
@@ -105,15 +113,24 @@ function PlayerSigningsPanel({ draft }: { draft: PendingPlayerDraft }) {
       {available.length > 0 ? (
         <div className="max-h-48 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
           {available.map((d) => (
-            <button
+            <DriverTooltip
               key={d.id}
-              onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
-              className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
+              driver={d}
+              year={year}
+              wdcPosition={wdcPosOf.get(d.id) ?? null}
+              wdcPoints={wdcPtsOf.get(d.id)}
+              career={careers[d.id]}
+              side="right"
             >
-              <NationalityFlag code={d.nationality} />
-              <span className="text-sm text-[#FFFFFF] truncate flex-1">{d.name}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
-            </button>
+              <button
+                onClick={() => useSeasonStore.getState().playerDraftSign(d.id)}
+                className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
+              >
+                <NationalityFlag code={d.nationality} />
+                <span className="text-sm text-[#FFFFFF] truncate flex-1">{d.name}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 shrink-0 bg-[#00D9FF] text-[#0F1419]">Sign (50%)</span>
+              </button>
+            </DriverTooltip>
           ))}
         </div>
       ) : (
@@ -151,7 +168,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   if (picks.length === 0) {
     return (
       <div className="flex h-full flex-col gap-3">
-        {playerDraft && <PlayerSigningsPanel draft={playerDraft} />}
+        {playerDraft && <PlayerSigningsPanel draft={playerDraft} year={year} careers={careers} driverStandings={driverStandings} />}
         <p className="text-sm text-[#FFFFFF]">Every seat was settled in-season. There was no free-agency activity this year.</p>
       </div>
     )
@@ -204,7 +221,7 @@ export function SigningDayBoard({ picks, year, dropped = [] }: { picks: DraftPic
   return (
     <div className="flex h-full flex-col gap-3">
       {/* Team Manager: your interactive free-agency picks, before the reveal content. */}
-      {playerDraft && <PlayerSigningsPanel draft={playerDraft} />}
+      {playerDraft && <PlayerSigningsPanel draft={playerDraft} year={year} careers={careers} driverStandings={driverStandings} />}
 
       {/* Controls (fixed) */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
