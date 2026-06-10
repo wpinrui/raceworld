@@ -20,6 +20,8 @@ import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile, TabBar } from '@/components/world/ui'
 import { UpgradeOverride } from '@/components/world/UpgradeOverride'
 import { DevCyclePicker } from '@/components/world/DevCyclePicker'
+import { resolveTeamNationality } from '@/lib/world/historical-team'
+import { useRatingsHidden } from '@/lib/useRatingsHidden'
 
 type Tab = 'overview' | 'seasons'
 
@@ -32,6 +34,8 @@ export default function TeamPage() {
   // The live season's round count drives the in-season upgrade timeline.
   const totalRounds = useSeasonStore((s) => calendarForYear(s.year).length)
   const liveTeam = useSeasonStore((s) => s.teams.find((t) => t.id === id))
+  const seasonTeams = useSeasonStore((s) => s.teams)
+  const ratingsHidden = useRatingsHidden()
   const updateTeam = useSeasonStore((s) => s.updateTeam)
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
@@ -96,12 +100,12 @@ export default function TeamPage() {
                 ) : (
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
-                      <NationalityFlag code={liveTeam?.nationality} size="1.4em" />
+                      <NationalityFlag code={resolveTeamNationality(id, seasonTeams)} size="1.4em" />
                       <h1 className="font-display text-2xl tracking-wider uppercase">{career.teamName}</h1>
                     </div>
                     <p className="text-sm text-[#FFFFFF] mt-0.5">
                       {career.currentPosition != null
-                        ? <>Currently P{career.currentPosition} · car pace {career.carPace}</>
+                        ? <>Currently P{career.currentPosition}{ratingsHidden ? '' : ` · car pace ${career.carPace}`}</>
                         : <span className="italic">Not on the current grid</span>}
                     </p>
                   </div>
@@ -181,8 +185,9 @@ export default function TeamPage() {
 
                   <HonoursPanel feats={honours} loading={honoursLoading} />
 
-                  {/* God-mode: inspect and edit the next car upgrade before it lands. */}
-                  {onGrid && devPlan && upgradeEditable && (
+                  {/* God-mode: inspect and edit the next car upgrade before it lands. Sandbox only — in Team
+                      Manager the upgrade magnitude is rolled and revealed (pre-race modal), never editable. */}
+                  {!teamManagerMode && onGrid && devPlan && upgradeEditable && (
                     <UpgradeOverride teamId={id} devPlan={devPlan} currentRound={currentRound} totalRounds={totalRounds} />
                   )}
                 </div>
