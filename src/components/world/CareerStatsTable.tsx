@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { TeamLink } from '@/components/world/EntityLink'
-import { ChampPill } from '@/components/world/pills'
+import { ChampRank } from '@/components/world/pills'
 import type { CareerSeason } from '@/lib/world/types'
 
 // Per-season career basics: year, team, races, wins, podiums, poles, WDC, points.
@@ -26,18 +26,17 @@ export function CareerStatsTable({ seasons, driverId }: { seasons: CareerSeason[
           </tr>
         </thead>
         <tbody>
-          {seasons.map((s) => (
+          {[...seasons].sort((a, b) => a.year - b.year).map((s) => (
             <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
               <td className="py-2 px-4 tabular-nums whitespace-nowrap">
                 <Link href={`/world/driver/${driverId}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
-                {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
               </td>
               <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
               <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.races}</td>
               <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.wins}</td>
               <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.podiums}</td>
               <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">{s.poles}</td>
-              <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
+              <td className="py-2 px-3"><span className="flex justify-center"><ChampRank position={s.championshipFinish} /></span></td>
               <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
             </tr>
           ))}

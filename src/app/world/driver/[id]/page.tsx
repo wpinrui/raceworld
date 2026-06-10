@@ -17,7 +17,8 @@ import { ResultChip, ResultCell } from '@/components/standings/ResultCell'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { TeamLink } from '@/components/world/EntityLink'
 import { CountrySelect } from '@/components/CountrySelect'
-import { ChampPill } from '@/components/world/pills'
+import { ChampRank, champRankColor } from '@/components/world/pills'
+import { ordinal } from '@/lib/news/util'
 import { Panel, TabBar } from '@/components/world/ui'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { DriverAvatar } from '@/components/world/DriverAvatar'
@@ -349,7 +350,7 @@ export default function DriverPage() {
                         <>
                           <div className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2A3142]">
                             <div className="text-center">
-                              <p className="text-lg font-bold tabular-nums text-[#FFFFFF]">{current?.championshipFinish != null ? `P${current.championshipFinish}` : '—'}</p>
+                              <p className="text-lg font-bold tabular-nums" style={{ color: current?.championshipFinish != null ? champRankColor(current.championshipFinish) : '#FFFFFF' }}>{current?.championshipFinish != null ? ordinal(current.championshipFinish) : '—'}</p>
                               <p className="text-[9px] uppercase tracking-widest text-[#FFFFFF] mt-0.5">Championship</p>
                             </div>
                             <div className="text-center">
@@ -492,17 +493,16 @@ export default function DriverPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {career.seasons.map((s) => (
+                            {[...career.seasons].sort((a, b) => a.year - b.year).map((s) => (
                               <tr key={`${s.year}-${s.teamId}`} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
                                 <td className="py-2 px-4 tabular-nums whitespace-nowrap sticky left-0 bg-[#1E2431]">
                                   <Link href={`/world/driver/${id}/${s.year}`} className="text-[#FFFFFF] hover:text-[#00D9FF] font-medium">{s.year}</Link>
-                                  {s.inProgress && <span className="ml-1.5 text-[10px] text-[#00D9FF]">LIVE</span>}
                                 </td>
                                 <td className="py-2 px-3 whitespace-nowrap"><TeamLink id={s.teamId} className="text-[#FFFFFF]">{s.teamName}</TeamLink></td>
                                 {Array.from({ length: maxRounds }, (_, i) => (
                                   <ResultCell key={i} position={i < s.results.length ? s.results[i] : undefined} year={s.year} code={calendarForYear(s.year)[i]?.code} />
                                 ))}
-                                <td className="py-2 px-3"><span className="flex justify-center"><ChampPill position={s.championshipFinish} /></span></td>
+                                <td className="py-2 px-3"><span className="flex justify-center"><ChampRank position={s.championshipFinish} /></span></td>
                                 <td className="py-2 px-4 text-right tabular-nums font-semibold text-[#FFFFFF]">{s.points}</td>
                               </tr>
                             ))}
