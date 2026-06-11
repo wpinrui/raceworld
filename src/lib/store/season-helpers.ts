@@ -1,4 +1,4 @@
-import type { Driver, Team, DevUpgradeEvent, MarketMove, DroppedDriver, DriverProgressionEvent, ConstructorSeasonRecord } from '@/lib/sim/types'
+import type { Driver, Team, DevUpgradeEvent, MarketMove, DroppedDriver, DriverProgressionEvent, ConstructorSeasonRecord, PendingGridChanges, TeamMediaScore } from '@/lib/sim/types'
 import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
 import { calendarForYear } from '@/data/calendars'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
@@ -167,4 +167,83 @@ export function updateConstructorHistory(
         arr.findIndex((x) => x.seasonYear === r.seasonYear && x.teamId === r.teamId) === idx,
     )
     .slice(0, 55)
+}
+
+// Real-world transitions approved at THIS season's start, taking effect on next year's grid.
+export type ApprovedSeasonChanges = {
+  joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
+  leaves: string[]
+  rebrands: { id: string; name: string; shortName: string; color: string; nationality: string }[]
+}
+
+// Build next season's grid from the just-finished one, applying (in order) god-mode grid changes,
+// approved real-world transitions, and the Team Manager inaugural pace rule. Pure: the current season
+// has already played out under the old grid, so every change takes effect from next season. Returns the
+// new teams + drivers and the team media scores augmented with the zero-score entries for new teams.
+export function applyGridTransition(input: {
+  teams: Team[]
+  drivers: Driver[]           // already aged for next season
+  year: number
+  pendingGridChanges: PendingGridChanges
+  approvedSeasonChanges: ApprovedSeasonChanges | null
+  teamManagerMode: boolean
+  playerTeamId: string | null
+  teamMediaScores: TeamMediaScore[]
+}): { nextTeams: Team[]; nextDrivers: Driver[]; teamMediaScores: TeamMediaScore[] } {
+  const { year, pendingGridChanges, approvedSeasonChanges, teamManagerMode, playerTeamId } = input
+  // God-mode grid changes (GDD §Grid Changes): departing teams leave and their drivers re-enter the
+  // market as free agents; new teams join at the lowest car pace, with empty seats the market then
+  // fills during contract negotiations.
+  let nextTeams = input.teams
+  let nextDrivers = input.drivers
+  let teamMediaScores = input.teamMediaScores
+  const { additions, removals } = pendingGridChanges
+  if (removals.length > 0) {
+    nextTeams = nextTeams.filter((t) => !removals.includes(t.id))
+    nextDrivers = nextDrivers.map((d) =>
+      removals.includes(d.teamId) ? { ...d, teamId: '', seasonsSinceF1Seat: 0 } : d,
+    )
+  }
+  if (additions.length > 0) {
+    const lowestPace = Math.min(75, ...nextTeams.map((t) => t.carPace))
+    const added = additions.map((t, i) => ({
+      ...t,
+      carPace: Math.max(5, lowestPace - 5 * (i + 1)),
+    }))
+    nextTeams = [...nextTeams, ...added]
+    // A brand-new team has no results — it's the LEAST attractive seat on the grid,
+    // not the mid-pack default. Otherwise the market poaches top drivers into it.
+    teamMediaScores = [...teamMediaScores, ...added.map((t) => ({ teamId: t.id, score: 0 }))]
+  }
+
+  // Real-world transitions APPROVED at the start of this season (and already announced mid-season by
+  // the newsroom) now take effect on next year's grid. Applying them here, before the end-of-season
+  // market runs, means seats are filled against the confirmed roster.
+  if (approvedSeasonChanges) {
+    const leaveIds = new Set(approvedSeasonChanges.leaves)
+    nextTeams = nextTeams.filter((t) => !leaveIds.has(t.id))
+    nextDrivers = nextDrivers.map((d) =>
+      leaveIds.has(d.teamId) ? { ...d, teamId: '', contractExpiresAfterSeason: year, seasonsSinceF1Seat: 0 } : d,
+    )
+    const rebrandById = new Map(approvedSeasonChanges.rebrands.map((r) => [r.id, r]))
+    nextTeams = nextTeams.map((t) => {
+      const r = rebrandById.get(t.id)
+      return r ? { ...t, name: r.name, shortName: r.shortName, color: r.color, nationality: r.nationality } : t
+    })
+    const lowest = nextTeams.reduce((m, t) => Math.min(m, t.carPace), 75)
+    approvedSeasonChanges.joins.forEach((j, i) => {
+      if (nextTeams.some((t) => t.id === j.id)) return
+      nextTeams = [...nextTeams, { id: j.id, name: j.name, shortName: j.shortName, nationality: j.nationality, color: j.color, carPace: Math.max(5, lowest - 5 * (i + 1)) }]
+      teamMediaScores = [...teamMediaScores, { teamId: j.id, score: 0 }]
+    })
+  }
+
+  // Team Manager: a brand-new player team enters as the strictly slowest car on the grid (exempt from
+  // the historical pace assignment), and stays slowest even if real-world teams join the same year.
+  // Only on its inaugural rollover (when it's actually among the additions); after that it develops.
+  if (teamManagerMode && playerTeamId && additions.some((t) => t.id === playerTeamId)) {
+    const slowestOther = nextTeams.reduce((m, t) => (t.id === playerTeamId ? m : Math.min(m, t.carPace)), 75)
+    nextTeams = nextTeams.map((t) => (t.id === playerTeamId ? { ...t, carPace: Math.max(1, slowestOther - 5) } : t))
+  }
+  return { nextTeams, nextDrivers, teamMediaScores }
 }
