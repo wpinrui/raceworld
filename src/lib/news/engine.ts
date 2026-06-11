@@ -2412,12 +2412,6 @@ function expectationCheck(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-// TRIGGER (live only): roughly one every four races — a spotlight on a driver off the grid.
-// career.starts is the truth of it: 0 means a never-raced prospect (pure narrative on name/age/
-// potential — nothing to contradict); > 0 means an experienced free agent, where we cite the real
-// career record. Either way it closes on the actual market projection (seeded ±10 media error) for
-// whether a return looks likely.
-
 // TRIGGER: a mid-season driver change at a team (god-mode), detected straight from the race
 // results — a seat's occupant changes partway through the year. Reports the axed driver's form to
 // that point (grounded, so the "why" never overclaims) and introduces the replacement, using the
