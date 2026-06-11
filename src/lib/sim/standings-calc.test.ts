@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  countbackCompare,
   sortDriverStandings,
   sortConstructorStandings,
   computeDriverStandings,
@@ -44,6 +45,21 @@ function standing(driverId: string, points: number, results: (number | null)[]):
 function teamStanding(teamId: string, points: number, wins: number): ConstructorStanding {
   return { teamId, teamName: teamId, points, wins, results: [] }
 }
+
+describe('countbackCompare', () => {
+  it('ranks more wins (P1s) first', () => {
+    expect(countbackCompare([1, 5], [2, 3])).toBeLessThan(0) // a has a P1, b has none
+    expect(countbackCompare([2, 3], [1, 5])).toBeGreaterThan(0)
+  })
+
+  it('falls through to the next position when the higher ones are level', () => {
+    expect(countbackCompare([1, 2], [1, 3])).toBeLessThan(0) // tie on P1, a has the P2
+  })
+
+  it('returns 0 when the position tallies match (nulls ignored)', () => {
+    expect(countbackCompare([1, null, 4], [4, 1, null])).toBe(0)
+  })
+})
 
 describe('sortDriverStandings', () => {
   it('orders by points descending', () => {

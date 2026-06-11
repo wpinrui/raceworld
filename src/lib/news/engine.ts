@@ -26,6 +26,7 @@ import type {
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
+import { countbackCompare } from '@/lib/sim/standings-calc'
 import { raceConditions } from '@/lib/sim/race-conditions'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
@@ -283,39 +284,46 @@ function tierWord(rank: number, total: number): string {
 
 interface SimpleStanding {
   driverId: string; driverName: string; teamId: string; teamName: string; points: number; wins: number
+  positions: number[]  // non-DNF finishing positions, for the shared countback tiebreak
 }
 
-// Driver standings as they stood AFTER `round` completed rounds (0 = before any race).
-// Computed from the result slices so it works identically for live and archived contexts.
+// Driver standings as they stood AFTER `round` completed rounds (0 = before any race). Built from the
+// result slices so it works identically for live and archived contexts (teamName follows the rows, not the
+// current roster). Ties break by the shared countback (P1 count, then P2, …) so this agrees with the
+// standings screen and the season-analysis trajectory.
 function driverStandingsAfter(ctx: NewsContext, round: number): SimpleStanding[] {
   const map = new Map<string, SimpleStanding>()
   for (let r = 0; r < round && r < ctx.raceResults.length; r++) {
     for (const res of ctx.raceResults[r] ?? []) {
       let s = map.get(res.driverId)
       if (!s) {
-        s = { driverId: res.driverId, driverName: res.driverName, teamId: res.teamId, teamName: res.teamName, points: 0, wins: 0 }
+        s = { driverId: res.driverId, driverName: res.driverName, teamId: res.teamId, teamName: res.teamName, points: 0, wins: 0, positions: [] }
         map.set(res.driverId, s)
       }
       s.points += res.points
       if (res.finishPosition === 1) s.wins++
+      if (!res.dnf && res.finishPosition != null) s.positions.push(res.finishPosition)
       s.teamId = res.teamId
       s.teamName = res.teamName
     }
   }
-  return [...map.values()].sort((a, b) => b.points - a.points || b.wins - a.wins)
+  return [...map.values()].sort((a, b) => b.points - a.points || countbackCompare(a.positions, b.positions))
 }
 
 function constructorStandingsAfter(ctx: NewsContext, round: number): { teamId: string; teamName: string; points: number }[] {
-  const map = new Map<string, { teamId: string; teamName: string; points: number }>()
+  const map = new Map<string, { teamId: string; teamName: string; points: number; wins: number }>()
   for (let r = 0; r < round && r < ctx.raceResults.length; r++) {
     for (const res of ctx.raceResults[r] ?? []) {
       let s = map.get(res.teamId)
-      if (!s) { s = { teamId: res.teamId, teamName: res.teamName, points: 0 }; map.set(res.teamId, s) }
+      if (!s) { s = { teamId: res.teamId, teamName: res.teamName, points: 0, wins: 0 }; map.set(res.teamId, s) }
       s.points += res.points
+      if (res.finishPosition === 1) s.wins++
       s.teamName = res.teamName
     }
   }
-  return [...map.values()].sort((a, b) => b.points - a.points)
+  return [...map.values()]
+    .sort((a, b) => b.points - a.points || b.wins - a.wins)
+    .map(({ teamId, teamName, points }) => ({ teamId, teamName, points }))
 }
 
 // Most-recent-first finishing positions for a driver up to and including `round`. A DNF
