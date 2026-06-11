@@ -6,6 +6,7 @@
 
 ## Environment
 - GitHub user: `wpinrui`
+- `python`, NOT `python3`!!!
 - Game Design document: gdd.md
 - Style guide: style-guide.md
 - Developer Notes: dev.md
