@@ -1,4 +1,4 @@
-import type { NewsContext } from './engine'
+import type { NewsContext, DriverCareer } from './engine'
 
 // Small shared lookups over the NewsContext that the producers lean on: display names, the car-pace rank
 // and its tier word, and the per-circuit colour traits. Carved out of engine.ts.
@@ -51,4 +51,15 @@ export function tierWord(rank: number, total: number): string {
   if (rank <= Math.max(2, total / 3)) return 'front-running'
   if (rank <= (2 * total) / 3) return 'midfield'
   return 'backmarker'
+}
+
+// A team's finishing position last season, from the constructor history (null in year one).
+export function lastSeasonPos(ctx: NewsContext, teamId: string): number | null {
+  const recs = ctx.constructorHistory.filter((h) => h.teamId === teamId).sort((a, b) => b.seasonYear - a.seasonYear)
+  return recs[0]?.finalPosition ?? null
+}
+
+// F1 career totals for a driver, if the caller supplied them. starts > 0 ⇔ has raced in F1.
+export function careerOf(ctx: NewsContext, id: string): DriverCareer | null {
+  return ctx.careers?.[id] ?? null
 }

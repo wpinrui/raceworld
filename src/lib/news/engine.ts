@@ -30,7 +30,7 @@ import { driverStandingsAfter, constructorStandingsAfter, recentFinishesUpTo } f
 import { sortedResults, marginWord, poleMargin, strategyPhrase, startingTyre } from './result-format'
 import { wonBefore, podiumBefore, isHomeRace, winsUpTo, teamOneTwoBefore } from './season-history'
 import { careerTotalsThroughRound, teamTotalsThroughRound, teamMilestoneCrossed, milestoneSig, type MileCat } from './milestone-math'
-import { teamName, circuit, CIRCUIT_TRAITS, paceRank, tierWord } from './lookups'
+import { teamName, circuit, CIRCUIT_TRAITS, paceRank, tierWord, careerOf, lastSeasonPos } from './lookups'
 import { raceConditions } from '@/lib/sim/race-conditions'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
@@ -250,17 +250,6 @@ function texture(seed: string, pool: string[], slots: Record<string, string | nu
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
 // metadata, nationality) or a count derived from results, so it can never contradict the game.
 
-
-// A team's finishing position last season, from the constructor history (null in year one).
-function lastSeasonPos(ctx: NewsContext, teamId: string): number | null {
-  const recs = ctx.constructorHistory.filter((h) => h.teamId === teamId).sort((a, b) => b.seasonYear - a.seasonYear)
-  return recs[0]?.finalPosition ?? null
-}
-
-// F1 career totals for a driver, if the caller supplied them. starts > 0 ⇔ has raced in F1.
-function careerOf(ctx: NewsContext, id: string): DriverCareer | null {
-  return ctx.careers?.[id] ?? null
-}
 
 // Gendered pronoun slots for a single driver, so copy reads with natural pronouns (he/she, his/her,
 // him/her, ...) instead of contorting to stay neutral. A driver's gender is always known.
