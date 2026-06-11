@@ -4,17 +4,16 @@ import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { buildPerformanceData } from '@/lib/world/performance'
+import { hexToRgb, rgbToHex } from '@/lib/color'
 
 type Sub = 'pace' | 'delta'
 
 // Lighten a hex colour by mixing it toward white by `pct`, so a team's drivers read as visibly lighter
 // shades of the team colour (mixing toward white shifts even saturated/bright colours, unlike scaling).
 function lighten(hex: string, pct: number): string {
-  const m = hex.replace('#', '')
-  const n = parseInt(m.length === 3 ? m.split('').map((c) => c + c).join('') : m, 16)
+  const [r, g, b] = hexToRgb(hex)
   const mix = (c: number) => Math.round(c + (255 - c) * pct)
-  const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+  return rgbToHex(mix(r), mix(g), mix(b))
 }
 
 function Chip({ on, color, label, onClick }: { on: boolean; color: string; label: string; onClick: () => void }) {

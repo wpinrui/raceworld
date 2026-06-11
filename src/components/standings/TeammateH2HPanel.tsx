@@ -5,6 +5,7 @@ import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { hexToRgb, rgbToHex } from '@/lib/color'
 
 interface Props {
   raceResults: RaceResult[][]
@@ -14,17 +15,14 @@ interface Props {
 
 // Darken a #rrggbb hex toward black (f = kept brightness, 0..1).
 function darken(hex: string, f: number): string {
-  const n = parseInt(hex.replace('#', ''), 16)
-  const r = Math.round(((n >> 16) & 255) * f)
-  const g = Math.round(((n >> 8) & 255) * f)
-  const b = Math.round((n & 255) * f)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+  const [r, g, b] = hexToRgb(hex)
+  return rgbToHex(Math.round(r * f), Math.round(g * f), Math.round(b * f))
 }
 
 // Perceived brightness, 0..1.
 function brightness(hex: string): number {
-  const n = parseInt(hex.replace('#', ''), 16)
-  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+  const [r, g, b] = hexToRgb(hex)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255
 }
 
 // Dim a bar colour (e.g. Mercedes teal) until white text on it has contrast,
