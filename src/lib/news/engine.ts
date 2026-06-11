@@ -22,7 +22,7 @@
 
 import type {
   Driver, Team, RaceResult, DevUpgradeEvent, TeamDevPlan, PreSeasonTest,
-  EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord, RaceWeather,
+  EndOfSeasonSummary, Circuit, SeasonPhase, ConstructorSeasonRecord,
 } from '@/lib/sim/types'
 import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/media-scores'
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
@@ -31,6 +31,7 @@ import { sortedResults, marginWord, poleMargin, strategyPhrase, startingTyre } f
 import { wonBefore, podiumBefore, isHomeRace, winsUpTo, teamOneTwoBefore } from './season-history'
 import { careerTotalsThroughRound, teamTotalsThroughRound, teamMilestoneCrossed, milestoneSig, type MileCat } from './milestone-math'
 import { teamName, circuit, CIRCUIT_TRAITS, paceRank, tierWord, careerOf, lastSeasonPos } from './lookups'
+import { paras, poss, wxHeadlineBucket, texture } from './copy'
 import { raceConditions } from '@/lib/sim/race-conditions'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
@@ -215,36 +216,6 @@ export interface NewsArticle {
   // An exact ISO drop date, bypassing the round + offset derivation entirely. Used by the legends series
   // (#93), whose 4-month cadence is independent of the race calendar. See articleDate.
   absoluteDate?: string
-}
-
-// Join composed paragraphs, dropping any that collapsed to empty.
-function paras(...parts: string[]): string {
-  return parts.filter(Boolean).join('\n\n')
-}
-
-// Possessive form. Names ending in s (Mercedes, Williams, Haas, Racing Bulls) take a bare
-// apostrophe; everything else takes 's.
-function poss(name: string): string {
-  return /s$/i.test(name) ? `${name}'` : `${name}'s`
-}
-
-// Headline weather modifier bucket (weather race-report news): a drying day reads as "drying",
-// otherwise the descriptor escalates with how wet the track got at its peak.
-function wxHeadlineBucket(wx: RaceWeather): 'damp' | 'wet' | 'heavy' | 'drying' {
-  if (wx.shape === 'drying') return 'drying'
-  if (wx.peakMoisture >= 0.70) return 'heavy'
-  if (wx.peakMoisture >= 0.35) return 'wet'
-  return 'damp'
-}
-
-// Invented, unfalsifiable colour. The rule: a texture line may NEVER reference a tracked
-// quantity (position, points, gap, lap, another driver's result). It is either sentiment that
-// matches the known outcome or fully orthogonal to anything we model, so it cannot contradict
-// the standings / driver / classification views. Gated so it stays texture, not boilerplate.
-const TEXTURE_PCT = 66
-function texture(seed: string, pool: string[], slots: Record<string, string | number>, pct: number = TEXTURE_PCT): string {
-  if (pool.length === 0 || !chance(`${seed}|tex`, pct)) return ''
-  return fill(pick(pool, `${seed}|tex`), slots)
 }
 
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
