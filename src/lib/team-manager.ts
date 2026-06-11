@@ -1,4 +1,5 @@
 import type { Driver } from '@/lib/sim/types'
+import { hexToRgb } from '@/lib/color'
 
 // Team Manager mode: shared, framework-agnostic helpers. The mode itself (teamManagerMode + playerTeamId)
 // lives on the season store; the per-talent on/off toggles live on the settings store.
@@ -50,12 +51,6 @@ export function normalisedRatingFill(driver: Driver, key: RatingKey): number {
 }
 
 // ---- Your-team highlight (colour-tinted row, contrast-checked) ------------------------------------------
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace('#', '')
-  const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6).padEnd(6, '0')
-  return [parseInt(n.slice(0, 2), 16) || 0, parseInt(n.slice(2, 4), 16) || 0, parseInt(n.slice(4, 6), 16) || 0]
-}
-
 // A subtle team-colour wash for the player's rows. Alpha scales DOWN for brighter team colours so the
 // blended row stays dark enough for white text to read; a solid colour bar pins the left edge.
 function tintAlpha(r: number, g: number, b: number): number {
