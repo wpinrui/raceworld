@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
 import type { Team } from '@/lib/sim/types'
-import type { CarPaceSnapshot } from '@/lib/store/season-store'
+import type { CarPaceSnapshot } from '@/lib/store/season-helpers'
 
 // Each car's pace across the season, read straight from the per-round snapshots the store records
 // (round 0 = season start). God-mode pace edits refresh the latest snapshot, so the chart always

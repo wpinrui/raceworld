@@ -13,18 +13,15 @@ import type {
   EndOfSeasonSummary,
   DriverProgressionEvent,
   PendingGridChanges,
-  MarketMove,
-  DroppedDriver,
   PreSeasonTest,
 } from '@/lib/sim/types'
 import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
-import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade, applyPlayerCycle } from '@/lib/sim/development'
 import { useSettingsStore } from './settings-store'
-import { applyRaceProgression, ageDrivers, rollSeasonForm, shownStats } from '@/lib/sim/progression'
+import { applyRaceProgression, ageDrivers, rollSeasonForm } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
-import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, generateRookie, computeRetentionDeltas } from '@/lib/sim/market'
+import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
 import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, renewalChance, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
 
 // Team Manager: an expiring driver of the player's, awaiting the player's renewal decision (offer or let
@@ -33,6 +30,7 @@ export interface PendingPlayerRenewal { driverId: string; driverName: string; di
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { computeDriverStandings, computeConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
+import { seasonStartDate, roundDate, snapshotStats, seedStatHistory, appendStatHistory, snapshotCarPaces, reconstructCarPaceHistory, resolveDraft, type StatHistory, type CarPaceSnapshot } from './season-helpers'
 
 // Team Manager free-agency pause: everything needed to finish the off-season draft once the player has
 // filled their seat(s). Rivals ABOVE the player's seat rank are already signed (picksAbove); the player
@@ -61,126 +59,6 @@ const DEFAULT_GRID = composeDefaultSeason()
 
 // Pre-season testing always runs at Barcelona/Catalunya.
 const TEST_CIRCUIT = calendarForYear(DEFAULT_CALENDAR_YEAR).find((c) => c.id === 'spain') ?? calendarForYear(DEFAULT_CALENDAR_YEAR)[0]
-
-// The game clock starts on 1 January of the season year — a pre-season window (launches,
-// testing) ahead of the opening round. Stored as a serialisable 'YYYY-MM-DD' string.
-const seasonStartDate = (year: number) => `${year}-01-01`
-// Race day (ISO date string) for a 1-based round in a given season year.
-const roundDate = (year: number, round: number): string => {
-  const c = calendarForYear(year)[round - 1]
-  return c ? toISODate(raceDate(year, c)) : seasonStartDate(year)
-}
-
-type StatSnapshot = Record<string, { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }>
-
-// One sampled point on a driver's in-progress-season attribute timeline. round 0 = season
-// start; rounds 1..N = post-race. Past seasons live in the DB; this carries only the
-// current (unarchived) season, which the DB career query excludes.
-export type StatPoint = { round: number; pace: number; wetWeatherPace: number; overtaking: number; smoothness: number }
-type StatHistory = Record<string, StatPoint[]>
-
-// Snapshot the four SHOWN stats (true + season form, #66) of every grid driver, keyed by id — the
-// ratings timeline is what the player saw, so it carries the form wobble.
-function snapshotStats(drivers: Driver[]): StatSnapshot {
-  const snap: StatSnapshot = {}
-  for (const d of drivers) {
-    if (d.teamId === '') continue
-    const s = shownStats(d)
-    snap[d.id] = {
-      pace: s.pace,
-      wetWeatherPace: s.wetWeatherPace,
-      overtaking: s.overtaking,
-      smoothness: s.smoothness,
-    }
-  }
-  return snap
-}
-
-// Seed the per-race stat history with a round-0 baseline (shown stats) for every grid driver.
-function seedStatHistory(drivers: Driver[]): StatHistory {
-  const hist: StatHistory = {}
-  for (const d of drivers) {
-    if (d.teamId === '') continue
-    const s = shownStats(d)
-    hist[d.id] = [{ round: 0, pace: s.pace, wetWeatherPace: s.wetWeatherPace, overtaking: s.overtaking, smoothness: s.smoothness }]
-  }
-  return hist
-}
-
-// Append a post-race point (shown stats) for each grid driver at the given round.
-function appendStatHistory(prev: StatHistory, drivers: Driver[], round: number): StatHistory {
-  const next: StatHistory = { ...prev }
-  for (const d of drivers) {
-    if (d.teamId === '') continue
-    const s = shownStats(d)
-    const point: StatPoint = { round, pace: s.pace, wetWeatherPace: s.wetWeatherPace, overtaking: s.overtaking, smoothness: s.smoothness }
-    const series = (next[d.id] ?? []).filter((p) => p.round !== round)
-    next[d.id] = [...series, point]
-  }
-  return next
-}
-
-// Per-round snapshot of every car's pace, for the home Car Development chart. Round 0 = season start;
-// one entry is appended per completed round. A god-mode pace edit refreshes the latest (current) entry,
-// so the chart stays accurate without reconstructing from the upgrade log (which can't see edits).
-export interface CarPaceSnapshot { round: number; paces: Record<string, number> }
-
-function snapshotCarPaces(teams: Team[]): Record<string, number> {
-  const paces: Record<string, number> = {}
-  for (const t of teams) paces[t.id] = t.carPace
-  return paces
-}
-
-// One-time backfill for saves that predate carPaceHistory: rebuild it from the current pace minus the
-// upgrades delivered after each round (best-effort; can't see past god-mode edits, which weren't logged).
-function reconstructCarPaceHistory(teams: Team[], events: DevUpgradeEvent[], completedRounds: number): CarPaceSnapshot[] {
-  const out: CarPaceSnapshot[] = []
-  for (let r = 0; r <= completedRounds; r++) {
-    const paces: Record<string, number> = {}
-    for (const t of teams) {
-      const future = events.reduce((s, e) => (e.teamId === t.id && e.round > r ? s + e.paceDelta : s), 0)
-      paces[t.id] = Math.round((t.carPace - future) * 10) / 10
-    }
-    out.push({ round: r, paces })
-  }
-  return out
-}
-
-// Turn an ordered set of draft picks (one per seat, in seat order) into next-season state: market moves,
-// the updated grid (winners seated, the unpicked freed), rookies for any seat the pool couldn't fill, and
-// the dropped (had a seat, signed nowhere) list. Shared by the auto-draft and the Team Manager player draft.
-function resolveDraft(
-  picks: DraftPick[], allDrivers: Driver[], stayingIds: Set<string>, seats: DraftSeat[],
-  mediaMap: Map<string, number>, teams: Team[], year: number, newYear: number,
-): { marketMoves: MarketMove[]; updatedDrivers: Driver[]; droppedDrivers: DroppedDriver[] } {
-  const pickById = new Map(picks.map((p) => [p.driverId, p]))
-  const prevTeam = new Map(allDrivers.map((d) => [d.id, d.teamId]))
-  const teamNameOf = new Map(teams.map((t) => [t.id, t.name]))
-  const marketMoves: MarketMove[] = picks.map((p) => ({
-    driverId: p.driverId, driverName: p.driverName,
-    fromTeamId: prevTeam.get(p.driverId) || null,
-    toTeamId: p.teamId, toTeamName: p.teamName,
-    contractLength: p.years, contractExpiresAfterSeason: year + p.years,
-    mediaScore: mediaMap.get(p.driverId) ?? 0,
-    isResignation: prevTeam.get(p.driverId) === p.teamId,
-  }))
-  const updatedDrivers: Driver[] = allDrivers.map((d) => {
-    const p = pickById.get(d.id)
-    if (p) return { ...d, teamId: p.teamId, contractExpiresAfterSeason: year + p.years, seasonsSinceF1Seat: 0 }
-    if (stayingIds.has(d.id)) return d
-    return { ...d, teamId: '' }
-  })
-  for (let i = picks.length; i < seats.length; i++) {
-    const seat = seats[i]
-    const rookie = generateRookie(seat.teamId, newYear, Math.random)
-    updatedDrivers.push(rookie)
-    marketMoves.push({ driverId: rookie.id, driverName: rookie.name, fromTeamId: null, toTeamId: seat.teamId, toTeamName: seat.teamName, contractLength: 1, contractExpiresAfterSeason: newYear, mediaScore: 0, isResignation: false })
-  }
-  const droppedDrivers: DroppedDriver[] = allDrivers
-    .filter((d) => !pickById.has(d.id) && !stayingIds.has(d.id) && (prevTeam.get(d.id) || '') !== '')
-    .map((d) => ({ driverId: d.id, driverName: d.name, fromTeamId: prevTeam.get(d.id)!, fromTeamName: teamNameOf.get(prevTeam.get(d.id)!) ?? prevTeam.get(d.id)!, mediaScore: mediaMap.get(d.id) ?? 0 }))
-  return { marketMoves, updatedDrivers, droppedDrivers }
-}
 
 interface SeasonStore {
   phase: SeasonPhase
