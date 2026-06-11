@@ -1,4 +1,4 @@
-import type { Driver, Team, DevUpgradeEvent, MarketMove, DroppedDriver } from '@/lib/sim/types'
+import type { Driver, Team, DevUpgradeEvent, MarketMove, DroppedDriver, DriverProgressionEvent, ConstructorSeasonRecord } from '@/lib/sim/types'
 import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
 import { calendarForYear } from '@/data/calendars'
 import { raceDate, toISODate } from '@/lib/sim/calendar-dates'
@@ -123,4 +123,48 @@ export function resolveDraft(
     .filter((d) => !pickById.has(d.id) && !stayingIds.has(d.id) && (prevTeam.get(d.id) || '') !== '')
     .map((d) => ({ driverId: d.id, driverName: d.name, fromTeamId: prevTeam.get(d.id)!, fromTeamName: teamNameOf.get(prevTeam.get(d.id)!) ?? prevTeam.get(d.id)!, mediaScore: mediaMap.get(d.id) ?? 0 }))
   return { marketMoves, updatedDrivers, droppedDrivers }
+}
+
+// Net development this season = current shown stats vs the season-start snapshot (the actual
+// improvement/decline already happened race-by-race). One event per stat that moved >= 0.05.
+export function computeProgressionEvents(drivers: Driver[], seasonStartStats: StatSnapshot): DriverProgressionEvent[] {
+  const progressionEvents: DriverProgressionEvent[] = []
+  for (const d of drivers) {
+    const start = seasonStartStats[d.id]
+    if (!start) continue
+    for (const stat of ['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const) {
+      if (Math.abs(d[stat] - start[stat]) >= 0.05) {
+        progressionEvents.push({
+          driverId: d.id, driverName: d.name, stat,
+          before: start[stat], after: d[stat],
+          direction: d[stat] > start[stat] ? 'improved' : 'declined',
+        })
+      }
+    }
+  }
+  return progressionEvents
+}
+
+// Prepend this season's constructor results to the history, de-dupe by (year, team) keeping the
+// newest, and cap at 55 seasons.
+export function updateConstructorHistory(
+  year: number,
+  constructorRankInfo: { teamId: string; points: number; finalPosition: number }[],
+  constructorHistory: ConstructorSeasonRecord[],
+): ConstructorSeasonRecord[] {
+  const newHistoryEntries: ConstructorSeasonRecord[] = constructorRankInfo.map((cs) => ({
+    seasonYear: year,
+    teamId: cs.teamId,
+    finalPosition: cs.finalPosition,
+    points: cs.points,
+  }))
+  return [
+    ...newHistoryEntries,
+    ...constructorHistory,
+  ]
+    .filter(
+      (r, idx, arr) =>
+        arr.findIndex((x) => x.seasonYear === r.seasonYear && x.teamId === r.teamId) === idx,
+    )
+    .slice(0, 55)
 }
