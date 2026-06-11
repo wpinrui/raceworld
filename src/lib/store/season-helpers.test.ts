@@ -8,8 +8,10 @@ import {
   snapshotCarPaces,
   reconstructCarPaceHistory,
   resolveDraft,
+  computeProgressionEvents,
+  updateConstructorHistory,
 } from './season-helpers'
-import type { Driver, Team, DevUpgradeEvent } from '@/lib/sim/types'
+import type { Driver, Team, DevUpgradeEvent, ConstructorSeasonRecord } from '@/lib/sim/types'
 import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
 
 // --- minimal fixtures: only the fields these pure helpers read carry meaning -------------------
@@ -173,5 +175,48 @@ describe('resolveDraft', () => {
     const { droppedDrivers } = run()
     expect(droppedDrivers).toHaveLength(1)
     expect(droppedDrivers[0]).toMatchObject({ driverId: 'd4', fromTeamId: 'tB', fromTeamName: 'tB', mediaScore: 5 })
+  })
+})
+
+describe('computeProgressionEvents', () => {
+  it('emits an event per stat that moved >= 0.05, ignoring smaller moves and missing snapshots', () => {
+    const start = { d1: { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70 } }
+    const drivers = [
+      makeDriver('d1', 't1', { pace: 72, wetWeatherPace: 70, overtaking: 70.02, smoothness: 68 }),
+      makeDriver('d2', 't2'), // no season-start snapshot -> skipped entirely
+    ]
+    const events = computeProgressionEvents(drivers, start)
+    // pace +2 (improved), smoothness -2 (declined); wet unchanged; overtaking +0.02 below the 0.05 threshold
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({ driverId: 'd1', stat: 'pace', before: 70, after: 72, direction: 'improved' })
+    expect(events[1]).toMatchObject({ driverId: 'd1', stat: 'smoothness', before: 70, after: 68, direction: 'declined' })
+  })
+
+  it('emits nothing when every stat is unchanged', () => {
+    const start = { d1: { pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70 } }
+    expect(computeProgressionEvents([makeDriver('d1', 't1')], start)).toEqual([])
+  })
+})
+
+describe('updateConstructorHistory', () => {
+  it('prepends the new season and de-dupes (year, team), keeping the fresh entry', () => {
+    const prior: ConstructorSeasonRecord[] = [
+      { seasonYear: 2025, teamId: 'tA', finalPosition: 5, points: 10 }, // stale duplicate of the season being added
+      { seasonYear: 2024, teamId: 'tA', finalPosition: 2, points: 100 },
+    ]
+    const out = updateConstructorHistory(2025, [{ teamId: 'tA', points: 200, finalPosition: 1 }], prior)
+    const thisYear = out.filter((r) => r.seasonYear === 2025 && r.teamId === 'tA')
+    expect(thisYear).toHaveLength(1)
+    expect(thisYear[0]).toMatchObject({ finalPosition: 1, points: 200 }) // the fresh entry won the de-dupe
+    expect(out.some((r) => r.seasonYear === 2024 && r.teamId === 'tA')).toBe(true) // older season preserved
+  })
+
+  it('keeps the newest first and caps the history at 55 seasons', () => {
+    const prior: ConstructorSeasonRecord[] = Array.from({ length: 60 }, (_, i) => ({
+      seasonYear: 1960 + i, teamId: 'tA', finalPosition: 1, points: 0,
+    }))
+    const out = updateConstructorHistory(2025, [{ teamId: 'tA', points: 1, finalPosition: 1 }], prior)
+    expect(out).toHaveLength(55)
+    expect(out[0]).toMatchObject({ seasonYear: 2025 }) // prepended, newest first
   })
 })

@@ -11,7 +11,6 @@ import type {
   DevUpgradeEvent,
   ConstructorSeasonRecord,
   EndOfSeasonSummary,
-  DriverProgressionEvent,
   PendingGridChanges,
   PreSeasonTest,
 } from '@/lib/sim/types'
@@ -30,7 +29,7 @@ export interface PendingPlayerRenewal { driverId: string; driverName: string; di
 import { runPreSeasonTest } from '@/lib/sim/pre-season-test'
 import { computeDriverStandings, computeConstructorStandings } from '@/lib/sim/standings-calc'
 import { rookiesForYear, lastDriverEntryYear } from '@/lib/history/compose'
-import { seasonStartDate, roundDate, snapshotStats, seedStatHistory, appendStatHistory, snapshotCarPaces, reconstructCarPaceHistory, resolveDraft, type StatHistory, type CarPaceSnapshot } from './season-helpers'
+import { seasonStartDate, roundDate, snapshotStats, seedStatHistory, appendStatHistory, snapshotCarPaces, reconstructCarPaceHistory, resolveDraft, computeProgressionEvents, updateConstructorHistory, type StatHistory, type CarPaceSnapshot } from './season-helpers'
 
 // Team Manager free-agency pause: everything needed to finish the off-season draft once the player has
 // filled their seat(s). Rivals ABOVE the player's seat rank are already signed (picksAbove); the player
@@ -575,20 +574,7 @@ export const useSeasonStore = create<SeasonStore>()(
 
         // 2. Net development this season = current stats vs the season-start snapshot
         //    (the actual improvement/decline already happened race-by-race).
-        const progressionEvents: DriverProgressionEvent[] = []
-        for (const d of drivers) {
-          const start = seasonStartStats[d.id]
-          if (!start) continue
-          for (const stat of ['pace', 'wetWeatherPace', 'overtaking', 'smoothness'] as const) {
-            if (Math.abs(d[stat] - start[stat]) >= 0.05) {
-              progressionEvents.push({
-                driverId: d.id, driverName: d.name, stat,
-                before: start[stat], after: d[stat],
-                direction: d[stat] > start[stat] ? 'improved' : 'declined',
-              })
-            }
-          }
-        }
+        const progressionEvents = computeProgressionEvents(drivers, seasonStartStats)
 
         // 3. Age every driver one year. Reshuffle, market and attrition are
         //    deferred to their own off-season phases (run lazily on entry).
@@ -680,21 +666,7 @@ export const useSeasonStore = create<SeasonStore>()(
         }
 
         // 5. Update constructor history (prepend current season, dedupe, keep ≤55)
-        const newHistoryEntries: ConstructorSeasonRecord[] = constructorRankInfo.map((cs) => ({
-          seasonYear: year,
-          teamId: cs.teamId,
-          finalPosition: cs.finalPosition,
-          points: cs.points,
-        }))
-        const updatedHistory = [
-          ...newHistoryEntries,
-          ...constructorHistory,
-        ]
-          .filter(
-            (r, idx, arr) =>
-              arr.findIndex((x) => x.seasonYear === r.seasonYear && x.teamId === r.teamId) === idx,
-          )
-          .slice(0, 55)
+        const updatedHistory = updateConstructorHistory(year, constructorRankInfo, constructorHistory)
 
         set({
           phase: 'end-of-season',
