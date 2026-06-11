@@ -4,16 +4,21 @@ import type { DriverStanding, ConstructorStanding, Driver, Team, RaceResult } fr
 // on. Bounded by the largest grid the game fields (current calendars run ≤20 cars, so 22 has headroom).
 const COUNTBACK_DEPTH = 22
 
+// Tiebreak by countback over per-round finish positions: more P1s wins, then more P2s, and so on up to
+// COUNTBACK_DEPTH. Nulls (DNF / not-yet-raced) don't count. Returns a comparator value (negative => a first).
+// Shared so every standings producer (the store, the news engine) breaks driver ties the same way.
+export function countbackCompare(a: (number | null)[], b: (number | null)[]): number {
+  for (let pos = 1; pos <= COUNTBACK_DEPTH; pos++) {
+    const diff = b.filter((r) => r === pos).length - a.filter((r) => r === pos).length
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
 export function sortDriverStandings(standings: DriverStanding[]): DriverStanding[] {
-  return standings.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points
-    for (let pos = 1; pos <= COUNTBACK_DEPTH; pos++) {
-      const diff =
-        b.results.filter((r) => r === pos).length - a.results.filter((r) => r === pos).length
-      if (diff !== 0) return diff
-    }
-    return 0
-  })
+  return standings.sort((a, b) =>
+    b.points !== a.points ? b.points - a.points : countbackCompare(a.results, b.results),
+  )
 }
 
 export function sortConstructorStandings(standings: ConstructorStanding[]): ConstructorStanding[] {

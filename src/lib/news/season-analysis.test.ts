@@ -1,17 +1,25 @@
 import { describe, it, expect } from 'vitest'
 import { driverPointsAfter, teamPointsAfter } from './season-analysis'
 import type { NewsContext } from './engine'
-import type { RaceResult, Team } from '@/lib/sim/types'
+import type { RaceResult, Team, Driver } from '@/lib/sim/types'
 
 function team(id: string): Team {
   return { id, name: id, shortName: id.toUpperCase(), nationality: 'GB', color: '#FF0000', carPace: 70 }
 }
 
-// driverPointsAfter only needs the results (driver standings materialise from them); team standings,
-// however, are seeded from ctx.teams (the season roster always contains every team that races), so the
-// team test supplies them explicitly.
-function ctxOf(raceResults: RaceResult[][], teams: Team[] = []): NewsContext {
-  return { drivers: [], teams, raceResults } as unknown as NewsContext
+function driver(id: string, teamId: string): Driver {
+  return {
+    id, name: id, teamId, nationality: 'GB', gender: 'male',
+    pace: 70, wetWeatherPace: 70, overtaking: 70, smoothness: 70, consistency: 70,
+    age: 25, peakPotential: 80, primeEnd: 30, narrativeModifier: 0, contractExpiresAfterSeason: 2030,
+  }
+}
+
+// driverPointsAfter materialises driver standings from the results; team standings are seeded from
+// ctx.teams (the season roster always contains every team that races), so the team test supplies them.
+// drivers only matters for the "seated but hasn't raced" exclusion path.
+function ctxOf(raceResults: RaceResult[][], teams: Team[] = [], drivers: Driver[] = []): NewsContext {
+  return { drivers, teams, raceResults } as unknown as NewsContext
 }
 
 // points is set explicitly (decoupled from finishPosition) so a tie on points+wins can be engineered.
@@ -33,6 +41,12 @@ describe('driverPointsAfter', () => {
     const out = driverPointsAfter(ctxOf(results), 2)
     expect(out.map((r) => r.id)).toEqual(['a', 'b']) // countback puts a ahead; old points||wins left it a tie
     expect(out.every((r) => r.points === 40)).toBe(true)
+  })
+
+  it('excludes a seated driver who has not raced', () => {
+    const results: RaceResult[][] = [[res('a', 't1', 1, 25)]]
+    const ctx = ctxOf(results, [], [driver('b', 't1')]) // b is seated but absent from the results
+    expect(driverPointsAfter(ctx, 1).map((r) => r.id)).toEqual(['a'])
   })
 
   it('counts only drivers who have raced, and respects the round cut', () => {
