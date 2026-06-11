@@ -1,5 +1,6 @@
 import type { NewsContext } from './engine'
 import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
+import { computeDriverStandings, computeConstructorStandings } from '@/lib/sim/standings-calc'
 
 // Season-long analysis layer (#88). One pass over the NewsContext produces the reusable facts the
 // narrative producers (season preview, championship arc, race-report coda, expectation-vs-actual,
@@ -78,8 +79,10 @@ export interface SeasonAnalysis {
   teamDeltas: PerfDelta[]
 }
 
-// ----- standings reducers (mirror engine.ts's driver/constructorStandingsAfter; kept local so this
-// module stays decoupled. TODO unify into a shared standings module when producers are wired). -----
+// ----- standings reducers: one source of truth. Delegate aggregation + tiebreak to the canonical sim
+// standings (so the news layer breaks driver ties by countback, exactly like the standings screen), while
+// keeping the news membership of "has raced so far" — drivers/teams that have appeared in a result up to
+// `round` — since the producers talk about the championship as contested, not the full seeded grid. -----
 
 interface PointRow {
   id: string
@@ -87,30 +90,20 @@ interface PointRow {
   wins: number
 }
 
-function driverPointsAfter(ctx: NewsContext, round: number): PointRow[] {
-  const map = new Map<string, PointRow>()
-  for (let r = 0; r < round && r < ctx.raceResults.length; r++) {
-    for (const res of ctx.raceResults[r] ?? []) {
-      let s = map.get(res.driverId)
-      if (!s) { s = { id: res.driverId, points: 0, wins: 0 }; map.set(res.driverId, s) }
-      s.points += res.points
-      if (res.finishPosition === 1) s.wins++
-    }
-  }
-  return [...map.values()].sort((a, b) => b.points - a.points || b.wins - a.wins)
+export function driverPointsAfter(ctx: NewsContext, round: number): PointRow[] {
+  const results = ctx.raceResults.slice(0, round)
+  const raced = new Set(results.flat().map((r) => r.driverId))
+  return computeDriverStandings(ctx.drivers, ctx.teams, results)
+    .filter((s) => raced.has(s.driverId))
+    .map((s) => ({ id: s.driverId, points: s.points, wins: s.wins }))
 }
 
-function teamPointsAfter(ctx: NewsContext, round: number): PointRow[] {
-  const map = new Map<string, PointRow>()
-  for (let r = 0; r < round && r < ctx.raceResults.length; r++) {
-    for (const res of ctx.raceResults[r] ?? []) {
-      let s = map.get(res.teamId)
-      if (!s) { s = { id: res.teamId, points: 0, wins: 0 }; map.set(res.teamId, s) }
-      s.points += res.points
-      if (res.finishPosition === 1) s.wins++
-    }
-  }
-  return [...map.values()].sort((a, b) => b.points - a.points || b.wins - a.wins)
+export function teamPointsAfter(ctx: NewsContext, round: number): PointRow[] {
+  const results = ctx.raceResults.slice(0, round)
+  const raced = new Set(results.flat().map((r) => r.teamId))
+  return computeConstructorStandings(ctx.teams, ctx.drivers, results)
+    .filter((s) => raced.has(s.teamId))
+    .map((s) => ({ id: s.teamId, points: s.points, wins: s.wins }))
 }
 
 function tierOf(rank: number, total: number): Tier {
