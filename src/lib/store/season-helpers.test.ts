@@ -10,6 +10,7 @@ import {
   resolveDraft,
   computeProgressionEvents,
   updateConstructorHistory,
+  applyGridTransition,
 } from './season-helpers'
 import type { Driver, Team, DevUpgradeEvent, ConstructorSeasonRecord } from '@/lib/sim/types'
 import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
@@ -218,5 +219,81 @@ describe('updateConstructorHistory', () => {
     const out = updateConstructorHistory(2025, [{ teamId: 'tA', points: 1, finalPosition: 1 }], prior)
     expect(out).toHaveLength(55)
     expect(out[0]).toMatchObject({ seasonYear: 2025 }) // prepended, newest first
+  })
+})
+
+describe('applyGridTransition', () => {
+  const noChanges = { additions: [], removals: [] }
+
+  it('returns the same references when nothing changes', () => {
+    const teams = [makeTeam('tA', 70)]
+    const drivers = [makeDriver('d1', 'tA')]
+    const tms = [{ teamId: 'tA', score: 9 }]
+    const r = applyGridTransition({
+      teams, drivers, year: 2025, pendingGridChanges: noChanges, approvedSeasonChanges: null,
+      teamManagerMode: false, playerTeamId: null, teamMediaScores: tms,
+    })
+    expect(r.nextTeams).toBe(teams)
+    expect(r.nextDrivers).toBe(drivers)
+    expect(r.teamMediaScores).toBe(tms)
+  })
+
+  it('removes a team and frees its drivers', () => {
+    const teams = [makeTeam('tA', 70), makeTeam('tB', 60)]
+    const drivers = [makeDriver('d1', 'tA'), makeDriver('d2', 'tB')]
+    const r = applyGridTransition({
+      teams, drivers, year: 2025, pendingGridChanges: { additions: [], removals: ['tB'] },
+      approvedSeasonChanges: null, teamManagerMode: false, playerTeamId: null, teamMediaScores: [],
+    })
+    expect(r.nextTeams.map((t) => t.id)).toEqual(['tA'])
+    expect(r.nextDrivers.find((d) => d.id === 'd2')).toMatchObject({ teamId: '', seasonsSinceF1Seat: 0 })
+    expect(r.nextDrivers.find((d) => d.id === 'd1')!.teamId).toBe('tA')
+  })
+
+  it('adds a new team at the lowest pace minus 5 with a zero media score', () => {
+    const teams = [makeTeam('tA', 70), makeTeam('tB', 80)] // lowest of (75, 70, 80) = 70
+    const r = applyGridTransition({
+      teams, drivers: [], year: 2025, pendingGridChanges: { additions: [makeTeam('tN', 999)], removals: [] },
+      approvedSeasonChanges: null, teamManagerMode: false, playerTeamId: null, teamMediaScores: [{ teamId: 'tA', score: 5 }],
+    })
+    expect(r.nextTeams.find((t) => t.id === 'tN')!.carPace).toBe(65) // max(5, 70 - 5)
+    expect(r.teamMediaScores).toContainEqual({ teamId: 'tN', score: 0 })
+    expect(r.teamMediaScores).toContainEqual({ teamId: 'tA', score: 5 }) // existing preserved
+  })
+
+  it('applies approved real-world changes: leave, rebrand, and join', () => {
+    const teams = [makeTeam('tA', 70), makeTeam('tOld', 60)]
+    const drivers = [makeDriver('d1', 'tOld'), makeDriver('d2', 'tA')]
+    const approved = {
+      leaves: ['tA'],
+      rebrands: [{ id: 'tOld', name: 'NewName', shortName: 'NEW', color: '#000000', nationality: 'IT' }],
+      joins: [{ id: 'tJoin', name: 'Joiner', shortName: 'JOI', nationality: 'FR', color: '#00FF00' }],
+    }
+    const r = applyGridTransition({
+      teams, drivers, year: 2025, pendingGridChanges: noChanges, approvedSeasonChanges: approved,
+      teamManagerMode: false, playerTeamId: null, teamMediaScores: [],
+    })
+    expect(r.nextTeams.find((t) => t.id === 'tA')).toBeUndefined() // left
+    expect(r.nextTeams.find((t) => t.id === 'tOld')).toMatchObject({ name: 'NewName', shortName: 'NEW', color: '#000000', nationality: 'IT' })
+    expect(r.nextTeams.find((t) => t.id === 'tJoin')!.carPace).toBe(55) // lowest after tA leaves = 60, join = 60 - 5
+    expect(r.teamMediaScores).toContainEqual({ teamId: 'tJoin', score: 0 })
+    expect(r.nextDrivers.find((d) => d.id === 'd2')).toMatchObject({ teamId: '', contractExpiresAfterSeason: 2025, seasonsSinceF1Seat: 0 }) // tA's driver freed
+    expect(r.nextDrivers.find((d) => d.id === 'd1')!.teamId).toBe('tOld') // rebrand keeps the id
+  })
+
+  it('forces a brand-new Team Manager team to the strictly slowest pace on its inaugural rollover', () => {
+    const teams = [makeTeam('tA', 70)]
+    const input = {
+      teams, drivers: [], year: 2025,
+      pendingGridChanges: { additions: [makeTeam('tP', 0), makeTeam('tX', 0)], removals: [] },
+      approvedSeasonChanges: null, teamMediaScores: [],
+    }
+    // Additions alone would seat tP at 65 (index 0: 70-5) and tX at 60 (index 1: 70-10).
+    const withTm = applyGridTransition({ ...input, teamManagerMode: true, playerTeamId: 'tP' })
+    expect(withTm.nextTeams.find((t) => t.id === 'tX')!.carPace).toBe(60)
+    expect(withTm.nextTeams.find((t) => t.id === 'tP')!.carPace).toBe(55) // slowestOther (60) - 5
+    // Control: without TM mode, tP keeps its addition pace.
+    const withoutTm = applyGridTransition({ ...input, teamManagerMode: false, playerTeamId: null })
+    expect(withoutTm.nextTeams.find((t) => t.id === 'tP')!.carPace).toBe(65)
   })
 })
