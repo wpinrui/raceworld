@@ -1,9 +1,13 @@
 import type { DriverStanding, ConstructorStanding, Driver, Team, RaceResult } from './types'
 
+// Countback depth when points are level: compare how many P1 finishes each driver has, then P2, and so
+// on. Bounded by the largest grid the game fields (current calendars run ≤20 cars, so 22 has headroom).
+const COUNTBACK_DEPTH = 22
+
 export function sortDriverStandings(standings: DriverStanding[]): DriverStanding[] {
   return standings.sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points
-    for (let pos = 1; pos <= 22; pos++) {
+    for (let pos = 1; pos <= COUNTBACK_DEPTH; pos++) {
       const diff =
         b.results.filter((r) => r === pos).length - a.results.filter((r) => r === pos).length
       if (diff !== 0) return diff

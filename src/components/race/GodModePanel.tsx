@@ -6,7 +6,7 @@ import { planStrategy, truthBelief, type StrategyStint } from '@/lib/sim/pit-ai'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { degradeTyre } from '@/lib/sim/tyres'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { formatLapTime } from '@/lib/format'
+import { formatLapTime, formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
 
 interface GodModePanelProps {
@@ -168,7 +168,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Gap</span>
-              <span className="font-mono text-[#FFFFFF]">{ds.gap === 0 ? 'LEAD' : `+${ds.gap.toFixed(2)}s`}</span>
+              <span className="font-mono text-[#FFFFFF]">{formatLiveGap(ds.gap)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#FFFFFF]">AI pit</span>
