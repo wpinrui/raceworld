@@ -10,7 +10,7 @@ import { ResultChip } from '@/components/standings/ResultCell'
 import { StintBar } from '@/components/world/StintBar'
 import { ChampPill } from '@/components/world/pills'
 import { Panel, StatTile } from '@/components/world/ui'
-import { formatLapTime } from '@/components/world/format'
+import { formatLapTime } from '@/lib/format'
 
 export default function DriverSeasonPage() {
   const { id, year: yearStr } = useParams<{ id: string; year: string }>()

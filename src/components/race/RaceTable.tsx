@@ -6,6 +6,7 @@ import type { DriverCareer } from '@/lib/news/engine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { DriverTooltip } from '@/components/world/DriverTooltip'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { formatLapTime } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
 
 interface RaceTableProps {
@@ -30,14 +31,6 @@ function formatTotalTime(t: number): string {
   const m = Math.floor((t % 3600) / 60)
   const s = (t % 60).toFixed(3).padStart(6, '0')
   return h > 0 ? `${h}h ${m}min ${s}s` : `${m}min ${s}s`
-}
-
-function formatLapTime(lapTimes: number[]): string {
-  if (lapTimes.length === 0) return '--'
-  const last = lapTimes[lapTimes.length - 1]
-  const mins = Math.floor(last / 60)
-  const secs = (last % 60).toFixed(3).padStart(6, '0')
-  return `${mins}:${secs}`
 }
 
 export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, animate = true }: RaceTableProps) {
@@ -205,7 +198,7 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                 </td>
                 <td className="py-1 px-2 text-center text-sm tabular-nums">{ds.pitStops}</td>
                 <td className="py-1 px-2 text-right font-mono text-sm">
-                  {formatLapTime(ds.lapTimes)}
+                  {formatLapTime(ds.lapTimes[ds.lapTimes.length - 1] ?? null)}
                 </td>
                 <td className="py-1 px-2">
                   <div className="flex items-center gap-1.5">

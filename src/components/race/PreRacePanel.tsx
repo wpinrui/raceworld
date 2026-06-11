@@ -3,13 +3,7 @@
 import ReactCountryFlag from 'react-country-flag'
 import type { Driver, Team, RaceState, Circuit } from '@/lib/sim/types'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
-
-function formatQualTime(t: number | null): string {
-  if (t === null) return '--'
-  const mins = Math.floor(t / 60)
-  const secs = (t % 60).toFixed(3).padStart(6, '0')
-  return `${mins}:${secs}`
-}
+import { formatLapTime } from '@/lib/format'
 
 interface Props {
   raceState: RaceState
@@ -55,9 +49,9 @@ export function PreRacePanel({ raceState, drivers, teams, currentCircuit }: Prop
                     </div>
                   </td>
                   <td className="py-1 px-2 text-sm text-[#FFFFFF]">{team?.name ?? '---'}</td>
-                  <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatQualTime(qr.q1Time)}</td>
-                  <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatQualTime(qr.q2Time)}</td>
-                  <td className="py-1 px-2 text-right font-mono text-sm font-bold">{formatQualTime(qr.q3Time)}</td>
+                  <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatLapTime(qr.q1Time)}</td>
+                  <td className="py-1 px-2 text-right font-mono text-sm text-[#FFFFFF]">{formatLapTime(qr.q2Time)}</td>
+                  <td className="py-1 px-2 text-right font-mono text-sm font-bold">{formatLapTime(qr.q3Time)}</td>
                 </tr>
               )
             })}

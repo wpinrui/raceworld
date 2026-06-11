@@ -10,6 +10,7 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { formatLapTime } from '@/lib/format'
 
 interface Props {
   test: PreSeasonTest | null
@@ -23,12 +24,6 @@ const FUEL_STYLE: Record<FuelBand, string> = {
   heavy: 'text-[#F59E0B]',
   medium: 'text-[#FFFFFF]',
   light: 'text-[#10B981]',
-}
-
-function fmtTime(t: number): string {
-  const m = Math.floor(t / 60)
-  const s = t - m * 60
-  return `${m}:${s.toFixed(3).padStart(6, '0')}`
 }
 
 type SortKey = 'time' | 'pace' | 'wcc'
@@ -118,7 +113,7 @@ export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
                   </span>
                 </td>
                 <td className={`py-2 px-3 font-semibold capitalize ${FUEL_STYLE[e.fuelBand]}`}>{e.fuelBand}</td>
-                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF] font-semibold">{fmtTime(e.lapTime)}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF] font-semibold">{formatLapTime(e.lapTime)}</td>
                 <td className="py-2 px-3 text-right tabular-nums text-[#FFFFFF]">
                   {i === 0 ? '—' : `+${(e.lapTime - fastest).toFixed(3)}`}
                 </td>
