@@ -28,6 +28,7 @@ import { computeDriverMediaScores, computeTeamMediaScores } from '@/lib/sim/medi
 import { driverMaxPerRace, constructorMaxPerRace, getPoints } from '@/lib/sim/points'
 import { countbackCompare } from '@/lib/sim/standings-calc'
 import { sortedResults, marginWord, poleMargin, strategyPhrase, startingTyre } from './result-format'
+import { wonBefore, podiumBefore, isHomeRace, winsUpTo, teamOneTwoBefore } from './season-history'
 import { raceConditions } from '@/lib/sim/race-conditions'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
@@ -331,20 +332,6 @@ function recentFinishesUpTo(ctx: NewsContext, driverId: string, round: number, n
   return out
 }
 
-// Has this driver won / reached the podium earlier in the season (rounds 1..before)?
-function wonBefore(ctx: NewsContext, driverId: string, before: number): boolean {
-  for (let r = 1; r < before; r++) {
-    if ((ctx.raceResults[r - 1] ?? []).some((x) => x.driverId === driverId && x.finishPosition === 1)) return true
-  }
-  return false
-}
-function podiumBefore(ctx: NewsContext, driverId: string, before: number): boolean {
-  for (let r = 1; r < before; r++) {
-    if ((ctx.raceResults[r - 1] ?? []).some((x) => x.driverId === driverId && !x.dnf && x.finishPosition != null && x.finishPosition <= 3)) return true
-  }
-  return false
-}
-
 // Headline weather modifier bucket (weather race-report news): a drying day reads as "drying",
 // otherwise the descriptor escalates with how wet the track got at its peak.
 function wxHeadlineBucket(wx: RaceWeather): 'damp' | 'wet' | 'heavy' | 'drying' {
@@ -366,31 +353,6 @@ function texture(seed: string, pool: string[], slots: Record<string, string | nu
 
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
 // metadata, nationality) or a count derived from results, so it can never contradict the game.
-
-// A driver racing in their own country (driver nationality === circuit country, both ISO-2).
-function isHomeRace(ctx: NewsContext, driverId: string, round: number): boolean {
-  const c = ctx.calendar[round - 1]
-  const nat = ctx.drivers.find((d) => d.id === driverId)?.nationality ?? ''
-  return !!c && !!nat && c.country === nat
-}
-
-// Wins a driver has up to and including `round`, this season.
-function winsUpTo(ctx: NewsContext, driverId: string, round: number): number {
-  let n = 0
-  for (let r = 1; r <= round && r <= ctx.raceResults.length; r++) {
-    if ((ctx.raceResults[r - 1] ?? []).some((x) => x.driverId === driverId && x.finishPosition === 1)) n++
-  }
-  return n
-}
-
-// Whether this team has already had a 1-2 earlier this season (before `round`).
-function teamOneTwoBefore(ctx: NewsContext, teamId: string, round: number): boolean {
-  for (let r = 1; r < round; r++) {
-    const top2 = sortedResults(ctx.raceResults[r - 1] ?? []).filter((x) => !x.dnf && x.finishPosition != null).slice(0, 2)
-    if (top2.length === 2 && top2[0].teamId === teamId && top2[1].teamId === teamId) return true
-  }
-  return false
-}
 
 
 // A team's finishing position last season, from the constructor history (null in year one).
