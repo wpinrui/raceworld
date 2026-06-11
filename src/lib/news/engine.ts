@@ -30,6 +30,7 @@ import { countbackCompare } from '@/lib/sim/standings-calc'
 import { sortedResults, marginWord, poleMargin, strategyPhrase, startingTyre } from './result-format'
 import { wonBefore, podiumBefore, isHomeRace, winsUpTo, teamOneTwoBefore } from './season-history'
 import { careerTotalsThroughRound, teamTotalsThroughRound, teamMilestoneCrossed, milestoneSig, type MileCat } from './milestone-math'
+import { teamName, circuit, CIRCUIT_TRAITS, paceRank, tierWord } from './lookups'
 import { raceConditions } from '@/lib/sim/race-conditions'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { computeRetentionDeltas, runDriverMarket } from '@/lib/sim/free-agency'
@@ -221,60 +222,10 @@ function paras(...parts: string[]): string {
   return parts.filter(Boolean).join('\n\n')
 }
 
-function teamName(ctx: NewsContext, id: string): string {
-  return ctx.teams.find((t) => t.id === id)?.name ?? id
-}
-
 // Possessive form. Names ending in s (Mercedes, Williams, Haas, Racing Bulls) take a bare
 // apostrophe; everything else takes 's.
 function poss(name: string): string {
   return /s$/i.test(name) ? `${name}'` : `${name}'s`
-}
-
-function circuit(ctx: NewsContext, round: number): string {
-  const name = ctx.calendar[round - 1]?.name
-  return name ? name.replace(/\bGP\b/, 'Grand Prix') : `Round ${round}`
-}
-
-// Real-world track characteristics, keyed by circuit id. Unfalsifiable against the game (we
-// model no track type), so safe to use as preview colour. One entry per 2026 circuit.
-const CIRCUIT_TRAITS: Record<string, string> = {
-  australia: 'the flowing rhythm of Albert Park',
-  china: 'the long, energy-sapping corners of Shanghai',
-  japan: 'the fast esses of Suzuka',
-  bahrain: 'the abrasive Bahrain surface',
-  'saudi-arabia': 'the high-speed walls of Jeddah',
-  miami: 'the Miami heat',
-  madrid: 'the fast street sweeps of the Madring',
-  monaco: 'the tight streets of Monaco',
-  spain: 'the aero-hungry corners of Barcelona',
-  canada: 'the stop-start rhythm of Montreal',
-  austria: 'the short, punchy Red Bull Ring',
-  britain: 'the high-speed sweeps of Silverstone',
-  belgium: 'the long lap and fickle weather of Spa',
-  hungary: 'the twisty, sweltering Hungaroring',
-  netherlands: 'the banking of Zandvoort',
-  italy: 'the low-downforce blast of Monza',
-  azerbaijan: 'the long straight and unforgiving walls of Baku',
-  singapore: 'the heat and humidity of Singapore',
-  usa: 'the bumps and elevation of Austin',
-  mexico: 'the thin air of Mexico City',
-  brazil: 'the altitude and changeable skies of Interlagos',
-  'las-vegas': 'the cold desert night of Las Vegas',
-  qatar: 'the relentless high-speed corners of Lusail',
-  'abu-dhabi': 'the smooth Yas Marina tarmac',
-}
-
-// car-pace rank: 1 = fastest car on the grid. Meaningless for archived contexts (carPace 0).
-function paceRank(ctx: NewsContext, teamId: string): number {
-  const sorted = [...ctx.teams].sort((a, b) => b.carPace - a.carPace)
-  return sorted.findIndex((t) => t.id === teamId) + 1
-}
-
-function tierWord(rank: number, total: number): string {
-  if (rank <= Math.max(2, total / 3)) return 'front-running'
-  if (rank <= (2 * total) / 3) return 'midfield'
-  return 'backmarker'
 }
 
 interface SimpleStanding {
