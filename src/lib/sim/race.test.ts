@@ -107,15 +107,17 @@ describe('simulateLap (characterization)', () => {
   })
 
   it('records a god-mode forced retirement and classifies the car out of the running', () => {
-    const state = runRace(2, { 2: [{ type: 'force-retire', driverId: 'd1' }] }) // retire the pole car on lap 2
-    const d1 = state.drivers.find((d) => d.driverId === 'd1')!
-    expect(d1.retired).toBe(true)
-    expect(d1.retirementLap).not.toBeNull()
-    expect(d1.retirementReason).not.toBeNull()
-    expect(d1.lapTimes.length).toBeLessThan(CIRCUIT.laps)
+    // d3 finishes naturally under seed 2, so forcing it out makes the retirement unambiguously the
+    // god-mode one — retirementLap is exactly the injected lap, not a coincidental natural DNF.
+    const state = runRace(2, { 5: [{ type: 'force-retire', driverId: 'd3' }] })
+    const d3 = state.drivers.find((d) => d.driverId === 'd3')!
+    expect(d3.retired).toBe(true)
+    expect(d3.retirementLap).toBe(5)
+    expect(d3.retirementReason).not.toBeNull()
+    expect(d3.lapTimes.length).toBeLessThan(CIRCUIT.laps)
     // A retiree classifies behind every car still running.
     const finishers = state.drivers.filter((d) => !d.retired)
-    expect(d1.position).toBeGreaterThan(finishers.length)
+    expect(d3.position).toBeGreaterThan(finishers.length)
     expect(project(state)).toMatchSnapshot()
   })
 
