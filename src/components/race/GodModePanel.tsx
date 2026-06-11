@@ -6,6 +6,7 @@ import { planStrategy, truthBelief, type StrategyStint } from '@/lib/sim/pit-ai'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { degradeTyre } from '@/lib/sim/tyres'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { formatLapTime } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
 
 interface GodModePanelProps {
@@ -18,12 +19,6 @@ interface GodModePanelProps {
 }
 
 const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
-
-function formatLapTime(lapTimes: number[]): string {
-  if (!lapTimes.length) return '--'
-  const t = lapTimes[lapTimes.length - 1]
-  return `${Math.floor(t / 60)}:${(t % 60).toFixed(3).padStart(6, '0')}`
-}
 
 export default function GodModePanel({ drivers, teams, states, raceState, selectedDriverId, onAction }: GodModePanelProps) {
   const ds = states.find(s => s.driverId === selectedDriverId)
@@ -169,7 +164,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Last lap</span>
-              <span className="font-mono text-[#FFFFFF]">{formatLapTime(ds.lapTimes)}</span>
+              <span className="font-mono text-[#FFFFFF]">{formatLapTime(ds.lapTimes[ds.lapTimes.length - 1] ?? null)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#FFFFFF]">Gap</span>

@@ -4,16 +4,11 @@ import type { Driver, Team, Circuit } from '@/lib/sim/types'
 import type { BoardRow } from './useQualifyingEngine'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
+import { formatLapTime } from '@/lib/format'
 
 const ROW_H = 30
 const COLS = '30px minmax(104px,1.3fr) minmax(52px,0.9fr) 84px 56px 56px 56px'
 
-function formatLap(t: number | null): string {
-  if (t === null) return '--'
-  const mins = Math.floor(t / 60)
-  const secs = (t % 60).toFixed(3).padStart(6, '0')
-  return `${mins}:${secs}`
-}
 const formatSector = (t: number | null) => (t === null ? '' : t.toFixed(3))
 
 interface Props {
@@ -76,7 +71,7 @@ export function QualifyingPanel({ rows, sessionName, cutSize, dropFrom, progress
                   <span className="truncate text-sm">{driver?.name ?? row.carId}</span>
                 </div>
                 <div className="text-sm truncate">{team?.name ?? '---'}</div>
-                <div className="text-right font-mono text-sm font-bold">{formatLap(row.best)}</div>
+                <div className="text-right font-mono text-sm font-bold">{formatLapTime(row.best)}</div>
                 <div className="text-right font-mono text-xs text-[#9CA3AF]">{formatSector(row.sectors[0])}</div>
                 <div className="text-right font-mono text-xs text-[#9CA3AF]">{formatSector(row.sectors[1])}</div>
                 <div className="text-right font-mono text-xs text-[#9CA3AF]">{formatSector(row.sectors[2])}</div>
