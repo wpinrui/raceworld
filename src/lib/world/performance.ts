@@ -1,5 +1,5 @@
 import type { RaceResult, Team } from '@/lib/sim/types'
-import type { CarPaceSnapshot } from '@/lib/store/season-store'
+import type { CarPaceSnapshot } from '@/lib/store/season-helpers'
 
 // Correlate car performance with results across the season. We expose, all keyed by round so they can
 // share an x-axis: car pace per team, each team's best finish, and the over/under-performance (expected

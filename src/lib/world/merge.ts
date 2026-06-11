@@ -3,7 +3,7 @@
 // live slice is additive — no double counting.
 
 import type { Driver, Team, DriverStanding, ConstructorStanding, RaceResult, Circuit } from '@/lib/sim/types'
-import type { StatPoint } from '@/lib/store/season-store'
+import type { StatPoint } from '@/lib/store/season-helpers'
 import { overall, shownStats, shownOverall } from '@/lib/sim/progression'
 import { driverMaxPerRace, constructorMaxPerRace } from '@/lib/sim/points'
 import type { Feat } from '@/lib/stats/types'
