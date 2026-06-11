@@ -36,6 +36,7 @@ function makeResult(
   }
 }
 
+// `wins` is unused by sortDriverStandings (it tiebreaks on `results` countback), so it's fixed at 0 here.
 function standing(driverId: string, points: number, results: (number | null)[]): DriverStanding {
   return { driverId, driverName: driverId, teamId: 't', teamName: 't', points, wins: 0, results }
 }
@@ -106,7 +107,7 @@ describe('computeDriverStandings', () => {
   })
 
   it('records a DNF as null in the results row', () => {
-    const results: RaceResult[][] = [[makeResult('d1', 't1', null, 0, { dnf: true })]]
+    const results: RaceResult[][] = [[makeResult('d1', 't1', null, 0)]] // null finish => DNF in the fixture
     const out = computeDriverStandings([makeDriver('d1', 't1')], [makeTeam('t1')], results)
     expect(out[0].results).toEqual([null])
   })
