@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { teamName, circuit, paceRank, tierWord } from './lookups'
+import { teamName, circuit, paceRank, tierWord, careerOf, lastSeasonPos } from './lookups'
 import type { NewsContext } from './engine'
 
 function ctxOf(parts: Record<string, unknown>): NewsContext {
@@ -35,4 +35,21 @@ describe('tierWord', () => {
     expect(tierWord(10, 20)).toBe('midfield')
     expect(tierWord(20, 20)).toBe('backmarker')
   })
+})
+
+describe('careerOf', () => {
+  const ctx = ctxOf({ careers: { d1: { starts: 5 } } })
+  it('returns the career record when present', () => expect(careerOf(ctx, 'd1')).toEqual({ starts: 5 }))
+  it('is null when absent', () => expect(careerOf(ctx, 'dX')).toBeNull())
+})
+
+describe('lastSeasonPos', () => {
+  const ctx = ctxOf({
+    constructorHistory: [
+      { teamId: 't1', seasonYear: 2024, finalPosition: 3 },
+      { teamId: 't1', seasonYear: 2025, finalPosition: 1 },
+    ],
+  })
+  it('returns the most recent season finish for the team', () => expect(lastSeasonPos(ctx, 't1')).toBe(1))
+  it('is null with no history', () => expect(lastSeasonPos(ctx, 'tX')).toBeNull())
 })
