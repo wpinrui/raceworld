@@ -215,7 +215,6 @@ export interface NewsArticle {
 // --- Safe-detail helpers: every value below is an observable fact (results, fixed circuit
 // metadata, nationality) or a count derived from results, so it can never contradict the game.
 
-
 // Gendered pronoun slots for a single driver, so copy reads with natural pronouns (he/she, his/her,
 // him/her, ...) instead of contorting to stay neutral. A driver's gender is always known.
 
@@ -768,10 +767,6 @@ function raceReports(ctx: NewsContext): NewsArticle[] {
   }
   return out
 }
-
-
-
-
 
 // The season review (#88): the end-of-season retrospective that pays off the preview — how the title was
 // won, who beat or missed their preseason projection, the best of the rest. Replaces the old `feature`
@@ -2152,10 +2147,6 @@ function market(ctx: NewsContext): NewsArticle[] {
   return out
 }
 
-
-
-
-
 // --- Article dating + entity tagging (applied centrally so per-producer literals stay terse) ---
 
 // Days a category's story drops relative to its round's race day (negative = before the race).
@@ -2258,11 +2249,9 @@ function entitiesFor(ctx: NewsContext, a: NewsArticle, m: EntityMatcher): NonNul
   return { driverIds: [...driverIds], teamIds: [...teamIds], ...(c ? { circuitId: c } : {}) }
 }
 
-
 // ---- Driver-market journalism: a contract watch, a renewals round-up, and an off-season
 // retrospective. All three are fed by the store's market beats (ctx.contractWatch / renewals / draft);
 // they only run on the live context (archived seasons replay the snapshot taken when these were live).
-
 
 export function generateNews(ctx: NewsContext): NewsArticle[] {
   const all = [
