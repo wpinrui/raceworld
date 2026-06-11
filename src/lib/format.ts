@@ -29,3 +29,8 @@ export function formatGap(s: number): string {
   const secs = s - mins * 60
   return `+${mins}:${secs.toFixed(3).padStart(6, '0')}`
 }
+
+// Live timing gap to the car ahead, in seconds: "LEAD" for the leader, else "+1.23s".
+export function formatLiveGap(gap: number): string {
+  return gap === 0 ? 'LEAD' : `+${gap.toFixed(2)}s`
+}

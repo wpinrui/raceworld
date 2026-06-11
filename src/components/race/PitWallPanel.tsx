@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Driver, Team, DriverRaceState, RaceState, TyreCompound } from '@/lib/sim/types'
 import { useRaceStore, type PitCommand } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
 import { DriverLink } from '@/components/world/EntityLink'
 
@@ -82,7 +83,7 @@ function Card({ driver, team, ds, raceState, onRetire }: { driver: Driver; team:
           <span className={cond < 20 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}>{cond}%</span>
         </span>
         <span>L{ds.stintLap} stint</span>
-        <span className="font-mono">{ds.gap === 0 ? 'LEAD' : `+${ds.gap.toFixed(2)}s`}</span>
+        <span className="font-mono">{formatLiveGap(ds.gap)}</span>
         <span className="ml-auto flex items-center gap-1 text-[#9CA3AF]">
           AI L{ds.targetPitLap ?? '—'} <TyreIndicator compound={ds.targetNextCompound} size="sm" />
         </span>
