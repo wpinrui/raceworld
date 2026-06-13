@@ -3,7 +3,10 @@
 import type { TyreCompound } from '@/lib/sim/types'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import TyreIndicator from './TyreIndicator'
+import { TyreTelemetry } from './TyreTelemetry'
+import { RaceEngineer } from './RaceEngineer'
 
 const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
 
@@ -26,6 +29,8 @@ export function StartingTyrePanel() {
   const drivers = useRaceStore((s) => s.drivers)
   const setStartingTyre = useRaceStore((s) => s.setStartingTyre)
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const tyreTel = useSettingsStore((s) => s.talents['tyre-telemetry'] ?? false)
+  const raceEng = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
 
   const myDrivers = drivers.filter((d) => d.teamId === playerTeamId)
   const compoundOf = (driverId: string) => raceState?.drivers.find((ds) => ds.driverId === driverId)?.currentTyre.compound
@@ -53,17 +58,22 @@ export function StartingTyrePanel() {
 
       <div className="h-px bg-[#2A3142]" />
 
-      {/* Per-driver — overrides one car (split strategy). */}
+      {/* Per-driver — overrides one car (split strategy), with the talent reveals beneath each car. */}
       {myDrivers.map((d) => {
         const cur = compoundOf(d.id)
+        const ds = raceState?.drivers.find((s) => s.driverId === d.id)
         return (
-          <div key={d.id} className="flex items-center gap-3">
-            <span className="text-sm text-[#FFFFFF] w-24 shrink-0 truncate">{d.name}</span>
-            <div className="flex gap-1.5">
-              {COMPOUNDS.map((c) => (
-                <CompoundButton key={c} compound={c} selected={cur === c} onClick={() => setStartingTyre(d.id, c)} />
-              ))}
+          <div key={d.id} className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-[#FFFFFF] w-24 shrink-0 truncate">{d.name}</span>
+              <div className="flex gap-1.5">
+                {COMPOUNDS.map((c) => (
+                  <CompoundButton key={c} compound={c} selected={cur === c} onClick={() => setStartingTyre(d.id, c)} />
+                ))}
+              </div>
             </div>
+            {raceState && ds && tyreTel && <TyreTelemetry driver={d} ds={ds} raceState={raceState} />}
+            {raceState && raceEng && <RaceEngineer driver={d} raceState={raceState} mode="pre-race" />}
           </div>
         )
       })}
