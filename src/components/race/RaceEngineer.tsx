@@ -1,47 +1,29 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
-import type { Driver, RaceState, TyreCompound } from '@/lib/sim/types'
+import type { Driver, RaceState } from '@/lib/sim/types'
 import { useRaceStore } from '@/lib/store/race-store'
 import { getMoistureAtLap } from '@/lib/sim/weather'
-import { tyreStepsOutOfWindow } from '@/lib/sim/tyres'
-import { forecastSingleRun, summarizeForecast, type ForecastCandidate, type ForecastSample } from '@/lib/sim/strategy-forecast'
+import { buildCandidates, candKey, forecastSingleRun, summarizeForecast, type ForecastCandidate, type ForecastSample } from '@/lib/sim/strategy-forecast'
 import TyreIndicator from './TyreIndicator'
 
-const ALL_COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
 const FORECAST_TARGET = 120 // runs per option at full convergence
 // One run from late in a race is sub-ms, but a full-distance run is ~0.5s (the AI replans every car each lap).
 // So we don't fix a run count per yield: we run for at most BURST_MS, then yield — the UI stays responsive
-// whether a run is fast or slow. A total wall-clock BUDGET caps the expensive (early/pre-race) case so it
-// can't run for minutes; it stops with whatever sample it gathered (flagged as time-limited).
+// whether a run is fast or slow. A wall-clock BUDGET caps the expensive (early/pre-race) case so it can't run
+// for minutes; it stops with whatever sample it gathered (flagged as time-limited).
 const BURST_MS = 80
 const BUDGET_MS = 12000
 
-type CandKey = string
-const candKey = (c: ForecastCandidate): CandKey => (c.kind === 'pit' || c.kind === 'start' ? `${c.kind}:${c.compound}` : c.kind)
 const candLabel = (c: ForecastCandidate): string =>
-  c.kind === 'auto' ? 'Auto (AI)' : c.kind === 'hold' ? 'Stay out' : c.kind === 'pit' ? 'Pit' : 'Start'
+  c.kind === 'hold' ? 'Stay out' : c.kind === 'pit' ? 'Pit' : 'Start'
 
-// The compounds that actually suit the track right now (no slicks in the wet, no wets in the dry). Current
-// moisture is already observable, so reading it here is no forecast leak.
-function suitableCompounds(moisture: number): TyreCompound[] {
-  const inWindow = ALL_COMPOUNDS.filter((c) => tyreStepsOutOfWindow(c, moisture) === 0)
-  return inWindow.length ? inWindow : ALL_COMPOUNDS.filter((c) => tyreStepsOutOfWindow(c, moisture) <= 1)
-}
-
-// Options worth simulating. Pre-race: which grid tyre to start on. In-race: ride the AI plan, hold, or box
-// now for a suitable compound.
-function buildCandidates(moisture: number, mode: 'pre-race' | 'racing'): ForecastCandidate[] {
-  const compounds = suitableCompounds(moisture)
-  if (mode === 'pre-race') return compounds.map((c) => ({ kind: 'start', compound: c }) as ForecastCandidate)
-  return [{ kind: 'auto' }, ...compounds.map((c) => ({ kind: 'pit', compound: c }) as ForecastCandidate), { kind: 'hold' }]
-}
-
-// Race Engineer talent: Monte-Carlo strategy advice. Runs the real engine to the flag many times under each
-// option and reports where the player's car lands. The simulation stays faithful (every run resamples the
+// Race Engineer talent: Monte-Carlo strategy advice for ONE car. Runs the real engine to the flag many times
+// under each option and reports where the car lands. The simulation stays faithful (every run resamples the
 // engine's true luck); the risk preference lives only in the ranking — Cautious ranks by the bad-day figure
 // (worst 25%) instead of the average, never by skewing the rolls. Shown only while paused (the forecast is a
-// snapshot) — pre-race, or mid-race once the player pauses.
+// snapshot) — pre-race, or mid-race once the player pauses. The lower bar's auto-advance is the team-level
+// counterpart that watches every car and pauses at the pit window.
 export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; raceState: RaceState; mode: 'pre-race' | 'racing' }) {
   const drivers = useRaceStore((s) => s.drivers)
   const teams = useRaceStore((s) => s.teams)
@@ -49,7 +31,7 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
   const [cautious, setCautious] = useState(false)
   const [running, setRunning] = useState(false)
   const [budgetHit, setBudgetHit] = useState(false)
-  const [samples, setSamples] = useState<Record<CandKey, ForecastSample[]>>({})
+  const [samples, setSamples] = useState<Record<string, ForecastSample[]>>({})
   const abortRef = useRef(false)
 
   // Abort an in-flight forecast if the panel unmounts (e.g. the player resumes the race).
@@ -70,7 +52,7 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
     // finally guarantees we leave the running state even if a run throws — otherwise the panel would stick
     // on "Stop" with a dead loop behind it, escapable only by unmounting.
     try {
-      const acc: Record<CandKey, ForecastSample[]> = Object.fromEntries(candidates.map((c) => [candKey(c), []]))
+      const acc: Record<string, ForecastSample[]> = Object.fromEntries(candidates.map((c) => [candKey(c), []]))
       setSamples({ ...acc })
       const startedAt = performance.now()
       let done = false
@@ -108,14 +90,14 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
   const ranAny = rows.some((r) => r.stats.runs > 0)
   const minRuns = Math.min(...candidates.map((c) => (samples[candKey(c)] ?? []).length))
   const pct = (p: number) => `${Math.round(p * 100)}%`
-  const intro = mode === 'pre-race' ? 'Simulate the race for each starting tyre.' : 'Simulate the rest of the race for each pit option. Each is “do it now, then let the AI run the rest”.'
+  const intro = mode === 'pre-race' ? 'Simulate the race for each starting tyre.' : 'Simulate the rest of the race for each pit option, each “box now, then let the AI run the rest”.'
 
   return (
     <div className="bg-[#1a1326] rounded p-2.5 border border-[#7C3AED]/40 flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <div className="text-[10px] font-bold tracking-widest text-[#A78BFA] uppercase">Race Engineer</div>
         <label className="ml-auto flex items-center gap-1 text-[10px] text-[#FFFFFF] cursor-pointer">
-          <input type="checkbox" checked={cautious} onChange={(e) => setCautious(e.target.checked)} className="accent-[#7C3AED]" />
+          <input type="checkbox" checked={cautious} onChange={(e) => setCautious(e.target.checked)} disabled={running} className="accent-[#7C3AED]" />
           Cautious
         </label>
       </div>

@@ -1,7 +1,10 @@
 import type { Driver, Team, Circuit, RaceState, GodModeAction, TyreCompound } from './types'
 import { simulateLap } from './race'
-import { computeTyreLife } from './tyres'
+import { computeTyreLife, tyreStepsOutOfWindow } from './tyres'
+import { getMoistureAtLap } from './weather'
 import { getPoints } from './points'
+
+const ALL_COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
 
 // Race Engineer talent: Monte-Carlo strategy advice. From the current (paused) race state, run the real
 // engine to the flag many times under each candidate pit decision and read where the player's car ends up.
@@ -24,6 +27,25 @@ export interface ForecastSample {
   position: number // classified position in the final state (only trusted when !retired)
   retired: boolean
 }
+
+// The compounds that suit the track at a given moisture — those in their window (no slicks in the wet, no
+// wets in the dry). Falls back to within-one-step if a transitional moisture leaves nothing perfectly in
+// window, so there's always at least one option.
+export function suitableCompounds(moisture: number): TyreCompound[] {
+  const inWindow = ALL_COMPOUNDS.filter((c) => tyreStepsOutOfWindow(c, moisture) === 0)
+  return inWindow.length ? inWindow : ALL_COMPOUNDS.filter((c) => tyreStepsOutOfWindow(c, moisture) <= 1)
+}
+
+// The decisions worth forecasting at a given moisture. Pre-race: which grid tyre to start on. In-race: box
+// now for a suitable compound, or hold (stay out). Intermediates/wets appear once it's actually wet.
+export function buildCandidates(moisture: number, mode: 'pre-race' | 'racing'): ForecastCandidate[] {
+  const compounds = suitableCompounds(moisture)
+  if (mode === 'pre-race') return compounds.map((c) => ({ kind: 'start', compound: c }) as ForecastCandidate)
+  return [...compounds.map((c) => ({ kind: 'pit', compound: c }) as ForecastCandidate), { kind: 'hold' }]
+}
+
+// Stable key for a candidate, for accumulating its samples.
+export const candKey = (c: ForecastCandidate): string => (c.kind === 'pit' || c.kind === 'start' ? `${c.kind}:${c.compound}` : c.kind)
 
 export interface ForecastStats {
   runs: number
@@ -121,4 +143,66 @@ export function summarizeForecast(samples: ForecastSample[], fieldSize: number, 
     pPoints: points / runs,
     dnfRate: dnfs / runs,
   }
+}
+
+export interface PitRecommendation {
+  driverId: string
+  compound: TyreCompound
+}
+
+// A car only sensibly considers boxing once its tyre is worn past this, or it's on the wrong compound for
+// the weather. Above it (and correct for conditions) the forecast is skipped — so the auto-advance watchdog
+// stays cheap through fresh-tyre laps and only pays for Monte-Carlo near a real pit window.
+const PIT_CONSIDER_CONDITION = 60
+
+// Auto-advance watchdog: does the forecast say any of these player cars should box NOW? For each worn/wrong
+// car, gather `runs` samples per option and rank by expected finish; if the best option is a pit, that car
+// should pit. Returns the first such car (and compound), or null. Async with a per-call time budget and
+// yields so it never freezes the playback loop; `shouldAbort` cancels it mid-run.
+export async function recommendsPit(
+  state: RaceState,
+  drivers: Driver[],
+  teams: Team[],
+  circuit: Circuit,
+  playerDriverIds: string[],
+  opts: { runs: number; budgetMs: number; burstMs?: number; shouldAbort?: () => boolean },
+): Promise<PitRecommendation | null> {
+  const burstMs = opts.burstMs ?? 80
+  const moisture = getMoistureAtLap(state.weather, state.currentLap)
+  const cands = buildCandidates(moisture, 'racing')
+  const fieldSize = state.drivers.length
+  for (const id of playerDriverIds) {
+    if (opts.shouldAbort?.()) return null
+    const ds = state.drivers.find((d) => d.driverId === id)
+    if (!ds || ds.retired) continue
+    const wrongTyre = tyreStepsOutOfWindow(ds.currentTyre.compound, moisture) >= 1
+    if (ds.currentTyre.condition > PIT_CONSIDER_CONDITION && !wrongTyre) continue // too fresh to box yet
+
+    const acc: Record<string, ForecastSample[]> = Object.fromEntries(cands.map((c) => [candKey(c), []]))
+    const startedAt = performance.now()
+    let done = false
+    while (!done) {
+      if (opts.shouldAbort?.()) return null
+      const burstStart = performance.now()
+      let advanced = true
+      while (advanced && performance.now() - burstStart < burstMs) {
+        advanced = false
+        for (const c of cands) {
+          const k = candKey(c)
+          if (acc[k].length >= opts.runs) continue
+          acc[k].push(forecastSingleRun(state, drivers, teams, circuit, state.year, id, c))
+          advanced = true
+          if (performance.now() - burstStart >= burstMs) break
+        }
+      }
+      await new Promise((r) => setTimeout(r, 0))
+      done = cands.every((c) => acc[candKey(c)].length >= opts.runs) || performance.now() - startedAt >= opts.budgetMs
+    }
+    const best = cands
+      .map((c) => ({ c, stats: summarizeForecast(acc[candKey(c)] ?? [], fieldSize, state.year) }))
+      .filter((r) => r.stats.runs > 0)
+      .sort((a, b) => a.stats.expectedFinish - b.stats.expectedFinish)[0]?.c
+    if (best?.kind === 'pit') return { driverId: id, compound: best.compound }
+  }
+  return null
 }

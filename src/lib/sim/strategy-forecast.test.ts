@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { Driver, Team, Circuit, QualifyingResult, RaceState } from './types'
 import { initRaceState, simulateLap } from './race'
 import {
+  buildCandidates,
   candidateActions,
   forecastSingleRun,
   summarizeForecast,
@@ -46,6 +47,30 @@ function racingState(seed: number): RaceState {
 }
 
 afterEach(() => vi.restoreAllMocks())
+
+describe('buildCandidates by weather', () => {
+  const pitCompounds = (m: number) => buildCandidates(m, 'racing').flatMap((c) => (c.kind === 'pit' ? [c.compound] : []))
+
+  it('offers slicks (and a hold) in the dry, no wets and no auto', () => {
+    const c = buildCandidates(0, 'racing')
+    expect(pitCompounds(0)).toEqual(['soft', 'medium', 'hard'])
+    expect(c.some((x) => x.kind === 'hold')).toBe(true)
+    expect(c.some((x) => x.kind === 'auto')).toBe(false)
+  })
+
+  it('switches to intermediates/wets once it is wet and drops slicks', () => {
+    expect(pitCompounds(0.3)).toContain('intermediate')
+    expect(pitCompounds(0.3)).not.toContain('soft')
+    expect(pitCompounds(0.6)).toContain('wet')
+    expect(pitCompounds(0.6)).not.toContain('soft')
+  })
+
+  it('pre-race offers the grid tyres as start options', () => {
+    const c = buildCandidates(0, 'pre-race')
+    expect(c.every((x) => x.kind === 'start')).toBe(true)
+    expect(c.flatMap((x) => (x.kind === 'start' ? [x.compound] : []))).toEqual(['soft', 'medium', 'hard'])
+  })
+})
 
 describe('candidateActions', () => {
   it('maps each pit-wall button to the right god-mode override', () => {
