@@ -145,64 +145,93 @@ export function summarizeForecast(samples: ForecastSample[], fieldSize: number, 
   }
 }
 
+export interface GatherOpts {
+  target: number // runs per option to collect
+  burstMs?: number // how long to run between yields (default 80ms)
+  budgetMs?: number // optional wall-clock cap; OMIT for a full sample (the auto-advance path)
+  shouldAbort?: () => boolean
+  onProgress?: (acc: Record<string, ForecastSample[]>) => void
+}
+
+// Gather forecast samples for ONE car across the given options. Runs are spread round-robin via a cursor
+// that PERSISTS across bursts, so every option gets even coverage even when a single run is slower than a
+// burst — otherwise the first option would hog the whole budget (the bug that left every other option at 0).
+// Yields between bursts so the UI paints / Stop fires. Stops at `target` per option, at `budgetMs` if given,
+// or when shouldAbort trips.
+export async function gatherForecast(
+  seed: RaceState,
+  drivers: Driver[],
+  teams: Team[],
+  circuit: Circuit,
+  playerDriverId: string,
+  candidates: ForecastCandidate[],
+  opts: GatherOpts,
+): Promise<{ acc: Record<string, ForecastSample[]>; timedOut: boolean }> {
+  const burstMs = opts.burstMs ?? 80
+  const acc: Record<string, ForecastSample[]> = Object.fromEntries(candidates.map((c) => [candKey(c), []]))
+  opts.onProgress?.(acc)
+  const allFull = () => candidates.every((c) => acc[candKey(c)].length >= opts.target)
+  const startedAt = performance.now()
+  let rr = 0
+  let done = false
+  let timedOut = false
+  while (!done && !timedOut) {
+    if (opts.shouldAbort?.()) break
+    const burstStart = performance.now()
+    do {
+      const c = candidates[rr % candidates.length]
+      rr++
+      const k = candKey(c)
+      if (acc[k].length < opts.target) acc[k].push(forecastSingleRun(seed, drivers, teams, circuit, seed.year, playerDriverId, c))
+    } while (performance.now() - burstStart < burstMs && !allFull())
+    opts.onProgress?.(acc)
+    await new Promise((r) => setTimeout(r, 0))
+    done = allFull()
+    timedOut = opts.budgetMs !== undefined && performance.now() - startedAt >= opts.budgetMs
+  }
+  return { acc, timedOut: timedOut && !done }
+}
+
 export interface PitRecommendation {
   driverId: string
   compound: TyreCompound
 }
 
-// A car only sensibly considers boxing once its tyre is worn past this, or it's on the wrong compound for
-// the weather. Above it (and correct for conditions) the forecast is skipped — so the auto-advance watchdog
-// stays cheap through fresh-tyre laps and only pays for Monte-Carlo near a real pit window.
-const PIT_CONSIDER_CONDITION = 60
+const PIT_MARGIN = 0.5 // box only if pitting now beats staying out by at least this many places — never on a wash
 
-// Auto-advance watchdog: does the forecast say any of these player cars should box NOW? For each worn/wrong
-// car, gather `runs` samples per option and rank by expected finish; if the best option is a pit, that car
-// should pit. Returns the first such car (and compound), or null. Async with a per-call time budget and
-// yields so it never freezes the playback loop; `shouldAbort` cancels it mid-run.
+// Race Engineer Mode watchdog: does a full forecast say any of these player cars should box NOW? For each
+// car, gather `target` samples per option (a full sample — no time cap), then box only if the best pit option
+// clearly beats staying out (by PIT_MARGIN). Returns the first such car (and compound), or null. Async with
+// yields + progress; `shouldAbort` cancels mid-run.
 export async function recommendsPit(
   state: RaceState,
   drivers: Driver[],
   teams: Team[],
   circuit: Circuit,
   playerDriverIds: string[],
-  opts: { runs: number; budgetMs: number; burstMs?: number; shouldAbort?: () => boolean },
+  opts: { target: number; shouldAbort?: () => boolean; onProgress?: (driverId: string, runs: number, target: number) => void },
 ): Promise<PitRecommendation | null> {
-  const burstMs = opts.burstMs ?? 80
-  const moisture = getMoistureAtLap(state.weather, state.currentLap)
-  const cands = buildCandidates(moisture, 'racing')
+  const cands = buildCandidates(getMoistureAtLap(state.weather, state.currentLap), 'racing')
   const fieldSize = state.drivers.length
   for (const id of playerDriverIds) {
     if (opts.shouldAbort?.()) return null
     const ds = state.drivers.find((d) => d.driverId === id)
     if (!ds || ds.retired) continue
-    const wrongTyre = tyreStepsOutOfWindow(ds.currentTyre.compound, moisture) >= 1
-    if (ds.currentTyre.condition > PIT_CONSIDER_CONDITION && !wrongTyre) continue // too fresh to box yet
-
-    const acc: Record<string, ForecastSample[]> = Object.fromEntries(cands.map((c) => [candKey(c), []]))
-    const startedAt = performance.now()
-    let done = false
-    while (!done) {
-      if (opts.shouldAbort?.()) return null
-      const burstStart = performance.now()
-      let advanced = true
-      while (advanced && performance.now() - burstStart < burstMs) {
-        advanced = false
-        for (const c of cands) {
-          const k = candKey(c)
-          if (acc[k].length >= opts.runs) continue
-          acc[k].push(forecastSingleRun(state, drivers, teams, circuit, state.year, id, c))
-          advanced = true
-          if (performance.now() - burstStart >= burstMs) break
-        }
-      }
-      await new Promise((r) => setTimeout(r, 0))
-      done = cands.every((c) => acc[candKey(c)].length >= opts.runs) || performance.now() - startedAt >= opts.budgetMs
-    }
-    const best = cands
-      .map((c) => ({ c, stats: summarizeForecast(acc[candKey(c)] ?? [], fieldSize, state.year) }))
-      .filter((r) => r.stats.runs > 0)
-      .sort((a, b) => a.stats.expectedFinish - b.stats.expectedFinish)[0]?.c
-    if (best?.kind === 'pit') return { driverId: id, compound: best.compound }
+    const { acc } = await gatherForecast(state, drivers, teams, circuit, id, cands, {
+      target: opts.target,
+      shouldAbort: opts.shouldAbort,
+      onProgress: (a) => opts.onProgress?.(id, Math.min(...cands.map((c) => a[candKey(c)].length)), opts.target),
+    })
+    if (opts.shouldAbort?.()) return null
+    const stat = (c: ForecastCandidate) => summarizeForecast(acc[candKey(c)] ?? [], fieldSize, state.year)
+    const hold = cands.find((c) => c.kind === 'hold')
+    const holdExp = hold ? stat(hold).expectedFinish : Infinity
+    const bestPit = cands
+      .filter((c) => c.kind === 'pit')
+      .map((c) => ({ c, e: stat(c) }))
+      .filter((x) => x.e.runs > 0)
+      .sort((a, b) => a.e.expectedFinish - b.e.expectedFinish)[0]
+    if (bestPit && bestPit.e.expectedFinish <= holdExp - PIT_MARGIN) return { driverId: id, compound: bestPit.c.compound }
   }
   return null
 }

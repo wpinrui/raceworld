@@ -3,8 +3,10 @@ import type { Driver, Team, Circuit, QualifyingResult, RaceState } from './types
 import { initRaceState, simulateLap } from './race'
 import {
   buildCandidates,
+  candKey,
   candidateActions,
   forecastSingleRun,
+  gatherForecast,
   summarizeForecast,
   type ForecastSample,
 } from './strategy-forecast'
@@ -69,6 +71,16 @@ describe('buildCandidates by weather', () => {
     const c = buildCandidates(0, 'pre-race')
     expect(c.every((x) => x.kind === 'start')).toBe(true)
     expect(c.flatMap((x) => (x.kind === 'start' ? [x.compound] : []))).toEqual(['soft', 'medium', 'hard'])
+  })
+})
+
+describe('gatherForecast', () => {
+  it('fills every option to target — round-robin, no starvation', async () => {
+    const start = racingState(3) // already phase 'racing', seeds Math.random
+    const cands = buildCandidates(0, 'racing') // soft/medium/hard pits + hold
+    const { acc } = await gatherForecast(start, DRIVERS, TEAMS, CIRCUIT, 'd1', cands, { target: 4 })
+    // The bug left every option after the first at 0; fair round-robin must bring them all to target.
+    for (const c of cands) expect(acc[candKey(c)].length).toBe(4)
   })
 })
 
