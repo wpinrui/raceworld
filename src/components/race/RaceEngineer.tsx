@@ -9,8 +9,13 @@ import { forecastSingleRun, summarizeForecast, type ForecastCandidate, type Fore
 import TyreIndicator from './TyreIndicator'
 
 const ALL_COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
-const FORECAST_TARGET = 150 // runs per option at full convergence
-const FORECAST_CHUNK = 3 // runs between yields — small bursts keep the UI responsive
+const FORECAST_TARGET = 120 // runs per option at full convergence
+// One run from late in a race is sub-ms, but a full-distance run is ~0.5s (the AI replans every car each lap).
+// So we don't fix a run count per yield: we run for at most BURST_MS, then yield — the UI stays responsive
+// whether a run is fast or slow. A total wall-clock BUDGET caps the expensive (early/pre-race) case so it
+// can't run for minutes; it stops with whatever sample it gathered (flagged as time-limited).
+const BURST_MS = 80
+const BUDGET_MS = 12000
 
 type CandKey = string
 const candKey = (c: ForecastCandidate): CandKey => (c.kind === 'pit' || c.kind === 'start' ? `${c.kind}:${c.compound}` : c.kind)
@@ -43,6 +48,7 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
   const circuit = useRaceStore((s) => s.selectedCircuit)
   const [cautious, setCautious] = useState(false)
   const [running, setRunning] = useState(false)
+  const [budgetHit, setBudgetHit] = useState(false)
   const [samples, setSamples] = useState<Record<CandKey, ForecastSample[]>>({})
   const abortRef = useRef(false)
 
@@ -60,21 +66,33 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
     if (!circuit) return
     abortRef.current = false
     setRunning(true)
+    setBudgetHit(false)
     const acc: Record<CandKey, ForecastSample[]> = Object.fromEntries(candidates.map((c) => [candKey(c), []]))
     setSamples({ ...acc })
+    const startedAt = performance.now()
     let done = false
-    while (!done && !abortRef.current) {
-      for (const c of candidates) {
-        const k = candKey(c)
-        for (let i = 0; i < FORECAST_CHUNK && acc[k].length < FORECAST_TARGET; i++) {
+    let timedOut = false
+    while (!done && !abortRef.current && !timedOut) {
+      // Run for up to BURST_MS (one run at minimum, even if it alone is longer), spreading runs evenly across
+      // candidates so the live table stays a fair comparison, then yield so the UI can paint / Stop can fire.
+      const burstStart = performance.now()
+      let advanced = true
+      while (advanced && performance.now() - burstStart < BURST_MS) {
+        advanced = false
+        for (const c of candidates) {
+          const k = candKey(c)
+          if (acc[k].length >= FORECAST_TARGET) continue
           acc[k].push(forecastSingleRun(start, drivers, teams, circuit, raceState.year, driver.id, c))
+          advanced = true
+          if (performance.now() - burstStart >= BURST_MS) break
         }
-        setSamples(Object.fromEntries(Object.entries(acc).map(([kk, v]) => [kk, v.slice()])))
-        await new Promise((r) => setTimeout(r, 0))
-        if (abortRef.current) break
       }
+      setSamples(Object.fromEntries(Object.entries(acc).map(([kk, v]) => [kk, v.slice()])))
+      await new Promise((r) => setTimeout(r, 0))
       done = candidates.every((c) => acc[candKey(c)].length >= FORECAST_TARGET)
+      timedOut = performance.now() - startedAt >= BUDGET_MS
     }
+    if (timedOut && !done) setBudgetHit(true)
     setRunning(false)
   }
 
@@ -139,7 +157,12 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
             {ranAny ? 'Re-simulate' : 'Simulate'}
           </button>
         )}
-        {(running || ranAny) && <span className="text-[10px] text-[#FFFFFF] tabular-nums">{Number.isFinite(minRuns) ? minRuns : 0}/{FORECAST_TARGET}</span>}
+        {(running || ranAny) && (
+          <span className="text-[10px] text-[#FFFFFF] tabular-nums">
+            {Number.isFinite(minRuns) ? minRuns : 0}/{FORECAST_TARGET}
+            {budgetHit && ' · time-limited'}
+          </span>
+        )}
       </div>
 
       {ranAny && (
