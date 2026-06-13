@@ -6,6 +6,10 @@ import { sampleNormal } from './rng-utils'
 export const DEFAULT_COMPOUND_DELTAS: Record<TyreCompound, number> = { soft: 0, medium: 0.7, hard: 1.5, intermediate: 2.5, wet: 4.0 }
 export const DEFAULT_TYRE_LIFE: Record<TyreCompound, number> = { soft: 0.20, medium: 0.30, hard: 0.45, intermediate: 0.30, wet: 0.45 }
 
+// Tyres running in dirty air (within ~1s of the car ahead) wear this much faster. Single source for the
+// runtime (race.ts applies it per lap) and the Tyre Telemetry reveal (which projects a traffic stint life).
+export const DIRTY_AIR_WEAR_MULT = 1.1
+
 // Per-race compound pace deltas. Soft is the 0 reference. The dry trio (soft≤medium≤hard) and the wet
 // pair (intermediate≤wet) are each kept in order — softer at least as fast — but the two chains are
 // independent (inter/wet aren't "harder" dry tyres). σ/anchors are sim-and-tune knobs.
