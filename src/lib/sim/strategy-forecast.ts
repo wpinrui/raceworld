@@ -1,4 +1,4 @@
-import type { Driver, Team, Circuit, RaceState, GodModeAction, TyreCompound } from './types'
+import type { Driver, Team, Circuit, RaceState, GodModeAction, TyreCompound, TyreState } from './types'
 import { simulateLap } from './race'
 import { computeTyreLife, tyreStepsOutOfWindow } from './tyres'
 import { getMoistureAtLap } from './weather'
@@ -210,6 +210,19 @@ const PROBE_MIN = 12
 const NO_PIT_MARGIN = 1.5
 const CONFIRM_MIN = 24
 
+// Zero-sim guard (deliberately conservative): a tyre that suits the conditions and is still this healthy is
+// never worth boxing in this model — the AI doesn't even consider a stop until ~22% condition, so 70% leaves
+// a 3x margin. Anything below this, or a tyre wrong for the weather (e.g. slicks in the rain), still gets the
+// full Monte-Carlo. Raise it for an even more cautious skip.
+const HEALTHY_SKIP_CONDITION = 70
+
+// Whether boxing a car is even worth simulating now. False only when the tyre is in its weather window AND
+// comfortably healthy — the obvious no-stop case the auto-mode skips outright (no sims). A wrong-for-weather
+// tyre always returns true, so a rain change immediately re-arms the forecast.
+export function shouldEvaluatePit(tyre: TyreState, moisture: number): boolean {
+  return !(tyreStepsOutOfWindow(tyre.compound, moisture) === 0 && tyre.condition >= HEALTHY_SKIP_CONDITION)
+}
+
 // Race Engineer Mode watchdog: does the forecast say any of these player cars should box NOW? For each car,
 // gather samples per option (up to `target`, but short-circuited early when the call is already decisive),
 // then box only if the best pit option clearly beats staying out (by PIT_MARGIN). Returns the first such car
@@ -222,7 +235,8 @@ export async function recommendsPit(
   playerDriverIds: string[],
   opts: { target: number; shouldAbort?: () => boolean; onProgress?: (driverId: string, runs: number, target: number) => void },
 ): Promise<PitRecommendation | null> {
-  const cands = buildCandidates(getMoistureAtLap(state.weather, state.currentLap), 'racing')
+  const moisture = getMoistureAtLap(state.weather, state.currentLap)
+  const cands = buildCandidates(moisture, 'racing')
   const fieldSize = state.drivers.length
   const hold = cands.find((c) => c.kind === 'hold')
   const pits = cands.filter((c) => c.kind === 'pit')
@@ -230,6 +244,7 @@ export async function recommendsPit(
     if (opts.shouldAbort?.()) return null
     const ds = state.drivers.find((d) => d.driverId === id)
     if (!ds || ds.retired) continue
+    if (!shouldEvaluatePit(ds.currentTyre, moisture)) continue // healthy & right tyre — obviously no stop, no sims
     const expOf = (acc: Record<string, ForecastSample[]>, c: ForecastCandidate) => summarizeForecast(acc[candKey(c)] ?? [], fieldSize, state.year).expectedFinish
     const { acc } = await gatherForecast(state, drivers, teams, circuit, id, cands, {
       target: opts.target,

@@ -7,6 +7,7 @@ import {
   candidateActions,
   forecastSingleRun,
   gatherForecast,
+  shouldEvaluatePit,
   summarizeForecast,
   type ForecastSample,
 } from './strategy-forecast'
@@ -71,6 +72,23 @@ describe('buildCandidates by weather', () => {
     const c = buildCandidates(0, 'pre-race')
     expect(c.every((x) => x.kind === 'start')).toBe(true)
     expect(c.flatMap((x) => (x.kind === 'start' ? [x.compound] : []))).toEqual(['soft', 'medium', 'hard'])
+  })
+})
+
+describe('shouldEvaluatePit (zero-sim guard)', () => {
+  it('skips a healthy, in-window tyre (no sims needed)', () => {
+    expect(shouldEvaluatePit({ compound: 'medium', condition: 90, maxLifeLaps: 30 }, 0)).toBe(false)
+    expect(shouldEvaluatePit({ compound: 'medium', condition: 70, maxLifeLaps: 30 }, 0)).toBe(false) // at the threshold
+  })
+
+  it('evaluates once the tyre is worn below the threshold', () => {
+    expect(shouldEvaluatePit({ compound: 'medium', condition: 69, maxLifeLaps: 30 }, 0)).toBe(true)
+    expect(shouldEvaluatePit({ compound: 'soft', condition: 20, maxLifeLaps: 20 }, 0)).toBe(true)
+  })
+
+  it('always evaluates a tyre wrong for the weather, however fresh (rain just started)', () => {
+    expect(shouldEvaluatePit({ compound: 'medium', condition: 100, maxLifeLaps: 30 }, 0.6)).toBe(true) // slicks in the wet
+    expect(shouldEvaluatePit({ compound: 'wet', condition: 100, maxLifeLaps: 30 }, 0)).toBe(true) // wets in the dry
   })
 })
 
