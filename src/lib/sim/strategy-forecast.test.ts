@@ -82,6 +82,14 @@ describe('gatherForecast', () => {
     // The bug left every option after the first at 0; fair round-robin must bring them all to target.
     for (const c of cands) expect(acc[candKey(c)].length).toBe(4)
   })
+
+  it('short-circuits before target when shouldStop fires', async () => {
+    const start = racingState(3)
+    const cands = buildCandidates(0, 'racing')
+    const { acc } = await gatherForecast(start, DRIVERS, TEAMS, CIRCUIT, 'd1', cands, { target: 50, shouldStop: () => true })
+    // Decisive after the first burst → far short of the full 50-per-option sample.
+    expect(Math.max(...cands.map((c) => acc[candKey(c)].length))).toBeLessThan(50)
+  })
 })
 
 describe('candidateActions', () => {

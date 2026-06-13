@@ -151,6 +151,9 @@ export interface GatherOpts {
   budgetMs?: number // optional wall-clock cap; OMIT for a full sample (the auto-advance path)
   shouldAbort?: () => boolean
   onProgress?: (acc: Record<string, ForecastSample[]>) => void
+  // Early-stop: checked after each burst with the samples so far. Return true to finish before `target` once
+  // the answer is already decisive (e.g. staying out is clearly best) — saves a full sample on obvious laps.
+  shouldStop?: (acc: Record<string, ForecastSample[]>) => boolean
 }
 
 // Gather forecast samples for ONE car across the given options. Runs are spread round-robin via a cursor
@@ -188,6 +191,7 @@ export async function gatherForecast(
     await new Promise((r) => setTimeout(r, 0))
     done = allFull()
     timedOut = opts.budgetMs !== undefined && performance.now() - startedAt >= opts.budgetMs
+    if (!done && opts.shouldStop?.(acc)) break // decisive already — don't burn the rest of the sample
   }
   return { acc, timedOut: timedOut && !done }
 }
@@ -198,11 +202,18 @@ export interface PitRecommendation {
 }
 
 const PIT_MARGIN = 0.5 // box only if pitting now beats staying out by at least this many places — never on a wash
+// Early-stop heuristic (auto-mode only): once each option has a PROBE_MIN-run probe, bail to "don't pit" if
+// staying out is clearly ahead (the common, obvious case — saves a full sample), or confirm a pit early once
+// it's clearly ahead with a bit more evidence. The no-pit bail is aggressive (a wrong skip just costs one more
+// lap); the pit confirm is more cautious (a wrong pause interrupts the player).
+const PROBE_MIN = 12
+const NO_PIT_MARGIN = 1.5
+const CONFIRM_MIN = 24
 
-// Race Engineer Mode watchdog: does a full forecast say any of these player cars should box NOW? For each
-// car, gather `target` samples per option (a full sample — no time cap), then box only if the best pit option
-// clearly beats staying out (by PIT_MARGIN). Returns the first such car (and compound), or null. Async with
-// yields + progress; `shouldAbort` cancels mid-run.
+// Race Engineer Mode watchdog: does the forecast say any of these player cars should box NOW? For each car,
+// gather samples per option (up to `target`, but short-circuited early when the call is already decisive),
+// then box only if the best pit option clearly beats staying out (by PIT_MARGIN). Returns the first such car
+// (and compound), or null. Async with yields + progress; `shouldAbort` cancels mid-run.
 export async function recommendsPit(
   state: RaceState,
   drivers: Driver[],
@@ -213,25 +224,34 @@ export async function recommendsPit(
 ): Promise<PitRecommendation | null> {
   const cands = buildCandidates(getMoistureAtLap(state.weather, state.currentLap), 'racing')
   const fieldSize = state.drivers.length
+  const hold = cands.find((c) => c.kind === 'hold')
+  const pits = cands.filter((c) => c.kind === 'pit')
   for (const id of playerDriverIds) {
     if (opts.shouldAbort?.()) return null
     const ds = state.drivers.find((d) => d.driverId === id)
     if (!ds || ds.retired) continue
+    const expOf = (acc: Record<string, ForecastSample[]>, c: ForecastCandidate) => summarizeForecast(acc[candKey(c)] ?? [], fieldSize, state.year).expectedFinish
     const { acc } = await gatherForecast(state, drivers, teams, circuit, id, cands, {
       target: opts.target,
       shouldAbort: opts.shouldAbort,
       onProgress: (a) => opts.onProgress?.(id, Math.min(...cands.map((c) => a[candKey(c)].length)), opts.target),
+      shouldStop: (a) => {
+        const minRuns = Math.min(...cands.map((c) => a[candKey(c)].length))
+        if (minRuns < PROBE_MIN) return false
+        const holdE = hold ? expOf(a, hold) : Infinity
+        const pitE = Math.min(...pits.map((c) => expOf(a, c)))
+        if (holdE <= pitE - NO_PIT_MARGIN) return true // staying out clearly best — obvious skip
+        if (pitE <= holdE - PIT_MARGIN && minRuns >= CONFIRM_MIN) return true // pitting clearly best — confirmed
+        return false
+      },
     })
     if (opts.shouldAbort?.()) return null
-    const stat = (c: ForecastCandidate) => summarizeForecast(acc[candKey(c)] ?? [], fieldSize, state.year)
-    const hold = cands.find((c) => c.kind === 'hold')
-    const holdExp = hold ? stat(hold).expectedFinish : Infinity
-    const bestPit = cands
-      .filter((c) => c.kind === 'pit')
-      .map((c) => ({ c, e: stat(c) }))
-      .filter((x) => x.e.runs > 0)
-      .sort((a, b) => a.e.expectedFinish - b.e.expectedFinish)[0]
-    if (bestPit && bestPit.e.expectedFinish <= holdExp - PIT_MARGIN) return { driverId: id, compound: bestPit.c.compound }
+    const holdExp = hold ? expOf(acc, hold) : Infinity
+    const bestPit = pits
+      .map((c) => ({ c, exp: expOf(acc, c), runs: (acc[candKey(c)] ?? []).length }))
+      .filter((x) => x.runs > 0)
+      .sort((a, b) => a.exp - b.exp)[0]
+    if (bestPit && bestPit.exp <= holdExp - PIT_MARGIN) return { driverId: id, compound: bestPit.c.compound }
   }
   return null
 }
