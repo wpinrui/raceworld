@@ -203,12 +203,12 @@ export interface PitRecommendation {
 
 const PIT_MARGIN = 0.5 // box only if pitting now beats staying out by at least this many places — never on a wash
 // Early-stop heuristic (auto-mode only): once each option has a PROBE_MIN-run probe, bail to "don't pit" if
-// staying out is clearly ahead (the common, obvious case — saves a full sample), or confirm a pit early once
-// it's clearly ahead with a bit more evidence. The no-pit bail is aggressive (a wrong skip just costs one more
-// lap); the pit confirm is more cautious (a wrong pause interrupts the player).
+// staying out is clearly ahead (the common case — saves a full sample). This is ASYMMETRIC ON PURPOSE: a
+// PIT recommendation is NEVER taken on a partial sample — it always rides the full forecast, so the auto-mode
+// call can't diverge from a manual Simulate. (A wrong no-pit skip just costs one more lap; a wrong pit ruins
+// the race — exactly what was happening when an early pit-confirm fired on 24 noisy runs.)
 const PROBE_MIN = 12
 const NO_PIT_MARGIN = 1.5
-const CONFIRM_MIN = 24
 
 // Zero-sim guard (deliberately conservative): a tyre that suits the conditions and is still this healthy is
 // never worth boxing in this model — the AI doesn't even consider a stop until ~22% condition, so 70% leaves
@@ -255,9 +255,7 @@ export async function recommendsPit(
         if (minRuns < PROBE_MIN) return false
         const holdE = hold ? expOf(a, hold) : Infinity
         const pitE = Math.min(...pits.map((c) => expOf(a, c)))
-        if (holdE <= pitE - NO_PIT_MARGIN) return true // staying out clearly best — obvious skip
-        if (pitE <= holdE - PIT_MARGIN && minRuns >= CONFIRM_MIN) return true // pitting clearly best — confirmed
-        return false
+        return holdE <= pitE - NO_PIT_MARGIN // staying out clearly best — obvious skip; pits ALWAYS go full-sample
       },
     })
     if (opts.shouldAbort?.()) return null
