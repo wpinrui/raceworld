@@ -1,6 +1,6 @@
 'use client'
 
-import { FastForward } from 'lucide-react'
+import { FastForward, Radio } from 'lucide-react'
 import type { SimSpeed } from '@/lib/sim/types'
 
 interface Props {
@@ -8,9 +8,15 @@ interface Props {
   paused: boolean
   onSpeedClick: (s: SimSpeed) => void
   onTogglePause: () => void
+  // Race Engineer auto-advance: play at the chosen speed but auto-pause at the pit window. A toggle, not a
+  // speed — it runs alongside speeds 1-4. Hidden unless the talent is on.
+  showAutoAdvance?: boolean
+  autoAdvance?: boolean
+  onToggleAutoAdvance?: () => void
+  pitAlert?: string | null
 }
 
-export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause }: Props) {
+export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause, showAutoAdvance, autoAdvance, onToggleAutoAdvance, pitAlert }: Props) {
   return (
     <div className="shrink-0 bg-[#1E2431] border-t border-[#2A3142] px-6 py-3 flex items-center gap-4">
       <div className="flex items-center gap-1.5">
@@ -25,6 +31,17 @@ export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause }: Props) 
             {s === 5 ? <FastForward size={16} className="fill-current" /> : `${s}x`}
           </button>
         ))}
+        {showAutoAdvance && (
+          <button
+            onClick={onToggleAutoAdvance}
+            title="Play at the chosen speed and auto-pause when a car should pit"
+            className={`ml-1.5 px-3 py-2 text-sm font-bold tracking-wide uppercase rounded transition-colors flex items-center gap-1.5 ${
+              autoAdvance ? 'bg-[#7C3AED] text-white' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
+            }`}
+          >
+            <Radio size={15} /> Auto-pit
+          </button>
+        )}
       </div>
 
       <div className="w-px h-5 bg-[#2A3142]" />
@@ -37,6 +54,10 @@ export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause }: Props) 
       >
         {paused ? 'Resume' : 'Pause'}
       </button>
+
+      {pitAlert && (
+        <span className="px-3 py-1.5 rounded bg-[#7C3AED] text-white text-sm font-bold tracking-wide">{pitAlert}</span>
+      )}
 
       <div className="ml-auto text-sm text-[#FFFFFF]">Space · 1 2 3 4</div>
     </div>
