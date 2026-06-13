@@ -233,6 +233,9 @@ export function simulateLap(
   circuit: Circuit,
   year: number,
   godModeActions?: GodModeAction[],
+  // Forecasts (Race Engineer Mode) set this so rivals plan 1-stops only — skipping the exhaustive 2-stop
+  // search that makes runs slow above 40 laps. The live race leaves it false for full-fidelity strategy.
+  fastStrategy = false,
 ): RaceState {
   const driverMap = new Map<string, Driver>(drivers.map((d) => [d.id, d]))
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
@@ -345,6 +348,7 @@ export function simulateLap(
       state.weather,
       state.weatherForecast,
       pitLoss,
+      !fastStrategy,
     )
     current = { ...current, targetPitLap: plan.targetPitLap, targetNextCompound: plan.targetNextCompound }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { Driver, Team, Circuit, QualifyingResult, RaceState } from './types'
 import { initRaceState, simulateLap } from './race'
+import { planStrategy, truthBelief } from './pit-ai'
 import {
   buildCandidates,
   candKey,
@@ -72,6 +73,24 @@ describe('buildCandidates by weather', () => {
     const c = buildCandidates(0, 'pre-race')
     expect(c.every((x) => x.kind === 'start')).toBe(true)
     expect(c.flatMap((x) => (x.kind === 'start' ? [x.compound] : []))).toEqual(['soft', 'medium', 'hard'])
+  })
+})
+
+describe('planStrategy fast mode (forecast skips the 2-stop search)', () => {
+  const laps = 60
+  const weather = Array.from({ length: laps + 1 }, (_, i) => ({ lap: i + 1, moisture: 0 }))
+  // High-deg, long race: with the full search a 2-stop (3 stints) wins; fast mode must never consider it.
+  const belief = truthBelief(
+    { soft: 0, medium: 0.7, hard: 1.5, intermediate: 2.5, wet: 4 },
+    { soft: 0.15, medium: 0.18, hard: 0.22, intermediate: 0.3, wet: 0.45 },
+    laps,
+  )
+
+  it('finds a 2-stop with the full search but only a 1-stop in fast mode', () => {
+    const full = planStrategy(1, laps, 100, 'soft', 50, belief, weather, weather, 25, true)
+    const fast = planStrategy(1, laps, 100, 'soft', 50, belief, weather, weather, 25, false)
+    expect(full.stints.length).toBe(3) // two stops
+    expect(fast.stints.length).toBeLessThanOrEqual(2) // at most one stop — the cubic search was skipped
   })
 })
 

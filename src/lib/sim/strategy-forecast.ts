@@ -101,7 +101,8 @@ export function forecastSingleRun(
   // loop (e.g. a future phase that never leaves 'racing').
   let safety = start.totalLaps - start.currentLap + 2
   while (s.phase === 'racing' && safety-- > 0) {
-    s = simulateLap(s, drivers, teams, circuit, year, firstLap ? candidateActions(candidate, playerDriverId) : undefined)
+    // fastStrategy: true — rivals plan 1-stops only, so the run stays fast even above 40 laps remaining.
+    s = simulateLap(s, drivers, teams, circuit, year, firstLap ? candidateActions(candidate, playerDriverId) : undefined, true)
     firstLap = false
   }
   const ds = s.drivers.find((d) => d.driverId === playerDriverId)
