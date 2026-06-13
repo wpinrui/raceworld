@@ -67,33 +67,38 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
     abortRef.current = false
     setRunning(true)
     setBudgetHit(false)
-    const acc: Record<CandKey, ForecastSample[]> = Object.fromEntries(candidates.map((c) => [candKey(c), []]))
-    setSamples({ ...acc })
-    const startedAt = performance.now()
-    let done = false
-    let timedOut = false
-    while (!done && !abortRef.current && !timedOut) {
-      // Run for up to BURST_MS (one run at minimum, even if it alone is longer), spreading runs evenly across
-      // candidates so the live table stays a fair comparison, then yield so the UI can paint / Stop can fire.
-      const burstStart = performance.now()
-      let advanced = true
-      while (advanced && performance.now() - burstStart < BURST_MS) {
-        advanced = false
-        for (const c of candidates) {
-          const k = candKey(c)
-          if (acc[k].length >= FORECAST_TARGET) continue
-          acc[k].push(forecastSingleRun(start, drivers, teams, circuit, raceState.year, driver.id, c))
-          advanced = true
-          if (performance.now() - burstStart >= BURST_MS) break
+    // finally guarantees we leave the running state even if a run throws — otherwise the panel would stick
+    // on "Stop" with a dead loop behind it, escapable only by unmounting.
+    try {
+      const acc: Record<CandKey, ForecastSample[]> = Object.fromEntries(candidates.map((c) => [candKey(c), []]))
+      setSamples({ ...acc })
+      const startedAt = performance.now()
+      let done = false
+      let timedOut = false
+      while (!done && !abortRef.current && !timedOut) {
+        // Run for up to BURST_MS (one run at minimum, even if it alone is longer), spreading runs evenly across
+        // candidates so the live table stays a fair comparison, then yield so the UI can paint / Stop can fire.
+        const burstStart = performance.now()
+        let advanced = true
+        while (advanced && performance.now() - burstStart < BURST_MS) {
+          advanced = false
+          for (const c of candidates) {
+            const k = candKey(c)
+            if (acc[k].length >= FORECAST_TARGET) continue
+            acc[k].push(forecastSingleRun(start, drivers, teams, circuit, raceState.year, driver.id, c))
+            advanced = true
+            if (performance.now() - burstStart >= BURST_MS) break
+          }
         }
+        setSamples(Object.fromEntries(Object.entries(acc).map(([kk, v]) => [kk, v.slice()])))
+        await new Promise((r) => setTimeout(r, 0))
+        done = candidates.every((c) => acc[candKey(c)].length >= FORECAST_TARGET)
+        timedOut = performance.now() - startedAt >= BUDGET_MS
       }
-      setSamples(Object.fromEntries(Object.entries(acc).map(([kk, v]) => [kk, v.slice()])))
-      await new Promise((r) => setTimeout(r, 0))
-      done = candidates.every((c) => acc[candKey(c)].length >= FORECAST_TARGET)
-      timedOut = performance.now() - startedAt >= BUDGET_MS
+      if (timedOut && !done) setBudgetHit(true)
+    } finally {
+      setRunning(false)
     }
-    if (timedOut && !done) setBudgetHit(true)
-    setRunning(false)
   }
 
   const fieldSize = raceState.drivers.length
