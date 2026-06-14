@@ -14,7 +14,7 @@ interface Props {
 }
 
 // Darken a #rrggbb hex toward black (f = kept brightness, 0..1).
-function darken(hex: string, f: number): string {
+export function darken(hex: string, f: number): string {
   const [r, g, b] = hexToRgb(hex)
   return rgbToHex(Math.round(r * f), Math.round(g * f), Math.round(b * f))
 }
@@ -27,12 +27,12 @@ function brightness(hex: string): number {
 
 // Dim a bar colour (e.g. Mercedes teal) until white text on it has contrast,
 // preserving its hue. Dark colours pass through untouched.
-function readableBar(hex: string): string {
+export function readableBar(hex: string): string {
   const b = brightness(hex)
   return b > 0.4 ? darken(hex, 0.4 / b) : hex
 }
 
-interface Side {
+export interface Side {
   qual: number
   raceAhead: number
   points: number
@@ -52,7 +52,7 @@ function accumulate(side: Side, r: RaceResult) {
   if (!r.dnf && r.finishPosition != null) { side.finSum += r.finishPosition; side.finN++ }
 }
 
-function computePairH2H(d1: string, d2: string, raceResults: RaceResult[][]): [Side, Side] {
+export function computePairH2H(d1: string, d2: string, raceResults: RaceResult[][]): [Side, Side] {
   const s1 = blank(), s2 = blank()
   for (const round of raceResults) {
     const a = round.find((r) => r.driverId === d1)
@@ -107,9 +107,42 @@ function Bar({ label, leftText, rightText, leftPct, c1, c2 }: {
   )
 }
 
-export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
+// One team's two-driver head-to-head card (qual / finished-ahead / points / avg grid / avg finish), with
+// the driver on the left (a / c1) leading. Exported so Driver mode's home reuses it for your own pair.
+export function PairH2HCard({ team, a, b, s1, s2, c1, c2 }: { team: Team; a: Driver; b: Driver; s1: Side; s2: Side; c1: string; c2: string }) {
   const card = useLiveDriverCards()
   const highlight = useTeamHighlight()
+  const g1 = avg(s1.gridSum, s1.gridN), g2 = avg(s2.gridSum, s2.gridN)
+  const f1 = avg(s1.finSum, s1.finN), f2 = avg(s2.finSum, s2.finN)
+  const hl = highlight(team.id, team.color)
+  return (
+    <div style={hl ? { boxShadow: hl.boxShadow } : undefined} className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 space-y-3">
+      <div className="flex items-center gap-2.5">
+        <div className="w-1 h-5 rounded-sm" style={{ backgroundColor: team.color }} />
+        <TeamLink id={team.id} className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{team.name}</TeamLink>
+      </div>
+      <div className="flex items-center gap-5 text-xs">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c1 }} />
+          <DriverHover id={a.id} card={card}><DriverLink id={a.id} className="text-[#FFFFFF]">{a.name}</DriverLink></DriverHover>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c2 }} />
+          <DriverHover id={b.id} card={card}><DriverLink id={b.id} className="text-[#FFFFFF]">{b.name}</DriverLink></DriverHover>
+        </span>
+      </div>
+      <div className="space-y-2">
+        <Bar label="Faster in qualifying" leftText={`${s1.qual}`} rightText={`${s2.qual}`} leftPct={higherPct(s1.qual, s2.qual)} c1={c1} c2={c2} />
+        <Bar label="Finished ahead" leftText={`${s1.raceAhead}`} rightText={`${s2.raceAhead}`} leftPct={higherPct(s1.raceAhead, s2.raceAhead)} c1={c1} c2={c2} />
+        <Bar label="Points scored" leftText={`${s1.points}`} rightText={`${s2.points}`} leftPct={higherPct(s1.points, s2.points)} c1={c1} c2={c2} />
+        <Bar label="Avg grid" leftText={fmtAvg(g1)} rightText={fmtAvg(g2)} leftPct={lowerPct(g1, g2)} c1={c1} c2={c2} />
+        <Bar label="Avg finish" leftText={fmtAvg(f1)} rightText={fmtAvg(f2)} leftPct={lowerPct(f1, f2)} c1={c1} c2={c2} />
+      </div>
+    </div>
+  )
+}
+
+export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
   if (raceResults.length === 0) {
     return <p className="text-sm text-[#FFFFFF]">No races completed yet — head-to-head opens after round one.</p>
   }
@@ -133,36 +166,7 @@ export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
-      {cards.map(({ team, a, b, s1, s2, c1, c2 }) => {
-        const g1 = avg(s1.gridSum, s1.gridN), g2 = avg(s2.gridSum, s2.gridN)
-        const f1 = avg(s1.finSum, s1.finN), f2 = avg(s2.finSum, s2.finN)
-        const hl = highlight(team.id, team.color)
-        return (
-          <div key={team.id} style={hl ? { boxShadow: hl.boxShadow } : undefined} className="rounded-xl bg-[#1E2431] border border-[#2A3142] p-5 space-y-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-1 h-5 rounded-sm" style={{ backgroundColor: team.color }} />
-              <TeamLink id={team.id} className="font-display text-base tracking-wide uppercase text-[#FFFFFF]">{team.name}</TeamLink>
-            </div>
-            <div className="flex items-center gap-5 text-xs">
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c1 }} />
-                <DriverHover id={a.id} card={card}><DriverLink id={a.id} className="text-[#FFFFFF]">{a.name}</DriverLink></DriverHover>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c2 }} />
-                <DriverHover id={b.id} card={card}><DriverLink id={b.id} className="text-[#FFFFFF]">{b.name}</DriverLink></DriverHover>
-              </span>
-            </div>
-            <div className="space-y-2">
-              <Bar label="Faster in qualifying" leftText={`${s1.qual}`} rightText={`${s2.qual}`} leftPct={higherPct(s1.qual, s2.qual)} c1={c1} c2={c2} />
-              <Bar label="Finished ahead" leftText={`${s1.raceAhead}`} rightText={`${s2.raceAhead}`} leftPct={higherPct(s1.raceAhead, s2.raceAhead)} c1={c1} c2={c2} />
-              <Bar label="Points scored" leftText={`${s1.points}`} rightText={`${s2.points}`} leftPct={higherPct(s1.points, s2.points)} c1={c1} c2={c2} />
-              <Bar label="Avg grid" leftText={fmtAvg(g1)} rightText={fmtAvg(g2)} leftPct={lowerPct(g1, g2)} c1={c1} c2={c2} />
-              <Bar label="Avg finish" leftText={fmtAvg(f1)} rightText={fmtAvg(f2)} leftPct={lowerPct(f1, f2)} c1={c1} c2={c2} />
-            </div>
-          </div>
-        )
-      })}
+      {cards.map((c) => <PairH2HCard key={c.team.id} {...c} />)}
     </div>
   )
 }

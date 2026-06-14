@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Upload, Download, Plus, ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import type { Driver, Team } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
@@ -249,6 +250,9 @@ export default function SetupPage() {
     useSeasonStore.getState().addPlayerDriver(driver)
     useSeasonStore.getState().setDriver(true, driver.id)
     useSeasonStore.getState().setRealWorldMode(true)
+    // Auto-follow yourself so your own news interrupts the sim (toggleable later in Settings). Added once at
+    // career start; if the player unfollows themselves, it isn't forced back on.
+    if (!useSettingsStore.getState().followedDriverIds.includes(driver.id)) useSettingsStore.getState().toggleFollowDriver(driver.id)
     useRaceStore.getState().resetSession()
     setSimulating(false)
     router.push('/home')
