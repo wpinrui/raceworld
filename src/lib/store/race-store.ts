@@ -57,6 +57,7 @@ interface RaceStore {
   setPaused: (paused: boolean) => void
   finishQualifying: () => void
   beginRacing: () => void
+  restartRace: () => void                                             // rebuild the race from the grid (qualifying kept)
   advanceQualSession: () => void
   resetSession: (drivers?: Driver[], teams?: Team[], circuit?: Circuit) => void
 }
@@ -220,6 +221,19 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const { raceState } = get()
     if (!raceState) return
     set({ raceState: { ...raceState, phase: 'racing', speed: 1, paused: true } })
+  },
+
+  // Restart just the RACE (qualifying kept): rebuild the lap-1 state from the existing grid and drop back to
+  // the pre-race screen. Same conditions — the seeded weather/tyres are identical, and the car-form roll is
+  // carried over from the current race so it's a true re-run, not a fresh roll. Pit/pace commands reset.
+  restartRace: () => {
+    const { raceState, drivers, teams, selectedCircuit, forms, strategyNoise } = get()
+    if (!raceState || !selectedCircuit) return
+    const { year, saveSeed, driverMode, playerDriverId } = useSeasonStore.getState()
+    const fresh = initRaceState(drivers, teams, selectedCircuit, raceState.qualifyingResults, raceState.qualifyingSessions, forms, year, strategyNoise, saveSeed)
+    const pitCommands: Record<string, PitCommand> =
+      driverMode && playerDriverId && drivers.some((d) => d.id === playerDriverId) ? { [playerDriverId]: 'hold' } : {}
+    set({ raceState: { ...fresh, carForm: raceState.carForm, phase: 'pre-race', paused: false }, pitCommands, driverModes: {} })
   },
 
   // Advance to the next qualifying session (Q1→Q2→Q3). In the store so a mid-Q3 Quit resumes at Q3.

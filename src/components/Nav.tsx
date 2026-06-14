@@ -86,6 +86,7 @@ export default function Nav() {
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
   const [restartOpen, setRestartOpen] = useState(false)
+  const [restartRaceOpen, setRestartRaceOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [raceModalOpen, setRaceModalOpen] = useState(false)
   const [raceModalMounted, setRaceModalMounted] = useState(false)
@@ -351,6 +352,12 @@ export default function Nav() {
     setMenuOpen(false)
   }
 
+  // Restart the race only (qualifying kept): rebuild lap 1 from the grid and return to the pre-race screen.
+  function handleRestartRace() {
+    useRaceStore.getState().restartRace()
+    setRestartRaceOpen(false)
+  }
+
   // The right-hand CTA, by context.
   const cta = (() => {
     if (!hydrated) return null
@@ -359,8 +366,14 @@ export default function Nav() {
       if (racePhase === 'qualifying') return <button onClick={handleSkipQualifying} className={SECONDARY_CTA}>Skip to Race<ChevronRight size={14} /></button>
 
       if (racePhase === 'pre-race') return <button onClick={handleStartRace} className={PRIMARY_CTA}>Start Race<ChevronRight size={14} /></button>
-      if (racePhase === 'finished') return <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
-      if (racePhase === 'racing') return null
+      if (racePhase === 'finished') return (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setRestartRaceOpen(true)} disabled={busy} className={SECONDARY_CTA}>Restart Race</button>
+          <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
+        </div>
+      )
+      // Mid-race: the SpeedBar drives pace/pause, so the top-right offers the race restart (grid kept).
+      if (racePhase === 'racing') return <button onClick={() => setRestartRaceOpen(true)} className={SECONDARY_CTA}>Restart Race</button>
       return <button onClick={handleSimQualifying} className={PRIMARY_CTA}>Start Qualifying<ChevronRight size={14} /></button>
     }
     if (!seasonActive) {
@@ -415,7 +428,7 @@ export default function Nav() {
     if (atRaceday && interruptOnRaceday) return () => router.push('/race')
     return busy ? null : handleContinue
   }
-  const ctaBlocked = newsStop != null || restartOpen || menuOpen || !!pendingRW
+  const ctaBlocked = newsStop != null || restartOpen || restartRaceOpen || menuOpen || !!pendingRW
   const ctaActionRef = useRef<(() => void) | null>(null)
   // Keep the ref pointed at the current action after each render (not during it).
   useEffect(() => { ctaActionRef.current = ctaBlocked ? null : primaryCtaAction() })
@@ -538,6 +551,23 @@ export default function Nav() {
             </div>
             <div className="flex justify-end px-5 py-3 border-t border-[#2A3142]">
               <button onClick={() => setNewsStop(null)} className={PRIMARY_CTA}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restart-race confirm (match mode): rebuilds the race from the grid, qualifying kept. */}
+      {restartRaceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRestartRaceOpen(false)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Restart Race</h2>
+            </div>
+            <p className="text-sm text-[#FFFFFF] mb-5">This restarts the race from the grid. Your qualifying result is kept; the current race is discarded.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setRestartRaceOpen(false)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Cancel</button>
+              <button onClick={handleRestartRace} className="px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors">Restart Race</button>
             </div>
           </div>
         </div>
