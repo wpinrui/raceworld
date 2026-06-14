@@ -143,10 +143,7 @@ export function PairH2HCard({ team, a, b, s1, s2, c1, c2 }: { team: Team; a: Dri
 }
 
 export function TeammateH2HPanel({ raceResults, drivers, teams }: Props) {
-  if (raceResults.length === 0) {
-    return <p className="text-sm text-[#FFFFFF]">No races completed yet — head-to-head opens after round one.</p>
-  }
-
+  // Even before any race, render the pairings at 0-0 — an empty head-to-head still shows who's up against whom.
   const cards = teams
     .map((team) => {
       const pair = drivers.filter((d) => d.teamId === team.id)

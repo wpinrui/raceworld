@@ -12,7 +12,6 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
 import { positionPalette } from '@/components/world/pills'
 import { SigningDayBoard } from '@/components/home/SigningDayBoard'
-import { DriverSigningBoard } from '@/components/home/DriverSigningBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
 import type { Driver, Team, RaceResult, PreSeasonTest } from '@/lib/sim/types'
 
@@ -109,7 +108,7 @@ function OffSeasonReview() {
               <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
             <div className="flex-1 min-h-0 p-5 overflow-hidden">
-              {offer ? <DriverSigningBoard /> : <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />}
+              <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />
             </div>
           </div>
         </div>

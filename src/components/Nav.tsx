@@ -73,7 +73,15 @@ export default function Nav() {
     const d = s.playerDriverId ? s.drivers.find((x) => x.id === s.playerDriverId) : null
     return d != null && d.teamId === ''
   })
-  const freeAgentWaiting = driverMode && !pendingOffer && playerSeatless
+  // You sit out the rest of the off-season after signing, so you're still teamId '' in the live grid until
+  // the rollover — but you DO have a confirmed drive (you're on a team in next season's staged grid). That
+  // ends the "waiting" state: no more sim-to-signing-day button once you've got a seat lined up.
+  const signedForNextSeason = useSeasonStore((s) => {
+    if (!s.playerDriverId) return false
+    const next = s.pendingNextSeasonState?.drivers.find((d) => d.id === s.playerDriverId)
+    return next != null && next.teamId !== ''
+  })
+  const freeAgentWaiting = driverMode && !pendingOffer && playerSeatless && !signedForNextSeason
 
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)

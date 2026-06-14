@@ -33,12 +33,18 @@ export function DriverManagerPanel() {
   const teams = useSeasonStore((s) => s.teams)
   const driverStandings = useSeasonStore((s) => s.driverStandings)
   const raceResults = useSeasonStore((s) => s.raceResults)
+  const year = useSeasonStore((s) => s.year)
+  const pending = useSeasonStore((s) => s.pendingNextSeasonState)
 
   if (!driverMode || !playerDriverId) return null
 
   const player = drivers.find((d) => d.id === playerDriverId)
   const team = player && player.teamId ? teams.find((t) => t.id === player.teamId) : undefined
   const teammate = player && player.teamId ? drivers.find((d) => d.teamId === player.teamId && d.id !== player.id) : undefined
+  // Free agent who's signed for next season: still teamId '' in the live grid, but on a team in next year's
+  // staged grid. Surface the confirmed drive rather than calling them a free agent.
+  const nextRecord = !team ? pending?.drivers.find((d) => d.id === playerDriverId) : undefined
+  const nextTeam = nextRecord && nextRecord.teamId ? (pending?.teams.find((t) => t.id === nextRecord.teamId) ?? teams.find((t) => t.id === nextRecord.teamId)) : undefined
 
   // Championship line: WDC position + wins / podiums / points. Podiums counted off the per-round finishes.
   const wdcIdx = driverStandings.findIndex((s) => s.driverId === playerDriverId)
@@ -57,14 +63,15 @@ export function DriverManagerPanel() {
     // Left: teammate head-to-head (current season). Right: your season line with the last race folded in.
     <div className="shrink-0 flex flex-wrap items-stretch gap-4">
       <div className="grow min-w-[20rem]">
-        {team && teammate && raceResults.length > 0 ? (
+        {team && teammate ? (
           (() => {
+            // Render even at 0-0 (pre-season / before round one) — an empty head-to-head still shows who you're up against.
             const [s1, s2] = computePairH2H(player!.id, teammate.id, raceResults)
             return <PairH2HCard team={team} a={player!} b={teammate} s1={s1} s2={s2} c1={base} c2={darken(base, 0.55)} />
           })()
         ) : (
           <div className={`${cardClass} h-full flex items-center`}>
-            <p className="text-sm text-[#FFFFFF]">{!team ? 'No seat yet.' : !teammate ? 'No teammate.' : 'Head-to-head opens after round one.'}</p>
+            <p className="text-sm text-[#FFFFFF]">{!team ? 'No seat yet.' : 'No teammate.'}</p>
           </div>
         )}
       </div>
@@ -72,7 +79,7 @@ export function DriverManagerPanel() {
       <div className={`${cardClass} flex grow flex-col gap-5 min-w-[18rem]`}>
         <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF] flex items-center gap-2">
           <NationalityFlag code={player?.nationality} size="1.1em" />
-          <span>{player?.name ?? 'You'}{team ? ` · ${team.name}` : ' · Free agent'}</span>
+          <span>{player?.name ?? 'You'}{team ? ` · ${team.name}` : nextTeam ? ` · ${nextTeam.name} from ${year + 1}` : ' · Free agent'}</span>
         </h2>
 
         <div className="flex flex-wrap gap-x-10 gap-y-4">

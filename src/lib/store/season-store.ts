@@ -714,7 +714,7 @@ export const useSeasonStore = create<SeasonStore>()(
           if (step.kind === 'offer') {
             set({
               phase: 'contract-negotiations',
-              signingDayRevealed: step.cursor.picks.length,
+              signingDayRevealed: 0, // reveal the rivals signed above you one at a time, then your offer (like the TM draft)
               pendingDriverOffer: { year, newYear, teams, allDrivers, stayingIds: [...stayingIds], seats, pool, cursor: step.cursor, offer: step.offer, modifyRejected: false },
             })
           } else {
