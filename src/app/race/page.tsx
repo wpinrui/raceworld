@@ -299,7 +299,7 @@ export default function RacePage() {
             <TrackMap clockRef={qe.clockRef} schedule={qe.schedule} rows={qe.rows} drivers={drivers} teams={teams} />
           ) : (
             <>
-              <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">
+              <div className="h-1/3 min-h-0 flex border-b border-[#2A3142] overflow-hidden">
                 <div className="w-1/2 min-h-0 p-4 border-r border-[#2A3142] flex flex-col overflow-hidden">
                   <CommentaryFeed entries={raceState?.commentary ?? []} />
                 </div>
@@ -314,7 +314,7 @@ export default function RacePage() {
                   />
                 </div>
               </div>
-              <div className="h-[55%] min-h-0 p-4 overflow-y-auto">
+              <div className="h-2/3 min-h-0 p-4 overflow-y-auto">
                 {raceState && phase === 'racing' ? (
                   season.teamManagerMode ? (
                     <PitWallPanel
