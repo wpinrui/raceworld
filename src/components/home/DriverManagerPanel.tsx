@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { shownOverall } from '@/lib/sim/progression'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { computePairH2H, readableBar, darken, PairH2HCard } from '@/components/standings/TeammateH2HPanel'
 
 // Driver mode home dashboard strip (mirrors TeamManagerPanel). Left: your current-season head-to-head with
@@ -68,9 +70,15 @@ export function DriverManagerPanel() {
       </div>
 
       <div className={`${cardClass} flex grow flex-col gap-5 min-w-[18rem]`}>
-        <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF]">{player?.name ?? 'You'}{team ? ` · ${team.name}` : ' · Free agent'}</h2>
+        <h2 className="font-display text-sm tracking-widest uppercase text-[#FFFFFF] flex items-center gap-2">
+          <NationalityFlag code={player?.nationality} size="1.1em" />
+          <span>{player?.name ?? 'You'}{team ? ` · ${team.name}` : ' · Free agent'}</span>
+        </h2>
 
         <div className="flex flex-wrap gap-x-10 gap-y-4">
+          {player && <Stat label="Overall" value={Math.round(shownOverall(player))} />}
+          {player && <Stat label="Potential" value={player.peakPotential} />}
+          {player && <Stat label="Age" value={player.age} />}
           <Stat label="Championship" value={wdcIdx >= 0 ? ordinal(wdcIdx + 1) : '—'} />
           <Stat label="Wins" value={standing?.wins ?? 0} />
           <Stat label="Podiums" value={podiums} />

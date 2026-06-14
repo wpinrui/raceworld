@@ -65,16 +65,15 @@ export default function Nav() {
   // Driver mode: a seat offer on the table is likewise a blocking call.
   const pendingOffer = useSeasonStore((s) => s.pendingDriverOffer != null)
   const pendingPlayerCall = pendingDraft || pendingRenewals || pendingOffer
-  // Driver mode: the player and whether they went unsigned at this off-season's signing day (free agent,
-  // signing day fully resolved and revealed) — the trigger for the "Sim to next signing day" escape hatch.
+  // Driver mode: a seatless free agent's only goal is the next signing day, so offer the one-click jump from
+  // ANY waiting state — whether they're sitting out a season (Jan 1, no team) or just went unsigned at a
+  // signing day. Only hidden once they hold a seat or an offer is on the table.
   const driverMode = useSeasonStore((s) => s.driverMode)
-  const signingDayRevealed = useSeasonStore((s) => s.signingDayRevealed)
-  const seasonDraftLen = useSeasonStore((s) => s.seasonDraft.length)
   const playerSeatless = useSeasonStore((s) => {
     const d = s.playerDriverId ? s.drivers.find((x) => x.id === s.playerDriverId) : null
     return d != null && d.teamId === ''
   })
-  const unsignedAtSigningDay = driverMode && phase === 'contract-negotiations' && !pendingOffer && playerSeatless && signingDayRevealed >= seasonDraftLen
+  const freeAgentWaiting = driverMode && !pendingOffer && playerSeatless
 
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -360,26 +359,27 @@ export default function Nav() {
         : null
     }
     if (advancing) return <button onClick={handleStop} className={STOP_CTA}>Stop Simulating</button>
+    const continueBtn = (
+      <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={freeAgentWaiting ? SECONDARY_CTA : PRIMARY_CTA}>
+        {pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : pendingOffer ? 'Decide offer' : busy ? 'Working…' : 'Continue'}<Play size={12} />
+      </button>
+    )
+    // Driver mode: a seatless free agent's main move is to reach the next signing day (from a sit-out season
+    // or after going unsigned), so that's the primary CTA, with Continue kept alongside for manual advance.
+    if (freeAgentWaiting) {
+      return (
+        <div className="flex items-center gap-2">
+          <button onClick={runSimToNextSigningDay} disabled={busy} className={PRIMARY_CTA}>Sim To Next Signing Day<Play size={12} /></button>
+          {continueBtn}
+        </div>
+      )
+    }
     // Off-season now uses the same unified Continue (the loop handles its dated beats) — no special case.
     if (atRaceday && interruptOnRaceday) {
       return (
         <div className="flex items-center gap-2">
           <button onClick={handleSimNextRace} disabled={busy} className={SECONDARY_CTA}>{busy ? 'Simulating…' : 'Simulate Next Race'}</button>
           <Link href="/race" className={PRIMARY_CTA}>Go To Race<ChevronRight size={14} /></Link>
-        </div>
-      )
-    }
-    const continueBtn = (
-      <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>
-        {pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : pendingOffer ? 'Decide offer' : busy ? 'Working…' : 'Continue'}<Play size={12} />
-      </button>
-    )
-    // Driver mode: when you've gone unsigned at signing day, offer the one-click jump to next year beside Continue.
-    if (unsignedAtSigningDay) {
-      return (
-        <div className="flex items-center gap-2">
-          <button onClick={runSimToNextSigningDay} disabled={busy} className={SECONDARY_CTA}>Sim To Next Signing Day</button>
-          {continueBtn}
         </div>
       )
     }
@@ -399,6 +399,7 @@ export default function Nav() {
     }
     if (advancing) return handleStop
     if (!seasonActive) return setupCta && setupCta.ready ? setupCta.start : null
+    if (freeAgentWaiting) return busy ? null : runSimToNextSigningDay
     if (offSeason) return busy ? null : handleContinue
     if (atRaceday && interruptOnRaceday) return () => router.push('/race')
     return busy ? null : handleContinue
