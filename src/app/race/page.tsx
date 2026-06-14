@@ -10,7 +10,7 @@ import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
-import { recommendsPit } from '@/lib/sim/strategy-forecast'
+import { recommendPitNow } from '@/lib/sim/race-projector'
 import { actionGetDriverCareers } from '@/lib/news/actions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import RaceTable from '@/components/race/RaceTable'
@@ -34,9 +34,6 @@ import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 // half the old slowest; 2/3/4 are the old 1/2/3.
 const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 10000, 2: 5000, 3: 2000, 4: 500, 5: 0 }
 
-// Race Engineer Mode: a full per-option sample each lap (no time cap — accuracy over speed; early laps in a
-// long race grind, which is expected and interruptible).
-const AUTO_PIT_TARGET = 80
 
 export default function RacePage() {
   const router = useRouter()
@@ -65,7 +62,6 @@ export default function RacePage() {
   const raceEngineerTalent = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
   const [autoAdvance, setAutoAdvance] = useState(false)
   const [pitAlert, setPitAlert] = useState<string | null>(null)
-  const [forecastStatus, setForecastStatus] = useState<string | null>(null)
   const autoAdvanceRef = useRef(false)
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -177,9 +173,9 @@ export default function RacePage() {
 
   useEffect(() => { autoAdvanceRef.current = autoAdvance }, [autoAdvance])
 
-  // Race Engineer Mode: drive the race ourselves — forecast the current lap (full sample); if a car should
-  // box, pause and hand over, switching the mode off; otherwise step a lap, paced by the chosen speed, and
-  // repeat. setState only happens inside the async loop's callbacks, never synchronously in the effect body.
+  // Race Engineer Mode: drive the race ourselves — project the current lap (instant, deterministic); if a car
+  // should box, pause and hand over, switching the mode off; otherwise step a lap, paced by the chosen speed,
+  // and repeat. setState only happens inside the async loop's callbacks, never synchronously in the effect body.
   useEffect(() => {
     if (!autoAdvance || phase !== 'racing' || paused || speed === 5) return
     let cancelled = false
@@ -190,13 +186,7 @@ export default function RacePage() {
         const { selectedCircuit, drivers: allDrivers, teams: allTeams } = useRaceStore.getState()
         const playerIds = allDrivers.filter((d) => d.teamId === useSeasonStore.getState().playerTeamId).map((d) => d.id)
         if (selectedCircuit && playerIds.length) {
-          const rec = await recommendsPit(s, allDrivers, allTeams, selectedCircuit, playerIds, {
-            target: AUTO_PIT_TARGET,
-            shouldAbort: () => cancelled,
-            onProgress: (id, runs, target) => setForecastStatus(`Forecasting ${allDrivers.find((d) => d.id === id)?.name ?? 'car'} · ${runs}/${target}`),
-          })
-          if (cancelled) return
-          setForecastStatus(null)
+          const rec = recommendPitNow(s, allDrivers, allTeams, selectedCircuit, s.year, playerIds)
           if (rec) {
             useRaceStore.getState().setPaused(true)
             setPitAlert(`Box ${allDrivers.find((d) => d.id === rec.driverId)?.name ?? 'Car'} → ${rec.compound.toUpperCase()}`)
@@ -204,7 +194,6 @@ export default function RacePage() {
             return
           }
         }
-        if (cancelled) return
         doTickRef.current() // advance a lap...
         await new Promise((r) => setTimeout(r, SPEED_INTERVALS[(useRaceStore.getState().raceState?.speed as SimSpeed) ?? speed])) // ...paced by the chosen speed
       }
@@ -213,10 +202,9 @@ export default function RacePage() {
     return () => { cancelled = true }
   }, [autoAdvance, phase, paused, speed])
 
-  // Paused-moment callouts; clear them the instant the race is running again / the mode is off. Adjusting
-  // state during render (guarded so it can't loop) is React's sanctioned pattern and keeps it out of effects.
+  // Paused-moment callout; clear it the instant the race is running again. Adjusting state during render
+  // (guarded so it can't loop) is React's sanctioned pattern and keeps it out of effects.
   if (!paused && pitAlert !== null) setPitAlert(null)
-  if ((!autoAdvance || paused || phase !== 'racing') && forecastStatus !== null) setForecastStatus(null)
 
   useEffect(() => {
     if (phase !== 'racing' || paused || speed === 5) {
@@ -368,7 +356,6 @@ export default function RacePage() {
           autoAdvance={autoAdvance}
           onToggleAutoAdvance={() => setAutoAdvance((v) => !v)}
           pitAlert={pitAlert}
-          forecastStatus={forecastStatus}
         />
       )}
 

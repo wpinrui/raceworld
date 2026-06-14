@@ -13,11 +13,10 @@ interface Props {
   showAutoAdvance?: boolean
   autoAdvance?: boolean
   onToggleAutoAdvance?: () => void
-  forecastStatus?: string | null // live "Forecasting <driver> · n/N" while a lap is being evaluated
   pitAlert?: string | null // "Box <driver> → <compound>" when it stops at a window
 }
 
-export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause, showAutoAdvance, autoAdvance, onToggleAutoAdvance, forecastStatus, pitAlert }: Props) {
+export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause, showAutoAdvance, autoAdvance, onToggleAutoAdvance, pitAlert }: Props) {
   return (
     <div className="shrink-0 bg-[#1E2431] border-t border-[#2A3142] px-6 py-3 flex items-center gap-4">
       <div className="flex items-center gap-1.5">
@@ -56,11 +55,9 @@ export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause, showAutoA
         {paused ? 'Resume' : 'Pause'}
       </button>
 
-      {pitAlert ? (
+      {pitAlert && (
         <span className="px-3 py-1.5 rounded bg-[#7C3AED] text-white text-sm font-bold tracking-wide">{pitAlert}</span>
-      ) : forecastStatus ? (
-        <span className="text-sm text-[#FFFFFF] tabular-nums">{forecastStatus}</span>
-      ) : null}
+      )}
 
       <div className="ml-auto text-sm text-[#FFFFFF]">Space · 1 2 3 4</div>
     </div>
