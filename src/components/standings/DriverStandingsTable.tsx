@@ -43,7 +43,7 @@ export function DriverStandingsTable({ standings, teams, totalRounds, completedR
           {standings.map((standing, idx) => {
             const teamColor = resolveTeamColor(standing.teamId, teams)
             const isFollowed = followed.drivers.has(standing.driverId)
-            const hl = highlight(standing.teamId, teamColor)
+            const hl = highlight(standing.teamId, teamColor, standing.driverId)
             const solid = hl ? teamHighlightSolid(teamColor) : undefined
             return (
               <tr

@@ -34,7 +34,7 @@ export function PostRacePanel({ results, teams }: Props) {
             {results.map((r) => {
               const team = teams.find((t) => t.id === r.teamId)
               return (
-                <tr key={r.driverId} style={highlight(r.teamId, team?.color)} className="border-b border-[#1a2030]">
+                <tr key={r.driverId} style={highlight(r.teamId, team?.color, r.driverId)} className="border-b border-[#1a2030]">
                   <td className="py-1 px-1 font-bold text-[#FFFFFF]">
                     {r.dnf ? <span className="text-[#C084FC] text-xs">DNF</span> : r.finishPosition}
                   </td>

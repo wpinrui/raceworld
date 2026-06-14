@@ -47,7 +47,7 @@ export function CompactStandings() {
         <ol className="space-y-1">
           {tab === 'drivers'
             ? driverStandings.map((d, i) => (
-                <li key={d.driverId} style={highlight(d.teamId, teamColor(d.teamId))} className="flex items-center justify-between text-sm rounded px-2 py-0.5 -mx-2">
+                <li key={d.driverId} style={highlight(d.teamId, teamColor(d.teamId), d.driverId)} className="flex items-center justify-between text-sm rounded px-2 py-0.5 -mx-2">
                   <span className="flex items-center gap-2 min-w-0">
                     <span className="w-5 text-right tabular-nums text-[#FFFFFF]">{i + 1}</span>
                     <span className="w-1.5 h-4 rounded-sm shrink-0" style={{ backgroundColor: teamColor(d.teamId) }} />

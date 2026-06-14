@@ -53,7 +53,7 @@ export function QualifyingPanel({ rows, sessionName, cutSize, dropFrom, progress
             const driver = driverMap.get(row.carId)
             const team = driver ? teamMap.get(driver.teamId) : undefined
             const inDrop = cutSize > 0 && idx >= dropFrom
-            const hl = highlight(driver?.teamId, team?.color)
+            const hl = highlight(driver?.teamId, team?.color, driver?.id)
             return (
               <div
                 key={row.carId}
