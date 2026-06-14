@@ -176,6 +176,8 @@ export default function Nav() {
 
   // Raceday progression — the single CTA walks pre-qualifying → pre-race → finished.
   function handleSimQualifying() { useRaceStore.getState().initSession() }
+  // Skip the qualifying playback: the result is already computed, so jump straight to the pre-race grid.
+  function handleSkipQualifying() { useRaceStore.getState().finishQualifying() }
   function handleStartRace() {
     // Go straight to a paused green flag (no lights-out countdown); the player resumes to set off.
     useRaceStore.getState().beginRacing()
@@ -353,8 +355,9 @@ export default function Nav() {
   const cta = (() => {
     if (!hydrated) return null
     if (matchMode) {
-      // Qualifying drives itself (SpeedBar) — no top-right CTA.
-      if (racePhase === 'qualifying') return null
+      // Qualifying drives itself (SpeedBar); the grid's already set, so offer a skip straight to the grid.
+      if (racePhase === 'qualifying') return <button onClick={handleSkipQualifying} className={SECONDARY_CTA}>Skip to Race<ChevronRight size={14} /></button>
+
       if (racePhase === 'pre-race') return <button onClick={handleStartRace} className={PRIMARY_CTA}>Start Race<ChevronRight size={14} /></button>
       if (racePhase === 'finished') return <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
       if (racePhase === 'racing') return null
