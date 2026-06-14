@@ -17,16 +17,17 @@ export type TalentId =
   | 'tyre-telemetry'  // reveal true tyre life (clear air vs traffic), pace-vs-wear, and the perfect strategy
   | 'race-engineer'   // simulate the rest of the race for each pit option's finishing-position odds
 
-// `icon` is a lucide-react export name; the Settings UI maps it to the component.
-export const TALENTS: { id: TalentId; name: string; icon: string; tooltip: string }[] = [
+// `icon` is a lucide-react export name; the Settings UI maps it to the component. `teamOnly` talents act on
+// a team you run (seats / car development), so they're hidden in Driver mode (where you race a single car).
+export const TALENTS: { id: TalentId; name: string; icon: string; tooltip: string; teamOnly?: boolean }[] = [
   { id: 'driver-tuning', name: 'Driver Tuning', icon: 'SlidersHorizontal', tooltip: "Directly adjust your own drivers' ratings, age, potential and narrative." },
-  { id: 'contract-desk', name: 'Contract Desk', icon: 'Handshake', tooltip: 'Extend, release or sign drivers to your seats outside the normal market windows.' },
+  { id: 'contract-desk', name: 'Contract Desk', icon: 'Handshake', tooltip: 'Extend, release or sign drivers to your seats outside the normal market windows.', teamOnly: true },
   { id: 'peak-form', name: 'Peak Form', icon: 'Flame', tooltip: 'Set your drivers to maximum form before a session.' },
   { id: 'scout-network', name: 'Scout Network', icon: 'Telescope', tooltip: 'Reveal the exact Overall, Potential and underlying ratings of every driver on the grid.' },
   { id: 'data-room', name: 'Data Room', icon: 'BarChart3', tooltip: 'Reveal the power-ranking media breakdown and the true pre-season test pace.' },
   { id: 'met-office', name: 'Met Office', icon: 'CloudSun', tooltip: 'Reveal the true weather forecast instead of the imperfect outlook.' },
-  { id: 'chief-engineer', name: 'Chief Engineer', icon: 'Wrench', tooltip: 'Your car upgrades never fail.' },
-  { id: 'chief-aero', name: 'Chief Aerodynamicist', icon: 'Wind', tooltip: 'Every upgrade gains 1.25 car pace per race of development (a 3-race upgrade gains 3.75, a 6-race upgrade 7.5).' },
+  { id: 'chief-engineer', name: 'Chief Engineer', icon: 'Wrench', tooltip: 'Your car upgrades never fail.', teamOnly: true },
+  { id: 'chief-aero', name: 'Chief Aerodynamicist', icon: 'Wind', tooltip: 'Every upgrade gains 1.25 car pace per race of development (a 3-race upgrade gains 3.75, a 6-race upgrade 7.5).', teamOnly: true },
   { id: 'tyre-telemetry', name: 'Tyre Telemetry', icon: 'Gauge', tooltip: 'Reveal your cars’ true tyre life in clear air and traffic, the pace-vs-wear curve, and the perfect-information strategy.' },
   { id: 'race-engineer', name: 'Race Engineer', icon: 'Radio', tooltip: 'Pause to simulate the rest of the race and see each pit option’s finishing-position odds for your cars.' },
 ]

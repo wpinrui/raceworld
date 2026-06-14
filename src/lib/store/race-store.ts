@@ -7,13 +7,18 @@ import { shownStats } from '@/lib/sim/progression'
 import { useSeasonStore } from './season-store'
 import { useSettingsStore } from './settings-store'
 
-// Team Manager + Peak Form talent: the player's own drivers run at maximum form (10) every weekend.
+// Peak Form talent: the player's own car(s) run at maximum form (10) every weekend — both of a Team
+// Manager's drivers, or just your own driver in Driver mode.
 function applyPeakForm(forms: Record<string, number>, drivers: Driver[]): Record<string, number> {
-  const { teamManagerMode, playerTeamId } = useSeasonStore.getState()
-  if (!teamManagerMode || !playerTeamId || !useSettingsStore.getState().talents['peak-form']) return forms
-  const out = { ...forms }
-  for (const d of drivers) if (d.teamId === playerTeamId) out[d.id] = 10
-  return out
+  if (!useSettingsStore.getState().talents['peak-form']) return forms
+  const { teamManagerMode, playerTeamId, driverMode, playerDriverId } = useSeasonStore.getState()
+  if (teamManagerMode && playerTeamId) {
+    const out = { ...forms }
+    for (const d of drivers) if (d.teamId === playerTeamId) out[d.id] = 10
+    return out
+  }
+  if (driverMode && playerDriverId) return { ...forms, [playerDriverId]: 10 }
+  return forms
 }
 
 // The sim races the SHOWN ratings (true + season form, #66). Bake them in as drivers enter the race

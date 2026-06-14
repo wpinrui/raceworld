@@ -25,7 +25,7 @@ export function PreQualPanel({
 }: Props) {
   const card = useLiveDriverCards()
   const hidden = useRatingsHidden()
-  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const constructorStandings = useSeasonStore((s) => s.constructorStandings)
   const highlight = useTeamHighlight()
 

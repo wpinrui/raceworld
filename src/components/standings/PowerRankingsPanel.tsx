@@ -53,10 +53,10 @@ function Th({ k, label, right, sortKey, sortDir, onSort }: {
 
 export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings, driverStandings }: Props) {
   const card = useLiveDriverCards()
-  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const managed = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
-  // In Team Manager mode the breakdown reveal is a Data Room talent; without it, force the public view.
-  const gateAllowsReveal = !teamManagerMode || talentOn
+  // In the managed career modes the breakdown reveal is a Data Room talent; without it, force the public view.
+  const gateAllowsReveal = !managed || talentOn
   const [godModeToggle, setGodModeToggle] = useState(false)
   const godMode = godModeToggle && gateAllowsReveal
   const [sortKey, setSortKey] = useState<SortKey>('media')

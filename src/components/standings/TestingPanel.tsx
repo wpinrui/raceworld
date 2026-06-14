@@ -31,10 +31,10 @@ type SortKey = 'time' | 'pace' | 'wcc'
 export function TestingPanel({ test, wccYear, prevFinish, teams }: Props) {
   const card = useLiveDriverCards()
   const highlight = useTeamHighlight()
-  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const managed = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
-  // In Team Manager mode the true-pace reveal is a Data Room talent; without it, keep pace hidden.
-  const gateAllowsReveal = !teamManagerMode || talentOn
+  // In the managed career modes the true-pace reveal is a Data Room talent; without it, keep pace hidden.
+  const gateAllowsReveal = !managed || talentOn
   const [revealToggle, setRevealToggle] = useState(false)
   const reveal = revealToggle && gateAllowsReveal
   const [sortKey, setSortKey] = useState<SortKey>('time')

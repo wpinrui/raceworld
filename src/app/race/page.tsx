@@ -351,7 +351,7 @@ export default function RacePage() {
           speed={speed} paused={paused}
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
-          showAutoAdvance={season.teamManagerMode && raceEngineerTalent}
+          showAutoAdvance={(season.teamManagerMode || season.driverMode) && raceEngineerTalent}
           autoAdvance={autoAdvance}
           onToggleAutoAdvance={() => setAutoAdvance((v) => !v)}
           pitAlert={pitAlert}

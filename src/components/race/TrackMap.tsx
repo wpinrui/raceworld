@@ -50,6 +50,7 @@ export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
   const teamMap = new Map(teams.map((t) => [t.id, t]))
   const posOf = new Map(rows.map((r, i) => [r.carId, i + 1]))
   const playerTeamId = useSeasonStore((s) => (s.teamManagerMode ? s.playerTeamId : null))
+  const playerDriverId = useSeasonStore((s) => (s.driverMode ? s.playerDriverId : null))
 
   // Private rAF: read the shared clock, move markers via direct DOM writes (no per-frame React render).
   // The rendered marker list only changes when a car joins/leaves the track or flips flying<->cruising.
@@ -98,8 +99,8 @@ export function TrackMap({ clockRef, schedule, rows, drivers, teams }: Props) {
           const d = driverMap.get(carId)
           const team = d ? teamMap.get(d.teamId) : undefined
           const pos = posOf.get(carId) ?? 0
-          const isMine = !!playerTeamId && d?.teamId === playerTeamId
-          // Your-team cars get a bright white ring so they stand out on the map.
+          const isMine = (!!playerTeamId && d?.teamId === playerTeamId) || (!!playerDriverId && d?.id === playerDriverId)
+          // Your car(s) get a bright white ring so they stand out on the map.
           const myRing = isMine ? '0 0 0 2.5px #FFFFFF, 0 0 7px rgba(255,255,255,0.7)' : undefined
           const inner = timed ? (
             <div
