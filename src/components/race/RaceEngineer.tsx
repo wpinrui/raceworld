@@ -7,8 +7,7 @@ import { evaluatePitOptions, evaluateStartOptions, type PitOption } from '@/lib/
 import type { ForecastCandidate } from '@/lib/sim/strategy-forecast'
 import TyreIndicator from './TyreIndicator'
 
-const candLabel = (c: ForecastCandidate): string =>
-  c.kind === 'hold' ? 'Stay out' : c.kind === 'pit' ? 'Pit' : c.kind === 'start' ? 'Start' : 'Auto'
+const candLabel = (c: ForecastCandidate): string => (c.kind === 'hold' ? 'Stay out' : c.kind === 'start' ? 'Start' : 'Pit')
 
 // Race Engineer talent: a DETERMINISTIC strategy projection (no Monte-Carlo, no DNFs). It projects one
 // noiseless race to the flag for each option — rivals pit at their own planned laps, traffic resolved with
@@ -64,7 +63,7 @@ export function RaceEngineer({ driver, raceState, mode }: { driver: Driver; race
         </table>
       )}
 
-      <div className="text-[9px] text-[#FFFFFF]">Predicted finish + time vs {mode === 'pre-race' ? 'the best start' : 'staying out'}. Traffic = laps held behind a car you can’t pass.</div>
+      <div className="text-[9px] text-[#FFFFFF]">Traffic: laps stuck behind a car you can’t pass.</div>
     </div>
   )
 }

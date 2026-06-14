@@ -34,7 +34,6 @@ import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 // half the old slowest; 2/3/4 are the old 1/2/3.
 const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 10000, 2: 5000, 3: 2000, 4: 500, 5: 0 }
 
-
 export default function RacePage() {
   const router = useRouter()
   const season = useSeasonStore()

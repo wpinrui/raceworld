@@ -116,7 +116,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
 
       <p className="mt-3 text-xs text-[#FFFFFF]">
         {!active
-          ? 'No upgrade in development. The car will not improve while idle.'
+          ? 'No upgrade in development.'
           : arrivalName
             ? <>In development: {devPlan!.pendingPackageName ?? 'an upgrade'}. Arrives {arrivalName} (Round {arrivalRound})</>
             : <>In development: {devPlan!.pendingPackageName ?? 'an upgrade'}. Arrives next season</>}
@@ -134,7 +134,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
       {confirmCancel && (
         <ConfirmModal
           title="Cancel upgrade"
-          body="Scraps the work on your current upgrade. The car won't improve until you select a new development package."
+          body="Scraps the work on your current upgrade."
           confirmLabel="Scrap upgrade"
           confirmClass="bg-[#DC143C] hover:bg-[#B01030] text-[#FFFFFF]"
           onConfirm={() => {

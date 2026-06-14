@@ -2,6 +2,7 @@
 
 import { FastForward, Radio } from 'lucide-react'
 import type { SimSpeed } from '@/lib/sim/types'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface Props {
   speed: SimSpeed
@@ -32,15 +33,16 @@ export function SpeedBar({ speed, paused, onSpeedClick, onTogglePause, showAutoA
           </button>
         ))}
         {showAutoAdvance && (
-          <button
-            onClick={onToggleAutoAdvance}
-            title="Step the race lap by lap, forecasting each lap, and pause when a car should pit"
-            className={`ml-1.5 px-3 py-2 text-sm font-bold tracking-wide uppercase rounded transition-colors flex items-center gap-1.5 ${
-              autoAdvance ? 'bg-[#7C3AED] text-white' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
-            }`}
-          >
-            <Radio size={15} /> Race Engineer
-          </button>
+          <Tooltip content="Plays at the chosen speed and pauses at the pit window">
+            <button
+              onClick={onToggleAutoAdvance}
+              className={`ml-1.5 px-3 py-2 text-sm font-bold tracking-wide uppercase rounded transition-colors flex items-center gap-1.5 ${
+                autoAdvance ? 'bg-[#7C3AED] text-white' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
+              }`}
+            >
+              <Radio size={15} /> Race Engineer
+            </button>
+          </Tooltip>
         )}
       </div>
 
