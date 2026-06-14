@@ -18,9 +18,11 @@ function slugify(s: string): string {
 }
 
 export function DriverSetup({
-  minEntryYear, maxEntryYear, lastRealYear, onChange, onEntryYearChange,
+  startYear, years, onStartYearChange, maxEntryYear, lastRealYear, onChange, onEntryYearChange,
 }: {
-  minEntryYear: number
+  startYear: number               // the year the simulated world begins (history depth)
+  years: number[]                 // selectable start years, latest first
+  onStartYearChange: (year: number) => void
   maxEntryYear: number
   lastRealYear: number // last year with real-world data; the reset option only applies up to here
   onChange: (sel: DriverSelection) => void
@@ -36,8 +38,16 @@ export function DriverSetup({
   const [primeEnd, setPrimeEnd] = useState(31)
   const [declineRate, setDeclineRate] = useState(1)
   const [narrative, setNarrative] = useState(0)
-  const [entryYear, setEntryYear] = useState(minEntryYear)
+  const [entryYear, setEntryYear] = useState(startYear)
   const [resetRealWorld, setResetRealWorld] = useState(false)
+
+  // You can't join before the sim starts; if the start year is pushed past the entry year, carry it up.
+  const [shownStart, setShownStart] = useState(startYear)
+  if (startYear !== shownStart) {
+    setShownStart(startYear)
+    if (!Number.isFinite(entryYear) || entryYear < startYear) setEntryYear(startYear)
+  }
+  const canReset = Number.isFinite(entryYear) && entryYear <= lastRealYear
 
   useEffect(() => { onEntryYearChange?.(entryYear) }, [entryYear, onEntryYearChange])
 
@@ -60,14 +70,14 @@ export function DriverSetup({
   }
 
   useEffect(() => {
-    const y = Math.max(minEntryYear, Math.min(maxEntryYear, entryYear))
+    const y = Math.max(startYear, Math.min(maxEntryYear, entryYear))
     if (name.trim() && nationality && Number.isFinite(entryYear) && Number.isFinite(y)) {
       onChange({ driver: { ...draft, contractExpiresAfterSeason: y - 1 }, entryYear: y, resetRealWorld: resetRealWorld && y <= lastRealYear })
     } else {
       onChange(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, nationality, gender, photoUrl, age, ratings, peakPotential, primeEnd, declineRate, narrative, entryYear, resetRealWorld, minEntryYear, maxEntryYear, lastRealYear])
+  }, [name, nationality, gender, photoUrl, age, ratings, peakPotential, primeEnd, declineRate, narrative, entryYear, resetRealWorld, startYear, maxEntryYear, lastRealYear])
 
   const field = 'px-2 py-1.5 rounded bg-[#0F1419] text-[#FFFFFF] text-sm border border-[#303848] focus:border-[#00D9FF] outline-none'
   const lbl = 'text-xs text-[#FFFFFF] block mb-1'
@@ -105,7 +115,7 @@ export function DriverSetup({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={lbl}>Age on entry</label>
             <input type="number" min={17} max={39} value={age} onChange={(e) => setAge(Math.max(17, Math.min(39, Number(e.target.value))))} className={`${field} w-full`} />
@@ -113,11 +123,6 @@ export function DriverSetup({
           <div>
             <label className={lbl}>Potential</label>
             <input type="number" min={50} max={99} value={peakPotential} onChange={(e) => setPeakPotential(Math.max(50, Math.min(99, Number(e.target.value))))} className={`${field} w-full`} />
-          </div>
-          <div>
-            <label className={lbl}>Entry year</label>
-            <input type="number" min={minEntryYear} max={maxEntryYear} value={Number.isFinite(entryYear) ? entryYear : ''}
-              onChange={(e) => setEntryYear(e.target.value === '' ? NaN : Number(e.target.value))} className={`${field} w-full`} />
           </div>
         </div>
 
@@ -147,12 +152,27 @@ export function DriverSetup({
           <input type="range" min={0.2} max={1.5} step={0.05} value={1.7 - declineRate} onChange={(e) => setDeclineRate(Math.round((1.7 - Number(e.target.value)) * 100) / 100)} className="flex-1 h-1 cursor-pointer" style={{ accentColor: '#7C3AED' }} />
           <span className="text-sm font-semibold w-10 text-right shrink-0 text-[#FFFFFF]">{declineRate <= 0.5 ? 'long' : declineRate >= 1.2 ? 'short' : 'med'}</span>
         </div>
-        {entryYear <= lastRealYear && (
-          <label className="flex items-center gap-2 text-xs text-[#FFFFFF] cursor-pointer pt-1">
-            <input type="checkbox" checked={resetRealWorld} onChange={(e) => setResetRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
-            Reset grid to the real-world {entryYear} roster on entry
+        {/* Career timeline: when the world starts, when you join it, and whether to rebuild it to that
+            year's real roster on entry. */}
+        <div className="space-y-2.5 pt-2 border-t border-[#2A3142]">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Sim starts</label>
+              <select value={startYear} onChange={(e) => onStartYearChange(Number(e.target.value))} className={`${field} w-full`}>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Enter grid</label>
+              <input type="number" min={startYear} max={maxEntryYear} value={Number.isFinite(entryYear) ? entryYear : ''}
+                onChange={(e) => setEntryYear(e.target.value === '' ? NaN : Number(e.target.value))} className={`${field} w-full`} />
+            </div>
+          </div>
+          <label className={`flex items-center gap-2 text-xs text-[#FFFFFF] ${canReset ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+            <input type="checkbox" checked={canReset && resetRealWorld} disabled={!canReset} onChange={(e) => setResetRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
+            Reset to the real-world {Number.isFinite(entryYear) ? entryYear : ''} grid on entry
           </label>
-        )}
+        </div>
       </div>
     </div>
   )

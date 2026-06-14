@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRouter } from 'next/navigation'
-import { Upload, Download, Plus, ChevronRight } from 'lucide-react'
+import { Upload, Download, Plus, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
@@ -18,6 +18,7 @@ import { simUntilYear } from '@/lib/sim/sim-until-year'
 import { SimulatingWorldModal } from '@/components/SimulatingWorldModal'
 import { TeamManagerSetup, type TmSelection } from '@/components/setup/TeamManagerSetup'
 import { DriverSetup, type DriverSelection } from '@/components/setup/DriverSetup'
+import { ModeSelect, type GameMode } from '@/components/setup/ModeSelect'
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -57,15 +58,18 @@ export default function SetupPage() {
   const [simulating, setSimulating] = useState(false)
   const [racesTotal, setRacesTotal] = useState(0)
   const cancelSimRef = useRef(false)
-  // Team Manager: run one team only, god-mode off (re-enableable as Settings talents).
-  const [teamManager, setTeamManager] = useState(false)
+  // Game mode is chosen on a standalone screen before any setup (Sandbox / Team Manager / Driver). null =
+  // that screen is showing (a fresh game only); once picked, the mode's own setup renders.
+  const [mode, setMode] = useState<GameMode | null>(null)
+  const teamManager = mode === 'team-manager'
+  const driverMode = mode === 'driver'
   const [tmSelection, setTmSelection] = useState<TmSelection>(null)
   const [tmMode, setTmMode] = useState<'existing' | 'new'>('existing')
   const [tmEntryYear, setTmEntryYear] = useState(EARLIEST_YEAR + 1)
-  // Driver mode: play as a single driver who enters the grid as a free agent.
-  const [driverMode, setDriverMode] = useState(false)
   const [driverSelection, setDriverSelection] = useState<DriverSelection>(null)
   const [driverEntryYear, setDriverEntryYear] = useState(DEFAULT_START_YEAR)
+  // Drop back to the mode-select screen, discarding either mode's staged selection.
+  const changeMode = () => { setMode(null); setTmSelection(null); setDriverSelection(null) }
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any
@@ -282,9 +286,11 @@ export default function SetupPage() {
   const setSetupCta = useSetupCta((s) => s.setCta)
   useEffect(() => {
     if (isActive) { setSetupCta(null); return }
-    setSetupCta({ ready: localDrivers.length > 0 && (!teamManager || tmSelection != null) && (!driverMode || driverSelection != null), year: startSeasonYear, start: handleStartSeason })
+    // No Start CTA until a mode is picked (or, mid-history, there's no mode screen so it's sandbox-ready).
+    const modeChosen = mode !== null || seasonStore.constructorHistory.length > 0
+    setSetupCta({ ready: modeChosen && localDrivers.length > 0 && (!teamManager || tmSelection != null) && (!driverMode || driverSelection != null), year: startSeasonYear, start: handleStartSeason })
     return () => setSetupCta(null)
-  }, [isActive, localDrivers, localTeams, startSeasonYear, realWorld, simWorld, teamManager, tmSelection, driverMode, driverSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, mode, localDrivers, localTeams, startSeasonYear, realWorld, simWorld, teamManager, tmSelection, driverMode, driverSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!hydrated) return null
 
@@ -292,6 +298,15 @@ export default function SetupPage() {
   // Pre-populating the 2026 defaults wipes the grid — only ever offer it on a
   // brand-new game (no season completed yet), never between seasons.
   const isFreshGame = seasonStore.constructorHistory.length === 0
+
+  // A fresh game opens on the standalone mode picker; once a mode is chosen its own setup renders.
+  if (!isActive && isFreshGame && mode === null) {
+    return (
+      <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+        <ModeSelect onSelect={setMode} />
+      </div>
+    )
+  }
   const expiringCount = localDrivers.filter(
     (d) => d.teamId !== '' && d.contractExpiresAfterSeason <= seasonStore.year,
   ).length
@@ -324,7 +339,7 @@ export default function SetupPage() {
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-1 h-6 rounded-sm bg-[#DC143C]" />
               <h1 className="font-display text-2xl tracking-wider uppercase">
-                {isActive ? 'Driver Market' : 'Setup'}
+                {isActive ? 'Driver Market' : teamManager ? 'Team Manager' : driverMode ? 'Driver' : mode === 'sandbox' ? 'Sandbox' : 'Setup'}
               </h1>
             </div>
             {isActive && expiringCount > 0 && (
@@ -339,9 +354,36 @@ export default function SetupPage() {
               <>
                 {isFreshGame && (
                   <>
-                    {/* The start-year dropdown is your START year (existing team). A new team sets its own
-                        entry year in the panel below, so the dropdown is hidden then. */}
-                    {!(teamManager && tmMode === 'new') && (
+                    <button onClick={changeMode}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                      <ChevronLeft size={13} /> Change mode
+                    </button>
+                    {/* Sandbox owns the world controls. Team Manager / Driver always play real F1 history (forced
+                        on), and Driver picks its start year inside its own panel — so these are sandbox-only.
+                        The start-year dropdown is also hidden for a new Team Manager team (it sets its own entry year). */}
+                    {mode === 'sandbox' && (
+                      <>
+                        <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
+                          className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
+                          {historyYears().slice().reverse().map((y) => (
+                            <option key={y} value={y}>{y}{y === DEFAULT_START_YEAR ? ' (default)' : ''}</option>
+                          ))}
+                        </select>
+                        {startYear !== DEFAULT_START_YEAR && (
+                          <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                            <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                            Real-world changes
+                          </label>
+                        )}
+                        {startYear > EARLIEST_YEAR && (
+                          <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                            <input type="checkbox" checked={simWorld} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                            Sim history from {EARLIEST_YEAR}
+                          </label>
+                        )}
+                      </>
+                    )}
+                    {teamManager && tmMode === 'existing' && (
                       <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
                         className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
                         {historyYears().slice().reverse().map((y) => (
@@ -349,28 +391,6 @@ export default function SetupPage() {
                         ))}
                       </select>
                     )}
-                    {startYear !== DEFAULT_START_YEAR && (
-                      <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] ${teamManager || driverMode ? 'opacity-60' : ''}`}>
-                        {/* Team Manager / Driver mode always play real F1 history, so real-world changes are forced on. */}
-                        <input type="checkbox" checked={teamManager || driverMode || realWorld} disabled={teamManager || driverMode} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
-                        Real-world changes
-                      </label>
-                    )}
-                    {startYear > EARLIEST_YEAR && (
-                      <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] ${teamManager || driverMode ? 'opacity-60' : ''}`}>
-                        {/* Team Manager / Driver mode always simulate history, so the toggle is forced on. */}
-                        <input type="checkbox" checked={teamManager || driverMode || simWorld} disabled={teamManager || driverMode} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
-                        Sim history from {EARLIEST_YEAR}
-                      </label>
-                    )}
-                    <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
-                      <input type="checkbox" checked={teamManager} onChange={(e) => { setTeamManager(e.target.checked); if (e.target.checked) { setDriverMode(false); setDriverSelection(null) } else setTmSelection(null) }} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
-                      Team Manager
-                    </label>
-                    <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
-                      <input type="checkbox" checked={driverMode} onChange={(e) => { setDriverMode(e.target.checked); if (e.target.checked) { setTeamManager(false); setTmSelection(null) } else setDriverSelection(null) }} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
-                      Driver
-                    </label>
                   </>
                 )}
                 <button onClick={() => fileInputRef.current?.click()}
@@ -401,7 +421,7 @@ export default function SetupPage() {
 
         {!isActive && driverMode && (
           <div className="mb-6">
-            <DriverSetup minEntryYear={startYear} maxEntryYear={DEFAULT_START_YEAR} lastRealYear={lastDriverEntryYear()} onChange={setDriverSelection} onEntryYearChange={setDriverEntryYear} />
+            <DriverSetup startYear={startYear} years={historyYears().slice().reverse()} onStartYearChange={selectYear} maxEntryYear={DEFAULT_START_YEAR} lastRealYear={lastDriverEntryYear()} onChange={setDriverSelection} onEntryYearChange={setDriverEntryYear} />
           </div>
         )}
 
