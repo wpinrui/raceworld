@@ -4,8 +4,12 @@ import { useState } from 'react'
 import type { Driver, Team, DriverRaceState, RaceState, TyreCompound } from '@/lib/sim/types'
 import { useRaceStore, type PitCommand } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
+import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
+import { TyreTelemetry } from './TyreTelemetry'
+import { RaceEngineer } from './RaceEngineer'
 import { DriverLink } from '@/components/world/EntityLink'
 
 const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
@@ -17,6 +21,27 @@ interface Props {
   states: DriverRaceState[]
   raceState: RaceState
   onRetire: (driverId: string) => void
+}
+
+// Where the player's car would slot back in if it pitted THIS lap: add the pit-lane loss to its race time
+// and read the field by race time (the same projection the AI uses to judge clear air). Returns the net
+// position and the nearest car — behind whom it rejoins, or (if it would keep the lead) ahead of whom.
+function rejoinProjection(ds: DriverRaceState, raceState: RaceState, drivers: Driver[]) {
+  const rejoinTime = ds.totalTime + pitLaneLoss(raceState.year)
+  const others = raceState.drivers.filter((o) => o.driverId !== ds.driverId && !o.retired)
+  const ahead = others.filter((o) => o.totalTime <= rejoinTime)
+  const nameOf = (id: string) => drivers.find((d) => d.id === id)?.name ?? '—'
+  const position = ahead.length + 1
+  if (ahead.length > 0) {
+    const carAhead = ahead.reduce((best, o) => (o.totalTime > best.totalTime ? o : best))
+    return { position, gap: rejoinTime - carAhead.totalTime, other: nameOf(carAhead.driverId), ahead: false }
+  }
+  const behind = others.filter((o) => o.totalTime > rejoinTime)
+  if (behind.length > 0) {
+    const carBehind = behind.reduce((best, o) => (o.totalTime < best.totalTime ? o : best))
+    return { position, gap: carBehind.totalTime - rejoinTime, other: nameOf(carBehind.driverId), ahead: true }
+  }
+  return { position, gap: 0, other: null, ahead: true }
 }
 
 // The pit wall the player commands the AI strategy with each lap. `auto` = the AI decides (read-only
@@ -45,9 +70,11 @@ function ModeButton({ active, color, onClick, children }: { active: boolean; col
   )
 }
 
-function Card({ driver, team, ds, raceState, onRetire }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; onRetire: (id: string) => void }) {
+function Card({ driver, team, ds, raceState, allDrivers, onRetire }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void }) {
   const cmd: PitCommand = useRaceStore((s) => s.pitCommands[driver.id]) ?? 'auto'
   const setPitCommand = useRaceStore((s) => s.setPitCommand)
+  const tyreTel = useSettingsStore((s) => s.talents['tyre-telemetry'] ?? false)
+  const raceEng = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
   // The compound a PIT command will use; defaults to the AI's planned next compound.
   const [compound, setCompound] = useState<TyreCompound>(ds?.targetNextCompound ?? 'medium')
 
@@ -71,6 +98,7 @@ function Card({ driver, team, ds, raceState, onRetire }: { driver: Driver; team:
   const isPit = cmd !== 'auto' && cmd !== 'hold'
   const st = status(cmd, ds, raceState.currentLap)
   const cond = Math.round(ds.currentTyre.condition)
+  const rejoin = rejoinProjection(ds, raceState, allDrivers)
 
   return (
     <div className="bg-[#1E2431] rounded p-2.5 flex flex-col gap-2">
@@ -92,6 +120,12 @@ function Card({ driver, team, ds, raceState, onRetire }: { driver: Driver; team:
       {/* Prominent status */}
       <div className="text-sm font-bold tracking-wide uppercase" style={{ color: st.color }}>{st.text}</div>
 
+      {/* Where a stop this lap drops you: behind the car you'd rejoin in front of, or ahead if you'd hold the lead. */}
+      <div className="text-[11px] text-[#FFFFFF]">
+        If you pit now: <span className="font-bold">P{rejoin.position}</span>
+        {rejoin.other && `, ${rejoin.gap.toFixed(1)}s ${rejoin.ahead ? 'ahead of' : 'behind'} ${rejoin.other}`}
+      </div>
+
       {/* Command: auto / pit (+ compound) / hold */}
       <div className="flex gap-1.5">
         <ModeButton active={cmd === 'auto'} color="#2A3142" onClick={() => setPitCommand(driver.id, 'auto')}>Auto</ModeButton>
@@ -108,6 +142,10 @@ function Card({ driver, team, ds, raceState, onRetire }: { driver: Driver; team:
           {COMPOUNDS.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
         </select>
       )}
+
+      {tyreTel && <TyreTelemetry driver={driver} ds={ds} raceState={raceState} />}
+      {/* Live every lap now that the projection is instant; only hidden under fast-forward's tight loop. */}
+      {raceEng && raceState.speed !== 5 && <RaceEngineer driver={driver} raceState={raceState} mode="racing" />}
 
       <button onClick={() => onRetire(driver.id)} className="self-start text-[10px] uppercase tracking-widest text-[#DC143C]/80 hover:text-[#DC143C]">Retire car</button>
     </div>
@@ -134,6 +172,7 @@ export default function PitWallPanel({ drivers, teams, states, raceState, onReti
             team={teams.find((t) => t.id === d.teamId)}
             ds={states.find((s) => s.driverId === d.id)}
             raceState={raceState}
+            allDrivers={drivers}
             onRetire={onRetire}
           />
         ))

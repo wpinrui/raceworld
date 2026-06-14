@@ -40,6 +40,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
   const aeroPerRace = talents['chief-aero'] ? 1.25 : 0
 
   const [pendingSwitch, setPendingSwitch] = useState<{ cycle: number; name: string } | null>(null)
+  const [confirmCancel, setConfirmCancel] = useState(false)
 
   // A fresh set of four named packages per development offer. The offer index = the player's delivered
   // upgrades this season, so the four options hold steady while one is in progress and refresh after each
@@ -115,11 +116,34 @@ export function DevCyclePicker({ className }: { className?: string }) {
 
       <p className="mt-3 text-xs text-[#FFFFFF]">
         {!active
-          ? 'No upgrade in development. The car will not improve while idle.'
+          ? 'No upgrade in development.'
           : arrivalName
             ? <>In development: {devPlan!.pendingPackageName ?? 'an upgrade'}. Arrives {arrivalName} (Round {arrivalRound})</>
             : <>In development: {devPlan!.pendingPackageName ?? 'an upgrade'}. Arrives next season</>}
       </p>
+
+      {active && (
+        <button
+          onClick={() => setConfirmCancel(true)}
+          className="mt-3 px-3 py-1.5 rounded-lg bg-[#2A3142] text-xs font-semibold uppercase tracking-wide text-[#DC143C] hover:bg-[#303848] transition-colors"
+        >
+          Cancel current upgrade
+        </button>
+      )}
+
+      {confirmCancel && (
+        <ConfirmModal
+          title="Cancel upgrade"
+          body="Scraps the work on your current upgrade."
+          confirmLabel="Scrap upgrade"
+          confirmClass="bg-[#DC143C] hover:bg-[#B01030] text-[#FFFFFF]"
+          onConfirm={() => {
+            useSeasonStore.getState().setPlayerUpgrade(null)
+            setConfirmCancel(false)
+          }}
+          onCancel={() => setConfirmCancel(false)}
+        />
+      )}
 
       {pendingSwitch && (
         <ConfirmModal

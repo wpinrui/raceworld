@@ -11,7 +11,7 @@ import type {
 } from './types'
 import { getMoistureAtLap } from './weather'
 import { raceConditions } from './race-conditions'
-import { computeTyreLife, wearTyre, recommendTyre } from './tyres'
+import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
 import { computeLapTime } from './engine'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
@@ -233,6 +233,9 @@ export function simulateLap(
   circuit: Circuit,
   year: number,
   godModeActions?: GodModeAction[],
+  // Forecasts (Race Engineer Mode) set this so rivals plan 1-stops only — skipping the exhaustive 2-stop
+  // search that makes runs slow above 40 laps. The live race leaves it false for full-fidelity strategy.
+  fastStrategy = false,
 ): RaceState {
   const driverMap = new Map<string, Driver>(drivers.map((d) => [d.id, d]))
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
@@ -345,6 +348,7 @@ export function simulateLap(
       state.weather,
       state.weatherForecast,
       pitLoss,
+      !fastStrategy,
     )
     current = { ...current, targetPitLap: plan.targetPitLap, targetNextCompound: plan.targetNextCompound }
 
@@ -490,7 +494,7 @@ export function simulateLap(
     }
 
     // 2h. Degrade tyre — dirty air (running within ~1s of the car ahead) wears it a touch faster.
-    const newCondition = wearTyre(current.currentTyre, gapToCarAhead < 1.0 ? 1.1 : 1)
+    const newCondition = wearTyre(current.currentTyre, gapToCarAhead < 1.0 ? DIRTY_AIR_WEAR_MULT : 1)
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },

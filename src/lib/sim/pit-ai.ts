@@ -186,6 +186,10 @@ export function planStrategy(
   weather: WeatherPoint[],
   forecast: WeatherPoint[],
   pitCost: number, // era pit-lane loss (issue #101); same source the runtime applies
+  // The 2-stop search is exhaustive (~cubic in laps remaining) and only runs above 40 laps — by far the
+  // hottest path. Forecasts (Race Engineer Mode) pass false to skip it: rivals plan 1-stops only, which keeps
+  // every forecast run fast regardless of laps remaining. The live race always passes true (full fidelity).
+  twoStop = true,
 ): StrategyPlan {
   const lapsRemaining = totalLaps - currentLap
   if (lapsRemaining <= 1) {
@@ -224,8 +228,8 @@ export function planStrategy(
     }
   }
 
-  // 2-stop (longer races only)
-  if (lapsRemaining >= 40) {
+  // 2-stop (longer races only; skipped in fast/forecast mode — the dominant cost)
+  if (twoStop && lapsRemaining >= 40) {
     for (let p1 = 3; p1 <= lapsRemaining - 6; p1++) {
       const s1 = stintCost(p1, currentLap, currentCompound, bucketedCondition, belief, smoothness, currentLap, projMoisture)
       for (let p2 = p1 + 3; p2 <= lapsRemaining - 3; p2++) {

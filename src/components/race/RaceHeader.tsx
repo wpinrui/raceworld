@@ -3,7 +3,6 @@
 import type { RacePhase, RaceState } from '@/lib/sim/types'
 import type { Circuit } from '@/lib/sim/types'
 import { WeatherGraph } from './WeatherGraph'
-import { pitLaneLoss } from '@/lib/sim/pit-loss'
 
 interface Props {
   phase: RacePhase
@@ -37,10 +36,12 @@ export function RaceHeader({
             )}
           </>
         ) : (
-          <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name ?? '—'}</span>
-        )}
-        {raceState && (
-          <span className="text-xs text-[#FFFFFF]">Pit loss ~{Math.round(pitLaneLoss(raceState.year))}s</span>
+          <>
+            <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name ?? '—'}</span>
+            {(raceState?.totalLaps ?? currentCircuit?.laps) != null && (
+              <span className="text-xs text-[#FFFFFF]">{raceState?.totalLaps ?? currentCircuit?.laps} laps</span>
+            )}
+          </>
         )}
       </div>
 

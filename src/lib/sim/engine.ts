@@ -43,6 +43,10 @@ const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in ra
 const HOLD_GAP = 0.3          // s: a car that can't get by harries around this far behind, tyres cooking
 const HOLD_JITTER = 0.3       // s: spread on the harry distance so a train isn't a column of identical +0.300s
 
+// Same tunables, exported so the deterministic race projector (race-projector.ts) resolves traffic with the
+// engine's exact numbers — its only difference is replacing the per-lap random pass roll with an accumulator.
+export const TRAFFIC = { DIRTY_RANGE, MAX_DIRTY, SLIPSTREAM, STRIKE_RANGE, PASS_MARGIN, OVERTAKE_SENS, MAX_CONTEST, ATTACKER_PENALTY, DEFENDER_PENALTY, HOLD_GAP } as const
+
 export function computeLapTime(input: LapInput): LapResult {
   const {
     driver,

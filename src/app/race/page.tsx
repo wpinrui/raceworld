@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
+import { recommendPitNow } from '@/lib/sim/race-projector'
 import { actionGetDriverCareers } from '@/lib/news/actions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import RaceTable from '@/components/race/RaceTable'
@@ -55,6 +57,11 @@ export default function RacePage() {
   const [lapProgress, setLapProgress] = useState(0)
   // Team Manager: the pre-race upgrade reveal shows once per upgrade; dismissing latches this round.
   const [acknowledgedRound, setAcknowledgedRound] = useState<number | null>(null)
+  // Race Engineer auto-pit (lower bar): play at the chosen speed but pause when a car should box.
+  const raceEngineerTalent = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
+  const [autoAdvance, setAutoAdvance] = useState(false)
+  const [pitAlert, setPitAlert] = useState<string | null>(null)
+  const autoAdvanceRef = useRef(false)
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextTickAtRef = useRef<number>(0)
@@ -143,12 +150,9 @@ export default function RacePage() {
     return () => { cancelled = true }
   }, [phase, paused, speed, ffConfirmed])
 
+  // Normal real-time tick. Stands down while Race Engineer Mode is on (that effect drives the ticking).
   useEffect(() => {
-    if (phase !== 'racing' || speed === 5) {
-      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
-      return
-    }
-    if (paused) {
+    if (phase !== 'racing' || speed === 5 || autoAdvance || paused) {
       if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
       return
     }
@@ -159,12 +163,47 @@ export default function RacePage() {
       tickTimerRef.current = setTimeout(() => {
         doTickRef.current()
         const s = useRaceStore.getState().raceState
-        if (s?.phase === 'racing' && !s.paused && s.speed !== 5) schedule(SPEED_INTERVALS[s.speed as SimSpeed])
+        if (s?.phase === 'racing' && !s.paused && s.speed !== 5 && !autoAdvanceRef.current) schedule(SPEED_INTERVALS[s.speed as SimSpeed])
       }, delay)
     }
     schedule(remaining)
     return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
-  }, [phase, paused, speed])
+  }, [phase, paused, speed, autoAdvance])
+
+  useEffect(() => { autoAdvanceRef.current = autoAdvance }, [autoAdvance])
+
+  // Race Engineer Mode: drive the race ourselves — project the current lap (instant, deterministic); if a car
+  // should box, pause and hand over, switching the mode off; otherwise step a lap, paced by the chosen speed,
+  // and repeat. setState only happens inside the async loop's callbacks, never synchronously in the effect body.
+  useEffect(() => {
+    if (!autoAdvance || phase !== 'racing' || paused || speed === 5) return
+    let cancelled = false
+    const loop = async () => {
+      while (!cancelled) {
+        const s = useRaceStore.getState().raceState
+        if (!s || s.phase !== 'racing' || s.paused) break
+        const { selectedCircuit, drivers: allDrivers, teams: allTeams } = useRaceStore.getState()
+        const playerIds = allDrivers.filter((d) => d.teamId === useSeasonStore.getState().playerTeamId).map((d) => d.id)
+        if (selectedCircuit && playerIds.length) {
+          const rec = recommendPitNow(s, allDrivers, allTeams, selectedCircuit, s.year, playerIds)
+          if (rec) {
+            useRaceStore.getState().setPaused(true)
+            setPitAlert(`Box ${allDrivers.find((d) => d.id === rec.driverId)?.name ?? 'Car'} → ${rec.compound.toUpperCase()}`)
+            setAutoAdvance(false)
+            return
+          }
+        }
+        doTickRef.current() // advance a lap...
+        await new Promise((r) => setTimeout(r, SPEED_INTERVALS[(useRaceStore.getState().raceState?.speed as SimSpeed) ?? speed])) // ...paced by the chosen speed
+      }
+    }
+    loop()
+    return () => { cancelled = true }
+  }, [autoAdvance, phase, paused, speed])
+
+  // Paused-moment callout; clear it the instant the race is running again. Adjusting state during render
+  // (guarded so it can't loop) is React's sanctioned pattern and keeps it out of effects.
+  if (!paused && pitAlert !== null) setPitAlert(null)
 
   useEffect(() => {
     if (phase !== 'racing' || paused || speed === 5) {
@@ -259,7 +298,7 @@ export default function RacePage() {
             <TrackMap clockRef={qe.clockRef} schedule={qe.schedule} rows={qe.rows} drivers={drivers} teams={teams} />
           ) : (
             <>
-              <div className="h-[45%] min-h-0 flex border-b border-[#2A3142] overflow-hidden">
+              <div className="h-1/3 min-h-0 flex border-b border-[#2A3142] overflow-hidden">
                 <div className="w-1/2 min-h-0 p-4 border-r border-[#2A3142] flex flex-col overflow-hidden">
                   <CommentaryFeed entries={raceState?.commentary ?? []} />
                 </div>
@@ -274,7 +313,7 @@ export default function RacePage() {
                   />
                 </div>
               </div>
-              <div className="h-[55%] min-h-0 p-4 overflow-y-auto">
+              <div className="h-2/3 min-h-0 p-4 overflow-y-auto">
                 {raceState && phase === 'racing' ? (
                   season.teamManagerMode ? (
                     <PitWallPanel
@@ -312,6 +351,10 @@ export default function RacePage() {
           speed={speed} paused={paused}
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
+          showAutoAdvance={season.teamManagerMode && raceEngineerTalent}
+          autoAdvance={autoAdvance}
+          onToggleAutoAdvance={() => setAutoAdvance((v) => !v)}
+          pitAlert={pitAlert}
         />
       )}
 

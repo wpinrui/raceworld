@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { useHydrated } from '@/lib/ui/use-hydrated'
-import { Star, SlidersHorizontal, Handshake, Flame, Telescope, BarChart3, CloudSun, Wrench, Wind, type LucideIcon } from 'lucide-react'
+import { Star, SlidersHorizontal, Handshake, Flame, Telescope, BarChart3, CloudSun, Wrench, Wind, Gauge, Radio, type LucideIcon } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore, DEFAULT_INTERRUPT_CATEGORIES } from '@/lib/store/settings-store'
 import { NEWS_FILTERS } from '@/lib/news/engine'
@@ -12,7 +12,7 @@ import { simUntilYear } from '@/lib/sim/sim-until-year'
 import { TALENTS } from '@/lib/team-manager'
 import { Tooltip } from '@/components/ui/Tooltip'
 
-const TALENT_ICONS: Record<string, LucideIcon> = { SlidersHorizontal, Handshake, Flame, Telescope, BarChart3, CloudSun, Wrench, Wind }
+const TALENT_ICONS: Record<string, LucideIcon> = { SlidersHorizontal, Handshake, Flame, Telescope, BarChart3, CloudSun, Wrench, Wind, Gauge, Radio }
 
 // Player settings for the "Continue" loop: which news interrupts the sim, plus the drivers/teams
 // you follow (any story mentioning them interrupts too). Reached from the top-right overflow menu.
