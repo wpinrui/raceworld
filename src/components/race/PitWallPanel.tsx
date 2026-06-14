@@ -144,7 +144,8 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire }: { driver: D
       )}
 
       {tyreTel && <TyreTelemetry driver={driver} ds={ds} raceState={raceState} />}
-      {raceEng && raceState.paused && <RaceEngineer driver={driver} raceState={raceState} mode="racing" />}
+      {/* Live every lap now that the projection is instant; only hidden under fast-forward's tight loop. */}
+      {raceEng && raceState.speed !== 5 && <RaceEngineer driver={driver} raceState={raceState} mode="racing" />}
 
       <button onClick={() => onRetire(driver.id)} className="self-start text-[10px] uppercase tracking-widest text-[#DC143C]/80 hover:text-[#DC143C]">Retire car</button>
     </div>
