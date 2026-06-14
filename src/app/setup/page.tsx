@@ -14,7 +14,7 @@ import { TeamLink } from '@/components/world/EntityLink'
 import { composeSeason, historyYears, DEFAULT_START_YEAR, lastDriverEntryYear } from '@/lib/history/compose'
 import { useSetupCta } from '@/lib/store/setup-cta'
 import { calendarForYear } from '@/data/calendars'
-import { simUntilYear } from '@/lib/sim/sim-until-year'
+import { simUntilYear, simToNextSigningDay } from '@/lib/sim/sim-until-year'
 import { SimulatingWorldModal } from '@/components/SimulatingWorldModal'
 import { TeamManagerSetup, type TmSelection } from '@/components/setup/TeamManagerSetup'
 import { DriverSetup, type DriverSelection } from '@/components/setup/DriverSetup'
@@ -237,7 +237,7 @@ export default function SetupPage() {
   async function startDriverCareer(sel: NonNullable<DriverSelection>) {
     const { driver, entryYear, resetRealWorld } = sel
     cancelSimRef.current = false
-    setRacesTotal(racesBetween(startYear, entryYear))
+    setRacesTotal(racesBetween(startYear, entryYear + 1)) // includes the sit-out entry year, simmed to its signing day
     setSimulating(true)
     const start = composeSeason(startYear)
     if (!start) { setSimulating(false); setImportError(`No historical data for ${startYear}`); return }
@@ -257,6 +257,10 @@ export default function SetupPage() {
     // Auto-follow yourself so your own news interrupts the sim (toggleable later in Settings). Added once at
     // career start; if the player unfollows themselves, it isn't forced back on.
     if (!useSettingsStore.getState().followedDriverIds.includes(driver.id)) useSettingsStore.getState().toggleFollowDriver(driver.id)
+    // You sit out the entry year, so auto-sim straight through it to ITS signing day — that's the point of
+    // entry (you get offered a seat for next year). Landing at the start of a season you don't even race in
+    // and making the player click through it would be pointless.
+    await simToNextSigningDay(() => cancelSimRef.current)
     useRaceStore.getState().resetSession()
     setSimulating(false)
     router.push('/home')
