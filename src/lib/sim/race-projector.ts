@@ -164,15 +164,20 @@ export interface PitRecommendation {
 }
 
 // The player's OWN strategy is taken as god-mode optimal: planStrategy on the race's true deltas/life gives
-// the stops AFTER the first stint, for a tyre fitted now at the given condition.
-function optimalStops(state: RaceState, circuit: Circuit, year: number, driver: Driver, startCompound: TyreCompound, startCondition: number): ProjStop[] {
+// the stops AFTER the first stint, for a tyre fitted now at the given condition. `actualMaxLife` (the current
+// set's exact life) overrides the average for the starting compound — without it, a lucky long-life set is
+// planned with a needless stop, so "stay out" is mis-rated as slow and the model over-recommends boxing.
+// Pit-now options omit it: a fresh set really is a gamble at the race-average life.
+function optimalStops(state: RaceState, circuit: Circuit, year: number, driver: Driver, startCompound: TyreCompound, startCondition: number, actualMaxLife?: number): ProjStop[] {
+  const belief = truthBelief(state.compoundDeltas, state.tyreBaseLife, state.totalLaps)
+  if (actualMaxLife) {
+    // planStrategy multiplies baseWearRate by (0.5 + smoothness/100), so divide it out to land on the set's
+    // true per-lap drop (100 / maxLifeLaps).
+    belief[startCompound] = { ...belief[startCompound], baseWearRate: 100 / actualMaxLife / (0.5 + driver.smoothness / 100) }
+  }
   // Full planner (2-stop aware): the player's own plan must be optimal or "stay out" is mis-rated in a
   // genuine 2-stop race. It's only a handful of calls per evaluation, not per-car-per-lap.
-  const plan = planStrategy(
-    state.currentLap, state.totalLaps, startCondition, startCompound, driver.smoothness,
-    truthBelief(state.compoundDeltas, state.tyreBaseLife, state.totalLaps),
-    state.weather, state.weatherForecast, pitLaneLoss(year),
-  )
+  const plan = planStrategy(state.currentLap, state.totalLaps, startCondition, startCompound, driver.smoothness, belief, state.weather, state.weatherForecast, pitLaneLoss(year))
   return plan.stints.slice(1).map((s) => ({ lap: s.fromLap, compound: s.compound }))
 }
 
@@ -195,10 +200,11 @@ export function evaluatePitOptions(
 
   const results: PitOption[] = candidates.map((candidate) => {
     const isPit = candidate.kind === 'pit'
-    // pit-now: optimal plan for the fresh compound fitted now; stay: optimal plan from the current tyre.
+    // pit-now: optimal plan for the fresh compound (average life — a new set is a gamble). stay: optimal plan
+    // from the current tyre, using THIS set's known exact life so a durable set isn't given a phantom stop.
     const stops = isPit
       ? optimalStops(state, circuit, year, driver, candidate.compound, 100)
-      : optimalStops(state, circuit, year, driver, ds.currentTyre.compound, ds.currentTyre.condition)
+      : optimalStops(state, circuit, year, driver, ds.currentTyre.compound, ds.currentTyre.condition, ds.currentTyre.maxLifeLaps)
     const { order, playerHeldLaps } = projectRace(state, driverMap, teamMap, circuit, year, playerId, stops, isPit ? candidate.compound : null)
     const idx = order.findIndex((o) => o.driverId === playerId)
     return { candidate, finishPosition: idx + 1, finishTime: order[idx]?.totalTime ?? Infinity, deltaVsBaseline: 0, heldLaps: playerHeldLaps }

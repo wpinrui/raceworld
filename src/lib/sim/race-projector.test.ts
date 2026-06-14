@@ -63,6 +63,16 @@ describe('evaluatePitOptions', () => {
     for (const o of opts) if (o.candidate.kind === 'pit') expect(o.deltaVsBaseline).toBeGreaterThan(0) // every pit loses time
   })
 
+  it('a durable (lucky) set near the end is told to STAY OUT, not given a phantom stop', () => {
+    const s = racingState(2)
+    const currentLap = CIRCUIT.laps - 14 // 14 laps to go
+    // d1 leads on a soft that's only half-worn but has a very long-life set — it easily reaches the flag.
+    const drivers = s.drivers.map((d) => (d.driverId === 'd1' ? { ...d, currentTyre: { compound: 'soft' as const, condition: 50, maxLifeLaps: 500 } } : d))
+    const opts = evaluatePitOptions({ ...s, currentLap, drivers }, DRIVERS, TEAMS, CIRCUIT, 2025, 'd1')
+    expect(opts[0].candidate.kind).toBe('hold') // staying out is best (the bug recommended boxing)
+    expect(opts.find((o) => o.candidate.kind === 'pit')!.deltaVsBaseline).toBeGreaterThan(0) // pitting loses time
+  })
+
   it('a near-dead tyre with no planned stop is told to BOX (pitting beats riding the cliff)', () => {
     const s = racingState(2)
     // Player on a dying tyre and the AI plan says no stop → "stay out" means riding it to the flag (cliff).
