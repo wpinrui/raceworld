@@ -62,9 +62,13 @@ function tintAlpha(r: number, g: number, b: number): number {
   return 0.12 + (1 - lum) * 0.14 // 0.12 for bright colours, up to ~0.26 for dark ones
 }
 
-export function teamHighlightStyle(color: string): { backgroundColor: string; boxShadow: string } {
+// `light` is a softer version of the same accent (thinner, translucent bar + ~half the tint) — used in
+// Driver mode for your TEAMMATE's row, so your own row stays the strong accent and theirs reads as related.
+export function teamHighlightStyle(color: string, light = false): { backgroundColor: string; boxShadow: string } {
   const [r, g, b] = hexToRgb(color)
-  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${tintAlpha(r, g, b).toFixed(3)})`, boxShadow: `inset 3px 0 0 ${color}` }
+  const a = tintAlpha(r, g, b) * (light ? 0.45 : 1)
+  const bar = light ? `inset 2px 0 0 rgba(${r}, ${g}, ${b}, 0.5)` : `inset 3px 0 0 ${color}`
+  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`, boxShadow: bar }
 }
 
 // Opaque equivalent of the row tint, for sticky cells that need a solid background (they'd otherwise let
