@@ -75,6 +75,10 @@ interface SeasonStore {
   // player's to make. null playerTeamId / false mode = the classic sandbox (everything below is gated on it).
   teamManagerMode: boolean
   playerTeamId: string | null
+  // Driver mode: the player IS one driver (playerDriverId) — a free agent who gets signed on signing day,
+  // then races their own car. Mutually exclusive with teamManagerMode.
+  driverMode: boolean
+  playerDriverId: string | null
   // Start-of-season gate: true once the player has acted on the team changes taking effect NEXT season
   // (Apply, with whatever overrides). Surfaced when a season begins; reset each time a season starts.
   realWorldChangesResolved: boolean
@@ -133,6 +137,7 @@ interface SeasonStore {
   setCurrentDate: (date: string) => void
   setRealWorldMode: (on: boolean) => void
   setTeamManager: (mode: boolean, playerTeamId: string | null) => void
+  setDriver: (mode: boolean, playerDriverId: string | null) => void
   // Team Manager: start the player's next car upgrade on the given cycle (3–6 races), recording the chosen
   // package name. cycle null = no development (the plan goes idle until the player picks again).
   setPlayerUpgrade: (cycle: number | null, packageName?: string) => void
@@ -185,6 +190,8 @@ export const useSeasonStore = create<SeasonStore>()(
       realWorldMode: false,
       teamManagerMode: false,
       playerTeamId: null,
+      driverMode: false,
+      playerDriverId: null,
       pendingPlayerDraft: null,
       pendingPlayerRenewals: [],
       realWorldChangesResolved: false,
@@ -284,6 +291,8 @@ export const useSeasonStore = create<SeasonStore>()(
       setRealWorldMode: (on) => set({ realWorldMode: on }),
 
       setTeamManager: (mode, playerTeamId) => set({ teamManagerMode: mode, playerTeamId: mode ? playerTeamId : null }),
+
+      setDriver: (mode, playerDriverId) => set({ driverMode: mode, playerDriverId: mode ? playerDriverId : null }),
 
       setPlayerUpgrade: (cycle, packageName) => {
         const { playerTeamId, devPlans, teams, currentRound } = get()
@@ -996,6 +1005,8 @@ export const useSeasonStore = create<SeasonStore>()(
         realWorldMode: state.realWorldMode,
         teamManagerMode: state.teamManagerMode,
         playerTeamId: state.playerTeamId,
+        driverMode: state.driverMode,
+        playerDriverId: state.playerDriverId,
         realWorldChangesResolved: state.realWorldChangesResolved,
         // MUST persist alongside `resolved`: it holds WHAT was approved at the season opener and is
         // applied at the season-end rollover. Persisting `resolved` without this dropped the approved

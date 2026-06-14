@@ -1,5 +1,5 @@
 import type { Driver, Team } from '@/lib/sim/types'
-import { overall, OVERALL_WEIGHTS, DEVELOP_RATES, DECLINE_RATES } from '@/lib/sim/progression'
+import { overall, OVERALL_WEIGHTS, DEVELOP_RATES, stepRaceMedian, RACES_PER_SEASON } from '@/lib/sim/progression'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
 import type { HistoricalDriver } from '@/data/history/types'
@@ -9,33 +9,12 @@ import type { HistoricalDriver } from '@/data/history/types'
 // engine's race-by-race development curve (src/lib/sim/progression.ts), so the same start year always
 // composes the same grid. From the start year on, the live engine takes over and history diverges.
 
-const RACES_PER_SEASON = 22 // rough average 1996-2026; only used to pace the deterministic projection
 type Stats = { pace: number; wetWeatherPace: number; overtaking: number; smoothness: number; consistency: number }
 const STAT_KEYS: (keyof Stats)[] = ['pace', 'wetWeatherPace', 'overtaking', 'smoothness', 'consistency']
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-// Expected-value (no-RNG) version of one applyRaceProgression tick for a single driver.
-// Keep the 15 here in step with progression.ts (races-to-potential pacing of the development curve).
-function stepRace(stats: Stats, age: number, peakPotential: number, primeEnd: number, declineRate: number): Stats {
-  // Mirror the live plateau check: all five rated stats (consistency included) grow until overall
-  // reaches peakPotential, the same point applyRaceProgression would stop (issue #59).
-  const ov = overall(stats)
-  const next = { ...stats }
-  if (age < primeEnd) {
-    if (ov >= peakPotential) return stats
-    const yearsTillPrime = Math.max(0.001, primeEnd - age)
-    const racesToPotential = Math.max(1, 15 * yearsTillPrime)
-    const gap = peakPotential - ov
-    const gain = Math.min(gap, (gap / racesToPotential) * 1.5) // per-race median
-    // Per-attribute develop rates (#66), shared with live progression so composed grids match.
-    for (const k of STAT_KEYS) next[k] = Math.min(100, round1(stats[k] + gain * DEVELOP_RATES[k]))
-  } else {
-    // Per-driver declineRate damps the acceleration (#87); at 1 this equals the original 0.04·(age−primeEnd+1).
-    const declineMedian = 0.04 * (1 + (age - primeEnd) * declineRate)
-    for (const k of STAT_KEYS) next[k] = Math.max(20, round1(stats[k] - declineMedian * DECLINE_RATES[k]))
-  }
-  return next
-}
+// The deterministic per-race development tick (median, no RNG) now lives in progression.ts as stepRaceMedian,
+// shared so composed grids and the driver-creation career-arc preview stay in step.
 
 // Neutral placeholders for any rating not yet signed off, so bios can be encoded before the ratings
 // pass. A driver with no ratings projects as a generic midfielder.
@@ -89,7 +68,7 @@ export function projectToYear(h: HistoricalDriver, targetYear: number): { stats:
   stats = retuneEntry(stats, peakOf(h), primeEndOf(h), h.ageAtEntry)
   let age = h.ageAtEntry
   for (let y = h.marketEntryYear; y < targetYear; y++) {
-    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRace(stats, age, peakOf(h), primeEndOf(h), declineRateOf(h))
+    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRaceMedian(stats, age, peakOf(h), primeEndOf(h), declineRateOf(h))
     age += 1
   }
   return { stats, age }
