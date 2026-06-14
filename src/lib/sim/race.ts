@@ -7,18 +7,32 @@ import type {
   QualifyingResult,
   QualifyingSessionResult,
   GodModeAction,
+  DriverPaceMode,
   TyreState,
 } from './types'
 import { getMoistureAtLap } from './weather'
 import { raceConditions } from './race-conditions'
 import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
-import { computeLapTime } from './engine'
+import { computeLapTime, TRAFFIC } from './engine'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
 import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
 import { perLapTechnicalDNF, sampleTechnicalFailure } from './reliability'
+
+// Driver-mode pace tools (#driver-mode), applied to the player's EFFECTIVE lap time only — clean-air pace
+// (freeAir) is left untouched, so a car behind always gates its overtake on honest pace, never the slowed lap.
+//   Defend: hold the gap to the car ahead at >= DIRTY_RANGE + buffer (+ positive-only noise), so you sit
+//   just outside its dirty air and keep clean-air pace. The buffer + one-sided noise guarantee the gap can
+//   only ever grow, never dip back into dirty-air range.
+//   Back-off: cruise +2s/lap for roughly half the tyre wear — a deliberately sub-optimal "nurse the tyre to
+//   the flag / squeeze a few more laps" tool (a stop is ~25s, so +2s/lap self-limits to end-of-stint).
+const { DIRTY_RANGE } = TRAFFIC // the engine's dirty-air radius, reused so defend's floor tracks it
+const DEFEND_BUFFER = 0.4      // s: clearance kept beyond DIRTY_RANGE
+const DEFEND_NOISE = 0.2       // s: one-sided (positive only) jitter on the held gap
+const BACKOFF_PENALTY = 2.0    // s/lap added when backing off
+const BACKOFF_WEAR_MULT = 0.5  // tyre wears at this fraction of normal while backing off (sim-tune 0.4-0.6)
 
 // Roll each driver's pre-race form. The roll mean is set by the driver's confidence
 // (2 + 0.6c, so c=5 -> mean 5), sampled Normal(mean, 1.8) clamped to [0, 10] (issue #58).
@@ -236,6 +250,8 @@ export function simulateLap(
   // Forecasts (Race Engineer Mode) set this so rivals plan 1-stops only — skipping the exhaustive 2-stop
   // search that makes runs slow above 40 laps. The live race leaves it false for full-fidelity strategy.
   fastStrategy = false,
+  // Driver mode: per-driver pace tool (defend / back-off). Only the player carries a non-normal mode.
+  driverModes?: Record<string, DriverPaceMode>,
 ): RaceState {
   const driverMap = new Map<string, Driver>(drivers.map((d) => [d.id, d]))
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
@@ -303,6 +319,7 @@ export function simulateLap(
     // Resolve driver/team early — needed for pit AI and lap time
     const driver = driverMap.get(current.driverId)!
     const team = teamMap.get(driver.teamId)!
+    const paceMode: DriverPaceMode = driverModes?.[current.driverId] ?? 'normal'
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
     // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (collision-damage DNF),
@@ -456,12 +473,24 @@ export function simulateLap(
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
     })
 
-    const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
+    // Driver-mode pace tools shape the EFFECTIVE lap time (freeAir is left alone above). Defend backs off to
+    // hold the gap to the car ahead outside its dirty air — clamp UP only, never a free gain. When defending
+    // the player isn't attacking, so any pass/crash the engine rolled this lap is suppressed below.
+    const defending = paceMode === 'defend' && carAheadLapTime !== null && Number.isFinite(gapToCarAhead)
+    let effLapTime = lapResult.lapTime
+    if (defending && carAheadLapTime !== null) {
+      const targetGap = DIRTY_RANGE + DEFEND_BUFFER + Math.random() * DEFEND_NOISE
+      effLapTime = Math.max(effLapTime, carAheadLapTime + targetGap - gapToCarAhead)
+    }
+    const backoffPenalty = paceMode === 'backoff' ? BACKOFF_PENALTY : 0
+
+    const finalLapTime = effLapTime + pitPenalty + mistakeTimeLoss + backoffPenalty
     lapTimesThisLap.set(current.driverId, finalLapTime)
     freeAirThisLap.set(current.driverId, lapResult.freeAir)
 
     // 2f. Overtake collision (issue #60): retire whoever the crash took out, reason 'collision-damage'.
-    if (lapResult.crash?.happened && carAheadState) {
+    // A defending player has lifted off and isn't contesting, so the engine's pass/crash roll doesn't apply.
+    if (lapResult.crash?.happened && carAheadState && !defending) {
       if (lapResult.crash.defender) {
         const ahead = updatedStates.get(carAheadState.driverId)
         if (ahead && !ahead.retired) {
@@ -477,7 +506,7 @@ export function simulateLap(
 
     // 2g. If overtook: swap positions with the car ahead, and the overtaken car loses time too (the fight
     // costs both). The defender penalty also drives the cascade — the next car back then sees it slower.
-    if (lapResult.overtook && carAheadState) {
+    if (lapResult.overtook && carAheadState && !defending) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
       const pen = lapResult.defenderPenalty ?? 0
       const aheadLaps = pen > 0 && aheadUpdated.lapTimes.length
@@ -493,8 +522,10 @@ export function simulateLap(
       current = { ...current, position: aheadUpdated.position }
     }
 
-    // 2h. Degrade tyre — dirty air (running within ~1s of the car ahead) wears it a touch faster.
-    const newCondition = wearTyre(current.currentTyre, gapToCarAhead < 1.0 ? DIRTY_AIR_WEAR_MULT : 1)
+    // 2h. Degrade tyre — dirty air (running within ~1s of the car ahead) wears it a touch faster; backing
+    // off cruises at a fraction of the normal wear (the point of the tool).
+    const wearMult = (gapToCarAhead < 1.0 ? DIRTY_AIR_WEAR_MULT : 1) * (paceMode === 'backoff' ? BACKOFF_WEAR_MULT : 1)
+    const newCondition = wearTyre(current.currentTyre, wearMult)
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },

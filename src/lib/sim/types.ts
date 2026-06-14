@@ -173,6 +173,11 @@ export interface GodModeAction {
   compound?: TyreCompound  // used with force-pit
 }
 
+// Driver mode in-race pace tool, per driver (#driver-mode). 'normal' = race as usual; 'defend' = back off
+// to hold station just outside the car-ahead's dirty air (clean-air pace preserved, so you stay hard to
+// pass); 'backoff' = cruise +2s/lap for roughly half the tyre wear, to nurse a stint longer.
+export type DriverPaceMode = 'normal' | 'defend' | 'backoff'
+
 // --- Season / standings types ---
 
 export type SeasonPhase =
