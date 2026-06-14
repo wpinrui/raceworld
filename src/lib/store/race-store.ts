@@ -77,13 +77,18 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const { godModeDriverId } = get()
     // Keep selection if the driver is still on the grid, otherwise clear
     const stillExists = godModeDriverId && drivers.some((d) => d.id === godModeDriverId)
+    // Driver mode: you call your own stops, so your car starts on HOLD (the AI won't pit you behind your
+    // back); every other car (and all of Team Manager / sandbox) starts on auto.
+    const { driverMode, playerDriverId } = useSeasonStore.getState()
+    const pitCommands: Record<string, PitCommand> =
+      driverMode && playerDriverId && drivers.some((d) => d.id === playerDriverId) ? { [playerDriverId]: 'hold' } : {}
     set({
       drivers: drivers.map(toRaceDriver),
       teams: teams.map((t) => ({ ...t })),
       selectedCircuit: circuit,
       forms: applyPeakForm(rollForms(drivers), drivers),
       godModeDriverId: stillExists ? godModeDriverId : null,
-      pitCommands: {},
+      pitCommands,
       driverModes: {},
     })
   },
