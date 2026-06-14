@@ -479,7 +479,11 @@ export function simulateLap(
     const defending = paceMode === 'defend' && carAheadLapTime !== null && Number.isFinite(gapToCarAhead)
     let effLapTime = lapResult.lapTime
     if (defending && carAheadLapTime !== null) {
-      const targetGap = DIRTY_RANGE + DEFEND_BUFFER + Math.random() * DEFEND_NOISE
+      // One-sided positive jitter so the held gap is never a robotic constant, derived deterministically
+      // from the car-ahead's lap time (which already varies lap to lap) rather than a fresh RNG draw — so
+      // choosing to defend never shifts the field's random sequence and butterflies an unrelated outcome.
+      const jitter = Math.abs(carAheadLapTime) % DEFEND_NOISE
+      const targetGap = DIRTY_RANGE + DEFEND_BUFFER + jitter
       effLapTime = Math.max(effLapTime, carAheadLapTime + targetGap - gapToCarAhead)
     }
     const backoffPenalty = paceMode === 'backoff' ? BACKOFF_PENALTY : 0

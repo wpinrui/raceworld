@@ -15,9 +15,14 @@ export function DriverSigningBoard() {
   const pdo = useSeasonStore((s) => s.pendingDriverOffer)
   const respond = useSeasonStore((s) => s.driverOfferRespond)
   const [want, setWant] = useState<number | null>(null)
+  // Reset the counter whenever a fresh offer (a new seat) arrives, so a length picked for a declined offer
+  // doesn't carry over. Adjusting state off the previous value during render is React's prescribed
+  // "reset on prop change" pattern (the project lints against setState inside an effect).
+  const [shownRank, setShownRank] = useState<number | null>(null)
 
   if (!pdo) return null
   const { offer, cursor, seats } = pdo
+  if (offer.seatRank !== shownRank) { setShownRank(offer.seatRank); setWant(null) }
   const filled = cursor.picks // seats decided above you, in order
   const proposeYears = want ?? offer.offeredYears
   const delta = Math.abs(proposeYears - offer.offeredYears)
