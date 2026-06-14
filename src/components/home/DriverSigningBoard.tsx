@@ -34,10 +34,6 @@ export function DriverSigningBoard() {
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <p className="text-sm text-[#FFFFFF] shrink-0">
-        A seat is on the table. Accept it, haggle the length, or hold out for a later one (you keep your place in the pool).
-      </p>
-
       <div className="flex-1 min-h-0 grid gap-4 lg:grid-cols-[3fr_2fr]">
         {/* Seats: filled above you, your offer on the clock, the rest still open. */}
         <div className="flex flex-col min-h-0">
@@ -88,7 +84,7 @@ export function DriverSigningBoard() {
 
             {pdo.modifyRejected ? (
               <div className="space-y-2">
-                <p className="text-xs text-[#F59E0B]">They turned down your counter. Take the original {offer.offeredYears}-year deal, or decline the seat.</p>
+                <p className="text-xs text-[#F59E0B]">They turned down your counter.</p>
                 <div className="flex gap-2">
                   <button onClick={() => respond('accept')} className={PRIMARY}>Accept {offer.offeredYears}yr</button>
                   <button onClick={() => respond('decline')} className={GHOST}>Decline seat</button>
@@ -111,7 +107,7 @@ export function DriverSigningBoard() {
                   </div>
                 </div>
                 {delta > 0 && (
-                  <p className="text-xs text-[#FFFFFF]">Counter at {proposeYears}yr · <span className={rejectPct >= 30 ? 'text-[#DC143C]' : 'text-[#F59E0B]'}>{rejectPct}% they walk away</span> (then accept the original or decline).</p>
+                  <p className="text-xs text-[#FFFFFF]">Counter at {proposeYears}yr · <span className={rejectPct >= 30 ? 'text-[#DC143C]' : 'text-[#F59E0B]'}>{rejectPct}% they walk away</span></p>
                 )}
                 <div className="flex flex-wrap gap-2 pt-1">
                   {delta === 0 ? (
@@ -124,7 +120,6 @@ export function DriverSigningBoard() {
               </>
             )}
           </div>
-          <p className="text-[10px] text-[#FFFFFF] mt-2">Decline and you stay a free agent for the seats below, then into next year if none land.</p>
         </div>
       </div>
     </div>

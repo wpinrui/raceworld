@@ -62,7 +62,7 @@ export function DriverManagerPanel() {
           })()
         ) : (
           <div className={`${cardClass} h-full flex items-center`}>
-            <p className="text-sm text-[#FFFFFF]">{!team ? 'You have no seat yet — head-to-head opens once you race for a team.' : !teammate ? 'No teammate to compare against.' : 'Head-to-head opens after round one.'}</p>
+            <p className="text-sm text-[#FFFFFF]">{!team ? 'No seat yet.' : !teammate ? 'No teammate.' : 'Head-to-head opens after round one.'}</p>
           </div>
         )}
       </div>

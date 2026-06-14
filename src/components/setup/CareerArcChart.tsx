@@ -8,12 +8,13 @@ import { statColor } from './stat-utils'
 // (progression.ts projectOverallByAge — no RNG, so it redraws instantly as the creation sliders move). Rises
 // to the potential by the peak age, plateaus, then declines at a rate set by the longevity slider.
 //
-// The x-axis runs from the chosen entry age to min(AGE_CEILING, the age the median first dips below the
-// retire floor): a short-lived driver's chart ends where they fade, a long one runs out to the ceiling.
-// Hover anywhere to read off the numbers.
+// The x-axis runs from the chosen entry age to max(AGE_FLOOR, the age the median first dips below the retire
+// floor): a short career still draws out to 40, while a long-lived driver extends to wherever they finally
+// fade — never cut off at 40. Hover anywhere to read off the numbers.
 
-const AGE_CEILING = 40 // upper bound: nobody's projected past 40 here, even a freak who'd still be above the floor
-const RETIRE_FLOOR = 50 // OVR at/below which the driver is effectively done — the chart ends just past here
+const AGE_FLOOR = 40    // always draw out to at least here, even for a driver who's faded earlier
+const HARD_CAP = 55     // absolute ceiling so the projection terminates even for a freak who never dips
+const RETIRE_FLOOR = 50 // OVR at/below which the driver is effectively done — the chart ends at that dip
 
 export function CareerArcChart({
   driver,
@@ -23,11 +24,13 @@ export function CareerArcChart({
   const svgRef = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<number | null>(null)
 
-  const full = projectOverallByAge(driver, AGE_CEILING)
-  // Trim the flat tail: keep everything up to (and including) the first point at/under the retire floor, so
-  // the descent is visible but the dead years aren't. A driver who never fades by the ceiling shows in full.
-  const floorIdx = full.findIndex((p) => p.overall <= RETIRE_FLOOR)
-  const arc = floorIdx > 0 ? full.slice(0, floorIdx + 1) : full
+  const full = projectOverallByAge(driver, HARD_CAP)
+  // Upper bound = max(40, the age the median first dips below the floor): always out to 40, but extended to
+  // wherever a long-lived driver finally fades. (dipIdx 0 = already below at entry → treat as no dip.)
+  const dipIdx = full.findIndex((p) => p.overall <= RETIRE_FLOOR)
+  const dipAge = dipIdx > 0 ? full[dipIdx].age : HARD_CAP
+  const upperAge = Math.max(AGE_FLOOR, dipAge)
+  const arc = full.filter((p) => p.age <= upperAge)
 
   const minAge = arc[0].age
   const maxAge = arc[arc.length - 1].age

@@ -148,7 +148,7 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
 
       {/* Driver mode: heads-up that your teammate boxes this lap, so you can hold and avoid a double-stack wait. */}
       {paceMode && teammatePitting && (
-        <div className="text-[11px] font-bold uppercase tracking-wide text-[#F59E0B]">Teammate boxing this lap — hold to avoid a double-stack</div>
+        <div className="text-[11px] font-bold uppercase tracking-wide text-[#F59E0B]">Teammate boxing this lap</div>
       )}
 
       {/* Command: auto / pit (+ compound) / hold */}

@@ -153,7 +153,6 @@ export function DriverSetup({
             Reset grid to the real-world {entryYear} roster on entry
           </label>
         )}
-        <p className="text-[10px] text-[#FFFFFF]">You enter as a free agent and sit out {Number.isFinite(entryYear) ? entryYear : ''} — signing day is its post-season.</p>
       </div>
     </div>
   )
