@@ -12,6 +12,7 @@ import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useTeamHighlight } from '@/lib/useTeamHighlight'
 import { positionPalette } from '@/components/world/pills'
 import { SigningDayBoard } from '@/components/home/SigningDayBoard'
+import { DriverSigningBoard } from '@/components/home/DriverSigningBoard'
 import { TestingPanel } from '@/components/standings/TestingPanel'
 import type { Driver, Team, RaceResult, PreSeasonTest } from '@/lib/sim/types'
 
@@ -75,27 +76,40 @@ let signingDaySeenYear: number | null = null
 function OffSeasonReview() {
   const season = useSeasonStore()
   const summary = season.endOfSeasonSummary
-  const [open, setOpen] = useState(signingDaySeenYear !== season.year)
+  // Driver mode: while a seat offer is on the table, the board is the interactive offer (a blocking call),
+  // so default it open and re-open on every new offer (re-keyed by seat). Otherwise it's the read-only
+  // signing-day reveal, auto-opened once per off-season.
+  const offer = season.pendingDriverOffer
+  const offerKey = offer ? `${offer.year}-${offer.offer.seatRank}` : null
+  const [open, setOpen] = useState(signingDaySeenYear !== season.year || offer != null)
   useEffect(() => { signingDaySeenYear = season.year }, [season.year])
+  // Re-open the modal whenever a fresh offer arrives (a new seat after a decline). Adjusting state during
+  // render off the previous value is React's prescribed pattern for "reset on prop change" (no effect).
+  const [shownOfferKey, setShownOfferKey] = useState(offerKey)
+  if (offerKey !== shownOfferKey) {
+    setShownOfferKey(offerKey)
+    if (offerKey) setOpen(true)
+  }
 
   if (!summary) {
     return <Panel title="Off-Season"><p className="p-4 text-sm text-[#FFFFFF]">Wrapping up the season…</p></Panel>
   }
 
+  const title = offer ? `Seat Offer · ${offer.newYear}` : `Signing Day · ${season.year}`
   return (
-    <Panel title={`Signing Day · ${season.year}`} flush fill>
+    <Panel title={title} flush fill>
       <div className="p-4">
-        <button onClick={() => setOpen(true)} className="px-3 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-semibold uppercase tracking-wide hover:bg-[#009CB8] transition-colors">View Signing Day</button>
+        <button onClick={() => setOpen(true)} className="px-3 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] text-xs font-semibold uppercase tracking-wide hover:bg-[#009CB8] transition-colors">{offer ? 'Respond to offer' : 'View Signing Day'}</button>
       </div>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)}>
           <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl w-full max-w-5xl h-[85vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A3142]">
-              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Signing Day · {season.year}</h2>
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">{title}</h2>
               <button onClick={() => setOpen(false)} className="text-xs text-[#FFFFFF] hover:text-[#00D9FF] uppercase tracking-wide">Close</button>
             </div>
             <div className="flex-1 min-h-0 p-5 overflow-hidden">
-              <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />
+              {offer ? <DriverSigningBoard /> : <SigningDayBoard picks={season.seasonDraft} year={season.year} dropped={summary.droppedDrivers} />}
             </div>
           </div>
         </div>

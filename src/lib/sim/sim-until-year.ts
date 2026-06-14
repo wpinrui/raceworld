@@ -45,3 +45,37 @@ export async function simUntilYear(targetYear: number, shouldStop?: () => boolea
     return // 'news' is unreachable with no interrupts; bail rather than spin.
   }
 }
+
+// Driver mode escape hatch: a free agent who went unsigned skips ahead to the NEXT signing day in one
+// click. From just past this off-season's signing day, blast the clock forward at max speed — auto-sim
+// the next full season and run every off-season beat — and stop the instant the next signing day runs.
+// That beat (runContractNegotiations) either parks an offer for the player (pendingDriverOffer set) or
+// resolves them unsigned again; either way we halt right after it so the player picks up on the board.
+export async function simToNextSigningDay(shouldStop?: () => boolean): Promise<void> {
+  for (let guard = 0; guard < 20000; guard++) {
+    if (shouldStop?.()) return
+    const s = useSeasonStore.getState()
+    if (s.pendingDriverOffer) return // an offer is already on the table — nothing to fast-forward through
+
+    const pendingRW = pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })
+    if (pendingRW) {
+      s.applyRealWorldChanges({
+        joins: pendingRW.teamJoins,
+        leaves: pendingRW.teamLeaves.map((l) => l.id),
+        rebrands: pendingRW.teamRebrands.map((r) => ({ id: r.id, name: r.to.name, shortName: r.to.shortName, color: r.to.color, nationality: r.to.nationality })),
+      })
+      continue
+    }
+
+    const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles: [], settings: NO_INTERRUPTS, readIds: s.readNewsIds })
+    if (stop.reason === 'idle') return
+    useSeasonStore.getState().setCurrentDate(stop.date)
+    if (stop.reason === 'offseason') {
+      await runOffSeasonEvent(stop.event)
+      if (stop.event === 'signing-day') return // ran the next signing day — halt for the player to react
+      continue
+    }
+    if (stop.reason === 'race') { await simulateUntilRound(stop.round + 1); continue }
+    return
+  }
+}

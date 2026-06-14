@@ -16,6 +16,7 @@ import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, typ
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop, type ContinueSettings } from '@/lib/sim/continue-loop'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
+import { simToNextSigningDay } from '@/lib/sim/sim-until-year'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { runOffSeasonEvent } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, actionGetLegendData } from '@/lib/news/actions'
@@ -61,7 +62,19 @@ export default function Nav() {
   // Team Manager: an unresolved free-agency draft or renewal call blocks Continue until the player acts.
   const pendingDraft = useSeasonStore((s) => s.pendingPlayerDraft != null)
   const pendingRenewals = useSeasonStore((s) => s.pendingPlayerRenewals.length > 0)
-  const pendingPlayerCall = pendingDraft || pendingRenewals
+  // Driver mode: a seat offer on the table is likewise a blocking call.
+  const pendingOffer = useSeasonStore((s) => s.pendingDriverOffer != null)
+  const pendingPlayerCall = pendingDraft || pendingRenewals || pendingOffer
+  // Driver mode: the player and whether they went unsigned at this off-season's signing day (free agent,
+  // signing day fully resolved and revealed) — the trigger for the "Sim to next signing day" escape hatch.
+  const driverMode = useSeasonStore((s) => s.driverMode)
+  const signingDayRevealed = useSeasonStore((s) => s.signingDayRevealed)
+  const seasonDraftLen = useSeasonStore((s) => s.seasonDraft.length)
+  const playerSeatless = useSeasonStore((s) => {
+    const d = s.playerDriverId ? s.drivers.find((x) => x.id === s.playerDriverId) : null
+    return d != null && d.teamId === ''
+  })
+  const unsignedAtSigningDay = driverMode && phase === 'contract-negotiations' && !pendingOffer && playerSeatless && signingDayRevealed >= seasonDraftLen
 
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -182,7 +195,8 @@ export default function Nav() {
       // running past an unmade decision now that the off-season flows through this same loop) (#126).
       if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) break
       // Team Manager: never advance past an unmade signing / renewal call (the draft pause, the renewal round).
-      if (s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0) break
+      // Driver mode: same for a seat offer waiting on the player.
+      if (s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0 || s.pendingDriverOffer != null) break
       const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legendData))
       setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
       const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
@@ -254,6 +268,26 @@ export default function Nav() {
     }
   }
   function handleSimNextRace() { runSimRace() }
+
+  // Driver mode escape hatch: an unsigned free agent jumps the whole next season at max speed and halts at
+  // the next signing day (a fresh offer, or unsigned again). Stoppable mid-run like any fast-forward.
+  async function runSimToNextSigningDay() {
+    if (busy) return
+    setNewsStop(null)
+    setCalendarArticles([])
+    setBusy(true)
+    setAdvancing(true)
+    stopRef.current = false
+    useSimControl.getState().setSimBusy(true)
+    try {
+      await simToNextSigningDay(() => stopRef.current)
+    } finally {
+      setBusy(false)
+      setAdvancing(false)
+      useSimControl.getState().setSimBusy(false)
+      router.push('/home')
+    }
+  }
 
   // Fast-forward (day bar, no news/followed interrupts) up to a future race's weekend.
   async function runAdvanceToRace(targetRound: number) {
@@ -335,7 +369,21 @@ export default function Nav() {
         </div>
       )
     }
-    return <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>{pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
+    const continueBtn = (
+      <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>
+        {pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : pendingOffer ? 'Decide offer' : busy ? 'Working…' : 'Continue'}<Play size={12} />
+      </button>
+    )
+    // Driver mode: when you've gone unsigned at signing day, offer the one-click jump to next year beside Continue.
+    if (unsignedAtSigningDay) {
+      return (
+        <div className="flex items-center gap-2">
+          <button onClick={runSimToNextSigningDay} disabled={busy} className={SECONDARY_CTA}>Sim To Next Signing Day</button>
+          {continueBtn}
+        </div>
+      )
+    }
+    return continueBtn
   })()
 
   // Spacebar activates the primary CTA (Football-Manager style). The current action mirrors the `cta`

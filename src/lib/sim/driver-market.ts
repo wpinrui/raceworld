@@ -228,3 +228,88 @@ export function runDraft(opts: {
 
   return picks
 }
+
+// ---------- Driver mode: the same draft, but it PAUSES to offer the player each seat the roll lands on ----------
+
+export interface PlayerSeatOffer {
+  seatRank: number
+  teamId: string
+  teamName: string
+  teamColor: string
+  pickPct: number      // the player's roll chance for this seat
+  offeredYears: number // the team's opening contract-length offer
+}
+
+// Serialisable resume state, parked on the store while the player decides an offer.
+export interface DriverDraftCursor {
+  picks: DraftPick[]
+  survival: [string, number][]
+  remainingIds: string[] // pool ids still unsigned (the player stays here until they accept)
+  nextSeat: number
+}
+
+export type DriverDraftStep =
+  | { kind: 'offer'; offer: PlayerSeatOffer; cursor: DriverDraftCursor }
+  | { kind: 'done'; picks: DraftPick[] }
+
+// Fill seats best-first, auto-signing rivals, until the geometric roll selects `playerId` (→ pause with an
+// offer the caller resolves) or the seats run out (→ done). Resume by passing the returned cursor back in;
+// `skipPlayerThisSeat` re-rolls the current seat WITHOUT the player after they decline (they hold out for a
+// later seat but stay in the pool).
+export function runDriverDraft(opts: {
+  seats: DraftSeat[]
+  pool: Driver[]
+  teams: Team[]
+  currentYear: number
+  playerId: string
+  rng: () => number
+  cursor?: DriverDraftCursor
+  skipPlayerThisSeat?: boolean
+}): DriverDraftStep {
+  const { seats, pool, teams, currentYear, playerId, rng } = opts
+  const teamName = new Map(teams.map((t) => [t.id, t.name]))
+  const poolRank = new Map(pool.map((d, i) => [d.id, i + 1]))
+  const byId = new Map(pool.map((d) => [d.id, d]))
+  const picks = opts.cursor ? [...opts.cursor.picks] : []
+  const survival = new Map<string, number>(opts.cursor ? opts.cursor.survival : pool.map((d) => [d.id, 1]))
+  let remainingIds = opts.cursor ? [...opts.cursor.remainingIds] : pool.map((d) => d.id)
+  let skipPlayer = !!opts.skipPlayerThisSeat
+
+  for (let seatRank = opts.cursor ? opts.cursor.nextSeat : 0; seatRank < seats.length; seatRank++) {
+    if (remainingIds.length === 0) break
+    const seat = seats[seatRank]
+    const candidateIds = skipPlayer ? remainingIds.filter((id) => id !== playerId) : remainingIds
+    skipPlayer = false
+    if (candidateIds.length === 0) break
+    const probs = geometricProbs(candidateIds.length)
+    const roll = rng()
+    let acc = 0
+    let ci = candidateIds.length - 1
+    for (let i = 0; i < probs.length; i++) { acc += probs[i]; if (roll <= acc) { ci = i; break } }
+    const pickedId = candidateIds[ci]
+    const realizedProb = (survival.get(pickedId) ?? 1) * probs[ci]
+
+    if (pickedId === playerId) {
+      return {
+        kind: 'offer',
+        offer: { seatRank, teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor, pickPct: Math.round(probs[ci] * 1000) / 10, offeredYears: draftYears(realizedProb, rng) },
+        cursor: { picks, survival: [...survival], remainingIds, nextSeat: seatRank },
+      }
+    }
+
+    const driver = byId.get(pickedId)!
+    const years = draftYears(realizedProb, rng)
+    const odds: DraftOdds[] = candidateIds.map((id, i) => ({ driverId: id, driverName: byId.get(id)!.name, pct: Math.round(probs[i] * 1000) / 10 }))
+    picks.push({
+      teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
+      driverId: pickedId, driverName: driver.name,
+      prevTeamName: driver.teamId !== '' ? (teamName.get(driver.teamId) ?? '') : '',
+      faRank: poolRank.get(pickedId) ?? seatRank + 1,
+      seatRank, pickPct: Math.round(probs[ci] * 1000) / 10, realizedProb, years,
+      flavour: flavourOf(driver, seatRank, probs[ci] * 100, years, currentYear), odds,
+    })
+    candidateIds.forEach((id, i) => { if (id !== pickedId) survival.set(id, (survival.get(id) ?? 1) * (1 - probs[i])) })
+    remainingIds = remainingIds.filter((id) => id !== pickedId)
+  }
+  return { kind: 'done', picks }
+}
