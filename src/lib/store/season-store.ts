@@ -138,6 +138,8 @@ interface SeasonStore {
   setRealWorldMode: (on: boolean) => void
   setTeamManager: (mode: boolean, playerTeamId: string | null) => void
   setDriver: (mode: boolean, playerDriverId: string | null) => void
+  // Driver mode: drop the player into the current season's free-agent pool (teamId '') at their entry year.
+  addPlayerDriver: (driver: Driver) => void
   // Team Manager: start the player's next car upgrade on the given cycle (3–6 races), recording the chosen
   // package name. cycle null = no development (the plan goes idle until the player picks again).
   setPlayerUpgrade: (cycle: number | null, packageName?: string) => void
@@ -293,6 +295,11 @@ export const useSeasonStore = create<SeasonStore>()(
       setTeamManager: (mode, playerTeamId) => set({ teamManagerMode: mode, playerTeamId: mode ? playerTeamId : null }),
 
       setDriver: (mode, playerDriverId) => set({ driverMode: mode, playerDriverId: mode ? playerDriverId : null }),
+
+      // Inject the player driver as a free agent (teamId '', neutral season form) into the live season, so
+      // they sit in the pool for the entry year and become a candidate at its post-season signing day.
+      addPlayerDriver: (driver) =>
+        set((s) => (s.drivers.some((d) => d.id === driver.id) ? s : { drivers: [...s.drivers, { ...driver, teamId: '', seasonForm: 0 }] })),
 
       setPlayerUpgrade: (cycle, packageName) => {
         const { playerTeamId, devPlans, teams, currentRound } = get()
