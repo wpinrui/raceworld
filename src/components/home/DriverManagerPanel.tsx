@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { calendarForYear } from '@/data/calendars'
 import { shownOverall } from '@/lib/sim/progression'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { computePairH2H, readableBar, darken, PairH2HCard } from '@/components/standings/TeammateH2HPanel'
@@ -51,10 +52,12 @@ export function DriverManagerPanel() {
   const standing = wdcIdx >= 0 ? driverStandings[wdcIdx] : null
   const podiums = standing ? standing.results.filter((p) => p != null && p <= 3).length : 0
 
-  // Previous race, folded into the same card (your grid, finish, points last time out).
-  const lastRound = raceResults[raceResults.length - 1]
+  // Previous race, folded into the same card as a result line (which race, your finish/grid/points).
+  const lastRoundNo = raceResults.length
+  const lastRound = raceResults[lastRoundNo - 1]
   const prev = lastRound?.find((r) => r.driverId === playerDriverId)
   const prevFinish = prev ? (prev.dnf || prev.finishPosition == null ? 'DNF' : `P${prev.finishPosition}`) : null
+  const lastRaceName = lastRoundNo > 0 ? calendarForYear(year)[lastRoundNo - 1]?.name : undefined
 
   const cardClass = 'rounded-xl bg-[#1E2431] border border-[#2A3142] p-5'
   const base = team ? readableBar(team.color) : '#2A3142'
@@ -93,13 +96,16 @@ export function DriverManagerPanel() {
         </div>
 
         {prev && (
-          <div className="rounded-lg bg-[#0F1419]/40 px-3 py-2">
-            <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Last time out</span>
-            <p className="text-sm text-[#FFFFFF] mt-0.5">
-              <span className="font-semibold">{prevFinish}</span> from P{prev.gridPosition}
-              {prev.points > 0 ? `, ${prev.points} pt${prev.points === 1 ? '' : 's'}` : ', no points'}
-              {prev.fastestLap ? ' · fastest lap' : ''}
-            </p>
+          <div className="space-y-2.5 pt-1 border-t border-[#2A3142]">
+            <span className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-[#FFFFFF]">
+              {lastRaceName ? `Round ${lastRoundNo} · ${lastRaceName}` : `Round ${lastRoundNo}`}
+              {prev.fastestLap && <span className="rounded px-1 py-0.5 text-[9px] font-bold text-[#FFFFFF]" style={{ backgroundColor: '#A855F7' }}>FL</span>}
+            </span>
+            <div className="flex flex-wrap gap-x-8 gap-y-2">
+              <Stat label="Finish" value={prevFinish ?? '—'} />
+              <Stat label="Grid" value={`P${prev.gridPosition}`} />
+              <Stat label="Points" value={prev.points} />
+            </div>
           </div>
         )}
 
