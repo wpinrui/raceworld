@@ -102,7 +102,11 @@ export interface DriverRaceState {
   currentTyre: TyreState
   tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
                          // Absent (legacy/forecast states) → treated as a fresh-tyre temp.
-  push?: PushState       // how hard the driver is pushing (slider or auto-reverting preset). Absent → normal.
+  push?: PushState       // the driver's SELECTED push (slider or auto-reverting preset) — their intent. Absent → normal.
+  pushAuto?: boolean     // Team Manager: hand push to the AI; `push` then mirrors the AI's live pick each lap (#push-auto).
+  autoDefend?: boolean   // Driver mode: while `push` is normal, auto-push to defend a car behind. The defensive push is
+                         // applied for the lap WITHOUT changing `push` (intent stays normal), so it stays armed (#push-auto).
+  defending?: boolean    // transient: the sim applied a defensive push this lap (drives the "Defending" UI badge).
   stintLap: number
   fuelLaps: number
   form: number           // 0-10

@@ -152,6 +152,26 @@ describe('simulateLap (characterization)', () => {
       expect(back.tyreTemp!).toBeLessThan(n.tyreTemp!)
       expect(100 - back.currentTyre.condition).toBeLessThan(100 - n.currentTyre.condition)
     })
+
+    // The careful #push-auto case: a player car in Normal with auto-defend armed, a genuine threat right behind.
+    // The sim pushes to defend FOR the lap, but that is NOT the driver changing push — the Normal selection and
+    // the armed toggle must both survive untouched, so it keeps defending lap after lap.
+    it('auto-defend defends without altering the driver\'s Normal intent', () => {
+      vi.spyOn(Math, 'random').mockImplementation(lcg(2))
+      const P = makeDriver('p', 'tA', 75), C = makeDriver('c', 'tA', 85) // same team → chaser edge is pure driver pace
+      const ds = [P, C], ts = [makeTeam('tA', 75)]
+      const q: QualifyingResult[] = [
+        { driverId: 'p', gridPosition: 1, bestTime: 80, q1Time: null, q2Time: null, q3Time: null },
+        { driverId: 'c', gridPosition: 2, bestTime: 80.1, q1Time: null, q2Time: null, q3Time: null },
+      ]
+      let state = initRaceState(ds, ts, CIRCUIT, q, [], { p: 5, c: 5 }, 2025)
+      state = { ...state, drivers: state.drivers.map((d) => (d.driverId === 'p' ? { ...d, autoDefend: true, push: { kind: 'manual', level: 0 } } : d)) }
+      state = simulateLap(state, ds, ts, CIRCUIT, 2025, undefined, false, ['p'])
+      const p = state.drivers.find((d) => d.driverId === 'p')!
+      expect(p.defending).toBe(true)                       // it actually defended this lap
+      expect(p.autoDefend).toBe(true)                      // ...and the toggle is still armed
+      expect(p.push).toEqual({ kind: 'manual', level: 0 }) // ...and the driver's intent is untouched
+    })
   })
 
   it('keeps the field physically consistent, finishers and retirees alike', () => {

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import type { Driver, Team, Circuit, RaceState, DriverRaceState, GodModeAction, SimSpeed, TyreCompound, PushState, SliderLevel, PushPreset } from '@/lib/sim/types'
+import type { Driver, Team, Circuit, RaceState, DriverRaceState, GodModeAction, SimSpeed, TyreCompound, SliderLevel, PushPreset } from '@/lib/sim/types'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
+import { NORMAL } from '@/lib/sim/push'
 import { computeTyreLife } from '@/lib/sim/tyres'
 import { runQualifying } from '@/lib/sim/qualifying'
 import { shownStats } from '@/lib/sim/progression'
@@ -21,9 +22,9 @@ function applyPeakForm(forms: Record<string, number>, drivers: Driver[]): Record
   return forms
 }
 
-// Set one car's push state on the race-state driver list (immutably).
-const setPush = (drivers: DriverRaceState[], driverId: string, push: PushState): DriverRaceState[] =>
-  drivers.map((d) => (d.driverId === driverId ? { ...d, push } : d))
+// Merge a patch onto one car's race state (immutably).
+const patchCar = (drivers: DriverRaceState[], driverId: string, patch: Partial<DriverRaceState>): DriverRaceState[] =>
+  drivers.map((d) => (d.driverId === driverId ? { ...d, ...patch } : d))
 
 // The cars the player drives directly (so the sim honours their push instead of the AI heuristic).
 function playerControlledIds(drivers: Driver[]): string[] {
@@ -62,6 +63,8 @@ interface RaceStore {
   setPitCommand: (driverId: string, cmd: PitCommand) => void          // pit wall: auto / hold / pit(compound)
   setPushSlider: (driverId: string, level: SliderLevel) => void       // persistent push level (back off…max)
   setPushPreset: (driverId: string, preset: PushPreset) => void       // transient preset (overtake/push/conserve)
+  setPushAuto: (driverId: string, on: boolean) => void                // Team Manager: hand a car's push to the AI
+  setAutoDefend: (driverId: string, on: boolean) => void              // Driver mode: arm auto-defend (only from Normal)
   clearHolds: () => void                                              // drop all HOLDs back to auto (FF)
   setStrategyNoise: (n: number) => void
   initSession: () => void
@@ -142,12 +145,33 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     })
   },
 
-  // Write the player's push onto the race state (where the sim reads + evolves it). No-op pre-race.
+  // Write the player's push onto the race state (where the sim reads + evolves it). No-op pre-race. A manual
+  // change is the player taking control, so it exits TM-auto; it also exits auto-defend UNLESS the move is to
+  // Normal (level 0), where auto-defend is allowed to stay armed. A preset (overtake/push/conserve) is never
+  // Normal, so it always exits auto-defend.
   setPushSlider: (driverId, level) => {
-    set((state) => (state.raceState ? { raceState: { ...state.raceState, drivers: setPush(state.raceState.drivers, driverId, { kind: 'manual', level }) } } : {}))
+    set((state) => (state.raceState
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { push: { kind: 'manual', level }, pushAuto: false, ...(level !== 0 ? { autoDefend: false } : {}) }) } }
+      : {}))
   },
   setPushPreset: (driverId, preset) => {
-    set((state) => (state.raceState ? { raceState: { ...state.raceState, drivers: setPush(state.raceState.drivers, driverId, { kind: 'preset', preset }) } } : {}))
+    set((state) => (state.raceState
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { push: { kind: 'preset', preset }, pushAuto: false, autoDefend: false }) } }
+      : {}))
+  },
+  // Team Manager: hand a car's push to the AI (on) or take it back (off). Leaving auto keeps the AI's last pick
+  // as the manual selection — a smooth handoff. Mutually exclusive with auto-defend.
+  setPushAuto: (driverId, on) => {
+    set((state) => (state.raceState
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { pushAuto: on, autoDefend: false }) } }
+      : {}))
+  },
+  // Driver mode: arm/disarm auto-defend. Only valid from Normal, so force the selection to Normal when arming —
+  // intent and the toggle then agree, and the sim's transient defensive pushes never alter that intent.
+  setAutoDefend: (driverId, on) => {
+    set((state) => (state.raceState
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { autoDefend: on, pushAuto: false, ...(on ? { push: NORMAL } : {}) }) } }
+      : {}))
   },
 
   clearHolds: () => {

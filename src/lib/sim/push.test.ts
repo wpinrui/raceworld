@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveIntensity, advancePreset, aiPushState, NORMAL } from './push'
+import { resolveIntensity, advancePreset, aiPushState, shouldDefend, resolvePlayerPush, DEFEND_PUSH, NORMAL } from './push'
 import type { PushState } from './types'
 
 describe('resolveIntensity', () => {
@@ -69,5 +69,44 @@ describe('aiPushState heuristic', () => {
   })
   it('cruises otherwise', () => {
     expect(aiPushState(ctx({}))).toEqual(NORMAL)
+  })
+})
+
+describe('shouldDefend', () => {
+  const ctx = (over: Partial<{ gapAhead: number; gapBehind: number; chaserPaceEdge: number; condition: number; temp: number }>) =>
+    ({ gapAhead: 5, gapBehind: 5, chaserPaceEdge: 0, condition: 80, temp: 0.5, ...over })
+
+  it('defends a matched-or-faster threat in range with healthy tyres', () => {
+    expect(shouldDefend(ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3 }))).toBe(true)
+  })
+  it('does not defend a chaser too far back', () => {
+    expect(shouldDefend(ctx({ gapBehind: 2, chaserPaceEdge: 0.3 }))).toBe(false)
+  })
+  it('does not defend a much-faster chaser (hopeless) or a slower one (no threat)', () => {
+    expect(shouldDefend(ctx({ gapBehind: 0.5, chaserPaceEdge: 1.5 }))).toBe(false)
+    expect(shouldDefend(ctx({ gapBehind: 0.5, chaserPaceEdge: -0.5 }))).toBe(false)
+  })
+  it('does not defend on overheating or worn tyres', () => {
+    expect(shouldDefend(ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3, temp: 1.2 }))).toBe(false)
+    expect(shouldDefend(ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3, condition: 20 }))).toBe(false)
+  })
+})
+
+describe('resolvePlayerPush', () => {
+  const ctx = (over: Partial<{ gapAhead: number; gapBehind: number; chaserPaceEdge: number; condition: number; temp: number }>) =>
+    ({ gapAhead: 5, gapBehind: 5, chaserPaceEdge: 0, condition: 80, temp: 0.5, ...over })
+
+  it('manual returns the selection unchanged, never flagged as defending', () => {
+    const sel: PushState = { kind: 'preset', preset: 'conserve' }
+    expect(resolvePlayerPush('manual', sel, ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3 }))).toEqual({ push: sel, defending: false })
+  })
+  it('auto mirrors the AI pick and flags a defensive push', () => {
+    expect(resolvePlayerPush('auto', NORMAL, ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3 }))).toEqual({ push: DEFEND_PUSH, defending: true })
+    expect(resolvePlayerPush('auto', NORMAL, ctx({ gapAhead: 0.5 }))).toEqual({ push: { kind: 'preset', preset: 'overtake' }, defending: false })
+  })
+  it('autoDefend pushes only to defend, else normal, and never attacks a car ahead', () => {
+    expect(resolvePlayerPush('autoDefend', NORMAL, ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3 }))).toEqual({ push: DEFEND_PUSH, defending: true })
+    expect(resolvePlayerPush('autoDefend', NORMAL, ctx({}))).toEqual({ push: NORMAL, defending: false })
+    expect(resolvePlayerPush('autoDefend', NORMAL, ctx({ gapAhead: 0.5 }))).toEqual({ push: NORMAL, defending: false })
   })
 })

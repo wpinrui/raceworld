@@ -16,7 +16,7 @@ import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from '.
 import { computeLapTime } from './engine'
 import { applyCarForm, effectiveCarPace } from './car-rating'
 import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, hotPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
-import { resolveIntensity, advancePreset, aiPushState, NORMAL } from './push'
+import { resolveIntensity, advancePreset, resolvePlayerPush, NORMAL } from './push'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
@@ -317,10 +317,10 @@ export function simulateLap(
     // Resolve driver/team early — needed for pit AI and lap time
     const driver = driverMap.get(current.driverId)!
     const team = teamMap.get(driver.teamId)!
-    // Push (#sim-overhaul): the player drives their own car (their slider/preset); every other car's push is
-    // the AI heuristic's pick this lap, off the tyre's temperature coming into the lap. The AI also weighs the
-    // car BEHIND so a driver defends (pushes back) against a genuine threat instead of leaving an attacker a
-    // free pace boost — otherwise attackers push and nobody answers, and passing becomes far too easy.
+    // Push (#sim-overhaul / #push-auto): work out how hard this car runs this lap, weighing the car BEHIND so a
+    // driver defends (pushes back) against a genuine threat instead of leaving an attacker a free pace boost.
+    // Control mode: a non-player car is full AI ('auto'); a player car follows its own selection ('manual'),
+    // hands off to the AI in Team Manager ('auto'), or auto-defends in Driver mode ('autoDefend').
     const tempIn = current.tyreTemp ?? TEMP.FRESH_TEMP
     let gapBehind = Infinity
     let chaserPaceEdge = 0 // how much faster (s/lap) the car right behind is; >0 = a real threat
@@ -334,9 +334,11 @@ export function simulateLap(
       gapBehind = updatedStates.get(carBehindState.driverId)?.gap ?? carBehindState.gap
       chaserPaceEdge = dryPaceProxy(driver, team) - dryPaceProxy(chaser, chaserTeam)
     }
-    const push: PushState = playerSet.has(current.driverId)
-      ? (current.push ?? NORMAL)
-      : aiPushState({ gapAhead: current.gap, gapBehind, chaserPaceEdge, condition: current.currentTyre.condition, temp: tempIn })
+    const pushCtx = { gapAhead: current.gap, gapBehind, chaserPaceEdge, condition: current.currentTyre.condition, temp: tempIn }
+    const pushMode: 'auto' | 'autoDefend' | 'manual' = !playerSet.has(current.driverId)
+      ? 'auto'
+      : current.pushAuto ? 'auto' : current.autoDefend ? 'autoDefend' : 'manual'
+    const { push, defending } = resolvePlayerPush(pushMode, current.push ?? NORMAL, pushCtx)
     const intensity = resolveIntensity(push)
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
@@ -544,14 +546,21 @@ export function simulateLap(
       overheatWearMult(tempIn)
     const newCondition = wearTyre(current.currentTyre, wearMult)
     const newTemp = nextTyreTemp(tempIn, intensity, tyreWarming)
-    const nextPush = playerSet.has(current.driverId)
-      ? advancePreset(push, { temp: newTemp, gapAhead: current.gap, overtook: lapResult.overtook })
-      : push // AI re-picks via the heuristic each lap, so no revert needed
+    // Carry the push state to next lap by mode:
+    //  manual     → advance the preset (it auto-reverts once its goal is met).
+    //  auto       → store the AI's live pick, so a Team-Manager player sees what their car is doing. No revert.
+    //  autoDefend → KEEP the selected intent (normal); the defensive push was transient and must not stick, so
+    //               the toggle stays armed and the panel keeps showing Normal selected (#push-auto careful case).
+    const nextPush: PushState =
+      pushMode === 'autoDefend' ? (current.push ?? NORMAL)
+      : pushMode === 'auto' ? push
+      : advancePreset(push, { temp: newTemp, gapAhead: current.gap, overtook: lapResult.overtook })
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },
       tyreTemp: newTemp,
       push: nextPush,
+      defending,
     }
 
     // 2i. Decrement fuelLaps
