@@ -100,6 +100,8 @@ export interface DriverRaceState {
   totalTime: number
   lapTimes: number[]
   currentTyre: TyreState
+  tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
+                         // Absent (legacy/forecast states) → treated as a fresh-tyre temp.
   stintLap: number
   fuelLaps: number
   form: number           // 0-10

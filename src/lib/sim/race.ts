@@ -15,6 +15,7 @@ import { raceConditions } from './race-conditions'
 import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
 import { computeLapTime, TRAFFIC } from './engine'
 import { applyCarForm } from './car-rating'
+import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
@@ -113,6 +114,7 @@ export function initRaceState(
       totalTime: (qr.gridPosition - 1) * GRID_SPACING,
       lapTimes: [],
       currentTyre: tyre,
+      tyreTemp: TEMP.FRESH_TEMP,
       stintLap: 0,
       fuelLaps: circuit.laps,
       form: forms[driver.id] ?? 5,
@@ -424,6 +426,7 @@ export function simulateLap(
           condition: 100,
           maxLifeLaps: newMaxLifeLaps,
         },
+        tyreTemp: TEMP.FRESH_TEMP, // fresh tyre fitted: starts cold-ish, wants warming
         stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap + 1 }],
         stintLap: 0,
         lastPitLap: state.currentLap,
@@ -490,7 +493,13 @@ export function simulateLap(
     }
     const backoffPenalty = paceMode === 'backoff' ? BACKOFF_PENALTY : 0
 
-    const finalLapTime = effLapTime + pitPenalty + mistakeTimeLoss + backoffPenalty
+    // Tyre temperature + push (#sim-overhaul). intensity 0 = normal (Phase 3 drives it from the push state).
+    // The lap is run at the tyre's temp coming INTO it; cold tyres lose pace, pushing gains it.
+    const intensity = 0
+    const temp0 = current.tyreTemp ?? TEMP.FRESH_TEMP
+    const tyreWarming = team.tyreWarming ?? team.carPace
+
+    const finalLapTime = effLapTime + pitPenalty + mistakeTimeLoss + backoffPenalty + pacePush(intensity) + coldPenalty(temp0)
     lapTimesThisLap.set(current.driverId, finalLapTime)
     freeAirThisLap.set(current.driverId, lapResult.freeAir)
 
@@ -528,13 +537,20 @@ export function simulateLap(
       current = { ...current, position: aheadUpdated.position }
     }
 
-    // 2h. Degrade tyre — dirty air (running within ~1s of the car ahead) wears it a touch faster; backing
-    // off cruises at a fraction of the normal wear (the point of the tool).
-    const wearMult = (gapToCarAhead < 1.0 ? DIRTY_AIR_WEAR_MULT : 1) * (paceMode === 'backoff' ? BACKOFF_WEAR_MULT : 1)
+    // 2h. Degrade tyre — multipliers stack on the noisy base: dirty air (within ~1s) wears it faster, the
+    // car's tyre-wear rating scales it, pushing wears more (backing off less), and running OVER the heat
+    // window shreds it. Then advance the tyre temperature for next lap.
+    const wearMult =
+      (gapToCarAhead < 1.0 ? DIRTY_AIR_WEAR_MULT : 1) *
+      (paceMode === 'backoff' ? BACKOFF_WEAR_MULT : 1) *
+      tyreWearRatingMult(team.tyreWear ?? team.carPace) *
+      pushWearMult(intensity) *
+      overheatWearMult(temp0)
     const newCondition = wearTyre(current.currentTyre, wearMult)
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },
+      tyreTemp: nextTyreTemp(temp0, intensity, tyreWarming),
     }
 
     // 2i. Decrement fuelLaps
