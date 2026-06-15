@@ -19,10 +19,7 @@ import { SimulatingWorldModal } from '@/components/SimulatingWorldModal'
 import { TeamManagerSetup, type TmSelection } from '@/components/setup/TeamManagerSetup'
 import { DriverSetup, type DriverSelection } from '@/components/setup/DriverSetup'
 import { ModeSelect, type GameMode } from '@/components/setup/ModeSelect'
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
+import { slugify } from '@/lib/slug'
 
 const DRIVERS_PER_TEAM = 2
 // Earliest season with historical data; derived (not hardcoded), so it tracks any earlier years added.
@@ -57,6 +54,9 @@ export default function SetupPage() {
   const [simWorld, setSimWorld] = useState(false)
   const [simulating, setSimulating] = useState(false)
   const [racesTotal, setRacesTotal] = useState(0)
+  // The year the launch sim STARTS from, so the progress bar counts races off the same base as racesTotal.
+  // Team Manager / sim-world start at EARLIEST_YEAR; Driver mode starts at the chosen startYear.
+  const [simBaseYear, setSimBaseYear] = useState(EARLIEST_YEAR)
   const cancelSimRef = useRef(false)
   // Game mode is chosen on a standalone screen before any setup (Sandbox / Team Manager / Driver). null =
   // that screen is showing (a fresh game only); once picked, the mode's own setup renders.
@@ -238,6 +238,7 @@ export default function SetupPage() {
     const { driver, entryYear, resetRealWorld } = sel
     cancelSimRef.current = false
     setRacesTotal(racesBetween(startYear, entryYear + 1)) // includes the sit-out entry year, simmed to its signing day
+    setSimBaseYear(startYear)
     setSimulating(true)
     const start = composeSeason(startYear)
     if (!start) { setSimulating(false); setImportError(`No historical data for ${startYear}`); return }
@@ -322,7 +323,7 @@ export default function SetupPage() {
 
   // Progress = races simmed so far (completed seasons + the in-progress one) over the total to the target.
   const racesSimmed = simulating
-    ? Math.min(racesTotal, racesBetween(EARLIEST_YEAR, seasonStore.year) + seasonStore.raceResults.length)
+    ? Math.min(racesTotal, racesBetween(simBaseYear, seasonStore.year) + seasonStore.raceResults.length)
     : 0
 
   return (

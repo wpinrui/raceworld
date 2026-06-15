@@ -7,6 +7,7 @@ import { calendarForYear } from '@/data/calendars'
 import { shownOverall } from '@/lib/sim/progression'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { computePairH2H, readableBar, darken, PairH2HCard } from '@/components/standings/TeammateH2HPanel'
+import { Stat } from '@/components/home/Stat'
 
 // Driver mode home dashboard strip (mirrors TeamManagerPanel). Left: your current-season head-to-head with
 // your teammate. Right: your championship line with the previous race folded in, and a link to your driver
@@ -16,15 +17,6 @@ const ordinal = (n: number): string => {
   const v = n % 100
   const s = ['th', 'st', 'nd', 'rd']
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">{label}</span>
-      <span className="text-lg font-semibold tabular-nums text-[#FFFFFF]">{value}</span>
-    </div>
-  )
 }
 
 export function DriverManagerPanel() {

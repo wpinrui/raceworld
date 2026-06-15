@@ -6,16 +6,13 @@ import { CountrySelect } from '@/components/CountrySelect'
 import { StatSlider } from './StatSlider'
 import { STAT_KEYS, STAT_LABELS } from './stat-utils'
 import { CareerArcChart } from './CareerArcChart'
+import { slugify } from '@/lib/slug'
 
 // Driver mode setup: create the driver you'll play as. You enter the grid as a FREE AGENT at the chosen
 // entry year (sitting that season out — signing day is its post-season), and optionally reset the grid to
 // the real-world roster of that year. Reports the assembled Driver + entry year upward, like TeamManagerSetup.
 
 export type DriverSelection = { driver: Driver; entryYear: number; resetRealWorld: boolean } | null
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
 
 export function DriverSetup({
   startYear, years, onStartYearChange, maxEntryYear, lastRealYear, onChange, onEntryYearChange,
