@@ -1,6 +1,6 @@
-import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeasonRecord } from './types'
+import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeasonRecord, FocusSplit } from './types'
 import { sampleNormal, seededRng } from './rng-utils'
-import { overallCarPace, addUpgradePace, ratingsFromCarPace } from './car-rating'
+import { overallCarPace, addUpgradeFocused, aiFocusSplit, DEFAULT_FOCUS, randomiseRatingsByRank } from './car-rating'
 
 // Team Manager: the pool of upgrade-package names the player picks from. Each pick maps to a cycle length
 // (3–6 races) with NO connection to the name — a longer name isn't a longer cycle; the mapping is a seeded
@@ -159,6 +159,7 @@ export function initDevPlans(
     return {
       teamId: team.id,
       cycleLength,
+      focusSplit: aiFocusSplit(rng),
       nextUpgradeRound: cycleLength,
       fundingTier,
       cumulativePenalty: 0,
@@ -174,6 +175,7 @@ export function initDevPlans(
 // (no pending upgrade, no delivery) until they pick again. No-op outside Team Manager mode (no playerTeamId).
 export function applyPlayerCycle(
   devPlans: TeamDevPlan[], teams: Team[], playerTeamId: string | null, cycle: number | null, fromRound: number, rng: () => number, packageName?: string,
+  focusSplit?: FocusSplit,
   upgradeOpts?: { noFail?: boolean; paceBonusPerRace?: number },
 ): TeamDevPlan[] {
   if (!playerTeamId) return devPlans
@@ -186,7 +188,7 @@ export function applyPlayerCycle(
       return { ...p, playerControlled: true, nextUpgradeRound: null, pendingPaceDelta: undefined, pendingFailed: undefined, pendingPackageName: undefined }
     }
     const pending = rollUpgrade(cycle, leaderPace - myPace, rng, upgradeOpts)
-    return { ...p, playerControlled: true, cycleLength: cycle, nextUpgradeRound: fromRound + cycle, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed, pendingPackageName: packageName }
+    return { ...p, playerControlled: true, cycleLength: cycle, focusSplit: focusSplit ?? p.focusSplit ?? DEFAULT_FOCUS, nextUpgradeRound: fromRound + cycle, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed, pendingPackageName: packageName }
   })
 }
 
@@ -220,7 +222,8 @@ export function applyUpgradeEvents(
     upgradeEvents.push({ teamId: plan.teamId, round, paceDelta, failed, packageName: plan.pendingPackageName })
 
     if (team && paceDelta > 0) {
-      teamMap.set(plan.teamId, addUpgradePace(team, paceDelta)) // bumps straight-line + cornering (lap time reads them)
+      // Allocate the gain across the four ratings by the team's focus split (#upgrade-focus); absent → pace.
+      teamMap.set(plan.teamId, addUpgradeFocused(team, paceDelta, plan.focusSplit ?? DEFAULT_FOCUS))
     }
 
     // A player-controlled team (Team Manager) does NOT auto-continue: once an upgrade lands its plan goes
@@ -236,6 +239,7 @@ export function applyUpgradeEvents(
     return {
       ...plan,
       cycleLength: nextCycle,
+      focusSplit: aiFocusSplit(rng), // a fresh pace-leaning split each cycle, so AI cars keep some character
       nextUpgradeRound: plan.nextUpgradeRound + nextCycle,
       cumulativePenalty: 0,
       pendingPaceDelta: nextPending.paceDelta,
@@ -251,8 +255,10 @@ export function applyUpgradeEvents(
 }
 
 // End of season: number teams by car pace (fastest = 1), add a Uniform(−1.5, +3) modifier to that rank
-// PLUS a small financial-tier nudge (richer teams drift up), re-rank by the total (smallest = best),
-// then redistribute 75/70/65… Tier only tilts the existing jitter; it does not dictate the order.
+// PLUS a small financial-tier nudge (richer teams drift up), re-rank by the total (smallest = best), then
+// hand each rank a freshly-randomised overall + a random four-stat split (#season-init-random), so every
+// season's grid is varied (some teams straight-line-biased, others corner/tyre) rather than flat. Tier only
+// tilts the existing jitter; it does not dictate the order.
 export function computeCarReshuffle(
   teams: Team[],
   tiers: Map<string, FundingTier>,
@@ -268,12 +274,10 @@ export function computeCarReshuffle(
   }))
   scored.sort((a, b) => a.total - b.total)
 
+  const ratings = randomiseRatingsByRank(scored.map((s) => s.id), rng)
   const newPaces: Record<string, number> = {}
-  scored.forEach((s, i) => {
-    newPaces[s.id] = Math.max(5, 75 - i * 5)
-  })
+  for (const [id, r] of ratings) newPaces[id] = r.carPace
 
-  // Reset every rating to the new pace (Phase 1: all equal; later variance can diverge them here).
-  const updatedTeams = teams.map((t) => ({ ...t, carPace: newPaces[t.id], ...ratingsFromCarPace(newPaces[t.id]) }))
+  const updatedTeams = teams.map((t) => ({ ...t, ...(ratings.get(t.id) ?? {}) }))
   return { updatedTeams, oldPaces, newPaces }
 }

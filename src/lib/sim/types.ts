@@ -284,9 +284,19 @@ export interface ConstructorStanding {
 
 export type FundingTier = 1 | 2 | 3 | 4
 
+// How a team's upgrade gain is allocated across the four car ratings (#upgrade-focus). Fractions summing to
+// 1; absent → a pace-focused default (the legacy behaviour: all gain on straight-line + cornering).
+export interface FocusSplit {
+  straightLine: number
+  cornering: number
+  tyreWarming: number
+  tyreWear: number
+}
+
 export interface TeamDevPlan {
   teamId: string
   cycleLength: number          // 3–6 races per upgrade
+  focusSplit?: FocusSplit      // how this cycle's gain is split across the four ratings (#upgrade-focus)
   // The round the in-progress upgrade lands. null = no active upgrade — Team Manager player only: after a
   // delivery the player's plan goes idle until they pick the next package (the car stagnates meanwhile).
   // AI plans are never null (they develop continuously).
