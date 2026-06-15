@@ -156,12 +156,7 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
           <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
           <span className={cond < 20 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}>{cond}%</span>
         </span>
-        {ds.tyreTemp != null && (
-          <span className="flex items-center gap-1.5">
-            <span className="text-[9px] uppercase tracking-widest text-[#9CA3AF]">Temp</span>
-            <TyreTempGauge temp={ds.tyreTemp} className="w-16" />
-          </span>
-        )}
+        {ds.tyreTemp != null && <TyreTempGauge temp={ds.tyreTemp} className="w-20" />}
         <span className="ml-auto flex items-center gap-1 text-[#9CA3AF]">
           AI L{ds.targetPitLap ?? '—'} <TyreIndicator compound={ds.targetNextCompound} size="sm" />
         </span>
