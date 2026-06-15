@@ -3,6 +3,7 @@
 import type { RacePhase, RaceState } from '@/lib/sim/types'
 import type { Circuit } from '@/lib/sim/types'
 import { WeatherGraph } from './WeatherGraph'
+import { OvertakingIndicator } from './OvertakingIndicator'
 
 interface Props {
   phase: RacePhase
@@ -29,6 +30,7 @@ export function RaceHeader({
               </span>
             </div>
             <span className="text-[#FFFFFF] text-sm">{currentCircuit?.name}</span>
+            {currentCircuit && <OvertakingIndicator straightness={currentCircuit.straightness} size="chip" />}
             {phase === 'finished' && (
               <span className="font-semibold text-xs tracking-wider text-[#00D9FF] uppercase animate-pulse ml-1">
                 Finished
@@ -41,6 +43,7 @@ export function RaceHeader({
             {(raceState?.totalLaps ?? currentCircuit?.laps) != null && (
               <span className="text-xs text-[#FFFFFF]">{raceState?.totalLaps ?? currentCircuit?.laps} laps</span>
             )}
+            {currentCircuit && <OvertakingIndicator straightness={currentCircuit.straightness} size="chip" />}
           </>
         )}
       </div>

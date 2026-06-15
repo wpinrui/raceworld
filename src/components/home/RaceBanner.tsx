@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ReactCountryFlag from 'react-country-flag'
 import { ChevronRight } from 'lucide-react'
 import { Panel } from '@/components/world/ui'
+import { OvertakingIndicator } from '@/components/race/OvertakingIndicator'
 import { calendarForYear } from '@/data/calendars'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSimControl } from '@/lib/store/sim-control'
@@ -210,7 +211,11 @@ export function RaceBanner() {
                 <div className="w-1 h-5 rounded-sm bg-[#00D9FF]" />
                 <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Round {modalRound} · {c?.name}</h2>
               </div>
-              <p className="text-sm text-[#FFFFFF] mb-5 ml-3.5">{c?.location}</p>
+              <p className="text-sm text-[#FFFFFF] mb-3 ml-3.5">{c?.location}</p>
+              <div className="ml-3.5 mb-5 flex items-center gap-2.5">
+                <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Overtaking</span>
+                <OvertakingIndicator straightness={c?.straightness} size="full" />
+              </div>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setModalRound(null)} className={cancel}>Cancel</button>
                 {isCurrent ? (
