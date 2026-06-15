@@ -17,7 +17,8 @@ export const TEMP = {
   PUSH_WEAR: 0.2,       // wear-multiplier change per intensity step
   OVERHEAT_WEAR: 0.8,   // extra wear multiplier per unit of temp over the ceiling
   COLD_PACE: 3.0,       // s/lap pace penalty per unit of temp under the basement (stone-cold -0.5 ≈ 1.5s)
-  HOT_PACE: 2.0,        // s/lap pace penalty per unit of temp over the ceiling (overheating greases the tyre)
+  HOT_PACE: 0.6,        // s/lap pace penalty per unit of temp over the ceiling — only a SLIGHT pace loss (so the
+                        // window is a genuine sweet spot), with wear staying the main punishment for running hot
   FRESH_TEMP: 0.1,      // a freshly-fitted tyre starts here (low in the window, wants warming)
   MIN: -0.5, MAX: 1.5,  // hard clamp on temp
 } as const
