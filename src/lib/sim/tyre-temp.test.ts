@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pacePush, pushWearMult, coldPenalty, overheatWearMult, tempDrift, nextTyreTemp, tyreWearRatingMult, TEMP } from './tyre-temp'
+import { pacePush, pushWearMult, coldPenalty, hotPenalty, overheatWearMult, tempDrift, nextTyreTemp, tyreWearRatingMult, TEMP } from './tyre-temp'
 
 describe('push curve', () => {
   it('pace: pushing is quicker, backing off slower, monotonic in intensity', () => {
@@ -30,6 +30,15 @@ describe('window penalties', () => {
     expect(overheatWearMult(1.3)).toBeGreaterThan(1)
     expect(overheatWearMult(1.5)).toBeGreaterThan(overheatWearMult(1.2))
   })
+  it('hot (over window) ALSO costs pace, none inside/under', () => {
+    expect(hotPenalty(0.5)).toBe(0)
+    expect(hotPenalty(-0.2)).toBe(0)
+    expect(hotPenalty(1.2)).toBeGreaterThan(0)
+    expect(hotPenalty(1.5)).toBeGreaterThan(hotPenalty(1.2))
+  })
+  it('stone-cold tyres are heavily penalised (the window must matter)', () => {
+    expect(coldPenalty(TEMP.MIN)).toBeGreaterThanOrEqual(1.4) // ~1.5s at the cold floor
+  })
 })
 
 describe('tempDrift', () => {
@@ -57,6 +66,22 @@ describe('tempDrift', () => {
   it('nextTyreTemp clamps to the hard limits', () => {
     expect(nextTyreTemp(TEMP.MAX, 2, 0)).toBeLessThanOrEqual(TEMP.MAX)
     expect(nextTyreTemp(TEMP.MIN, -2, 0)).toBeGreaterThanOrEqual(TEMP.MIN)
+  })
+
+  it('normal (the flat pull) re-centres a cold tyre back INTO the window', () => {
+    let t = -0.3
+    for (let l = 0; l < 25; l++) t = nextTyreTemp(t, 0, 60)
+    expect(t).toBeGreaterThanOrEqual(0) // actually crosses in, not stuck just below the edge forever
+  })
+  it('normal re-centres an overheated tyre back into the window too', () => {
+    let t = 1.3
+    for (let l = 0; l < 25; l++) t = nextTyreTemp(t, 0, 60)
+    expect(t).toBeLessThanOrEqual(1)
+  })
+  it('but deliberately pushing warms a cold tyre much faster than holding normal', () => {
+    const pushed = nextTyreTemp(-0.3, 1, 60) - -0.3
+    const held = nextTyreTemp(-0.3, 0, 60) - -0.3
+    expect(pushed).toBeGreaterThan(held * 2) // push is the real warm-up tool, not normal
   })
 })
 
