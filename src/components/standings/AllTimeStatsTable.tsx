@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { DriverLink, TeamLink } from '@/components/world/EntityLink'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { teamHighlightStyle, teamHighlightSolid } from '@/lib/team-manager'
 
 // Generic all-time stats table: a leftmost rank (#) column reflecting the current sort, a name search
 // box, and click-to-sort on every column. Each numeric cell carries a tooltip with that entity's
@@ -33,8 +34,8 @@ function prettyLabel(label: string): string {
 }
 
 export function AllTimeStatsTable<T extends { id: string; name: string }>({
-  rows, columns, kind, flagOf,
-}: { rows: T[]; columns: AllTimeColumn<T>[]; kind: 'driver' | 'team'; flagOf?: (id: string) => string }) {
+  rows, columns, kind, flagOf, highlightId, highlightColor,
+}: { rows: T[]; columns: AllTimeColumn<T>[]; kind: 'driver' | 'team'; flagOf?: (id: string) => string; highlightId?: string | null; highlightColor?: string }) {
   const numericKeys = useMemo(
     () => new Set(columns.filter((c) => c.type === 'num' || c.type === 'year').map((c) => c.key)),
     [columns],
@@ -109,9 +110,16 @@ export function AllTimeStatsTable<T extends { id: string; name: string }>({
             </tr>
           </thead>
           <tbody>
-            {view.map(({ row, pos }) => (
-              <tr key={row.id} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
-                <td className="py-1.5 px-3 text-right tabular-nums sticky left-0 z-10 bg-[#1E2431] text-[#FFFFFF]">{pos}</td>
+            {view.map(({ row, pos }) => {
+              // Mark the player's own row ("this is you"): driver mode highlights your driver, Team Manager
+              // your constructor — gated by the parent, which passes the matching id + your team colour. The
+              // sticky #/name cells need a SOLID tint (they'd otherwise paint over the row's translucent one).
+              const isHl = !!highlightColor && highlightId != null && row.id === highlightId
+              const hl = isHl ? teamHighlightStyle(highlightColor) : undefined
+              const solid = isHl ? teamHighlightSolid(highlightColor) : undefined
+              return (
+              <tr key={row.id} style={hl} className="border-b border-[#2A3142]/50 hover:bg-[#0F1419]/40">
+                <td className={`py-1.5 px-3 text-right tabular-nums sticky left-0 z-10 text-[#FFFFFF] ${solid ? '' : 'bg-[#1E2431]'}`} style={solid ? { backgroundColor: solid, boxShadow: `inset 3px 0 0 ${highlightColor}` } : undefined}>{pos}</td>
                 {columns.map((c, i) => {
                   const v = row[c.key]
                   const isName = c.key === ('name' as keyof T)
@@ -120,7 +128,8 @@ export function AllTimeStatsTable<T extends { id: string; name: string }>({
                   return (
                     <td
                       key={String(c.key)}
-                      className={`py-1.5 px-3 ${c.type === 'num' || c.type === 'year' ? 'text-right tabular-nums' : ''} ${i === 0 ? 'sticky left-14 z-10 bg-[#1E2431] font-medium' : 'text-[#FFFFFF]'}`}
+                      className={`py-1.5 px-3 ${c.type === 'num' || c.type === 'year' ? 'text-right tabular-nums' : ''} ${i === 0 ? `sticky left-14 z-10 font-medium ${solid ? '' : 'bg-[#1E2431]'}` : 'text-[#FFFFFF]'}`}
+                      style={i === 0 && solid ? { backgroundColor: solid } : undefined}
                     >
                       {isName ? (
                         <span className="flex items-center gap-2">
@@ -142,7 +151,7 @@ export function AllTimeStatsTable<T extends { id: string; name: string }>({
                   )
                 })}
               </tr>
-            ))}
+            )})}
             {view.length === 0 && (
               <tr><td colSpan={columns.length + 1} className="py-4 px-3 text-[#FFFFFF]">No results.</td></tr>
             )}

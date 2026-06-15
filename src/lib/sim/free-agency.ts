@@ -85,13 +85,14 @@ const OUT_OF_F1_PENALTY = 5
 // of F1 and is removed from the market once they reach RETIREMENT_SEASONS_OUT.
 export function applyMarketAttrition(
   drivers: Driver[],
+  exemptId?: string | null, // Driver mode: the player never times out of the market while waiting for a seat
 ): { drivers: Driver[]; retiredDriverIds: string[] } {
   const retiredDriverIds: string[] = []
   const updated: Driver[] = []
 
   for (const d of drivers) {
     const seasonsOut = d.teamId === '' ? (d.seasonsSinceF1Seat ?? 0) + 1 : 0
-    if (seasonsOut >= RETIREMENT_SEASONS_OUT) {
+    if (seasonsOut >= RETIREMENT_SEASONS_OUT && d.id !== exemptId) {
       retiredDriverIds.push(d.id)
       continue
     }

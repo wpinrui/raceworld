@@ -34,10 +34,10 @@ function path(from: number, to: number, totalLaps: number, value: (lap: number) 
 // weather, revealed lap by lap; the dashed line ahead is the (imperfect) forecast, which homes onto
 // reality as each lap nears. The eye toggle is a god-mode cheat that reveals the true future.
 export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props) {
-  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const managed = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const talentOn = useSettingsStore((s) => s.talents['met-office'] ?? false)
-  // In Team Manager mode the true-weather reveal is a Met Office talent; without it, only the forecast shows.
-  const gateAllowsReveal = !teamManagerMode || talentOn
+  // In the managed career modes the true-weather reveal is a Met Office talent; without it, only the forecast shows.
+  const gateAllowsReveal = !managed || talentOn
   const [revealToggle, setRevealToggle] = useState(false)
   const reveal = revealToggle && gateAllowsReveal
   const [hover, setHover] = useState<{ lap: number; pct: number; xView: number; yView: number; actual: boolean } | null>(null)

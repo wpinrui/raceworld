@@ -25,7 +25,7 @@ export function PreQualPanel({
 }: Props) {
   const card = useLiveDriverCards()
   const hidden = useRatingsHidden()
-  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const constructorStandings = useSeasonStore((s) => s.constructorStandings)
   const highlight = useTeamHighlight()
 
@@ -75,7 +75,7 @@ export function PreQualPanel({
               const team = teams.find((t) => t.id === d.teamId)
               const form = forms[d.id] ?? 5
               return (
-                <tr key={d.id} style={highlight(d.teamId, team?.color)} className="border-b border-[#1a2030] hover:bg-[#1E2431] transition-colors">
+                <tr key={d.id} style={highlight(d.teamId, team?.color, d.id)} className="border-b border-[#1a2030] hover:bg-[#1E2431] transition-colors">
                   <td className="py-1 pr-2">
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: team?.color }} />

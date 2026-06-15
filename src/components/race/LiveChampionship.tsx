@@ -101,7 +101,7 @@ export function LiveChampionship({ states, drivers, teams, baselineDrivers, base
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-b border-[#1a2030]"
-                style={highlight(tab === 'constructors' ? r.id : driverTeam.get(r.id), r.color)}>
+                style={highlight(tab === 'constructors' ? r.id : driverTeam.get(r.id), r.color, tab === 'constructors' ? undefined : r.id)}>
                 <td className="py-1 pr-1 font-bold text-[#FFFFFF] w-5 text-right">{i + 1}</td>
                 <td className="py-1 px-1 w-8"><DeltaArrow delta={r.delta} /></td>
                 <td className="py-1 px-1">

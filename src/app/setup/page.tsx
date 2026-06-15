@@ -3,23 +3,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRouter } from 'next/navigation'
-import { Upload, Download, Plus, ChevronRight } from 'lucide-react'
+import { Upload, Download, Plus, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useRaceStore } from '@/lib/store/race-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import type { Driver, Team } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { DriverCard, makeDefaultDriver } from '@/components/setup/DriverCard'
 import { TeamLink } from '@/components/world/EntityLink'
-import { composeSeason, historyYears, DEFAULT_START_YEAR } from '@/lib/history/compose'
+import { composeSeason, historyYears, DEFAULT_START_YEAR, lastDriverEntryYear } from '@/lib/history/compose'
 import { useSetupCta } from '@/lib/store/setup-cta'
 import { calendarForYear } from '@/data/calendars'
-import { simUntilYear } from '@/lib/sim/sim-until-year'
+import { simUntilYear, simToNextSigningDay } from '@/lib/sim/sim-until-year'
 import { SimulatingWorldModal } from '@/components/SimulatingWorldModal'
 import { TeamManagerSetup, type TmSelection } from '@/components/setup/TeamManagerSetup'
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
+import { DriverSetup, type DriverSelection } from '@/components/setup/DriverSetup'
+import { ModeSelect, type GameMode } from '@/components/setup/ModeSelect'
+import { slugify } from '@/lib/slug'
 
 const DRIVERS_PER_TEAM = 2
 // Earliest season with historical data; derived (not hardcoded), so it tracks any earlier years added.
@@ -54,12 +54,22 @@ export default function SetupPage() {
   const [simWorld, setSimWorld] = useState(false)
   const [simulating, setSimulating] = useState(false)
   const [racesTotal, setRacesTotal] = useState(0)
+  // The year the launch sim STARTS from, so the progress bar counts races off the same base as racesTotal.
+  // Team Manager / sim-world start at EARLIEST_YEAR; Driver mode starts at the chosen startYear.
+  const [simBaseYear, setSimBaseYear] = useState(EARLIEST_YEAR)
   const cancelSimRef = useRef(false)
-  // Team Manager: run one team only, god-mode off (re-enableable as Settings talents).
-  const [teamManager, setTeamManager] = useState(false)
+  // Game mode is chosen on a standalone screen before any setup (Sandbox / Team Manager / Driver). null =
+  // that screen is showing (a fresh game only); once picked, the mode's own setup renders.
+  const [mode, setMode] = useState<GameMode | null>(null)
+  const teamManager = mode === 'team-manager'
+  const driverMode = mode === 'driver'
   const [tmSelection, setTmSelection] = useState<TmSelection>(null)
   const [tmMode, setTmMode] = useState<'existing' | 'new'>('existing')
   const [tmEntryYear, setTmEntryYear] = useState(EARLIEST_YEAR + 1)
+  const [driverSelection, setDriverSelection] = useState<DriverSelection>(null)
+  const [driverEntryYear, setDriverEntryYear] = useState(DEFAULT_START_YEAR)
+  // Drop back to the mode-select screen, discarding either mode's staged selection.
+  const changeMode = () => { setMode(null); setTmSelection(null); setDriverSelection(null) }
 
   // Selecting a year pre-populates that season's grid immediately — every year goes through the same
   // composeSeason() path (the latest year is just the default). Real-world changes default on for any
@@ -221,7 +231,44 @@ export default function SetupPage() {
     router.push('/home')
   }
 
+  // Driver mode: sim real history from the chosen start year to the entry year, optionally reset to that
+  // year's real-world roster, then drop the player into the free-agent pool and take over. The interactive
+  // signing day at the entry year's post-season is layered on once Driver mode's market lands (next phase).
+  async function startDriverCareer(sel: NonNullable<DriverSelection>) {
+    const { driver, entryYear, resetRealWorld } = sel
+    cancelSimRef.current = false
+    setRacesTotal(racesBetween(startYear, entryYear + 1)) // includes the sit-out entry year, simmed to its signing day
+    setSimBaseYear(startYear)
+    setSimulating(true)
+    const start = composeSeason(startYear)
+    if (!start) { setSimulating(false); setImportError(`No historical data for ${startYear}`); return }
+    useSeasonStore.getState().setTeamManager(false, null)
+    useSeasonStore.getState().setDriver(false, null) // auto-resolve the market during the fast-forward
+    useSeasonStore.getState().setRealWorldMode(true)
+    useSeasonStore.getState().initSeason(start.drivers, start.teams, startYear)
+    if (entryYear > startYear) await simUntilYear(entryYear, () => cancelSimRef.current)
+    const landed = useSeasonStore.getState().year
+    if (resetRealWorld) {
+      const real = composeSeason(landed)
+      if (real) useSeasonStore.getState().initSeason(real.drivers, real.teams, landed)
+    }
+    useSeasonStore.getState().addPlayerDriver(driver)
+    useSeasonStore.getState().setDriver(true, driver.id)
+    useSeasonStore.getState().setRealWorldMode(true)
+    // Auto-follow yourself so your own news interrupts the sim (toggleable later in Settings). Added once at
+    // career start; if the player unfollows themselves, it isn't forced back on.
+    if (!useSettingsStore.getState().followedDriverIds.includes(driver.id)) useSettingsStore.getState().toggleFollowDriver(driver.id)
+    // You sit out the entry year, so auto-sim straight through it to ITS signing day — that's the point of
+    // entry (you get offered a seat for next year). Landing at the start of a season you don't even race in
+    // and making the player click through it would be pointless.
+    await simToNextSigningDay(() => cancelSimRef.current)
+    useRaceStore.getState().resetSession()
+    setSimulating(false)
+    router.push('/home')
+  }
+
   async function handleStartSeason() {
+    if (driverMode && driverSelection) { await startDriverCareer(driverSelection); return }
     if (teamManager && tmSelection) { await startTeamManager(tmSelection); return }
     if (simWorld && startYear > EARLIEST_YEAR) { await runSimWorld(); return }
     seasonStore.setRealWorldMode(realWorld)
@@ -235,16 +282,20 @@ export default function SetupPage() {
   // start year. (seasonStore.year is the store default before any season exists, so it can't drive this.)
   const startSeasonYear = teamManager && tmMode === 'new'
     ? (Number.isFinite(tmEntryYear) ? tmEntryYear : EARLIEST_YEAR + 1)
-    : startYear
+    : driverMode
+      ? (Number.isFinite(driverEntryYear) ? driverEntryYear : startYear)
+      : startYear
 
   // Surface "Start Season" up in the nav top bar (the only CTA before a season exists). The staged
   // grid lives in this page's local state, so we register the action here for the nav to invoke.
   const setSetupCta = useSetupCta((s) => s.setCta)
   useEffect(() => {
     if (isActive) { setSetupCta(null); return }
-    setSetupCta({ ready: localDrivers.length > 0 && (!teamManager || tmSelection != null), year: startSeasonYear, start: handleStartSeason })
+    // No Start CTA until a mode is picked (or, mid-history, there's no mode screen so it's sandbox-ready).
+    const modeChosen = mode !== null || seasonStore.constructorHistory.length > 0
+    setSetupCta({ ready: modeChosen && localDrivers.length > 0 && (!teamManager || tmSelection != null) && (!driverMode || driverSelection != null), year: startSeasonYear, start: handleStartSeason })
     return () => setSetupCta(null)
-  }, [isActive, localDrivers, localTeams, startSeasonYear, realWorld, simWorld, teamManager, tmSelection]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, mode, localDrivers, localTeams, startSeasonYear, realWorld, simWorld, teamManager, tmSelection, driverMode, driverSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!hydrated) return null
 
@@ -252,6 +303,15 @@ export default function SetupPage() {
   // Pre-populating the 2026 defaults wipes the grid — only ever offer it on a
   // brand-new game (no season completed yet), never between seasons.
   const isFreshGame = seasonStore.constructorHistory.length === 0
+
+  // A fresh game opens on the standalone mode picker; once a mode is chosen its own setup renders.
+  if (!isActive && isFreshGame && mode === null) {
+    return (
+      <div className="h-full overflow-y-auto bg-[#0F1419] text-[#FFFFFF]">
+        <ModeSelect onSelect={setMode} />
+      </div>
+    )
+  }
   const expiringCount = localDrivers.filter(
     (d) => d.teamId !== '' && d.contractExpiresAfterSeason <= seasonStore.year,
   ).length
@@ -263,7 +323,7 @@ export default function SetupPage() {
 
   // Progress = races simmed so far (completed seasons + the in-progress one) over the total to the target.
   const racesSimmed = simulating
-    ? Math.min(racesTotal, racesBetween(EARLIEST_YEAR, seasonStore.year) + seasonStore.raceResults.length)
+    ? Math.min(racesTotal, racesBetween(simBaseYear, seasonStore.year) + seasonStore.raceResults.length)
     : 0
 
   return (
@@ -284,7 +344,7 @@ export default function SetupPage() {
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-1 h-6 rounded-sm bg-[#DC143C]" />
               <h1 className="font-display text-2xl tracking-wider uppercase">
-                {isActive ? 'Driver Market' : 'Setup'}
+                {isActive ? 'Driver Market' : teamManager ? 'Team Manager' : driverMode ? 'Driver' : mode === 'sandbox' ? 'Sandbox' : 'Setup'}
               </h1>
             </div>
             {isActive && expiringCount > 0 && (
@@ -299,9 +359,36 @@ export default function SetupPage() {
               <>
                 {isFreshGame && (
                   <>
-                    {/* The start-year dropdown is your START year (existing team). A new team sets its own
-                        entry year in the panel below, so the dropdown is hidden then. */}
-                    {!(teamManager && tmMode === 'new') && (
+                    <button onClick={changeMode}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] text-xs font-semibold uppercase tracking-wide transition-colors">
+                      <ChevronLeft size={13} /> Change mode
+                    </button>
+                    {/* Sandbox owns the world controls. Team Manager / Driver always play real F1 history (forced
+                        on), and Driver picks its start year inside its own panel — so these are sandbox-only.
+                        The start-year dropdown is also hidden for a new Team Manager team (it sets its own entry year). */}
+                    {mode === 'sandbox' && (
+                      <>
+                        <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
+                          className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
+                          {historyYears().slice().reverse().map((y) => (
+                            <option key={y} value={y}>{y}{y === DEFAULT_START_YEAR ? ' (default)' : ''}</option>
+                          ))}
+                        </select>
+                        {startYear !== DEFAULT_START_YEAR && (
+                          <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                            <input type="checkbox" checked={realWorld} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                            Real-world changes
+                          </label>
+                        )}
+                        {startYear > EARLIEST_YEAR && (
+                          <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
+                            <input type="checkbox" checked={simWorld} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
+                            Sim history from {EARLIEST_YEAR}
+                          </label>
+                        )}
+                      </>
+                    )}
+                    {teamManager && tmMode === 'existing' && (
                       <select value={startYear} onChange={(e) => selectYear(Number(e.target.value))}
                         className="px-2 py-2 rounded-lg bg-[#0F1419] text-[#FFFFFF] text-xs border border-[#303848] focus:border-[#00D9FF] outline-none">
                         {historyYears().slice().reverse().map((y) => (
@@ -309,24 +396,6 @@ export default function SetupPage() {
                         ))}
                       </select>
                     )}
-                    {startYear !== DEFAULT_START_YEAR && (
-                      <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] ${teamManager ? 'opacity-60' : ''}`}>
-                        {/* Team Manager always plays real F1 history, so real-world changes are forced on. */}
-                        <input type="checkbox" checked={teamManager || realWorld} disabled={teamManager} onChange={(e) => setRealWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
-                        Real-world changes
-                      </label>
-                    )}
-                    {startYear > EARLIEST_YEAR && (
-                      <label className={`flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] ${teamManager ? 'opacity-60' : ''}`}>
-                        {/* Team Manager always simulates history from the earliest year, so the toggle is forced on. */}
-                        <input type="checkbox" checked={teamManager || simWorld} disabled={teamManager} onChange={(e) => setSimWorld(e.target.checked)} className="w-4 h-4 accent-[#00D9FF] cursor-pointer disabled:cursor-not-allowed" />
-                        Sim history from {EARLIEST_YEAR}
-                      </label>
-                    )}
-                    <label className="flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF]">
-                      <input type="checkbox" checked={teamManager} onChange={(e) => { setTeamManager(e.target.checked); if (!e.target.checked) setTmSelection(null) }} className="w-4 h-4 accent-[#00D9FF] cursor-pointer" />
-                      Team Manager
-                    </label>
                   </>
                 )}
                 <button onClick={() => fileInputRef.current?.click()}
@@ -355,9 +424,15 @@ export default function SetupPage() {
           </div>
         )}
 
+        {!isActive && driverMode && (
+          <div className="mb-6">
+            <DriverSetup startYear={startYear} years={historyYears().slice().reverse()} onStartYearChange={selectYear} maxEntryYear={DEFAULT_START_YEAR} lastRealYear={lastDriverEntryYear()} onChange={setDriverSelection} onEntryYearChange={setDriverEntryYear} />
+          </div>
+        )}
+
         {/* In Team Manager mode the grid is rebuilt by the simulated history + your team choice, so editing
             it here is moot — hide the roster at setup (it still drives the live Driver Market once playing). */}
-        <div className={`space-y-6 ${teamManager && !isActive ? 'hidden' : ''}`}>
+        <div className={`space-y-6 ${(teamManager || driverMode) && !isActive ? 'hidden' : ''}`}>
           {driversByTeam.map(({ team, drivers: teamDrivers }) => (
             <div key={team.id} className="rounded-xl bg-[#1E2431] overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
@@ -401,7 +476,7 @@ export default function SetupPage() {
         </div>
 
         {/* Free agents */}
-        {freeAgents.length > 0 && !(teamManager && !isActive) && (
+        {freeAgents.length > 0 && !((teamManager || driverMode) && !isActive) && (
           <div className="mt-6 rounded-xl bg-[#1E2431] overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3 border-b border-[#2A3142]">
               <div className="w-1.5 h-8 rounded-full bg-[#6B7280]" />
@@ -525,7 +600,7 @@ export default function SetupPage() {
 
         {!isActive && (
           <div className="mt-8 flex justify-end">
-            <button onClick={handleStartSeason} disabled={localDrivers.length === 0 || (teamManager && !tmSelection)}
+            <button onClick={handleStartSeason} disabled={localDrivers.length === 0 || (teamManager && !tmSelection) || (driverMode && !driverSelection)}
               className="flex items-center gap-2 px-6 py-3 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-sm uppercase tracking-wide hover:bg-[#009CB8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               Start Season {startSeasonYear} <ChevronRight size={16} />
             </button>

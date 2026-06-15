@@ -315,7 +315,7 @@ export default function RacePage() {
               </div>
               <div className="h-2/3 min-h-0 p-4 overflow-y-auto">
                 {raceState && phase === 'racing' ? (
-                  season.teamManagerMode ? (
+                  season.teamManagerMode || season.driverMode ? (
                     <PitWallPanel
                       drivers={drivers} teams={teams} states={raceState.drivers}
                       raceState={raceState}
@@ -329,15 +329,15 @@ export default function RacePage() {
                       onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
                     />
                   )
-                ) : raceState && phase === 'pre-race' && season.teamManagerMode ? (
+                ) : raceState && phase === 'pre-race' && (season.teamManagerMode || season.driverMode) ? (
                   <StartingTyrePanel />
                 ) : (
                   <div className="flex flex-col h-full">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1 h-6 bg-[#DC143C] rounded-sm" />
-                      <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">{season.teamManagerMode ? 'Pit Wall' : 'God Mode'}</h2>
+                      <h2 className="font-semibold text-sm tracking-widest text-[#FFFFFF] uppercase">{season.teamManagerMode || season.driverMode ? 'Pit Wall' : 'God Mode'}</h2>
                     </div>
-                    <p className="text-[#FFFFFF] text-sm">{season.teamManagerMode ? 'Pit strategy control opens when the race starts.' : 'Available during race.'}</p>
+                    <p className="text-[#FFFFFF] text-sm">{season.teamManagerMode || season.driverMode ? 'Pit strategy control opens when the race starts.' : 'Available during race.'}</p>
                   </div>
                 )}
               </div>
@@ -351,7 +351,7 @@ export default function RacePage() {
           speed={speed} paused={paused}
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
-          showAutoAdvance={season.teamManagerMode && raceEngineerTalent}
+          showAutoAdvance={(season.teamManagerMode || season.driverMode) && raceEngineerTalent}
           autoAdvance={autoAdvance}
           onToggleAutoAdvance={() => setAutoAdvance((v) => !v)}
           pitAlert={pitAlert}

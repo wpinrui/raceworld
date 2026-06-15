@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const teams = useSeasonStore((s) => s.teams)
   const year = useSeasonStore((s) => s.year)
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const driverMode = useSeasonStore((s) => s.driverMode)
   const {
     interruptOnRaceday, interruptCategories, followedDriverIds, followedTeamIds, interruptOnFollowed,
     setInterruptOnRaceday, setCategoryInterrupt, toggleFollowDriver, toggleFollowTeam, setInterruptOnFollowed, resetInterruptsToDefault,
@@ -259,15 +260,16 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Team Manager talents — re-enable god-mode powers, your team only. Only shown in Team Manager mode. */}
-        {teamManagerMode && (
+        {/* God-mode talents — re-enable god-mode powers, off by default. Shown in both managed career modes;
+            Driver mode hides the team-only ones (seats / car development) since you race a single car. */}
+        {(teamManagerMode || driverMode) && (
           <section className="rounded-xl bg-[#1E2431] border border-[#2A3142] overflow-hidden">
             <div className="px-5 py-3 border-b border-[#2A3142]">
-              <h2 className="font-semibold text-sm tracking-wide uppercase text-[#FFFFFF]">Team Manager Talents</h2>
-              <p className="text-xs text-[#9CA3AF] mt-0.5">God-mode powers, off by default. Each applies to your team only.</p>
+              <h2 className="font-semibold text-sm tracking-wide uppercase text-[#FFFFFF]">{teamManagerMode ? 'Team Manager Talents' : 'Driver Talents'}</h2>
+              <p className="text-xs text-[#9CA3AF] mt-0.5">God-mode powers, off by default. Each applies to {teamManagerMode ? 'your team' : 'you'} only.</p>
             </div>
             <div className="p-4 space-y-1.5">
-              {TALENTS.map((t) => {
+              {TALENTS.filter((t) => teamManagerMode || !t.teamOnly).map((t) => {
                 const Icon = TALENT_ICONS[t.icon]
                 return (
                   <Tooltip key={t.id} content={t.tooltip}>

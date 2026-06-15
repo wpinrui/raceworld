@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { DraftPick, DraftSeat } from '@/lib/sim/driver-market'
+import type { DraftPick, DraftSeat, PlayerSeatOffer } from '@/lib/sim/driver-market'
 import type { Driver, DroppedDriver } from '@/lib/sim/types'
-import { useSeasonStore, type PendingPlayerDraft } from '@/lib/store/season-store'
+import { useSeasonStore, type PendingPlayerDraft, type PendingDriverOffer, type DriverOfferResponse } from '@/lib/store/season-store'
 import { signingDayReactions } from '@/lib/news/signing-day-reactions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import { actionGetDriverCareers } from '@/lib/news/actions'
@@ -86,6 +86,71 @@ function buildPlayerDraftPicks(pd: PendingPlayerDraft): DraftPick[] {
   ]
 }
 
+// Driver mode: the SAME board, inverted — a team has OFFERED you a seat. Rivals ABOVE the offered seat are
+// revealed one at a time (as in the TM draft), then your offered seat is on the clock with the accept /
+// haggle / decline controls; the seats BELOW are pending placeholders. Built from the paused draft cursor.
+function buildDriverOfferPicks(pdo: PendingDriverOffer): DraftPick[] {
+  const ph = (seat: DraftSeat): DraftPick => ({
+    teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
+    driverId: '', driverName: '', prevTeamName: '', faRank: 0, seatRank: 0,
+    pickPct: 0, realizedProb: 0, years: 0, flavour: 'chalk', odds: [],
+  })
+  return [...pdo.cursor.picks, ...pdo.seats.slice(pdo.offer.seatRank).map(ph)]
+}
+
+const clampYears = (n: number) => Math.max(1, Math.min(5, Math.round(n)))
+
+// The accept / haggle / decline panel for the seat offer, shown in the board's right column once it's your
+// turn. Haggling a different length carries a 10%-per-year rejection; on rejection, take the original or walk.
+function DriverOfferControls({ offer, modifyRejected, onRespond }: { offer: PlayerSeatOffer; modifyRejected: boolean; onRespond: (r: DriverOfferResponse) => void }) {
+  const [want, setWant] = useState<number | null>(null)
+  const [shownRank, setShownRank] = useState(offer.seatRank)
+  if (offer.seatRank !== shownRank) { setShownRank(offer.seatRank); setWant(null) } // reset the counter on a new offer
+  const proposeYears = want ?? offer.offeredYears
+  const delta = Math.abs(proposeYears - offer.offeredYears)
+  const rejectPct = Math.round(Math.min(1, 0.1 * delta) * 100)
+  const PRIMARY = 'px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF]'
+  const GHOST = 'px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'
+  return (
+    <div className="p-3 space-y-3">
+      <div>
+        <span className="h-5 w-1 inline-block align-middle mr-2 rounded-sm" style={{ backgroundColor: offer.teamColor }} />
+        <TeamLink id={offer.teamId} className="text-base font-display tracking-wide text-[#FFFFFF]">{offer.teamName}</TeamLink>
+        <p className="text-xs text-[#FFFFFF] mt-1">Offering a <span className="font-semibold text-[#00D9FF]">{offer.offeredYears}-year</span> deal · {offer.pickPct}% they came to you for this seat.</p>
+      </div>
+      {modifyRejected ? (
+        <div className="space-y-2">
+          <p className="text-xs text-[#F59E0B]">They turned down your counter.</p>
+          <div className="flex gap-2">
+            <button onClick={() => onRespond('accept')} className={PRIMARY}>Accept {offer.offeredYears}yr</button>
+            <button onClick={() => onRespond('decline')} className={GHOST}>Decline seat</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-[#FFFFFF]">Length</span>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((y) => (
+                <button key={y} onClick={() => setWant(y)} className={`px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${proposeYears === y ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}>{y}yr</button>
+              ))}
+            </div>
+          </div>
+          {delta > 0 && (
+            <p className="text-xs text-[#FFFFFF]">Counter at {proposeYears}yr · <span className={rejectPct >= 30 ? 'text-[#DC143C]' : 'text-[#F59E0B]'}>{rejectPct}% they walk away</span></p>
+          )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {delta === 0
+              ? <button onClick={() => onRespond('accept')} className={PRIMARY}>Accept {offer.offeredYears}yr</button>
+              : <button onClick={() => onRespond({ modifyYears: clampYears(proposeYears) })} className={PRIMARY}>Counter {proposeYears}yr</button>}
+            <button onClick={() => onRespond('decline')} className={GHOST}>Decline, hold out</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { picks: DraftPick[]; year: number; dropped?: DroppedDriver[] }) {
   const stored = useSeasonStore((s) => s.signingDayRevealed)
   const setRevealed = useSeasonStore((s) => s.setSigningDayRevealed)
@@ -97,6 +162,9 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
   const eos = useSeasonStore((s) => s.endOfSeasonSummary)
   // Team Manager: when the off-season draft is paused for the player to fill their own seat(s).
   const playerDraft = useSeasonStore((s) => s.pendingPlayerDraft)
+  // Driver mode: when the draft has paused to OFFER the player a seat (the inverse interactive pause).
+  const driverOffer = useSeasonStore((s) => s.pendingDriverOffer)
+  const respondOffer = useSeasonStore((s) => s.driverOfferRespond)
 
   // Team Manager: the contract length you're offering the next free agent you sign (your call, 1-4 years).
   const [offerYears, setOfferYears] = useState(1)
@@ -110,8 +178,8 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
 
   // Team Manager: fold the player's interactive pick INTO this one board (rivals above signed, your seat
   // on the clock with a clickable pool, rivals below pending). Otherwise it's just the resolved draft.
-  const draftMode = playerDraft != null
-  const picks: DraftPick[] = playerDraft ? buildPlayerDraftPicks(playerDraft) : seasonPicks
+  const draftMode = playerDraft != null || driverOffer != null
+  const picks: DraftPick[] = driverOffer ? buildDriverOfferPicks(driverOffer) : playerDraft ? buildPlayerDraftPicks(playerDraft) : seasonPicks
 
   if (picks.length === 0) {
     return (
@@ -122,11 +190,15 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
   }
 
   const total = picks.length
-  // Draft mode: the player reveals the rivals ABOVE their seat one at a time (manual reveal, capped at the
-  // above count), then it's their turn. revealed = (rivals above revealed so far) + (own seats filled).
-  const aboveCount = playerDraft ? playerDraft.picksAbove.length : 0
-  const revealed = playerDraft ? Math.min(stored, aboveCount) + playerDraft.playerPicks.length : Math.min(stored, total)
-  const playerTurn = playerDraft != null && stored >= aboveCount // every rival above is revealed -> you pick
+  // Draft / offer mode: the player reveals the rivals ABOVE their seat one at a time (manual reveal, capped
+  // at the above count), then it's their turn. revealed = (rivals above revealed so far) + (own seats filled).
+  const aboveCount = driverOffer ? driverOffer.cursor.picks.length : playerDraft ? playerDraft.picksAbove.length : 0
+  const revealed = driverOffer
+    ? Math.min(stored, aboveCount)
+    : playerDraft
+    ? Math.min(stored, aboveCount) + playerDraft.playerPicks.length
+    : Math.min(stored, total)
+  const playerTurn = draftMode && stored >= aboveCount // every rival above is revealed -> your pick / your offer
   const onClock = revealed < total ? picks[revealed] : null
   const complete = !draftMode && !onClock
   // The pool you're choosing from once it's your turn.
@@ -178,15 +250,15 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
         {!playerTurn && (
           <>
             <button
-              onClick={() => setRevealed(playerDraft ? Math.min(aboveCount, stored + 1) : Math.min(total, revealed + 1))}
-              disabled={!playerDraft && complete}
+              onClick={() => setRevealed(draftMode ? Math.min(aboveCount, stored + 1) : Math.min(total, revealed + 1))}
+              disabled={!draftMode && complete}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#00D9FF] text-[#0F1419] hover:bg-[#33E1FF] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Reveal next signing
             </button>
             <button
-              onClick={() => setRevealed(playerDraft ? aboveCount : total)}
-              disabled={!playerDraft && complete}
+              onClick={() => setRevealed(draftMode ? aboveCount : total)}
+              disabled={!draftMode && complete}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Reveal all
@@ -232,7 +304,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
                       <span className="ml-auto shrink-0 tabular-nums text-xs text-[#FFFFFF]">{p.years}yr</span>
                     </span>
                   ) : isOnClock ? (
-                    <span className="text-xs italic text-[#00D9FF] flex-1">{playerTurn ? 'Your pick' : 'Up next…'}</span>
+                    <span className="text-xs italic text-[#00D9FF] flex-1">{playerTurn ? (driverOffer ? `Offered to you · ${driverOffer.offer.offeredYears}yr` : 'Your pick') : 'Up next…'}</span>
                   ) : (
                     <span className="text-xs text-[#FFFFFF] flex-1">Seat open</span>
                   )}
@@ -246,7 +318,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
             unsigned once every seat is settled. Always visible, so it's clear who missed out. */}
         <div className="flex flex-col min-h-0">
           <p className="text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5 shrink-0">
-            Free agents{playerDraft && playerDraft.rejected.length > 0 ? <> · <span className="text-[#DC143C]">{playerDraft.rejected.length} turned you down</span></> : complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}
+            {driverOffer && playerTurn ? 'Your offer' : <>Free agents{playerDraft && playerDraft.rejected.length > 0 ? <> · <span className="text-[#DC143C]">{playerDraft.rejected.length} turned you down</span></> : complete && dropped.length > 0 ? <> · <span className="text-[#DC143C]">{dropped.length} unsigned</span></> : ''}</>}
           </p>
           {playerTurn && playerPool.length > 0 && (
             <div className="flex items-center gap-2 mb-1.5 shrink-0">
@@ -265,7 +337,9 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
             </div>
           )}
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[#2A3142]/50 rounded-lg bg-[#0F1419]/40">
-            {playerTurn
+            {driverOffer && playerTurn
+              ? <DriverOfferControls offer={driverOffer.offer} modifyRejected={driverOffer.modifyRejected} onRespond={respondOffer} />
+              : playerTurn
               ? playerPool.length > 0
                 ? playerPool.map((d) => (
                     <button
@@ -273,7 +347,7 @@ export function SigningDayBoard({ picks: seasonPicks, year, dropped = [] }: { pi
                       onClick={() => useSeasonStore.getState().playerDraftSign(d.id, offerYears)}
                       className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[#00D9FF]/10"
                     >
-                      <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{playerDraft.faRankOf[d.id] ?? ''}</span>
+                      <span className="w-5 text-xs font-bold tabular-nums text-[#FFFFFF] shrink-0">{playerDraft?.faRankOf[d.id] ?? ''}</span>
                       <NationalityFlag code={d.nationality} />
                       <DriverTooltip driver={d} year={year} wdcPosition={wdcPosOf.get(d.id) ?? null} wdcPoints={wdcPtsOf.get(d.id)} career={careers[d.id]}>
                         <span className="text-sm text-[#FFFFFF] truncate min-w-0">{d.name}</span>

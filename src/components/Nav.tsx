@@ -16,6 +16,7 @@ import { generateNews, CATEGORY_LABELS, type NewsArticle, type DriverCareer, typ
 import { buildLiveNewsContext } from '@/lib/news/live-context'
 import { computeNextStop, type ContinueSettings } from '@/lib/sim/continue-loop'
 import { simulateUntilRound } from '@/lib/sim/sim-ahead'
+import { simToNextSigningDay } from '@/lib/sim/sim-until-year'
 import { commitCurrentRace } from '@/lib/sim/race-commit'
 import { runOffSeasonEvent } from '@/lib/sim/offseason-flow'
 import { actionGetDriverCareers, actionGetTeamCareers, actionGetTeamDriverTallies, actionGetSeasonRecords, actionGetLegendData } from '@/lib/news/actions'
@@ -61,11 +62,31 @@ export default function Nav() {
   // Team Manager: an unresolved free-agency draft or renewal call blocks Continue until the player acts.
   const pendingDraft = useSeasonStore((s) => s.pendingPlayerDraft != null)
   const pendingRenewals = useSeasonStore((s) => s.pendingPlayerRenewals.length > 0)
-  const pendingPlayerCall = pendingDraft || pendingRenewals
+  // Driver mode: a seat offer on the table is likewise a blocking call.
+  const pendingOffer = useSeasonStore((s) => s.pendingDriverOffer != null)
+  const pendingPlayerCall = pendingDraft || pendingRenewals || pendingOffer
+  // Driver mode: a seatless free agent's only goal is the next signing day, so offer the one-click jump from
+  // ANY waiting state — whether they're sitting out a season (Jan 1, no team) or just went unsigned at a
+  // signing day. Only hidden once they hold a seat or an offer is on the table.
+  const driverMode = useSeasonStore((s) => s.driverMode)
+  const playerSeatless = useSeasonStore((s) => {
+    const d = s.playerDriverId ? s.drivers.find((x) => x.id === s.playerDriverId) : null
+    return d != null && d.teamId === ''
+  })
+  // You sit out the rest of the off-season after signing, so you're still teamId '' in the live grid until
+  // the rollover — but you DO have a confirmed drive (you're on a team in next season's staged grid). That
+  // ends the "waiting" state: no more sim-to-signing-day button once you've got a seat lined up.
+  const signedForNextSeason = useSeasonStore((s) => {
+    if (!s.playerDriverId) return false
+    const next = s.pendingNextSeasonState?.drivers.find((d) => d.id === s.playerDriverId)
+    return next != null && next.teamId !== ''
+  })
+  const freeAgentWaiting = driverMode && !pendingOffer && playerSeatless && !signedForNextSeason
 
   const hydrated = useHydrated()
   const [menuOpen, setMenuOpen] = useState(false)
   const [restartOpen, setRestartOpen] = useState(false)
+  const [restartRaceOpen, setRestartRaceOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [raceModalOpen, setRaceModalOpen] = useState(false)
   const [raceModalMounted, setRaceModalMounted] = useState(false)
@@ -156,6 +177,8 @@ export default function Nav() {
 
   // Raceday progression — the single CTA walks pre-qualifying → pre-race → finished.
   function handleSimQualifying() { useRaceStore.getState().initSession() }
+  // Skip the qualifying playback: the result is already computed, so jump straight to the pre-race grid.
+  function handleSkipQualifying() { useRaceStore.getState().finishQualifying() }
   function handleStartRace() {
     // Go straight to a paused green flag (no lights-out countdown); the player resumes to set off.
     useRaceStore.getState().beginRacing()
@@ -182,7 +205,8 @@ export default function Nav() {
       // running past an unmade decision now that the off-season flows through this same loop) (#126).
       if (pendingRealWorldChanges({ realWorldMode: s.realWorldMode, phase: s.phase, resolved: s.realWorldChangesResolved, year: s.year, teams: s.teams, completedRounds: s.raceResults.length })) break
       // Team Manager: never advance past an unmade signing / renewal call (the draft pause, the renewal round).
-      if (s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0) break
+      // Driver mode: same for a seat offer waiting on the player.
+      if (s.pendingPlayerDraft != null || s.pendingPlayerRenewals.length > 0 || s.pendingDriverOffer != null) break
       const articles = generateNews(buildLiveNewsContext(s, careerBase, teamCareerBase, records, teamDriverTallies, legendData))
       setCalendarArticles(articles) // feed the calendar bar this season's dated news (revealed per day)
       const stop = computeNextStop({ currentDate: s.currentDate, completedRounds: s.raceResults.length, year: s.year, articles, settings, readIds: s.readNewsIds })
@@ -255,6 +279,26 @@ export default function Nav() {
   }
   function handleSimNextRace() { runSimRace() }
 
+  // Driver mode escape hatch: an unsigned free agent jumps the whole next season at max speed and halts at
+  // the next signing day (a fresh offer, or unsigned again). Stoppable mid-run like any fast-forward.
+  async function runSimToNextSigningDay() {
+    if (busy) return
+    setNewsStop(null)
+    setCalendarArticles([])
+    setBusy(true)
+    setAdvancing(true)
+    stopRef.current = false
+    useSimControl.getState().setSimBusy(true)
+    try {
+      await simToNextSigningDay(() => stopRef.current)
+    } finally {
+      setBusy(false)
+      setAdvancing(false)
+      useSimControl.getState().setSimBusy(false)
+      router.push('/home')
+    }
+  }
+
   // Fast-forward (day bar, no news/followed interrupts) up to a future race's weekend.
   async function runAdvanceToRace(targetRound: number) {
     if (busy) return
@@ -308,15 +352,28 @@ export default function Nav() {
     setMenuOpen(false)
   }
 
+  // Restart the race only (qualifying kept): rebuild lap 1 from the grid and return to the pre-race screen.
+  function handleRestartRace() {
+    useRaceStore.getState().restartRace()
+    setRestartRaceOpen(false)
+  }
+
   // The right-hand CTA, by context.
   const cta = (() => {
     if (!hydrated) return null
     if (matchMode) {
-      // Qualifying drives itself (SpeedBar) — no top-right CTA.
-      if (racePhase === 'qualifying') return null
+      // Qualifying drives itself (SpeedBar); the grid's already set, so offer a skip straight to the grid.
+      if (racePhase === 'qualifying') return <button onClick={handleSkipQualifying} className={SECONDARY_CTA}>Skip to Race<ChevronRight size={14} /></button>
+
       if (racePhase === 'pre-race') return <button onClick={handleStartRace} className={PRIMARY_CTA}>Start Race<ChevronRight size={14} /></button>
-      if (racePhase === 'finished') return <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
-      if (racePhase === 'racing') return null
+      if (racePhase === 'finished') return (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setRestartRaceOpen(true)} disabled={busy} className={SECONDARY_CTA}>Restart Race</button>
+          <button onClick={handleEndRace} disabled={busy} className={PRIMARY_CTA}>{busy ? 'Ending…' : 'End Race'}<ChevronRight size={14} /></button>
+        </div>
+      )
+      // Mid-race: the SpeedBar drives pace/pause, so the top-right offers the race restart (grid kept).
+      if (racePhase === 'racing') return <button onClick={() => setRestartRaceOpen(true)} className={SECONDARY_CTA}>Restart Race</button>
       return <button onClick={handleSimQualifying} className={PRIMARY_CTA}>Start Qualifying<ChevronRight size={14} /></button>
     }
     if (!seasonActive) {
@@ -326,6 +383,21 @@ export default function Nav() {
         : null
     }
     if (advancing) return <button onClick={handleStop} className={STOP_CTA}>Stop Simulating</button>
+    const continueBtn = (
+      <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={freeAgentWaiting ? SECONDARY_CTA : PRIMARY_CTA}>
+        {pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : pendingOffer ? 'Decide offer' : busy ? 'Working…' : 'Continue'}<Play size={12} />
+      </button>
+    )
+    // Driver mode: a seatless free agent's main move is to reach the next signing day (from a sit-out season
+    // or after going unsigned), so that's the primary CTA, with Continue kept alongside for manual advance.
+    if (freeAgentWaiting) {
+      return (
+        <div className="flex items-center gap-2">
+          <button onClick={runSimToNextSigningDay} disabled={busy} className={PRIMARY_CTA}>Sim To Next Signing Day<Play size={12} /></button>
+          {continueBtn}
+        </div>
+      )
+    }
     // Off-season now uses the same unified Continue (the loop handles its dated beats) — no special case.
     if (atRaceday && interruptOnRaceday) {
       return (
@@ -335,7 +407,7 @@ export default function Nav() {
         </div>
       )
     }
-    return <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={PRIMARY_CTA}>{pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : busy ? 'Working…' : 'Continue'}<Play size={12} /></button>
+    return continueBtn
   })()
 
   // Spacebar activates the primary CTA (Football-Manager style). The current action mirrors the `cta`
@@ -351,11 +423,12 @@ export default function Nav() {
     }
     if (advancing) return handleStop
     if (!seasonActive) return setupCta && setupCta.ready ? setupCta.start : null
+    if (freeAgentWaiting) return busy ? null : runSimToNextSigningDay
     if (offSeason) return busy ? null : handleContinue
     if (atRaceday && interruptOnRaceday) return () => router.push('/race')
     return busy ? null : handleContinue
   }
-  const ctaBlocked = newsStop != null || restartOpen || menuOpen || !!pendingRW
+  const ctaBlocked = newsStop != null || restartOpen || restartRaceOpen || menuOpen || !!pendingRW
   const ctaActionRef = useRef<(() => void) | null>(null)
   // Keep the ref pointed at the current action after each render (not during it).
   useEffect(() => { ctaActionRef.current = ctaBlocked ? null : primaryCtaAction() })
@@ -478,6 +551,23 @@ export default function Nav() {
             </div>
             <div className="flex justify-end px-5 py-3 border-t border-[#2A3142]">
               <button onClick={() => setNewsStop(null)} className={PRIMARY_CTA}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restart-race confirm (match mode): rebuilds the race from the grid, qualifying kept. */}
+      {restartRaceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRestartRaceOpen(false)}>
+          <div className="bg-[#1E2431] border border-[#2A3142] rounded-xl p-6 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-1 h-5 rounded-sm bg-[#DC143C]" />
+              <h2 className="font-display text-sm tracking-wider uppercase text-[#FFFFFF]">Restart Race</h2>
+            </div>
+            <p className="text-sm text-[#FFFFFF] mb-5">This restarts the race from the grid. Your qualifying result is kept; the current race is discarded.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setRestartRaceOpen(false)} className="px-4 py-2 rounded-lg bg-[#2A3142] text-[#FFFFFF] text-xs font-semibold uppercase tracking-wide hover:bg-[#303848] transition-colors">Cancel</button>
+              <button onClick={handleRestartRace} className="px-4 py-2 rounded-lg bg-[#DC143C] text-white text-xs font-semibold uppercase tracking-wide hover:bg-[#b01030] transition-colors">Restart Race</button>
             </div>
           </div>
         </div>

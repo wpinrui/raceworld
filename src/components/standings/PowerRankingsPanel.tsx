@@ -9,6 +9,7 @@ import { DriverHover } from '@/components/world/DriverHover'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
+import { useTeamHighlight } from '@/lib/useTeamHighlight'
 
 interface Props {
   drivers: Driver[]
@@ -53,10 +54,11 @@ function Th({ k, label, right, sortKey, sortDir, onSort }: {
 
 export function PowerRankingsPanel({ drivers, teams, raceResults, constructorStandings, driverStandings }: Props) {
   const card = useLiveDriverCards()
-  const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const highlight = useTeamHighlight()
+  const managed = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const talentOn = useSettingsStore((s) => s.talents['data-room'] ?? false)
-  // In Team Manager mode the breakdown reveal is a Data Room talent; without it, force the public view.
-  const gateAllowsReveal = !teamManagerMode || talentOn
+  // In the managed career modes the breakdown reveal is a Data Room talent; without it, force the public view.
+  const gateAllowsReveal = !managed || talentOn
   const [godModeToggle, setGodModeToggle] = useState(false)
   const godMode = godModeToggle && gateAllowsReveal
   const [sortKey, setSortKey] = useState<SortKey>('media')
@@ -141,7 +143,7 @@ export function PowerRankingsPanel({ drivers, teams, raceResults, constructorSta
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.driver.id} className="border-b border-[#2A3142]/50">
+              <tr key={r.driver.id} style={highlight(r.driver.teamId, r.teamColor, r.driver.id)} className="border-b border-[#2A3142]/50">
                 <td className="py-1.5 pr-3 tabular-nums text-[#FFFFFF]">{i + 1}</td>
                 <td className="py-1.5 px-3">
                   <span className="flex items-center gap-2">

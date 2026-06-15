@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { Team } from '@/lib/sim/types'
 import { CountrySelect } from '@/components/CountrySelect'
+import { slugify } from '@/lib/slug'
 
 // Pick the team you'll manage in Team Manager mode: an EXISTING grid team (you start the year you chose),
 // or a NEW team that JOINS the grid at a future entry year. A new team isn't given a roster here — the
@@ -13,10 +14,6 @@ export type TmSelection =
   | { kind: 'existing'; teamId: string }
   | { kind: 'new'; team: Team; entryYear: number }
   | null
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
 
 export function TeamManagerSetup({
   teams, minEntryYear, maxEntryYear, onChange, onModeChange, onEntryYearChange,

@@ -29,10 +29,13 @@ export function StartingTyrePanel() {
   const drivers = useRaceStore((s) => s.drivers)
   const setStartingTyre = useRaceStore((s) => s.setStartingTyre)
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const driverMode = useSeasonStore((s) => s.driverMode)
+  const playerDriverId = useSeasonStore((s) => s.playerDriverId)
   const tyreTel = useSettingsStore((s) => s.talents['tyre-telemetry'] ?? false)
   const raceEng = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
 
-  const myDrivers = drivers.filter((d) => d.teamId === playerTeamId)
+  // Driver mode: only your own car; Team Manager: both of the team's cars.
+  const myDrivers = driverMode ? drivers.filter((d) => d.id === playerDriverId) : drivers.filter((d) => d.teamId === playerTeamId)
   const compoundOf = (driverId: string) => raceState?.drivers.find((ds) => ds.driverId === driverId)?.currentTyre.compound
 
   if (myDrivers.length === 0) {
@@ -46,17 +49,20 @@ export function StartingTyrePanel() {
         <h2 className="font-semibold text-sm tracking-widest uppercase text-[#FFFFFF]">Starting Tyre</h2>
       </div>
 
-      {/* Set both cars at once. */}
-      <div className="flex items-center gap-3">
-        <span className="text-xs uppercase tracking-wide text-[#FFFFFF] w-24 shrink-0">Both cars</span>
-        <div className="flex gap-1.5">
-          {COMPOUNDS.map((c) => (
-            <CompoundButton key={c} compound={c} selected={false} onClick={() => myDrivers.forEach((d) => setStartingTyre(d.id, c))} />
-          ))}
-        </div>
-      </div>
-
-      <div className="h-px bg-[#2A3142]" />
+      {/* Set both cars at once (Team Manager only — Driver mode has a single car). */}
+      {myDrivers.length > 1 && (
+        <>
+          <div className="flex items-center gap-3">
+            <span className="text-xs uppercase tracking-wide text-[#FFFFFF] w-24 shrink-0">Both cars</span>
+            <div className="flex gap-1.5">
+              {COMPOUNDS.map((c) => (
+                <CompoundButton key={c} compound={c} selected={false} onClick={() => myDrivers.forEach((d) => setStartingTyre(d.id, c))} />
+              ))}
+            </div>
+          </div>
+          <div className="h-px bg-[#2A3142]" />
+        </>
+      )}
 
       {/* Per-driver — overrides one car (split strategy), with the talent reveals beneath each car. */}
       {myDrivers.map((d) => {

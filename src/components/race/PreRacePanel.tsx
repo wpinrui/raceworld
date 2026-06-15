@@ -39,7 +39,7 @@ export function PreRacePanel({ raceState, drivers, teams, currentCircuit }: Prop
               const driver = drivers.find((d) => d.id === qr.driverId)
               const team = driver ? teams.find((t) => t.id === driver.teamId) : undefined
               return (
-                <tr key={qr.driverId} style={highlight(driver?.teamId, team?.color)} className="border-b border-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142] transition-colors">
+                <tr key={qr.driverId} style={highlight(driver?.teamId, team?.color, qr.driverId)} className="border-b border-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142] transition-colors">
                   <td className="py-1 px-2 font-bold">{qr.gridPosition}</td>
                   <td className="py-1 px-2">
                     <div className="flex items-center gap-2.5">

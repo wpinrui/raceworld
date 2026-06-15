@@ -152,3 +152,46 @@ export function applyRaceProgression(
 export function ageDrivers(drivers: Driver[]): Driver[] {
   return drivers.map((d) => ({ ...d, age: d.age + 1 }))
 }
+
+// Races per season used to pace the deterministic projection (rough 1996-2026 average). Shared with the
+// historical grid composition (compose.ts) so a previewed career arc matches how the game develops drivers.
+export const RACES_PER_SEASON = 22
+
+// Expected-value (no-RNG) version of one applyRaceProgression tick — the deterministic spine of the curve.
+// Mirrors applyRaceProgression exactly with the random draws replaced by their medians (develop gain =
+// median, no per-stat jitter; decline drop = declineMedian). Shared by the historical projection
+// (compose.ts) and the driver-creation career-arc preview, so the two never drift.
+export function stepRaceMedian(stats: Ratings, age: number, peakPotential: number, primeEnd: number, declineRate = 1): Ratings {
+  const ov = overall(stats)
+  const next = { ...stats }
+  if (age < primeEnd) {
+    if (ov >= peakPotential) return stats
+    const yearsTillPrime = Math.max(0.001, primeEnd - age)
+    const racesToPotential = Math.max(1, 15 * yearsTillPrime)
+    const gap = peakPotential - ov
+    const gain = Math.min(gap, (gap / racesToPotential) * 1.5) // per-race median
+    for (const stat of STATS) next[stat] = Math.min(100, round1(stats[stat] + gain * DEVELOP_RATES[stat]))
+  } else {
+    const declineMedian = 0.04 * (1 + (age - primeEnd) * declineRate)
+    for (const stat of STATS) next[stat] = Math.max(20, round1(stats[stat] - declineMedian * DECLINE_RATES[stat]))
+  }
+  return next
+}
+
+// Project a driver's overall across age, from their current age to `toAge`, along the deterministic median
+// career curve. Powers the live arc preview in driver creation — no RNG, so it redraws instantly as sliders
+// move. Ratings are taken as-is (no entry re-tuning: the player's slider values ARE the entry ratings).
+export function projectOverallByAge(
+  d: Ratings & { age: number; peakPotential: number; primeEnd: number; declineRate?: number },
+  toAge = 40,
+): { age: number; overall: number }[] {
+  let stats: Ratings = { pace: d.pace, wetWeatherPace: d.wetWeatherPace, overtaking: d.overtaking, smoothness: d.smoothness, consistency: d.consistency }
+  let age = d.age
+  const out = [{ age, overall: round1(overall(stats)) }]
+  while (age < toAge) {
+    for (let r = 0; r < RACES_PER_SEASON; r++) stats = stepRaceMedian(stats, age, d.peakPotential, d.primeEnd, d.declineRate ?? 1)
+    age += 1
+    out.push({ age, overall: round1(overall(stats)) })
+  }
+  return out
+}

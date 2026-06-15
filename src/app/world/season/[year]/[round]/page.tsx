@@ -66,7 +66,7 @@ export default function RaceClassificationPage() {
                   </thead>
                   <tbody>
                     {classification.rows.map((r) => {
-                      const hl = highlight(r.teamId, resolveTeamColor(r.teamId, teams))
+                      const hl = highlight(r.teamId, resolveTeamColor(r.teamId, teams), r.driverId)
                       return (
                       <tr key={r.driverId} style={hl} className="border-b border-[#2A3142]/50">
                         <td className="py-1.5 px-3"><span className="flex justify-center"><ResultChip position={r.dnf ? null : r.finishPosition} year={year} /></span></td>

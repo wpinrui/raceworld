@@ -145,6 +145,14 @@ export default function StandingsPage() {
     ? selectedArchive.driverStandings.map((d) => ({ id: d.driverId, name: d.driverName, teamId: d.teamId }))
     : season.drivers
 
+  // All-time highlight = identity, not involvement: Driver mode marks YOUR driver in the drivers table;
+  // Team Manager marks YOUR constructor in the constructors table — never the other way round. Tinted with
+  // your team's colour (a free agent falls back to the app accent).
+  const hlTeamId = season.teamManagerMode ? season.playerTeamId : (season.driverMode && season.playerDriverId ? season.drivers.find((d) => d.id === season.playerDriverId)?.teamId ?? null : null)
+  const hlColor = (hlTeamId ? season.teams.find((t) => t.id === hlTeamId)?.color : undefined) ?? '#00D9FF'
+  const allTimeDriverHlId = season.driverMode ? season.playerDriverId : null
+  const allTimeTeamHlId = season.teamManagerMode ? season.playerTeamId : null
+
   // At year end the standings are final — celebrate the two champions.
   const showChampions = isOffSeason(season.phase) && !selectedArchive
   const champDriver = displayDrivers[0]
@@ -300,9 +308,9 @@ export default function StandingsPage() {
           <div className="flex flex-col flex-1 min-h-0 gap-2">
             {([
               { label: 'Drivers', open: openDrivers, toggle: () => setOpenDrivers((v) => !v), empty: foldedDrivers.length === 0,
-                table: <AllTimeStatsTable rows={foldedDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} /> },
+                table: <AllTimeStatsTable rows={foldedDrivers} columns={DRIVER_ALLTIME_COLS} kind="driver" flagOf={(id) => driverNation.get(id) ?? ''} highlightId={allTimeDriverHlId} highlightColor={hlColor} /> },
               { label: 'Constructors', open: openTeams, toggle: () => setOpenTeams((v) => !v), empty: foldedTeams.length === 0,
-                table: <AllTimeStatsTable rows={foldedTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} /> },
+                table: <AllTimeStatsTable rows={foldedTeams} columns={TEAM_ALLTIME_COLS} kind="team" flagOf={(id) => teamNation.get(id) ?? ''} highlightId={allTimeTeamHlId} highlightColor={hlColor} /> },
             ] as const).map((s) => (
               <div
                 key={s.label}

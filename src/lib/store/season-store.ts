@@ -21,7 +21,7 @@ import { useSettingsStore } from './settings-store'
 import { applyRaceProgression, ageDrivers, rollSeasonForm } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
 import { computeDriverMediaScores, computeTeamMediaScores, applyMarketAttrition, generateFreeAgentPool, computeRetentionDeltas } from '@/lib/sim/market'
-import { runDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, renewalChance, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch } from '@/lib/sim/driver-market'
+import { runDraft, runDriverDraft, negotiateRenewals, assessExpiringContracts, marketWatchRound, marketRenewalRound, renewalChance, type DraftPick, type DraftSeat, type RenewalResult, type ContractWatch, type PlayerSeatOffer, type DriverDraftCursor } from '@/lib/sim/driver-market'
 
 // Team Manager: an expiring driver of the player's, awaiting the player's renewal decision (offer or let
 // expire). `diff` = driver media percentile − team WCC percentile: >0 = outdriving the seat (a decline risk).
@@ -49,6 +49,25 @@ export interface PendingPlayerDraft {
   rejected: string[] // declined for the seat currently being filled
 }
 
+// Driver mode signing-day pause: the draft has rolled the player a seat and waits for accept / decline /
+// modify-length. `cursor` is the resumable draft state; `modifyRejected` means a length counter-offer was
+// turned down and the player must now take the original offer or decline.
+export interface PendingDriverOffer {
+  year: number
+  newYear: number
+  teams: Team[]
+  allDrivers: Driver[]
+  stayingIds: string[]
+  seats: DraftSeat[]
+  pool: Driver[]
+  cursor: DriverDraftCursor
+  offer: PlayerSeatOffer
+  modifyRejected: boolean
+}
+
+// The player's response to a seat offer in Driver mode.
+export type DriverOfferResponse = 'accept' | 'decline' | { modifyYears: number }
+
 // Default new-game grid: the latest season composed from the historical timeline (no bespoke grid).
 const DEFAULT_GRID = composeDefaultSeason()
 // Round count is per-season (era-accurate calendars, #64): derived from the active season's year
@@ -75,6 +94,10 @@ interface SeasonStore {
   // player's to make. null playerTeamId / false mode = the classic sandbox (everything below is gated on it).
   teamManagerMode: boolean
   playerTeamId: string | null
+  // Driver mode: the player IS one driver (playerDriverId) — a free agent who gets signed on signing day,
+  // then races their own car. Mutually exclusive with teamManagerMode.
+  driverMode: boolean
+  playerDriverId: string | null
   // Start-of-season gate: true once the player has acted on the team changes taking effect NEXT season
   // (Apply, with whatever overrides). Surfaced when a season begins; reset each time a season starts.
   realWorldChangesResolved: boolean
@@ -111,6 +134,7 @@ interface SeasonStore {
   // Team Manager free agency: when the off-season draft reaches the player's seat(s), it pauses here so the
   // player picks (rivals above already signed; rivals below sign on confirm). null outside that window.
   pendingPlayerDraft: PendingPlayerDraft | null
+  pendingDriverOffer: PendingDriverOffer | null
   // Team Manager: the player's own expiring drivers at the renewal round, awaiting an offer/let-expire call.
   pendingPlayerRenewals: PendingPlayerRenewal[]
   // Round-18 contract renewals this season, for the renewals round-up feature.
@@ -133,6 +157,9 @@ interface SeasonStore {
   setCurrentDate: (date: string) => void
   setRealWorldMode: (on: boolean) => void
   setTeamManager: (mode: boolean, playerTeamId: string | null) => void
+  setDriver: (mode: boolean, playerDriverId: string | null) => void
+  // Driver mode: drop the player into the current season's free-agent pool (teamId '') at their entry year.
+  addPlayerDriver: (driver: Driver) => void
   // Team Manager: start the player's next car upgrade on the given cycle (3–6 races), recording the chosen
   // package name. cycle null = no development (the plan goes idle until the player picks again).
   setPlayerUpgrade: (cycle: number | null, packageName?: string) => void
@@ -159,6 +186,7 @@ interface SeasonStore {
   decidePlayerRenewal: (driverId: string, offer: boolean, years?: number) => void  // Team Manager: offer your expiring driver a renewal of `years` (1-4), or let them go
   playerDraftSign: (driverId: string, years: number) => void   // Team Manager: offer a free agent a contract of `years` for your open seat (50% accept)
   finishPlayerDraft: () => void                  // Team Manager: resolve rival seats below yours and close the draft
+  driverOfferRespond: (response: DriverOfferResponse) => void // Driver mode: accept / decline / modify a seat offer
   runDriverRetirements: () => void
   runPreSeasonTesting: () => void
   // Date-driven off-season (#126): the New-Year roster swap (kept clock), and the pre-season test on its own date.
@@ -185,7 +213,10 @@ export const useSeasonStore = create<SeasonStore>()(
       realWorldMode: false,
       teamManagerMode: false,
       playerTeamId: null,
+      driverMode: false,
+      playerDriverId: null,
       pendingPlayerDraft: null,
+      pendingDriverOffer: null,
       pendingPlayerRenewals: [],
       realWorldChangesResolved: false,
       approvedSeasonChanges: null,
@@ -284,6 +315,13 @@ export const useSeasonStore = create<SeasonStore>()(
       setRealWorldMode: (on) => set({ realWorldMode: on }),
 
       setTeamManager: (mode, playerTeamId) => set({ teamManagerMode: mode, playerTeamId: mode ? playerTeamId : null }),
+
+      setDriver: (mode, playerDriverId) => set({ driverMode: mode, playerDriverId: mode ? playerDriverId : null }),
+
+      // Inject the player driver as a free agent (teamId '', neutral season form) into the live season, so
+      // they sit in the pool for the entry year and become a candidate at its post-season signing day.
+      addPlayerDriver: (driver) =>
+        set((s) => (s.drivers.some((d) => d.id === driver.id) ? s : { drivers: [...s.drivers, { ...driver, teamId: '', seasonForm: 0 }] })),
 
       setPlayerUpgrade: (cycle, packageName) => {
         const { playerTeamId, devPlans, teams, currentRound } = get()
@@ -668,6 +706,32 @@ export const useSeasonStore = create<SeasonStore>()(
         const valueOf = (d: Driver) => mediaMap.get(d.id) ?? Math.max(0, Math.min(100, 35 + (d.pace - 68) * 0.8))
         const pool = allDrivers.filter((d) => !stayingIds.has(d.id)).sort((a, b) => valueOf(b) - valueOf(a))
 
+        // Driver mode: run the draft seat-by-seat and PAUSE the moment the roll lands the player a seat, so
+        // they can accept / decline / haggle the length. Rivals fill the rest automatically.
+        const { driverMode, playerDriverId } = get()
+        if (driverMode && playerDriverId && pool.some((d) => d.id === playerDriverId)) {
+          const step = runDriverDraft({ seats, pool, teams, currentYear: year, playerId: playerDriverId, rng: Math.random })
+          if (step.kind === 'offer') {
+            set({
+              phase: 'contract-negotiations',
+              signingDayRevealed: 0, // reveal the rivals signed above you one at a time, then your offer (like the TM draft)
+              pendingDriverOffer: { year, newYear, teams, allDrivers, stayingIds: [...stayingIds], seats, pool, cursor: step.cursor, offer: step.offer, modifyRejected: false },
+            })
+          } else {
+            // The player drew no seat at all — finalise with the rivals' picks; the player stays a free agent.
+            const { marketMoves, updatedDrivers, droppedDrivers } = resolveDraft(step.picks, allDrivers, stayingIds, seats, mediaMap, teams, year, newYear)
+            set({
+              phase: 'contract-negotiations',
+              endOfSeasonSummary: { ...endOfSeasonSummary, marketMoves, seatContests: [], droppedDrivers },
+              pendingNextSeasonState: { drivers: updatedDrivers, teams },
+              seasonDraft: step.picks,
+              signingDayRevealed: 0,
+              pendingDriverOffer: null,
+            })
+          }
+          return
+        }
+
         // Team Manager: pause for the player to fill their own seat(s). Rivals ABOVE the player's seat rank
         // sign now; the player picks from what's left; rivals BELOW sign on confirm (finishPlayerDraft).
         const { teamManagerMode, playerTeamId } = get()
@@ -769,13 +833,77 @@ export const useSeasonStore = create<SeasonStore>()(
         })
       },
 
+      // Driver mode: resolve the player's seat offer. Accept (at the offered or a modified length) signs them
+      // and the draft rolls on; decline re-rolls that seat to a rival and the player stays in the pool for a
+      // later seat; modify rolls a 10%-per-year-of-delta rejection — if rejected the player must take the
+      // original or decline. When the draft completes, the moves are committed via resolveDraft.
+      driverOfferRespond: (response) => {
+        const pdo = get().pendingDriverOffer
+        const playerId = get().playerDriverId
+        if (!pdo || !playerId) return
+        const { year, newYear, teams, allDrivers, stayingIds, seats, pool, cursor, offer } = pdo
+        const mediaMap = new Map((get().endOfSeasonSummary?.driverMediaScores ?? []).map((s) => [s.driverId, s.score]))
+
+        const finalize = (picks: DraftPick[]) => {
+          const summary = get().endOfSeasonSummary
+          const { marketMoves, updatedDrivers, droppedDrivers } = resolveDraft(picks, allDrivers, new Set(stayingIds), seats, mediaMap, teams, year, newYear)
+          set({
+            endOfSeasonSummary: summary ? { ...summary, marketMoves, seatContests: [], droppedDrivers } : summary,
+            pendingNextSeasonState: { drivers: updatedDrivers, teams },
+            seasonDraft: picks,
+            // Keep the reveal where the player left it (the seats they witnessed during the offers); they
+            // step through the rest on the board, so "all seats revealed" is a real gate for the
+            // sim-to-next-signing-day escape hatch.
+            signingDayRevealed: Math.min(get().signingDayRevealed, picks.length),
+            pendingDriverOffer: null,
+          })
+        }
+        const resume = (step: ReturnType<typeof runDriverDraft>) => {
+          if (step.kind === 'offer') set({ pendingDriverOffer: { ...pdo, cursor: step.cursor, offer: step.offer, modifyRejected: false } })
+          else finalize(step.picks)
+        }
+
+        if (response === 'decline') {
+          resume(runDriverDraft({ seats, pool, teams, currentYear: year, playerId, rng: Math.random, cursor, skipPlayerThisSeat: true }))
+          return
+        }
+
+        let years = offer.offeredYears
+        if (typeof response === 'object') {
+          const want = Math.max(1, Math.min(5, Math.round(response.modifyYears)))
+          if (Math.random() < 0.1 * Math.abs(want - offer.offeredYears)) {
+            set({ pendingDriverOffer: { ...pdo, modifyRejected: true } }) // turned down; take the original or decline
+            return
+          }
+          years = want
+        }
+
+        // Accept (original or agreed length): sign the player into the offered seat, then roll the draft on.
+        const seat = seats[offer.seatRank]
+        const playerName = allDrivers.find((d) => d.id === playerId)?.name ?? 'You'
+        const playerPick: DraftPick = {
+          teamId: seat.teamId, teamName: seat.teamName, teamColor: seat.teamColor,
+          driverId: playerId, driverName: playerName, prevTeamName: '',
+          faRank: cursor.remainingIds.indexOf(playerId) + 1, seatRank: offer.seatRank,
+          pickPct: offer.pickPct, realizedProb: 0.5, years: Math.max(1, Math.min(5, Math.round(years))), flavour: 'chalk', odds: [],
+        }
+        const nextCursor: DriverDraftCursor = {
+          picks: [...cursor.picks, playerPick],
+          survival: cursor.survival,
+          remainingIds: cursor.remainingIds.filter((id) => id !== playerId),
+          nextSeat: offer.seatRank + 1,
+        }
+        resume(runDriverDraft({ seats, pool, teams, currentYear: year, playerId, rng: Math.random, cursor: nextCursor }))
+      },
+
       // Phase 3: drivers without a seat for 5 seasons leave the market.
       runDriverRetirements: () => {
         const { pendingNextSeasonState, endOfSeasonSummary } = get()
         if (!pendingNextSeasonState || !endOfSeasonSummary) return
         const { drivers, teams } = pendingNextSeasonState
 
-        const { drivers: survivors, retiredDriverIds } = applyMarketAttrition(drivers)
+        // The player driver never times out of the market while waiting for a seat (Driver mode).
+        const { drivers: survivors, retiredDriverIds } = applyMarketAttrition(drivers, get().driverMode ? get().playerDriverId : null)
 
         set({
           phase: 'driver-retirements',
@@ -996,6 +1124,8 @@ export const useSeasonStore = create<SeasonStore>()(
         realWorldMode: state.realWorldMode,
         teamManagerMode: state.teamManagerMode,
         playerTeamId: state.playerTeamId,
+        driverMode: state.driverMode,
+        playerDriverId: state.playerDriverId,
         realWorldChangesResolved: state.realWorldChangesResolved,
         // MUST persist alongside `resolved`: it holds WHAT was approved at the season opener and is
         // applied at the season-end rollover. Persisting `resolved` without this dropped the approved
@@ -1017,6 +1147,7 @@ export const useSeasonStore = create<SeasonStore>()(
         priorSeasonDriverMediaScores: state.priorSeasonDriverMediaScores,
         seasonDraft: state.seasonDraft,
         pendingPlayerDraft: state.pendingPlayerDraft,
+        pendingDriverOffer: state.pendingDriverOffer,
         pendingPlayerRenewals: state.pendingPlayerRenewals,
         seasonRenewals: state.seasonRenewals,
         seasonContractWatch: state.seasonContractWatch,

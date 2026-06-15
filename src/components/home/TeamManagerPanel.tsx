@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { DevCyclePicker } from '@/components/world/DevCyclePicker'
+import { Stat } from '@/components/home/Stat'
 
 // Team Manager home dashboard strip: the upgrade-cycle picker (so it can't be missed), your team's
 // championship line, and a shortcut to its World page. Renders only in Team Manager mode.
@@ -12,15 +13,6 @@ const ordinal = (n: number): string => {
   const v = n % 100
   const s = ['th', 'st', 'nd', 'rd']
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">{label}</span>
-      <span className="text-lg font-semibold tabular-nums text-[#FFFFFF]">{value}</span>
-    </div>
-  )
 }
 
 export function TeamManagerPanel() {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Driver, Team, DriverRaceState, RaceState, TyreCompound } from '@/lib/sim/types'
+import type { Driver, Team, DriverRaceState, RaceState, TyreCompound, DriverPaceMode } from '@/lib/sim/types'
 import { useRaceStore, type PitCommand } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
@@ -70,7 +70,27 @@ function ModeButton({ active, color, onClick, children }: { active: boolean; col
   )
 }
 
-function Card({ driver, team, ds, raceState, allDrivers, onRetire }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void }) {
+// Driver mode pace tool: how you're driving the car this stint. Defend backs off to sit outside the car
+// ahead's dirty air (you stay hard to pass); Back-off cruises +2s/lap to nurse the tyre much longer.
+const PACE_MODES: { mode: DriverPaceMode; label: string; color: string }[] = [
+  { mode: 'normal', label: 'Normal', color: '#2A3142' },
+  { mode: 'defend', label: 'Defend', color: '#00D9FF' },
+  { mode: 'backoff', label: 'Back-off', color: '#F59E0B' },
+]
+
+function PaceModeControl({ driverId }: { driverId: string }) {
+  const mode: DriverPaceMode = useRaceStore((s) => s.driverModes[driverId]) ?? 'normal'
+  const setDriverMode = useRaceStore((s) => s.setDriverMode)
+  return (
+    <div className="flex gap-1.5">
+      {PACE_MODES.map((m) => (
+        <ModeButton key={m.mode} active={mode === m.mode} color={m.color} onClick={() => setDriverMode(driverId, m.mode)}>{m.label}</ModeButton>
+      ))}
+    </div>
+  )
+}
+
+function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = false, teammatePitting = false }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void; paceMode?: boolean; teammatePitting?: boolean }) {
   const cmd: PitCommand = useRaceStore((s) => s.pitCommands[driver.id]) ?? 'auto'
   const setPitCommand = useRaceStore((s) => s.setPitCommand)
   const tyreTel = useSettingsStore((s) => s.talents['tyre-telemetry'] ?? false)
@@ -126,12 +146,25 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire }: { driver: D
         {rejoin.other && `, ${rejoin.gap.toFixed(1)}s ${rejoin.ahead ? 'ahead of' : 'behind'} ${rejoin.other}`}
       </div>
 
+      {/* Driver mode: heads-up that your teammate boxes this lap, so you can hold and avoid a double-stack wait. */}
+      {paceMode && teammatePitting && (
+        <div className="text-[11px] font-bold uppercase tracking-wide text-[#F59E0B]">Teammate boxing this lap</div>
+      )}
+
       {/* Command: auto / pit (+ compound) / hold */}
       <div className="flex gap-1.5">
         <ModeButton active={cmd === 'auto'} color="#2A3142" onClick={() => setPitCommand(driver.id, 'auto')}>Auto</ModeButton>
         <ModeButton active={isPit} color="#00D9FF" onClick={() => setPitCommand(driver.id, { pit: compound })}>Pit</ModeButton>
         <ModeButton active={cmd === 'hold'} color="#DC143C" onClick={() => setPitCommand(driver.id, 'hold')}>Hold</ModeButton>
       </div>
+
+      {/* Driver mode: how you're driving the car (Normal / Defend / Back-off). */}
+      {paceMode && (
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Pace</span>
+          <PaceModeControl driverId={driver.id} />
+        </div>
+      )}
 
       {isPit && (
         <select
@@ -152,9 +185,27 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire }: { driver: D
   )
 }
 
+// Is the player's teammate boxing this lap? Used to warn against a double-stack (the AI runs the teammate
+// in Driver mode, so it's their planned stop or a stop already taken this lap).
+function teammateBoxingThisLap(teammate: Driver | undefined, states: DriverRaceState[], currentLap: number): boolean {
+  if (!teammate) return false
+  const ds = states.find((s) => s.driverId === teammate.id)
+  if (!ds || ds.retired) return false
+  return (ds.targetPitLap != null && ds.targetPitLap <= currentLap) || ds.lastPitLap === currentLap
+}
+
 export default function PitWallPanel({ drivers, teams, states, raceState, onRetire }: Props) {
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
-  const myDrivers = drivers.filter((d) => d.teamId === playerTeamId)
+  const driverMode = useSeasonStore((s) => s.driverMode)
+  const playerDriverId = useSeasonStore((s) => s.playerDriverId)
+
+  // Driver mode controls ONLY your own car; Team Manager runs both of the team's cars.
+  const player = driverMode ? drivers.find((d) => d.id === playerDriverId) : undefined
+  const myDrivers = driverMode
+    ? (player ? [player] : [])
+    : drivers.filter((d) => d.teamId === playerTeamId)
+  const teammate = driverMode && player ? drivers.find((d) => d.teamId === player.teamId && d.id !== player.id) : undefined
+  const teammatePitting = driverMode ? teammateBoxingThisLap(teammate, states, raceState.currentLap) : false
 
   return (
     <div className="flex flex-col gap-3">
@@ -174,6 +225,8 @@ export default function PitWallPanel({ drivers, teams, states, raceState, onReti
             raceState={raceState}
             allDrivers={drivers}
             onRetire={onRetire}
+            paceMode={driverMode}
+            teammatePitting={teammatePitting}
           />
         ))
       )}

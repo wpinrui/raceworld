@@ -132,7 +132,9 @@ export default function DriverPage() {
   // Team Manager: fog-of-war display + god-mode gating (own-team only, per-talent).
   const ratingsHidden = useRatingsHidden()
   const teamManagerMode = useSeasonStore((s) => s.teamManagerMode)
+  const driverMode = useSeasonStore((s) => s.driverMode)
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
+  const playerDriverId = useSeasonStore((s) => s.playerDriverId)
   const driverTuning = useSettingsStore((s) => s.talents['driver-tuning'] ?? false)
   const contractDesk = useSettingsStore((s) => s.talents['contract-desk'] ?? false)
   const [assignTeam, setAssignTeam] = useState('')
@@ -207,13 +209,14 @@ export default function DriverPage() {
           const bio = a ? buildDriverBio(career, a, seasonYear, teamStrength, knownFor, overallRank) : null
           const milestones = buildMilestones(career)
 
-          // God-mode gating. Sandbox (teamManagerMode false) = everything as before, ungated. In Team
-          // Manager mode, god mode only exists for the player's OWN driver, and is further split:
-          // attribute edits need Driver Tuning, contract actions need Contract Desk.
-          const isOwnDriver = !teamManagerMode || (!!liveDriver && liveDriver.teamId === playerTeamId)
+          // God-mode gating. Sandbox = everything ungated. In the managed career modes god mode only exists
+          // for the player's OWN driver (Team Manager: a driver on your team; Driver mode: you), split by
+          // talent: attribute edits need Driver Tuning. Contract actions are Team-Manager-only (Contract Desk).
+          const managed = teamManagerMode || driverMode
+          const isOwnDriver = !managed || (!!liveDriver && (teamManagerMode ? liveDriver.teamId === playerTeamId : liveDriver.id === playerDriverId))
           const showGodMode = !!liveDriver && isOwnDriver
-          const canEditAttributes = !teamManagerMode || driverTuning
-          const canEditContract = !teamManagerMode || contractDesk
+          const canEditAttributes = !managed || driverTuning
+          const canEditContract = !managed || (teamManagerMode && contractDesk)
 
           return (
             <>
