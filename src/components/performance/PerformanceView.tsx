@@ -167,10 +167,10 @@ export function PerformanceView() {
     setter(next)
   }
 
-  // The car-ratings tab is god-mode-only; fall back to pace if Data Room is off. It works with no races run,
-  // so the "run some races" empty state applies only to the chart views.
+  // The car-ratings tab is god-mode-only; fall back to pace if Data Room is off. Nothing here hides wholesale
+  // pre-season: the car-pace chart and ratings exist from the start; only the race-driven charts wait for round 1.
   const view: Sub = sub === 'cars' && !dataRoom ? 'pace' : sub
-  const showEmpty = rounds === 0 && view !== 'cars'
+  const preSeason = rounds === 0
 
   const maxFinish = Math.max(2, ...teamFinishRows.flatMap((r) => teams.map((t) => r[t.id]).filter((v) => v != null)))
   const visibleTeams = orderedTeams.filter((t) => !hidden.has(t.id))
@@ -197,7 +197,7 @@ export function PerformanceView() {
             {label}
           </button>
         ))}
-        {view !== 'cars' && !showEmpty && (
+        {(view === 'pace' || (view === 'delta' && !preSeason)) && (
           <button
             onClick={toggleAll}
             className="ml-auto px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] transition-colors"
@@ -209,8 +209,6 @@ export function PerformanceView() {
 
       {view === 'cars' ? (
         <CarRatingsTable teams={teams} />
-      ) : showEmpty ? (
-        <p className="text-sm text-[#FFFFFF]">Run some races and this will fill in.</p>
       ) : view === 'pace' ? (
         <>
           <div className="shrink-0 flex flex-wrap gap-1.5">
@@ -223,10 +221,11 @@ export function PerformanceView() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={paceRows} margin={{ top: 6, right: 16, bottom: 4, left: -12 }}>
                   <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="round" type="number" domain={[0, rounds]} allowDecimals={false} tickFormatter={(r: number) => (r === 0 ? 'Start' : String(r))} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} />
+                  <XAxis dataKey="round" type="number" domain={[0, Math.max(1, rounds)]} allowDecimals={false} tickFormatter={(r: number) => (r === 0 ? 'Start' : String(r))} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} />
                   <YAxis domain={[(min: number) => Math.floor(min - 2), (max: number) => Math.ceil(max + 2)]} allowDecimals={false} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} width={40} />
                   <RTooltip content={<Tip nameOf={nameOf} />} />
-                  {visibleTeams.map((t) => <Line key={t.id} type="monotone" dataKey={t.id} stroke={t.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />)}
+                  {/* Pre-season there's a single 'Start' point per team, so show dots (a lone point draws no line). */}
+                  {visibleTeams.map((t) => <Line key={t.id} type="monotone" dataKey={t.id} stroke={t.color} strokeWidth={2} dot={preSeason} isAnimationActive={false} connectNulls />)}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -235,6 +234,9 @@ export function PerformanceView() {
           <div className="flex-1 min-h-0 flex flex-col rounded-xl bg-[#1E2431] border border-[#2A3142] p-3">
             <p className="shrink-0 text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5">Best finish</p>
             <div className="flex-1 min-h-0">
+              {preSeason ? (
+                <div className="h-full flex items-center justify-center text-xs text-[#FFFFFF]">Fills in once the racing starts.</div>
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={teamFinishRows} margin={{ top: 6, right: 16, bottom: 4, left: -12 }}>
                   <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
@@ -244,9 +246,12 @@ export function PerformanceView() {
                   {visibleTeams.map((t) => <Line key={t.id} type="monotone" dataKey={t.id} stroke={t.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />)}
                 </LineChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         </>
+      ) : preSeason ? (
+        <p className="text-sm text-[#FFFFFF]">Over / under performance fills in once the racing starts.</p>
       ) : (
         <>
           <div className="shrink-0 max-h-44 overflow-y-auto grid grid-cols-5 gap-x-3 gap-y-2">
