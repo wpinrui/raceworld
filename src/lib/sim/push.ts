@@ -78,6 +78,8 @@ export function resolvePlayerPush(
     return { push, defending: push === DEFEND_PUSH }
   }
   if (mode === 'autoDefend') {
+    // Baseline is always normal by construction — the toggle is only armable from Normal and the sim never
+    // changes that intent — so `selected` is intentionally not consulted; we hold normal until a threat warrants.
     const defending = shouldDefend(ctx)
     return { push: defending ? DEFEND_PUSH : NORMAL, defending }
   }

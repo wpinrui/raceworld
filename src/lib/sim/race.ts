@@ -248,8 +248,10 @@ export function simulateLap(
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
   const playerSet = new Set(playerControlledIds ?? [])
 
-  // A cheap deterministic clean-air pace proxy (lap-time delta from base, lower = faster), car form folded in.
-  // Used only to judge whether a car behind is a genuine threat worth defending against (race-ts internal).
+  // A cheap deterministic clean-air pace proxy (lap-time delta from base, lower = faster): car + this race's
+  // form, plus driver pace. Deliberately OMITS fuel, tyre wear, and per-lap noise — it only has to be monotone
+  // in RELATIVE pace to judge whether the car behind is a real threat. Folding fuel in would make defending
+  // depend on lap number, and tyre age would make it jitter; neither belongs in a "is this a fair fight" check.
   const dryPaceProxy = (drv: Driver, tm: Team): number =>
     (75 - effectiveCarPace(applyCarForm(tm, state.carForm[tm.id] ?? 0), circuit.straightness)) / 25 -
     (drv.pace - 75) * 0.03
@@ -331,7 +333,9 @@ export function simulateLap(
     if (carBehindState) {
       const chaser = driverMap.get(carBehindState.driverId)!
       const chaserTeam = teamMap.get(chaser.teamId)!
-      gapBehind = updatedStates.get(carBehindState.driverId)?.gap ?? carBehindState.gap
+      // The car behind hasn't been stepped yet this lap and gaps aren't recomputed until lap-end, so the
+      // snapshot's gap (this car → the one ahead, i.e. me) is the live interval behind.
+      gapBehind = carBehindState.gap
       chaserPaceEdge = dryPaceProxy(driver, team) - dryPaceProxy(chaser, chaserTeam)
     }
     const pushCtx = { gapAhead: current.gap, gapBehind, chaserPaceEdge, condition: current.currentTyre.condition, temp: tempIn }
