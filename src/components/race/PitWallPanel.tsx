@@ -4,12 +4,9 @@ import { useState } from 'react'
 import type { Driver, Team, DriverRaceState, RaceState, TyreCompound, DriverPaceMode } from '@/lib/sim/types'
 import { useRaceStore, type PitCommand } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { useSettingsStore } from '@/lib/store/settings-store'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
-import { TyreTelemetry } from './TyreTelemetry'
-import { RaceEngineer } from './RaceEngineer'
 import { DriverLink } from '@/components/world/EntityLink'
 
 const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
@@ -93,8 +90,6 @@ function PaceModeControl({ driverId }: { driverId: string }) {
 function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = false, teammatePitting = false }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void; paceMode?: boolean; teammatePitting?: boolean }) {
   const cmd: PitCommand = useRaceStore((s) => s.pitCommands[driver.id]) ?? 'auto'
   const setPitCommand = useRaceStore((s) => s.setPitCommand)
-  const tyreTel = useSettingsStore((s) => s.talents['tyre-telemetry'] ?? false)
-  const raceEng = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
   // The compound a PIT command will use; defaults to the AI's planned next compound.
   const [compound, setCompound] = useState<TyreCompound>(ds?.targetNextCompound ?? 'medium')
 
@@ -175,10 +170,6 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
           {COMPOUNDS.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
         </select>
       )}
-
-      {tyreTel && <TyreTelemetry driver={driver} ds={ds} raceState={raceState} />}
-      {/* Live every lap now that the projection is instant; only hidden under fast-forward's tight loop. */}
-      {raceEng && raceState.speed !== 5 && <RaceEngineer driver={driver} raceState={raceState} mode="racing" />}
 
       <button onClick={() => onRetire(driver.id)} className="self-start text-[10px] uppercase tracking-widest text-[#DC143C]/80 hover:text-[#DC143C]">Retire car</button>
     </div>

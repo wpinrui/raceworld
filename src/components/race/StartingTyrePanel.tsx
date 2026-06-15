@@ -3,10 +3,7 @@
 import type { TyreCompound } from '@/lib/sim/types'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { useSettingsStore } from '@/lib/store/settings-store'
 import TyreIndicator from './TyreIndicator'
-import { TyreTelemetry } from './TyreTelemetry'
-import { RaceEngineer } from './RaceEngineer'
 
 const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
 
@@ -31,8 +28,6 @@ export function StartingTyrePanel() {
   const playerTeamId = useSeasonStore((s) => s.playerTeamId)
   const driverMode = useSeasonStore((s) => s.driverMode)
   const playerDriverId = useSeasonStore((s) => s.playerDriverId)
-  const tyreTel = useSettingsStore((s) => s.talents['tyre-telemetry'] ?? false)
-  const raceEng = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
 
   // Driver mode: only your own car; Team Manager: both of the team's cars.
   const myDrivers = driverMode ? drivers.filter((d) => d.id === playerDriverId) : drivers.filter((d) => d.teamId === playerTeamId)
@@ -64,10 +59,9 @@ export function StartingTyrePanel() {
         </>
       )}
 
-      {/* Per-driver — overrides one car (split strategy), with the talent reveals beneath each car. */}
+      {/* Per-driver — overrides one car (split strategy). */}
       {myDrivers.map((d) => {
         const cur = compoundOf(d.id)
-        const ds = raceState?.drivers.find((s) => s.driverId === d.id)
         return (
           <div key={d.id} className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
@@ -78,8 +72,6 @@ export function StartingTyrePanel() {
                 ))}
               </div>
             </div>
-            {raceState && ds && tyreTel && <TyreTelemetry driver={d} ds={ds} raceState={raceState} />}
-            {raceState && raceEng && <RaceEngineer driver={d} raceState={raceState} mode="pre-race" />}
           </div>
         )
       })}
