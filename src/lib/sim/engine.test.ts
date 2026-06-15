@@ -29,7 +29,7 @@ function passes(straightness: number, roll: number): boolean {
 
 describe('overtaking × circuit straightness (#sim-overhaul)', () => {
   it('a marginal pass lands on a straight-heavy track but not a corner-heavy one', () => {
-    // roll 0.2: prob ≈ 0.29 at Monza-straightness (passes), ≈ 0.14 at Monaco-straightness (does not).
+    // A ~2.2s clean edge: roll 0.2 passes at Monza-straightness (prob caps at 0.5) but not at Monaco (prob ≈ 0.11).
     expect(passes(0.95, 0.2)).toBe(true)
     expect(passes(0.05, 0.2)).toBe(false)
   })

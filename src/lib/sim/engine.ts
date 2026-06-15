@@ -35,12 +35,17 @@ export interface LapResult {
 // Traffic / dirty-air model (make qualifying matter — overtaking was far too easy). Tunables:
 const DIRTY_RANGE = 1.0       // s: a follower within this loses pace to dirty air
 const MAX_DIRTY = 0.7         // s: pace lost right on the gearbox (gap 0); fades to 0 at DIRTY_RANGE
-const SLIPSTREAM = 0.3        // s: tow a chasing car gets within DIRTY_RANGE — eases the pass, offsets dirty air
+const SLIPSTREAM = 0.3        // s: tow a chasing car gets within DIRTY_RANGE — eases the pass, offsets dirty air.
+                             //   Scaled by straightness (less of a tow in the corners) at the use site below.
 const STRIKE_RANGE = 1.0      // s: within this (~DRS range) a faster car gets a per-lap chance to pass
 const PASS_MARGIN = 3.0       // s: only a car whose pace would leave it this far AHEAD blows straight by (rare)
 const CONTEST_GAP = 0.15      // s: a car closing past this from beyond range arrives right behind, contests next lap
-const OVERTAKE_SENS = 0.12    // per-lap pass chance per second of clean-air pace edge (overtaking is HARD:
-                             //   a 0.4s/lap edge ≈ 5%/lap ≈ 20 laps to clear; a 2s edge ≈ 24%/lap ≈ 4 laps)
+// Per-lap pass chance per second of CLEAN pace edge. The CIRCUIT'S STRAIGHTNESS sets it, EXPONENTIALLY
+// interpolated between these two ends, so the pace delta a pass needs differs ~7× from Monaco to Monza:
+//   Monaco (s≈0.05, ~0.051): 0.5s edge ≈ 3%/lap (no way past), 1s ≈ 5% (~no way in a race), 2s ≈ 10% (maybe, late).
+//   Monza  (s≈0.95, ~0.32):  0.3s ≈ 9%/lap (after some tries), 0.5s ≈ 16% (reasonably quick), 1s ≈ 32% (a couple).
+const OVERTAKE_SENS_MIN = 0.046 // most corner-heavy track
+const OVERTAKE_SENS_MAX = 0.35  // most straight-heavy track
 const MAX_CONTEST = 0.5       // cap on the per-lap pass chance from within range (no certain passes)
 const ATTACKER_PENALTY = 0.2  // s: a completed pass costs the attacker this
 const DEFENDER_PENALTY = 0.4  // s: ...and the overtaken car this (applied in race.ts)
@@ -48,7 +53,7 @@ const HOLD_GAP = 0.3          // s: a car that can't get by harries around this 
 const HOLD_JITTER = 0.3       // s: spread on the harry distance so a train isn't a column of identical +0.300s
 
 // The traffic tunables, exported so race.ts (and the pace-mode logic) share the engine's exact numbers.
-export const TRAFFIC = { DIRTY_RANGE, MAX_DIRTY, SLIPSTREAM, STRIKE_RANGE, PASS_MARGIN, OVERTAKE_SENS, MAX_CONTEST, ATTACKER_PENALTY, DEFENDER_PENALTY, HOLD_GAP } as const
+export const TRAFFIC = { DIRTY_RANGE, MAX_DIRTY, SLIPSTREAM, STRIKE_RANGE, PASS_MARGIN, OVERTAKE_SENS_MIN, OVERTAKE_SENS_MAX, MAX_CONTEST, ATTACKER_PENALTY, DEFENDER_PENALTY, HOLD_GAP } as const
 
 export function computeLapTime(input: LapInput): LapResult {
   const {
@@ -141,10 +146,12 @@ export function computeLapTime(input: LapInput): LapResult {
   // SLIPSTREAM: a chasing car within DIRTY_RANGE gets a tow off the car ahead, applied BEFORE the overtake
   // calculations — it runs this much faster, easing the pass (bigger pace edge, closes the gap quicker) and
   // partly offsetting dirty air. Its own clean-air pace (freeAir, what the next car back gates on) is unchanged.
-  const tow = gapToCarAhead < DIRTY_RANGE ? SLIPSTREAM : 0
+  const tow = gapToCarAhead < DIRTY_RANGE ? SLIPSTREAM * (0.3 + 0.7 * (input.circuitStraightness ?? 0.5)) : 0
   const dirtyLapTime = rawTime + dirty - tow
   const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this (towed) pace
-  const paceEdge = input.carAheadFreeAir - freeAir + tow            // clean-air pace edge, plus the tow
+  // The pass is gated on the CLEAN pace edge — raw pace delta, no tow. The tow's job is to help you close up
+  // and hang on in the dirty air (via dirtyLapTime above), not to manufacture a pass you don't have the legs for.
+  const paceEdge = input.carAheadFreeAir - freeAir
 
   // A pass happens this lap in one of two ways:
   //  (a) BLOW-PAST (rare) — the car is so much faster than the gap that running its own pace leaves it
@@ -172,10 +179,11 @@ export function computeLapTime(input: LapInput): LapResult {
       }
     }
     // Blow-past goes through; a contest is a hard, edge-scaled roll (overtaking rated against a 75 baseline).
-    // The track's straightness scales the pass chance (#sim-overhaul): straight-heavy tracks pass more easily
-    // (0.6× at Monaco-like corner circuits, 1.4× at Monza-like ones), a DRS-style effect.
-    const straightnessFactor = 0.6 + 0.8 * (input.circuitStraightness ?? 0.5)
-    const prob = Math.min(MAX_CONTEST, paceEdge * OVERTAKE_SENS * (driver.overtaking / 75) * straightnessFactor)
+    // The track's straightness sets HOW MUCH pace edge a pass needs, exponentially: a corner-heavy track walls
+    // out all but a huge edge, a straight-heavy one lets a small edge through (DRS/slipstream effect).
+    const s = input.circuitStraightness ?? 0.5
+    const sens = OVERTAKE_SENS_MIN * (OVERTAKE_SENS_MAX / OVERTAKE_SENS_MIN) ** s
+    const prob = Math.min(MAX_CONTEST, paceEdge * sens * (driver.overtaking / 75))
     if (blowPast || Math.random() < prob) {
       // A completed pass costs both cars time: the attacker a little, the defender more.
       return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
