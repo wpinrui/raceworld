@@ -8,6 +8,7 @@ import { SLIDER_LABELS } from '@/lib/sim/push'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
+import TyreTempGauge from './TyreTempGauge'
 import { DriverLink } from '@/components/world/EntityLink'
 
 const COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet']
@@ -113,7 +114,6 @@ function PushControl({ ds }: { ds: DriverRaceState }) {
           )
         })}
       </div>
-      <span className="text-[10px] text-[#FFFFFF]">Tyre temp: <span style={{ color: cold ? '#00D9FF' : hot ? '#DC143C' : '#10B981' }}>{cold ? 'cold' : hot ? 'overheating' : 'in window'}</span></span>
     </div>
   )
 }
@@ -150,17 +150,26 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
     <div className="bg-[#1E2431] rounded p-2.5 flex flex-col gap-2">
       {header}
 
-      {/* Live: tyre + condition, stint, gap, AI plan */}
+      {/* Live tyre status: compound + condition + a temperature gauge (the quick MM-style read). */}
       <div className="flex items-center gap-3 text-xs text-[#FFFFFF]">
         <span className="flex items-center gap-1.5">
           <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
           <span className={cond < 20 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}>{cond}%</span>
         </span>
-        <span>L{ds.stintLap} stint</span>
-        <span className="font-mono">{formatLiveGap(ds.gap)}</span>
+        {ds.tyreTemp != null && (
+          <span className="flex items-center gap-1.5">
+            <span className="text-[9px] uppercase tracking-widest text-[#9CA3AF]">Temp</span>
+            <TyreTempGauge temp={ds.tyreTemp} className="w-16" />
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-1 text-[#9CA3AF]">
           AI L{ds.targetPitLap ?? '—'} <TyreIndicator compound={ds.targetNextCompound} size="sm" />
         </span>
+      </div>
+      {/* Stint + gap, kept on their own line now the tyre row carries the temperature gauge. */}
+      <div className="flex items-center gap-3 text-xs text-[#FFFFFF] -mt-1">
+        <span>L{ds.stintLap} stint</span>
+        <span className="font-mono">{formatLiveGap(ds.gap)}</span>
       </div>
 
       {/* Prominent status */}
