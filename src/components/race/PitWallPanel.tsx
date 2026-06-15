@@ -78,14 +78,40 @@ const PRESETS: { preset: PushPreset | 'normal'; label: string; color: string }[]
   { preset: 'conserve', label: 'Conserve', color: '#10B981' },
 ]
 
-function PushControl({ ds }: { ds: DriverRaceState }) {
+// A small on/off toggle (distinct from the preset buttons, which are a one-of-many choice).
+function Toggle({ on, disabled, onColor, onClick, children }: { on: boolean; disabled?: boolean; onColor: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-colors ${
+        disabled ? 'bg-[#1E2431] text-[#6B7280] cursor-not-allowed' : on ? 'text-[#0F1419]' : 'bg-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142]'
+      }`}
+      style={on && !disabled ? { backgroundColor: onColor } : undefined}
+    >
+      <span className={`inline-block w-2 h-2 rounded-full ${on && !disabled ? 'bg-[#0F1419]' : 'bg-[#6B7280]'}`} />
+      {children}
+    </button>
+  )
+}
+
+// Driver/Team-Manager push controls. Presets + a 5-step slider set the car's push; the active button reflects
+// `ds.push`. In Team Manager an AUTO toggle hands push to the AI (and `ds.push` then mirrors its live pick); in
+// Driver mode an AUTO-DEFEND toggle (only armable from Normal) pushes to defend a car behind without disturbing
+// the Normal selection. Picking any preset takes manual control and clears the relevant auto (#push-auto).
+function PushControl({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' }) {
   const setPushSlider = useRaceStore((s) => s.setPushSlider)
   const setPushPreset = useRaceStore((s) => s.setPushPreset)
+  const setPushAuto = useRaceStore((s) => s.setPushAuto)
+  const setAutoDefend = useRaceStore((s) => s.setAutoDefend)
   const push = ds.push ?? { kind: 'manual', level: 0 as const }
   const temp = ds.tyreTemp ?? 0.1
   const cold = temp < 0, hot = temp > 1
+  const auto = ds.pushAuto ?? false
+  const autoDefend = ds.autoDefend ?? false
   const activePreset = push.kind === 'preset' ? push.preset : null
   const level = push.kind === 'manual' ? push.level : null
+  const isNormal = push.kind === 'manual' && push.level === 0
   // Out of the heat window: the slider's active step glows blue (too cold) or red (too hot).
   const stepColor = cold ? '#00D9FF' : hot ? '#DC143C' : '#7C3AED'
   return (
@@ -114,11 +140,19 @@ function PushControl({ ds }: { ds: DriverRaceState }) {
           )
         })}
       </div>
+      <div className="flex items-center gap-2">
+        {mode === 'tm' ? (
+          <Toggle on={auto} onColor="#00D9FF" onClick={() => setPushAuto(ds.driverId, !auto)}>Auto</Toggle>
+        ) : (
+          <Toggle on={autoDefend} disabled={!isNormal} onColor="#F59E0B" onClick={() => setAutoDefend(ds.driverId, !autoDefend)}>Auto-defend</Toggle>
+        )}
+        {ds.defending && <span className="text-[10px] font-bold uppercase tracking-wide text-[#DC143C]">Defending</span>}
+      </div>
     </div>
   )
 }
 
-function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = false, teammatePitting = false }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void; paceMode?: boolean; teammatePitting?: boolean }) {
+function Card({ driver, team, ds, raceState, allDrivers, onRetire, mode, teammatePitting = false }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void; mode: 'driver' | 'tm'; teammatePitting?: boolean }) {
   const cmd: PitCommand = useRaceStore((s) => s.pitCommands[driver.id]) ?? 'auto'
   const setPitCommand = useRaceStore((s) => s.setPitCommand)
   // The compound a PIT command will use; defaults to the AI's planned next compound.
@@ -156,7 +190,7 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
           <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
           <span className={cond < 20 ? 'text-[#DC143C]' : 'text-[#FFFFFF]'}>{cond}%</span>
         </span>
-        {ds.tyreTemp != null && <TyreTempGauge temp={ds.tyreTemp} className="w-20" />}
+        {ds.tyreTemp != null && <TyreTempGauge temp={ds.tyreTemp} className="w-14" />}
         <span className="ml-auto flex items-center gap-1 text-[#9CA3AF]">
           AI L{ds.targetPitLap ?? '—'} <TyreIndicator compound={ds.targetNextCompound} size="sm" />
         </span>
@@ -177,7 +211,7 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
       </div>
 
       {/* Driver mode: heads-up that your teammate boxes this lap, so you can hold and avoid a double-stack wait. */}
-      {paceMode && teammatePitting && (
+      {mode === 'driver' && teammatePitting && (
         <div className="text-[11px] font-bold uppercase tracking-wide text-[#F59E0B]">Teammate boxing this lap</div>
       )}
 
@@ -188,13 +222,11 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
         <ModeButton active={cmd === 'hold'} color="#DC143C" onClick={() => setPitCommand(driver.id, 'hold')}>Hold</ModeButton>
       </div>
 
-      {/* Driver mode: push presets + the manual intensity slider. */}
-      {paceMode && (
-        <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Push</span>
-          <PushControl ds={ds} />
-        </div>
-      )}
+      {/* Push presets + the manual intensity slider (both modes — your own car in Driver, both cars in TM). */}
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Push</span>
+        <PushControl ds={ds} mode={mode} />
+      </div>
 
       {isPit && (
         <select
@@ -251,7 +283,7 @@ export default function PitWallPanel({ drivers, teams, states, raceState, onReti
             raceState={raceState}
             allDrivers={drivers}
             onRetire={onRetire}
-            paceMode={driverMode}
+            mode={driverMode ? 'driver' : 'tm'}
             teammatePitting={teammatePitting}
           />
         ))
