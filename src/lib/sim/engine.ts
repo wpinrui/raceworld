@@ -172,7 +172,10 @@ export function computeLapTime(input: LapInput): LapResult {
       }
     }
     // Blow-past goes through; a contest is a hard, edge-scaled roll (overtaking rated against a 75 baseline).
-    const prob = Math.min(MAX_CONTEST, paceEdge * OVERTAKE_SENS * (driver.overtaking / 75))
+    // The track's straightness scales the pass chance (#sim-overhaul): straight-heavy tracks pass more easily
+    // (0.6× at Monaco-like corner circuits, 1.4× at Monza-like ones), a DRS-style effect.
+    const straightnessFactor = 0.6 + 0.8 * (input.circuitStraightness ?? 0.5)
+    const prob = Math.min(MAX_CONTEST, paceEdge * OVERTAKE_SENS * (driver.overtaking / 75) * straightnessFactor)
     if (blowPast || Math.random() < prob) {
       // A completed pass costs both cars time: the attacker a little, the defender more.
       return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
