@@ -14,8 +14,8 @@ import { getMoistureAtLap } from './weather'
 import { raceConditions } from './race-conditions'
 import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
 import { computeLapTime } from './engine'
-import { applyCarForm } from './car-rating'
-import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
+import { applyCarForm, effectiveCarPace } from './car-rating'
+import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, hotPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
 import { resolveIntensity, advancePreset, aiPushState, NORMAL } from './push'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
@@ -248,6 +248,12 @@ export function simulateLap(
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
   const playerSet = new Set(playerControlledIds ?? [])
 
+  // A cheap deterministic clean-air pace proxy (lap-time delta from base, lower = faster), car form folded in.
+  // Used only to judge whether a car behind is a genuine threat worth defending against (race-ts internal).
+  const dryPaceProxy = (drv: Driver, tm: Team): number =>
+    (75 - effectiveCarPace(applyCarForm(tm, state.carForm[tm.id] ?? 0), circuit.straightness)) / 25 -
+    (drv.pace - 75) * 0.03
+
   // Deep-copy driver states
   let driverStates: DriverRaceState[] = state.drivers.map((d) => ({
     ...d,
@@ -312,11 +318,25 @@ export function simulateLap(
     const driver = driverMap.get(current.driverId)!
     const team = teamMap.get(driver.teamId)!
     // Push (#sim-overhaul): the player drives their own car (their slider/preset); every other car's push is
-    // the AI heuristic's pick this lap, off the tyre's temperature coming into the lap.
+    // the AI heuristic's pick this lap, off the tyre's temperature coming into the lap. The AI also weighs the
+    // car BEHIND so a driver defends (pushes back) against a genuine threat instead of leaving an attacker a
+    // free pace boost — otherwise attackers push and nobody answers, and passing becomes far too easy.
     const tempIn = current.tyreTemp ?? TEMP.FRESH_TEMP
+    let gapBehind = Infinity
+    let chaserPaceEdge = 0 // how much faster (s/lap) the car right behind is; >0 = a real threat
+    const carBehindState = sortedByPosition.find(
+      (d) => !d.retired && d.driverId !== current.driverId &&
+        (updatedStates.get(d.driverId)?.position ?? d.position) === current.position + 1,
+    )
+    if (carBehindState) {
+      const chaser = driverMap.get(carBehindState.driverId)!
+      const chaserTeam = teamMap.get(chaser.teamId)!
+      gapBehind = updatedStates.get(carBehindState.driverId)?.gap ?? carBehindState.gap
+      chaserPaceEdge = dryPaceProxy(driver, team) - dryPaceProxy(chaser, chaserTeam)
+    }
     const push: PushState = playerSet.has(current.driverId)
       ? (current.push ?? NORMAL)
-      : aiPushState({ gapAhead: current.gap, condition: current.currentTyre.condition, temp: tempIn })
+      : aiPushState({ gapAhead: current.gap, gapBehind, chaserPaceEdge, condition: current.currentTyre.condition, temp: tempIn })
     const intensity = resolveIntensity(push)
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
@@ -473,7 +493,7 @@ export function simulateLap(
       carAheadFreeAir: carAheadState ? (freeAirThisLap.get(carAheadState.driverId) ?? null) : null,
       circuitFlatModifier: circuit.flatModifier,
       circuitStraightness: circuit.straightness,
-      paceDelta: pacePush(intensity) + coldPenalty(tempIn),
+      paceDelta: pacePush(intensity) + coldPenalty(tempIn) + hotPenalty(tempIn),
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
     })
 

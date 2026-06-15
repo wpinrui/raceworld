@@ -33,10 +33,22 @@ export function advancePreset(push: PushState, ctx: { temp: number; gapAhead: nu
   }
 }
 
-// AI heuristic: a cheap, deterministic per-lap pick from the four presets. Attack a car right ahead while the
-// tyres are healthy and not overheating; warm up cold tyres; nurse worn or overheating tyres; else cruise.
-export function aiPushState(ctx: { gapAhead: number; condition: number; temp: number }): PushState {
-  if (ctx.gapAhead < TRAFFIC.DIRTY_RANGE && ctx.condition > 25 && ctx.temp <= 1) return { kind: 'preset', preset: 'overtake' }
+// A car behind is worth defending against when it's roughly matched-or-faster (a real fight) but not so much
+// faster that holding it up is hopeless (you'd just cook your tyres delaying the inevitable). Pace edge is in
+// s/lap, >0 meaning the chaser is faster.
+const DEFEND_MIN = -0.1  // defend down to a chaser this much SLOWER (it may still be on a tow / in DRS range)
+const DEFEND_GIVEUP = 0.8 // a chaser more than this much faster will get by regardless — yield, save the tyres
+
+// AI heuristic: a cheap, deterministic per-lap pick. Attack a car right ahead; else DEFEND (push back at max)
+// against a genuine threat right behind so an attacker doesn't get a free, unanswered pace boost; else warm up
+// cold tyres; nurse worn or overheating tyres; else cruise. Defending and attacking are gated on tyre health
+// (no point pushing already-overheating or worn-out tyres).
+export function aiPushState(ctx: { gapAhead: number; gapBehind: number; chaserPaceEdge: number; condition: number; temp: number }): PushState {
+  const healthy = ctx.condition > 25 && ctx.temp <= 1
+  if (ctx.gapAhead < TRAFFIC.DIRTY_RANGE && healthy) return { kind: 'preset', preset: 'overtake' }
+  if (ctx.gapBehind < TRAFFIC.DIRTY_RANGE && ctx.chaserPaceEdge > DEFEND_MIN && ctx.chaserPaceEdge < DEFEND_GIVEUP && healthy) {
+    return { kind: 'manual', level: 2 } // defend at max to neutralise the attacker's push; AI re-picks each lap
+  }
   if (ctx.temp < 0) return { kind: 'preset', preset: 'push' }
   if (ctx.condition < 20 || ctx.temp > 1) return { kind: 'preset', preset: 'conserve' }
   return NORMAL

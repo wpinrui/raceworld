@@ -36,19 +36,38 @@ describe('advancePreset (presets auto-revert; the slider never does)', () => {
 })
 
 describe('aiPushState heuristic', () => {
+  // clear air both ends, healthy tyres — overridden per case
+  const ctx = (over: Partial<{ gapAhead: number; gapBehind: number; chaserPaceEdge: number; condition: number; temp: number }>) =>
+    ({ gapAhead: 5, gapBehind: 5, chaserPaceEdge: 0, condition: 80, temp: 0.5, ...over })
+
   it('attacks a car right ahead while healthy and not overheating', () => {
-    expect(aiPushState({ gapAhead: 0.5, condition: 80, temp: 0.5 })).toEqual({ kind: 'preset', preset: 'overtake' })
+    expect(aiPushState(ctx({ gapAhead: 0.5 }))).toEqual({ kind: 'preset', preset: 'overtake' })
   })
   it('does not attack when overheating', () => {
-    expect(aiPushState({ gapAhead: 0.5, condition: 80, temp: 1.2 })).toEqual({ kind: 'preset', preset: 'conserve' })
+    expect(aiPushState(ctx({ gapAhead: 0.5, temp: 1.2 }))).toEqual({ kind: 'preset', preset: 'conserve' })
+  })
+  it('defends (pushes back at max) against a genuine threat right behind', () => {
+    expect(aiPushState(ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3 }))).toEqual({ kind: 'manual', level: 2 })
+  })
+  it('yields to a car much faster behind instead of cooking its tyres', () => {
+    expect(aiPushState(ctx({ gapBehind: 0.5, chaserPaceEdge: 1.5 }))).toEqual(NORMAL)
+  })
+  it('ignores a slower car behind (no real threat)', () => {
+    expect(aiPushState(ctx({ gapBehind: 0.5, chaserPaceEdge: -0.5 }))).toEqual(NORMAL)
+  })
+  it('does not defend on overheating tyres', () => {
+    expect(aiPushState(ctx({ gapBehind: 0.5, chaserPaceEdge: 0.3, temp: 1.2 }))).toEqual({ kind: 'preset', preset: 'conserve' })
+  })
+  it('attacking takes priority over defending in a midfield train', () => {
+    expect(aiPushState(ctx({ gapAhead: 0.5, gapBehind: 0.5, chaserPaceEdge: 0.3 }))).toEqual({ kind: 'preset', preset: 'overtake' })
   })
   it('warms up cold tyres in clear air', () => {
-    expect(aiPushState({ gapAhead: 5, condition: 80, temp: -0.1 })).toEqual({ kind: 'preset', preset: 'push' })
+    expect(aiPushState(ctx({ temp: -0.1 }))).toEqual({ kind: 'preset', preset: 'push' })
   })
   it('nurses worn tyres', () => {
-    expect(aiPushState({ gapAhead: 5, condition: 15, temp: 0.5 })).toEqual({ kind: 'preset', preset: 'conserve' })
+    expect(aiPushState(ctx({ condition: 15 }))).toEqual({ kind: 'preset', preset: 'conserve' })
   })
   it('cruises otherwise', () => {
-    expect(aiPushState({ gapAhead: 5, condition: 80, temp: 0.5 })).toEqual(NORMAL)
+    expect(aiPushState(ctx({}))).toEqual(NORMAL)
   })
 })
