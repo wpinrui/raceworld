@@ -17,6 +17,8 @@ export interface LapInput {
   carAheadFreeAir?: number | null // the car ahead's CLEAN-AIR pace this lap (drives the pace-edge gate)
   circuitFlatModifier: number
   circuitStraightness?: number // 0-1; weights the car's straight-line vs cornering pace. Absent → 0.5.
+  paceDelta?: number          // driver push + cold-tyre pace adjustment (#sim-overhaul), baked into clean-air
+                              // pace so pushing genuinely helps attack/defend and cold tyres are easy to pass
   defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
   noiseOverride?: number      // qualifying supplies its own noise model (more quali variation); races use the default
 }
@@ -106,7 +108,8 @@ export function computeLapTime(input: LapInput): LapResult {
   //     negative, so this must be ?? not ||); races leave it undefined and use the default.
   const noise = input.noiseOverride ?? Math.random() * (1.2 - 0.01 * driver.consistency)
 
-  // 13. rawTime
+  // 13. rawTime — the driver's push / cold-tyre adjustment (#sim-overhaul) is part of clean-air pace, so it
+  // flows through dirty air + the overtake gate below (pushing helps you pass; cold tyres make you easy prey).
   const flatModifier = circuitFlatModifier
   const rawTime =
     base +
@@ -119,6 +122,7 @@ export function computeLapTime(input: LapInput): LapResult {
     fuelMod +
     compoundDelta +
     flatModifier +
+    (input.paceDelta ?? 0) +
     noise
 
   // FREE-AIR PACE is rawTime. Traffic — dirty air, the contested pass, its crash roll, and the time a

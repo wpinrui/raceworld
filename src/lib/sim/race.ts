@@ -7,34 +7,22 @@ import type {
   QualifyingResult,
   QualifyingSessionResult,
   GodModeAction,
-  DriverPaceMode,
+  PushState,
   TyreState,
 } from './types'
 import { getMoistureAtLap } from './weather'
 import { raceConditions } from './race-conditions'
 import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
-import { computeLapTime, TRAFFIC } from './engine'
+import { computeLapTime } from './engine'
 import { applyCarForm } from './car-rating'
 import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
+import { resolveIntensity, advancePreset, aiPushState, NORMAL } from './push'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
 import { sampleNormal, sampleExponential } from './rng-utils'
 import { confidenceFormMean } from './race-results'
 import { perLapTechnicalDNF, sampleTechnicalFailure } from './reliability'
-
-// Driver-mode pace tools (#driver-mode), applied to the player's EFFECTIVE lap time only — clean-air pace
-// (freeAir) is left untouched, so a car behind always gates its overtake on honest pace, never the slowed lap.
-//   Defend: hold the gap to the car ahead at >= DIRTY_RANGE + buffer (+ positive-only noise), so you sit
-//   just outside its dirty air and keep clean-air pace. The buffer + one-sided noise guarantee the gap can
-//   only ever grow, never dip back into dirty-air range.
-//   Back-off: cruise +2s/lap for roughly half the tyre wear — a deliberately sub-optimal "nurse the tyre to
-//   the flag / squeeze a few more laps" tool (a stop is ~25s, so +2s/lap self-limits to end-of-stint).
-const { DIRTY_RANGE } = TRAFFIC // the engine's dirty-air radius, reused so defend's floor tracks it
-const DEFEND_BUFFER = 0.4      // s: clearance kept beyond DIRTY_RANGE
-const DEFEND_NOISE = 0.2       // s: one-sided (positive only) jitter on the held gap
-const BACKOFF_PENALTY = 2.0    // s/lap added when backing off
-const BACKOFF_WEAR_MULT = 0.5  // tyre wears at this fraction of normal while backing off (sim-tune 0.4-0.6)
 
 // Roll each driver's pre-race form. The roll mean is set by the driver's confidence
 // (2 + 0.6c, so c=5 -> mean 5), sampled Normal(mean, 1.8) clamped to [0, 10] (issue #58).
@@ -250,14 +238,15 @@ export function simulateLap(
   circuit: Circuit,
   year: number,
   godModeActions?: GodModeAction[],
-  // Forecasts (Race Engineer Mode) set this so rivals plan 1-stops only — skipping the exhaustive 2-stop
-  // search that makes runs slow above 40 laps. The live race leaves it false for full-fidelity strategy.
+  // Reserved for cheaper strategy planning on long runs; the live race uses full-fidelity strategy.
   fastStrategy = false,
-  // Driver mode: per-driver pace tool (defend / back-off). Only the player carries a non-normal mode.
-  driverModes?: Record<string, DriverPaceMode>,
+  // The cars the player drives directly (their push is honoured as set); every other car has its push
+  // chosen by the AI heuristic each lap. Empty/absent → all AI (sandbox).
+  playerControlledIds?: string[],
 ): RaceState {
   const driverMap = new Map<string, Driver>(drivers.map((d) => [d.id, d]))
   const teamMap = new Map<string, Team>(teams.map((t) => [t.id, t]))
+  const playerSet = new Set(playerControlledIds ?? [])
 
   // Deep-copy driver states
   let driverStates: DriverRaceState[] = state.drivers.map((d) => ({
@@ -322,7 +311,13 @@ export function simulateLap(
     // Resolve driver/team early — needed for pit AI and lap time
     const driver = driverMap.get(current.driverId)!
     const team = teamMap.get(driver.teamId)!
-    const paceMode: DriverPaceMode = driverModes?.[current.driverId] ?? 'normal'
+    // Push (#sim-overhaul): the player drives their own car (their slider/preset); every other car's push is
+    // the AI heuristic's pick this lap, off the tyre's temperature coming into the lap.
+    const tempIn = current.tyreTemp ?? TEMP.FRESH_TEMP
+    const push: PushState = playerSet.has(current.driverId)
+      ? (current.push ?? NORMAL)
+      : aiPushState({ gapAhead: current.gap, condition: current.currentTyre.condition, temp: tempIn })
+    const intensity = resolveIntensity(push)
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
     // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (collision-damage DNF),
@@ -461,6 +456,9 @@ export function simulateLap(
     // (0 = neutral; the form delta adds straight to the pace ratings for both the team's cars).
     const form = state.carForm[team.id] ?? 0
     const raceTeam = applyCarForm(team, form)
+    // Push + cold-tyre pace adjustment goes INTO the engine's clean-air pace (#sim-overhaul), so it flows
+    // through dirty air and the overtake gate (pushing helps you pass; cold tyres make you easy to pass).
+    const tyreWarming = team.tyreWarming ?? team.carPace
     const lapResult = computeLapTime({
       driver,
       team: raceTeam,
@@ -475,37 +473,16 @@ export function simulateLap(
       carAheadFreeAir: carAheadState ? (freeAirThisLap.get(carAheadState.driverId) ?? null) : null,
       circuitFlatModifier: circuit.flatModifier,
       circuitStraightness: circuit.straightness,
+      paceDelta: pacePush(intensity) + coldPenalty(tempIn),
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
     })
 
-    // Driver-mode pace tools shape the EFFECTIVE lap time (freeAir is left alone above). Defend backs off to
-    // hold the gap to the car ahead outside its dirty air — clamp UP only, never a free gain. When defending
-    // the player isn't attacking, so any pass/crash the engine rolled this lap is suppressed below.
-    const defending = paceMode === 'defend' && carAheadLapTime !== null && Number.isFinite(gapToCarAhead)
-    let effLapTime = lapResult.lapTime
-    if (defending && carAheadLapTime !== null) {
-      // One-sided positive jitter so the held gap is never a robotic constant, derived deterministically
-      // from the car-ahead's lap time (which already varies lap to lap) rather than a fresh RNG draw — so
-      // choosing to defend never shifts the field's random sequence and butterflies an unrelated outcome.
-      const jitter = Math.abs(carAheadLapTime) % DEFEND_NOISE
-      const targetGap = DIRTY_RANGE + DEFEND_BUFFER + jitter
-      effLapTime = Math.max(effLapTime, carAheadLapTime + targetGap - gapToCarAhead)
-    }
-    const backoffPenalty = paceMode === 'backoff' ? BACKOFF_PENALTY : 0
-
-    // Tyre temperature + push (#sim-overhaul). intensity 0 = normal (Phase 3 drives it from the push state).
-    // The lap is run at the tyre's temp coming INTO it; cold tyres lose pace, pushing gains it.
-    const intensity = 0
-    const temp0 = current.tyreTemp ?? TEMP.FRESH_TEMP
-    const tyreWarming = team.tyreWarming ?? team.carPace
-
-    const finalLapTime = effLapTime + pitPenalty + mistakeTimeLoss + backoffPenalty + pacePush(intensity) + coldPenalty(temp0)
+    const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
     lapTimesThisLap.set(current.driverId, finalLapTime)
     freeAirThisLap.set(current.driverId, lapResult.freeAir)
 
     // 2f. Overtake collision (issue #60): retire whoever the crash took out, reason 'collision-damage'.
-    // A defending player has lifted off and isn't contesting, so the engine's pass/crash roll doesn't apply.
-    if (lapResult.crash?.happened && carAheadState && !defending) {
+    if (lapResult.crash?.happened && carAheadState) {
       if (lapResult.crash.defender) {
         const ahead = updatedStates.get(carAheadState.driverId)
         if (ahead && !ahead.retired) {
@@ -521,7 +498,7 @@ export function simulateLap(
 
     // 2g. If overtook: swap positions with the car ahead, and the overtaken car loses time too (the fight
     // costs both). The defender penalty also drives the cascade — the next car back then sees it slower.
-    if (lapResult.overtook && carAheadState && !defending) {
+    if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
       const pen = lapResult.defenderPenalty ?? 0
       const aheadLaps = pen > 0 && aheadUpdated.lapTimes.length
@@ -539,18 +516,22 @@ export function simulateLap(
 
     // 2h. Degrade tyre — multipliers stack on the noisy base: dirty air (within ~1s) wears it faster, the
     // car's tyre-wear rating scales it, pushing wears more (backing off less), and running OVER the heat
-    // window shreds it. Then advance the tyre temperature for next lap.
+    // window shreds it. Then advance the tyre temperature, and the push state (presets auto-revert), for next lap.
     const wearMult =
       (gapToCarAhead < 1.0 ? DIRTY_AIR_WEAR_MULT : 1) *
-      (paceMode === 'backoff' ? BACKOFF_WEAR_MULT : 1) *
       tyreWearRatingMult(team.tyreWear ?? team.carPace) *
       pushWearMult(intensity) *
-      overheatWearMult(temp0)
+      overheatWearMult(tempIn)
     const newCondition = wearTyre(current.currentTyre, wearMult)
+    const newTemp = nextTyreTemp(tempIn, intensity, tyreWarming)
+    const nextPush = playerSet.has(current.driverId)
+      ? advancePreset(push, { temp: newTemp, gapAhead: current.gap, overtook: lapResult.overtook })
+      : push // AI re-picks via the heuristic each lap, so no revert needed
     current = {
       ...current,
       currentTyre: { ...current.currentTyre, condition: newCondition },
-      tyreTemp: nextTyreTemp(temp0, intensity, tyreWarming),
+      tyreTemp: newTemp,
+      push: nextPush,
     }
 
     // 2i. Decrement fuelLaps

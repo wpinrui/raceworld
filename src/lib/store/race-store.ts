@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Driver, Team, Circuit, RaceState, GodModeAction, SimSpeed, TyreCompound, DriverPaceMode } from '@/lib/sim/types'
+import type { Driver, Team, Circuit, RaceState, DriverRaceState, GodModeAction, SimSpeed, TyreCompound, PushState, SliderLevel, PushPreset } from '@/lib/sim/types'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { computeTyreLife } from '@/lib/sim/tyres'
 import { runQualifying } from '@/lib/sim/qualifying'
@@ -19,6 +19,18 @@ function applyPeakForm(forms: Record<string, number>, drivers: Driver[]): Record
   }
   if (driverMode && playerDriverId) return { ...forms, [playerDriverId]: 10 }
   return forms
+}
+
+// Set one car's push state on the race-state driver list (immutably).
+const setPush = (drivers: DriverRaceState[], driverId: string, push: PushState): DriverRaceState[] =>
+  drivers.map((d) => (d.driverId === driverId ? { ...d, push } : d))
+
+// The cars the player drives directly (so the sim honours their push instead of the AI heuristic).
+function playerControlledIds(drivers: Driver[]): string[] {
+  const { teamManagerMode, playerTeamId, driverMode, playerDriverId } = useSeasonStore.getState()
+  if (driverMode && playerDriverId) return [playerDriverId]
+  if (teamManagerMode && playerTeamId) return drivers.filter((d) => d.teamId === playerTeamId).map((d) => d.id)
+  return []
 }
 
 // The sim races the SHOWN ratings (true + season form, #66). Bake them in as drivers enter the race
@@ -41,14 +53,15 @@ interface RaceStore {
   godModeDriverId: string | null  // persists across races
   qualSessionIdx: number          // which qualifying session (0=Q1) — in the store so a Quit resumes it
   pitCommands: Record<string, PitCommand>  // Team Manager pit-wall instructions, per driver (absent = auto)
-  driverModes: Record<string, DriverPaceMode>  // Driver mode pace tools, per driver (absent = normal)
+  // The push controls live on the race state (DriverRaceState.push), evolving with the sim; these write them.
 
   loadFromSeason: (drivers: Driver[], teams: Team[], circuit: Circuit) => void
   setGodModeDriver: (driverId: string) => void
   updateDriverForm: (driverId: string, value: number) => void
   setStartingTyre: (driverId: string, compound: TyreCompound) => void // pre-race: choose a car's grid tyre
   setPitCommand: (driverId: string, cmd: PitCommand) => void          // pit wall: auto / hold / pit(compound)
-  setDriverMode: (driverId: string, mode: DriverPaceMode) => void     // Driver mode: normal / defend / back-off
+  setPushSlider: (driverId: string, level: SliderLevel) => void       // persistent push level (back off…max)
+  setPushPreset: (driverId: string, preset: PushPreset) => void       // transient preset (overtake/push/conserve)
   clearHolds: () => void                                              // drop all HOLDs back to auto (FF)
   setStrategyNoise: (n: number) => void
   initSession: () => void
@@ -72,7 +85,6 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   godModeDriverId: null,
   qualSessionIdx: 0,
   pitCommands: {},
-  driverModes: {},
 
   loadFromSeason: (drivers, teams, circuit) => {
     const { godModeDriverId } = get()
@@ -90,7 +102,6 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       forms: applyPeakForm(rollForms(drivers), drivers),
       godModeDriverId: stillExists ? godModeDriverId : null,
       pitCommands,
-      driverModes: {},
     })
   },
 
@@ -131,13 +142,12 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     })
   },
 
-  setDriverMode: (driverId, mode) => {
-    set((state) => {
-      const next = { ...state.driverModes }
-      if (mode === 'normal') delete next[driverId] // normal = no standing instruction
-      else next[driverId] = mode
-      return { driverModes: next }
-    })
+  // Write the player's push onto the race state (where the sim reads + evolves it). No-op pre-race.
+  setPushSlider: (driverId, level) => {
+    set((state) => (state.raceState ? { raceState: { ...state.raceState, drivers: setPush(state.raceState.drivers, driverId, { kind: 'manual', level }) } } : {}))
+  },
+  setPushPreset: (driverId, preset) => {
+    set((state) => (state.raceState ? { raceState: { ...state.raceState, drivers: setPush(state.raceState.drivers, driverId, { kind: 'preset', preset }) } } : {}))
   },
 
   clearHolds: () => {
@@ -161,7 +171,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   },
 
   tickLap: (godModeActions) => {
-    const { raceState, drivers, teams, selectedCircuit, pitCommands, driverModes } = get()
+    const { raceState, drivers, teams, selectedCircuit, pitCommands } = get()
     if (!raceState || raceState.phase !== 'racing' || !selectedCircuit) return
     const year = useSeasonStore.getState().year
     const lapBeing = raceState.currentLap
@@ -175,8 +185,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     }
     const merged = commandActions.length || godModeActions ? [...commandActions, ...(godModeActions ?? [])] : undefined
 
-    const hasModes = Object.keys(driverModes).length > 0
-    const next = simulateLap(raceState, drivers, teams, selectedCircuit, year, merged, false, hasModes ? driverModes : undefined)
+    const next = simulateLap(raceState, drivers, teams, selectedCircuit, year, merged, false, playerControlledIds(drivers))
 
     // Once a commanded PIT has landed (lastPitLap caught up), keep manual control: fall back to HOLD, not
     // auto — the player took the wheel, so don't hand the car back to the AI behind their back. A retired or
@@ -233,7 +242,7 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     const fresh = initRaceState(drivers, teams, selectedCircuit, raceState.qualifyingResults, raceState.qualifyingSessions, forms, year, strategyNoise, saveSeed)
     const pitCommands: Record<string, PitCommand> =
       driverMode && playerDriverId && drivers.some((d) => d.id === playerDriverId) ? { [playerDriverId]: 'hold' } : {}
-    set({ raceState: { ...fresh, carForm: raceState.carForm, phase: 'pre-race', paused: false }, pitCommands, driverModes: {} })
+    set({ raceState: { ...fresh, carForm: raceState.carForm, phase: 'pre-race', paused: false }, pitCommands })
   },
 
   // Advance to the next qualifying session (Q1→Q2→Q3). In the store so a mid-Q3 Quit resumes at Q3.
@@ -249,7 +258,6 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
       forms: rollForms(nextDrivers),
       qualSessionIdx: 0,
       pitCommands: {},
-      driverModes: {},
     })
   },
 }))

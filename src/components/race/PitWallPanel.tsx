@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import type { Driver, Team, DriverRaceState, RaceState, TyreCompound, DriverPaceMode } from '@/lib/sim/types'
+import type { Driver, Team, DriverRaceState, RaceState, TyreCompound, PushPreset, SliderLevel } from '@/lib/sim/types'
 import { useRaceStore, type PitCommand } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { SLIDER_LABELS } from '@/lib/sim/push'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
@@ -67,22 +68,52 @@ function ModeButton({ active, color, onClick, children }: { active: boolean; col
   )
 }
 
-// Driver mode pace tool: how you're driving the car this stint. Defend backs off to sit outside the car
-// ahead's dirty air (you stay hard to pass); Back-off cruises +2s/lap to nurse the tyre much longer.
-const PACE_MODES: { mode: DriverPaceMode; label: string; color: string }[] = [
-  { mode: 'normal', label: 'Normal', color: '#2A3142' },
-  { mode: 'defend', label: 'Defend', color: '#00D9FF' },
-  { mode: 'backoff', label: 'Back-off', color: '#F59E0B' },
+// Driver mode push controls (#sim-overhaul): four PRESETS that auto-revert to normal once their goal is met,
+// plus a persistent 5-step SLIDER. Pushing is quicker but heats + wears the tyres; backing off cools + saves.
+const PRESETS: { preset: PushPreset | 'normal'; label: string; color: string }[] = [
+  { preset: 'overtake', label: 'Overtake', color: '#DC143C' },
+  { preset: 'push', label: 'Push', color: '#F59E0B' },
+  { preset: 'normal', label: 'Normal', color: '#2A3142' },
+  { preset: 'conserve', label: 'Conserve', color: '#10B981' },
 ]
 
-function PaceModeControl({ driverId }: { driverId: string }) {
-  const mode: DriverPaceMode = useRaceStore((s) => s.driverModes[driverId]) ?? 'normal'
-  const setDriverMode = useRaceStore((s) => s.setDriverMode)
+function PushControl({ ds }: { ds: DriverRaceState }) {
+  const setPushSlider = useRaceStore((s) => s.setPushSlider)
+  const setPushPreset = useRaceStore((s) => s.setPushPreset)
+  const push = ds.push ?? { kind: 'manual', level: 0 as const }
+  const temp = ds.tyreTemp ?? 0.1
+  const cold = temp < 0, hot = temp > 1
+  const activePreset = push.kind === 'preset' ? push.preset : null
+  const level = push.kind === 'manual' ? push.level : null
+  // Out of the heat window: the slider's active step glows blue (too cold) or red (too hot).
+  const stepColor = cold ? '#00D9FF' : hot ? '#DC143C' : '#7C3AED'
   return (
-    <div className="flex gap-1.5">
-      {PACE_MODES.map((m) => (
-        <ModeButton key={m.mode} active={mode === m.mode} color={m.color} onClick={() => setDriverMode(driverId, m.mode)}>{m.label}</ModeButton>
-      ))}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-1.5">
+        {PRESETS.map((p) => (
+          <ModeButton
+            key={p.preset}
+            active={p.preset === 'normal' ? level === 0 : activePreset === p.preset}
+            color={p.color}
+            onClick={() => (p.preset === 'normal' ? setPushSlider(ds.driverId, 0) : setPushPreset(ds.driverId, p.preset))}
+          >{p.label}</ModeButton>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        {SLIDER_LABELS.map((lbl, i) => {
+          const lv = (i - 2) as SliderLevel
+          const active = level === lv
+          return (
+            <button
+              key={lbl}
+              onClick={() => setPushSlider(ds.driverId, lv)}
+              className={`flex-1 py-1 text-[10px] font-bold tracking-wide uppercase rounded transition-colors ${active ? '' : 'bg-[#1E2431] text-[#FFFFFF] hover:bg-[#2A3142]'}`}
+              style={active ? { backgroundColor: stepColor, color: '#FFFFFF' } : undefined}
+            >{lbl}</button>
+          )
+        })}
+      </div>
+      <span className="text-[10px] text-[#FFFFFF]">Tyre temp: <span style={{ color: cold ? '#00D9FF' : hot ? '#DC143C' : '#10B981' }}>{cold ? 'cold' : hot ? 'overheating' : 'in window'}</span></span>
     </div>
   )
 }
@@ -153,11 +184,11 @@ function Card({ driver, team, ds, raceState, allDrivers, onRetire, paceMode = fa
         <ModeButton active={cmd === 'hold'} color="#DC143C" onClick={() => setPitCommand(driver.id, 'hold')}>Hold</ModeButton>
       </div>
 
-      {/* Driver mode: how you're driving the car (Normal / Defend / Back-off). */}
+      {/* Driver mode: push presets + the manual intensity slider. */}
       {paceMode && (
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Pace</span>
-          <PaceModeControl driverId={driver.id} />
+          <span className="text-[10px] uppercase tracking-widest text-[#FFFFFF]">Push</span>
+          <PushControl ds={ds} />
         </div>
       )}
 

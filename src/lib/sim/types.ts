@@ -102,6 +102,7 @@ export interface DriverRaceState {
   currentTyre: TyreState
   tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
                          // Absent (legacy/forecast states) → treated as a fresh-tyre temp.
+  push?: PushState       // how hard the driver is pushing (slider or auto-reverting preset). Absent → normal.
   stintLap: number
   fuelLaps: number
   form: number           // 0-10
@@ -184,10 +185,12 @@ export interface GodModeAction {
   compound?: TyreCompound  // used with force-pit
 }
 
-// Driver mode in-race pace tool, per driver (#driver-mode). 'normal' = race as usual; 'defend' = back off
-// to hold station just outside the car-ahead's dirty air (clean-air pace preserved, so you stay hard to
-// pass); 'backoff' = cruise +2s/lap for roughly half the tyre wear, to nurse a stint longer.
-export type DriverPaceMode = 'normal' | 'defend' | 'backoff'
+// Driver push controls (#sim-overhaul). A persistent 5-step SLIDER (back off…max) or a transient PRESET
+// that auto-reverts to normal once its goal is met. Logic in push.ts; resolves to an intensity for the lap
+// loop's pace/temp/wear model. Per-car race state (DriverRaceState.push).
+export type SliderLevel = -2 | -1 | 0 | 1 | 2
+export type PushPreset = 'overtake' | 'push' | 'conserve'
+export type PushState = { kind: 'manual'; level: SliderLevel } | { kind: 'preset'; preset: PushPreset }
 
 // --- Season / standings types ---
 
