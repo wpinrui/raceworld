@@ -1,5 +1,6 @@
 import type { Driver, Team } from '@/lib/sim/types'
 import { overall, OVERALL_WEIGHTS, DEVELOP_RATES, stepRaceMedian, RACES_PER_SEASON } from '@/lib/sim/progression'
+import { ratingsFromCarPace } from '@/lib/sim/car-rating'
 import { historicalDrivers } from '@/data/history/drivers'
 import { historicalGrids } from '@/data/history/grids'
 import type { HistoricalDriver } from '@/data/history/types'
@@ -137,7 +138,7 @@ export function composeSeason(year: number): { drivers: Driver[]; teams: Team[] 
   const seenTeam = new Set<string>()
   const teams: Team[] = grid.teams
     .filter((t) => (seenTeam.has(t.id) ? false : (seenTeam.add(t.id), true)))
-    .map((t, i) => ({ id: t.id, name: t.name, shortName: t.shortName, nationality: t.nationality, color: t.color, carPace: carPaceForRank(i) }))
+    .map((t, i) => ({ id: t.id, name: t.name, shortName: t.shortName, nationality: t.nationality, color: t.color, carPace: carPaceForRank(i), ...ratingsFromCarPace(carPaceForRank(i)) }))
 
   const seatedIds = new Set<string>()
   const drivers: Driver[] = []

@@ -64,7 +64,14 @@ export interface Team {
   shortName: string
   nationality: string    // constructor licence country, ISO 3166-1 alpha-2; '' = rest of world
   color: string          // primary hex
-  carPace: number        // 75/70/65/60/55/50/45/40/35/30
+  carPace: number        // 75/70/65/60/55/50/45/40/35/30 — the derived OVERALL pace (mean of the two below)
+  // Multi-rating car model (#sim-overhaul). 0-100. Absent on legacy saves → fall back to carPace
+  // (see car-rating.ts). straightLine + cornering blend into effective pace per circuit; the two tyre
+  // ratings feed the tyre temperature / wear model.
+  straightLine?: number  // straight-line speed (acceleration + top speed)
+  cornering?: number     // cornering speed
+  tyreWarming?: number   // how easily the car keeps its tyres in the optimal temperature window
+  tyreWear?: number      // resistance to tyre degradation (higher = slower wear)
 }
 
 export interface Circuit {
@@ -77,6 +84,8 @@ export interface Circuit {
   flatModifier: number   // seconds added to base laptime for cosmetic realism
   sundayOfYear: number   // race day = the Nth Sunday of the season year (1-based), so the
                          // calendar self-resolves to a real date for any future year
+  straightness?: number  // 0 (corner-heavy, Monaco) – 1 (straight-heavy, Monza); weights the pace blend
+                         // and overtaking ease. Absent → treated as 0.5. (#sim-overhaul)
 }
 
 export interface TyreState {

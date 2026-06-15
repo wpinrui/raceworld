@@ -1,6 +1,7 @@
 import type { Driver, Team, DriverMediaScore, TeamMediaScore, MarketMove, SeatContest, SeatContestDriver, DroppedDriver, RaceResult } from './types'
 import { sampleNormal } from './rng-utils'
 import { generateRookie } from './driver-generation'
+import { overallCarPace } from './car-rating'
 
 // --- Fit-based retention (tuned in scripts/market-sim.mjs to ~4 changes/season) ---
 // A team OFFERS to re-sign an expiring driver with a probability tied to how he did
@@ -24,7 +25,7 @@ export function computeRetentionDeltas(
   raceResults: RaceResult[][],
 ): Record<string, number> {
   const paceRank = new Map<string, number>()
-  ;[...teams].sort((a, b) => b.carPace - a.carPace).forEach((t, i) => paceRank.set(t.id, i + 1))
+  ;[...teams].sort((a, b) => overallCarPace(b) - overallCarPace(a)).forEach((t, i) => paceRank.set(t.id, i + 1))
   const agg = new Map<string, { grid: number; race: number; n: number }>()
   for (const round of raceResults) {
     const field = round.length || 20

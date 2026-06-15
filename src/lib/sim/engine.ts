@@ -1,6 +1,7 @@
 import type { Driver, Team, TyreState, WeatherPoint, TyreCompound } from './types'
 import { getMoistureAtLap } from './weather'
 import { tyreStepsOutOfWindow } from './tyres'
+import { effectiveCarPace } from './car-rating'
 
 export interface LapInput {
   driver: Driver
@@ -15,6 +16,7 @@ export interface LapInput {
   carAheadLapTime: number | null  // the car ahead's EFFECTIVE lap time this lap (drives the gap evolution)
   carAheadFreeAir?: number | null // the car ahead's CLEAN-AIR pace this lap (drives the pace-edge gate)
   circuitFlatModifier: number
+  circuitStraightness?: number // 0-1; weights the car's straight-line vs cornering pace. Absent → 0.5.
   defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
   noiseOverride?: number      // qualifying supplies its own noise model (more quali variation); races use the default
 }
@@ -63,8 +65,8 @@ export function computeLapTime(input: LapInput): LapResult {
   // 1. base
   const base = 100
 
-  // 2. carMod = (75 - team.carPace) / 25
-  const carMod = (75 - team.carPace) / 25
+  // 2. carMod from the EFFECTIVE pace (straight-line/cornering blended by the track's straightness).
+  const carMod = (75 - effectiveCarPace(team, input.circuitStraightness)) / 25
 
   // 3. moisture at this lap
   const moisture = getMoistureAtLap(weather, lap)

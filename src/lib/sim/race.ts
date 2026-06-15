@@ -14,6 +14,7 @@ import { getMoistureAtLap } from './weather'
 import { raceConditions } from './race-conditions'
 import { computeTyreLife, wearTyre, recommendTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
 import { computeLapTime, TRAFFIC } from './engine'
+import { applyCarForm } from './car-rating'
 import { decidePit, planStrategy, initTeamBelief, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
@@ -454,9 +455,9 @@ export function simulateLap(
     }
 
     // 2e. Compute lap time — this race's car form shifts the car's pace for the whole race
-    // (0 = neutral; the form delta adds straight to car pace for both the team's cars).
+    // (0 = neutral; the form delta adds straight to the pace ratings for both the team's cars).
     const form = state.carForm[team.id] ?? 0
-    const raceTeam = form === 0 ? team : { ...team, carPace: team.carPace + form }
+    const raceTeam = applyCarForm(team, form)
     const lapResult = computeLapTime({
       driver,
       team: raceTeam,
@@ -470,6 +471,7 @@ export function simulateLap(
       carAheadLapTime,
       carAheadFreeAir: carAheadState ? (freeAirThisLap.get(carAheadState.driverId) ?? null) : null,
       circuitFlatModifier: circuit.flatModifier,
+      circuitStraightness: circuit.straightness,
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
     })
 

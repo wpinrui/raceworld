@@ -14,6 +14,6 @@ export function calendarForYear(year: number): Circuit[] {
   const season = SEASON_CALENDARS[year] ?? SEASON_CALENDARS[DEFAULT_CALENDAR_YEAR]
   return season.map((r) => {
     const c = CIRCUITS[r.id]
-    return { id: r.id, name: r.name, code: c.code, location: c.location, country: c.country, laps: r.laps, flatModifier: c.flatModifier, sundayOfYear: r.sundayOfYear }
+    return { id: r.id, name: r.name, code: c.code, location: c.location, country: c.country, laps: r.laps, flatModifier: c.flatModifier, sundayOfYear: r.sundayOfYear, straightness: c.straightness }
   })
 }
