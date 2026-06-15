@@ -3,7 +3,7 @@
 exports[`simulateLap (characterization) > produces a stable final classification, including retirements, for a seeded race 1`] = `
 [
   {
-    "condition": 12,
+    "condition": 2,
     "driverId": "d1",
     "gap": 0,
     "laps": 12,
@@ -14,13 +14,13 @@ exports[`simulateLap (characterization) > produces a stable final classification
     "retired": false,
     "retirementLap": null,
     "stints": 1,
-    "totalTime": 1233.924,
+    "totalTime": 1233.812,
     "tyre": "medium",
   },
   {
     "condition": 0,
     "driverId": "d3",
-    "gap": 16.419,
+    "gap": 16.531,
     "laps": 12,
     "lapsDown": 0,
     "mistakeCount": 0,
@@ -98,7 +98,7 @@ exports[`simulateLap (characterization) > produces a stable final classification
 exports[`simulateLap (characterization) > records a god-mode forced retirement and classifies the car out of the running 1`] = `
 [
   {
-    "condition": 2,
+    "condition": 1,
     "driverId": "d4",
     "gap": 0,
     "laps": 12,
@@ -109,13 +109,13 @@ exports[`simulateLap (characterization) > records a god-mode forced retirement a
     "retired": false,
     "retirementLap": null,
     "stints": 1,
-    "totalTime": 1252.726,
+    "totalTime": 1252.578,
     "tyre": "medium",
   },
   {
-    "condition": 89,
+    "condition": 73,
     "driverId": "d1",
-    "gap": 6.256,
+    "gap": 2.587,
     "laps": 12,
     "lapsDown": 0,
     "mistakeCount": 0,
@@ -124,13 +124,13 @@ exports[`simulateLap (characterization) > records a god-mode forced retirement a
     "retired": false,
     "retirementLap": null,
     "stints": 2,
-    "totalTime": 1258.983,
+    "totalTime": 1255.165,
     "tyre": "medium",
   },
   {
-    "condition": 6,
+    "condition": 11,
     "driverId": "d5",
-    "gap": 16.254,
+    "gap": 20.317,
     "laps": 12,
     "lapsDown": 0,
     "mistakeCount": 0,
@@ -139,13 +139,13 @@ exports[`simulateLap (characterization) > records a god-mode forced retirement a
     "retired": false,
     "retirementLap": null,
     "stints": 2,
-    "totalTime": 1275.237,
+    "totalTime": 1275.482,
     "tyre": "soft",
   },
   {
-    "condition": 91,
+    "condition": 87,
     "driverId": "d6",
-    "gap": 19.788,
+    "gap": 18.679,
     "laps": 12,
     "lapsDown": 0,
     "mistakeCount": 0,
@@ -154,7 +154,7 @@ exports[`simulateLap (characterization) > records a god-mode forced retirement a
     "retired": false,
     "retirementLap": null,
     "stints": 2,
-    "totalTime": 1295.025,
+    "totalTime": 1294.161,
     "tyre": "hard",
   },
   {

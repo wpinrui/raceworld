@@ -549,7 +549,9 @@ export function simulateLap(
       pushWearMult(intensity) *
       overheatWearMult(tempIn)
     const newCondition = wearTyre(current.currentTyre, wearMult)
-    const newTemp = nextTyreTemp(tempIn, intensity, tyreWarming)
+    // A fresh set comes out of the pits cold (slightly below the window); it warms on the out-lap. Otherwise
+    // `tempIn` (captured before the stop) would evolve the OLD tyre's heat onto the new set and never reset.
+    const newTemp = pitted ? TEMP.FRESH_TEMP : nextTyreTemp(tempIn, intensity, tyreWarming)
     // Carry the push state to next lap by mode:
     //  manual     → advance the preset (it auto-reverts once its goal is met).
     //  auto       → store the AI's live pick, so a Team-Manager player sees what their car is doing. No revert.
