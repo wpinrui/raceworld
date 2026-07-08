@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { usePathname, useRouter } from 'next/navigation'
-import { EllipsisVertical, ChevronRight, Play } from 'lucide-react'
+import { EllipsisVertical, ChevronRight, Play, Square } from 'lucide-react'
 import { useSeasonStore } from '@/lib/store/season-store'
 import { useLiveDriverCards } from '@/components/news/useDriverCards'
 import { useRaceStore } from '@/lib/store/race-store'
@@ -530,6 +530,17 @@ export default function Nav() {
       {/* News interrupt modal */}
       <RealWorldChangesModal key={pendingRW?.toYear ?? 'none'} open={!!pendingRW} transition={pendingRW} />
       {calMounted && <SimCalendar open={advancing} articles={calendarArticles} />}
+      {/* Bottom stop bar during a fast-forward: a reachable Stop Simulating control (Escape does the same). */}
+      {calMounted && (
+        <div className={`fixed inset-x-0 bottom-0 z-40 flex justify-center pb-6 pointer-events-none transition-opacity duration-300 ${advancing ? 'opacity-100' : 'opacity-0'}`}>
+          <button
+            onClick={handleStop}
+            className="pointer-events-auto flex items-center gap-2 rounded-full bg-[#DC143C] px-6 py-3 text-sm font-bold uppercase tracking-widest text-[#FFFFFF] shadow-2xl shadow-black/50 hover:bg-[#B01030] transition-colors"
+          >
+            <Square size={13} fill="currentColor" /> Stop Simulating
+          </button>
+        </div>
+      )}
       {raceModalMounted && <RaceSimModal open={raceModalOpen} />}
 
       {newsStop && (
