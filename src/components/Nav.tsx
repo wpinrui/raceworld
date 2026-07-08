@@ -31,7 +31,6 @@ import { useSimControl } from '@/lib/store/sim-control'
 
 const PRIMARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00D9FF] text-[#0F1419] font-bold text-xs uppercase tracking-wide hover:bg-[#009CB8] disabled:opacity-50 transition-colors'
 const SECONDARY_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#2A3142] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#303848] disabled:opacity-50 transition-colors'
-const STOP_CTA = 'flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#DC143C] text-[#FFFFFF] font-bold text-xs uppercase tracking-wide hover:bg-[#B01030] transition-colors'
 const MENU_ITEM = 'block w-full text-left px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#FFFFFF] hover:bg-[#2A3142] transition-colors'
 
 // Day-by-day Continue pacing: ms per simulated day. FM-style ~1 day/sec, easing a little faster on long
@@ -382,7 +381,7 @@ export default function Nav() {
         ? <button onClick={setupCta.start} disabled={!setupCta.ready} className={PRIMARY_CTA}>Start Season {setupCta.year}<ChevronRight size={14} /></button>
         : null
     }
-    if (advancing) return <button onClick={handleStop} className={STOP_CTA}>Stop Simulating</button>
+    if (advancing) return null // the bottom Stop Simulating bar owns this now; Space/Escape still stop the sim
     const continueBtn = (
       <button onClick={handleContinue} disabled={busy || pendingPlayerCall} className={freeAgentWaiting ? SECONDARY_CTA : PRIMARY_CTA}>
         {pendingRenewals ? 'Decide renewals' : pendingDraft ? 'Decide signings' : pendingOffer ? 'Decide offer' : busy ? 'Working…' : 'Continue'}<Play size={12} />
@@ -535,7 +534,7 @@ export default function Nav() {
         <div className={`fixed inset-x-0 bottom-0 z-40 flex justify-center pb-6 pointer-events-none transition-opacity duration-300 ${advancing ? 'opacity-100' : 'opacity-0'}`}>
           <button
             onClick={handleStop}
-            className="pointer-events-auto flex items-center gap-2 rounded-full bg-[#DC143C] px-6 py-3 text-sm font-bold uppercase tracking-widest text-[#FFFFFF] shadow-2xl shadow-black/50 hover:bg-[#B01030] transition-colors"
+            className={`flex items-center gap-2 rounded-full bg-[#DC143C] px-6 py-3 text-sm font-bold uppercase tracking-widest text-[#FFFFFF] shadow-2xl shadow-black/50 hover:bg-[#B01030] transition-colors ${advancing ? 'pointer-events-auto' : 'pointer-events-none'}`}
           >
             <Square size={13} fill="currentColor" /> Stop Simulating
           </button>

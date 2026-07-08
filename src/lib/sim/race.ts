@@ -447,7 +447,8 @@ export function simulateLap(
           condition: 100,
           maxLifeLaps: newMaxLifeLaps,
         },
-        tyreTemp: TEMP.FRESH_TEMP, // fresh tyre fitted: starts cold-ish, wants warming
+        // tyreTemp is reset to FRESH_TEMP in the end-of-lap temp step (which keys off `pitted`) — don't also
+        // set it here, so the two sites can't drift apart (the bug this replaced came from a stale double-write).
         stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap + 1 }],
         stintLap: 0,
         lastPitLap: state.currentLap,

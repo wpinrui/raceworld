@@ -163,6 +163,7 @@ export function DevCyclePicker({ className }: { className?: string }) {
       </div>
 
       <FocusAllocator
+        key={`${playerTeamId}:${seasonYear}`} // remount on team change / season rollover so the sliders re-read the plan's focus
         focus={devPlan?.focusSplit ?? DEFAULT_FOCUS}
         onChange={(f) => useSeasonStore.getState().setPlayerFocus(f)}
       />

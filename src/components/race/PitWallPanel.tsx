@@ -7,6 +7,7 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { SLIDER_LABELS } from '@/lib/sim/push'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
+import { TEMP } from '@/lib/sim/tyre-temp'
 import TyreIndicator from './TyreIndicator'
 import TyreTempGauge from './TyreTempGauge'
 import { DriverLink } from '@/components/world/EntityLink'
@@ -105,7 +106,7 @@ function PushControl({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' 
   const setPushAuto = useRaceStore((s) => s.setPushAuto)
   const setAutoDefend = useRaceStore((s) => s.setAutoDefend)
   const push = ds.push ?? { kind: 'manual', level: 0 as const }
-  const temp = ds.tyreTemp ?? 0.1
+  const temp = ds.tyreTemp ?? TEMP.FRESH_TEMP
   const cold = temp < 0, hot = temp > 1
   const auto = ds.pushAuto ?? false
   const autoDefend = ds.autoDefend ?? false
