@@ -82,35 +82,27 @@ export function aiFocusSplit(rng: () => number): FocusSplit {
 // Positive modulo into [0, m): handles a negative normal sample so the fractional part is always in range.
 const posMod = (x: number, m: number) => ((x % m) + m) % m
 
-// How far a stat swings from the team's overall within its pair (rating points, ~±this at 1σ). Bigger = more
-// track character. Sim-tunable.
-const CAR_STAT_SPREAD = 8
+// How widely the four stats spread around the team's overall when split. ~±12 rating points at the spread's
+// typical reach; a team can be notably better on straights than tyres, etc. (sim-tunable).
+const CAR_STAT_SPREAD = 0.16
 
 // The four car ratings, all present (unlike the optional fields on Team).
 export type CarRatings = { straightLine: number; cornering: number; tyreWarming: number; tyreWear: number }
 
-// Split an overall rating across the four car stats as two MIRRORED pairs around the overall: the pace pair
-// (straight-line ↔ cornering) trades off around it, and the tyre pair (warming ↔ wear) trades off independently.
-// Two properties we rely on: (1) carPace = mean(pace pair) = the overall exactly, so the pace RANK ORDER holds
-// (a top-ranked team is genuinely fastest); (2) the mean of all four = the overall, the "basic overall" the
-// performance table shows. A team still gets real character — a straight-line lean, a tyre lean — it just can't
-// scramble the pace pecking order the funding→performance loop depends on.
+// Split an overall rating across the four car stats so their AVERAGE equals the overall (the "basic overall"
+// the performance table shows). Multiply the overall by 4 to get a points budget, roll four normalised
+// weights, and hand each stat its share — clamped to [0,100].
 export function splitOverallIntoRatings(overall: number, rng: () => number): CarRatings {
-  const paceBias = sampleNormal(0, CAR_STAT_SPREAD, rng)
-  const tyreBias = sampleNormal(0, CAR_STAT_SPREAD, rng)
-  const stat = (v: number) => clamp(Math.round(v), 0, 100)
-  return {
-    straightLine: stat(overall + paceBias),
-    cornering: stat(overall - paceBias),
-    tyreWarming: stat(overall + tyreBias),
-    tyreWear: stat(overall - tyreBias),
-  }
+  const total = overall * 4
+  const raw = [0, 0, 0, 0].map(() => Math.max(0.15, sampleNormal(1, CAR_STAT_SPREAD, rng)))
+  const sum = raw[0] + raw[1] + raw[2] + raw[3]
+  const stat = (w: number) => clamp(Math.round((total * w) / sum), 0, 100)
+  return { straightLine: stat(raw[0]), cornering: stat(raw[1]), tyreWarming: stat(raw[2]), tyreWear: stat(raw[3]) }
 }
 
-// Assign each team (given best-first by rank) a randomised OVERALL then a mirrored-pair four-stat split. The
-// fastest team is pinned at 75; team i draws within a 5-wide band below the previous one — lower bound 75−5i,
-// plus a standard-normal-derived fraction (mod 1) × 5. carPace comes out = the overall, so the rank order is
-// genuinely preserved; only the within-pair character jitters.
+// Assign each team (given best-first by rank) a randomised OVERALL then a random four-stat split. The fastest
+// team is pinned at 75; team i draws within a 5-wide band below the previous one — lower bound 75−5i, plus a
+// standard-normal-derived fraction (mod 1) × 5 — so the order is always preserved but the values jitter.
 export function randomiseRatingsByRank(
   rankedTeamIds: string[],
   rng: () => number,

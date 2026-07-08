@@ -120,9 +120,5 @@ describe('randomiseRatingsByRank', () => {
     expect(avg('e')).toBeLessThan(avg('a')) // the back of the grid is clearly slower than the front
     // each rank sits in its own ~5-wide band, capped below the previous: team i overall < 80 − 5i
     for (let i = 1; i < ids.length; i++) expect(avg(ids[i])).toBeLessThanOrEqual(80 - 5 * i + 3)
-    // carPace (the pace pecking order the funding loop depends on) is genuinely rank-ordered — no scramble.
-    const cp = (id: string) => m.get(id)!.carPace
-    expect(cp('a')).toBeGreaterThanOrEqual(73) // top ≈ 75
-    for (let i = 1; i < ids.length; i++) expect(cp(ids[i])).toBeLessThanOrEqual(cp(ids[i - 1]) + 1)
   })
 })
