@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowUpDown, FastForward, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
+  ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
   Timer, Wrench, type LucideIcon,
 } from 'lucide-react'
 import type { DriverRaceState, SimSpeed } from '@/lib/sim/types'
@@ -26,8 +26,11 @@ import { createEngine } from './engine'
 // game's speeds, dots interpolate smoothly between ticks, pit stops route through the procedural pit
 // lane, and the board/championship/cards/commentary follow live. Open at /dev/track-preview.
 
-// Real-time ms per lap by speed; 5 (FF in the real game) just runs very fast here.
-const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 10000, 2: 5000, 3: 2000, 4: 500, 5: 100 }
+// Playback multipliers: 1x is REAL TIME (a ~78s lap takes ~78s), the rest divide the lap's real duration.
+const SPEED_MULTS: Record<SimSpeed, number> = { 1: 1, 2: 2, 3: 5, 4: 10, 5: 25 }
+const SPEED_LABELS: Record<SimSpeed, string> = { 1: '1×', 2: '2×', 3: '5×', 4: '10×', 5: '25×' }
+// The pre-race grid wait before lap 1 starts animating.
+const GRID_HOLD_MS = 2000
 
 // Subpane toggles: each button shows/hides one data group on the timing board.
 const COLUMN_TOGGLES: Array<{ col: RaceTableColumn; label: string; icon: LucideIcon }> = [
@@ -62,17 +65,17 @@ export default function TrackPreviewPage() {
   const [commentary, setCommentary] = useState(() => engine.commentary())
 
   const tickStartRef = useRef(0)
-  const intervalRef = useRef(SPEED_INTERVALS[2])
+  const intervalRef = useRef(GRID_HOLD_MS)
   const frozenFracRef = useRef(0)
   const pausedRef = useRef(false)
 
-  // The tick loop: one engine lap per interval, remembering mid-lap progress across pause/speed changes.
+  // The tick loop: one engine lap per interval. The interval is the LEADER'S REAL LAP TIME divided by
+  // the speed multiplier (1x = real time), remembering mid-lap progress across pause/speed changes.
   useEffect(() => {
     pausedRef.current = paused
     if (paused || engine.finished) return
-    const interval = SPEED_INTERVALS[speed]
-    intervalRef.current = interval
-    tickStartRef.current = performance.now() - frozenFracRef.current * interval
+    const mult = SPEED_MULTS[speed]
+    const intervalNow = () => (engine.laps === 0 ? GRID_HOLD_MS : (engine.leaderLapSeconds() * 1000) / mult)
     let timer: ReturnType<typeof setTimeout>
     const loop = () => {
       engine.tick()
@@ -80,10 +83,13 @@ export default function TrackPreviewPage() {
       setCommentary(engine.commentary())
       setLap(engine.laps)
       frozenFracRef.current = 0
+      intervalRef.current = intervalNow()
       tickStartRef.current = performance.now()
-      if (!engine.finished) timer = setTimeout(loop, interval)
+      if (!engine.finished) timer = setTimeout(loop, intervalRef.current)
     }
-    timer = setTimeout(loop, (1 - frozenFracRef.current) * interval)
+    intervalRef.current = intervalNow()
+    tickStartRef.current = performance.now() - frozenFracRef.current * intervalRef.current
+    timer = setTimeout(loop, (1 - frozenFracRef.current) * intervalRef.current)
     return () => {
       clearTimeout(timer)
       frozenFracRef.current = Math.min(1, (performance.now() - tickStartRef.current) / intervalRef.current)
@@ -323,7 +329,7 @@ function CentreConsole({ lap, speed, paused, onSpeed, onTogglePause }: {
                 }`}
                 style={speed === s ? undefined : { background: CHIP_BG }}
               >
-                {s === 5 ? <FastForward size={15} className="fill-current" /> : `${s}×`}
+                {SPEED_LABELS[s]}
               </button>
             ))}
           </div>

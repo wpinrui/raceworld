@@ -37,6 +37,8 @@ export interface FakeEngine {
   commentary(): CommentaryEntry[]
   /** Position of a car at `frac` (0..1) of the way through the current tick interval. */
   sampleAt(id: string, frac: number): TrackSample
+  /** Duration of the leader's most recent lap in seconds (the real-time length of one tick at 1x). */
+  leaderLapSeconds(): number
 }
 
 export function createEngine(): FakeEngine {
@@ -160,9 +162,10 @@ export function createEngine(): FakeEngine {
     if (isPit) {
       const tEntry = PIT_ENTRY * run
       if (tau < tEntry) return { prog: tau / run }
-      // Pit phase: 25% of the window driving to the box, 50% stationary, 25% driving out.
+      // Pit phase: 35% of the window crawling to the box, 30% stationary, 35% crawling out — the long
+      // drive shares make the pit-lane speed limit visible next to racing speed.
       const w = Math.min(1, (tau - tEntry) / (lapT - tEntry))
-      const prog = w < 0.25 ? (w / 0.25) * 0.5 : w < 0.75 ? 0.5 : 0.5 + ((w - 0.75) / 0.25) * 0.5
+      const prog = w < 0.35 ? (w / 0.35) * 0.5 : w < 0.65 ? 0.5 : 0.5 + ((w - 0.65) / 0.35) * 0.5
       return { prog, pit: true }
     }
     // The lap after a stop starts from the pit exit, not the S/F line.
@@ -178,5 +181,6 @@ export function createEngine(): FakeEngine {
     states: () => statesCache,
     commentary: () => [...log],
     sampleAt,
+    leaderLapSeconds: () => (laps === 0 ? BASE_LAP : leaderCumAt(laps) - leaderCumAt(laps - 1)),
   }
 }
