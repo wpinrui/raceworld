@@ -12,6 +12,7 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from '@/compo
 import CommentaryFeed from '@/components/race/CommentaryFeed'
 import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { PitWallCard } from '@/components/race/PitWallPanel'
+import { WeatherGraph } from '@/components/race/WeatherGraph'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
 import {
@@ -61,12 +62,6 @@ const EDGE_MASK = 'linear-gradient(90deg,transparent,#000 16%,#000 84%,transpare
 const CHIP_BG = 'rgba(20,25,36,0.75)'
 
 function CentreConsole({ speed, paused, onSpeed, onTogglePause }: { speed: SimSpeed; paused: boolean; onSpeed: (s: SimSpeed) => void; onTogglePause: () => void }) {
-  const remaining = MOCK_RACE_STATE.weatherForecast.filter((p) => p.lap >= MOCK_LAP)
-  const rainPct = Math.round(Math.max(0, ...remaining.map((p) => p.moisture)) * 100)
-  const bars = Array.from({ length: 5 }, (_, i) => {
-    const p = remaining[Math.min(remaining.length - 1, Math.round((i / 4) * (remaining.length - 1)))]
-    return p?.moisture ?? 0
-  })
   const lapProgress = (MOCK_LAP / MOCK_TOTAL_LAPS) * 100
 
   const chipBtn = 'h-7 flex items-center px-4 rounded border border-[#2A3142] text-[11px] font-extrabold tracking-[1.5px] text-[#8A93A6] hover:text-[#FFFFFF] hover:border-[#3A4356] cursor-pointer'
@@ -99,21 +94,17 @@ function CentreConsole({ speed, paused, onSpeed, onTogglePause }: { speed: SimSp
         <div className="flex items-center gap-3">
           <NationalityFlag code={MOCK_CIRCUIT.country} />
           <span className="text-lg font-extrabold tracking-[2px]">{MOCK_CIRCUIT.name.toUpperCase()}</span>
-          <div className="flex items-center gap-2 rounded border border-[#2A3142] px-2.5 py-1" style={{ background: CHIP_BG }}>
-            <span className="text-[10px] font-extrabold tracking-[1px] text-[#8A93A6]">RAIN</span>
-            <span className="text-sm font-bold tabular-nums">{rainPct}%</span>
-            <div className="flex items-end gap-[2px] h-[13px] ml-0.5">
-              {bars.map((m, i) => (
-                <div
-                  key={i}
-                  className="w-[4px] rounded-[1px] bg-[#3B82F6]"
-                  style={{ height: 4 + m * 14, opacity: 0.5 + m * 0.5 }}
-                />
-              ))}
-            </div>
+          {/* Track condition: the live WeatherGraph (actual line revealed lap by lap, forecast ahead,
+              hover readout, god-mode reveal toggle), framed in the console's chip style. */}
+          <div className="rounded border border-[#2A3142] px-2.5 py-1" style={{ background: CHIP_BG }}>
+            <WeatherGraph
+              weather={MOCK_RACE_STATE.weather}
+              forecast={MOCK_RACE_STATE.weatherForecast}
+              currentLap={MOCK_LAP}
+              totalLaps={MOCK_TOTAL_LAPS}
+            />
           </div>
           <div className="ml-auto flex gap-2">
-            <button className={chipBtn} style={{ background: CHIP_BG }}>TRACK STATE</button>
             <button className={chipBtn} style={{ background: CHIP_BG }}>DATA ROOM</button>
           </div>
         </div>
