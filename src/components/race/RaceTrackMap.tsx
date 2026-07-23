@@ -49,7 +49,8 @@ const SF_HALF_M = 7
 const CAR_LENGTH_M = 5.63
 
 const ZOOM_MIN = 0.6
-const ZOOM_MAX = 20
+const ZOOM_MAX = 60
+const ZOOM_DEFAULT = 20
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 
 // How much of the track's width the racing line may use, each side of the centreline: half the tarmac
@@ -487,7 +488,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
 
   // Camera: pan (px), zoom, rotation — applied as one transform on the world layer. While following,
   // the pan is owned by the follow logic; dragging breaks the lock and pans freely.
-  const camRef = useRef({ x: 0, y: 0, z: 1, rot: 0 })
+  const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 })
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
 
@@ -601,10 +602,13 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   }
 
   const resetCamera = () => {
-    camRef.current = { x: 0, y: 0, z: 1, rot: 0 }
+    camRef.current = { x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 }
     onFollow(null)
     applyCam()
   }
+
+  // Apply the default camera on mount (nothing else writes the transform until an interaction).
+  useEffect(() => { applyCam() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
