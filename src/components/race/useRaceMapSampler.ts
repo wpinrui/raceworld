@@ -103,9 +103,9 @@ export function useRaceMapSampler(
       if (N === 0) return { prog: 0, gridSlot: c.grid } // formed up on the starting grid
       const frac = pausedRef.current ? frozenFracRef.current : liveFrac()
       const S = leaderCumAt(N - 1) + frac * (leaderCumAt(N) - leaderCumAt(N - 1))
-      // Still on the grid: the playback clock hasn't reached this car's official start offset yet, so
-      // it launches when its grid stagger says it should.
-      if (S < c.cum[0]) return { prog: 0, gridSlot: c.grid }
+      // Covering its grid deficit: the whole field launches together at lights out; this car reaches
+      // the S/F line exactly when the official clock says its race begins.
+      if (S < c.cum[0]) return { prog: 0, gridSlot: c.grid, launch: c.cum[0] > 0 ? S / c.cum[0] : 1 }
       if (c.retired && S >= c.cum[c.cum.length - 1]) return null
       let k = Math.min(c.scan, c.cum.length - 1)
       while (k > 0 && c.cum[k] > S) k--
@@ -126,11 +126,7 @@ export function useRaceMapSampler(
         return { prog, pit: true }
       }
       const from = c.pitLaps.has(lapNo - 1) ? PIT_EXIT_FRAC : 0
-      const prog = from + (1 - from) * Math.min(0.999, tau / run)
-      // Lap 1 launches from the grid box, easing onto the racing line over the opening stretch —
-      // without this, every car's clock starts at zero and the field teleports into one ball.
-      if (lapNo === 1) return { prog, gridSlot: c.grid, blend: Math.min(1, tau / run / 0.12) }
-      return { prog }
+      return { prog: from + (1 - from) * Math.min(0.999, tau / run) }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

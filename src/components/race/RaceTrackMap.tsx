@@ -26,10 +26,10 @@ export interface TrackCarMeta {
 }
 
 /** One frame of a car's position: lap TIME fraction 0..1 (racing line), pit-lane progress when `pit`,
- * or a starting-grid slot before lights out. During lap 1, `gridSlot` + `blend` ease the car from its
- * grid box onto the racing line (at blend >= 1 the slot is ignored). Racing progress is mapped through
- * a curvature-derived speed profile, so equal time steps cover more distance on straights than corners. */
-export type TrackSample = { prog: number; pit?: boolean; gridSlot?: number; blend?: number } | null
+ * or a starting-grid slot. All cars LAUNCH TOGETHER at lights out: `launch` (0..1) slides the grid box
+ * to the S/F line, timed so the car crosses exactly when its official grid-seeded time says. Racing
+ * progress maps through a curvature-derived speed profile (more distance per time step on straights). */
+export type TrackSample = { prog: number; pit?: boolean; gridSlot?: number; launch?: number } | null
 
 // Speed-profile physics in REAL units (m/s, m/s²), converted per track via metresPerUnit: top speed,
 // the hairpin floor, lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and
@@ -606,11 +606,16 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     applyCam()
   }
 
+  // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
+  // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
   useEffect(() => {
-    lenRef.current = 0 // re-measure if the layout changes
+    lenRef.current = 0
     pitLenRef.current = 0
     raceLenRef.current = 0
     profileRef.current = null
+  }, [layout])
+
+  useEffect(() => {
     let raf = 0
     const tick = () => {
       const path = pathRef.current
@@ -631,10 +636,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
 
         // Pass 1: place every car in arc space. Racing cars live on the RACING LINE path; grid slots
         // form the staggered starting grid (8m pitch, alternating sides) on the centreline.
-        interface Frame {
-          id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number
-          blend?: number
-        }
+        interface Frame { id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number }
         const frames: Frame[] = []
         for (const car of cars) {
           const el = elRefs.current.get(car.id)
@@ -647,33 +649,27 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           el.style.visibility = ''
           if (sample.pit) {
             frames.push({ id: car.id, el, kind: 'pit', dist: Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current, lat: 0 })
-          } else if (sample.gridSlot != null && sample.blend == null) {
-            // Parked pre-race ONLY: lap-1 samples also carry gridSlot (for the launch deficit) but come
-            // WITH a blend — those must fall through to the racing branch, or the whole first lap
-            // renders as a frozen grid.
-            const back = uu(3 + (sample.gridSlot - 1) * 8)
+          } else if (sample.gridSlot != null) {
+            // On the grid — parked pre-race, and from lights out the whole field launches TOGETHER:
+            // `launch` slides the box toward the S/F line so the car crosses it exactly when its
+            // official (grid-seeded) time begins. The box's lateral stagger fades over the run.
+            const launch = Math.min(1, sample.launch ?? 0)
+            const back = uu(3 + (sample.gridSlot - 1) * 8) * (1 - launch)
             frames.push({
               id: car.id, el, kind: 'grid',
               dist: (((lenTotal - back) % lenTotal) + lenTotal) % lenTotal,
-              lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7),
+              lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - launch),
             })
           } else {
             const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
-            // Grid stagger in TIME lives in the sampler's official seeds now; only the grid box's
-            // lateral offset fades out here over the opening stretch of lap 1.
-            const lat = sample.gridSlot != null
-              ? (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - Math.min(1, sample.blend ?? 1))
-              : 0
-            frames.push({ id: car.id, el, kind: 'race', dist, lat, blend: sample.blend })
+            frames.push({ id: car.id, el, kind: 'race', dist, lat: 0 })
           }
         }
 
         // Pass 2: side-by-side separation — when two racing cars share ~8m of arc, the chasing car
         // moves off-line (side chosen stably per car) and the car ahead leans slightly the other way,
         // so a battle runs genuinely two-wide instead of overlapping.
-        const racing = frames
-          .filter((f) => f.kind === 'race' && (f.blend ?? 1) >= 1)
-          .sort((a, b) => a.dist - b.dist)
+        const racing = frames.filter((f) => f.kind === 'race').sort((a, b) => a.dist - b.dist)
         const sepRange = uu(8)
         const latMax = uu(3.4)
         for (let i = 0; i < racing.length; i++) {

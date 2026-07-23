@@ -147,7 +147,7 @@ export function createEngine(): FakeEngine {
     // Playback clock: the leader covers exactly one lap per tick interval; everyone else follows their
     // own cumulative times against the same clock.
     const S = leaderCumAt(laps - 1) + Math.min(1, Math.max(0, frac)) * (leaderCumAt(laps) - leaderCumAt(laps - 1))
-    if (S < c.cum[0]) return { prog: 0, gridSlot: c.grid } // grid stagger: launches at its start offset
+    if (S < c.cum[0]) return { prog: 0, gridSlot: c.grid, launch: c.cum[0] > 0 ? S / c.cum[0] : 1 }
     if (c.retireLap !== null && S >= c.cum[Math.min(c.retireLap, c.cum.length - 1)]) return null
     // Find the lap in progress at S.
     let k = Math.min(c.scanIdx, c.cum.length - 1)
@@ -171,9 +171,7 @@ export function createEngine(): FakeEngine {
     }
     // The lap after a stop starts from the pit exit, not the S/F line.
     const from = lapNo === c.pitLap + 1 ? PIT_EXIT : 0
-    const prog = from + (1 - from) * Math.min(0.999, tau / run)
-    if (lapNo === 1) return { prog, gridSlot: c.grid, blend: Math.min(1, tau / run / 0.12) }
-    return { prog }
+    return { prog: from + (1 - from) * Math.min(0.999, tau / run) }
   }
 
   return {
