@@ -290,7 +290,8 @@ export function RaceDayView({
               onSpeed={onSpeedClick}
               onTogglePause={onTogglePause}
               straightness={circuit.straightness}
-              backdropUrl={`/track-backdrops/${circuit.id}.png`}
+              // Monaco stands in for every venue until per-track backdrops are sourced (see README attribution).
+              backdropUrl="/track-backdrops/monaco.png"
               speedLabels={{ 1: '1×', 2: '2×', 3: '5×', 4: '10×', 5: '25×' }}
               topRight={
                 !driverMode && !teamManagerMode ? (
