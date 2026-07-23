@@ -170,7 +170,9 @@ export function createEngine(): FakeEngine {
     }
     // The lap after a stop starts from the pit exit, not the S/F line.
     const from = lapNo === c.pitLap + 1 ? PIT_EXIT : 0
-    return { prog: from + (1 - from) * Math.min(0.999, tau / run) }
+    const prog = from + (1 - from) * Math.min(0.999, tau / run)
+    if (lapNo === 1) return { prog, gridSlot: c.grid, blend: Math.min(1, tau / run / 0.12) }
+    return { prog }
   }
 
   return {

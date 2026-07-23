@@ -26,9 +26,10 @@ export interface TrackCarMeta {
 }
 
 /** One frame of a car's position: lap TIME fraction 0..1 (racing line), pit-lane progress when `pit`,
- * or a starting-grid slot before lights out. Racing progress is mapped through a curvature-derived
- * speed profile, so equal time steps cover more distance on straights than in corners. */
-export type TrackSample = { prog: number; pit?: boolean; gridSlot?: number } | null
+ * or a starting-grid slot before lights out. During lap 1, `gridSlot` + `blend` ease the car from its
+ * grid box onto the racing line (at blend >= 1 the slot is ignored). Racing progress is mapped through
+ * a curvature-derived speed profile, so equal time steps cover more distance on straights than corners. */
+export type TrackSample = { prog: number; pit?: boolean; gridSlot?: number; blend?: number } | null
 
 // Speed-profile physics in REAL units (m/s, m/s²), converted per track via metresPerUnit: top speed,
 // the hairpin floor, lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and
@@ -630,7 +631,20 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
 
         // Pass 1: place every car in arc space. Racing cars live on the RACING LINE path; grid slots
         // form the staggered starting grid (8m pitch, alternating sides) on the centreline.
-        interface Frame { id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number }
+        interface Frame {
+          id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number
+          gridSlot?: number; blend?: number
+        }
+        // Grid-box pose on the centreline (also the launch origin for the lap-1 blend).
+        const gridPose = (slot: number) => {
+          const back = uu(3 + (slot - 1) * 8)
+          const gdist = (((lenTotal - back) % lenTotal) + lenTotal) % lenTotal
+          const pt0 = path.getPointAtLength(gdist)
+          const pt1 = path.getPointAtLength((gdist + look) % lenTotal)
+          const h = Math.atan2(pt1.y - pt0.y, pt1.x - pt0.x)
+          const lat = (slot % 2 === 1 ? 1 : -1) * uu(1.7)
+          return { x: pt0.x - Math.sin(h) * lat, y: pt0.y + Math.cos(h) * lat, h }
+        }
         const frames: Frame[] = []
         for (const car of cars) {
           const el = elRefs.current.get(car.id)
@@ -652,14 +666,16 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             })
           } else {
             const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
-            frames.push({ id: car.id, el, kind: 'race', dist, lat: 0 })
+            frames.push({ id: car.id, el, kind: 'race', dist, lat: 0, gridSlot: sample.gridSlot, blend: sample.blend })
           }
         }
 
         // Pass 2: side-by-side separation — when two racing cars share ~8m of arc, the chasing car
         // moves off-line (side chosen stably per car) and the car ahead leans slightly the other way,
         // so a battle runs genuinely two-wide instead of overlapping.
-        const racing = frames.filter((f) => f.kind === 'race').sort((a, b) => a.dist - b.dist)
+        const racing = frames
+          .filter((f) => f.kind === 'race' && (f.blend ?? 1) >= 1)
+          .sort((a, b) => a.dist - b.dist)
         const sepRange = uu(8)
         const latMax = uu(3.4)
         for (let i = 0; i < racing.length; i++) {
@@ -694,8 +710,16 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           const prevLat = latRef.current.get(f.id) ?? f.lat
           const lat = prevLat + (f.lat - prevLat) * 0.15
           latRef.current.set(f.id, lat)
-          const x = pt.x - Math.sin(heading) * lat
-          const y = pt.y + Math.cos(heading) * lat
+          let x = pt.x - Math.sin(heading) * lat
+          let y = pt.y + Math.cos(heading) * lat
+          // Lap-1 launch: ease from the grid box onto the racing line instead of teleporting.
+          if (f.kind === 'race' && f.gridSlot != null && (f.blend ?? 1) < 1) {
+            const b = f.blend ?? 0
+            const e = b * b * (3 - 2 * b)
+            const pose = gridPose(f.gridSlot)
+            x = pose.x + (x - pose.x) * e
+            y = pose.y + (y - pose.y) * e
+          }
           const left = ((x - vb.x) / vb.w) * 100
           const top = ((y - vb.y) / vb.h) * 100
           posRef.current.set(f.id, { left, top })

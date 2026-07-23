@@ -111,7 +111,11 @@ export function useRaceMapSampler(
         return { prog, pit: true }
       }
       const from = c.pitLaps.has(lapNo - 1) ? PIT_EXIT_FRAC : 0
-      return { prog: from + (1 - from) * Math.min(0.999, tau / run) }
+      const prog = from + (1 - from) * Math.min(0.999, tau / run)
+      // Lap 1 launches from the grid box, easing onto the racing line over the opening stretch —
+      // without this, every car's clock starts at zero and the field teleports into one ball.
+      if (lapNo === 1) return { prog, gridSlot: c.grid, blend: Math.min(1, tau / run / 0.12) }
+      return { prog }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
