@@ -4,24 +4,32 @@ import { useRef, useState } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { RaceTrackMap, type TrackCarMeta } from '@/components/race/RaceTrackMap'
+import RaceTable from '@/components/race/RaceTable'
+import { MOCK_DRIVERS, MOCK_GRID, MOCK_LAP, MOCK_STATES, MOCK_TEAMS, MOCK_TOTAL_LAPS } from './mock'
 
 // Dev-only preview (#sim-overhaul phase 6 spike): the Monaco track map plus a placeholder skeleton of the
-// race screen (MM-inspired). No sim wiring: markers are a constant-speed parade so the map reads alive.
-// Open at /dev/track-preview.
+// race screen (MM-inspired). No sim wiring: the left panel is the real RaceTable on fabricated data, and
+// the map markers are a constant-speed parade so the map reads alive. Open at /dev/track-preview.
 
-const TEAM_COLORS = ['#DC143C', '#1E6FD9', '#00A19C', '#F58020', '#9B59B6', '#2ECC71', '#E8B923', '#FF69B4', '#8B4513', '#5D6D7E']
-
-const CARS: TrackCarMeta[] = Array.from({ length: 20 }, (_, i) => ({
-  id: `car-${i}`,
-  pos: i + 1,
-  color: TEAM_COLORS[Math.floor(i / 2)],
-  name: `Car ${i + 1}`,
-  team: `Team ${Math.floor(i / 2) + 1}`,
-  isPlayer: i === 7,
-}))
-
-// Parade drift: the field spread over ~60% of the lap, all moving at one slow constant speed.
 const PARADE_LAP_MS = 40000
+
+const PANEL_MIN = 170
+const PANEL_MAX = 900
+const PANEL_DEFAULT = 700
+
+const teamOf = new Map(MOCK_TEAMS.map((t) => [t.id, t]))
+const CARS: TrackCarMeta[] = MOCK_STATES.filter((s) => !s.retired).map((s) => {
+  const driver = MOCK_DRIVERS.find((d) => d.id === s.driverId)!
+  const team = teamOf.get(driver.teamId)
+  return {
+    id: s.driverId,
+    pos: s.position,
+    color: team?.color ?? '#888',
+    name: driver.name,
+    team: team?.name,
+    isPlayer: s.driverId === 'car-7',
+  }
+})
 
 function Placeholder({ label, className = '' }: { label: string; className?: string }) {
   return (
@@ -33,6 +41,7 @@ function Placeholder({ label, className = '' }: { label: string; className?: str
 
 export default function TrackPreviewPage() {
   const layout = TRACK_LAYOUTS.monaco
+  const [panelW, setPanelW] = useState<number>(PANEL_DEFAULT)
   const [standingsOpen, setStandingsOpen] = useState(true)
 
   const sampleRef = useRef((id: string) => {
@@ -40,6 +49,20 @@ export default function TrackPreviewPage() {
     const t = (performance.now() % PARADE_LAP_MS) / PARADE_LAP_MS
     return t - i * 0.03
   })
+
+  const startDrag = (e: React.PointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = panelW
+    const move = (ev: PointerEvent) =>
+      setPanelW(Math.min(PANEL_MAX, Math.max(PANEL_MIN, startW + ev.clientX - startX)))
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#0F1319] text-[#FFFFFF]">
@@ -53,9 +76,12 @@ export default function TrackPreviewPage() {
       </div>
 
       <div className="flex flex-1 min-h-0">
-        {/* Left: standings, collapsible */}
-        <div className={`shrink-0 border-r border-[#232A38] flex flex-col transition-all ${standingsOpen ? 'w-64' : 'w-10'}`}>
-          <div className="flex items-center justify-between px-2 py-2">
+        {/* Left: the race-day timing board, drag-resizable and collapsible */}
+        <div
+          className="shrink-0 border-r border-[#232A38] flex flex-col"
+          style={{ width: standingsOpen ? panelW : 40 }}
+        >
+          <div className="flex items-center justify-between px-2 py-2 shrink-0">
             {standingsOpen && <span className="text-xs font-semibold tracking-widest uppercase">Standings</span>}
             <button
               className="p-1 rounded hover:bg-[#232A38] cursor-pointer"
@@ -65,18 +91,24 @@ export default function TrackPreviewPage() {
             </button>
           </div>
           {standingsOpen && (
-            <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 flex flex-col gap-1">
-              {CARS.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 rounded bg-[#161B26] px-2 py-1">
-                  <span className="w-5 text-right text-xs font-bold">{c.pos}</span>
-                  <span className="w-1.5 h-4 rounded-sm" style={{ backgroundColor: c.color }} />
-                  <span className="text-xs font-medium flex-1">{c.name}</span>
-                  <span className="text-xs tabular-nums">{c.pos === 1 ? '-' : `+${(c.pos * 0.4).toFixed(1)}`}</span>
-                </div>
-              ))}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <RaceTable
+                drivers={MOCK_DRIVERS}
+                teams={MOCK_TEAMS}
+                states={MOCK_STATES}
+                currentLap={MOCK_LAP}
+                totalLaps={MOCK_TOTAL_LAPS}
+                gridPos={MOCK_GRID}
+              />
             </div>
           )}
         </div>
+        {standingsOpen && (
+          <div
+            className="w-1.5 shrink-0 cursor-col-resize hover:bg-[#3A4252] active:bg-[#3A4252]"
+            onPointerDown={startDrag}
+          />
+        )}
 
         {/* Center: the track map, full bleed */}
         <div className="flex-1 min-w-0 relative p-6">
@@ -94,7 +126,7 @@ export default function TrackPreviewPage() {
       <div className="flex items-stretch gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
         <Placeholder label="Car 1 pit wall" className="h-24 flex-1" />
         <div className="flex flex-col items-center justify-center gap-2 w-80 shrink-0">
-          <div className="font-semibold text-sm tracking-widest uppercase">Lap 1 / 78</div>
+          <div className="font-semibold text-sm tracking-widest uppercase">Lap {MOCK_LAP} / {MOCK_TOTAL_LAPS}</div>
           <Placeholder label="Speed controls" className="h-10 w-full" />
         </div>
         <Placeholder label="Car 2 pit wall" className="h-24 flex-1" />
