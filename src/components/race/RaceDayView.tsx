@@ -274,7 +274,7 @@ export function RaceDayView({
             return (
               <div
                 className="absolute left-1/2 top-1/2 pointer-events-none"
-                style={{ transform: 'translate(-50%, calc(-100% - 56px))' }}
+                style={{ transform: 'translate(-50%, calc(-100% - 44px)) scale(0.9)', transformOrigin: '50% 100%' }}
               >
                 <DriverTrackTip
                   ds={ds}
