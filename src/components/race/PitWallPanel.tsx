@@ -153,7 +153,7 @@ function PushControl({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' 
   )
 }
 
-function Card({ driver, team, ds, raceState, allDrivers, onRetire, mode, teammatePitting = false }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void; mode: 'driver' | 'tm'; teammatePitting?: boolean }) {
+export function PitWallCard({ driver, team, ds, raceState, allDrivers, onRetire, mode, teammatePitting = false }: { driver: Driver; team: Team | undefined; ds: DriverRaceState | undefined; raceState: RaceState; allDrivers: Driver[]; onRetire: (id: string) => void; mode: 'driver' | 'tm'; teammatePitting?: boolean }) {
   const cmd: PitCommand = useRaceStore((s) => s.pitCommands[driver.id]) ?? 'auto'
   const setPitCommand = useRaceStore((s) => s.setPitCommand)
   // The compound a PIT command will use; defaults to the AI's planned next compound.
@@ -276,7 +276,7 @@ export default function PitWallPanel({ drivers, teams, states, raceState, onReti
         <p className="text-sm text-[#FFFFFF]">No cars in the race.</p>
       ) : (
         myDrivers.map((d) => (
-          <Card
+          <PitWallCard
             key={d.id}
             driver={d}
             team={teams.find((t) => t.id === d.teamId)}

@@ -1,8 +1,12 @@
 // Fabricated race-day data for the track preview (#sim-overhaul phase 6 spike). Deterministic (no
-// randomness: it renders on the server too) and plausible enough to exercise every RaceTable feature:
-// grid deltas, mixed compounds and wear, stint histories, a lapped car, and a DNF.
+// randomness: it renders on the server too) and plausible enough to exercise every real race-screen
+// component: grid deltas, mixed compounds and wear, stint histories, a lapped car, a DNF, push states,
+// a rain threat mid-race, commentary of every type, and championship baselines.
 
-import type { Driver, DriverRaceState, Team, TyreCompound } from '@/lib/sim/types'
+import type {
+  Circuit, CommentaryEntry, ConstructorStanding, Driver, DriverRaceState, DriverStanding, RaceState, Team,
+  TyreCompound, WeatherPoint,
+} from '@/lib/sim/types'
 
 export const MOCK_LAP = 30
 export const MOCK_TOTAL_LAPS = 78
@@ -111,3 +115,99 @@ export const MOCK_STATES: DriverRaceState[] = ORDER.map((driverIdx, posIdx) => {
     dsq: false,
   }
 })
+
+// The mock player team (Sunburst, car-6 + car-7) gets live push/temp state so the pit wall cards read real.
+{
+  const byId = new Map(MOCK_STATES.map((s) => [s.driverId, s]))
+  const c6 = byId.get('car-6')!
+  c6.push = { kind: 'preset', preset: 'overtake' }
+  c6.tyreTemp = 0.85
+  c6.targetPitLap = 41
+  const c7 = byId.get('car-7')!
+  c7.push = { kind: 'manual', level: 0 }
+  c7.autoDefend = true
+  c7.defending = true
+  c7.tyreTemp = 0.4
+  c7.targetPitLap = 44
+}
+
+export const MOCK_CIRCUIT: Circuit = {
+  id: 'monaco',
+  name: 'Monaco Grand Prix',
+  code: 'MON',
+  location: 'Monte Carlo',
+  country: 'MC',
+  laps: MOCK_TOTAL_LAPS,
+  flatModifier: -23,
+  sundayOfYear: 21,
+  straightness: 0.05,
+}
+
+// Dry race with a mid-race rain threat the forecast overcalls, so the weather graph has something to say.
+const moistureAt = (lap: number) => (lap < 24 || lap > 52 ? 0.04 : 0.04 + 0.4 * Math.sin(((lap - 24) / 28) * Math.PI))
+const MOCK_WEATHER: WeatherPoint[] = Array.from({ length: MOCK_TOTAL_LAPS }, (_, i) => ({
+  lap: i + 1,
+  moisture: Math.round(moistureAt(i + 1) * 100) / 100,
+}))
+const MOCK_FORECAST: WeatherPoint[] = MOCK_WEATHER.map(({ lap, moisture }) => ({
+  lap,
+  moisture: Math.min(1, Math.round(moisture * 1.5 * 100) / 100),
+}))
+
+const MOCK_COMMENTARY: CommentaryEntry[] = [
+  { lap: 1, type: 'info', text: 'Lights out, the field streams through Sainte Devote without contact' },
+  { lap: 8, type: 'closing', text: 'D. Fraser closes to within 1.2s of A. Rossi' },
+  { lap: 14, type: 'pit', text: 'L. Moreau pits from the lead for mediums' },
+  { lap: 18, type: 'retirement', text: 'I. Farkas retires, engine failure' },
+  { lap: 23, type: 'weather', text: 'Drizzle reported at the chicane, moisture rising' },
+  { lap: 27, type: 'overtake', text: 'R. Tanaka passes T. Kovac for P2 into the chicane' },
+  { lap: 29, type: 'closing', text: 'B. Carter closes to within 0.8s of E. Duarte' },
+]
+
+export const MOCK_RACE_STATE: RaceState = {
+  circuitId: 'monaco',
+  year: 2026,
+  totalLaps: MOCK_TOTAL_LAPS,
+  currentLap: MOCK_LAP,
+  weather: MOCK_WEATHER,
+  weatherForecast: MOCK_FORECAST,
+  drivers: MOCK_STATES,
+  commentary: MOCK_COMMENTARY,
+  phase: 'racing',
+  qualifyingResults: [],
+  qualifyingSessions: [],
+  speed: 2,
+  paused: false,
+  strategyNoise: 0.5,
+  compoundDeltas: { soft: -0.6, medium: 0, hard: 0.5, intermediate: 2.5, wet: 5 },
+  tyreBaseLife: { soft: 0.25, medium: 0.35, hard: 0.5, intermediate: 0.4, wet: 0.45 },
+  teamBeliefs: {},
+  carForm: {},
+}
+
+// Championship baselines after 4 rounds: broadly the pace order with a few inversions so the live
+// projection shows movement both ways.
+const BASE_PTS = [82, 61, 74, 66, 48, 52, 38, 30, 41, 22, 26, 15, 18, 9, 12, 11, 4, 6, 1, 0]
+const WINS: Record<number, number> = { 0: 3, 2: 1 }
+
+export const MOCK_BASELINE_DRIVERS: DriverStanding[] = MOCK_DRIVERS
+  .map((d, i) => ({
+    driverId: d.id,
+    driverName: d.name,
+    teamId: d.teamId,
+    teamName: MOCK_TEAMS.find((t) => t.id === d.teamId)?.name ?? '',
+    points: BASE_PTS[i],
+    wins: WINS[i] ?? 0,
+    results: [],
+  }))
+  .sort((a, b) => b.points - a.points)
+
+export const MOCK_BASELINE_CONSTRUCTORS: ConstructorStanding[] = MOCK_TEAMS
+  .map((t, i) => ({
+    teamId: t.id,
+    teamName: t.name,
+    points: BASE_PTS[i * 2] + BASE_PTS[i * 2 + 1],
+    wins: (WINS[i * 2] ?? 0) + (WINS[i * 2 + 1] ?? 0),
+    results: [[], []],
+  }))
+  .sort((a, b) => b.points - a.points)

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { TrackLayout } from '@/data/tracks'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 
 // 2D top-down race view (#sim-overhaul phase 6): the circuit outline with one numbered dot per car.
 // Rendering follows the qualifying TrackMap pattern: a private rAF reads per-car lap progress from
@@ -16,6 +17,7 @@ export interface TrackCarMeta {
   color: string
   name: string
   team?: string
+  nationality?: string
   isPlayer?: boolean
   retired?: boolean
 }
@@ -27,11 +29,13 @@ interface Props {
   sampleRef: React.MutableRefObject<(id: string) => number | null>
   /** Marker diameter in px (default 22). */
   markerSize?: number
+  /** Show a flag + name label beside each marker. */
+  showLabels?: boolean
 }
 
 const TRACK_STROKE = 16
 
-export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props) {
+export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLabels = false }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
@@ -148,6 +152,17 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props
               >
                 <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
               </div>
+              {showLabels && (
+                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-1.5 flex items-center gap-1 whitespace-nowrap pointer-events-none">
+                  {car.nationality && <NationalityFlag code={car.nationality} />}
+                  <span
+                    className="text-xs font-semibold text-[#FFFFFF]"
+                    style={{ WebkitTextStroke: '1px #000000', paintOrder: 'stroke' }}
+                  >
+                    {car.name}
+                  </span>
+                </div>
+              )}
             </div>
           </Tooltip>
         )
