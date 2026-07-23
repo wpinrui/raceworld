@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type Scenery, type SceneryDensity } from '@/lib/ui/track-scenery'
@@ -46,7 +46,6 @@ const TARMAC_WIDTH_M = 10
 const PIT_WIDTH_M = 7
 const SF_HALF_M = 7
 const CAR_LENGTH_M = 5.63
-const CAR_WIDTH_M = 2.0
 
 const ZOOM_MIN = 0.6
 const ZOOM_MAX = 20
@@ -203,29 +202,122 @@ function timeToDistance(profile: Float64Array, f: number): number {
   return (lo + (f - profile[lo]) / span) / PROFILE_N
 }
 
-// Top-down open-wheeler, nose pointing up: front wing, tapered body over sidepods, cockpit, rear wing,
-// four exposed wheels. Tinted by the team colour; rendered at the car's true footprint.
-function CarSprite({ color, width, length }: { color: string; width: number; length: number }) {
-  const outline = 'rgba(0,0,0,0.55)'
+// The user-authored top-down F1 sprite (designs/F1 car.dc.html): three livery roles over fixed
+// neutrals. PRIMARY = nose/chassis/sidepods/mid wing flaps, SECONDARY = wing planes/stripe/blades/
+// helmet, TERTIARY = floor/endplates/halo/beam wing/fin. Memoised: ~90 elements per car, and only the
+// livery/scale ever change.
+const SPRITE_VIEWBOX = '-16 0 272 520'
+const SPRITE_ASPECT = 272 / 520
+
+// Derive the darker livery accents from the team's single colour.
+function shade(hex: string, f: number): string {
+  const v = hex.replace('#', '')
+  const n = parseInt(v.length === 3 ? v.split('').map((c) => c + c).join('') : v, 16)
+  const ch = (x: number) => Math.max(0, Math.min(255, Math.round(x * (1 + f))))
+  const r = ch((n >> 16) & 255)
+  const g = ch((n >> 8) & 255)
+  const b = ch(n & 255)
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
+
+const CarSprite = memo(function CarSprite({ color, length }: { color: string; length: number }) {
+  const p = color
+  const sec = shade(color, -0.38)
+  const t = '#969CA6'
   return (
-    <svg width={width} height={length} viewBox="0 0 24 50" preserveAspectRatio="none" className="block">
-      <rect x="2" y="1" width="20" height="4" rx="1.2" fill={color} stroke={outline} strokeWidth="1" />
-      <rect x="1" y="8" width="4.6" height="8" rx="1.6" fill="#14181F" />
-      <rect x="18.4" y="8" width="4.6" height="8" rx="1.6" fill="#14181F" />
-      <rect x="0.6" y="33" width="5.2" height="9" rx="1.6" fill="#14181F" />
-      <rect x="18.2" y="33" width="5.2" height="9" rx="1.6" fill="#14181F" />
-      <rect x="5.6" y="24" width="12.8" height="10" rx="2" fill={color} stroke={outline} strokeWidth="1" />
-      <path
-        d="M12 2 C10.6 6 10.2 8 10 12 L7 20 L7 32 L9.4 44 L14.6 44 L17 32 L17 20 L14 12 C13.8 8 13.4 6 12 2 Z"
-        fill={color}
-        stroke={outline}
-        strokeWidth="1"
-      />
-      <ellipse cx="12" cy="25" rx="2.6" ry="4.2" fill="#0F1419" />
-      <rect x="3.4" y="45" width="17.2" height="4" rx="1.2" fill={color} stroke={outline} strokeWidth="1" />
+    <svg width={length * SPRITE_ASPECT} height={length} viewBox={SPRITE_VIEWBOX} className="block">
+      {/* floor, visible through coke bottle */}
+      <path d="M60 190 L120 164 L180 190 L180 450 Q180 460 170 460 L70 460 Q60 460 60 450 Z" fill="#14171E" />
+      {/* front suspension: upper + lower wishbone + pushrod */}
+      <path d="M52 84 L106 104 L106 110 L52 92 Z" fill="#2E3138" />
+      <path d="M188 84 L134 104 L134 110 L188 92 Z" fill="#2E3138" />
+      <path d="M52 126 L106 126 L106 131 L52 132 Z" fill="#2E3138" />
+      <path d="M188 126 L134 126 L134 131 L188 132 Z" fill="#2E3138" />
+      <path d="M54 106 L104 118 L104 122 L54 110 Z" fill="#43474F" />
+      <path d="M186 106 L136 118 L136 122 L186 110 Z" fill="#43474F" />
+      {/* rear suspension: 3 elements */}
+      <path d="M56 374 L100 380 L100 385 L56 380 Z" fill="#2E3138" />
+      <path d="M184 374 L140 380 L140 385 L184 380 Z" fill="#2E3138" />
+      <path d="M56 397 L100 397 L100 404 L56 404 Z" fill="#43474F" />
+      <path d="M184 397 L140 397 L140 404 L184 404 Z" fill="#43474F" />
+      <path d="M56 424 L100 420 L100 425 L56 430 Z" fill="#2E3138" />
+      <path d="M184 424 L140 420 L140 425 L184 430 Z" fill="#2E3138" />
+      {/* front wing: swept elements, angular endplates */}
+      <rect x="62" y="44" width="3" height="10" fill={p} />
+      <rect x="88" y="44" width="3" height="10" fill={p} />
+      <rect x="149" y="44" width="3" height="10" fill={p} />
+      <rect x="175" y="44" width="3" height="10" fill={p} />
+      <path d="M30 42 Q120 30 210 42 L210 51 Q120 41 30 51 Z" fill={sec} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+      <path d="M36 31 Q120 19 204 31 L204 40 Q120 29 36 40 Z" fill={p} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+      <path d="M44 21 Q120 11 196 21 L196 29 Q120 19 44 29 Z" fill={sec} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+      <path d="M56 13 Q120 5 184 13 L184 19 Q120 11 56 19 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="0.5" />
+      <path d="M28 12 L40 9 L32 52 L20 50 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+      <path d="M212 12 L200 9 L208 52 L220 50 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+      {/* nose */}
+      <path d="M120 8 C112 8 108 24 106 48 L102 110 Q100 142 95 166 L145 166 Q140 142 138 110 L134 48 C132 24 128 8 120 8 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
+      <path d="M120 12 C115 12 113 26 112 48 L109 118 L131 118 L128 48 C127 26 125 12 120 12 Z" fill={sec} />
+      <path d="M94 174 Q74 218 58 218 L58 213 Q77 213 90 172 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
+      <path d="M146 174 Q166 218 182 218 L182 213 Q163 213 150 172 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
+      {/* chassis + sidepods, coke bottle */}
+      <path d="M95 166 L145 166 L146 202 C154 204 161 205 168 206 C179 208 190 214 190 224 L188 290 C186 316 170 332 156 342 C150 350 148 356 148 366 L148 448 L92 448 L92 366 C92 356 90 350 84 342 C70 332 54 316 52 290 L50 224 C50 214 61 208 72 206 C79 205 86 204 94 202 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
+      {/* sidepod inlets */}
+      <path d="M56 218 L94 212 L92 228 L54 234 Z" fill="#0B0D10" />
+      <path d="M184 218 L146 212 L148 228 L186 234 Z" fill="#0B0D10" />
+      {/* sidepod edge blades */}
+      <path d="M52 224 C52 214 61 209 72 207 L94 203 L95 210 L74 214 C63 215 58 219 58 226 L60 288 C62 310 78 328 89 338 L84 344 C68 332 54 316 52 290 Z" fill={sec} />
+      <path d="M188 224 C188 214 179 209 168 207 L146 203 L145 210 L166 214 C177 215 182 219 182 226 L180 288 C178 310 162 328 151 338 L156 344 C172 332 186 316 188 290 Z" fill={sec} />
+      <path d="M62 246 L82 242 L82 245 L62 249 Z" fill="rgba(0,0,0,0.2)" />
+      <path d="M63 258 L83 254 L83 257 L63 261 Z" fill="rgba(0,0,0,0.2)" />
+      <path d="M64 270 L84 266 L84 269 L64 273 Z" fill="rgba(0,0,0,0.2)" />
+      <path d="M178 246 L158 242 L158 245 L178 249 Z" fill="rgba(0,0,0,0.2)" />
+      <path d="M177 258 L157 254 L157 257 L177 261 Z" fill="rgba(0,0,0,0.2)" />
+      <path d="M176 270 L156 266 L156 269 L176 273 Z" fill="rgba(0,0,0,0.2)" />
+      {/* engine cover spine + fin */}
+      <path d="M113 262 L127 262 L124 446 L116 446 Z" fill={sec} />
+      <rect x="117" y="352" width="6" height="94" fill={t} />
+      {/* mirrors */}
+      <rect x="90" y="202" width="11" height="6" rx="2" fill={t} />
+      <rect x="139" y="202" width="11" height="6" rx="2" fill={t} />
+      {/* cockpit + halo + helmet */}
+      <rect x="104" y="194" width="32" height="60" rx="14" fill="#0B0D10" />
+      <path d="M105 210 C105 190 135 190 135 210" fill="none" stroke={t} strokeWidth="5" strokeLinecap="round" />
+      <rect x="118" y="190" width="4" height="16" fill={t} />
+      <circle cx="120" cy="234" r="10" fill={sec} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+      <rect x="113" y="228" width="14" height="3" rx="1.5" fill="#0B0D10" />
+      {/* tyres */}
+      <rect x="6" y="64" width="48" height="88" rx="18" fill="#16181D" />
+      <rect x="16" y="82" width="28" height="52" rx="11" fill="#2E3138" />
+      <rect x="186" y="64" width="48" height="88" rx="18" fill="#16181D" />
+      <rect x="196" y="82" width="28" height="52" rx="11" fill="#2E3138" />
+      <rect x="4" y="350" width="52" height="96" rx="19" fill="#16181D" />
+      <rect x="15" y="370" width="30" height="56" rx="12" fill="#2E3138" />
+      <rect x="184" y="350" width="52" height="96" rx="19" fill="#16181D" />
+      <rect x="195" y="370" width="30" height="56" rx="12" fill="#2E3138" />
+      {/* diffuser */}
+      <path d="M84 448 L156 448 L164 468 L76 468 Z" fill="#0B0D10" />
+      <rect x="96" y="450" width="3" height="16" fill="#2E3138" />
+      <rect x="110" y="450" width="3" height="17" fill="#2E3138" />
+      <rect x="127" y="450" width="3" height="17" fill="#2E3138" />
+      <rect x="141" y="450" width="3" height="16" fill="#2E3138" />
+      {/* rear wing: pylon + beam wing attach it to the body */}
+      <rect x="66" y="476" width="3" height="12" fill={p} />
+      <rect x="92" y="478" width="3" height="12" fill={p} />
+      <rect x="145" y="478" width="3" height="12" fill={p} />
+      <rect x="171" y="476" width="3" height="12" fill={p} />
+      <rect x="116" y="412" width="8" height="36" fill="#2E3138" />
+      <path d="M44 446 Q120 436 196 446 L196 453 Q120 444 44 453 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+      <path d="M44 453 Q120 445 196 453 L196 464 Q120 456 44 464 Z" fill={p} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+      <path d="M42 466 Q120 458 198 466 L198 481 Q120 473 42 481 Z" fill={sec} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+      <rect x="113" y="448" width="14" height="9" rx="2" fill="#0B0D10" />
+      <path d="M30 420 L42 415 L44 490 L32 487 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+      <path d="M210 420 L198 415 L196 490 L208 487 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
+      {/* shading */}
+      <path d="M95 166 L94 202 C86 204 79 205 72 206 C61 208 50 214 50 224 L52 290 C54 316 70 332 84 342 C90 350 92 356 92 366 L92 448 L100 448 L100 366 C100 354 96 346 89 338 C76 327 62 311 60 288 L58 226 C58 218 63 214 72 212 L98 208 L104 166 Z" fill="rgba(255,255,255,0.16)" />
+      <path d="M145 166 L146 202 C154 204 161 205 168 206 C179 208 190 214 190 224 L188 290 C186 316 170 332 156 342 C150 350 148 356 148 366 L148 448 L140 448 L140 366 C140 354 144 346 151 338 C164 327 178 311 180 288 L182 226 C182 218 177 214 168 212 L142 208 L138 166 Z" fill="rgba(0,0,0,0.14)" />
+      <path d="M120 8 C112 8 108 24 106 48 L102 110 Q100 142 95 166 L102 166 Q106 142 108 110 L111 48 C112 30 114 16 118 10 Z" fill="rgba(255,255,255,0.16)" />
     </svg>
   )
-}
+})
 
 // Static scenery layer: generated once per circuit, transforms with the camera. The seat-stripe and
 // crowd-dot patterns live in userSpace so they align with each rotated stand's local axes. Faux
@@ -645,9 +737,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     return { x1: x - nx * half, y1: y - ny * half, x2: x + nx * half, y2: y + ny * half }
   }, [layout.start, layout.metresPerUnit])
 
-  // Cars render at their true footprint: px per viewBox unit at zoom 1, times the real car size.
+  // Cars render at their true footprint: px per viewBox unit at zoom 1, times the real car length
+  // (the sprite's width follows its own aspect ratio).
   const pxPerUnit = vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1
-  const carW = Math.max(1.5, u(CAR_WIDTH_M) * pxPerUnit)
   const carL = Math.max(3.5, u(CAR_LENGTH_M) * pxPerUnit)
 
   // Scenery is deterministic per circuit and static — build once per layout.
@@ -750,7 +842,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
                       : 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))',
                   }}
                 >
-                  <CarSprite color={car.color} width={carW} length={carL} />
+                  <CarSprite color={car.color} length={carL} />
                 </div>
                 {showLabels && (
                   <div
