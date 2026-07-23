@@ -795,14 +795,17 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           tipPosRef.current = cur
           tip.style.opacity = '1'
           tip.style.transform = `translate(${cur.x}px, ${cur.y}px) translate(-50%, -50%) scale(0.9)`
-          // Notch on the card's car-facing edge, its corner aimed back at the driver.
+          // Notch on the card's car-facing edge, its corner aimed back at the driver. The distance to
+          // the border along the ray is a ray-box intersection (a projection width overshoots diagonals).
           const chev = tipChevRef.current
           if (chev) {
             const lw = r.width / 0.9
             const lh = r.height / 0.9
-            const lc = Math.abs(nx) * (lw / 2) + Math.abs(ny) * (lh / 2)
+            const ex = Math.abs(nx) > 1e-6 ? (lw / 2) / Math.abs(nx) : Infinity
+            const ey = Math.abs(ny) > 1e-6 ? (lh / 2) / Math.abs(ny) : Infinity
+            const edge = Math.min(ex, ey)
             const deg = (Math.atan2(-ny, -nx) * 180) / Math.PI
-            chev.style.transform = `translate(-50%, -50%) translate(${-nx * (lc + 3)}px, ${-ny * (lc + 3)}px) rotate(${deg - 45}deg)`
+            chev.style.transform = `translate(-50%, -50%) translate(${-nx * (edge - 1)}px, ${-ny * (edge - 1)}px) rotate(${deg - 45}deg)`
           }
         } else {
           tip.style.opacity = '0'
