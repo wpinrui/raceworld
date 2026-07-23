@@ -879,7 +879,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
       onPointerCancel={onPointerUp}
     >
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
-        <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%', willChange: 'transform' }}>
+        <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
               the edge of the world under follow + zoom. */}
           <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
