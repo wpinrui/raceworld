@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
   Timer, Wrench, type LucideIcon,
@@ -33,6 +33,23 @@ const COLUMN_TOGGLES: Array<{ col: RaceTableColumn; label: string; icon: LucideI
   { col: 'stints', label: 'Stints', icon: Layers },
 ]
 
+// Pane preferences persist across race days. Safe to read lazily: the race page renders nothing until
+// after hydration, so the first real render is always client-side.
+const UI_KEY = 'raceday-ui'
+interface StoredUi { standingsOpen: boolean; columns: RaceTableColumn[]; labelsOn: boolean }
+function loadUi(): Partial<StoredUi> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem(UI_KEY) ?? '') as Partial<StoredUi>
+    return {
+      ...parsed,
+      columns: parsed.columns?.filter((c) => ALL_RACE_TABLE_COLUMNS.includes(c)),
+    }
+  } catch {
+    return {}
+  }
+}
+
 interface Props {
   raceState: RaceState
   phase: 'racing' | 'finished'
@@ -64,10 +81,17 @@ export function RaceDayView({
   sampleRef, results, baselineDrivers, baselineConstructors, year, driverMode, teamManagerMode,
   playerDriverId, playerTeamId, godSelectedId, onGodSelect, onGodActions, onRetire,
 }: Props) {
-  const [standingsOpen, setStandingsOpen] = useState(true)
-  const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(ALL_RACE_TABLE_COLUMNS))
-  const [labelsOn, setLabelsOn] = useState(false)
+  const [stored] = useState(loadUi)
+  const [standingsOpen, setStandingsOpen] = useState(stored.standingsOpen ?? true)
+  const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(stored.columns ?? ALL_RACE_TABLE_COLUMNS))
+  const [labelsOn, setLabelsOn] = useState(stored.labelsOn ?? false)
   const [godOpen, setGodOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(UI_KEY, JSON.stringify({ standingsOpen, columns: [...columns], labelsOn }))
+    } catch { /* storage unavailable: preferences just don't persist */ }
+  }, [standingsOpen, columns, labelsOn])
   const [followId, setFollowId] = useState<string | null>(() =>
     driverMode ? playerDriverId : teamManagerMode ? drivers.find((d) => d.teamId === playerTeamId)?.id ?? null : null,
   )
