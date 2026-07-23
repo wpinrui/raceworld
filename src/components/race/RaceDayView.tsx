@@ -282,7 +282,8 @@ export function RaceDayView({
             <CentreConsole
               circuitName={circuit.name}
               countryCode={circuit.country}
-              lap={raceState.currentLap}
+              // The display state's currentLap IS the lap being animated; the console expects completed laps.
+              lap={Math.max(0, raceState.currentLap - 1)}
               totalLaps={raceState.totalLaps}
               weather={raceState.weather}
               forecast={raceState.weatherForecast}

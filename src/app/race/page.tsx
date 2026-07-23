@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
-import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
+import type { GodModeAction, RaceResult, RaceState, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
@@ -131,7 +131,14 @@ export default function RacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, paused])
 
+  // The 2D view animates the lap the sim JUST resolved, so everything the player reads (board, gaps,
+  // stops, commentary, championship) must show the state from the START of that lap and flip forward
+  // exactly as the cars cross the line — broadcast-style. The pre-tick snapshot is that display state;
+  // the sim itself stays a lap ahead internally.
+  const [displayState, setDisplayState] = useState<RaceState | null>(null)
+
   const doTick = useCallback(() => {
+    setDisplayState(useRaceStore.getState().raceState)
     const actions = pendingGodModeActions.length > 0 ? [...pendingGodModeActions] : undefined
     if (actions) setPendingGodModeActions([])
     tickLap(actions)
@@ -219,18 +226,25 @@ export default function RacePage() {
 
   const useNewView = !!trackLayout && !!raceState && (phase === 'racing' || phase === 'finished')
 
+  // What the player READS during racing: the pre-tick snapshot, in lockstep with the animated lap.
+  // Falls back to the live state at the lights, after the flag, and across a restart (lap regression).
+  const shownRace =
+    phase === 'racing' && displayState && raceState && displayState.currentLap <= raceState.currentLap
+      ? displayState
+      : raceState
+
   return (
     <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
       {!useNewView && (
         <RaceHeader
-          phase={phase} raceState={raceState} lapProgress={lapProgress}
+          phase={phase} raceState={shownRace} lapProgress={lapProgress}
           currentCircuit={currentCircuit}
         />
       )}
 
       {useNewView && raceState && trackLayout && currentCircuit && (
         <RaceDayView
-          raceState={raceState}
+          raceState={shownRace!}
           phase={phase as 'racing' | 'finished'}
           layout={trackLayout}
           circuit={currentCircuit}
@@ -282,9 +296,9 @@ export default function RacePage() {
           {(phase === 'racing' || phase === 'finished') && raceState && (
             <div className="flex-1 overflow-y-auto min-h-0 px-4 py-2">
               <RaceTable
-                drivers={drivers} teams={teams} states={raceState.drivers}
-                currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
-                gridPos={Object.fromEntries(raceState.qualifyingResults.map((q) => [q.driverId, q.gridPosition]))}
+                drivers={drivers} teams={teams} states={shownRace!.drivers}
+                currentLap={shownRace!.currentLap} totalLaps={shownRace!.totalLaps}
+                gridPos={Object.fromEntries(shownRace!.qualifyingResults.map((q) => [q.driverId, q.gridPosition]))}
                 year={season.year} careers={careers} wdcPosOf={wdcPosOf} wdcPtsOf={wdcPtsOf}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
@@ -303,11 +317,11 @@ export default function RacePage() {
             <>
               <div className="h-1/3 min-h-0 flex border-b border-[#2A3142] overflow-hidden">
                 <div className="w-1/2 min-h-0 p-4 border-r border-[#2A3142] flex flex-col overflow-hidden">
-                  <CommentaryFeed entries={raceState?.commentary ?? []} />
+                  <CommentaryFeed entries={shownRace?.commentary ?? []} />
                 </div>
                 <div className="w-1/2 min-h-0 p-4 flex flex-col overflow-hidden">
                   <LiveChampionship
-                    states={raceState?.drivers ?? []}
+                    states={shownRace?.drivers ?? []}
                     drivers={drivers}
                     teams={teams}
                     baselineDrivers={season.driverStandings}
@@ -320,14 +334,14 @@ export default function RacePage() {
                 {raceState && phase === 'racing' ? (
                   season.teamManagerMode || season.driverMode ? (
                     <PitWallPanel
-                      drivers={drivers} teams={teams} states={raceState.drivers}
-                      raceState={raceState}
+                      drivers={drivers} teams={teams} states={shownRace!.drivers}
+                      raceState={shownRace!}
                       onRetire={(driverId) => setPendingGodModeActions((prev) => [...prev, { type: 'force-retire', driverId }])}
                     />
                   ) : (
                     <GodModePanel
-                      drivers={drivers} teams={teams} states={raceState.drivers}
-                      raceState={raceState}
+                      drivers={drivers} teams={teams} states={shownRace!.drivers}
+                      raceState={shownRace!}
                       selectedDriverId={selectedDriverId ?? drivers[0]?.id ?? ''}
                       onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
                     />
