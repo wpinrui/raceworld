@@ -184,12 +184,12 @@ export default function TrackPreviewPage() {
         </div>
       </div>
 
-      {/* Bottom: car pods flanking the lap counter / speed controls */}
-      <div className="flex items-start gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
-        <div className="flex-1 min-w-0">
+      {/* Bottom: fixed-width car cards flanking the lap counter / speed controls */}
+      <div className="flex items-center gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
+        <div className="shrink-0">
           <CarPod id={PLAYER_CAR_IDS[0]} />
         </div>
-        <div className="flex flex-col items-center justify-center gap-2 w-[440px] shrink-0 self-center">
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-w-0">
           <div className="font-semibold text-sm tracking-widest uppercase">Lap {MOCK_LAP} / {MOCK_TOTAL_LAPS}</div>
           <SpeedBar
             speed={speed}
@@ -198,7 +198,7 @@ export default function TrackPreviewPage() {
             onTogglePause={() => setPaused((v) => !v)}
           />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="shrink-0">
           <CarPod id={PLAYER_CAR_IDS[1]} />
         </div>
       </div>
