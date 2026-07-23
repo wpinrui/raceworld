@@ -467,9 +467,11 @@ interface Props {
   showLabels?: boolean
   /** Per-track scenery density multipliers (trees/buildings). */
   sceneryDensity?: SceneryDensity
+  /** Rich hover card per car; falls back to a simple name/team tip. */
+  tooltipFor?: (id: string) => React.ReactNode
 }
 
-export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity }: Props) {
+export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -844,11 +846,14 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             >
               {/* Tooltip + click on the sprite ONLY — its exact rendered footprint, no hover halo. */}
               <Tooltip
+                bare={!!tooltipFor}
                 content={
-                  <div>
-                    <div className="font-semibold">P{car.pos} {car.name}</div>
-                    {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
-                  </div>
+                  tooltipFor?.(car.id) ?? (
+                    <div>
+                      <div className="font-semibold">P{car.pos} {car.name}</div>
+                      {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
+                    </div>
+                  )
                 }
               >
                 <div

@@ -12,6 +12,7 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from '@/compo
 import CommentaryFeed from '@/components/race/CommentaryFeed'
 import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { PitWallCard } from '@/components/race/PitWallPanel'
+import { DriverTrackTip } from '@/components/race/DriverTrackTip'
 import { CentreConsole, CHIP_BG, consoleChipClass } from '@/components/race/CentreConsole'
 import { Tooltip } from '@/components/ui/Tooltip'
 import {
@@ -218,6 +219,22 @@ export default function TrackPreviewPage() {
             followId={followId}
             onFollow={setFollowId}
             showLabels={labelsOn}
+            tooltipFor={(id) => {
+              const ds = states.find((s) => s.driverId === id)
+              const d = driverOf.get(id)
+              if (!ds || !d) return null
+              return (
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={states}
+                  drivers={MOCK_DRIVERS}
+                  currentLap={lap}
+                  isPlayer={id === 'car-7'}
+                />
+              )
+            }}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
             <Tooltip content="Driver labels">

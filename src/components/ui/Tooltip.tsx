@@ -9,11 +9,14 @@ export function Tooltip({
   children,
   side = 'top',
   delay = 150,
+  bare = false,
 }: {
   content: React.ReactNode
   children: React.ReactNode
   side?: 'top' | 'right' | 'bottom' | 'left'
   delay?: number
+  /** Content brings its own card chrome (background, border, padding). */
+  bare?: boolean
 }) {
   return (
     <RadixTooltip.Provider delayDuration={delay}>
@@ -23,10 +26,14 @@ export function Tooltip({
           <RadixTooltip.Content
             side={side}
             sideOffset={6}
-            className="z-50 rounded-lg bg-[#2A3142] border border-[#303848] px-2.5 py-1.5 text-xs text-[#FFFFFF] shadow-lg shadow-black/40 select-none"
+            className={
+              bare
+                ? 'z-50 select-none'
+                : 'z-50 rounded-lg bg-[#2A3142] border border-[#303848] px-2.5 py-1.5 text-xs text-[#FFFFFF] shadow-lg shadow-black/40 select-none'
+            }
           >
             {content}
-            <RadixTooltip.Arrow className="fill-[#2A3142]" />
+            <RadixTooltip.Arrow className={bare ? 'fill-[#141924]' : 'fill-[#2A3142]'} />
           </RadixTooltip.Content>
         </RadixTooltip.Portal>
       </RadixTooltip.Root>

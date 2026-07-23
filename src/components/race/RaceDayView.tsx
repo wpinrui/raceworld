@@ -13,6 +13,7 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from './RaceT
 import CommentaryFeed from './CommentaryFeed'
 import { LiveChampionship } from './LiveChampionship'
 import { PitWallCard } from './PitWallPanel'
+import { DriverTrackTip } from './DriverTrackTip'
 import GodModePanel from './GodModePanel'
 import { PostRacePanel } from './PostRacePanel'
 import { CentreConsole, CHIP_BG, consoleChipClass } from './CentreConsole'
@@ -223,6 +224,22 @@ export function RaceDayView({
             followId={effectiveFollow}
             onFollow={setFollowId}
             showLabels={labelsOn}
+            tooltipFor={(id) => {
+              const ds = raceState.drivers.find((s) => s.driverId === id)
+              const d = driverOf.get(id)
+              if (!ds || !d) return null
+              return (
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={raceState.drivers}
+                  drivers={drivers}
+                  currentLap={raceState.currentLap}
+                  isPlayer={isPlayerCar(ds)}
+                />
+              )
+            }}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
             <Tooltip content="Driver labels">
