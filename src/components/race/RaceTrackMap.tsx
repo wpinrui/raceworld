@@ -332,6 +332,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const sprRefs = useRef(new Map<string, HTMLDivElement>())
   const posRef = useRef(new Map<string, { left: number; top: number }>())
   const headingRef = useRef(new Map<string, number>())
+  const latRef = useRef(new Map<string, number>())
   const outerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
@@ -501,8 +502,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             })
           } else {
             const dist = timeToDistance(prof.time, ((sample.prog % 1) + 1) % 1) * lenTotal
-            const idx = Math.min(PROFILE_N - 1, Math.floor((dist / lenTotal) * PROFILE_N))
-            frames.push({ id: car.id, el, onPit: false, dist, lat: prof.lateral[idx], race: true })
+            // Lerp between profile stations: a floor() lookup pops sideways at every station boundary.
+            const x = (dist / lenTotal) * PROFILE_N
+            const i0 = Math.floor(x) % PROFILE_N
+            const fx = x - Math.floor(x)
+            const lat = prof.lateral[i0] * (1 - fx) + prof.lateral[(i0 + 1) % PROFILE_N] * fx
+            frames.push({ id: car.id, el, onPit: false, dist, lat, race: true })
           }
         }
 
@@ -536,8 +541,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           if (delta < -Math.PI) delta += 2 * Math.PI
           const heading = prev + delta * 0.25
           headingRef.current.set(f.id, heading)
-          const x = pt.x - Math.sin(heading) * f.lat
-          const y = pt.y + Math.cos(heading) * f.lat
+          // Low-pass the lateral too: chicane sign flips and battle-role handoffs become slides.
+          const prevLat = latRef.current.get(f.id) ?? f.lat
+          const lat = prevLat + (f.lat - prevLat) * 0.15
+          latRef.current.set(f.id, lat)
+          const x = pt.x - Math.sin(heading) * lat
+          const y = pt.y + Math.cos(heading) * lat
           const left = ((x - vb.x) / vb.w) * 100
           const top = ((y - vb.y) / vb.h) * 100
           posRef.current.set(f.id, { left, top })
