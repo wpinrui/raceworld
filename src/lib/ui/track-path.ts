@@ -17,6 +17,18 @@ export interface TrackStart {
   angle: number
 }
 
+/** A dense projected polyline (from a real GPS trace, see scripts/track-import.ts). Point 0 = the S/F line. */
+export type TrackTrace = [number, number][]
+
+/** Build the closed path and S/F pose from an imported trace. Dense points render smooth with round joins. */
+export function buildTracePath(trace: TrackTrace): { d: string; start: TrackStart } {
+  if (trace.length < 3) throw new Error('a track trace needs at least 3 points')
+  const d = `M ${trace.map(([x, y]) => `${x} ${y}`).join(' L ')} Z`
+  const [x0, y0] = trace[0]
+  const [x1, y1] = trace[1]
+  return { d, start: { x: x0, y: y0, angle: Math.atan2(y1 - y0, x1 - x0) } }
+}
+
 const DEFAULT_RADIUS = 12
 
 type Vec = { x: number; y: number }

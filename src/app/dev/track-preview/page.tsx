@@ -42,7 +42,7 @@ export default function TrackPreviewPage() {
   })
 
   return (
-    <div className="flex flex-col h-screen bg-[#0F1319] text-[#FFFFFF]">
+    <div className="flex flex-col h-full bg-[#0F1319] text-[#FFFFFF]">
       {/* Top bar: weather / track state / god-mode entry placeholders */}
       <div className="flex items-center gap-3 px-4 py-2 shrink-0 border-b border-[#232A38]">
         <div className="font-semibold text-sm tracking-widest uppercase">Monaco</div>
