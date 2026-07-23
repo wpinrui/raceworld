@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
-  Timer, Wrench, type LucideIcon,
+  ArrowUpDown, Hourglass, Info, Layers, LayoutGrid, LifeBuoy, Map as MapIcon, PanelLeftClose,
+  PanelLeftOpen, Shield, Timer, Wrench, type LucideIcon,
 } from 'lucide-react'
 import type { DriverRaceState, SimSpeed } from '@/lib/sim/types'
 import { TRACK_LAYOUTS } from '@/data/tracks'
@@ -53,7 +53,8 @@ export default function TrackPreviewPage() {
   const layout = TRACK_LAYOUTS.monaco
   const [standingsOpen, setStandingsOpen] = useState(true)
   const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(ALL_RACE_TABLE_COLUMNS))
-  const [labelsOn, setLabelsOn] = useState(false)
+  const [pinnedTip, setPinnedTip] = useState(true)
+  const [mapView, setMapView] = useState(false)
   const [speed, setSpeed] = useState<SimSpeed>(2)
   const [paused, setPaused] = useState(false)
 
@@ -218,7 +219,7 @@ export default function TrackPreviewPage() {
             sampleRef={sampleRef}
             followId={followId}
             onFollow={setFollowId}
-            showLabels={labelsOn}
+            view={mapView ? 'map' : 'live'}
             tooltipFor={(id) => {
               const ds = states.find((s) => s.driverId === id)
               const d = driverOf.get(id)
@@ -237,17 +238,51 @@ export default function TrackPreviewPage() {
             }}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
-            <Tooltip content="Driver labels">
+            {followId && !mapView && (
+              <Tooltip content="Driver card">
+                <button
+                  onClick={(e) => { e.currentTarget.blur(); setPinnedTip((v) => !v) }}
+                  className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
+                    pinnedTip ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                  }`}
+                >
+                  <Info size={21} />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip content="Map view">
               <button
-                onClick={() => setLabelsOn((v) => !v)}
+                onClick={(e) => { e.currentTarget.blur(); setMapView((v) => !v) }}
                 className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
-                  labelsOn ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                  mapView ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
                 }`}
               >
-                <Tag size={21} />
+                <MapIcon size={21} />
               </button>
             </Tooltip>
           </div>
+          {/* Pinned card for the watched driver: the follow camera keeps the car at stage centre. */}
+          {followId && pinnedTip && !mapView && (() => {
+            const ds = states.find((s) => s.driverId === followId)
+            const d = driverOf.get(followId)
+            if (!ds || !d) return null
+            return (
+              <div
+                className="absolute left-1/2 top-1/2 pointer-events-none"
+                style={{ transform: 'translate(-50%, calc(-100% - 56px))' }}
+              >
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={states}
+                  drivers={MOCK_DRIVERS}
+                  currentLap={lap}
+                  isPlayer={followId === 'car-7'}
+                />
+              </div>
+            )
+          })()}
         </div>
 
         {/* Right: commentary + live championship */}

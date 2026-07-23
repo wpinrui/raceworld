@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
-  Timer, Wrench, type LucideIcon,
+  ArrowUpDown, Hourglass, Info, Layers, LayoutGrid, LifeBuoy, Map as MapIcon, PanelLeftClose,
+  PanelLeftOpen, Shield, Timer, Wrench, type LucideIcon,
 } from 'lucide-react'
 import type { Circuit, Driver, DriverRaceState, GodModeAction, RaceResult, RaceState, SimSpeed, Team } from '@/lib/sim/types'
 import type { ConstructorStanding, DriverStanding } from '@/lib/sim/types'
@@ -37,7 +37,7 @@ const COLUMN_TOGGLES: Array<{ col: RaceTableColumn; label: string; icon: LucideI
 // Pane preferences persist across race days. Safe to read lazily: the race page renders nothing until
 // after hydration, so the first real render is always client-side.
 const UI_KEY = 'raceday-ui'
-interface StoredUi { standingsOpen: boolean; columns: RaceTableColumn[]; labelsOn: boolean }
+interface StoredUi { standingsOpen: boolean; columns: RaceTableColumn[]; pinnedTip: boolean; mapView: boolean }
 function loadUi(): Partial<StoredUi> {
   if (typeof window === 'undefined') return {}
   try {
@@ -85,14 +85,15 @@ export function RaceDayView({
   const [stored] = useState(loadUi)
   const [standingsOpen, setStandingsOpen] = useState(stored.standingsOpen ?? true)
   const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(stored.columns ?? ALL_RACE_TABLE_COLUMNS))
-  const [labelsOn, setLabelsOn] = useState(stored.labelsOn ?? false)
+  const [pinnedTip, setPinnedTip] = useState(stored.pinnedTip ?? true)
+  const [mapView, setMapView] = useState(stored.mapView ?? false)
   const [godOpen, setGodOpen] = useState(false)
 
   useEffect(() => {
     try {
-      localStorage.setItem(UI_KEY, JSON.stringify({ standingsOpen, columns: [...columns], labelsOn }))
+      localStorage.setItem(UI_KEY, JSON.stringify({ standingsOpen, columns: [...columns], pinnedTip, mapView }))
     } catch { /* storage unavailable: preferences just don't persist */ }
-  }, [standingsOpen, columns, labelsOn])
+  }, [standingsOpen, columns, pinnedTip, mapView])
   const [followId, setFollowId] = useState<string | null>(() =>
     driverMode ? playerDriverId : teamManagerMode ? drivers.find((d) => d.teamId === playerTeamId)?.id ?? null : null,
   )
@@ -223,7 +224,7 @@ export function RaceDayView({
             sampleRef={sampleRef}
             followId={effectiveFollow}
             onFollow={setFollowId}
-            showLabels={labelsOn}
+            view={mapView ? 'map' : 'live'}
             tooltipFor={(id) => {
               const ds = raceState.drivers.find((s) => s.driverId === id)
               const d = driverOf.get(id)
@@ -242,17 +243,51 @@ export function RaceDayView({
             }}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
-            <Tooltip content="Driver labels">
+            {effectiveFollow && !mapView && (
+              <Tooltip content="Driver card">
+                <button
+                  onClick={(e) => { e.currentTarget.blur(); setPinnedTip((v) => !v) }}
+                  className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
+                    pinnedTip ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                  }`}
+                >
+                  <Info size={21} />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip content="Map view">
               <button
-                onClick={(e) => { e.currentTarget.blur(); setLabelsOn((v) => !v) }}
+                onClick={(e) => { e.currentTarget.blur(); setMapView((v) => !v) }}
                 className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
-                  labelsOn ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                  mapView ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
                 }`}
               >
-                <Tag size={21} />
+                <MapIcon size={21} />
               </button>
             </Tooltip>
           </div>
+          {/* Pinned card for the watched driver: the follow camera keeps the car at stage centre. */}
+          {effectiveFollow && pinnedTip && !mapView && (() => {
+            const ds = raceState.drivers.find((s) => s.driverId === effectiveFollow)
+            const d = driverOf.get(effectiveFollow)
+            if (!ds || !d) return null
+            return (
+              <div
+                className="absolute left-1/2 top-1/2 pointer-events-none"
+                style={{ transform: 'translate(-50%, calc(-100% - 56px))' }}
+              >
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={raceState.drivers}
+                  drivers={drivers}
+                  currentLap={raceState.currentLap}
+                  isPlayer={isPlayerCar(ds)}
+                />
+              </div>
+            )
+          })()}
         </div>
 
         {/* Right: post-race results, the god-mode panel, or commentary + live championship */}

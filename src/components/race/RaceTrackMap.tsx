@@ -469,9 +469,11 @@ interface Props {
   sceneryDensity?: SceneryDensity
   /** Rich hover card per car; falls back to a simple name/team tip. */
   tooltipFor?: (id: string) => React.ReactNode
+  /** 'live' = sprites + camera; 'map' = the classic static full-track view with numbered dots. */
+  view?: 'live' | 'map'
 }
 
-export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor }: Props) {
+export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live' }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -495,6 +497,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 })
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
+  const viewRef = useRef(view)
 
   const applyCam = () => {
     const world = worldRef.current
@@ -540,6 +543,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     if (!outer) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      if (viewRef.current === 'map') return // the map view is static
       const cam = camRef.current
       if (e.shiftKey) {
         const delta = e.deltaY > 0 ? ROT_STEP : -ROT_STEP
@@ -571,7 +575,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
   const suppressClickRef = useRef(false)
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || view === 'map') return
     dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false }
   }
   const onPointerMove = (e: React.PointerEvent) => {
@@ -611,8 +615,13 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     applyCam()
   }
 
-  // Apply the default camera on mount (nothing else writes the transform until an interaction).
-  useEffect(() => { applyCam() }, [])
+  // Camera per view: 'map' is the static full-track fit (the stage IS the whole track at zoom 1);
+  // 'live' returns to the default chase zoom. Also applies the initial camera on mount.
+  useEffect(() => {
+    viewRef.current = view
+    camRef.current = view === 'map' ? { x: 0, y: 0, z: 1, rot: 0 } : { x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 }
+    applyCam()
+  }, [view])
 
   // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
@@ -725,11 +734,11 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           const { w: sw, h: sh } = stageDimsRef.current
           f.el.style.transform = `translate(${(left / 100) * sw}px, ${(top / 100) * sh}px) translate(-50%, -50%)`
           const spr = sprRefs.current.get(f.id)
-          if (spr) spr.style.transform = `rotate(${heading + Math.PI / 2}rad)`
+          if (spr) spr.style.transform = viewRef.current === 'map' ? '' : `rotate(${heading + Math.PI / 2}rad)`
         }
       }
       // Follow camera: keep the followed car pinned to the stage centre (rotation and zoom untouched).
-      if (followRef.current) {
+      if (followRef.current && viewRef.current !== 'map') {
         const pos = posRef.current.get(followRef.current)
         if (pos) {
           const { w, h } = stageDimsRef.current
@@ -792,9 +801,10 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
               the edge of the world under follow + zoom. */}
           <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
-            {/* Grass ground plane, far beyond the canvas so the camera never sees the edge of the world. */}
-            <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill="#2F4A28" />
-            {sceneryNode}
+            {/* Grass ground plane, far beyond the canvas so the camera never sees the edge of the world.
+                The static map view drops the scenery for a clean dark minimap. */}
+            <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : '#2F4A28'} />
+            {view === 'live' && sceneryNode}
             {/* Pit lane: a narrower asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
             <defs>
               <pattern id="tm-hatch" width={u(2.2)} height={u(2.2)} patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
@@ -866,7 +876,21 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
                       : 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))',
                   }}
                 >
-                  <CarSprite color={car.color} length={carL} />
+                  {view === 'map' ? (
+                    <div
+                      className="flex items-center justify-center rounded-full font-bold text-[#FFFFFF]"
+                      style={{
+                        width: 20, height: 20, fontSize: 10,
+                        backgroundColor: car.color,
+                        border: '1.5px solid rgba(0,0,0,0.5)',
+                        boxShadow: car.isPlayer ? '0 0 0 2px #FFFFFF' : undefined,
+                      }}
+                    >
+                      <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
+                    </div>
+                  ) : (
+                    <CarSprite color={car.color} length={carL} />
+                  )}
                 </div>
               </Tooltip>
                 {showLabels && (
@@ -893,17 +917,19 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
         </div>
       </div>
 
-      {/* Camera controls */}
-      <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
-        <Tooltip content="Reset zoom">
-          <button
-            onClick={resetZoom}
-            className="h-9 w-9 flex items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#1E2431] hover:text-[#FFFFFF] cursor-pointer"
-          >
-            <Maximize size={18} />
-          </button>
-        </Tooltip>
-      </div>
+      {/* Camera controls (the map view is static; nothing to reset) */}
+      {view === 'live' && (
+        <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+          <Tooltip content="Reset zoom">
+            <button
+              onClick={resetZoom}
+              className="h-9 w-9 flex items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#1E2431] hover:text-[#FFFFFF] cursor-pointer"
+            >
+              <Maximize size={18} />
+            </button>
+          </Tooltip>
+        </div>
+      )}
     </div>
   )
 }
