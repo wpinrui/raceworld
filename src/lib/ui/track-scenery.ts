@@ -137,8 +137,9 @@ export function buildScenery(
 ): Scenery {
   const rng = seededRng(`scenery:${circuitId}`)
   const u = (m: number) => m / metresPerUnit
-  const treeMult = density.trees ?? 1
-  const buildingMult = density.buildings ?? 1
+  // Default density is deliberately rich (the old tuning slider's ceiling and change).
+  const treeMult = density.trees ?? 3
+  const buildingMult = density.buildings ?? 3
 
   // ── Track sampling: points, tangents, outward normals ──
   const n = trace.length

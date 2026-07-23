@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowUpDown, Building2, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
-  Timer, TreePine, Wrench, type LucideIcon,
+  ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
+  Timer, Wrench, type LucideIcon,
 } from 'lucide-react'
 import type { DriverRaceState, SimSpeed } from '@/lib/sim/types'
 import { TRACK_LAYOUTS } from '@/data/tracks'
@@ -53,13 +53,6 @@ export default function TrackPreviewPage() {
   const [standingsOpen, setStandingsOpen] = useState(true)
   const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(ALL_RACE_TABLE_COLUMNS))
   const [labelsOn, setLabelsOn] = useState(false)
-  // Scenery density tuning (per-track values get authored once the right feel is found here).
-  const [treeDensity, setTreeDensity] = useState(1)
-  const [buildingDensity, setBuildingDensity] = useState(1)
-  const sceneryDensity = useMemo(
-    () => ({ trees: treeDensity, buildings: buildingDensity }),
-    [treeDensity, buildingDensity],
-  )
   const [speed, setSpeed] = useState<SimSpeed>(2)
   const [paused, setPaused] = useState(false)
 
@@ -225,7 +218,6 @@ export default function TrackPreviewPage() {
             followId={followId}
             onFollow={setFollowId}
             showLabels={labelsOn}
-            sceneryDensity={sceneryDensity}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
             <Tooltip content="Driver labels">
@@ -238,35 +230,6 @@ export default function TrackPreviewPage() {
                 <Tag size={21} />
               </button>
             </Tooltip>
-          </div>
-          {/* Scenery density tuning */}
-          <div className="absolute bottom-3 left-3 flex flex-col gap-2 rounded-lg bg-[#0F1319]/85 border border-[#232A38] px-3 py-2.5">
-            <div className="flex items-center gap-2.5">
-              <TreePine size={16} className="text-[#8FB35F] shrink-0" />
-              <input
-                type="range"
-                min={0}
-                max={2.5}
-                step={0.1}
-                value={treeDensity}
-                onChange={(e) => setTreeDensity(Number(e.target.value))}
-                className="w-36 accent-[#00D9FF]"
-              />
-              <span className="text-xs tabular-nums w-8">{treeDensity.toFixed(1)}×</span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Building2 size={16} className="text-[#8A93A6] shrink-0" />
-              <input
-                type="range"
-                min={0}
-                max={2.5}
-                step={0.1}
-                value={buildingDensity}
-                onChange={(e) => setBuildingDensity(Number(e.target.value))}
-                className="w-36 accent-[#00D9FF]"
-              />
-              <span className="text-xs tabular-nums w-8">{buildingDensity.toFixed(1)}×</span>
-            </div>
           </div>
         </div>
 
