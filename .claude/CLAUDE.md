@@ -1,12 +1,13 @@
 # Project conventions
 
 ## Stack
-<!-- -->
-
+- Next.js 16 (App Router) · TypeScript (strict) · Tailwind CSS v4 · better-sqlite3 · Zustand · Anthropic SDK · Lucide React · Radix UI · Recharts.
+- Package manager: **npm**. Tests: **Vitest** (`npm run test`). Lint: **ESLint** (`npm run lint`). Typecheck: `npx tsc --noEmit`.
+- **This is NOT the Next.js you know.** APIs, conventions, and file structure may differ from training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any Next code, and heed deprecation notices (see AGENTS.md).
 
 ## Environment
 - GitHub user: `wpinrui`
-- `python`, NOT `python3`!!!
+- `python`, NOT `python3`!!! (a `PreToolUse` hook blocks `python3` — it triggers the Windows Store alias)
 - Game Design document: gdd.md
 - Style guide: style-guide.md
 - Developer Notes: dev.md
@@ -40,23 +41,24 @@
 - **Clarifying questions are not pushback.** When the user asks "why?", "what's wrong with X?", or "explain that", they are asking for your reasoning — not overruling you. Hold your position while you explain the tradeoff.
 
 ## Workflow defaults
-- **Non-trivial change?** Plan before editing — read the relevant files, propose an approach in chat, wait for the user to accept, only then edit code. Skip planning for one-line fixes you could describe in one sentence.
+- **Non-trivial change?** Plan before editing — read the relevant files, propose an approach in chat, wait for the user to accept, only then edit code. Use the built-in `Plan` agent for a written strategy. Skip planning for one-line fixes you could describe in one sentence.
 - **Reading many files just to answer a question?** Delegate to the built-in `Explore` subagent. The subagent's reads consume its context, not yours.
-- **Independent judgement needed?** Spawn `reviewer` or `critic`. A fresh context won't pattern-match against what you just wrote.
+- **Independent judgement on a diff?** Run `/review` (the `code-reviewer` Opus agent) — a fresh context won't pattern-match against what you just wrote.
 - **Risky action?** Force-push, history rewrite, branch delete, dropping data — confirm before executing.
 
-## Subagents available
+## Commands & subagents
 | Tool | When |
 |---|---|
-| `reviewer` | Review the current branch's diff with fresh eyes |
-| `critic` | Stress-test a plan or proposal for hidden flaws |
-| `tester` | Build & execute a CLI / UI test plan and report findings |
-
-For generic codebase research, use the built-in `Explore` agent.
+| `/review` → `code-reviewer` agent | Opus review of the branch diff against this bar; blocks merge on any blocker |
+| `/loc` | Total SLOC and a longest-files audit flagging anything over the 500-line cap |
+| `/mem-add` `/mem-view` `/mem-update` `/mem-delete` | Manual memory management (the project's `memory/` store) |
+| built-in `Explore` | Broad, read-only codebase research |
+| built-in `Plan` | A written implementation strategy without touching code |
 
 ## Out of scope for the agent
 The agent does not own product calls (balance, UX intent, scope, design vision). When a decision is load-bearing on product judgement, surface the question to the user and wait — do not fabricate a call.
 
 ## Project-specific
-<!-- -->
-
+- **Architecture** (see dev.md): the race simulation runs entirely client-side as a Zustand store — no DB writes mid-race; flush to SQLite at race end via a Server Action. The stats engine lives server-side (SQL queries via Server Actions, called from Standings and Newsroom). The Newsroom LLM is a Server Action calling Claude with tool-calling against the stats DB — the `ANTHROPIC_API_KEY` never leaves the server.
+- **Data** is SQLite via better-sqlite3 (`raceworld.db`). `npm run db:init` initialises the schema. Saves are disposable — bump the schema version silently; never caveat about migrations or losing current-save data.
+- **Probe scripts** live under `scripts/` and run via `tsx` (`npm run news:play`, `history:check`, `weather:check`, `wet:measure`, `pit:check`, `overall:calibrate`). Long sims must stream round-by-round progress with a running result, never run silent.
