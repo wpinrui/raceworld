@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react'
 import {
-  ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag, Timer, Wrench,
-  type LucideIcon,
+  ArrowUpDown, FastForward, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
+  Timer, Wrench, type LucideIcon,
 } from 'lucide-react'
 import type { SimSpeed } from '@/lib/sim/types'
 import { TRACK_LAYOUTS } from '@/data/tracks'
@@ -12,8 +12,7 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from '@/compo
 import CommentaryFeed from '@/components/race/CommentaryFeed'
 import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { PitWallCard } from '@/components/race/PitWallPanel'
-import { SpeedBar } from '@/components/race/SpeedBar'
-import { WeatherGraph } from '@/components/race/WeatherGraph'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
 import {
   MOCK_BASELINE_CONSTRUCTORS, MOCK_BASELINE_DRIVERS, MOCK_CIRCUIT, MOCK_DRIVERS, MOCK_GRID, MOCK_LAP,
@@ -55,10 +54,114 @@ const CARS: TrackCarMeta[] = MOCK_STATES.filter((s) => !s.retired).map((s) => {
 
 const PLAYER_CAR_IDS = ['car-6', 'car-7'] as const
 
-function Placeholder({ label, className = '' }: { label: string; className?: string }) {
+// Centre console per designs/Canvas.dc.html: absorbs the old top bar (race title + flag, rain chip,
+// Track state / Data room) above the lap counter and speed controls, over a photo backdrop that fades
+// out on both sides before reaching the pit wall cards.
+const EDGE_MASK = 'linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent)'
+const CHIP_BG = 'rgba(20,25,36,0.75)'
+
+function CentreConsole({ speed, paused, onSpeed, onTogglePause }: { speed: SimSpeed; paused: boolean; onSpeed: (s: SimSpeed) => void; onTogglePause: () => void }) {
+  const remaining = MOCK_RACE_STATE.weatherForecast.filter((p) => p.lap >= MOCK_LAP)
+  const rainPct = Math.round(Math.max(0, ...remaining.map((p) => p.moisture)) * 100)
+  const bars = Array.from({ length: 5 }, (_, i) => {
+    const p = remaining[Math.min(remaining.length - 1, Math.round((i / 4) * (remaining.length - 1)))]
+    return p?.moisture ?? 0
+  })
+  const lapProgress = (MOCK_LAP / MOCK_TOTAL_LAPS) * 100
+
+  const chipBtn = 'h-7 flex items-center px-4 rounded border border-[#2A3142] text-[11px] font-extrabold tracking-[1.5px] text-[#8A93A6] hover:text-[#FFFFFF] hover:border-[#3A4356] cursor-pointer'
+  const keycap = 'h-6 flex items-center justify-center px-2 rounded-[3px] border border-[#2A3142] border-b-2 text-[10px] font-extrabold text-[#5C6779] font-mono'
+
   return (
-    <div className={`flex items-center justify-center rounded-md border border-dashed border-[#3A4252] bg-[#161B26]/80 ${className}`}>
-      <span className="text-xs font-semibold tracking-widest uppercase text-[#6B7280]">{label}</span>
+    <div className="relative flex-1 min-w-0 self-stretch">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url('/track-backdrops/monaco.png')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 30%',
+          opacity: 0.55,
+          WebkitMaskImage: EDGE_MASK,
+          maskImage: EDGE_MASK,
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(180deg,rgba(15,19,25,0.82),rgba(15,19,25,0.45) 45%,rgba(15,19,25,0.88))',
+          WebkitMaskImage: EDGE_MASK,
+          maskImage: EDGE_MASK,
+        }}
+      />
+
+      <div className="relative h-full flex flex-col justify-between px-16 py-4">
+        {/* Top row: race identity + rain + panel chips */}
+        <div className="flex items-center gap-3">
+          <NationalityFlag code={MOCK_CIRCUIT.country} />
+          <span className="text-lg font-extrabold tracking-[2px]">{MOCK_CIRCUIT.name.toUpperCase()}</span>
+          <div className="flex items-center gap-2 rounded border border-[#2A3142] px-2.5 py-1" style={{ background: CHIP_BG }}>
+            <span className="text-[10px] font-extrabold tracking-[1px] text-[#8A93A6]">RAIN</span>
+            <span className="text-sm font-bold tabular-nums">{rainPct}%</span>
+            <div className="flex items-end gap-[2px] h-[13px] ml-0.5">
+              {bars.map((m, i) => (
+                <div
+                  key={i}
+                  className="w-[4px] rounded-[1px] bg-[#3B82F6]"
+                  style={{ height: 4 + m * 14, opacity: 0.5 + m * 0.5 }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button className={chipBtn} style={{ background: CHIP_BG }}>TRACK STATE</button>
+            <button className={chipBtn} style={{ background: CHIP_BG }}>DATA ROOM</button>
+          </div>
+        </div>
+
+        {/* Middle: lap counter + progress */}
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[13px] font-extrabold tracking-[2px] text-[#8A93A6]">LAP</span>
+            <span className="text-[40px] font-extrabold tabular-nums leading-none">{MOCK_LAP}</span>
+            <span className="text-lg font-bold text-[#8A93A6]">/ {MOCK_TOTAL_LAPS}</span>
+          </div>
+          <div className="w-[300px] h-[5px] rounded-full bg-[rgba(42,49,66,0.9)]">
+            <div className="h-full rounded-full bg-[#00D9FF]" style={{ width: `${lapProgress}%` }} />
+          </div>
+        </div>
+
+        {/* Bottom: speed steps + pause + keycap hints */}
+        <div className="flex items-center justify-center gap-4">
+          <div className="flex gap-1.5">
+            {([1, 2, 3, 4, 5] as SimSpeed[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => onSpeed(s)}
+                className={`w-[42px] h-8 flex items-center justify-center rounded border text-[13px] font-extrabold cursor-pointer ${
+                  speed === s
+                    ? 'border-[#00D9FF] bg-[#00D9FF]/15 text-[#00D9FF]'
+                    : 'border-[#2A3142] text-[#8A93A6] hover:text-[#FFFFFF]'
+                }`}
+                style={speed === s ? undefined : { background: CHIP_BG }}
+              >
+                {s === 5 ? <FastForward size={15} className="fill-current" /> : `${s}×`}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onTogglePause}
+            className="h-8 flex items-center px-7 rounded bg-[#00D9FF] hover:bg-[#4DE4FF] text-[#0F1419] text-[13px] font-extrabold tracking-[1.5px] cursor-pointer"
+          >
+            {paused ? 'RESUME' : 'PAUSE'}
+          </button>
+          <div className="flex items-center gap-1.5">
+            <div className={keycap} style={{ background: CHIP_BG }}>SPACE</div>
+            {['1', '2', '3', '4'].map((k) => (
+              <div key={k} className={`${keycap} w-6 px-0`} style={{ background: CHIP_BG }}>{k}</div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -87,20 +190,6 @@ export default function TrackPreviewPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#0F1319] text-[#FFFFFF]">
-      {/* Top bar: weather (real graph) / track state / god-mode entry */}
-      <div className="flex items-center gap-3 px-4 py-2 shrink-0 border-b border-[#232A38]">
-        <div className="font-semibold text-sm tracking-widest uppercase">{MOCK_CIRCUIT.location}</div>
-        <WeatherGraph
-          weather={MOCK_RACE_STATE.weather}
-          forecast={MOCK_RACE_STATE.weatherForecast}
-          currentLap={MOCK_LAP}
-          totalLaps={MOCK_TOTAL_LAPS}
-        />
-        <Placeholder label="Track state" className="h-9 w-40" />
-        <div className="flex-1" />
-        <Placeholder label="Data room" className="h-9 w-32" />
-      </div>
-
       <div className="flex flex-1 min-h-0">
         {/* Left: the race-day timing board; subpane toggles pick the data, the panel fits itself to it */}
         <div className={`shrink-0 border-r border-[#232A38] flex flex-col ${standingsOpen ? 'max-w-[55vw]' : 'w-10'}`}>
@@ -184,21 +273,18 @@ export default function TrackPreviewPage() {
         </div>
       </div>
 
-      {/* Bottom: fixed-width car cards flanking the lap counter / speed controls */}
-      <div className="flex items-center gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
-        <div className="shrink-0">
+      {/* Bottom: fixed-width car cards flanking the centre console (absorbs the old top bar) */}
+      <div className="flex items-stretch gap-0 px-4 py-3 shrink-0 border-t border-[#232A38]">
+        <div className="shrink-0 self-center">
           <CarPod id={PLAYER_CAR_IDS[0]} />
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 min-w-0">
-          <div className="font-semibold text-sm tracking-widest uppercase">Lap {MOCK_LAP} / {MOCK_TOTAL_LAPS}</div>
-          <SpeedBar
-            speed={speed}
-            paused={paused}
-            onSpeedClick={setSpeed}
-            onTogglePause={() => setPaused((v) => !v)}
-          />
-        </div>
-        <div className="shrink-0">
+        <CentreConsole
+          speed={speed}
+          paused={paused}
+          onSpeed={setSpeed}
+          onTogglePause={() => setPaused((v) => !v)}
+        />
+        <div className="shrink-0 self-center">
           <CarPod id={PLAYER_CAR_IDS[1]} />
         </div>
       </div>
