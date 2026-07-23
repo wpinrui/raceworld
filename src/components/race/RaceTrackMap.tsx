@@ -51,9 +51,8 @@ const CAR_LENGTH_M = 5.63
 const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
-const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery LOD + composited world layer
-// Below this zoom the scenery drops its heavy layers (trees, shadows, bevels) — unresolvable there anyway.
-const LOD_ZOOM = 3
+// Zooming far out means painting the whole true-scale world every frame — lag. Cap at 9 notches below default.
+const ZOOM_MIN = ZOOM_DEFAULT / ZOOM_STEP ** 9
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 
 // How much of the track's width the racing line may use, each side of the centreline: half the tarmac
@@ -328,8 +327,7 @@ const CarSprite = memo(function CarSprite({ color, length }: { color: string; le
 // crowd-dot patterns live in userSpace so they align with each rotated stand's local axes. Faux
 // lighting comes from the top-left: every solid prop casts a soft drop shadow toward bottom-right and
 // wears a diagonal bevel (lit top-left edge, shaded bottom-right).
-function SceneryLayer({ scenery, u, detail = 'full' }: { scenery: Scenery; u: (m: number) => number; detail?: 'full' | 'low' }) {
-  const full = detail === 'full'
+function SceneryLayer({ scenery, u }: { scenery: Scenery; u: (m: number) => number }) {
   const deg = (r: number) => (r * 180) / Math.PI
   const partsOf = (r: { w: number; h: number; parts?: Array<{ dx: number; dy: number; w: number; h: number }> }) =>
     r.parts ?? [{ dx: 0, dy: 0, w: r.w, h: r.h }]
@@ -395,7 +393,7 @@ function SceneryLayer({ scenery, u, detail = 'full' }: { scenery: Scenery; u: (m
       ))}
 
       {/* Drop shadows for every solid structure, cast toward bottom-right. */}
-      {full && <g transform={`translate(${u(1.6)} ${u(2)})`} fill="#000000" opacity={0.22}>
+      <g transform={`translate(${u(1.6)} ${u(2)})`} fill="#000000" opacity={0.22}>
         {structures.map((r, i) => (
           <g key={`sh${i}`} transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}>
             {partsOf(r).map((p, j) => (
@@ -403,14 +401,14 @@ function SceneryLayer({ scenery, u, detail = 'full' }: { scenery: Scenery; u: (m
             ))}
           </g>
         ))}
-      </g>}
+      </g>
 
       {/* Pit building */}
       {scenery.plaza.slice(1).map((r, i) => (
         <g key={`pb${i}`} transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}>
           <rect x={-r.w / 2} y={-r.h / 2} width={r.w} height={r.h} rx={u(0.8)} fill={r.fill} stroke="#2E333B" strokeWidth={u(0.6)} />
-          {full && <rect x={-r.w / 2} y={-r.h / 2} width={r.w} height={r.h} rx={u(0.8)} fill="url(#tm-bevel)" />}
-          {full && r.vents?.map((v, j) => (
+          <rect x={-r.w / 2} y={-r.h / 2} width={r.w} height={r.h} rx={u(0.8)} fill="url(#tm-bevel)" />
+          {r.vents?.map((v, j) => (
             <rect key={j} x={v.dx - v.s / 2} y={v.dy - v.s / 2} width={v.s} height={v.s} fill="#333944" />
           ))}
         </g>
@@ -421,9 +419,9 @@ function SceneryLayer({ scenery, u, detail = 'full' }: { scenery: Scenery; u: (m
         return (
           <g key={`s${i}`} transform={`translate(${s.x} ${s.y}) rotate(${deg(s.rot)})`}>
             <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-seats)" stroke="#2E333B" strokeWidth={u(0.6)} />
-            {full && <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-crowd)" />}
+            <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-crowd)" />
             <rect x={-s.w / 2} y={roofY} width={s.w} height={u(2.2)} fill="#7B8494" />
-            {full && <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-bevel)" />}
+            <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-bevel)" />
           </g>
         )
       })}
@@ -433,22 +431,20 @@ function SceneryLayer({ scenery, u, detail = 'full' }: { scenery: Scenery; u: (m
           {partsOf(b).map((p, j) => (
             <rect key={`f${j}`} x={p.dx - p.w / 2} y={p.dy - p.h / 2} width={p.w} height={p.h} rx={u(0.8)} fill={b.fill} stroke="#2E333B" strokeWidth={u(0.5)} />
           ))}
-          {full && partsOf(b).map((p, j) => (
+          {partsOf(b).map((p, j) => (
             <rect key={`v${j}`} x={p.dx - p.w / 2} y={p.dy - p.h / 2} width={p.w} height={p.h} rx={u(0.8)} fill="url(#tm-bevel)" />
           ))}
-          {full && b.vents?.map((v, j) => (
+          {b.vents?.map((v, j) => (
             <rect key={`n${j}`} x={v.dx - v.s / 2} y={v.dy - v.s / 2} width={v.s} height={v.s} fill="#333944" />
           ))}
         </g>
       ))}
 
-      {/* Tree shadows, then canopies with their lit side — the biggest node count, dropped at low LOD. */}
-      {full && (
-        <g transform={`translate(${u(2.4)} ${u(3)})`} fill="#000000" opacity={0.3}>
-          {scenery.trees.map((t, i) => <path key={`ts${i}`} d={t.d} />)}
-        </g>
-      )}
-      {full && scenery.trees.map((t, i) => (
+      {/* Tree shadows, then canopies with their lit side. */}
+      <g transform={`translate(${u(2.4)} ${u(3)})`} fill="#000000" opacity={0.3}>
+        {scenery.trees.map((t, i) => <path key={`ts${i}`} d={t.d} />)}
+      </g>
+      {scenery.trees.map((t, i) => (
         <g key={`v${i}`}>
           <path d={t.d} fill={`url(#tm-tree${t.variant})`} stroke="#1E3318" strokeWidth={u(0.35)} />
           <path d={t.hd} fill="#8FB35F" opacity={0.3} />
@@ -507,10 +503,6 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
 
-  // Scenery LOD: below LOD_ZOOM the heavy layers drop out (state flips only on threshold crossings).
-  const [lodLow, setLodLow] = useState(false)
-  const lodLowRef = useRef(false)
-
   const applyCam = () => {
     const world = worldRef.current
     if (!world) return
@@ -518,11 +510,6 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     world.style.transform = `translate(${x}px, ${y}px) rotate(${rot}rad) scale(${z})`
     world.style.setProperty('--cam-rot', `${rot}rad`)
     world.style.setProperty('--cam-zoom-inv', String(1 / z))
-    const low = z < LOD_ZOOM && viewRef.current === 'live'
-    if (low !== lodLowRef.current) {
-      lodLowRef.current = low
-      setLodLow(low)
-    }
   }
 
   // Real-world metres -> viewBox units for this track.
@@ -661,18 +648,13 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     applyCam()
   }
 
-  // Camera per view: 'map' is the static full-track fit (the stage IS the whole track at zoom 1).
-  // The LIVE camera (zoom/pan/rotation) is saved on the way out and restored on the way back, so
-  // flipping views never loses where the player was. Also applies the initial camera on mount.
-  const savedCamRef = useRef<{ x: number; y: number; z: number; rot: number } | null>(null)
+  // Camera per view: 'map' is the static full-track fit (the stage IS the whole track at zoom 1);
+  // 'live' returns to the default chase zoom. Also applies the initial camera on mount.
   useEffect(() => {
-    if (view === 'map' && viewRef.current === 'live') savedCamRef.current = { ...camRef.current }
     viewRef.current = view
-    camRef.current = view === 'map'
-      ? { x: 0, y: 0, z: 1, rot: 0 }
-      : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 }
+    camRef.current = view === 'map' ? { x: 0, y: 0, z: 1, rot: 0 } : { x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 }
     applyCam()
-  }, [view])  
+  }, [view])
 
   // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
@@ -865,8 +847,8 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     [layout, sceneryDensity],
   )
   const sceneryNode = useMemo(
-    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lodLow],
+    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} />,
+    [scenery, layout.metresPerUnit],
   )
 
   return (
@@ -879,7 +861,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
       onPointerCancel={onPointerUp}
     >
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
-        <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%', willChange: 'transform' }}>
+        <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
               the edge of the world under follow + zoom. */}
           <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
