@@ -822,33 +822,33 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             <path ref={raceLineRef} fill="none" stroke="none" />
           </svg>
           {cars.map((car) => (
-            <Tooltip
+            <div
               key={car.id}
-              content={
-                <div>
-                  <div className="font-semibold">P{car.pos} {car.name}</div>
-                  {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
-                </div>
-              }
+              ref={(el) => {
+                if (!el) { elRefs.current.delete(car.id); return }
+                elRefs.current.set(car.id, el)
+                const p = posRef.current.get(car.id) // keep the last spot across re-renders (commit, not render)
+                const { w, h } = stageDimsRef.current
+                el.style.transform = p && w
+                  ? `translate(${(p.left / 100) * w}px, ${(p.top / 100) * h}px) translate(-50%, -50%)`
+                  : 'translate(-50%, -50%)'
+              }}
+              className="absolute left-0 top-0"
+              style={{ opacity: car.retired ? 0.35 : 1 }}
             >
-              <div
-                ref={(el) => {
-                  if (!el) { elRefs.current.delete(car.id); return }
-                  elRefs.current.set(car.id, el)
-                  const p = posRef.current.get(car.id) // keep the last spot across re-renders (commit, not render)
-                  const { w, h } = stageDimsRef.current
-                  el.style.transform = p && w
-                    ? `translate(${(p.left / 100) * w}px, ${(p.top / 100) * h}px) translate(-50%, -50%)`
-                    : 'translate(-50%, -50%)'
-                }}
-                onClick={() => clickCar(car.id)}
-                className="absolute left-0 top-0 cursor-pointer"
-                style={{ opacity: car.retired ? 0.35 : 1 }}
+              {/* Tooltip + click on the sprite ONLY — its exact rendered footprint, no hover halo. */}
+              <Tooltip
+                content={
+                  <div>
+                    <div className="font-semibold">P{car.pos} {car.name}</div>
+                    {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
+                  </div>
+                }
               >
-                {/* Click target that doesn't affect layout, so the label anchor hugs the car itself. */}
-                <div className="absolute -inset-2" />
                 <div
                   ref={(el) => { if (el) sprRefs.current.set(car.id, el); else sprRefs.current.delete(car.id) }}
+                  onClick={() => clickCar(car.id)}
+                  className="cursor-pointer"
                   style={{
                     filter: car.isPlayer
                       ? 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5)) drop-shadow(0 0 2px #FFFFFF) drop-shadow(0 0 4px rgba(255,255,255,0.6))'
@@ -857,6 +857,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
                 >
                   <CarSprite color={car.color} length={carL} />
                 </div>
+              </Tooltip>
                 {showLabels && (
                   <div
                     className="absolute left-full top-1/2 flex items-center gap-1 whitespace-nowrap pointer-events-none"
@@ -876,8 +877,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
                     </span>
                   </div>
                 )}
-              </div>
-            </Tooltip>
+            </div>
           ))}
         </div>
       </div>
