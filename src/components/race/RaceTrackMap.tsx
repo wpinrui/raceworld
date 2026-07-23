@@ -603,9 +603,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     onFollow(followRef.current === id ? null : id)
   }
 
-  const resetCamera = () => {
-    camRef.current = { x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 }
-    onFollow(null)
+  // Reset ZOOM only: keep the pan (or the follow lock) and rotation exactly as they are.
+  const resetZoom = () => {
+    camRef.current = { ...camRef.current, z: ZOOM_DEFAULT }
     applyCam()
   }
 
@@ -890,9 +890,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
 
       {/* Camera controls */}
       <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
-        <Tooltip content="Reset camera">
+        <Tooltip content="Reset zoom">
           <button
-            onClick={resetCamera}
+            onClick={resetZoom}
             className="h-9 w-9 flex items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#1E2431] hover:text-[#FFFFFF] cursor-pointer"
           >
             <Maximize size={18} />
