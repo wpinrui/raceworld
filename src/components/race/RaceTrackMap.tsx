@@ -647,7 +647,10 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           el.style.visibility = ''
           if (sample.pit) {
             frames.push({ id: car.id, el, kind: 'pit', dist: Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current, lat: 0 })
-          } else if (sample.gridSlot != null) {
+          } else if (sample.gridSlot != null && sample.blend == null) {
+            // Parked pre-race ONLY: lap-1 samples also carry gridSlot (for the launch deficit) but come
+            // WITH a blend — those must fall through to the racing branch, or the whole first lap
+            // renders as a frozen grid.
             const back = uu(3 + (sample.gridSlot - 1) * 8)
             frames.push({
               id: car.id, el, kind: 'grid',
