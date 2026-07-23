@@ -27,6 +27,9 @@ import { QualifyingPanel } from '@/components/race/QualifyingPanel'
 import { TrackMap } from '@/components/race/TrackMap'
 import { UpgradeRevealModal } from '@/components/race/UpgradeRevealModal'
 import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
+import { RaceDayView } from '@/components/race/RaceDayView'
+import { useRaceMapSampler } from '@/components/race/useRaceMapSampler'
+import { TRACK_LAYOUTS } from '@/data/tracks'
 
 // 1-4 are real-time tick intervals (slow -> fast); 5 (FF) = 0 = instant "sim to the end". Speed 1 is
 // half the old slowest; 2/3/4 are the old 1/2/3.
@@ -65,6 +68,15 @@ export default function RacePage() {
 
   const currentCircuit = calendarForYear(season.year)[season.currentRound - 1]
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
+
+  // The 2D race-day view runs wherever the circuit has an authored track layout; others keep the
+  // classic screen until their traces are imported (#sim-2d).
+  const trackLayout = currentCircuit ? TRACK_LAYOUTS[currentCircuit.id] : undefined
+  const gridPosMap = useMemo(
+    () => Object.fromEntries((raceState?.qualifyingResults ?? []).map((q) => [q.driverId, q.gridPosition])),
+    [raceState?.qualifyingResults],
+  )
+  const mapSampleRef = useRaceMapSampler(raceState, gridPosMap, nextTickAtRef, SPEED_INTERVALS[raceState?.speed ?? 1], raceState?.paused ?? false)
 
   // Driver hover card data: career totals (through last season, folded with this season's results) + this
   // year's WDC standing, so a name in the race table opens the same expanded card used around the app.
@@ -204,14 +216,46 @@ export default function RacePage() {
     phase !== 'finished' &&
     acknowledgedRound !== season.currentRound
 
+  const useNewView = !!trackLayout && !!raceState && (phase === 'racing' || phase === 'finished')
+
   return (
     <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
-      <RaceHeader
-        phase={phase} raceState={raceState} lapProgress={lapProgress}
-        currentCircuit={currentCircuit}
-      />
+      {!useNewView && (
+        <RaceHeader
+          phase={phase} raceState={raceState} lapProgress={lapProgress}
+          currentCircuit={currentCircuit}
+        />
+      )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {useNewView && raceState && trackLayout && currentCircuit && (
+        <RaceDayView
+          raceState={raceState}
+          phase={phase as 'racing' | 'finished'}
+          layout={trackLayout}
+          circuit={currentCircuit}
+          drivers={drivers}
+          teams={teams}
+          speed={speed}
+          paused={paused}
+          onSpeedClick={handleSpeedClick}
+          onTogglePause={() => setPaused(!paused)}
+          sampleRef={mapSampleRef}
+          results={resultsForDisplay}
+          baselineDrivers={season.driverStandings}
+          baselineConstructors={season.constructorStandings}
+          year={season.year}
+          driverMode={season.driverMode}
+          teamManagerMode={season.teamManagerMode}
+          playerDriverId={season.playerDriverId ?? null}
+          playerTeamId={season.playerTeamId ?? null}
+          godSelectedId={godModeDriverId}
+          onGodSelect={setGodModeDriver}
+          onGodActions={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
+          onRetire={(driverId) => setPendingGodModeActions((prev) => [...prev, { type: 'force-retire', driverId }])}
+        />
+      )}
+
+      {!useNewView && <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left 60% */}
         <div className="w-[60%] border-r border-[#2A3142] flex flex-col min-h-0 overflow-hidden">
           {phase === 'pre-qualifying' && (
@@ -302,9 +346,9 @@ export default function RacePage() {
             </>
           )}
         </div>
-      </div>
+      </div>}
 
-      {phase === 'racing' && raceState && (
+      {!useNewView && phase === 'racing' && raceState && (
         <SpeedBar
           speed={speed} paused={paused}
           onSpeedClick={handleSpeedClick}

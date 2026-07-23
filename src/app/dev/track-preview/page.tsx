@@ -12,8 +12,7 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from '@/compo
 import CommentaryFeed from '@/components/race/CommentaryFeed'
 import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { PitWallCard } from '@/components/race/PitWallPanel'
-import { WeatherGraph } from '@/components/race/WeatherGraph'
-import { NationalityFlag } from '@/components/world/NationalityFlag'
+import { CentreConsole, CHIP_BG, consoleChipClass } from '@/components/race/CentreConsole'
 import { Tooltip } from '@/components/ui/Tooltip'
 import {
   MOCK_BASELINE_CONSTRUCTORS, MOCK_BASELINE_DRIVERS, MOCK_CIRCUIT, MOCK_DRIVERS, MOCK_GRID,
@@ -31,6 +30,7 @@ const SPEED_MULTS: Record<SimSpeed, number> = { 1: 1, 2: 2, 3: 5, 4: 10, 5: 25 }
 const SPEED_LABELS: Record<SimSpeed, string> = { 1: '1×', 2: '2×', 3: '5×', 4: '10×', 5: '25×' }
 // The pre-race grid wait before lap 1 starts animating.
 const GRID_HOLD_MS = 2000
+const BACKDROP_URL = '/track-backdrops/monaco.png'
 
 // Subpane toggles: each button shows/hides one data group on the timing board.
 const COLUMN_TOGGLES: Array<{ col: RaceTableColumn; label: string; icon: LucideIcon }> = [
@@ -47,9 +47,6 @@ const COLUMN_TOGGLES: Array<{ col: RaceTableColumn; label: string; icon: LucideI
 const teamOf = new Map(MOCK_TEAMS.map((t) => [t.id, t]))
 const driverOf = new Map(MOCK_DRIVERS.map((d) => [d.id, d]))
 const PLAYER_CAR_IDS = ['car-6', 'car-7'] as const
-
-const EDGE_MASK = 'linear-gradient(90deg,transparent,#000 16%,#000 84%,transparent)'
-const CHIP_BG = 'rgba(20,25,36,0.75)'
 
 export default function TrackPreviewPage() {
   const layout = TRACK_LAYOUTS.monaco
@@ -111,6 +108,19 @@ export default function TrackPreviewPage() {
       frozenFracRef.current = Math.min(1, (performance.now() - tickStartRef.current) / intervalRef.current)
     }
   }, [speed, paused, engine])
+
+  // Space = pause, 1-4 = speed. SpaceGuard (root layout) already stops Space re-activating the last
+  // focused button; the console's controls also blur themselves on click.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+      if (e.key === ' ') { e.preventDefault(); setPaused((p) => !p) }
+      if (['1', '2', '3', '4'].includes(e.key)) setSpeed(Number(e.key) as SimSpeed)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const sampleRef = useRef<(id: string) => TrackSample>(() => null)
   useEffect(() => {
@@ -295,111 +305,23 @@ export default function TrackPreviewPage() {
         ))}
         <div style={{ order: 1 }} className="flex-1 min-w-0 self-stretch">
           <CentreConsole
+            circuitName={MOCK_CIRCUIT.name}
+            countryCode={MOCK_CIRCUIT.country}
             lap={lap}
+            totalLaps={MOCK_TOTAL_LAPS}
+            weather={MOCK_RACE_STATE.weather}
+            forecast={MOCK_RACE_STATE.weatherForecast}
             speed={speed}
             paused={paused}
             onSpeed={setSpeed}
             onTogglePause={() => setPaused((v) => !v)}
+            straightness={MOCK_CIRCUIT.straightness}
+            backdropUrl={BACKDROP_URL}
+            speedLabels={SPEED_LABELS}
+            topRight={
+              <button className={consoleChipClass} style={{ background: CHIP_BG }}>DATA ROOM</button>
+            }
           />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Centre console per designs/Canvas.dc.html: race identity + the live track condition over a photo
-// backdrop that fades out on both sides before reaching the pit wall cards.
-function CentreConsole({ lap, speed, paused, onSpeed, onTogglePause }: {
-  lap: number
-  speed: SimSpeed
-  paused: boolean
-  onSpeed: (s: SimSpeed) => void
-  onTogglePause: () => void
-}) {
-  const chipBtn = 'h-7 flex items-center px-4 rounded border border-[#2A3142] text-[11px] font-extrabold tracking-[1.5px] text-[#8A93A6] hover:text-[#FFFFFF] hover:border-[#3A4356] cursor-pointer'
-
-  return (
-    <div className="relative w-full h-full">
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: "url('/track-backdrops/monaco.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center 30%',
-          opacity: 0.55,
-          WebkitMaskImage: EDGE_MASK,
-          maskImage: EDGE_MASK,
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: 'linear-gradient(180deg,rgba(15,19,25,0.82),rgba(15,19,25,0.45) 45%,rgba(15,19,25,0.88))',
-          WebkitMaskImage: EDGE_MASK,
-          maskImage: EDGE_MASK,
-        }}
-      />
-
-      <div className="relative h-full flex flex-col justify-between px-16 py-4">
-        {/* Top row: race identity + lap + panel chips */}
-        <div className="flex items-center gap-3">
-          <NationalityFlag code={MOCK_CIRCUIT.country} />
-          <span className="text-lg font-extrabold tracking-[2px]">{MOCK_CIRCUIT.name.toUpperCase()}</span>
-          {/* Understated lap counter: plain text, no card. */}
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-[10px] font-extrabold tracking-[1.5px] text-[#8A93A6]">LAP</span>
-            <span className="text-base font-extrabold tabular-nums leading-none">{Math.min(lap + 1, MOCK_TOTAL_LAPS)}</span>
-            <span className="text-xs font-bold text-[#8A93A6]">/ {MOCK_TOTAL_LAPS}</span>
-          </div>
-          <div className="ml-auto flex gap-2">
-            <button className={chipBtn} style={{ background: CHIP_BG }}>DATA ROOM</button>
-          </div>
-        </div>
-
-        {/* Middle: the track condition takes centre stage — the live WeatherGraph. */}
-        <div className="flex justify-center">
-          <div className="rounded border border-[#2A3142] px-3 py-1.5" style={{ background: CHIP_BG }}>
-            <WeatherGraph
-              weather={MOCK_RACE_STATE.weather}
-              forecast={MOCK_RACE_STATE.weatherForecast}
-              currentLap={lap}
-              totalLaps={MOCK_TOTAL_LAPS}
-              graphWidth={340}
-              graphHeight={52}
-            />
-          </div>
-        </div>
-
-        {/* Bottom: speed steps + pause + keycap hints */}
-        <div className="flex items-center justify-center gap-4">
-          <div className="flex gap-1.5">
-            {([1, 2, 3, 4, 5] as SimSpeed[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => onSpeed(s)}
-                className={`w-[42px] h-8 flex items-center justify-center rounded border text-[13px] font-extrabold cursor-pointer ${
-                  speed === s
-                    ? 'border-[#00D9FF] bg-[#00D9FF]/15 text-[#00D9FF]'
-                    : 'border-[#2A3142] text-[#8A93A6] hover:text-[#FFFFFF]'
-                }`}
-                style={speed === s ? undefined : { background: CHIP_BG }}
-              >
-                {SPEED_LABELS[s]}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={onTogglePause}
-            className="h-8 flex items-center px-7 rounded bg-[#00D9FF] hover:bg-[#4DE4FF] text-[#0F1419] text-[13px] font-extrabold tracking-[1.5px] cursor-pointer"
-          >
-            {paused ? 'RESUME' : 'PAUSE'}
-          </button>
-          <div className="flex items-center gap-1.5">
-            <div className="h-6 flex items-center justify-center px-2 rounded-[3px] border border-[#2A3142] border-b-2 text-[10px] font-extrabold text-[#5C6779] font-mono" style={{ background: CHIP_BG }}>SPACE</div>
-            {['1', '2', '3', '4'].map((k) => (
-              <div key={k} className="h-6 w-6 flex items-center justify-center rounded-[3px] border border-[#2A3142] border-b-2 text-[10px] font-extrabold text-[#5C6779] font-mono" style={{ background: CHIP_BG }}>{k}</div>
-            ))}
-          </div>
         </div>
       </div>
     </div>
