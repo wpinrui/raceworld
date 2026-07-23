@@ -651,14 +651,16 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             frames.push({ id: car.id, el, kind: 'pit', dist: Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current, lat: 0 })
           } else if (sample.gridSlot != null) {
             // On the grid — parked pre-race, and from lights out the whole field launches TOGETHER:
-            // `launch` slides the box toward the S/F line so the car crosses it exactly when its
-            // official (grid-seeded) time begins. The box's lateral stagger fades over the run.
+            // `launch` covers the run to the S/F line so the car crosses exactly when its official
+            // (grid-seeded) time begins. CUBED: a launch is an acceleration — barely moving off the
+            // box, arriving at the line near racing speed — not a constant crawl with a jump at the line.
             const launch = Math.min(1, sample.launch ?? 0)
-            const back = uu(3 + (sample.gridSlot - 1) * 8) * (1 - launch)
+            const covered = launch * launch * launch
+            const back = uu(3 + (sample.gridSlot - 1) * 8) * (1 - covered)
             frames.push({
               id: car.id, el, kind: 'grid',
               dist: (((lenTotal - back) % lenTotal) + lenTotal) % lenTotal,
-              lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - launch),
+              lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - covered),
             })
           } else {
             const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
