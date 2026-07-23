@@ -489,6 +489,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const headingRef = useRef(new Map<string, number>())
   const latRef = useRef(new Map<string, number>())
   const tipRef = useRef<HTMLDivElement>(null)
+  const tipChevRef = useRef<HTMLDivElement>(null)
   const tipPosRef = useRef<{ x: number; y: number } | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -794,6 +795,15 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           tipPosRef.current = cur
           tip.style.opacity = '1'
           tip.style.transform = `translate(${cur.x}px, ${cur.y}px) translate(-50%, -50%) scale(0.9)`
+          // Notch on the card's car-facing edge, its corner aimed back at the driver.
+          const chev = tipChevRef.current
+          if (chev) {
+            const lw = r.width / 0.9
+            const lh = r.height / 0.9
+            const lc = Math.abs(nx) * (lw / 2) + Math.abs(ny) * (lh / 2)
+            const deg = (Math.atan2(-ny, -nx) * 180) / Math.PI
+            chev.style.transform = `translate(-50%, -50%) translate(${-nx * (lc + 3)}px, ${-ny * (lc + 3)}px) rotate(${deg - 45}deg)`
+          }
         } else {
           tip.style.opacity = '0'
           tipPosRef.current = null
@@ -964,6 +974,11 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
         </div>
         {pinnedCard && view === 'live' && (
           <div ref={tipRef} className="absolute left-0 top-0 pointer-events-none" style={{ opacity: 0 }}>
+            <div
+              ref={tipChevRef}
+              className="absolute left-1/2 top-1/2 w-3 h-3"
+              style={{ background: '#1E2431', borderRight: '1px solid #2A3142', borderBottom: '1px solid #2A3142' }}
+            />
             {pinnedCard}
           </div>
         )}
