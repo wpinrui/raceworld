@@ -22,11 +22,14 @@ export interface TrackCarMeta {
   retired?: boolean
 }
 
+/** One frame of a car's position: lap progress 0..1 (racing line), or pit-lane progress when `pit`. */
+export type TrackSample = { prog: number; pit?: boolean } | null
+
 interface Props {
   layout: TrackLayout
   cars: TrackCarMeta[]
-  /** Per-frame sampler: lap progress 0..1 for a car, or null to hide its marker. Read inside rAF. */
-  sampleRef: React.MutableRefObject<(id: string) => number | null>
+  /** Per-frame sampler: where a car is right now, or null to hide its marker. Read inside rAF. */
+  sampleRef: React.MutableRefObject<(id: string) => TrackSample>
   /** Marker diameter in px (default 22). */
   markerSize?: number
   /** Show a flag + name label beside each marker. */
@@ -37,7 +40,9 @@ const TRACK_STROKE = 16
 
 export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLabels = false }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
+  const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
+  const pitLenRef = useRef(0)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
   const posRef = useRef(new Map<string, { left: number; top: number }>())
   const outerRef = useRef<HTMLDivElement>(null)
@@ -69,23 +74,26 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLab
 
   useEffect(() => {
     lenRef.current = 0 // re-measure if the layout changes
+    pitLenRef.current = 0
     let raf = 0
     const tick = () => {
       const path = pathRef.current
-      if (path) {
+      const pitPath = pitPathRef.current
+      if (path && pitPath) {
         if (!lenRef.current) lenRef.current = path.getTotalLength()
-        const lenTotal = lenRef.current
+        if (!pitLenRef.current) pitLenRef.current = pitPath.getTotalLength()
         for (const car of cars) {
           const el = elRefs.current.get(car.id)
           if (!el) continue
-          const prog = sampleRef.current(car.id)
-          if (prog === null) {
+          const sample = sampleRef.current(car.id)
+          if (sample === null) {
             el.style.visibility = 'hidden'
             continue
           }
           el.style.visibility = ''
-          const frac = ((prog % 1) + 1) % 1
-          const pt = path.getPointAtLength(frac * lenTotal)
+          const pt = sample.pit
+            ? pitPath.getPointAtLength(Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current)
+            : path.getPointAtLength((((sample.prog % 1) + 1) % 1) * lenRef.current)
           const left = ((pt.x - vb.x) / vb.w) * 100
           const top = ((pt.y - vb.y) / vb.h) * 100
           posRef.current.set(car.id, { left, top })
@@ -112,6 +120,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLab
     <div ref={outerRef} className="relative w-full h-full flex items-center justify-center">
       <div className="relative" style={{ width: stage.w, height: stage.h }}>
       <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full">
+        {/* Pit lane: a narrower, dimmer ribbon under the track, with a tick at the pit box. */}
+        <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="#2A3142" strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={layout.pit.box.x} cy={layout.pit.box.y} r={3} fill="#5C6779" />
         <path ref={pathRef} d={layout.d} fill="none" stroke="#3A4252" strokeWidth={TRACK_STROKE} strokeLinejoin="round" />
         <path d={layout.d} fill="none" stroke="#232A38" strokeWidth={10} strokeLinejoin="round" />
         <line x1={sf.x1} y1={sf.y1} x2={sf.x2} y2={sf.y2} stroke="#FFFFFF" strokeWidth={3} />

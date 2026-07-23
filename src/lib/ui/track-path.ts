@@ -29,6 +29,72 @@ export function buildTracePath(trace: TrackTrace): { d: string; start: TrackStar
   return { d, start: { x: x0, y: y0, angle: Math.atan2(y1 - y0, x1 - x0) } }
 }
 
+// ── Procedural pit lane ─────────────────────────────────────────────────────────────────────────────
+// A pit lane departs the racing line just before the final corner, runs parallel to the pit straight on
+// the INSIDE, and rejoins just after turn 1. Traces are normalised (progress 0 = the S/F line, clockwise),
+// so this is constructible from the trace alone: slice the polyline around progress 0, offset it along the
+// inward normal (toward the centroid), and taper both ends back onto the racing line.
+
+export interface PitLane {
+  d: string
+  /** The pit box (stationary hold point), at the lane's midpoint. */
+  box: { x: number; y: number }
+}
+
+const PIT_ENTRY_FRAC = 0.93 // lap fraction where the lane leaves the racing line
+const PIT_EXIT_FRAC = 0.07  // lap fraction (of the next lap) where it rejoins
+const PIT_OFFSET = 16       // parallel offset in viewBox units
+const PIT_TAPER = 0.18      // fraction of the lane's arc spent blending on/off the racing line
+
+/** Build the pit lane for a trace. `entry`/`exit`/`offset` may be overridden per track if the default reads wrong. */
+export function buildPitLane(
+  trace: TrackTrace,
+  { entry = PIT_ENTRY_FRAC, exit = PIT_EXIT_FRAC, offset = PIT_OFFSET }: { entry?: number; exit?: number; offset?: number } = {},
+): PitLane {
+  const n = trace.length
+  const pt = (i: number): Vec => ({ x: trace[i % n][0], y: trace[i % n][1] })
+  // Cumulative arc length at each vertex (closing edge included at index n).
+  const cum: number[] = [0]
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + len(sub(pt(i), pt(i - 1))))
+  const total = cum[n]
+
+  // A point at arc position s (wrapping), linearly interpolated on its segment.
+  const at = (s: number): Vec => {
+    const w = ((s % total) + total) % total
+    let i = 1
+    while (i <= n && cum[i] < w) i++
+    const a = pt(i - 1)
+    const b = pt(i)
+    const seg = cum[i] - cum[i - 1] || 1
+    const f = (w - cum[i - 1]) / seg
+    return add(a, scale(sub(b, a), f))
+  }
+
+  // Sample the slice [entry..1)+[0..exit] densely in travel order.
+  const startS = entry * total
+  const span = (1 - entry + exit) * total
+  const STEPS = 40
+  const centroid = scale(trace.reduce((acc, [x, y]) => add(acc, { x, y }), { x: 0, y: 0 }), 1 / n)
+
+  const pts: Vec[] = []
+  for (let k = 0; k <= STEPS; k++) {
+    const t = k / STEPS
+    const s = startS + t * span
+    const p = at(s)
+    const dir = unit(sub(at(s + 2), at(s - 2)))
+    let normal: Vec = { x: dir.y, y: -dir.x }
+    if ((centroid.x - p.x) * normal.x + (centroid.y - p.y) * normal.y < 0) normal = scale(normal, -1)
+    // Taper the offset in and out so the lane blends onto the racing line at both ends.
+    const taper = Math.min(1, Math.min(t, 1 - t) / PIT_TAPER)
+    const ease = taper * taper * (3 - 2 * taper)
+    pts.push(add(p, scale(normal, offset * ease)))
+  }
+
+  const d = `M ${pts.map((p) => `${fmt(p.x)} ${fmt(p.y)}`).join(' L ')}`
+  const box = pts[Math.round(STEPS / 2)]
+  return { d, box: { x: box.x, y: box.y } }
+}
+
 const DEFAULT_RADIUS = 12
 
 type Vec = { x: number; y: number }
