@@ -9,6 +9,7 @@ import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
 import { DriverLink } from '@/components/world/EntityLink'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
 
 // Pit wall card, redesigned per designs/Pit Wall Card.dc.html: a fixed-width card with an always-visible
@@ -270,6 +271,7 @@ export function PitWallCard({ driver, team, ds, raceState, allDrivers, onRetire,
   const header = (
     <div className="relative flex items-center gap-2 h-[40px] pl-[17px] pr-3 border-b" style={{ borderColor: C.border }}>
       <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ background: team?.color ?? C.muted }} />
+      <NationalityFlag code={driver.nationality} />
       <DriverLink id={driver.id} className="text-[16px] font-semibold text-[#FFFFFF]">{driver.name}</DriverLink>
       {ds?.defending && (
         <span
