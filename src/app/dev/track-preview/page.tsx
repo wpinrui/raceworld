@@ -62,8 +62,6 @@ const EDGE_MASK = 'linear-gradient(90deg,transparent,#000 16%,#000 84%,transpare
 const CHIP_BG = 'rgba(20,25,36,0.75)'
 
 function CentreConsole({ speed, paused, onSpeed, onTogglePause }: { speed: SimSpeed; paused: boolean; onSpeed: (s: SimSpeed) => void; onTogglePause: () => void }) {
-  const lapProgress = (MOCK_LAP / MOCK_TOTAL_LAPS) * 100
-
   const chipBtn = 'h-7 flex items-center px-4 rounded border border-[#2A3142] text-[11px] font-extrabold tracking-[1.5px] text-[#8A93A6] hover:text-[#FFFFFF] hover:border-[#3A4356] cursor-pointer'
   const keycap = 'h-6 flex items-center justify-center px-2 rounded-[3px] border border-[#2A3142] border-b-2 text-[10px] font-extrabold text-[#5C6779] font-mono'
 
@@ -94,16 +92,11 @@ function CentreConsole({ speed, paused, onSpeed, onTogglePause }: { speed: SimSp
         <div className="flex items-center gap-3">
           <NationalityFlag code={MOCK_CIRCUIT.country} />
           <span className="text-lg font-extrabold tracking-[2px]">{MOCK_CIRCUIT.name.toUpperCase()}</span>
-          {/* Lap counter chip with a slim progress fill along its base. */}
-          <div className="relative overflow-hidden rounded border border-[#2A3142] px-3 pt-1 pb-1.5" style={{ background: CHIP_BG }}>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[10px] font-extrabold tracking-[1.5px] text-[#8A93A6]">LAP</span>
-              <span className="text-xl font-extrabold tabular-nums leading-none">{MOCK_LAP}</span>
-              <span className="text-xs font-bold text-[#8A93A6]">/ {MOCK_TOTAL_LAPS}</span>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 h-[3px] bg-[rgba(42,49,66,0.9)]">
-              <div className="h-full bg-[#00D9FF]" style={{ width: `${lapProgress}%` }} />
-            </div>
+          {/* Understated lap counter: plain text, no card. */}
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[10px] font-extrabold tracking-[1.5px] text-[#8A93A6]">LAP</span>
+            <span className="text-base font-extrabold tabular-nums leading-none">{MOCK_LAP}</span>
+            <span className="text-xs font-bold text-[#8A93A6]">/ {MOCK_TOTAL_LAPS}</span>
           </div>
           <div className="ml-auto flex gap-2">
             <button className={chipBtn} style={{ background: CHIP_BG }}>DATA ROOM</button>
