@@ -12,8 +12,8 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from '@/compo
 import CommentaryFeed from '@/components/race/CommentaryFeed'
 import { LiveChampionship } from '@/components/race/LiveChampionship'
 import { PitWallCard } from '@/components/race/PitWallPanel'
-import { RaceHeader } from '@/components/race/RaceHeader'
 import { SpeedBar } from '@/components/race/SpeedBar'
+import { WeatherGraph } from '@/components/race/WeatherGraph'
 import { Tooltip } from '@/components/ui/Tooltip'
 import {
   MOCK_BASELINE_CONSTRUCTORS, MOCK_BASELINE_DRIVERS, MOCK_CIRCUIT, MOCK_DRIVERS, MOCK_GRID, MOCK_LAP,
@@ -55,6 +55,14 @@ const CARS: TrackCarMeta[] = MOCK_STATES.filter((s) => !s.retired).map((s) => {
 
 const PLAYER_CAR_IDS = ['car-6', 'car-7'] as const
 
+function Placeholder({ label, className = '' }: { label: string; className?: string }) {
+  return (
+    <div className={`flex items-center justify-center rounded-md border border-dashed border-[#3A4252] bg-[#161B26]/80 ${className}`}>
+      <span className="text-xs font-semibold tracking-widest uppercase text-[#6B7280]">{label}</span>
+    </div>
+  )
+}
+
 export default function TrackPreviewPage() {
   const layout = TRACK_LAYOUTS.monaco
   const [standingsOpen, setStandingsOpen] = useState(true)
@@ -79,7 +87,19 @@ export default function TrackPreviewPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#0F1319] text-[#FFFFFF]">
-      <RaceHeader phase="racing" raceState={MOCK_RACE_STATE} lapProgress={45} currentCircuit={MOCK_CIRCUIT} />
+      {/* Top bar: weather (real graph) / track state / god-mode entry */}
+      <div className="flex items-center gap-3 px-4 py-2 shrink-0 border-b border-[#232A38]">
+        <div className="font-semibold text-sm tracking-widest uppercase">{MOCK_CIRCUIT.location}</div>
+        <WeatherGraph
+          weather={MOCK_RACE_STATE.weather}
+          forecast={MOCK_RACE_STATE.weatherForecast}
+          currentLap={MOCK_LAP}
+          totalLaps={MOCK_TOTAL_LAPS}
+        />
+        <Placeholder label="Track state" className="h-9 w-40" />
+        <div className="flex-1" />
+        <Placeholder label="Data room" className="h-9 w-32" />
+      </div>
 
       <div className="flex flex-1 min-h-0">
         {/* Left: the race-day timing board; subpane toggles pick the data, the panel fits itself to it */}
@@ -164,31 +184,39 @@ export default function TrackPreviewPage() {
         </div>
       </div>
 
-      {/* Bottom: the player team's pit wall cards, then the speed bar */}
-      <div className="flex gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
-        {PLAYER_CAR_IDS.map((id) => {
-          const driver = MOCK_DRIVERS.find((d) => d.id === id)!
-          return (
-            <div key={id} className="flex-1 min-w-0">
-              <PitWallCard
-                driver={driver}
-                team={teamOf.get(driver.teamId)}
-                ds={MOCK_STATES.find((s) => s.driverId === id)}
-                raceState={MOCK_RACE_STATE}
-                allDrivers={MOCK_DRIVERS}
-                onRetire={() => {}}
-                mode="tm"
-              />
-            </div>
-          )
-        })}
+      {/* Bottom: car pods flanking the lap counter / speed controls */}
+      <div className="flex items-start gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
+        <div className="flex-1 min-w-0">
+          <CarPod id={PLAYER_CAR_IDS[0]} />
+        </div>
+        <div className="flex flex-col items-center justify-center gap-2 w-[440px] shrink-0 self-center">
+          <div className="font-semibold text-sm tracking-widest uppercase">Lap {MOCK_LAP} / {MOCK_TOTAL_LAPS}</div>
+          <SpeedBar
+            speed={speed}
+            paused={paused}
+            onSpeedClick={setSpeed}
+            onTogglePause={() => setPaused((v) => !v)}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <CarPod id={PLAYER_CAR_IDS[1]} />
+        </div>
       </div>
-      <SpeedBar
-        speed={speed}
-        paused={paused}
-        onSpeedClick={setSpeed}
-        onTogglePause={() => setPaused((v) => !v)}
-      />
     </div>
+  )
+}
+
+function CarPod({ id }: { id: string }) {
+  const driver = MOCK_DRIVERS.find((d) => d.id === id)!
+  return (
+    <PitWallCard
+      driver={driver}
+      team={teamOf.get(driver.teamId)}
+      ds={MOCK_STATES.find((s) => s.driverId === id)}
+      raceState={MOCK_RACE_STATE}
+      allDrivers={MOCK_DRIVERS}
+      onRetire={() => {}}
+      mode="tm"
+    />
   )
 }
