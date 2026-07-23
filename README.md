@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RaceWorld
 
-## Getting Started
+RaceWorld is a single-player Formula 1 management sim that runs in the browser. Pick a mode (Sandbox, Team Manager, or Driver), then live a full career: qualifying and race weekends with tyre strategy, push levels and pit calls, a driver market with signings and contracts, car development across multi-rating chassis, and season-by-season history that the in-game newsroom writes about as it happens. The race engine simulates every lap client-side; results, standings, and careers persist to a local SQLite database. Built with Next.js, TypeScript, Zustand, and the Anthropic API for generated news copy.
 
-First, run the development server:
+## Getting started
 
 ```bash
+npm install
+npm run db:init
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Attribution
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Track backdrop photos are used under their original licences. Images may be resized or re-encoded for use as in-game backdrops.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Track | File | Image | Author | Licence |
+|---|---|---|---|---|
+| Monaco | `public/track-backdrops/monaco.png` | [2013 Monaco Grand Prix - Sunday](https://commons.wikimedia.org/wiki/File:2013_Monaco_Grand_Prix_-_Sunday.jpg) | Charles Coates/LAT Photographic, via United Autosports (Flickr) | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
