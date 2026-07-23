@@ -275,7 +275,7 @@ export function RaceDayView({
 
       {/* Bottom: pit wall cards flanking the centre console (racing only) */}
       {phase === 'racing' && (
-        <div className="flex items-stretch gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
+        <div className="flex items-stretch gap-3 px-4 pb-3 pt-0 shrink-0 border-t border-[#232A38]">
           {myDrivers[0] && pod(myDrivers[0])}
           <div className="flex-1 min-w-0 self-stretch">
             <CentreConsole
