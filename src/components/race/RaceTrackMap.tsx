@@ -22,8 +22,53 @@ export interface TrackCarMeta {
   retired?: boolean
 }
 
-/** One frame of a car's position: lap progress 0..1 (racing line), or pit-lane progress when `pit`. */
+/** One frame of a car's position: lap TIME fraction 0..1 (racing line), or pit-lane progress when `pit`.
+ * Racing progress is mapped through a curvature-derived speed profile, so equal time steps cover more
+ * distance on straights than in corners. */
 export type TrackSample = { prog: number; pit?: boolean } | null
+
+// Speed-profile resolution and range: how many stations the lap is sampled at, and how much faster a
+// flat-out straight is than the tightest hairpin.
+const PROFILE_N = 256
+const V_MAX = 1.55
+const V_MIN = 0.5
+const CURVE_SENSITIVITY = 2.6
+
+// Cumulative normalised lap TIME at each equal-distance station; inverting it turns a time fraction
+// into a distance fraction.
+function buildSpeedProfile(path: SVGPathElement): Float64Array {
+  const len = path.getTotalLength()
+  const pts: { x: number; y: number }[] = []
+  for (let i = 0; i < PROFILE_N; i++) pts.push(path.getPointAtLength((i / PROFILE_N) * len))
+  const cum = new Float64Array(PROFILE_N + 1)
+  for (let i = 0; i < PROFILE_N; i++) {
+    const a = pts[(i - 2 + PROFILE_N) % PROFILE_N]
+    const b = pts[i]
+    const c = pts[(i + 2) % PROFILE_N]
+    const in_ = Math.atan2(b.y - a.y, b.x - a.x)
+    const out = Math.atan2(c.y - b.y, c.x - b.x)
+    let theta = Math.abs(out - in_)
+    if (theta > Math.PI) theta = 2 * Math.PI - theta
+    const v = Math.max(V_MIN, Math.min(V_MAX, V_MAX - CURVE_SENSITIVITY * theta))
+    cum[i + 1] = cum[i] + 1 / v
+  }
+  const total = cum[PROFILE_N]
+  for (let i = 0; i <= PROFILE_N; i++) cum[i] /= total
+  return cum
+}
+
+// Invert the profile: time fraction -> distance fraction.
+function timeToDistance(profile: Float64Array, f: number): number {
+  let lo = 0
+  let hi = PROFILE_N
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1
+    if (profile[mid] <= f) lo = mid
+    else hi = mid
+  }
+  const span = profile[hi] - profile[lo] || 1
+  return (lo + (f - profile[lo]) / span) / PROFILE_N
+}
 
 interface Props {
   layout: TrackLayout
@@ -72,9 +117,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLab
     return () => ro.disconnect()
   }, [vb])
 
+  const profileRef = useRef<Float64Array | null>(null)
+
   useEffect(() => {
     lenRef.current = 0 // re-measure if the layout changes
     pitLenRef.current = 0
+    profileRef.current = null
     let raf = 0
     const tick = () => {
       const path = pathRef.current
@@ -82,6 +130,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLab
       if (path && pitPath) {
         if (!lenRef.current) lenRef.current = path.getTotalLength()
         if (!pitLenRef.current) pitLenRef.current = pitPath.getTotalLength()
+        if (!profileRef.current) profileRef.current = buildSpeedProfile(path)
         for (const car of cars) {
           const el = elRefs.current.get(car.id)
           if (!el) continue
@@ -93,7 +142,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22, showLab
           el.style.visibility = ''
           const pt = sample.pit
             ? pitPath.getPointAtLength(Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current)
-            : path.getPointAtLength((((sample.prog % 1) + 1) % 1) * lenRef.current)
+            : path.getPointAtLength(
+                timeToDistance(profileRef.current, ((sample.prog % 1) + 1) % 1) * lenRef.current,
+              )
           const left = ((pt.x - vb.x) / vb.w) * 100
           const top = ((pt.y - vb.y) / vb.h) * 100
           posRef.current.set(car.id, { left, top })
