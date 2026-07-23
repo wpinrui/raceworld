@@ -54,7 +54,7 @@ const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 
 // How much of the track's width the racing line may use, each side of the centreline: half the tarmac
 // minus half a car and a margin.
-const RACE_LINE_HALF_M = 3.6
+const RACE_LINE_HALF_M = 4.0
 
 // Sample the centreline at n stations: points, right normals, and signed curvature (right turn > 0).
 function sampleCentre(center: SVGPathElement, len: number, n: number) {
@@ -119,7 +119,7 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
 
     const sweeps = li === 0 ? 4000 : 900
     const OMEGA = 1.4
-    const SPRING = 0.004
+    const SPRING = 0.0008
     for (let pass = 0; pass < sweeps; pass++) {
       const fwd = pass % 2 === 0
       for (let s = 0; s < n; s++) {
@@ -587,11 +587,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           const pt = p.getPointAtLength(f.dist)
           const aheadPt = p.getPointAtLength(f.kind === 'pit' ? Math.min(total, f.dist + look) : (f.dist + look) % total)
           const target = Math.atan2(aheadPt.y - pt.y, aheadPt.x - pt.x)
-          // Low-pass the heading so polyline vertices don't twitch the sprite.
+          // Low-pass the heading so polyline vertices don't twitch the sprite. The delta must be
+          // modulo-wrapped, not single-corrected: a closed lap winds the stored heading by 2π each
+          // time around, and an under-corrected delta makes the sprite pirouette the long way.
           const prev = headingRef.current.get(f.id) ?? target
-          let delta = target - prev
-          if (delta > Math.PI) delta -= 2 * Math.PI
-          if (delta < -Math.PI) delta += 2 * Math.PI
+          const raw = target - prev
+          const delta = ((raw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI
           const heading = prev + delta * 0.25
           headingRef.current.set(f.id, heading)
           // Low-pass the lateral too: chicane sign flips and battle-role handoffs become slides.
