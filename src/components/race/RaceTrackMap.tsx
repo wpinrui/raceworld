@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { TrackLayout } from '@/data/tracks'
 import { Tooltip } from '@/components/ui/Tooltip'
 
@@ -34,11 +34,29 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props
   const lenRef = useRef(0)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
   const posRef = useRef(new Map<string, { left: number; top: number }>())
+  const outerRef = useRef<HTMLDivElement>(null)
+  const [stage, setStage] = useState({ w: 0, h: 0 })
 
   const vb = useMemo(() => {
     const [x, y, w, h] = layout.viewBox.split(' ').map(Number)
     return { x, y, w, h }
   }, [layout.viewBox])
+
+  // Fit an inner stage of the track's exact aspect ratio inside whatever box we're given, so the marker
+  // layer's percentage coordinates line up with the SVG at any viewport size.
+  useLayoutEffect(() => {
+    const el = outerRef.current
+    if (!el) return
+    const fit = () => {
+      const { width, height } = el.getBoundingClientRect()
+      const scale = Math.min(width / vb.w, height / vb.h)
+      setStage({ w: Math.floor(vb.w * scale), h: Math.floor(vb.h * scale) })
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [vb])
 
   useEffect(() => {
     lenRef.current = 0 // re-measure if the layout changes
@@ -82,8 +100,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props
   }, [layout.start])
 
   return (
-    <div className="relative w-full h-full">
-      <svg viewBox={layout.viewBox} className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+    <div ref={outerRef} className="relative w-full h-full flex items-center justify-center">
+      <div className="relative" style={{ width: stage.w, height: stage.h }}>
+      <svg viewBox={layout.viewBox} className="absolute inset-0 w-full h-full">
         <path ref={pathRef} d={layout.d} fill="none" stroke="#3A4252" strokeWidth={16} strokeLinejoin="round" />
         <path d={layout.d} fill="none" stroke="#232A38" strokeWidth={10} strokeLinejoin="round" />
         <line x1={sf.x1} y1={sf.y1} x2={sf.x2} y2={sf.y2} stroke="#FFFFFF" strokeWidth={3} />
@@ -128,6 +147,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props
           </Tooltip>
         )
       })}
+      </div>
     </div>
   )
 }
