@@ -515,6 +515,18 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   // Real-world metres -> viewBox units for this track.
   const u = (metres: number) => metres / layout.metresPerUnit
 
+  // Which side is the OUTSIDE of the circuit (from the loop's orientation): the pinned card lives
+  // there permanently so it never crosses the track. Clockwise (y-down) = interior on the right of
+  // travel, so outside is the left; anticlockwise mirrors.
+  const outSign = useMemo(() => {
+    const t = layout.trace
+    const area = t.reduce((s, p, i) => {
+      const q = t[(i + 1) % t.length]
+      return s + (p[0] * q[1] - q[0] * p[1])
+    }, 0)
+    return area > 0 ? -1 : 1
+  }, [layout.trace])
+
   // Pad the authored viewBox: it hugs the racing line, so half the track stroke (and the pit lane)
   // would otherwise be clipped wherever the path touches an edge.
   const vb = useMemo(() => {
@@ -765,9 +777,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
         const heading = fid ? headingRef.current.get(fid) : undefined
         if (fid && viewRef.current === 'live' && heading != null) {
           const hs = heading + camRef.current.rot // track direction in screen space
-          let nx = -Math.sin(hs)
-          let ny = Math.cos(hs)
-          if (ny > 0) { nx = -nx; ny = -ny } // prefer the upper side
+          // Always the circuit's OUTSIDE, so the card never crosses the ribbon during a lap.
+          const nx = outSign * -Math.sin(hs)
+          const ny = outSign * Math.cos(hs)
           const { w, h } = stageDimsRef.current
           const ppu = vb.w > 0 ? w / vb.w : 1
           const ribbonHalf = ((TRACK_WIDTH_M / 2) / layout.metresPerUnit) * ppu * camRef.current.z
