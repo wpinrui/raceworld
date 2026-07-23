@@ -94,30 +94,34 @@ function CentreConsole({ speed, paused, onSpeed, onTogglePause }: { speed: SimSp
         <div className="flex items-center gap-3">
           <NationalityFlag code={MOCK_CIRCUIT.country} />
           <span className="text-lg font-extrabold tracking-[2px]">{MOCK_CIRCUIT.name.toUpperCase()}</span>
-          {/* Track condition: the live WeatherGraph (actual line revealed lap by lap, forecast ahead,
-              hover readout, god-mode reveal toggle), framed in the console's chip style. */}
-          <div className="rounded border border-[#2A3142] px-2.5 py-1" style={{ background: CHIP_BG }}>
-            <WeatherGraph
-              weather={MOCK_RACE_STATE.weather}
-              forecast={MOCK_RACE_STATE.weatherForecast}
-              currentLap={MOCK_LAP}
-              totalLaps={MOCK_TOTAL_LAPS}
-            />
+          {/* Lap counter chip with a slim progress fill along its base. */}
+          <div className="relative overflow-hidden rounded border border-[#2A3142] px-3 pt-1 pb-1.5" style={{ background: CHIP_BG }}>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[10px] font-extrabold tracking-[1.5px] text-[#8A93A6]">LAP</span>
+              <span className="text-xl font-extrabold tabular-nums leading-none">{MOCK_LAP}</span>
+              <span className="text-xs font-bold text-[#8A93A6]">/ {MOCK_TOTAL_LAPS}</span>
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-[3px] bg-[rgba(42,49,66,0.9)]">
+              <div className="h-full bg-[#00D9FF]" style={{ width: `${lapProgress}%` }} />
+            </div>
           </div>
           <div className="ml-auto flex gap-2">
             <button className={chipBtn} style={{ background: CHIP_BG }}>DATA ROOM</button>
           </div>
         </div>
 
-        {/* Middle: lap counter + progress */}
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[13px] font-extrabold tracking-[2px] text-[#8A93A6]">LAP</span>
-            <span className="text-[40px] font-extrabold tabular-nums leading-none">{MOCK_LAP}</span>
-            <span className="text-lg font-bold text-[#8A93A6]">/ {MOCK_TOTAL_LAPS}</span>
-          </div>
-          <div className="w-[300px] h-[5px] rounded-full bg-[rgba(42,49,66,0.9)]">
-            <div className="h-full rounded-full bg-[#00D9FF]" style={{ width: `${lapProgress}%` }} />
+        {/* Middle: the track condition takes centre stage — the live WeatherGraph (actual line revealed
+            lap by lap, forecast ahead, hover readout, god-mode reveal toggle), enlarged. */}
+        <div className="flex justify-center">
+          <div className="rounded border border-[#2A3142] px-3 py-1.5" style={{ background: CHIP_BG }}>
+            <WeatherGraph
+              weather={MOCK_RACE_STATE.weather}
+              forecast={MOCK_RACE_STATE.weatherForecast}
+              currentLap={MOCK_LAP}
+              totalLaps={MOCK_TOTAL_LAPS}
+              graphWidth={340}
+              graphHeight={52}
+            />
           </div>
         </div>
 
