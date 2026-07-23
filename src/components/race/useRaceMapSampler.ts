@@ -35,8 +35,9 @@ export function useRaceMapSampler(
 
   const liveFrac = () => {
     const ms = intervalRef.current
-    if (ms <= 0) return 1
-    return Math.min(1, Math.max(0, 1 - (nextTickAtRef.current - Date.now()) / ms))
+    if (!Number.isFinite(ms) || ms <= 0) return 1
+    const f = 1 - (nextTickAtRef.current - Date.now()) / ms
+    return Number.isFinite(f) ? Math.min(1, Math.max(0, f)) : 0
   }
 
   // Rebuild the cumulative-time tables SYNCHRONOUSLY with the store tick: zustand subscribers fire

@@ -160,7 +160,9 @@ export default function RacePage() {
       const running = s.drivers.filter((d) => !d.retired)
       const leader = running.reduce((a, b) => (a.totalTime <= b.totalTime ? a : b), running[0])
       const last = leader?.lapTimes[leader.lapTimes.length - 1]
-      return last ? (last * 1000) / SPEED_MULTS[s.speed as SimSpeed] : GRID_HOLD_MS
+      const ms = last ? (last * 1000) / (SPEED_MULTS[s.speed as SimSpeed] ?? 1) : GRID_HOLD_MS
+      // NaN is sticky through the clock refs (it survives clamps), so never let one out of here.
+      return Number.isFinite(ms) && ms > 0 ? ms : GRID_HOLD_MS
     }
     // `fullMs` is the whole lap's animation window (what the sampler divides by); `delay` is the part
     // still to play. Keeping them separate lets a speed change resume mid-lap instead of restarting it.
@@ -178,11 +180,13 @@ export default function RacePage() {
       }, delay)
     }
     const ms = nextMs()
+    if (!Number.isFinite(lapFracDoneRef.current)) lapFracDoneRef.current = 0
     schedule(ms, (1 - lapFracDoneRef.current) * ms)
     return () => {
       if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
       // Remember how far through the lap we were, for the next run (speed change or unpause).
-      lapFracDoneRef.current = Math.min(1, Math.max(0, 1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current))
+      const done = 1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current
+      lapFracDoneRef.current = Number.isFinite(done) ? Math.min(1, Math.max(0, done)) : 0
     }
   }, [phase, paused, speed])
 

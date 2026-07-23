@@ -697,6 +697,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
 
         // Pass 3: resolve to viewBox coordinates and write the DOM.
         for (const f of frames) {
+          if (!Number.isFinite(f.dist)) { f.el.style.visibility = 'hidden'; continue } // never crash the geometry API
           const p = f.kind === 'pit' ? pitPath : f.kind === 'race' ? raceLine : path
           const total = f.kind === 'pit' ? pitLenRef.current : f.kind === 'race' ? raceLenRef.current : lenTotal
           const pt = p.getPointAtLength(f.dist)
