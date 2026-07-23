@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import type { RaceState } from '@/lib/sim/types'
 import type { TrackSample } from './RaceTrackMap'
+import { useRaceStore } from '@/lib/store/race-store'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC } from '@/lib/ui/track-path'
 
@@ -21,7 +22,6 @@ interface CarData {
 }
 
 export function useRaceMapSampler(
-  raceState: RaceState | null,
   gridPos: Record<string, number>,
   nextTickAtRef: React.MutableRefObject<number>,
   intervalRef: React.MutableRefObject<number>,
@@ -39,33 +39,40 @@ export function useRaceMapSampler(
     return Math.min(1, Math.max(0, 1 - (nextTickAtRef.current - Date.now()) / ms))
   }
 
-  // Rebuild the cumulative-time tables each tick (raceState is replaced per lap).
+  // Rebuild the cumulative-time tables SYNCHRONOUSLY with the store tick: zustand subscribers fire
+  // inside tickLap, before the page's scheduler resets the animation clock. Rebuilding in a React
+  // effect instead ran a frame late — the fresh clock read stale tables for one painted frame, and
+  // the whole field flashed a lap-window back then snapped forward at the start of every lap.
   useEffect(() => {
-    if (!raceState) return
-    pitLossRef.current = pitLaneLoss(raceState.year)
-    // COMPLETED laps, derived from the data itself: the sim's currentLap is the lap IN PROGRESS
-    // (it starts at 1 on the grid), so counting lapTimes is the robust source of truth.
-    lapRef.current = Math.max(0, ...raceState.drivers.map((d) => d.lapTimes.length))
-    const map = dataRef.current
-    for (const ds of raceState.drivers) {
-      const cum: number[] = [0]
-      for (const t of ds.lapTimes) cum.push(cum[cum.length - 1] + t)
-      const pitLaps = new Set<number>()
-      let acc = 0
-      for (const s of ds.stintHistory) {
-        acc += s.laps
-        pitLaps.add(acc)
+    const rebuild = (raceState: RaceState | null) => {
+      if (!raceState) return
+      pitLossRef.current = pitLaneLoss(raceState.year)
+      // COMPLETED laps, derived from the data itself: the sim's currentLap is the lap IN PROGRESS
+      // (it starts at 1 on the grid), so counting lapTimes is the robust source of truth.
+      lapRef.current = Math.max(0, ...raceState.drivers.map((d) => d.lapTimes.length))
+      const map = dataRef.current
+      for (const ds of raceState.drivers) {
+        const cum: number[] = [0]
+        for (const t of ds.lapTimes) cum.push(cum[cum.length - 1] + t)
+        const pitLaps = new Set<number>()
+        let acc = 0
+        for (const s of ds.stintHistory) {
+          acc += s.laps
+          pitLaps.add(acc)
+        }
+        const prev = map.get(ds.driverId)
+        map.set(ds.driverId, {
+          cum,
+          pitLaps,
+          retired: ds.retired,
+          grid: gridPos[ds.driverId] ?? ds.position,
+          scan: Math.min(prev?.scan ?? 0, cum.length - 1),
+        })
       }
-      const prev = map.get(ds.driverId)
-      map.set(ds.driverId, {
-        cum,
-        pitLaps,
-        retired: ds.retired,
-        grid: gridPos[ds.driverId] ?? ds.position,
-        scan: Math.min(prev?.scan ?? 0, cum.length - 1),
-      })
     }
-  }, [raceState, gridPos])
+    rebuild(useRaceStore.getState().raceState)
+    return useRaceStore.subscribe((state) => rebuild(state.raceState))
+  }, [gridPos])
 
   useEffect(() => {
     if (paused && !pausedRef.current) frozenFracRef.current = liveFrac()

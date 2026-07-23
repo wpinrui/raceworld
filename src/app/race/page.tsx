@@ -78,7 +78,7 @@ export default function RacePage() {
     () => Object.fromEntries((raceState?.qualifyingResults ?? []).map((q) => [q.driverId, q.gridPosition])),
     [raceState?.qualifyingResults],
   )
-  const mapSampleRef = useRaceMapSampler(raceState, gridPosMap, nextTickAtRef, tickIntervalRef, raceState?.paused ?? false)
+  const mapSampleRef = useRaceMapSampler(gridPosMap, nextTickAtRef, tickIntervalRef, raceState?.paused ?? false)
 
   // Driver hover card data: career totals (through last season, folded with this season's results) + this
   // year's WDC standing, so a name in the race table opens the same expanded card used around the app.
