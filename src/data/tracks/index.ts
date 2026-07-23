@@ -13,6 +13,7 @@ import { TRACK as azerbaijan } from './azerbaijan'
 import { TRACK as bahrain } from './bahrain'
 import { TRACK as belgium } from './belgium'
 import { TRACK as brazil } from './brazil'
+import { TRACK as britain } from './britain'
 import { TRACK as canada } from './canada'
 import { TRACK as china } from './china'
 import { TRACK as estoril } from './estoril'
@@ -95,6 +96,7 @@ const IMPORTED: Record<string, ImportedTrack> = {
   bahrain,
   belgium,
   brazil,
+  britain,
   canada,
   china,
   estoril,

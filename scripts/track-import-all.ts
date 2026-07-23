@@ -20,6 +20,7 @@ const CIRCUITS: Entry[] = [
   { id: 'bahrain', file: 'bh-2002', dir: 'cw', sf: [26.0325, 50.5106] },
   { id: 'belgium', file: 'be-1925', dir: 'cw', sf: [50.444, 5.967] },
   { id: 'brazil', file: 'br-1940', dir: 'ccw', sf: [-23.7036, -46.6997] },
+  { id: 'britain', file: 'gb-1948', dir: 'cw', sf: [52.069, -1.013] },
   { id: 'canada', file: 'ca-1978', dir: 'cw', sf: [45.5, -73.5228] },
   { id: 'china', file: 'cn-2004', dir: 'cw', sf: [31.3389, 121.22] },
   { id: 'estoril', file: 'pt-1972', dir: 'cw', sf: [38.7506, -9.3942] },
