@@ -9,6 +9,10 @@ import { useTeamHighlight } from '@/lib/useTeamHighlight'
 import { formatLapTime } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
 
+// Optional column groups; P + Driver are always shown. Callers omit `columns` for the full board.
+export type RaceTableColumn = 'grid' | 'team' | 'gap' | 'interval' | 'tyre' | 'stops' | 'lastLap' | 'stints'
+export const ALL_RACE_TABLE_COLUMNS: RaceTableColumn[] = ['grid', 'team', 'gap', 'interval', 'tyre', 'stops', 'lastLap', 'stints']
+
 interface RaceTableProps {
   drivers: Driver[]
   teams: Team[]
@@ -23,6 +27,7 @@ interface RaceTableProps {
   selectedDriverId?: string | null
   onSelectDriver?: (id: string) => void
   animate?: boolean
+  columns?: RaceTableColumn[]
 }
 
 // The leader's running race time, e.g. "1h 23min 04.567s" (hours dropped before the one-hour mark).
@@ -33,8 +38,9 @@ function formatTotalTime(t: number): string {
   return h > 0 ? `${h}h ${m}min ${s}s` : `${m}min ${s}s`
 }
 
-export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, animate = true }: RaceTableProps) {
+export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, animate = true, columns }: RaceTableProps) {
   const highlight = useTeamHighlight()
+  const show = new Set(columns ?? ALL_RACE_TABLE_COLUMNS)
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
   const teamMap = new Map(teams.map((t) => [t.id, t]))
 
@@ -103,15 +109,15 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
         <thead>
           <tr className="text-[#FFFFFF] text-xs font-bold tracking-widest uppercase border-b border-[#2A3142]">
             <th className="text-left py-1.5 px-2 w-8">P</th>
-            <th className="text-left py-1.5 px-2 w-16">Grid</th>
+            {show.has('grid') && <th className="text-left py-1.5 px-2 w-16">Grid</th>}
             <th className="text-left py-1.5 px-2">Driver</th>
-            <th className="text-left py-1.5 px-2">Team</th>
-            <th className="text-right py-1.5 px-2">Gap</th>
-            <th className="text-right py-1.5 px-2">Interval</th>
-            <th className="text-center py-1.5 px-2">Tyre</th>
-            <th className="text-center py-1.5 px-2">Stops</th>
-            <th className="text-right py-1.5 px-2">Last Lap</th>
-            <th className="text-left py-1.5 px-2">Stints</th>
+            {show.has('team') && <th className="text-left py-1.5 px-2">Team</th>}
+            {show.has('gap') && <th className="text-right py-1.5 px-2">Gap</th>}
+            {show.has('interval') && <th className="text-right py-1.5 px-2">Interval</th>}
+            {show.has('tyre') && <th className="text-center py-1.5 px-2">Tyre</th>}
+            {show.has('stops') && <th className="text-center py-1.5 px-2">Stops</th>}
+            {show.has('lastLap') && <th className="text-right py-1.5 px-2">Last Lap</th>}
+            {show.has('stints') && <th className="text-left py-1.5 px-2">Stints</th>}
           </tr>
         </thead>
         <tbody>
@@ -141,14 +147,16 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                 }`}
               >
                 <td className="py-1 px-2 font-bold text-sm">{ds.position}</td>
-                <td className="py-1 px-2 tabular-nums text-sm whitespace-nowrap">
-                  <span className="text-[#9CA3AF]">{gp ?? '—'}</span>
-                  {!ds.retired && delta != null && delta !== 0 && (
-                    <span className={`ml-1 text-xs font-semibold ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      ({delta > 0 ? '+' : ''}{delta})
-                    </span>
-                  )}
-                </td>
+                {show.has('grid') && (
+                  <td className="py-1 px-2 tabular-nums text-sm whitespace-nowrap">
+                    <span className="text-[#9CA3AF]">{gp ?? '—'}</span>
+                    {!ds.retired && delta != null && delta !== 0 && (
+                      <span className={`ml-1 text-xs font-semibold ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ({delta > 0 ? '+' : ''}{delta})
+                      </span>
+                    )}
+                  </td>
+                )}
                 <td className="py-1 px-2">
                   <div className="flex items-center gap-2">
                     {team && <div className="w-0.5 h-4 rounded-full shrink-0" style={{ backgroundColor: team.color }} />}
@@ -171,49 +179,61 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                     )}
                   </div>
                 </td>
-                <td className="py-1 px-2 text-xs text-[#FFFFFF]">
-                  {team?.name ?? '---'}
-                </td>
-                <td className={`py-1 px-2 text-right font-mono text-sm whitespace-nowrap ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
-                  {ds.retired
-                    ? 'DNF'
-                    : ds.position === 1
-                      ? formatTotalTime(ds.totalTime)
-                      : ds.lapsDown >= 1
-                        ? `+${ds.lapsDown} LAP${ds.lapsDown > 1 ? 'S' : ''}`
-                        : `+${(ds.totalTime - leaderTime).toFixed(3)}s`}
-                </td>
-                <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
-                  {ds.retired ? 'DNF' : ds.position === 1 ? <span className="text-[#6B7280]">—</span> : `+${ds.gap.toFixed(3)}s`}
-                </td>
-                <td className="py-1 px-2">
-                  <div className="flex items-center gap-1.5 justify-center">
-                    <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
-                    {!ds.retired && (
-                      <span className={`text-xs ${condColor}`}>
-                        {ds.currentTyre.condition}%
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-1 px-2 text-center text-sm tabular-nums">{ds.pitStops}</td>
-                <td className="py-1 px-2 text-right font-mono text-sm">
-                  {formatLapTime(ds.lapTimes[ds.lapTimes.length - 1] ?? null)}
-                </td>
-                <td className="py-1 px-2">
-                  <div className="flex items-center gap-1.5">
-                    {ds.stintHistory.map((s, i) => (
-                      <div key={i} className="flex items-center gap-0.5">
-                        <TyreIndicator compound={s.compound} size="sm" />
-                        <span className="text-xs text-[#FFFFFF]">{s.laps}</span>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-0.5">
+                {show.has('team') && (
+                  <td className="py-1 px-2 text-xs text-[#FFFFFF]">
+                    {team?.name ?? '---'}
+                  </td>
+                )}
+                {show.has('gap') && (
+                  <td className={`py-1 px-2 text-right font-mono text-sm whitespace-nowrap ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
+                    {ds.retired
+                      ? 'DNF'
+                      : ds.position === 1
+                        ? formatTotalTime(ds.totalTime)
+                        : ds.lapsDown >= 1
+                          ? `+${ds.lapsDown} LAP${ds.lapsDown > 1 ? 'S' : ''}`
+                          : `+${(ds.totalTime - leaderTime).toFixed(3)}s`}
+                  </td>
+                )}
+                {show.has('interval') && (
+                  <td className={`py-1 px-2 text-right font-mono text-sm ${ds.retired ? 'text-red-400 font-bold' : ''}`}>
+                    {ds.retired ? 'DNF' : ds.position === 1 ? <span className="text-[#6B7280]">—</span> : `+${ds.gap.toFixed(3)}s`}
+                  </td>
+                )}
+                {show.has('tyre') && (
+                  <td className="py-1 px-2">
+                    <div className="flex items-center gap-1.5 justify-center">
                       <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
-                      <span className="text-xs text-[#FFFFFF]">{ds.stintLap}</span>
+                      {!ds.retired && (
+                        <span className={`text-xs ${condColor}`}>
+                          {ds.currentTyre.condition}%
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </td>
+                  </td>
+                )}
+                {show.has('stops') && <td className="py-1 px-2 text-center text-sm tabular-nums">{ds.pitStops}</td>}
+                {show.has('lastLap') && (
+                  <td className="py-1 px-2 text-right font-mono text-sm">
+                    {formatLapTime(ds.lapTimes[ds.lapTimes.length - 1] ?? null)}
+                  </td>
+                )}
+                {show.has('stints') && (
+                  <td className="py-1 px-2">
+                    <div className="flex items-center gap-1.5">
+                      {ds.stintHistory.map((s, i) => (
+                        <div key={i} className="flex items-center gap-0.5">
+                          <TyreIndicator compound={s.compound} size="sm" />
+                          <span className="text-xs text-[#FFFFFF]">{s.laps}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-0.5">
+                        <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
+                        <span className="text-xs text-[#FFFFFF]">{ds.stintLap}</span>
+                      </div>
+                    </div>
+                  </td>
+                )}
               </tr>
             )
           })}
