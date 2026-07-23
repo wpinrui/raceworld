@@ -27,20 +27,26 @@ export interface TrackCarMeta {
  * distance on straights than in corners. */
 export type TrackSample = { prog: number; pit?: boolean } | null
 
-// Speed-profile resolution and range: how many stations the lap is sampled at, and how much faster a
-// flat-out straight is than the tightest hairpin.
+// Speed-profile physics, in viewBox units (~2.5 m/unit for an F1 venue): top speed, the hairpin floor,
+// lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and traction/braking limits
+// that smear speed changes over real distance — build-up on straights, braking zones into corners.
 const PROFILE_N = 256
-const V_MAX = 1.55
-const V_MIN = 0.5
-const CURVE_SENSITIVITY = 2.6
+const V_TOP = 34
+const V_FLOOR = 6
+const A_LAT = 15
+const A_ACCEL = 5
+const A_BRAKE = 16
 
 // Cumulative normalised lap TIME at each equal-distance station; inverting it turns a time fraction
-// into a distance fraction.
+// into a distance fraction. Classic three-step racing profile: corner limits from curvature, then an
+// acceleration-limited forward pass and a braking-limited backward pass (twice each, for the wrap).
 function buildSpeedProfile(path: SVGPathElement): Float64Array {
   const len = path.getTotalLength()
+  const ds = len / PROFILE_N
   const pts: { x: number; y: number }[] = []
   for (let i = 0; i < PROFILE_N; i++) pts.push(path.getPointAtLength((i / PROFILE_N) * len))
-  const cum = new Float64Array(PROFILE_N + 1)
+
+  const v = new Float64Array(PROFILE_N)
   for (let i = 0; i < PROFILE_N; i++) {
     const a = pts[(i - 2 + PROFILE_N) % PROFILE_N]
     const b = pts[i]
@@ -49,9 +55,22 @@ function buildSpeedProfile(path: SVGPathElement): Float64Array {
     const out = Math.atan2(c.y - b.y, c.x - b.x)
     let theta = Math.abs(out - in_)
     if (theta > Math.PI) theta = 2 * Math.PI - theta
-    const v = Math.max(V_MIN, Math.min(V_MAX, V_MAX - CURVE_SENSITIVITY * theta))
-    cum[i + 1] = cum[i] + 1 / v
+    const kappa = theta / (4 * ds)
+    v[i] = Math.max(V_FLOOR, Math.min(V_TOP, Math.sqrt(A_LAT / Math.max(kappa, 1e-9))))
   }
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < PROFILE_N; i++) {
+      const j = (i + 1) % PROFILE_N
+      v[j] = Math.min(v[j], Math.sqrt(v[i] * v[i] + 2 * A_ACCEL * ds))
+    }
+    for (let i = PROFILE_N - 1; i >= 0; i--) {
+      const j = (i + 1) % PROFILE_N
+      v[i] = Math.min(v[i], Math.sqrt(v[j] * v[j] + 2 * A_BRAKE * ds))
+    }
+  }
+
+  const cum = new Float64Array(PROFILE_N + 1)
+  for (let i = 0; i < PROFILE_N; i++) cum[i + 1] = cum[i] + ds / ((v[i] + v[(i + 1) % PROFILE_N]) / 2)
   const total = cum[PROFILE_N]
   for (let i = 0; i <= PROFILE_N; i++) cum[i] /= total
   return cum
