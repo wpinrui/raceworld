@@ -95,25 +95,6 @@ export default function TrackPreviewPage() {
           </div>
           {standingsOpen && (
             <>
-              <div className="flex flex-wrap gap-1.5 px-2 pb-2 shrink-0">
-                {COLUMN_TOGGLES.map(({ col, label, icon: Icon }) => {
-                  const on = columns.has(col)
-                  return (
-                    <Tooltip key={col} content={label}>
-                      <button
-                        onClick={() => toggleColumn(col)}
-                        className={`flex items-center justify-center w-11 h-11 rounded-lg border cursor-pointer transition-colors ${
-                          on
-                            ? 'border-[#00D9FF] bg-[#00D9FF]/10 text-[#00D9FF]'
-                            : 'border-[#2A3142] text-[#6B7280] hover:bg-[#1E2431]'
-                        }`}
-                      >
-                        <Icon size={21} />
-                      </button>
-                    </Tooltip>
-                  )
-                })}
-              </div>
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <RaceTable
                   drivers={MOCK_DRIVERS}
@@ -124,6 +105,25 @@ export default function TrackPreviewPage() {
                   gridPos={MOCK_GRID}
                   columns={[...columns]}
                 />
+              </div>
+              <div className="flex flex-wrap gap-1.5 px-2 py-2 shrink-0 border-t border-[#232A38]">
+                {COLUMN_TOGGLES.map(({ col, label, icon: Icon }) => {
+                  const on = columns.has(col)
+                  return (
+                    <Tooltip key={col} content={label}>
+                      <button
+                        onClick={() => toggleColumn(col)}
+                        className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
+                          on
+                            ? 'bg-[#232A38] text-[#FFFFFF]'
+                            : 'text-[#6B7280] hover:bg-[#1E2431]'
+                        }`}
+                      >
+                        <Icon size={21} />
+                      </button>
+                    </Tooltip>
+                  )
+                })}
               </div>
             </>
           )}
