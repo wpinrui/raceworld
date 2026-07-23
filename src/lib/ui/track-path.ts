@@ -53,6 +53,33 @@ export function buildTracePath(trace: TrackTrace): { d: string; start: TrackStar
   return { d, start: { x: p0.x, y: p0.y, angle: Math.atan2(p1.y - p0.y, p1.x - p0.x) } }
 }
 
+/** Resample a trace densely along the SAME quad-midpoint curves buildTracePath renders, so geometry
+ * offset from it (kerbs, pit-lane edges) hugs the drawn ribbon. Offsetting from the raw polyline
+ * mismatches in corners: smoothing pulls the ribbon inside the polyline by (p[i-1]-2p[i]+p[i+1])/8.
+ * Point 0 stays trace[0] = the S/F line. */
+export function densifyTrace(trace: TrackTrace, perSeg = 6): TrackTrace {
+  const n = trace.length
+  if (n < 3) return trace
+  const p = (i: number) => trace[i % n]
+  const mid = (i: number, j: number): [number, number] =>
+    [(p(i)[0] + p(j)[0]) / 2, (p(i)[1] + p(j)[1]) / 2]
+  const out: TrackTrace = [[p(0)[0], p(0)[1]], mid(0, 1)]
+  for (let i = 1; i < n; i++) {
+    const a = mid(i - 1, i)
+    const c = p(i)
+    const b = mid(i, i + 1)
+    for (let k = 1; k <= perSeg; k++) {
+      const t = k / perSeg
+      const s = 1 - t
+      out.push([
+        s * s * a[0] + 2 * s * t * c[0] + t * t * b[0],
+        s * s * a[1] + 2 * s * t * c[1] + t * t * b[1],
+      ])
+    }
+  }
+  return out // the closing wrap (mid(n-1,0) back to p0) matches the path's final L segment
+}
+
 // ── Procedural pit lane ─────────────────────────────────────────────────────────────────────────────
 // A pit lane departs the racing line just before the final corner, runs parallel to the pit straight on
 // the INSIDE, and rejoins just after turn 1. Traces are normalised (progress 0 = the S/F line, clockwise),
@@ -80,11 +107,13 @@ const PIT_TAPER = 0.18      // fraction of the lane's arc spent blending on/off 
 
 /** Build the pit lane for a trace. `entry`/`exit`/`offset` may be overridden per track if the default reads wrong. */
 export function buildPitLane(
-  trace: TrackTrace,
+  rawTrace: TrackTrace,
   {
     entry = PIT_ENTRY_FRAC, exit = PIT_EXIT_FRAC, offset = PIT_OFFSET, metresPerUnit = 2.2,
   }: { entry?: number; exit?: number; offset?: number; metresPerUnit?: number } = {},
 ): PitLane {
+  // Offset from the smoothed geometry the ribbon is drawn with, so the tapers land on its edge.
+  const trace = densifyTrace(rawTrace)
   const n = trace.length
   const pt = (i: number): Vec => ({ x: trace[i % n][0], y: trace[i % n][1] })
   // Cumulative arc length at each vertex (closing edge included at index n).

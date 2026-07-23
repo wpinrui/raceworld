@@ -6,7 +6,7 @@
 // All coordinates are viewBox units; real-world sizes convert through metresPerUnit.
 
 import { seededRng } from '@/lib/sim/rng-utils'
-import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type TrackTrace } from './track-path'
+import { densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type TrackTrace } from './track-path'
 
 export interface SceneryBlob { d: string; fill: string; water?: boolean }
 export interface SceneryPart { dx: number; dy: number; w: number; h: number }
@@ -129,13 +129,16 @@ function buildingParts(type: number, w: number, h: number): SceneryPart[] {
 }
 
 export function buildScenery(
-  trace: TrackTrace,
+  rawTrace: TrackTrace,
   pitBox: { x: number; y: number },
   {
     circuitId, metresPerUnit, viewBox, density = {},
   }: { circuitId: string; metresPerUnit: number; viewBox: string; density?: SceneryDensity },
 ): Scenery {
   const rng = seededRng(`scenery:${circuitId}`)
+  // Work on the SMOOTHED geometry the ribbon is actually drawn with — offsets from the raw polyline
+  // (kerbs especially) drift off the ribbon's edge in corners.
+  const trace = densifyTrace(rawTrace)
   const u = (m: number) => m / metresPerUnit
   // Default density is deliberately rich (the old tuning slider's ceiling and change).
   const treeMult = density.trees ?? 3
