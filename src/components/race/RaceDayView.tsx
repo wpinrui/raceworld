@@ -277,8 +277,8 @@ export function RaceDayView({
       {phase === 'racing' && (
         <div className="flex items-stretch gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
           {myDrivers[0] && pod(myDrivers[0])}
-          {/* -mt-3 cancels the strip's top padding so the backdrop meets the divider flush. */}
-          <div className="flex-1 min-w-0 self-stretch -mt-3">
+          {/* Negative margins cancel the strip's vertical padding so the backdrop runs edge to edge. */}
+          <div className="flex-1 min-w-0 self-stretch -mt-3 -mb-3">
             <CentreConsole
               circuitName={circuit.name}
               countryCode={circuit.country}

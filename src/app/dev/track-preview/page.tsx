@@ -266,7 +266,7 @@ export default function TrackPreviewPage() {
             />
           </div>
         ))}
-        <div style={{ order: 1 }} className="flex-1 min-w-0 self-stretch -mt-3">
+        <div style={{ order: 1 }} className="flex-1 min-w-0 self-stretch -mt-3 -mb-3">
           <CentreConsole
             circuitName={MOCK_CIRCUIT.name}
             countryCode={MOCK_CIRCUIT.country}
