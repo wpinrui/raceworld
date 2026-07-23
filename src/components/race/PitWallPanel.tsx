@@ -8,7 +8,6 @@ import { resolveIntensity } from '@/lib/sim/push'
 import { pitLaneLoss } from '@/lib/sim/pit-loss'
 import { formatLiveGap } from '@/lib/format'
 import TyreIndicator from './TyreIndicator'
-import { DriverLink } from '@/components/world/EntityLink'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { Tooltip } from '@/components/ui/Tooltip'
 
@@ -271,8 +270,9 @@ export function PitWallCard({ driver, team, ds, raceState, allDrivers, onRetire,
   const header = (
     <div className="relative flex items-center gap-2 h-[40px] pl-[17px] pr-3 border-b" style={{ borderColor: C.border }}>
       <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ background: team?.color ?? C.muted }} />
+      {/* Plain text on purpose: race day never navigates away to the driver page. */}
       <NationalityFlag code={driver.nationality} />
-      <DriverLink id={driver.id} className="text-[16px] font-semibold text-[#FFFFFF]">{driver.name}</DriverLink>
+      <span className="text-[16px] font-semibold text-[#FFFFFF]">{driver.name}</span>
       {ds?.defending && (
         <span
           className="flex items-center gap-1 rounded-[3px] px-2 py-0.5 text-[10px] font-extrabold tracking-[1px]"

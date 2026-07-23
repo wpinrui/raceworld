@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowUpDown, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
-  Timer, Wrench, type LucideIcon,
+  ArrowUpDown, Building2, Hourglass, Layers, LayoutGrid, LifeBuoy, PanelLeftClose, PanelLeftOpen, Shield, Tag,
+  Timer, TreePine, Wrench, type LucideIcon,
 } from 'lucide-react'
 import type { DriverRaceState, SimSpeed } from '@/lib/sim/types'
 import { TRACK_LAYOUTS } from '@/data/tracks'
@@ -56,6 +56,13 @@ export default function TrackPreviewPage() {
   const [standingsOpen, setStandingsOpen] = useState(true)
   const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(ALL_RACE_TABLE_COLUMNS))
   const [labelsOn, setLabelsOn] = useState(false)
+  // Scenery density tuning (per-track values get authored once the right feel is found here).
+  const [treeDensity, setTreeDensity] = useState(1)
+  const [buildingDensity, setBuildingDensity] = useState(1)
+  const sceneryDensity = useMemo(
+    () => ({ trees: treeDensity, buildings: buildingDensity }),
+    [treeDensity, buildingDensity],
+  )
   const [speed, setSpeed] = useState<SimSpeed>(2)
   const [paused, setPaused] = useState(false)
 
@@ -63,6 +70,8 @@ export default function TrackPreviewPage() {
   const [states, setStates] = useState<DriverRaceState[]>(() => engine.states())
   const [lap, setLap] = useState(0)
   const [commentary, setCommentary] = useState(() => engine.commentary())
+  // Camera lock: your car by default; dragging the map frees the camera, clicking a car re-locks.
+  const [followId, setFollowId] = useState<string | null>('car-7')
 
   const tickStartRef = useRef(0)
   const intervalRef = useRef(GRID_HOLD_MS)
@@ -79,9 +88,16 @@ export default function TrackPreviewPage() {
     let timer: ReturnType<typeof setTimeout>
     const loop = () => {
       engine.tick()
-      setStates(engine.states())
+      const next = engine.states()
+      setStates(next)
       setCommentary(engine.commentary())
       setLap(engine.laps)
+      // Hand the lock to the leader if the followed car retires.
+      setFollowId((prev) =>
+        prev && next.find((s) => s.driverId === prev)?.retired
+          ? next.find((s) => !s.retired)?.driverId ?? null
+          : prev,
+      )
       frozenFracRef.current = 0
       intervalRef.current = intervalNow()
       tickStartRef.current = performance.now()
@@ -163,6 +179,8 @@ export default function TrackPreviewPage() {
                   totalLaps={MOCK_TOTAL_LAPS}
                   gridPos={MOCK_GRID}
                   columns={[...columns]}
+                  selectedDriverId={followId}
+                  onSelectDriver={setFollowId}
                 />
               </div>
               <div className="flex flex-wrap gap-1.5 px-2 py-2 shrink-0 border-t border-[#232A38]">
@@ -189,8 +207,16 @@ export default function TrackPreviewPage() {
         </div>
 
         {/* Center: the track map, full bleed, with its own display toggles top-right */}
-        <div className="flex-1 min-w-0 relative p-6">
-          <RaceTrackMap layout={layout} cars={cars} sampleRef={sampleRef} showLabels={labelsOn} />
+        <div className="flex-1 min-w-0 relative">
+          <RaceTrackMap
+            layout={layout}
+            cars={cars}
+            sampleRef={sampleRef}
+            followId={followId}
+            onFollow={setFollowId}
+            showLabels={labelsOn}
+            sceneryDensity={sceneryDensity}
+          />
           <div className="absolute top-3 right-3 flex gap-1.5">
             <Tooltip content="Driver labels">
               <button
@@ -202,6 +228,35 @@ export default function TrackPreviewPage() {
                 <Tag size={21} />
               </button>
             </Tooltip>
+          </div>
+          {/* Scenery density tuning */}
+          <div className="absolute bottom-3 left-3 flex flex-col gap-2 rounded-lg bg-[#0F1319]/85 border border-[#232A38] px-3 py-2.5">
+            <div className="flex items-center gap-2.5">
+              <TreePine size={16} className="text-[#8FB35F] shrink-0" />
+              <input
+                type="range"
+                min={0}
+                max={2.5}
+                step={0.1}
+                value={treeDensity}
+                onChange={(e) => setTreeDensity(Number(e.target.value))}
+                className="w-36 accent-[#00D9FF]"
+              />
+              <span className="text-xs tabular-nums w-8">{treeDensity.toFixed(1)}×</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <Building2 size={16} className="text-[#8A93A6] shrink-0" />
+              <input
+                type="range"
+                min={0}
+                max={2.5}
+                step={0.1}
+                value={buildingDensity}
+                onChange={(e) => setBuildingDensity(Number(e.target.value))}
+                className="w-36 accent-[#00D9FF]"
+              />
+              <span className="text-xs tabular-nums w-8">{buildingDensity.toFixed(1)}×</span>
+            </div>
           </div>
         </div>
 
