@@ -803,7 +803,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [cars, layout, vb, sampleRef])
+  }, [cars, layout, vb, sampleRef, outSign])
 
   // S/F line: a short tick perpendicular to the direction of travel at path start.
   const sf = useMemo(() => {
