@@ -252,7 +252,7 @@ export default function TrackPreviewPage() {
       </div>
 
       {/* Bottom: fixed-width car cards flanking the centre console */}
-      <div className="flex items-stretch gap-0 px-4 pb-3 pt-0 shrink-0 border-t border-[#232A38]">
+      <div className="flex items-stretch gap-0 px-4 py-3 shrink-0 border-t border-[#232A38]">
         {PLAYER_CAR_IDS.map((id, i) => (
           <div key={id} className="shrink-0 self-center" style={{ order: i === 0 ? 0 : 2 }}>
             <PitWallCard
@@ -266,7 +266,7 @@ export default function TrackPreviewPage() {
             />
           </div>
         ))}
-        <div style={{ order: 1 }} className="flex-1 min-w-0 self-stretch">
+        <div style={{ order: 1 }} className="flex-1 min-w-0 self-stretch -mt-3">
           <CentreConsole
             circuitName={MOCK_CIRCUIT.name}
             countryCode={MOCK_CIRCUIT.country}
