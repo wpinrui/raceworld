@@ -56,44 +56,89 @@ const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 // minus half a car and a margin.
 const RACE_LINE_HALF_M = 3.6
 
-// The RACING LINE: the minimum-curvature path through the track corridor. Each station may sit up to
-// ±RACE_LINE_HALF_M off the centreline; iterative relaxation (every point pulled toward its
-// neighbours' midpoint, clamped to the corridor) converges to the classic line — full-width entry,
-// inside-edge apex, full-width exit. Cars DRIVE this path, so their heading and effective corner
-// radius follow it naturally.
-function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string {
-  const len = center.getTotalLength()
-  const N = PROFILE_N
+// Sample the centreline at n stations: points, right normals, and signed curvature (right turn > 0).
+function sampleCentre(center: SVGPathElement, len: number, n: number) {
   const c: Array<{ x: number; y: number }> = []
-  for (let i = 0; i < N; i++) c.push(center.getPointAtLength((i / N) * len))
+  for (let i = 0; i < n; i++) c.push(center.getPointAtLength((i / n) * len))
+  const ds = len / n
   const r: Array<{ x: number; y: number }> = []
-  for (let i = 0; i < N; i++) {
-    const a = c[(i - 1 + N) % N]
-    const b = c[(i + 1) % N]
+  const kappa = new Float64Array(n)
+  for (let i = 0; i < n; i++) {
+    const a = c[(i - 1 + n) % n]
+    const b = c[(i + 1) % n]
     const d = Math.hypot(b.x - a.x, b.y - a.y) || 1
     r.push({ x: -(b.y - a.y) / d, y: (b.x - a.x) / d }) // right of travel
+    const hIn = Math.atan2(c[i].y - a.y, c[i].x - a.x)
+    const hOut = Math.atan2(b.y - c[i].y, b.x - c[i].x)
+    let dth = hOut - hIn
+    if (dth > Math.PI) dth -= 2 * Math.PI
+    if (dth < -Math.PI) dth += 2 * Math.PI
+    kappa[i] = dth / ds
   }
+  return { c, r, kappa, ds }
+}
+
+// Minimise CURVATURE, not length: a midpoint-pull relaxation is curve-shortening flow, whose optimum
+// is the taut string, i.e. the SHORTEST way round, hugging the insides. The fastest line minimises
+// sum(kappa^2). In the lateral domain, path curvature ~ centreline kappa minus the lateral second
+// derivative; Gauss-Seidel on that quartic system's stationarity equations (update = ds^2/6 times the
+// discrete laplacian of kappa), clamped to the corridor, converges to the true minimum-curvature line:
+// out wide, apex, out wide. A resolution ladder gets the long-range shape cheaply at the coarse level;
+// a whisper of centring spring breaks the degeneracy on straights (any straight line has zero kappa).
+function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string {
+  const len = center.getTotalLength()
+  const targetN = Math.min(1200, Math.max(256, Math.round(len / (6 / metresPerUnit))))
+  const ladder: number[] = []
+  for (let n = targetN; n > 150; n = Math.ceil(n / 2)) ladder.push(n)
+  if (ladder.length === 0) ladder.push(targetN)
+  ladder.reverse() // coarse -> fine
   const w = RACE_LINE_HALF_M / metresPerUnit
-  const a = new Float64Array(N)
-  // Run the relaxation to REAL convergence: information travels ~one station per sweep, so a short run
-  // only produces local corner-cutting (a chord hugging the inside). Out-in-out — swinging to the
-  // OUTSIDE edge before a corner — is a long-range property that needs the full solve. Over-relaxation
-  // plus alternating sweep directions gets there quickly; the build is one-time per circuit.
-  const OMEGA = 1.5
-  for (let pass = 0; pass < 4000; pass++) {
-    const fwd = pass % 2 === 0
-    for (let k = 0; k < N; k++) {
-      const i = fwd ? k : N - 1 - k
-      const ip = (i - 1 + N) % N
-      const inx = (i + 1) % N
-      const px = c[ip].x + r[ip].x * a[ip]
-      const py = c[ip].y + r[ip].y * a[ip]
-      const nx = c[inx].x + r[inx].x * a[inx]
-      const ny = c[inx].y + r[inx].y * a[inx]
-      const t = ((px + nx) / 2 - c[i].x) * r[i].x + ((py + ny) / 2 - c[i].y) * r[i].y
-      a[i] = Math.max(-w, Math.min(w, a[i] + (t - a[i]) * OMEGA))
+
+  let a = new Float64Array(ladder[0])
+  let prevN = ladder[0]
+  for (let li = 0; li < ladder.length; li++) {
+    const n = ladder[li]
+    const { kappa: kc, ds } = sampleCentre(center, len, n)
+    if (li > 0) {
+      // Upsample the previous level's laterals (linear, wrapping).
+      const up = new Float64Array(n)
+      for (let i = 0; i < n; i++) {
+        const x = (i / n) * prevN
+        const j = Math.floor(x) % prevN
+        const f = x - Math.floor(x)
+        up[i] = a[j] * (1 - f) + a[(j + 1) % prevN] * f
+      }
+      a = up
+    }
+    prevN = n
+    const inv2 = 1 / (ds * ds)
+    const lap = (i: number) => (a[(i - 1 + n) % n] - 2 * a[i] + a[(i + 1) % n]) * inv2
+    const k = new Float64Array(n)
+    for (let i = 0; i < n; i++) k[i] = kc[i] - lap(i)
+
+    const sweeps = li === 0 ? 4000 : 900
+    const OMEGA = 1.4
+    const SPRING = 0.004
+    for (let pass = 0; pass < sweeps; pass++) {
+      const fwd = pass % 2 === 0
+      for (let s = 0; s < n; s++) {
+        const i = fwd ? s : n - 1 - s
+        const ip = (i - 1 + n) % n
+        const inx = (i + 1) % n
+        const step = ((k[ip] - 2 * k[i] + k[inx]) * ds * ds) / 6
+        const next = Math.max(-w, Math.min(w, (a[i] + OMEGA * step) / (1 + SPRING)))
+        if (next !== a[i]) {
+          a[i] = next
+          // kappa depends on laterals at i-1, i, i+1: refresh the three affected stations.
+          k[ip] = kc[ip] - lap(ip)
+          k[i] = kc[i] - lap(i)
+          k[inx] = kc[inx] - lap(inx)
+        }
+      }
     }
   }
+
+  const { c, r } = sampleCentre(center, len, prevN)
   const pts = c.map((p, i) => `${(p.x + r[i].x * a[i]).toFixed(2)} ${(p.y + r[i].y * a[i]).toFixed(2)}`)
   return `M ${pts.join(' L ')} Z`
 }
