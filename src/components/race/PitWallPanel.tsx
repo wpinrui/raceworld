@@ -70,15 +70,15 @@ function TempBar({ temp, critical }: { temp: number; critical: boolean }) {
   return (
     <div className="flex flex-col gap-1 pt-0.5">
       <div
-        className="relative w-[54px] h-[5px] rounded-[3px]"
+        className="relative w-[72px] h-[6px] rounded-[3px]"
         style={{ background: `linear-gradient(90deg,${C.blue} 0 26%,${C.green} 26% 72%,${C.red} 72% 100%)` }}
       >
         <div
-          className="absolute top-1/2 w-[9px] h-[9px] rounded-full bg-[#FFFFFF] box-border"
+          className="absolute top-1/2 w-[12px] h-[12px] rounded-full bg-[#FFFFFF] box-border"
           style={{ left: `${pct}%`, transform: 'translate(-50%,-50%)', border: `2px solid ${C.surface}` }}
         />
       </div>
-      <div className="text-[7.5px] font-bold tracking-[1px]" style={{ color: critical ? C.red : C.muted }}>TEMP</div>
+      <div className="text-[9.5px] font-bold tracking-[1px]" style={{ color: critical ? C.red : C.muted }}>TEMP</div>
     </div>
   )
 }
@@ -86,8 +86,8 @@ function TempBar({ temp, critical }: { temp: number; critical: boolean }) {
 function Stat({ value, label, valueColor }: { value: string; label: string; valueColor?: string }) {
   return (
     <div>
-      <div className="text-xs font-bold tabular-nums" style={valueColor ? { color: valueColor } : undefined}>{value}</div>
-      <div className="text-[7.5px] font-bold tracking-[1px]" style={{ color: C.muted }}>{label}</div>
+      <div className="text-sm font-bold tabular-nums" style={valueColor ? { color: valueColor } : undefined}>{value}</div>
+      <div className="text-[9.5px] font-bold tracking-[1px]" style={{ color: C.muted }}>{label}</div>
     </div>
   )
 }
@@ -96,7 +96,7 @@ function RetireButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="ml-auto text-[8px] font-extrabold tracking-[1px] rounded px-2 py-0.5 cursor-pointer hover:bg-[rgba(220,20,60,0.15)]"
+      className="ml-auto text-[10px] font-extrabold tracking-[1px] rounded px-2.5 py-1 cursor-pointer hover:bg-[rgba(220,20,60,0.15)]"
       style={{ color: C.red, border: '1px solid rgba(220,20,60,0.35)' }}
     >
       RETIRE
@@ -117,8 +117,8 @@ function StratTab({ driver, ds, onRetire }: { driver: Driver; ds: DriverRaceStat
       : undefined
 
   return (
-    <div className="flex-1 px-2.5 py-1.5 flex flex-col gap-[5px] justify-center min-w-0">
-      <div className="flex rounded-[5px] overflow-hidden h-[21px]" style={{ background: C.inset, border: `1px solid ${C.border}` }}>
+    <div className="flex-1 px-3 py-2 flex flex-col gap-[7px] justify-center min-w-0">
+      <div className="flex rounded-[5px] overflow-hidden h-[27px]" style={{ background: C.inset, border: `1px solid ${C.border}` }}>
         {([
           ['auto', 'AUTO', C.cyan, () => setPitCommand(driver.id, 'auto')],
           ['pit', 'PIT', C.cyan, () => setPitCommand(driver.id, { pit: armedCompound })],
@@ -129,7 +129,7 @@ function StratTab({ driver, ds, onRetire }: { driver: Driver; ds: DriverRaceStat
             <button
               key={key}
               onClick={onClick}
-              className={`flex-1 text-[9px] font-extrabold tracking-[1px] cursor-pointer ${active ? '' : 'text-[#8A93A6] hover:text-[#FFFFFF]'} ${i > 0 ? 'border-l border-[#2A3142]' : ''}`}
+              className={`flex-1 text-[11px] font-extrabold tracking-[1px] cursor-pointer ${active ? '' : 'text-[#8A93A6] hover:text-[#FFFFFF]'} ${i > 0 ? 'border-l border-[#2A3142]' : ''}`}
               style={seg(active, color)}
             >
               {label}
@@ -137,10 +137,10 @@ function StratTab({ driver, ds, onRetire }: { driver: Driver; ds: DriverRaceStat
           )
         })}
       </div>
-      <div className="flex items-center gap-1.5 min-h-[18px]">
+      <div className="flex items-center gap-2 min-h-[24px]">
         {isPit ? (
           <>
-            <span className="text-[8px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>BOX FOR</span>
+            <span className="text-[10px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>BOX FOR</span>
             <div className="flex gap-1">
               {COMPOUNDS.map((c) => (
                 <button
@@ -155,7 +155,7 @@ function StratTab({ driver, ds, onRetire }: { driver: Driver; ds: DriverRaceStat
             </div>
           </>
         ) : (
-          <span className="text-[8px] font-bold tracking-[0.8px]" style={{ color: C.muted }}>
+          <span className="text-[10px] font-bold tracking-[0.8px]" style={{ color: C.muted }}>
             {cmd === 'hold' ? 'STAYS OUT THIS LAP' : 'STRATEGIST IN CONTROL'}
           </span>
         )}
@@ -207,9 +207,9 @@ function PaceTab({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' }) {
   ]
 
   return (
-    <div className="flex-1 px-2.5 py-1.5 flex flex-col gap-[5px] justify-center min-w-0">
+    <div className="flex-1 px-3 py-2 flex flex-col gap-[7px] justify-center min-w-0">
       <div className="flex items-center gap-1.5">
-        <span className="w-7 shrink-0 text-[7px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>MODE</span>
+        <span className="w-10 shrink-0 text-[9px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>MODE</span>
         <div className="flex-1 flex gap-1">
           {modeDefs.map(({ key, label, dot, onClick }) => {
             const on = active === key
@@ -225,10 +225,10 @@ function PaceTab({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' }) {
               <button
                 key={key}
                 onClick={onClick}
-                className="flex-1 h-[19px] flex items-center justify-center gap-1 text-[8px] font-extrabold tracking-[0.5px] rounded cursor-pointer hover:text-[#FFFFFF]"
+                className="flex-1 h-[25px] flex items-center justify-center gap-1 text-[10px] font-extrabold tracking-[0.5px] rounded cursor-pointer hover:text-[#FFFFFF]"
                 style={style}
               >
-                {dot && <span className="w-[5px] h-[5px] rounded-full" style={{ background: on ? C.cyan : C.muted }} />}
+                {dot && <span className="w-[6px] h-[6px] rounded-full" style={{ background: on ? C.cyan : C.muted }} />}
                 {label}
               </button>
             )
@@ -236,7 +236,7 @@ function PaceTab({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' }) {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="w-7 shrink-0 text-[7px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>LEVEL</span>
+        <span className="w-10 shrink-0 text-[9px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>LEVEL</span>
         <div className={`flex-1 flex gap-0.5 ${active !== 'manual' ? 'opacity-85' : ''}`}>
           {LEVEL_LABELS.map((label, i) => {
             const lv = (i - 2) as SliderLevel
@@ -250,7 +250,7 @@ function PaceTab({ ds, mode }: { ds: DriverRaceState; mode: 'driver' | 'tm' }) {
               <button
                 key={label}
                 onClick={() => setPushSlider(ds.driverId, lv)}
-                className="flex-1 h-[18px] flex items-center justify-center text-[7.5px] font-bold rounded-[3px] cursor-pointer"
+                className="flex-1 h-[24px] flex items-center justify-center text-[9.5px] font-bold rounded-[3px] cursor-pointer"
                 style={style}
               >
                 {label}
@@ -268,27 +268,27 @@ export function PitWallCard({ driver, team, ds, raceState, allDrivers, onRetire,
   const [tab, setTab] = useState<'strat' | 'pace'>('strat')
 
   const header = (
-    <div className="relative flex items-center gap-2 h-[30px] pl-[13px] pr-2.5 border-b" style={{ borderColor: C.border }}>
-      <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: team?.color ?? C.muted }} />
-      <DriverLink id={driver.id} className="text-[13px] font-semibold text-[#FFFFFF]">{driver.name}</DriverLink>
+    <div className="relative flex items-center gap-2 h-[40px] pl-[17px] pr-3 border-b" style={{ borderColor: C.border }}>
+      <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ background: team?.color ?? C.muted }} />
+      <DriverLink id={driver.id} className="text-[16px] font-semibold text-[#FFFFFF]">{driver.name}</DriverLink>
       {ds?.defending && (
         <span
-          className="flex items-center gap-1 rounded-[3px] px-1.5 py-px text-[8px] font-extrabold tracking-[1px]"
+          className="flex items-center gap-1 rounded-[3px] px-2 py-0.5 text-[10px] font-extrabold tracking-[1px]"
           style={{ color: C.red, background: 'rgba(220,20,60,0.15)', border: '1px solid rgba(220,20,60,0.4)' }}
         >
-          <span className="w-[5px] h-[5px] rounded-full" style={{ background: C.red }} />
+          <span className="w-[6px] h-[6px] rounded-full" style={{ background: C.red }} />
           DEFENDING
         </span>
       )}
-      {ds && <span className="ml-auto text-[13px] font-extrabold tabular-nums" style={{ color: C.cyan }}>P{ds.position}</span>}
+      {ds && <span className="ml-auto text-[16px] font-extrabold tabular-nums" style={{ color: C.cyan }}>P{ds.position}</span>}
     </div>
   )
 
   if (!ds || ds.retired) {
     return (
-      <div className="w-[360px] rounded-lg overflow-hidden text-[#FFFFFF]" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+      <div className="w-[480px] rounded-lg overflow-hidden text-[#FFFFFF]" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
         {header}
-        <p className="px-[13px] py-2 text-xs text-[#FFFFFF]">{ds?.retired ? `Retired, L${ds.retirementLap ?? ''}` : 'Out of the race.'}</p>
+        <p className="px-[17px] py-3 text-sm text-[#FFFFFF]">{ds?.retired ? `Retired, L${ds.retirementLap ?? ''}` : 'Out of the race.'}</p>
       </div>
     )
   }
@@ -299,50 +299,50 @@ export function PitWallCard({ driver, team, ds, raceState, allDrivers, onRetire,
   const rejoin = rejoinProjection(ds, raceState, allDrivers)
 
   return (
-    <div className="w-[360px] rounded-lg overflow-hidden text-[#FFFFFF]" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+    <div className="w-[480px] rounded-lg overflow-hidden text-[#FFFFFF]" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
       {header}
 
       {/* Telemetry strip */}
-      <div className="flex items-center gap-3 pl-[13px] pr-2.5 pt-[7px] pb-1">
+      <div className="flex items-center gap-4 pl-[17px] pr-3 pt-[9px] pb-1.5">
         <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
         <Stat value={`${cond}%`} label="TYRE" valueColor={cond < 20 ? C.red : undefined} />
         <Stat value={`L${ds.stintLap}`} label="STINT" />
         {ds.tyreTemp != null && <TempBar temp={ds.tyreTemp} critical={ds.tyreTemp > 1} />}
         <Stat value={formatLiveGap(ds.gap)} label="GAP" />
         <Tooltip content="AI plan: pit lap and next compound">
-          <div className="ml-auto flex items-center gap-[5px] rounded-[5px] px-[7px] py-[3px]" style={{ background: C.inset, border: `1px solid ${C.border}` }}>
-            <span className="text-[8px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>AI</span>
-            <span className="text-[11px] font-bold tabular-nums">L{ds.targetPitLap ?? '—'}</span>
-            <span className="text-[9px]" style={{ color: C.muted }}>→</span>
+          <div className="ml-auto flex items-center gap-[6px] rounded-[5px] px-2 py-1" style={{ background: C.inset, border: `1px solid ${C.border}` }}>
+            <span className="text-[10px] font-extrabold tracking-[1px]" style={{ color: C.muted }}>AI</span>
+            <span className="text-[13px] font-bold tabular-nums">L{ds.targetPitLap ?? '—'}</span>
+            <span className="text-[11px]" style={{ color: C.muted }}>→</span>
             <TyreIndicator compound={ds.targetNextCompound} size="sm" />
           </div>
         </Tooltip>
       </div>
 
       {/* Status block */}
-      <div className="flex flex-col gap-0.5 pl-[13px] pr-2.5 pb-[7px]">
+      <div className="flex flex-col gap-1 pl-[17px] pr-3 pb-[9px]">
         <div className="flex items-center gap-[5px]">
-          <span className="w-[5px] h-[5px] rounded-full" style={{ background: st.color }} />
-          <span className="text-[9.5px] font-bold tracking-[1px]" style={{ color: st.color === C.green ? C.secondary : st.color }}>{st.text}</span>
-          {st.hint && <span className="ml-auto text-[9.5px] font-bold tracking-[1px]" style={{ color: C.muted }}>{st.hint}</span>}
+          <span className="w-[6px] h-[6px] rounded-full" style={{ background: st.color }} />
+          <span className="text-[12px] font-bold tracking-[1px]" style={{ color: st.color === C.green ? C.secondary : st.color }}>{st.text}</span>
+          {st.hint && <span className="ml-auto text-[12px] font-bold tracking-[1px]" style={{ color: C.muted }}>{st.hint}</span>}
         </div>
-        <div className="text-[10.5px]" style={{ color: C.secondary }}>
+        <div className="text-[13px]" style={{ color: C.secondary }}>
           {isPit ? 'Rejoin' : 'Pit now'}: <span className="font-bold text-[#FFFFFF]">P{rejoin.position}</span>
           {rejoin.other && `, ${rejoin.gap.toFixed(1)}s ${rejoin.ahead ? 'ahead of' : 'behind'} ${rejoin.other}`}
         </div>
         {mode === 'driver' && teammatePitting && (
-          <div className="text-[9.5px] font-bold tracking-[1px]" style={{ color: C.amber }}>TEAMMATE BOXING THIS LAP</div>
+          <div className="text-[12px] font-bold tracking-[1px]" style={{ color: C.amber }}>TEAMMATE BOXING THIS LAP</div>
         )}
       </div>
 
       {/* Controls: tab rail + active tab */}
-      <div className="flex h-[56px] border-t" style={{ borderColor: C.border }}>
-        <div className="w-[54px] shrink-0 flex flex-col border-r" style={{ borderColor: C.border }}>
+      <div className="flex h-[74px] border-t" style={{ borderColor: C.border }}>
+        <div className="w-[70px] shrink-0 flex flex-col border-r" style={{ borderColor: C.border }}>
           {(['strat', 'pace'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 flex items-center justify-center text-[8.5px] font-extrabold tracking-[1px] cursor-pointer ${tab === t ? 'bg-[#232B3B]' : 'hover:bg-[#232B3B]'}`}
+              className={`flex-1 flex items-center justify-center text-[11px] font-extrabold tracking-[1px] cursor-pointer ${tab === t ? 'bg-[#232B3B]' : 'hover:bg-[#232B3B]'}`}
               style={tab === t ? { color: C.cyan, boxShadow: `inset 2px 0 0 ${C.cyan}` } : { color: C.muted }}
             >
               {t === 'strat' ? 'STRAT' : 'PACE'}
