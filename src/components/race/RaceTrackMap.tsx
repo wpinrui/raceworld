@@ -75,8 +75,15 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
   }
   const w = RACE_LINE_HALF_M / metresPerUnit
   const a = new Float64Array(N)
-  for (let pass = 0; pass < 240; pass++) {
-    for (let i = 0; i < N; i++) {
+  // Run the relaxation to REAL convergence: information travels ~one station per sweep, so a short run
+  // only produces local corner-cutting (a chord hugging the inside). Out-in-out — swinging to the
+  // OUTSIDE edge before a corner — is a long-range property that needs the full solve. Over-relaxation
+  // plus alternating sweep directions gets there quickly; the build is one-time per circuit.
+  const OMEGA = 1.5
+  for (let pass = 0; pass < 4000; pass++) {
+    const fwd = pass % 2 === 0
+    for (let k = 0; k < N; k++) {
+      const i = fwd ? k : N - 1 - k
       const ip = (i - 1 + N) % N
       const inx = (i + 1) % N
       const px = c[ip].x + r[ip].x * a[ip]
@@ -84,7 +91,7 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
       const nx = c[inx].x + r[inx].x * a[inx]
       const ny = c[inx].y + r[inx].y * a[inx]
       const t = ((px + nx) / 2 - c[i].x) * r[i].x + ((py + ny) / 2 - c[i].y) * r[i].y
-      a[i] = Math.max(-w, Math.min(w, a[i] + (t - a[i]) * 0.7))
+      a[i] = Math.max(-w, Math.min(w, a[i] + (t - a[i]) * OMEGA))
     }
   }
   const pts = c.map((p, i) => `${(p.x + r[i].x * a[i]).toFixed(2)} ${(p.y + r[i].y * a[i]).toFixed(2)}`)
