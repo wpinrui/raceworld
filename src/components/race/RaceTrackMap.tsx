@@ -52,34 +52,49 @@ const ZOOM_MIN = 0.6
 const ZOOM_MAX = 20
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 
-interface MotionProfile {
-  /** Cumulative normalised lap TIME at each equal-distance station (invert for time -> distance). */
-  time: Float64Array
-  /** Racing-line lateral offset (viewBox units, positive = right of travel) at each station. */
-  lateral: Float64Array
-}
+// How much of the track's width the racing line may use, each side of the centreline: half the tarmac
+// minus half a car and a margin.
+const RACE_LINE_HALF_M = 3.6
 
-// Circular box blur, applied three times for a gaussian-ish kernel.
-function blur(src: Float64Array, radius: number): Float64Array {
-  let a = src
-  for (let pass = 0; pass < 3; pass++) {
-    const out = new Float64Array(a.length)
-    for (let i = 0; i < a.length; i++) {
-      let sum = 0
-      for (let j = -radius; j <= radius; j++) sum += a[(i + j + a.length) % a.length]
-      out[i] = sum / (2 * radius + 1)
-    }
-    a = out
+// The RACING LINE: the minimum-curvature path through the track corridor. Each station may sit up to
+// ±RACE_LINE_HALF_M off the centreline; iterative relaxation (every point pulled toward its
+// neighbours' midpoint, clamped to the corridor) converges to the classic line — full-width entry,
+// inside-edge apex, full-width exit. Cars DRIVE this path, so their heading and effective corner
+// radius follow it naturally.
+function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string {
+  const len = center.getTotalLength()
+  const N = PROFILE_N
+  const c: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < N; i++) c.push(center.getPointAtLength((i / N) * len))
+  const r: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < N; i++) {
+    const a = c[(i - 1 + N) % N]
+    const b = c[(i + 1) % N]
+    const d = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    r.push({ x: -(b.y - a.y) / d, y: (b.x - a.x) / d }) // right of travel
   }
-  return a
+  const w = RACE_LINE_HALF_M / metresPerUnit
+  const a = new Float64Array(N)
+  for (let pass = 0; pass < 240; pass++) {
+    for (let i = 0; i < N; i++) {
+      const ip = (i - 1 + N) % N
+      const inx = (i + 1) % N
+      const px = c[ip].x + r[ip].x * a[ip]
+      const py = c[ip].y + r[ip].y * a[ip]
+      const nx = c[inx].x + r[inx].x * a[inx]
+      const ny = c[inx].y + r[inx].y * a[inx]
+      const t = ((px + nx) / 2 - c[i].x) * r[i].x + ((py + ny) / 2 - c[i].y) * r[i].y
+      a[i] = Math.max(-w, Math.min(w, a[i] + (t - a[i]) * 0.7))
+    }
+  }
+  const pts = c.map((p, i) => `${(p.x + r[i].x * a[i]).toFixed(2)} ${(p.y + r[i].y * a[i]).toFixed(2)}`)
+  return `M ${pts.join(' L ')} Z`
 }
 
-// Cumulative normalised lap TIME at each equal-distance station; inverting it turns a time fraction
-// into a distance fraction. Classic three-step racing profile: corner limits from curvature, then an
-// acceleration-limited forward pass and a braking-limited backward pass (twice each, for the wrap).
-// The racing LINE comes from a difference of gaussians on the signed turn rate: wide on entry, clipping
-// the apex inside, drifting wide again on exit.
-function buildMotionProfile(path: SVGPathElement, metresPerUnit: number): MotionProfile {
+// Cumulative normalised lap TIME at each equal-distance station of the RACING LINE; inverting it turns
+// a time fraction into a distance fraction. Classic three-step profile: corner limits from curvature,
+// then an acceleration-limited forward pass and a braking-limited backward pass (twice, for the wrap).
+function buildTimeProfile(path: SVGPathElement, metresPerUnit: number): Float64Array {
   const vTop = V_TOP_M / metresPerUnit
   const vFloor = V_FLOOR_M / metresPerUnit
   const aLat = A_LAT_M / metresPerUnit
@@ -91,7 +106,6 @@ function buildMotionProfile(path: SVGPathElement, metresPerUnit: number): Motion
   for (let i = 0; i < PROFILE_N; i++) pts.push(path.getPointAtLength((i / PROFILE_N) * len))
 
   const v = new Float64Array(PROFILE_N)
-  const turn = new Float64Array(PROFILE_N) // signed turn angle over the window; positive = right turn
   for (let i = 0; i < PROFILE_N; i++) {
     const a = pts[(i - 2 + PROFILE_N) % PROFILE_N]
     const b = pts[i]
@@ -101,7 +115,6 @@ function buildMotionProfile(path: SVGPathElement, metresPerUnit: number): Motion
     let dth = out - in_
     if (dth > Math.PI) dth -= 2 * Math.PI
     if (dth < -Math.PI) dth += 2 * Math.PI
-    turn[i] = dth
     const kappa = Math.abs(dth) / (4 * ds)
     v[i] = Math.max(vFloor, Math.min(vTop, Math.sqrt(aLat / Math.max(kappa, 1e-9))))
   }
@@ -120,23 +133,7 @@ function buildMotionProfile(path: SVGPathElement, metresPerUnit: number): Motion
   for (let i = 0; i < PROFILE_N; i++) cum[i + 1] = cum[i] + ds / ((v[i] + v[(i + 1) % PROFILE_N]) / 2)
   const total = cum[PROFILE_N]
   for (let i = 0; i <= PROFILE_N; i++) cum[i] /= total
-
-  // Racing line: DoG of the signed turn rate. Narrow blur tracks the apex, wide blur anticipates it.
-  const r1 = Math.max(1, Math.round(12 / metresPerUnit / ds))
-  const narrow = blur(turn, r1)
-  const wide = blur(turn, r1 * 3 + 1)
-  const T_REF = 0.12 // turn angle treated as a full-commitment corner
-  const lateral = new Float64Array(PROFILE_N)
-  const A = 3.2 / metresPerUnit
-  const B = 2.2 / metresPerUnit
-  const clamp1 = (x: number) => Math.max(-1, Math.min(1, x))
-  const latMax = 3.4 / metresPerUnit
-  for (let i = 0; i < PROFILE_N; i++) {
-    const raw = A * clamp1(narrow[i] / T_REF) - B * clamp1(wide[i] / T_REF)
-    lateral[i] = Math.max(-latMax, Math.min(latMax, raw))
-  }
-
-  return { time: cum, lateral }
+  return cum
 }
 
 // Invert the profile: time fraction -> distance fraction.
@@ -327,7 +324,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
   const pitLenRef = useRef(0)
-  const profileRef = useRef<MotionProfile | null>(null)
+  const profileRef = useRef<Float64Array | null>(null)
+  const raceLineRef = useRef<SVGPathElement>(null)
+  const raceLenRef = useRef(0)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
   const sprRefs = useRef(new Map<string, HTMLDivElement>())
   const posRef = useRef(new Map<string, { left: number; top: number }>())
@@ -463,23 +462,29 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   useEffect(() => {
     lenRef.current = 0 // re-measure if the layout changes
     pitLenRef.current = 0
+    raceLenRef.current = 0
     profileRef.current = null
     let raf = 0
     const tick = () => {
       const path = pathRef.current
       const pitPath = pitPathRef.current
-      if (path && pitPath) {
+      const raceLine = raceLineRef.current
+      if (path && pitPath && raceLine) {
         if (!lenRef.current) lenRef.current = path.getTotalLength()
         if (!pitLenRef.current) pitLenRef.current = pitPath.getTotalLength()
-        if (!profileRef.current) profileRef.current = buildMotionProfile(path, layout.metresPerUnit)
-        const prof = profileRef.current
+        if (!raceLenRef.current) {
+          raceLine.setAttribute('d', buildRacingLine(path, layout.metresPerUnit))
+          raceLenRef.current = raceLine.getTotalLength()
+          profileRef.current = buildTimeProfile(raceLine, layout.metresPerUnit)
+        }
+        const prof = profileRef.current!
         const lenTotal = lenRef.current
         const uu = (m: number) => m / layout.metresPerUnit
         const look = uu(8) // heading from ~8m of track ahead
 
-        // Pass 1: place every car in arc space. Racing cars get the racing-line lateral offset; grid
-        // slots form the staggered starting grid (8m pitch, alternating sides) in DISTANCE space.
-        interface Frame { id: string; el: HTMLDivElement; onPit: boolean; dist: number; lat: number; race: boolean }
+        // Pass 1: place every car in arc space. Racing cars live on the RACING LINE path; grid slots
+        // form the staggered starting grid (8m pitch, alternating sides) on the centreline.
+        interface Frame { id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number }
         const frames: Frame[] = []
         for (const car of cars) {
           const el = elRefs.current.get(car.id)
@@ -491,36 +496,30 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           }
           el.style.visibility = ''
           if (sample.pit) {
-            frames.push({ id: car.id, el, onPit: true, dist: Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current, lat: 0, race: false })
+            frames.push({ id: car.id, el, kind: 'pit', dist: Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current, lat: 0 })
           } else if (sample.gridSlot != null) {
             const back = uu(3 + (sample.gridSlot - 1) * 8)
             frames.push({
-              id: car.id, el, onPit: false,
+              id: car.id, el, kind: 'grid',
               dist: (((lenTotal - back) % lenTotal) + lenTotal) % lenTotal,
               lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7),
-              race: false,
             })
           } else {
-            const dist = timeToDistance(prof.time, ((sample.prog % 1) + 1) % 1) * lenTotal
-            // Lerp between profile stations: a floor() lookup pops sideways at every station boundary.
-            const x = (dist / lenTotal) * PROFILE_N
-            const i0 = Math.floor(x) % PROFILE_N
-            const fx = x - Math.floor(x)
-            const lat = prof.lateral[i0] * (1 - fx) + prof.lateral[(i0 + 1) % PROFILE_N] * fx
-            frames.push({ id: car.id, el, onPit: false, dist, lat, race: true })
+            const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
+            frames.push({ id: car.id, el, kind: 'race', dist, lat: 0 })
           }
         }
 
         // Pass 2: side-by-side separation — when two racing cars share ~6m of arc, the chasing car
         // moves off-line (side chosen stably per car) instead of overlapping the car ahead.
-        const racing = frames.filter((f) => f.race).sort((a, b) => a.dist - b.dist)
+        const racing = frames.filter((f) => f.kind === 'race').sort((a, b) => a.dist - b.dist)
         const sepRange = uu(6)
-        const latMax = uu(3.4)
+        const latMax = uu(2.6)
         for (let i = 0; i < racing.length; i++) {
           const behind = racing[i]
           const ahead = racing[(i + 1) % racing.length]
           if (behind === ahead) break
-          const gap = i === racing.length - 1 ? ahead.dist + lenTotal - behind.dist : ahead.dist - behind.dist
+          const gap = i === racing.length - 1 ? ahead.dist + raceLenRef.current - behind.dist : ahead.dist - behind.dist
           if (gap < sepRange) {
             const side = behind.id.charCodeAt(behind.id.length - 1) % 2 === 0 ? 1 : -1
             behind.lat = Math.max(-latMax, Math.min(latMax, behind.lat + side * uu(2.1) * (1 - gap / sepRange)))
@@ -529,10 +528,10 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
 
         // Pass 3: resolve to viewBox coordinates and write the DOM.
         for (const f of frames) {
-          const p = f.onPit ? pitPath : path
-          const total = f.onPit ? pitLenRef.current : lenTotal
+          const p = f.kind === 'pit' ? pitPath : f.kind === 'race' ? raceLine : path
+          const total = f.kind === 'pit' ? pitLenRef.current : f.kind === 'race' ? raceLenRef.current : lenTotal
           const pt = p.getPointAtLength(f.dist)
-          const aheadPt = p.getPointAtLength(f.onPit ? Math.min(total, f.dist + look) : (f.dist + look) % total)
+          const aheadPt = p.getPointAtLength(f.kind === 'pit' ? Math.min(total, f.dist + look) : (f.dist + look) % total)
           const target = Math.atan2(aheadPt.y - pt.y, aheadPt.x - pt.x)
           // Low-pass the heading so polyline vertices don't twitch the sprite.
           const prev = headingRef.current.get(f.id) ?? target
@@ -656,6 +655,8 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
               </g>
             ))}
             <line x1={sf.x1} y1={sf.y1} x2={sf.x2} y2={sf.y2} stroke="#FFFFFF" strokeWidth={u(1.5)} />
+            {/* Invisible: the computed racing line the cars actually drive (sampled per frame). */}
+            <path ref={raceLineRef} fill="none" stroke="none" />
           </svg>
           {cars.map((car) => (
             <Tooltip
