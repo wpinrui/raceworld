@@ -48,9 +48,11 @@ const PIT_WIDTH_M = 7
 const SF_HALF_M = 7
 const CAR_LENGTH_M = 5.63
 
-const ZOOM_MIN = 0.6
 const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
+const ZOOM_STEP = 1.18 // per wheel notch
+// Zooming far out means painting the whole true-scale world every frame — lag. Cap at 9 notches below default.
+const ZOOM_MIN = ZOOM_DEFAULT / ZOOM_STEP ** 9
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 
 // How much of the track's width the racing line may use, each side of the centreline: half the tarmac
@@ -552,7 +554,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
         const { w, h } = stageDimsRef.current
         const qx = e.clientX - rect.left - (rect.width / 2 - w / 2) - w / 2
         const qy = e.clientY - rect.top - (rect.height / 2 - h / 2) - h / 2
-        const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.z * (e.deltaY > 0 ? 1 / 1.18 : 1.18)))
+        const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.z * (e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP)))
         const k = nz / cam.z
         cam.x = qx - k * (qx - cam.x)
         cam.y = qy - k * (qy - cam.y)
