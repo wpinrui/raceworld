@@ -143,7 +143,7 @@ export function createEngine(): FakeEngine {
   const sampleAt = (id: string, frac: number): TrackSample => {
     const c = byId.get(id)
     if (!c) return null
-    if (laps === 0) return { prog: 1 - c.grid * 0.006 } // parked on the grid behind the line
+    if (laps === 0) return { prog: 0, gridSlot: c.grid } // formed up on the starting grid
     // Playback clock: the leader covers exactly one lap per tick interval; everyone else follows their
     // own cumulative times against the same clock.
     const S = leaderCumAt(laps - 1) + Math.min(1, Math.max(0, frac)) * (leaderCumAt(laps) - leaderCumAt(laps - 1))

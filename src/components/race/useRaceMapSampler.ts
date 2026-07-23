@@ -88,7 +88,7 @@ export function useRaceMapSampler(
       const c = dataRef.current.get(id)
       if (!c) return null
       const N = lapRef.current
-      if (N === 0) return { prog: 1 - c.grid * 0.006 } // parked on the grid behind the line
+      if (N === 0) return { prog: 0, gridSlot: c.grid } // formed up on the starting grid
       const frac = pausedRef.current ? frozenFracRef.current : liveFrac()
       const S = leaderCumAt(N - 1) + frac * (leaderCumAt(N) - leaderCumAt(N - 1))
       if (c.retired && S >= c.cum[c.cum.length - 1]) return null

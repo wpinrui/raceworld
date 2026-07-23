@@ -25,10 +25,10 @@ export interface TrackCarMeta {
   retired?: boolean
 }
 
-/** One frame of a car's position: lap TIME fraction 0..1 (racing line), or pit-lane progress when `pit`.
- * Racing progress is mapped through a curvature-derived speed profile, so equal time steps cover more
- * distance on straights than in corners. */
-export type TrackSample = { prog: number; pit?: boolean } | null
+/** One frame of a car's position: lap TIME fraction 0..1 (racing line), pit-lane progress when `pit`,
+ * or a starting-grid slot before lights out. Racing progress is mapped through a curvature-derived
+ * speed profile, so equal time steps cover more distance on straights than in corners. */
+export type TrackSample = { prog: number; pit?: boolean; gridSlot?: number } | null
 
 // Speed-profile physics in REAL units (m/s, m/s²), converted per track via metresPerUnit: top speed,
 // the hairpin floor, lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and
@@ -52,10 +52,34 @@ const ZOOM_MIN = 0.6
 const ZOOM_MAX = 20
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 
+interface MotionProfile {
+  /** Cumulative normalised lap TIME at each equal-distance station (invert for time -> distance). */
+  time: Float64Array
+  /** Racing-line lateral offset (viewBox units, positive = right of travel) at each station. */
+  lateral: Float64Array
+}
+
+// Circular box blur, applied three times for a gaussian-ish kernel.
+function blur(src: Float64Array, radius: number): Float64Array {
+  let a = src
+  for (let pass = 0; pass < 3; pass++) {
+    const out = new Float64Array(a.length)
+    for (let i = 0; i < a.length; i++) {
+      let sum = 0
+      for (let j = -radius; j <= radius; j++) sum += a[(i + j + a.length) % a.length]
+      out[i] = sum / (2 * radius + 1)
+    }
+    a = out
+  }
+  return a
+}
+
 // Cumulative normalised lap TIME at each equal-distance station; inverting it turns a time fraction
 // into a distance fraction. Classic three-step racing profile: corner limits from curvature, then an
 // acceleration-limited forward pass and a braking-limited backward pass (twice each, for the wrap).
-function buildSpeedProfile(path: SVGPathElement, metresPerUnit: number): Float64Array {
+// The racing LINE comes from a difference of gaussians on the signed turn rate: wide on entry, clipping
+// the apex inside, drifting wide again on exit.
+function buildMotionProfile(path: SVGPathElement, metresPerUnit: number): MotionProfile {
   const vTop = V_TOP_M / metresPerUnit
   const vFloor = V_FLOOR_M / metresPerUnit
   const aLat = A_LAT_M / metresPerUnit
@@ -67,15 +91,18 @@ function buildSpeedProfile(path: SVGPathElement, metresPerUnit: number): Float64
   for (let i = 0; i < PROFILE_N; i++) pts.push(path.getPointAtLength((i / PROFILE_N) * len))
 
   const v = new Float64Array(PROFILE_N)
+  const turn = new Float64Array(PROFILE_N) // signed turn angle over the window; positive = right turn
   for (let i = 0; i < PROFILE_N; i++) {
     const a = pts[(i - 2 + PROFILE_N) % PROFILE_N]
     const b = pts[i]
     const c = pts[(i + 2) % PROFILE_N]
     const in_ = Math.atan2(b.y - a.y, b.x - a.x)
     const out = Math.atan2(c.y - b.y, c.x - b.x)
-    let theta = Math.abs(out - in_)
-    if (theta > Math.PI) theta = 2 * Math.PI - theta
-    const kappa = theta / (4 * ds)
+    let dth = out - in_
+    if (dth > Math.PI) dth -= 2 * Math.PI
+    if (dth < -Math.PI) dth += 2 * Math.PI
+    turn[i] = dth
+    const kappa = Math.abs(dth) / (4 * ds)
     v[i] = Math.max(vFloor, Math.min(vTop, Math.sqrt(aLat / Math.max(kappa, 1e-9))))
   }
   for (let pass = 0; pass < 2; pass++) {
@@ -93,7 +120,23 @@ function buildSpeedProfile(path: SVGPathElement, metresPerUnit: number): Float64
   for (let i = 0; i < PROFILE_N; i++) cum[i + 1] = cum[i] + ds / ((v[i] + v[(i + 1) % PROFILE_N]) / 2)
   const total = cum[PROFILE_N]
   for (let i = 0; i <= PROFILE_N; i++) cum[i] /= total
-  return cum
+
+  // Racing line: DoG of the signed turn rate. Narrow blur tracks the apex, wide blur anticipates it.
+  const r1 = Math.max(1, Math.round(12 / metresPerUnit / ds))
+  const narrow = blur(turn, r1)
+  const wide = blur(turn, r1 * 3 + 1)
+  const T_REF = 0.12 // turn angle treated as a full-commitment corner
+  const lateral = new Float64Array(PROFILE_N)
+  const A = 3.2 / metresPerUnit
+  const B = 2.2 / metresPerUnit
+  const clamp1 = (x: number) => Math.max(-1, Math.min(1, x))
+  const latMax = 3.4 / metresPerUnit
+  for (let i = 0; i < PROFILE_N; i++) {
+    const raw = A * clamp1(narrow[i] / T_REF) - B * clamp1(wide[i] / T_REF)
+    lateral[i] = Math.max(-latMax, Math.min(latMax, raw))
+  }
+
+  return { time: cum, lateral }
 }
 
 // Invert the profile: time fraction -> distance fraction.
@@ -284,7 +327,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
   const pitLenRef = useRef(0)
-  const profileRef = useRef<Float64Array | null>(null)
+  const profileRef = useRef<MotionProfile | null>(null)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
   const sprRefs = useRef(new Map<string, HTMLDivElement>())
   const posRef = useRef(new Map<string, { left: number; top: number }>())
@@ -427,7 +470,16 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
       if (path && pitPath) {
         if (!lenRef.current) lenRef.current = path.getTotalLength()
         if (!pitLenRef.current) pitLenRef.current = pitPath.getTotalLength()
-        if (!profileRef.current) profileRef.current = buildSpeedProfile(path, layout.metresPerUnit)
+        if (!profileRef.current) profileRef.current = buildMotionProfile(path, layout.metresPerUnit)
+        const prof = profileRef.current
+        const lenTotal = lenRef.current
+        const uu = (m: number) => m / layout.metresPerUnit
+        const look = uu(8) // heading from ~8m of track ahead
+
+        // Pass 1: place every car in arc space. Racing cars get the racing-line lateral offset; grid
+        // slots form the staggered starting grid (8m pitch, alternating sides) in DISTANCE space.
+        interface Frame { id: string; el: HTMLDivElement; onPit: boolean; dist: number; lat: number; race: boolean }
+        const frames: Frame[] = []
         for (const car of cars) {
           const el = elRefs.current.get(car.id)
           if (!el) continue
@@ -437,31 +489,63 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             continue
           }
           el.style.visibility = ''
-          const [p, total] = sample.pit
-            ? [pitPath, pitLenRef.current]
-            : [path, lenRef.current]
-          const dist = sample.pit
-            ? Math.min(1, Math.max(0, sample.prog)) * total
-            : timeToDistance(profileRef.current, ((sample.prog % 1) + 1) % 1) * total
-          const look = 8 / layout.metresPerUnit // heading from ~8m of track ahead
-          const pt = p.getPointAtLength(dist)
-          const ahead = p.getPointAtLength(sample.pit ? Math.min(total, dist + look) : (dist + look) % total)
-          const target = Math.atan2(ahead.y - pt.y, ahead.x - pt.x)
+          if (sample.pit) {
+            frames.push({ id: car.id, el, onPit: true, dist: Math.min(1, Math.max(0, sample.prog)) * pitLenRef.current, lat: 0, race: false })
+          } else if (sample.gridSlot != null) {
+            const back = uu(3 + (sample.gridSlot - 1) * 8)
+            frames.push({
+              id: car.id, el, onPit: false,
+              dist: (((lenTotal - back) % lenTotal) + lenTotal) % lenTotal,
+              lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7),
+              race: false,
+            })
+          } else {
+            const dist = timeToDistance(prof.time, ((sample.prog % 1) + 1) % 1) * lenTotal
+            const idx = Math.min(PROFILE_N - 1, Math.floor((dist / lenTotal) * PROFILE_N))
+            frames.push({ id: car.id, el, onPit: false, dist, lat: prof.lateral[idx], race: true })
+          }
+        }
+
+        // Pass 2: side-by-side separation — when two racing cars share ~6m of arc, the chasing car
+        // moves off-line (side chosen stably per car) instead of overlapping the car ahead.
+        const racing = frames.filter((f) => f.race).sort((a, b) => a.dist - b.dist)
+        const sepRange = uu(6)
+        const latMax = uu(3.4)
+        for (let i = 0; i < racing.length; i++) {
+          const behind = racing[i]
+          const ahead = racing[(i + 1) % racing.length]
+          if (behind === ahead) break
+          const gap = i === racing.length - 1 ? ahead.dist + lenTotal - behind.dist : ahead.dist - behind.dist
+          if (gap < sepRange) {
+            const side = behind.id.charCodeAt(behind.id.length - 1) % 2 === 0 ? 1 : -1
+            behind.lat = Math.max(-latMax, Math.min(latMax, behind.lat + side * uu(2.1) * (1 - gap / sepRange)))
+          }
+        }
+
+        // Pass 3: resolve to viewBox coordinates and write the DOM.
+        for (const f of frames) {
+          const p = f.onPit ? pitPath : path
+          const total = f.onPit ? pitLenRef.current : lenTotal
+          const pt = p.getPointAtLength(f.dist)
+          const aheadPt = p.getPointAtLength(f.onPit ? Math.min(total, f.dist + look) : (f.dist + look) % total)
+          const target = Math.atan2(aheadPt.y - pt.y, aheadPt.x - pt.x)
           // Low-pass the heading so polyline vertices don't twitch the sprite.
-          const prev = headingRef.current.get(car.id) ?? target
+          const prev = headingRef.current.get(f.id) ?? target
           let delta = target - prev
           if (delta > Math.PI) delta -= 2 * Math.PI
           if (delta < -Math.PI) delta += 2 * Math.PI
           const heading = prev + delta * 0.25
-          headingRef.current.set(car.id, heading)
-          const left = ((pt.x - vb.x) / vb.w) * 100
-          const top = ((pt.y - vb.y) / vb.h) * 100
-          posRef.current.set(car.id, { left, top })
+          headingRef.current.set(f.id, heading)
+          const x = pt.x - Math.sin(heading) * f.lat
+          const y = pt.y + Math.cos(heading) * f.lat
+          const left = ((x - vb.x) / vb.w) * 100
+          const top = ((y - vb.y) / vb.h) * 100
+          posRef.current.set(f.id, { left, top })
           // Position via transform, not left/top: layout offsets snap to the pixel grid in world space,
           // which a zoomed follow camera amplifies into visible jiggle on the pinned car.
           const { w: sw, h: sh } = stageDimsRef.current
-          el.style.transform = `translate(${(left / 100) * sw}px, ${(top / 100) * sh}px) translate(-50%, -50%)`
-          const spr = sprRefs.current.get(car.id)
+          f.el.style.transform = `translate(${(left / 100) * sw}px, ${(top / 100) * sh}px) translate(-50%, -50%)`
+          const spr = sprRefs.current.get(f.id)
           if (spr) spr.style.transform = `rotate(${heading + Math.PI / 2}rad)`
         }
       }
