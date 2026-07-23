@@ -113,8 +113,9 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
     prevN = n
     const inv2 = 1 / (ds * ds)
     const lap = (i: number) => (a[(i - 1 + n) % n] - 2 * a[i] + a[(i + 1) % n]) * inv2
+    // Path curvature: kc PLUS a'' — shifting toward the inside of a turn tightens it.
     const k = new Float64Array(n)
-    for (let i = 0; i < n; i++) k[i] = kc[i] - lap(i)
+    for (let i = 0; i < n; i++) k[i] = kc[i] + lap(i)
 
     const sweeps = li === 0 ? 4000 : 900
     const OMEGA = 1.4
@@ -125,14 +126,15 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
         const i = fwd ? s : n - 1 - s
         const ip = (i - 1 + n) % n
         const inx = (i + 1) % n
-        const step = ((k[ip] - 2 * k[i] + k[inx]) * ds * ds) / 6
+        // Stationarity of sum(kappa^2) wrt a_i: a_i <- a_i - ds^2/6 * (discrete laplacian of kappa).
+        const step = -((k[ip] - 2 * k[i] + k[inx]) * ds * ds) / 6
         const next = Math.max(-w, Math.min(w, (a[i] + OMEGA * step) / (1 + SPRING)))
         if (next !== a[i]) {
           a[i] = next
           // kappa depends on laterals at i-1, i, i+1: refresh the three affected stations.
-          k[ip] = kc[ip] - lap(ip)
-          k[i] = kc[i] - lap(i)
-          k[inx] = kc[inx] - lap(inx)
+          k[ip] = kc[ip] + lap(ip)
+          k[i] = kc[i] + lap(i)
+          k[inx] = kc[inx] + lap(inx)
         }
       }
     }
