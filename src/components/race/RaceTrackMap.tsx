@@ -489,7 +489,6 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const headingRef = useRef(new Map<string, number>())
   const latRef = useRef(new Map<string, number>())
   const tipRef = useRef<HTMLDivElement>(null)
-  const tipChevRef = useRef<HTMLDivElement>(null)
   const tipPosRef = useRef<{ x: number; y: number } | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -589,11 +588,13 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     return () => outer.removeEventListener('wheel', onWheel)
   }, [])
 
-  const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
+  const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean; mode: 'pan' | 'rotate' } | null>(null)
   const suppressClickRef = useRef(false)
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 || view === 'map') return
-    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false }
+    if (view === 'map') return
+    if (e.button === 1) e.preventDefault() // no middle-click autoscroll
+    if (e.button !== 0 && e.button !== 1) return
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, mode: e.button === 1 ? 'rotate' : 'pan' }
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current
@@ -603,12 +604,26 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
     if (!drag.moved && Math.hypot(dx, dy) < 3) return
     if (!drag.moved) {
       drag.moved = true
-      followRef.current = null
-      onFollow(null)
+      // Only PANNING breaks the follow lock; rotation orbits the followed car.
+      if (drag.mode === 'pan') {
+        followRef.current = null
+        onFollow(null)
+      }
       outerRef.current?.setPointerCapture(e.pointerId)
     }
-    camRef.current.x += dx
-    camRef.current.y += dy
+    const cam = camRef.current
+    if (drag.mode === 'rotate') {
+      const delta = dx * 0.005
+      cam.rot += delta
+      const cos = Math.cos(delta)
+      const sin = Math.sin(delta)
+      const { x, y } = cam
+      cam.x = x * cos - y * sin
+      cam.y = x * sin + y * cos
+    } else {
+      cam.x += dx
+      cam.y += dy
+    }
     drag.x = e.clientX
     drag.y = e.clientY
     applyCam()
@@ -623,7 +638,8 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
       suppressClickRef.current = false
       return
     }
-    onFollow(followRef.current === id ? null : id)
+    // Clicking the followed car does nothing — the only way to unfollow is to pan away.
+    if (followRef.current !== id) onFollow(id)
   }
 
   // Reset ZOOM only: keep the pan (or the follow lock) and rotation exactly as they are.
@@ -795,18 +811,6 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           tipPosRef.current = cur
           tip.style.opacity = '1'
           tip.style.transform = `translate(${cur.x}px, ${cur.y}px) translate(-50%, -50%) scale(0.9)`
-          // Notch on the card's car-facing edge, its corner aimed back at the driver. The distance to
-          // the border along the ray is a ray-box intersection (a projection width overshoots diagonals).
-          const chev = tipChevRef.current
-          if (chev) {
-            const lw = r.width / 0.9
-            const lh = r.height / 0.9
-            const ex = Math.abs(nx) > 1e-6 ? (lw / 2) / Math.abs(nx) : Infinity
-            const ey = Math.abs(ny) > 1e-6 ? (lh / 2) / Math.abs(ny) : Infinity
-            const edge = Math.min(ex, ey)
-            const deg = (Math.atan2(-ny, -nx) * 180) / Math.PI
-            chev.style.transform = `translate(-50%, -50%) translate(${-nx * (edge - 1)}px, ${-ny * (edge - 1)}px) rotate(${deg - 45}deg)`
-          }
         } else {
           tip.style.opacity = '0'
           tipPosRef.current = null
@@ -914,45 +918,54 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
               className="absolute left-0 top-0"
               style={{ opacity: car.retired ? 0.35 : 1 }}
             >
-              {/* Tooltip + click on the sprite ONLY — its exact rendered footprint, no hover halo. */}
-              <Tooltip
-                bare={!!tooltipFor}
-                content={
-                  tooltipFor?.(car.id) ?? (
-                    <div>
-                      <div className="font-semibold">P{car.pos} {car.name}</div>
-                      {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
-                    </div>
-                  )
-                }
-              >
-                <div
-                  ref={(el) => { if (el) sprRefs.current.set(car.id, el); else sprRefs.current.delete(car.id) }}
-                  onClick={() => clickCar(car.id)}
-                  className="cursor-pointer"
-                  style={{
-                    filter: car.isPlayer
-                      ? 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5)) drop-shadow(0 0 2px #FFFFFF) drop-shadow(0 0 4px rgba(255,255,255,0.6))'
-                      : 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))',
-                  }}
-                >
-                  {view === 'map' ? (
-                    <div
-                      className="flex items-center justify-center rounded-full font-bold text-[#FFFFFF]"
-                      style={{
-                        width: 20, height: 20, fontSize: 10,
-                        backgroundColor: car.color,
-                        border: '1.5px solid rgba(0,0,0,0.5)',
-                        boxShadow: car.isPlayer ? '0 0 0 2px #FFFFFF' : undefined,
-                      }}
-                    >
-                      <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
-                    </div>
-                  ) : (
-                    <CarSprite color={car.color} length={carL} />
-                  )}
-                </div>
-              </Tooltip>
+              {(() => {
+                {/* Tooltip + click on the sprite ONLY — its exact rendered footprint, no hover halo. */}
+                const sprite = (
+                  <div
+                    ref={(el) => { if (el) sprRefs.current.set(car.id, el); else sprRefs.current.delete(car.id) }}
+                    onClick={() => clickCar(car.id)}
+                    className="cursor-pointer"
+                    style={{
+                      filter: car.isPlayer
+                        ? 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5)) drop-shadow(0 0 2px #FFFFFF) drop-shadow(0 0 4px rgba(255,255,255,0.6))'
+                        : 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))',
+                    }}
+                  >
+                    {view === 'map' ? (
+                      <div
+                        className="flex items-center justify-center rounded-full font-bold text-[#FFFFFF]"
+                        style={{
+                          width: 20, height: 20, fontSize: 10,
+                          backgroundColor: car.color,
+                          border: '1.5px solid rgba(0,0,0,0.5)',
+                          boxShadow: car.isPlayer ? '0 0 0 2px #FFFFFF' : undefined,
+                        }}
+                      >
+                        <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
+                      </div>
+                    ) : (
+                      <CarSprite color={car.color} length={carL} />
+                    )}
+                  </div>
+                )
+                // The followed car's pinned card IS its tooltip — no double card on hover.
+                if (pinnedCard && view === 'live' && car.id === followId) return sprite
+                return (
+                  <Tooltip
+                    bare={!!tooltipFor}
+                    content={
+                      tooltipFor?.(car.id) ?? (
+                        <div>
+                          <div className="font-semibold">P{car.pos} {car.name}</div>
+                          {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
+                        </div>
+                      )
+                    }
+                  >
+                    {sprite}
+                  </Tooltip>
+                )
+              })()}
                 {showLabels && (
                   <div
                     className="absolute left-full top-1/2 flex items-center gap-1 whitespace-nowrap pointer-events-none"
@@ -977,11 +990,6 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
         </div>
         {pinnedCard && view === 'live' && (
           <div ref={tipRef} className="absolute left-0 top-0 pointer-events-none" style={{ opacity: 0 }}>
-            <div
-              ref={tipChevRef}
-              className="absolute left-1/2 top-1/2 w-3 h-3"
-              style={{ background: '#1E2431', borderRight: '1px solid #2A3142', borderBottom: '1px solid #2A3142' }}
-            />
             {pinnedCard}
           </div>
         )}
