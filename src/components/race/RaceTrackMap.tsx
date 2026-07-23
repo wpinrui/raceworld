@@ -564,11 +564,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           }
         }
 
-        // Pass 2: side-by-side separation — when two racing cars share ~6m of arc, the chasing car
-        // moves off-line (side chosen stably per car) instead of overlapping the car ahead.
+        // Pass 2: side-by-side separation — when two racing cars share ~8m of arc, the chasing car
+        // moves off-line (side chosen stably per car) and the car ahead leans slightly the other way,
+        // so a battle runs genuinely two-wide instead of overlapping.
         const racing = frames.filter((f) => f.kind === 'race').sort((a, b) => a.dist - b.dist)
-        const sepRange = uu(6)
-        const latMax = uu(2.6)
+        const sepRange = uu(8)
+        const latMax = uu(3.4)
         for (let i = 0; i < racing.length; i++) {
           const behind = racing[i]
           const ahead = racing[(i + 1) % racing.length]
@@ -576,7 +577,9 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           const gap = i === racing.length - 1 ? ahead.dist + raceLenRef.current - behind.dist : ahead.dist - behind.dist
           if (gap < sepRange) {
             const side = behind.id.charCodeAt(behind.id.length - 1) % 2 === 0 ? 1 : -1
-            behind.lat = Math.max(-latMax, Math.min(latMax, behind.lat + side * uu(2.1) * (1 - gap / sepRange)))
+            const k = 1 - gap / sepRange
+            behind.lat = Math.max(-latMax, Math.min(latMax, behind.lat + side * uu(3.0) * k))
+            ahead.lat = Math.max(-latMax, Math.min(latMax, ahead.lat - side * uu(0.9) * k))
           }
         }
 
