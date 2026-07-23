@@ -32,8 +32,8 @@ export type TrackSample = { prog: number; pit?: boolean } | null
 // that smear speed changes over real distance — build-up on straights, braking zones into corners.
 const PROFILE_N = 256
 const V_TOP = 34
-const V_FLOOR = 6
-const A_LAT = 15
+const V_FLOOR = 5
+const A_LAT = 9
 const A_ACCEL = 5
 const A_BRAKE = 16
 
