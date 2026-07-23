@@ -280,7 +280,12 @@ export function RaceDayView({
               }
             />
           </div>
-          {myDrivers[1] && pod(myDrivers[1])}
+          {myDrivers[1]
+            ? pod(myDrivers[1])
+            : myDrivers[0]
+              // Driver mode has a single card; balance it so the console stays screen-centred.
+              ? <div className="w-[480px] shrink-0" />
+              : null}
         </div>
       )}
     </>
