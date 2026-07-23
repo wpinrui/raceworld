@@ -109,7 +109,7 @@ export default function TrackPreviewPage() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
       if (e.key === ' ') { e.preventDefault(); setPaused((p) => !p) }
-      if (['1', '2', '3', '4'].includes(e.key)) setSpeed(Number(e.key) as SimSpeed)
+      if (['1', '2', '3', '4', '5'].includes(e.key)) setSpeed(Number(e.key) as SimSpeed)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)

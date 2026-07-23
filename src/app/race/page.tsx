@@ -31,9 +31,11 @@ import { RaceDayView } from '@/components/race/RaceDayView'
 import { useRaceMapSampler } from '@/components/race/useRaceMapSampler'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 
-// 1-4 are real-time tick intervals (slow -> fast); 5 (FF) = 0 = instant "sim to the end". Speed 1 is
-// half the old slowest; 2/3/4 are the old 1/2/3.
-const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 10000, 2: 5000, 3: 2000, 4: 500, 5: 0 }
+// Race playback multipliers (#sim-2d): 1x is REAL TIME — one tick animates the leader's lap over its
+// actual duration — and the rest divide it. The old instant fast-forward is gone; 25x is the ceiling.
+const SPEED_MULTS: Record<SimSpeed, number> = { 1: 1, 2: 2, 3: 5, 4: 10, 5: 25 }
+// The pre-race grid wait before lap 1 starts animating.
+const GRID_HOLD_MS = 2000
 
 export default function RacePage() {
   const router = useRouter()
@@ -51,9 +53,7 @@ export default function RacePage() {
   const qe = useQualifyingEngine(raceState, drivers, teams, season.constructorStandings, season.currentRound)
 
   const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
-  const [showRaceFFModal, setShowRaceFFModal] = useState(false)
   const [showQualyFFModal, setShowQualyFFModal] = useState(false)
-  const [ffConfirmed, setFFConfirmed] = useState(false)
   const hydrated = useHydrated()
   const [lapProgress, setLapProgress] = useState(0)
   // Team Manager: the pre-race upgrade reveal shows once per upgrade; dismissing latches this round.
@@ -61,6 +61,7 @@ export default function RacePage() {
 
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextTickAtRef = useRef<number>(0)
+  const tickIntervalRef = useRef<number>(GRID_HOLD_MS)
   const doTickRef = useRef<() => void>(() => {})
   // Once the race has finished, raceState going null means End Race fired and we're navigating to Home;
   // render nothing instead of flashing the (now-advanced) next round's pre-qualifying for a frame (#113).
@@ -76,7 +77,7 @@ export default function RacePage() {
     () => Object.fromEntries((raceState?.qualifyingResults ?? []).map((q) => [q.driverId, q.gridPosition])),
     [raceState?.qualifyingResults],
   )
-  const mapSampleRef = useRaceMapSampler(raceState, gridPosMap, nextTickAtRef, SPEED_INTERVALS[raceState?.speed ?? 1], raceState?.paused ?? false)
+  const mapSampleRef = useRaceMapSampler(raceState, gridPosMap, nextTickAtRef, tickIntervalRef, raceState?.paused ?? false)
 
   // Driver hover card data: career totals (through last season, folded with this season's results) + this
   // year's WDC standing, so a name in the race table opens the same expanded card used around the app.
@@ -97,10 +98,7 @@ export default function RacePage() {
 
   useEffect(() => { if (phase === 'finished') endedRef.current = true }, [phase])
 
-  const handleSpeedClick = (s: SimSpeed) => {
-    if (s === 5) { setShowRaceFFModal(true); return }
-    setFFConfirmed(false); setSpeed(s)
-  }
+  const handleSpeedClick = (s: SimSpeed) => setSpeed(s)
   // Qualifying FF (speed 5) skips the rest of the session instantly — confirm first, like the race FF.
   const handleQualySpeedClick = (s: SimSpeed) => {
     if (s === 5) { setShowQualyFFModal(true); return }
@@ -117,6 +115,7 @@ export default function RacePage() {
         if (e.key === '2') handleSpeedClick(2)
         if (e.key === '3') handleSpeedClick(3)
         if (e.key === '4') handleSpeedClick(4)
+        if (e.key === '5') handleSpeedClick(5)
       }
       if (phase === 'qualifying') {
         // Keys map to the animated speeds 1-4 (2x..16x); FF (skip) is button-only, behind its confirm.
@@ -139,56 +138,48 @@ export default function RacePage() {
 
   useEffect(() => { doTickRef.current = doTick }, [doTick])
 
+  // Tick scheduler: each interval animates the leader's JUST-COMPLETED lap, so its duration is that
+  // lap's real time divided by the speed multiplier (1x = real time). The first interval (no lap yet)
+  // is a short grid hold before lights out.
   useEffect(() => {
-    if (phase !== 'racing' || paused || speed !== 5 || !ffConfirmed) return
-    if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
-    let cancelled = false
-    const run = async () => {
-      while (!cancelled) {
-        const current = useRaceStore.getState().raceState
-        if (!current || current.phase !== 'racing') break
-        useRaceStore.getState().tickLap()
-        await new Promise((r) => setTimeout(r, 0))
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [phase, paused, speed, ffConfirmed])
-
-  // Normal real-time tick: schedule the next lap at the chosen speed while racing, paused, or fast-forward off.
-  useEffect(() => {
-    if (phase !== 'racing' || speed === 5 || paused) {
+    if (phase !== 'racing' || paused) {
       if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
       return
     }
-    const ms = SPEED_INTERVALS[speed]
-    const remaining = nextTickAtRef.current > Date.now() ? Math.min(nextTickAtRef.current - Date.now(), ms) : ms
+    const nextMs = () => {
+      const s = useRaceStore.getState().raceState
+      if (!s) return GRID_HOLD_MS
+      const running = s.drivers.filter((d) => !d.retired)
+      const leader = running.reduce((a, b) => (a.totalTime <= b.totalTime ? a : b), running[0])
+      const last = leader?.lapTimes[leader.lapTimes.length - 1]
+      return last ? (last * 1000) / SPEED_MULTS[s.speed as SimSpeed] : GRID_HOLD_MS
+    }
     const schedule = (delay: number) => {
+      tickIntervalRef.current = delay
       nextTickAtRef.current = Date.now() + delay
       tickTimerRef.current = setTimeout(() => {
         doTickRef.current()
         const s = useRaceStore.getState().raceState
-        if (s?.phase === 'racing' && !s.paused && s.speed !== 5) schedule(SPEED_INTERVALS[s.speed as SimSpeed])
+        if (s?.phase === 'racing' && !s.paused) schedule(nextMs())
       }, delay)
     }
+    const ms = nextMs()
+    const remaining = nextTickAtRef.current > Date.now() ? Math.min(nextTickAtRef.current - Date.now(), ms) : ms
     schedule(remaining)
     return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
   }, [phase, paused, speed])
 
   useEffect(() => {
-    if (phase !== 'racing' || paused || speed === 5) {
-      setLapProgress(paused ? Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / SPEED_INTERVALS[speed]) * 100)) : 0)
+    if (phase !== 'racing' || paused) {
+      setLapProgress(paused ? Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current) * 100)) : 0)
       return
     }
     const timer = setInterval(() => {
-      setLapProgress(Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / SPEED_INTERVALS[speed]) * 100)))
+      setLapProgress(Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current) * 100)))
     }, 50)
     return () => clearInterval(timer)
   }, [phase, paused, speed])
 
-  // Confirming FF runs it immediately (unpause), since the race/session starts paused. Held cars go back to
-  // automatic strategy so a standing HOLD doesn't ride dead tyres to the flag while fast-forwarding.
-  const confirmRaceFF = () => { setShowRaceFFModal(false); setFFConfirmed(true); useRaceStore.getState().clearHolds(); setSpeed(5); setPaused(false) }
   const confirmQualyFF = () => { setShowQualyFFModal(false); setSpeed(5); setPaused(false) }
 
   function computeResults(): RaceResult[] {
@@ -361,16 +352,6 @@ export default function RacePage() {
           speed={speed} paused={paused}
           onSpeedClick={handleQualySpeedClick}
           onTogglePause={() => setPaused(!paused)}
-        />
-      )}
-
-      {showRaceFFModal && (
-        <ConfirmModal
-          title="Fast-forward to the end?"
-          body={season.teamManagerMode ? 'The rest of the race will be simulated instantly. Held cars return to automatic strategy.' : 'The rest of the race will be simulated instantly.'}
-          confirmLabel="Fast-forward"
-          onConfirm={confirmRaceFF}
-          onCancel={() => setShowRaceFFModal(false)}
         />
       )}
 

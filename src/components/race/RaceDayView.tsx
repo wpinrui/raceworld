@@ -267,6 +267,7 @@ export function RaceDayView({
               onTogglePause={onTogglePause}
               straightness={circuit.straightness}
               backdropUrl={`/track-backdrops/${circuit.id}.png`}
+              speedLabels={{ 1: '1×', 2: '2×', 3: '5×', 4: '10×', 5: '25×' }}
               topRight={
                 !driverMode && !teamManagerMode ? (
                   <button

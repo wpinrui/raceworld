@@ -24,13 +24,12 @@ export function useRaceMapSampler(
   raceState: RaceState | null,
   gridPos: Record<string, number>,
   nextTickAtRef: React.MutableRefObject<number>,
-  intervalMs: number,
+  intervalRef: React.MutableRefObject<number>,
   paused: boolean,
 ): React.MutableRefObject<(id: string) => TrackSample> {
   const dataRef = useRef(new Map<string, CarData>())
   const lapRef = useRef(0)
   const pitLossRef = useRef(21)
-  const intervalRef = useRef(intervalMs)
   const pausedRef = useRef(paused)
   const frozenFracRef = useRef(0)
 
@@ -44,7 +43,9 @@ export function useRaceMapSampler(
   useEffect(() => {
     if (!raceState) return
     pitLossRef.current = pitLaneLoss(raceState.year)
-    lapRef.current = raceState.currentLap
+    // COMPLETED laps, derived from the data itself: the sim's currentLap is the lap IN PROGRESS
+    // (it starts at 1 on the grid), so counting lapTimes is the robust source of truth.
+    lapRef.current = Math.max(0, ...raceState.drivers.map((d) => d.lapTimes.length))
     const map = dataRef.current
     for (const ds of raceState.drivers) {
       const cum: number[] = [0]
@@ -66,7 +67,6 @@ export function useRaceMapSampler(
     }
   }, [raceState, gridPos])
 
-  useEffect(() => { intervalRef.current = intervalMs }, [intervalMs])
   useEffect(() => {
     if (paused && !pausedRef.current) frozenFracRef.current = liveFrac()
     pausedRef.current = paused

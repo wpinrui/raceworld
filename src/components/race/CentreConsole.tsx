@@ -124,7 +124,7 @@ export function CentreConsole({
           </button>
           <div className="flex items-center gap-1.5">
             <div className="h-6 flex items-center justify-center px-2 rounded-[3px] border border-[#2A3142] border-b-2 text-[10px] font-extrabold text-[#5C6779] font-mono" style={{ background: CHIP_BG }}>SPACE</div>
-            {['1', '2', '3', '4'].map((k) => (
+            {['1', '2', '3', '4', '5'].map((k) => (
               <div key={k} className="h-6 w-6 flex items-center justify-center rounded-[3px] border border-[#2A3142] border-b-2 text-[10px] font-extrabold text-[#5C6779] font-mono" style={{ background: CHIP_BG }}>{k}</div>
             ))}
           </div>
