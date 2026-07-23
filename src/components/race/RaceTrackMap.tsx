@@ -633,17 +633,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
         // form the staggered starting grid (8m pitch, alternating sides) on the centreline.
         interface Frame {
           id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number
-          gridSlot?: number; blend?: number
-        }
-        // Grid-box pose on the centreline (also the launch origin for the lap-1 blend).
-        const gridPose = (slot: number) => {
-          const back = uu(3 + (slot - 1) * 8)
-          const gdist = (((lenTotal - back) % lenTotal) + lenTotal) % lenTotal
-          const pt0 = path.getPointAtLength(gdist)
-          const pt1 = path.getPointAtLength((gdist + look) % lenTotal)
-          const h = Math.atan2(pt1.y - pt0.y, pt1.x - pt0.x)
-          const lat = (slot % 2 === 1 ? 1 : -1) * uu(1.7)
-          return { x: pt0.x - Math.sin(h) * lat, y: pt0.y + Math.cos(h) * lat, h }
+          blend?: number
         }
         const frames: Frame[] = []
         for (const car of cars) {
@@ -665,8 +655,19 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
               lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7),
             })
           } else {
-            const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
-            frames.push({ id: car.id, el, kind: 'race', dist, lat: 0, gridSlot: sample.gridSlot, blend: sample.blend })
+            let dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
+            let lat = 0
+            // Lap 1: every car shares the playback clock with cum = 0, so nominal positions coincide.
+            // Carry the car's GRID DEFICIT as a distance offset that decays to zero across the lap —
+            // P20 launches 155m back and only reaches nominal position at the line — and fade the grid
+            // box's lateral stagger out over the opening stretch.
+            if (sample.gridSlot != null) {
+              const back = uu(3 + (sample.gridSlot - 1) * 8)
+              const rl = raceLenRef.current
+              dist = (((dist - back * (1 - dist / rl)) % rl) + rl) % rl
+              lat = (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - Math.min(1, sample.blend ?? 1))
+            }
+            frames.push({ id: car.id, el, kind: 'race', dist, lat, blend: sample.blend })
           }
         }
 
@@ -710,16 +711,8 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           const prevLat = latRef.current.get(f.id) ?? f.lat
           const lat = prevLat + (f.lat - prevLat) * 0.15
           latRef.current.set(f.id, lat)
-          let x = pt.x - Math.sin(heading) * lat
-          let y = pt.y + Math.cos(heading) * lat
-          // Lap-1 launch: ease from the grid box onto the racing line instead of teleporting.
-          if (f.kind === 'race' && f.gridSlot != null && (f.blend ?? 1) < 1) {
-            const b = f.blend ?? 0
-            const e = b * b * (3 - 2 * b)
-            const pose = gridPose(f.gridSlot)
-            x = pose.x + (x - pose.x) * e
-            y = pose.y + (y - pose.y) * e
-          }
+          const x = pt.x - Math.sin(heading) * lat
+          const y = pt.y + Math.cos(heading) * lat
           const left = ((x - vb.x) / vb.w) * 100
           const top = ((y - vb.y) / vb.h) * 100
           posRef.current.set(f.id, { left, top })
