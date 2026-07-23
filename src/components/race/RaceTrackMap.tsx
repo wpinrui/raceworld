@@ -29,6 +29,8 @@ interface Props {
   markerSize?: number
 }
 
+const TRACK_STROKE = 16
+
 export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -37,9 +39,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props
   const outerRef = useRef<HTMLDivElement>(null)
   const [stage, setStage] = useState({ w: 0, h: 0 })
 
+  // Pad the authored viewBox: it hugs the racing line, so half the track stroke (and the markers) would
+  // otherwise be clipped wherever the path touches an edge.
   const vb = useMemo(() => {
     const [x, y, w, h] = layout.viewBox.split(' ').map(Number)
-    return { x, y, w, h }
+    const m = TRACK_STROKE / 2 + 8
+    return { x: x - m, y: y - m, w: w + 2 * m, h: h + 2 * m }
   }, [layout.viewBox])
 
   // Fit an inner stage of the track's exact aspect ratio inside whatever box we're given, so the marker
@@ -102,8 +107,8 @@ export function RaceTrackMap({ layout, cars, sampleRef, markerSize = 22 }: Props
   return (
     <div ref={outerRef} className="relative w-full h-full flex items-center justify-center">
       <div className="relative" style={{ width: stage.w, height: stage.h }}>
-      <svg viewBox={layout.viewBox} className="absolute inset-0 w-full h-full">
-        <path ref={pathRef} d={layout.d} fill="none" stroke="#3A4252" strokeWidth={16} strokeLinejoin="round" />
+      <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full">
+        <path ref={pathRef} d={layout.d} fill="none" stroke="#3A4252" strokeWidth={TRACK_STROKE} strokeLinejoin="round" />
         <path d={layout.d} fill="none" stroke="#232A38" strokeWidth={10} strokeLinejoin="round" />
         <line x1={sf.x1} y1={sf.y1} x2={sf.x2} y2={sf.y2} stroke="#FFFFFF" strokeWidth={3} />
       </svg>
