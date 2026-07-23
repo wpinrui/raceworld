@@ -62,6 +62,7 @@ export default function RacePage() {
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextTickAtRef = useRef<number>(0)
   const tickIntervalRef = useRef<number>(GRID_HOLD_MS)
+  const lapFracDoneRef = useRef(0)
   const doTickRef = useRef<() => void>(() => {})
   // Once the race has finished, raceState going null means End Race fired and we're navigating to Home;
   // render nothing instead of flashing the (now-advanced) next round's pre-qualifying for a frame (#113).
@@ -154,19 +155,28 @@ export default function RacePage() {
       const last = leader?.lapTimes[leader.lapTimes.length - 1]
       return last ? (last * 1000) / SPEED_MULTS[s.speed as SimSpeed] : GRID_HOLD_MS
     }
-    const schedule = (delay: number) => {
-      tickIntervalRef.current = delay
+    // `fullMs` is the whole lap's animation window (what the sampler divides by); `delay` is the part
+    // still to play. Keeping them separate lets a speed change resume mid-lap instead of restarting it.
+    const schedule = (fullMs: number, delay: number) => {
+      tickIntervalRef.current = fullMs
       nextTickAtRef.current = Date.now() + delay
       tickTimerRef.current = setTimeout(() => {
         doTickRef.current()
+        lapFracDoneRef.current = 0
         const s = useRaceStore.getState().raceState
-        if (s?.phase === 'racing' && !s.paused) schedule(nextMs())
+        if (s?.phase === 'racing' && !s.paused) {
+          const m = nextMs()
+          schedule(m, m)
+        }
       }, delay)
     }
     const ms = nextMs()
-    const remaining = nextTickAtRef.current > Date.now() ? Math.min(nextTickAtRef.current - Date.now(), ms) : ms
-    schedule(remaining)
-    return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
+    schedule(ms, (1 - lapFracDoneRef.current) * ms)
+    return () => {
+      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
+      // Remember how far through the lap we were, for the next run (speed change or unpause).
+      lapFracDoneRef.current = Math.min(1, Math.max(0, 1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current))
+    }
   }, [phase, paused, speed])
 
   useEffect(() => {
