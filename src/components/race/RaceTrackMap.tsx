@@ -471,9 +471,11 @@ interface Props {
   tooltipFor?: (id: string) => React.ReactNode
   /** 'live' = sprites + camera; 'map' = the classic static full-track view with numbered dots. */
   view?: 'live' | 'map'
+  /** Card pinned to the followed car; the map positions it clear of the track ribbon each frame. */
+  pinnedCard?: React.ReactNode
 }
 
-export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live' }: Props) {
+export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live', pinnedCard }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -486,6 +488,8 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   const posRef = useRef(new Map<string, { left: number; top: number }>())
   const headingRef = useRef(new Map<string, number>())
   const latRef = useRef(new Map<string, number>())
+  const tipRef = useRef<HTMLDivElement>(null)
+  const tipPosRef = useRef<{ x: number; y: number } | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
@@ -752,6 +756,37 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
           applyCam()
         }
       }
+
+      // Pinned card: orbit the followed car perpendicular to the LOCAL TRACK DIRECTION, just clear of
+      // the ribbon, preferring above — so it never sits on the tarmac. Low-passed so it glides.
+      const tip = tipRef.current
+      if (tip) {
+        const fid = followRef.current
+        const heading = fid ? headingRef.current.get(fid) : undefined
+        if (fid && viewRef.current === 'live' && heading != null) {
+          const hs = heading + camRef.current.rot // track direction in screen space
+          let nx = -Math.sin(hs)
+          let ny = Math.cos(hs)
+          if (ny > 0) { nx = -nx; ny = -ny } // prefer the upper side
+          const { w, h } = stageDimsRef.current
+          const ppu = vb.w > 0 ? w / vb.w : 1
+          const ribbonHalf = ((TRACK_WIDTH_M / 2) / layout.metresPerUnit) * ppu * camRef.current.z
+          const r = tip.getBoundingClientRect()
+          const clearance = Math.abs(nx) * (r.width / 2) + Math.abs(ny) * (r.height / 2)
+          const offset = ribbonHalf + clearance + 18
+          const tx = w / 2 + nx * offset
+          const ty = h / 2 + ny * offset
+          const cur = tipPosRef.current ?? { x: tx, y: ty }
+          cur.x += (tx - cur.x) * 0.12
+          cur.y += (ty - cur.y) * 0.12
+          tipPosRef.current = cur
+          tip.style.opacity = '1'
+          tip.style.transform = `translate(${cur.x}px, ${cur.y}px) translate(-50%, -50%) scale(0.9)`
+        } else {
+          tip.style.opacity = '0'
+          tipPosRef.current = null
+        }
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -915,6 +950,11 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
             </div>
           ))}
         </div>
+        {pinnedCard && view === 'live' && (
+          <div ref={tipRef} className="absolute left-0 top-0 pointer-events-none" style={{ opacity: 0 }}>
+            {pinnedCard}
+          </div>
+        )}
       </div>
 
       {/* Camera controls (the map view is static; nothing to reset) */}

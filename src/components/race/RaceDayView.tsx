@@ -225,6 +225,23 @@ export function RaceDayView({
             followId={effectiveFollow}
             onFollow={setFollowId}
             view={mapView ? 'map' : 'live'}
+            pinnedCard={(() => {
+              if (!effectiveFollow || !pinnedTip || mapView) return undefined
+              const ds = raceState.drivers.find((s) => s.driverId === effectiveFollow)
+              const d = driverOf.get(effectiveFollow)
+              if (!ds || !d) return undefined
+              return (
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={raceState.drivers}
+                  drivers={drivers}
+                  currentLap={raceState.currentLap}
+                  isPlayer={isPlayerCar(ds)}
+                />
+              )
+            })()}
             tooltipFor={(id) => {
               const ds = raceState.drivers.find((s) => s.driverId === id)
               const d = driverOf.get(id)
@@ -266,28 +283,6 @@ export function RaceDayView({
               </button>
             </Tooltip>
           </div>
-          {/* Pinned card for the watched driver: the follow camera keeps the car at stage centre. */}
-          {effectiveFollow && pinnedTip && !mapView && (() => {
-            const ds = raceState.drivers.find((s) => s.driverId === effectiveFollow)
-            const d = driverOf.get(effectiveFollow)
-            if (!ds || !d) return null
-            return (
-              <div
-                className="absolute left-1/2 top-1/2 pointer-events-none"
-                style={{ transform: 'translate(-50%, calc(-100% - 44px)) scale(0.9)', transformOrigin: '50% 100%' }}
-              >
-                <DriverTrackTip
-                  ds={ds}
-                  driver={d}
-                  team={teamOf.get(d.teamId)}
-                  states={raceState.drivers}
-                  drivers={drivers}
-                  currentLap={raceState.currentLap}
-                  isPlayer={isPlayerCar(ds)}
-                />
-              </div>
-            )
-          })()}
         </div>
 
         {/* Right: post-race results, the god-mode panel, or commentary + live championship */}

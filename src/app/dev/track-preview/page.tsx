@@ -220,6 +220,23 @@ export default function TrackPreviewPage() {
             followId={followId}
             onFollow={setFollowId}
             view={mapView ? 'map' : 'live'}
+            pinnedCard={(() => {
+              if (!followId || !pinnedTip || mapView) return undefined
+              const ds = states.find((s) => s.driverId === followId)
+              const d = driverOf.get(followId)
+              if (!ds || !d) return undefined
+              return (
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={states}
+                  drivers={MOCK_DRIVERS}
+                  currentLap={lap}
+                  isPlayer={followId === 'car-7'}
+                />
+              )
+            })()}
             tooltipFor={(id) => {
               const ds = states.find((s) => s.driverId === id)
               const d = driverOf.get(id)
@@ -261,29 +278,7 @@ export default function TrackPreviewPage() {
               </button>
             </Tooltip>
           </div>
-          {/* Pinned card for the watched driver: the follow camera keeps the car at stage centre. */}
-          {followId && pinnedTip && !mapView && (() => {
-            const ds = states.find((s) => s.driverId === followId)
-            const d = driverOf.get(followId)
-            if (!ds || !d) return null
-            return (
-              <div
-                className="absolute left-1/2 top-1/2 pointer-events-none"
-                style={{ transform: 'translate(-50%, calc(-100% - 44px)) scale(0.9)', transformOrigin: '50% 100%' }}
-              >
-                <DriverTrackTip
-                  ds={ds}
-                  driver={d}
-                  team={teamOf.get(d.teamId)}
-                  states={states}
-                  drivers={MOCK_DRIVERS}
-                  currentLap={lap}
-                  isPlayer={followId === 'car-7'}
-                />
-              </div>
-            )
-          })()}
-        </div>
+</div>
 
         {/* Right: commentary + live championship */}
         <div className="w-80 shrink-0 border-l border-[#232A38] flex flex-col p-3 gap-3">
