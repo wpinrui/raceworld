@@ -53,7 +53,11 @@ export function useRaceMapSampler(
       lapRef.current = Math.max(0, ...raceState.drivers.map((d) => d.lapTimes.length))
       const map = dataRef.current
       for (const ds of raceState.drivers) {
-        const cum: number[] = [0]
+        // Anchor at the car's OFFICIAL starting time (the sim seeds totalTime with the grid offset,
+        // which lapTimes don't contain) — otherwise the map orders cars by pure pace and disagrees
+        // with the standings from lap 1.
+        const seed = ds.totalTime - ds.lapTimes.reduce((a, b) => a + b, 0)
+        const cum: number[] = [seed]
         for (const t of ds.lapTimes) cum.push(cum[cum.length - 1] + t)
         const pitLaps = new Set<number>()
         let acc = 0
@@ -99,6 +103,9 @@ export function useRaceMapSampler(
       if (N === 0) return { prog: 0, gridSlot: c.grid } // formed up on the starting grid
       const frac = pausedRef.current ? frozenFracRef.current : liveFrac()
       const S = leaderCumAt(N - 1) + frac * (leaderCumAt(N) - leaderCumAt(N - 1))
+      // Still on the grid: the playback clock hasn't reached this car's official start offset yet, so
+      // it launches when its grid stagger says it should.
+      if (S < c.cum[0]) return { prog: 0, gridSlot: c.grid }
       if (c.retired && S >= c.cum[c.cum.length - 1]) return null
       let k = Math.min(c.scan, c.cum.length - 1)
       while (k > 0 && c.cum[k] > S) k--

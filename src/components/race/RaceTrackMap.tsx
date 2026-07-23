@@ -658,18 +658,12 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
               lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7),
             })
           } else {
-            let dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
-            let lat = 0
-            // Lap 1: every car shares the playback clock with cum = 0, so nominal positions coincide.
-            // Carry the car's GRID DEFICIT as a distance offset that decays to zero across the lap —
-            // P20 launches 155m back and only reaches nominal position at the line — and fade the grid
-            // box's lateral stagger out over the opening stretch.
-            if (sample.gridSlot != null) {
-              const back = uu(3 + (sample.gridSlot - 1) * 8)
-              const rl = raceLenRef.current
-              dist = (((dist - back * (1 - dist / rl)) % rl) + rl) % rl
-              lat = (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - Math.min(1, sample.blend ?? 1))
-            }
+            const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
+            // Grid stagger in TIME lives in the sampler's official seeds now; only the grid box's
+            // lateral offset fades out here over the opening stretch of lap 1.
+            const lat = sample.gridSlot != null
+              ? (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - Math.min(1, sample.blend ?? 1))
+              : 0
             frames.push({ id: car.id, el, kind: 'race', dist, lat, blend: sample.blend })
           }
         }
