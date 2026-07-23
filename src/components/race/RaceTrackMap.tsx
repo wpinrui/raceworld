@@ -608,7 +608,7 @@ export function RaceTrackMap({ layout, cars, sampleRef, followId, onFollow, show
   }
 
   // Apply the default camera on mount (nothing else writes the transform until an interaction).
-  useEffect(() => { applyCam() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { applyCam() }, [])
 
   // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
