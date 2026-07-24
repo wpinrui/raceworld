@@ -5,6 +5,7 @@ Next.js 15 (App Router) · TypeScript · Tailwind CSS · better-sqlite3 · Zusta
 
 ## Architecture
 - **Race simulation** runs entirely client-side as a Zustand store. No DB writes mid-race; flush to SQLite at race end via Server Action.
+- **Two tick granularities, one core** (#sector-engine): `simulateSlice` (src/lib/sim/slice.ts) advances the field by a fraction of a lap. Played races tick 8 sectors per lap via `simulateSector` (store action `tickSector`), so the board, gaps and player commands are at most 1/8 lap stale. Headless racing (sim-ahead fast-forward, probe scripts) calls `simulateLap`, a frac=1 delegate that is bit-compatible with the historical lap engine — race.test.ts's seeded snapshot locks it. Statistical parity between the two is measured by `npx tsx scripts/sector-parity.ts` (paired-seed races, streamed metrics); the scaling rules (probability rescale, per-lap atomic decisions at lap boundaries, one pass per car per lap) live in slice.ts/engine.ts comments.
 - **Stats engine** lives server-side: SQL queries via Server Actions, called from Standings and Newsroom screens.
 - **Newsroom LLM** is a Server Action calling Claude with tool-calling against the stats DB. API key never leaves the server.
 
