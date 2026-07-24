@@ -8,7 +8,7 @@ import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLay
 import {
   MOODS, lightDir, shadowFill, shadowOpacity, shadowReach,
 } from '@/lib/ui/lighting'
-import { buildPitSlots, buildPitZone, pitViewAzimuth } from '@/lib/ui/pit-zone'
+import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
 } from './PitBuilding'
@@ -433,7 +433,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
   // Camera: pan (px), zoom, rotation — applied as one transform on the world layer. While following,
   // the pan is owned by the follow logic; dragging breaks the lock and pans freely.
-  const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 })
+  const defaultRot = useMemo(() => pitCameraRotation(layout) ?? 0, [layout])
+  const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot })
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
@@ -669,9 +670,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     viewRef.current = view
     camRef.current = view === 'map'
       ? { x: 0, y: 0, z: 1, rot: 0 }
-      : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: 0 }
+      : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
     applyCam()
-  }, [view])  
+  }, [view, defaultRot])  
 
   // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.

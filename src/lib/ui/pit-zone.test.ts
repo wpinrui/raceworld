@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
-import { buildPitSlots, buildPitZone, pitViewAzimuth } from './pit-zone'
+import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from './pit-zone'
 
 const IDS = Object.keys(TRACK_LAYOUTS)
 
@@ -97,6 +97,31 @@ describe('pitViewAzimuth', () => {
       const az = pitViewAzimuth(TRACK_LAYOUTS[id])!
       expect(Number.isFinite(az), id).toBe(true)
       expect(Math.hypot(Math.cos(az), Math.sin(az))).toBeCloseTo(1, 9)
+    }
+  })
+})
+
+describe('pitCameraRotation', () => {
+  it('lands the pit lane across the screen with the garages along the top', () => {
+    for (const id of IDS) {
+      const layout = TRACK_LAYOUTS[id]
+      const rot = pitCameraRotation(layout)
+      expect(rot, id).not.toBeNull()
+      const c = Math.cos(rot!)
+      const sn = Math.sin(rot!)
+      const st = layout.pit.slotStations
+      let nx = 0
+      let ny = 0
+      for (const q of st) {
+        nx += q.nx
+        ny += q.ny
+      }
+      const len = Math.hypot(nx, ny)
+      // Rotate the garage-side normal into screen space; y is DOWN, so up the screen is -1.
+      const sy = ((nx / len) * sn + (ny / len) * c)
+      const sx = ((nx / len) * c - (ny / len) * sn)
+      expect(sy, `${id}: garages are not at the top`).toBeCloseTo(-1, 6)
+      expect(sx, `${id}: pit lane is not horizontal`).toBeCloseTo(0, 6)
     }
   })
 })

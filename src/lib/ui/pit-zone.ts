@@ -66,6 +66,23 @@ export function pitViewAzimuth(layout: TrackLayout): number | null {
   return Math.atan2(-ny, -nx)
 }
 
+/** The world rotation that starts the race with the pit lane running across the screen and the
+ *  complex along the top of it.
+ *
+ *  This is the other half of `pitViewAzimuth`. That one fixes the projection to the building; this
+ *  one fixes the CAMERA to it, so the standardised perspective is the one the player actually opens
+ *  on rather than one they would have to orbit to find. Putting the garages at the top is what makes
+ *  every solid on the map lean away from the eye instead of toward it.
+ *
+ *  Follow is unaffected: the follow logic owns the pan and leaves rotation alone, so the camera still
+ *  tracks a car, just from a known heading. */
+export function pitCameraRotation(layout: TrackLayout): number | null {
+  const az = pitViewAzimuth(layout)
+  // The view runs from the building out across the lane, so the garage side is the opposite bearing;
+  // rotate until that bearing points up the screen, which in y-down screen space is -PI/2.
+  return az === null ? null : Math.PI / 2 - az
+}
+
 /** Where each garage box sits along the lane: evenly spread through the authored slot band, then
  *  pushed 1.6 m off the centreline onto the working lane. */
 export function buildPitSlots(layout: TrackLayout, teamCount: number): PitSlot[] {
