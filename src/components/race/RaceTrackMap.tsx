@@ -521,7 +521,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const pitDRef = useRef('') // the `d` the pit caches were built from — geometry, not identity
   const profileRef = useRef<Float64Array | null>(null)
   const pitWindowForRef = useRef<unknown>(null) // which engine instance the pit window was sent to
-  const dbgPosRef = useRef(new Map<string, { x: number; y: number; kind: string; dist: number; lat: number }>())
+  const prevDrawRef = useRef(new Map<string, { x: number; y: number; kind: string; dist: number; lat: number }>()) // last drawn pose per car, for the path-switch blend
   const pathBlendRef = useRef(new Map<string, { dx: number; dy: number; start: number }>()) // path-switch offset decay
   const pitAnchorRef = useRef(new Map<string, { residual: number; t0: number }>()) // service-position pin
   const slotDistsRef = useRef<number[]>([]) // arc position of each pit box along the lane path
@@ -1298,7 +1298,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
         // Pass 3c: write the DOM.
         for (const d of draws) {
-          const { f, pt, heading, lat, total } = d
+          const { f, pt, heading, lat } = d
           let x = pt.x - Math.sin(heading) * lat
           let y = pt.y + Math.cos(heading) * lat
           // Path-switch OFFSET DECAY: changing path (race↔pit, grid→race) changes the base point the
@@ -1306,9 +1306,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           // new path's motion from the FIRST frame; only the positional discrepancy, captured at the
           // switch, decays to zero. (The previous version lerped from a frozen snapshot — which pins
           // the sprite motionless at the start of every switch. Never again.)
-          const dbgPrev = dbgPosRef.current.get(f.id)
-          if (dbgPrev && dbgPrev.kind !== f.kind) {
-            pathBlendRef.current.set(f.id, { dx: dbgPrev.x - x, dy: dbgPrev.y - y, start: performance.now() })
+          const prevDraw = prevDrawRef.current.get(f.id)
+          if (prevDraw && prevDraw.kind !== f.kind) {
+            pathBlendRef.current.set(f.id, { dx: prevDraw.x - x, dy: prevDraw.y - y, start: performance.now() })
           }
           const bl = pathBlendRef.current.get(f.id)
           if (bl) {
@@ -1327,12 +1327,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           // Position via transform, not left/top: layout offsets snap to the pixel grid in world space,
           // which a zoomed follow camera amplifies into visible jiggle on the pinned car.
           const { w: sw, h: sh } = stageDimsRef.current
-          // TEMP teleport hunter (#live-engine debug): flag any sprite moving > ~25m in one frame.
-          const dbgJump = dbgPrev ? Math.hypot(x - dbgPrev.x, y - dbgPrev.y) * layout.metresPerUnit : 0
-          if (dbgPrev && dbgJump > 25) {
-            console.warn(`[teleport] ${f.id} ${dbgJump.toFixed(0)}m kind ${dbgPrev.kind}->${f.kind} dist ${dbgPrev.dist.toFixed(1)}->${f.dist.toFixed(1)} of ${total.toFixed(1)} lat ${dbgPrev.lat.toFixed(1)}->${lat.toFixed(1)}`)
-          }
-          dbgPosRef.current.set(f.id, { x, y, kind: f.kind, dist: f.dist, lat })
+          prevDrawRef.current.set(f.id, { x, y, kind: f.kind, dist: f.dist, lat })
           f.el.style.transform = `translate(${(left / 100) * sw}px, ${(top / 100) * sh}px) translate(-50%, -50%)`
           const spr = sprRefs.current.get(f.id)
           if (spr) spr.style.transform = viewRef.current === 'map' ? '' : `rotate(${heading + Math.PI / 2}rad)`

@@ -39,7 +39,9 @@ export function useLiveRace(): {
   const phase = useRaceStore((s) => s.raceState?.phase)
   const paused = useRaceStore((s) => s.raceState?.paused ?? false)
   const speed = useRaceStore((s) => (s.raceState?.speed ?? 1) as SimSpeed)
-  multRef.current = SPEED_MULTS[speed]
+  // The rAF loop and the sampler read this outside render; write it in an effect (writing a ref
+  // during render is not safe under concurrent rendering).
+  useEffect(() => { multRef.current = SPEED_MULTS[speed] }, [speed])
 
   // Engine lifecycle: born when the race goes green, discarded when the session leaves racing/finished.
   useEffect(() => {
