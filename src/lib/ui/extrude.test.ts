@@ -3,7 +3,10 @@
 // second staggered copy of the roof, and every diagonal edge coming out as a staircase.
 
 import { describe, it, expect } from 'vitest'
-import { partsPath, quad, ringArea, sweptHull, sideFacesX, rakedStand, type Part, type Vec } from './extrude'
+import {
+  partsPath, quad, ringArea, sweptHull, sideFacesX, rakedStand, ribbon, posts,
+  type Part, type Vec,
+} from './extrude'
 
 const P = (x: number, y: number): Vec => ({ x, y })
 const RECT: Part[] = [{ dx: 0, dy: 0, w: 10, h: 6 }]
@@ -113,6 +116,48 @@ describe('sideFacesX', () => {
       { dx: 8, dy: 2, w: 6, h: 6 }, // its right edge is outside the first rect
     ]
     expect(rings(sideFacesX(lShape, 6, 4))).toHaveLength(2)
+  })
+})
+
+describe('ribbon', () => {
+  const run = [P(0, 0), P(10, 0), P(20, 4)]
+
+  it('closes a band between the top line and its offset base', () => {
+    const r = rings(ribbon(run, 3, 2))
+    expect(r).toHaveLength(1)
+    // Every top point, then every base point back again.
+    expect(r[0]).toHaveLength(run.length * 2)
+    expect(r[0][0]).toEqual(P(0, 0))
+    expect(r[0][run.length]).toEqual(P(23, 6)) // last point, offset
+  })
+
+  it('is empty for a degenerate run', () => {
+    expect(ribbon([P(0, 0)], 3, 2)).toBe('')
+  })
+
+  it('walks the base back in reverse, so the band does not self-cross', () => {
+    const r = rings(ribbon(run, 3, 2))[0]
+    expect(r[r.length - 1]).toEqual(P(3, 2)) // first point, offset — i.e. reversed
+  })
+})
+
+describe('posts', () => {
+  const run = Array.from({ length: 9 }, (_, i) => P(i * 5, 0))
+
+  it('emits one vertical per strided point, as subpaths of a single path', () => {
+    const r = rings(posts(run, 2, 3, 2))
+    expect(r).toHaveLength(5) // indices 0,2,4,6,8
+    for (const seg of r) expect(seg).toHaveLength(2)
+  })
+
+  it('runs each post from the base line to the offset top', () => {
+    const seg = rings(posts(run, 2, 3, 4))[0]
+    expect(seg[0]).toEqual(P(0, 0))
+    expect(seg[1]).toEqual(P(2, 3))
+  })
+
+  it('never divides by a zero stride', () => {
+    expect(rings(posts(run, 2, 3, 0)).length).toBe(run.length)
   })
 })
 

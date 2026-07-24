@@ -1,5 +1,5 @@
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
-import { partsPath, rakedStand, sideFacesX, sweptHull } from '@/lib/ui/extrude'
+import { partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull } from '@/lib/ui/extrude'
 import {
   contactOpacity, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
   type Lighting,
@@ -31,6 +31,9 @@ const STAND_REAR_M = 5.5
 const STAND_ROOF_FRAC = 0.3
 /** Marshal hut height. */
 const MARSHAL_H_M = 2.8
+/** Trackside wall heights: armco/concrete, then the debris fencing standing behind it. */
+const BARRIER_H_M = 1.3
+const FENCE_H_M = 4
 /** Canopy height, for the tree shadow. Kept short of the true cast length: 1140 blobs cannot afford
  *  a swept shadow each, and a fully-detached round shadow reads worse than a slightly short one. */
 const TREE_H_M = 5
@@ -308,8 +311,9 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
-  // Barriers and tyre walls are about a metre and a half tall, so they throw a short hard shadow.
-  const wallT = u(1.5 * reach)
+  // Barriers and tyre walls throw a short hard shadow, cast from their BASE like every other solid.
+  const wallT = u(BARRIER_H_M * reach)
+  const wallB = u(BARRIER_H_M * EXTRUDE)
   return (
     <g>
       {/* Furniture obeys the same light as the buildings. Without this the barriers read as painted
@@ -319,7 +323,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
           {scenery.barriers.filter((b) => b.kind === 'wall').map((b, i) => (
             <path
               key={`bs${i}`} d={b.d} strokeWidth={u(1.6)}
-              transform={`translate(${dir.x * wallT} ${dir.y * wallT})`}
+              transform={`translate(${dir.x * wallB + dir.x * wallT} ${dir.y * wallB + dir.y * wallT})`}
             />
           ))}
           {scenery.tyreWalls.map((t, i) => (
@@ -330,21 +334,39 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
           ))}
         </g>
       )}
-      {scenery.barriers.map((b, i) => (
-        b.kind === 'wall'
-          ? (
+
+      {/* Barriers and fencing are solids on a curve. Each needs the height face between its top line
+          and its base, or it is a line plus a detached shadow and reads as floating above the
+          ground. The wall's face is solid; the debris fence's is a cage, so it is drawn see-through
+          with its posts as verticals — one path for a whole circuit's worth. */}
+      {scenery.barriers.map((b, i) => {
+        const solid = b.kind === 'wall'
+        const t = u((solid ? BARRIER_H_M : FENCE_H_M) * EXTRUDE)
+        const ox = dir.x * t
+        const oy = dir.y * t
+        if (solid) {
+          return (
             <g key={`bw${i}`}>
-              <path d={b.d} fill="none" stroke="#20242B" strokeWidth={u(1.5)} strokeLinecap="round" />
+              {/* Face, then the top rail. No dark casing under the rail: that was an outline around
+                  the barrier rather than any part of it, and the face and shadow now carry its form. */}
+              <path d={ribbon(b.pts, ox, oy)} fill={shadeFace('#8A9099', lighting)} />
               <path d={b.d} fill="none" stroke="#C9CDD4" strokeWidth={u(0.9)} strokeLinecap="round" />
             </g>
           )
-          : full && (
+        }
+        if (!full) return null
+        return (
+          <g key={`bf${i}`}>
+            {/* Mesh: you can see the circuit through debris fencing, so the face is barely there. */}
+            <path d={ribbon(b.pts, ox, oy)} fill="#AEB6C2" opacity={0.13} />
             <path
-              key={`bf${i}`} d={b.d} fill="none" stroke="#79808C" strokeWidth={u(0.5)}
-              strokeDasharray={`${u(1.6)} ${u(1.6)}`} opacity={0.55}
+              d={posts(b.pts, ox, oy, 2)} fill="none" stroke="#79808C"
+              strokeWidth={u(0.35)} opacity={0.5}
             />
-          )
-      ))}
+            <path d={b.d} fill="none" stroke="#79808C" strokeWidth={u(0.4)} opacity={0.6} />
+          </g>
+        )
+      })}
 
       {/* Tyre walls: banded so they read as stacked tyres even when only a few pixels wide. */}
       {scenery.tyreWalls.map((t, i) => (

@@ -105,6 +105,27 @@ export function sideFacesX(parts: Part[], ox: number, oy: number): string {
   return d
 }
 
+/** The height face of a WALL: the band swept between a run's top line and its base line. A barrier is
+ *  a solid the same as a building is, but its outline is an open curve rather than a rectangle, so
+ *  the face is one ribbon rather than a pair of quads. Without it a wall is a top line and a
+ *  detached shadow with nothing between them, and it reads as floating above the ground. */
+export function ribbon(pts: Vec[], ox: number, oy: number): string {
+  if (pts.length < 2) return ''
+  const top = pts.map((p) => `${f2(p.x)} ${f2(p.y)}`).join(' L ')
+  const base = [...pts].reverse().map((p) => `${f2(p.x + ox)} ${f2(p.y + oy)}`).join(' L ')
+  return `M ${top} L ${base} Z `
+}
+
+/** Vertical members up a wall's face — the posts of a debris fence, drawn as subpaths of ONE path so
+ *  a whole circuit's fencing costs a single element. `every` is a stride over the run's points. */
+export function posts(pts: Vec[], ox: number, oy: number, every: number): string {
+  let d = ''
+  for (let i = 0; i < pts.length; i += Math.max(1, every)) {
+    d += `M ${f2(pts[i].x)} ${f2(pts[i].y)} L ${f2(pts[i].x + ox)} ${f2(pts[i].y + oy)} `
+  }
+  return d
+}
+
 export interface RakedStand {
   /** The whole solid's outline, for the silhouette and its stroke. */
   hull: string

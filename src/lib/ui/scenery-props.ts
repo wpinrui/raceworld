@@ -14,6 +14,10 @@ export const FENCE_OFFSET_M = 15.5
 
 export interface SceneryBarrier {
   d: string
+  /** The run's points. The renderer needs these, not just the path string: a wall's height face is
+   *  the ribbon swept between its top line and its base, and that has to be rebuilt whenever the
+   *  light moves. */
+  pts: Vec[]
   /** 'wall' = concrete/armco at the track edge, 'fence' = debris fencing set back behind it. */
   kind: 'wall' | 'fence'
 }
@@ -48,7 +52,7 @@ export function buildBarriers(
       // becomes its own path instead of one path leaping across the gaps.
       let run: Vec[] = []
       const flush = () => {
-        if (run.length >= 3) out.push({ d: smoothOpenPath(run), kind })
+        if (run.length >= 3) out.push({ d: smoothOpenPath(run), pts: run, kind })
         run = []
       }
       for (let s = 0; s <= total; s += stepU) {
