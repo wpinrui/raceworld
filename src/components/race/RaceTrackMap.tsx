@@ -8,7 +8,7 @@ import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLay
 import {
   MOODS, lightDir, shadowFill, shadowOpacity, shadowReach,
 } from '@/lib/ui/lighting'
-import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
+import { buildPitSlots, buildPitZone, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
 } from './PitBuilding'
@@ -53,9 +53,9 @@ const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
 const GANTRY_H_M = 2.2
-/** Boom length: far enough back to meet the building's front wall, far enough forward to sit over the
- *  car. Shared with its shadow, which has to stay exactly the same shape. */
-const GANTRY_REACH_M = 4.6
+/** Boom length: back to the building's front face, with a few centimetres of overlap so the join is
+ *  visible rather than exact. Shared with its shadow, which has to stay exactly the same shape. */
+const GANTRY_REACH_M = 4.75
 const V_TOP_M = 87
 const V_FLOOR_M = 10
 const A_LAT_M = 14
@@ -396,7 +396,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const slotDistsRef = useRef<number[]>([]) // arc position of each pit box along the lane path
   const crewRefs = useRef(new Map<number, SVGGElement>()) // per-slot pit crew overlays (root visibility)
   const crewPartsRef = useRef(new Map<string, SVGGElement>()) // `slot:role` -> member/prop group
-  const lighting = MOODS.afternoon
+  // Perspective is standardised against the pit complex rather than against world north.
+  const lighting = useMemo(() => {
+    const azimuth = pitViewAzimuth(layout)
+    return azimuth === null ? MOODS.afternoon : { ...MOODS.afternoon, azimuth }
+  }, [layout])
   const ldir = useMemo(() => lightDir(lighting), [lighting])
   const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
   const gantryShRefs = useRef(new Map<number, SVGGElement>()) // gantry shadow, offset against that flip

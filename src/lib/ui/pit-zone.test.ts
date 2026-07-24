@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
-import { buildPitSlots, buildPitZone } from './pit-zone'
+import { buildPitSlots, buildPitZone, pitViewAzimuth } from './pit-zone'
 
 const IDS = Object.keys(TRACK_LAYOUTS)
 
@@ -66,6 +66,37 @@ describe('buildPitZone', () => {
         const depth = Math.hypot(r[3].x - r[0].x, r[3].y - r[0].y) * layout.metresPerUnit
         expect(depth, `${id}: garage only ${depth.toFixed(1)}m deep`).toBeGreaterThan(5.6)
       }
+    }
+  })
+})
+
+describe('pitViewAzimuth', () => {
+  it('faces the garages on every layout, not a fixed compass bearing', () => {
+    for (const id of IDS) {
+      const layout = TRACK_LAYOUTS[id]
+      const az = pitViewAzimuth(layout)
+      expect(az, id).not.toBeNull()
+      const dir = { x: Math.cos(az!), y: Math.sin(az!) }
+      const zone = buildPitZone(layout, buildPitSlots(layout, 11))!
+      for (const r of zone.garageFloors) {
+        // Outward normal of the garage's front face runs from the back of the bay to its opening.
+        const ox = r[0].x - r[3].x
+        const oy = r[0].y - r[3].y
+        const len = Math.hypot(ox, oy)
+        // A visible face is one whose outward normal agrees with the sweep, so this must be positive
+        // — and near 1, since the view is set square to the complex rather than merely on its side.
+        expect((ox / len) * dir.x + (oy / len) * dir.y, `${id}: looking at the back of the garages`)
+          .toBeGreaterThan(0.9)
+      }
+    }
+  })
+
+  it('gives a direction the shadow and the wall faces both agree on', () => {
+    // One vector drives both, so a layout may never produce a non-finite or non-unit one.
+    for (const id of IDS) {
+      const az = pitViewAzimuth(TRACK_LAYOUTS[id])!
+      expect(Number.isFinite(az), id).toBe(true)
+      expect(Math.hypot(Math.cos(az), Math.sin(az))).toBeCloseTo(1, 9)
     }
   })
 })

@@ -7,6 +7,8 @@ import type { TrackLayout } from '@/data/tracks'
 const GARAGE_FACE = 4.45
 const GARAGE_BACK = 13.1  // 8.65 m deep: a car's length plus the crew room behind it
 const REAR_LAT = 13.8
+/** The block that steps out behind the middle of the complex. */
+const BLOCK_LAT = 16.0
 const TERRACE_FRONT = 9.0
 const TERRACE_BACK = 11.6
 const PLANT_FRONT = 12.2
@@ -34,6 +36,34 @@ export interface PitZone {
   roofDeck: string
   roofRail: Array<{ x: number; y: number }>
   plant: Array<Array<{ x: number; y: number }>>
+}
+
+/** The one direction the oblique projection runs in, chosen so the camera sits square in FRONT of the
+ *  pit complex.
+ *
+ *  That direction decides which faces of every solid are visible. Left as a fixed compass bearing it
+ *  is a fixed bearing in WORLD space, so which face of the pit building you end up looking at is an
+ *  accident of how each circuit happens to have been drawn: front-on at one, side-on at the next,
+ *  from behind at a third. Deriving it from the lane's own normal standardises the whole map against
+ *  the one landmark every circuit shares. Put the main straight across the screen and you are always
+ *  looking at the garages.
+ *
+ *  Returns null when a layout has no box row to measure, which is the caller's cue to keep the mood's
+ *  own bearing. Shadows run along this direction too, so the sun moves with the camera; they are a
+ *  single vector in this renderer, not two. */
+export function pitViewAzimuth(layout: TrackLayout): number | null {
+  const st = layout.pit.slotStations
+  if (st.length === 0) return null
+  let nx = 0
+  let ny = 0
+  for (const s of st) {
+    nx += s.nx
+    ny += s.ny
+  }
+  if (Math.hypot(nx, ny) < 1e-9) return null
+  // Station normals point to the GARAGE side, so the view runs the other way: out from the building
+  // across the lane, which is the side its front face looks onto.
+  return Math.atan2(-ny, -nx)
 }
 
 /** Where each garage box sits along the lane: evenly spread through the authored slot band, then
@@ -251,7 +281,7 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
   // Everything from the rear of the front face round the back, shared by both storeys.
   const rear: Array<{ s: number; lat: number }> = [
     { s: a1, lat: GARAGE_FACE }, { s: a1, lat: REAR_LAT },
-    { s: c1, lat: REAR_LAT }, { s: c1, lat: 16.0 }, { s: c0, lat: 16.0 }, { s: c0, lat: REAR_LAT },
+    { s: c1, lat: REAR_LAT }, { s: c1, lat: BLOCK_LAT }, { s: c0, lat: BLOCK_LAT }, { s: c0, lat: REAR_LAT },
     { s: a0, lat: REAR_LAT },
   ]
   V.push(...rear)
@@ -301,8 +331,11 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
       let d = ''
       const step = u1(2.4)
       for (let sv = a0 + step; sv < a1 - step * 0.5; sv += step) {
+        // Runs to the back of whatever the roof actually is at this station: the middle of the
+        // complex steps out further, and siding that stopped at the main rear wall left that block
+        // as a bare white patch.
         const p = ptAt(sv, u1(GARAGE_FACE))
-        const q = ptAt(sv, u1(REAR_LAT))
+        const q = ptAt(sv, u1(sv > c0 && sv < c1 ? BLOCK_LAT : REAR_LAT))
         d += `M ${p.x.toFixed(1)} ${p.y.toFixed(1)} L ${q.x.toFixed(1)} ${q.y.toFixed(1)} `
       }
       return d

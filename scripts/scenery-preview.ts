@@ -16,7 +16,7 @@ import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLay
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
 } from '../src/components/race/PitBuilding'
-import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
+import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
 
 
@@ -26,7 +26,7 @@ const low = argv.includes('--low')
 const terrainDetail = argv.includes('--terrain')
 const detail = low ? 'low' : 'full'
 const moodArg = (argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon') as Mood
-const lighting = MOODS[moodArg] ?? MOODS.afternoon
+const mood = MOODS[moodArg] ?? MOODS.afternoon
 // Crop to a fraction of the viewBox around a normalised centre, so detail that only exists at
 // racing zoom (glazing, kerb faces, tyre stacks) can actually be judged from a still.
 const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
@@ -43,6 +43,9 @@ for (const id of ids) {
     console.log(`${id}: no such layout`)
     continue
   }
+  // Same standardised bearing the map uses, or the preview would not be checking what ships.
+  const az = pitViewAzimuth(layout)
+  const lighting = az === null ? mood : { ...mood, azimuth: az }
   const mpu = layout.metresPerUnit
   const u = (m: number) => m / mpu
   const scenery = buildScenery(layout.trace, layout.pit, {
@@ -111,7 +114,10 @@ for (const id of ids) {
     })(),
   ].join('\n')
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${Math.round(vb.w * 2 * Math.min(zoom, 14))}" height="${Math.round(vb.h * 2 * Math.min(zoom, 14))}">${body}</svg>`
+  // Fixed output width whatever the zoom, so a hard crop is actually inspectable rather than
+  // shrinking with the region it selects.
+  const outW = Math.round(Math.max(vb.w * 2, 900))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${outW}" height="${Math.round((outW * vb.h) / vb.w)}">${body}</svg>`
   const tag = `${id}${low ? '-low' : ''}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}${zoom > 1 ? `-z${zoom}` : ''}`
   writeFileSync(`${OUT}/${tag}.svg`, svg)
   // Counted off the rendered markup, not estimated: an estimate drifts from the renderer the moment

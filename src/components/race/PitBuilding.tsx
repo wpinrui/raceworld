@@ -85,7 +85,6 @@ export function PitBuilding({ zone, u, lighting, garageColor }: {
           and its underside is what closes off the back of each garage recess. Stacked the other way
           round the ground floor paints straight over the wall above it. */}
       <path d={sweptRing(lower, dir.x * mid, dir.y * mid)} fill={wall} />
-      <path d={obliqueRingFaces(lower, dir.x * mid, dir.y * mid)} fill={ret} />
       {/* The garage door, on the back wall of its bay and in that wall's plane. It replaced a flat
           rounded rectangle laid on the ground, which was drawn when the complex had no perspective at
           all and read as a sticker once it gained some. */}
@@ -100,6 +99,12 @@ export function PitBuilding({ zone, u, lighting, garageColor }: {
           </g>
         )
       })}
+      {/* Ends and pier returns LAST of the ground floor, so they occlude any shutter that reached
+          across them. A shutter sits on the back wall of its bay, eight metres deeper into the
+          building than the end wall beside it, so painting it over that wall put the far surface in
+          front of the near one. These are exactly the faces angled away from the view, which is what
+          the oblique split already isolates. */}
+      <path d={obliqueRingFaces(lower, dir.x * mid, dir.y * mid)} fill={ret} />
       <path d={sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid))} fill={wall} />
       <path d={obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid))} fill={ret} />
       <path d={ringPath(upper)} fill={litFace(PIT_WHITE, lighting)} />
