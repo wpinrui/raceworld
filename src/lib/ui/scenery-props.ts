@@ -1,5 +1,5 @@
 // Trackside furniture (#sim-2d). Before this the circuit had kerbs and nothing else between the
-// tarmac and the grass: no barriers, no fencing, no tyre walls, no marshal posts. Those are the
+// tarmac and the grass: no fencing, no tyre walls, no marshal posts. Those are the
 // details that say "motor racing" rather than "road through a park", and they are cheap — long
 // polylines and pattern-filled rects, next to nothing beside the ~1140 tree canopies.
 
@@ -9,17 +9,15 @@ import type { Vec } from './geom'
 /** Trackside cross-section, metres from the centreline. Everything placed beside the circuit
  *  measures its clearance against these: a grandstand sited closer than the debris fence ends up
  *  drawn straight through its own barrier. */
-export const BARRIER_OFFSET_M = 11.5
+export const TYRE_REF_OFFSET_M = 11.5
 export const FENCE_OFFSET_M = 15.5
 
-export interface SceneryBarrier {
+export interface SceneryFence {
   d: string
   /** The run's points. The renderer needs these, not just the path string: a wall's height face is
    *  the ribbon swept between its top line and its base, and that has to be rebuilt whenever the
    *  light moves. */
   pts: Vec[]
-  /** 'wall' = concrete/armco at the track edge, 'fence' = debris fencing set back behind it. */
-  kind: 'wall' | 'fence'
 }
 export interface SceneryTyreWall {
   d: string
@@ -44,23 +42,23 @@ export interface TrackFrame {
   u: (m: number) => number
 }
 
-/** Continuous barriers down both edges of the whole lap, plus debris fencing set back behind them.
- *  Broken at the pit mouths, where the lane leaves and rejoins and there is no wall to run. */
-export function buildBarriers(
+/** Continuous debris fencing down both edges of the whole lap.
+ *  Broken at the pit mouths, where the lane leaves and rejoins and there is no run to make. */
+export function buildFences(
   frame: TrackFrame,
-  { offsetM, fenceOffsetM, skip }:
-  { offsetM: number; fenceOffsetM: number; skip: (s: number, side: number) => boolean },
-): SceneryBarrier[] {
+  { offsetM, skip }: { offsetM: number; skip: (s: number, side: number) => boolean },
+): SceneryFence[] {
   const { total, u } = frame
-  const out: SceneryBarrier[] = []
+  const out: SceneryFence[] = []
   const stepU = u(9)
   for (const side of [1, -1]) {
-    for (const [lat, kind] of [[offsetM, 'wall'], [fenceOffsetM, 'fence']] as const) {
+    {
+      const lat = offsetM
       // Walk the lap, breaking the run wherever the barrier is suppressed, so each unbroken stretch
       // becomes its own path instead of one path leaping across the gaps.
       let run: Vec[] = []
       const flush = () => {
-        if (run.length >= 3) out.push({ d: smoothOpenPath(run), pts: run, kind })
+        if (run.length >= 3) out.push({ d: smoothOpenPath(run), pts: run })
         run = []
       }
       for (let s = 0; s <= total; s += stepU) {

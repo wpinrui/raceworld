@@ -73,7 +73,7 @@ for (const id of ids) {
   const paths = [
     ...scenery.bands.map((b) => b.d), ...scenery.fields.map((f) => f.d),
     ...scenery.terrain.map((t) => t.d), ...scenery.runoffs.map((r) => r.d),
-    ...scenery.kerbs.map((k) => k.d), ...scenery.barriers.map((b) => b.d),
+    ...scenery.kerbs.map((k) => k.d), ...scenery.fences.map((b) => b.d),
     ...scenery.tyreWalls.map((t) => t.d), ...scenery.trees.map((t) => t.d),
   ]
   const badPath = paths.filter((d) => !d || /NaN|Infinity|undefined/.test(d)).length

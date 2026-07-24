@@ -35,7 +35,6 @@ const STAND_ROOF_FRAC = 0.3
 /** Marshal hut height. */
 const MARSHAL_H_M = 2.8
 /** Trackside wall heights: armco/concrete, then the debris fencing standing behind it. */
-const BARRIER_H_M = 1.3
 const FENCE_H_M = 4
 /** A stacked tyre barrier stands about as tall as the wall it fronts. */
 const TYRE_H_M = 1.5
@@ -336,7 +335,7 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
   )
 }
 
-/** Circuit furniture that belongs ON TOP of the tarmac: barriers line the track edge, so drawing
+/** Circuit furniture that belongs ON TOP of the tarmac: it lines the track edge, so drawing
  *  them with the rest of the scenery (which is painted before the ribbon) would bury them under it.
  *  All long polylines, so both LOD tiers can afford them — they are what makes the place read as a
  *  racing circuit rather than a road. */
@@ -349,8 +348,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
   // Every piece of furniture casts from its BASE, like every other solid on the map.
-  const wallB = u(BARRIER_H_M * EXTRUDE)
-  const wallT = u(BARRIER_H_M * reach)
   const tyreB = u(TYRE_H_M * EXTRUDE)
   const tyreT = u(TYRE_H_M * reach)
   const fenceB = u(FENCE_H_M * EXTRUDE)
@@ -361,8 +358,8 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
   // base), so "away" is -dir and the CAMERA sits at +dir. Nearer therefore means a LARGER projection
   // along dir, and nearer draws last.
   //
-  // A tyre wall is inboard of the barrier, so where the outward normal points toward the camera the
-  // barrier is the nearer of the two and the tyres go under it; where it points away, the tyres are
+  // A tyre wall is inboard of the fencing, so where the outward normal points toward the camera the
+  // fence is the nearer of the two and the tyres go under it; where it points away, the tyres are
   // nearer and go on top.
   const withIdx = scenery.tyreWalls.map((t, i) => ({ t, i }))
   const nearTyres = withIdx.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0)
@@ -380,23 +377,14 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
   ))
   return (
     <g>
-      {/* Furniture obeys the same light as the buildings. Without this the barriers read as painted
-          lines while everything behind them reads as solid, which breaks the whole illusion. */}
+      {/* Furniture obeys the same light as the buildings. Without this the fencing reads as a painted
+          line while everything behind it reads as solid, which breaks the whole illusion. */}
       {full && (
         <g fill={shFill} stroke={shFill} opacity={shOp} strokeLinejoin="round">
           {/* A shadow is SWEPT from the object's base, never a displaced copy of it. A stroked copy
-              offset by the cast distance leaves a gap between the wall and its own shadow, which
-              reads as the wall levitating — and implies a taller wall than the one drawn. The fill
-              covers the swept ground; the stroke dilates it to the object's real thickness. */}
-          {scenery.barriers.filter((b) => b.kind === 'wall').map((b, i) => (
-            <path
-              key={`bs${i}`} strokeWidth={u(1.1)}
-              d={ribbon(
-                b.pts.map((p) => ({ x: p.x + dir.x * wallB, y: p.y + dir.y * wallB })),
-                dir.x * wallT, dir.y * wallT,
-              )}
-            />
-          ))}
+              offset by the cast distance leaves a gap between the object and its own shadow, which
+              reads as levitation — and implies something taller than the thing drawn. The fill covers
+              the swept ground; the stroke dilates it to the object's real thickness. */}
           {scenery.tyreWalls.map((t, i) => (
             <path
               key={`ts${i}`} strokeWidth={u(3.4)}
@@ -408,7 +396,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
           ))}
           {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
               mesh, so what it casts is faint. */}
-          {full && scenery.barriers.filter((b) => b.kind === 'fence').map((b, i) => (
+          {full && scenery.fences.map((b, i) => (
             <path
               key={`fs${i}`} opacity={0.35} stroke="none"
               d={ribbon(
@@ -420,29 +408,16 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
         </g>
       )}
 
-      {/* Tyre walls FURTHER from the viewer than the barrier go under it. */}
+      {/* Tyre walls FURTHER from the viewer than the fencing go under it. */}
       {TyreWalls(farTyres)}
 
-      {/* Barriers and fencing are solids on a curve. Each needs the height face between its top line
-          and its base, or it is a line plus a detached shadow and reads as floating above the
-          ground. The wall's face is solid; the debris fence's is a cage, so it is drawn see-through
-          with its posts as verticals — one path for a whole circuit's worth. */}
-      {scenery.barriers.map((b, i) => {
-        const solid = b.kind === 'wall'
-        const t = u((solid ? BARRIER_H_M : FENCE_H_M) * EXTRUDE)
-        const ox = dir.x * t
-        const oy = dir.y * t
-        if (solid) {
-          return (
-            <g key={`bw${i}`}>
-              {/* Face, then the top rail. No dark casing under the rail: that was an outline around
-                  the barrier rather than any part of it, and the face and shadow now carry its form. */}
-              <path d={ribbon(b.pts, ox, oy)} fill={shadeFace('#8A9099', lighting)} />
-              <path d={b.d} fill="none" stroke="#C9CDD4" strokeWidth={u(0.9)} strokeLinecap="round" />
-            </g>
-          )
-        }
-        if (!full) return null
+      {/* Debris fencing is a solid on a curve. It needs the height face between its top line and its
+          base, or it is a line plus a detached shadow and reads as floating above the ground. That
+          face is a cage rather than a wall, so it is drawn see-through with its posts as verticals —
+          one path for a whole circuit's worth. */}
+      {full && scenery.fences.map((b, i) => {
+        const ox = dir.x * fenceB
+        const oy = dir.y * fenceB
         return (
           <g key={`bf${i}`}>
             {/* Mesh: you can see the circuit through debris fencing, so the face is barely there. */}
@@ -456,7 +431,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
         )
       })}
 
-      {/* Tyre walls NEARER than the barrier go over it. */}
+      {/* Tyre walls NEARER than the fencing go over it. */}
       {TyreWalls(nearTyres)}
 
       {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of

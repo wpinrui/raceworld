@@ -9,7 +9,9 @@ import {
   MOODS, lightDir, shadowFill, shadowOpacity, shadowReach,
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
-import { PitBuilding, PitBuildingDefs, PitBuildingShadow } from './PitBuilding'
+import {
+  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
+} from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import { shade } from '@/lib/color'
 import type { TyreCompound } from '@/lib/sim/types'
@@ -51,8 +53,9 @@ const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
 const GANTRY_H_M = 2.2
-/** Boom length. Shared with its shadow, which has to stay exactly the same shape. */
-const GANTRY_REACH_M = 3.5
+/** Boom length: far enough back to meet the building's front wall, far enough forward to sit over the
+ *  car. Shared with its shadow, which has to stay exactly the same shape. */
+const GANTRY_REACH_M = 4.6
 const V_TOP_M = 87
 const V_FLOOR_M = 10
 const A_LAT_M = 14
@@ -522,6 +525,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     return { byCar: map, colors }
   }, [cars, teamOrder])
+
+  // Who is signed above each garage: the two cars the box order put in that bay.
+  const garageCars = useMemo(() => {
+    const out: TrackCarMeta[][] = []
+    for (const c of cars) {
+      const gi = slotOf.byCar.get(c.id)
+      if (gi === undefined) continue
+      ;(out[gi] ??= []).push(c)
+    }
+    return out
+  }, [cars, slotOf])
 
   const vb = useMemo(() => {
     const m = TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8
@@ -1301,6 +1315,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 The static map view drops the scenery for a clean dark minimap. */}
             <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             {view === 'live' && sceneryNode}
+            {pitZone && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
             <path ref={pathRef} d={layout.d} fill="none" stroke="#D8D8D2" strokeWidth={u(TRACK_WIDTH_M)} strokeLinejoin="round" />
@@ -1310,21 +1325,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             <path d={layout.pit.fastD} fill="none" stroke="#33383E" strokeWidth={u(4.2)} strokeLinejoin="round" strokeLinecap="round" />
             {pitZone && <path d={pitZone.work} fill="#33383E" />}
             {/* Pit lane: an asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
-            <defs>
-              <pattern id="tm-hatch" width={u(2.6)} height={u(2.6)} patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
-                <rect width={u(0.3)} height={u(2.6)} fill="#E6E3DC" opacity={0.3} />
-              </pattern>
-              <PitBuildingDefs u={u} />
-            </defs>
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
-            {layout.pit.hatches.map((d, i) => (
-              <path key={`ph${i}`} d={d} fill="url(#tm-hatch)" />
-            ))}
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's
                 track-side line, entry/exit guide lines reaching onto the track, the white–blue–white
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
             {pitZone && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
             {pitZone && <PitBuilding zone={pitZone} u={u} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
+            {pitZone && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} drivers={(gi) => garageCars[gi] ?? []} />}
             {pitZone && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
@@ -1333,12 +1340,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 <path d={pitZone.limiterOut} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
               </g>
             )}
-            {pitSlots.map((s, i) => (
-              <g key={`door${i}`} transform={`translate(${s.x + s.nx * u(3.4)} ${s.y + s.ny * u(3.4)}) rotate(${(s.rot * 180) / Math.PI})`}>
-                <rect x={-u(2.4)} y={-u(0.5)} width={u(4.8)} height={u(1.0)} rx={u(0.15)} fill="#1B1F26" />
-                <rect x={-u(2.4)} y={-u(0.5)} width={u(4.8)} height={u(0.22)} fill={slotOf.colors[i] ?? '#9AA3B2'} />
-              </g>
-            ))}
             {pitSlots.map((s, i) => (
               <g key={`pl${i}`} transform={`translate(${s.x} ${s.y}) rotate(${(s.rot * 180) / Math.PI})`}>
                 {/* Everything inside flips so the garage faces AWAY from the lane (measured per slot). */}
@@ -1370,16 +1371,19 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                   fill={shadowFill(lighting)} opacity={shadowOpacity(lighting)}
                 >
                   {([1.5, -1.5] as const).map((bx) => (
-                    <rect key={bx} x={u(bx) - u(0.16)} y={-u(1.35)} width={u(0.32)} height={u(GANTRY_REACH_M)} rx={u(0.14)} />
+                    <rect key={bx} x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.6)} height={u(GANTRY_REACH_M)} rx={u(0.12)} />
                   ))}
                 </g>
                 {/* Overhead gantry: two booms from the garage out over the box — black, team accents. */}
                 <g ref={(el) => { if (el) gantryRefs.current.set(i, el); else gantryRefs.current.delete(i) }}>
                 {([1.5, -1.5] as const).map((bx) => (
                   <g key={bx}>
-                    <rect x={u(bx) - u(0.16)} y={-u(1.35)} width={u(0.32)} height={u(GANTRY_REACH_M)} rx={u(0.14)} fill="#14171C" />
-                    <rect x={u(bx) - u(0.16)} y={u(1.6)} width={u(0.32)} height={u(0.55)} rx={u(0.1)} fill={slotOf.colors[i] ?? '#9AA3B2'} />
-                    <rect x={u(bx) - u(0.24)} y={-u(1.45)} width={u(0.48)} height={u(0.22)} rx={u(0.1)} fill="#20242B" />
+                    {/* A metal beam seen from above: its length is the only thing that reads at this
+                        scale, so it carries a highlight down one flank rather than a face — a face
+                        would need the light direction, which the box only learns once it knows which
+                        way it is flipped. Height comes from the lift and the shadow, not from paint. */}
+                    <rect x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.6)} height={u(GANTRY_REACH_M)} rx={u(0.12)} fill="#2E333C" />
+                    <rect x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.2)} height={u(GANTRY_REACH_M)} rx={u(0.08)} fill="#4C5460" />
                   </g>
                 ))}
                 </g>

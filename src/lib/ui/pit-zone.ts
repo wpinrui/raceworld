@@ -28,6 +28,8 @@ export interface PitZone {
   upperPts: Array<{ x: number; y: number }>
   /** The floor of each garage bay, indexed BY PIT SLOT so a team's colour lands in its own box. */
   garageFloors: Array<Array<{ x: number; y: number }>>
+  /** Siding seams across the roof, running front to back and following the lane's curve. */
+  roofSeams: string
   /** Rooftop viewing terrace, its railing line, and the plant units behind it. */
   roofDeck: string
   roofRail: Array<{ x: number; y: number }>
@@ -230,7 +232,10 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
   // wall. That makes the ring concave, which is why it is extruded as a ring and not as boxes.
   const V: Array<{ s: number; lat: number }> = []
   const bay = (a1 - a0) / Math.max(1, pitSlots.length)
-  const pier = u1(0.9)
+  // Clamped to the bay: a fixed pier is wider than half a bay once a short pit zone is shared by
+  // enough teams, and then every bay's start runs past its own end. That inverts the recess vertices
+  // into a bow tie, which renders as a stray triangle on the wall rather than as a garage.
+  const pier = Math.min(u1(0.9), bay * 0.3)
   V.push({ s: a0, lat: GARAGE_FACE })
   for (let i = 0; i <= pitSlots.length; i++) {
     const sB = a0 + i * bay
@@ -291,6 +296,16 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
       for (let i = 0; i <= N; i++) ring.push(ptAt(a0 + ((a1 - a0) * i) / N, u1(TERRACE_FRONT)))
       for (let i = N; i >= 0; i--) ring.push(ptAt(a0 + ((a1 - a0) * i) / N, u1(TERRACE_BACK)))
       return `M ${ring.map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`
+    })(),
+    roofSeams: (() => {
+      let d = ''
+      const step = u1(2.4)
+      for (let sv = a0 + step; sv < a1 - step * 0.5; sv += step) {
+        const p = ptAt(sv, u1(GARAGE_FACE))
+        const q = ptAt(sv, u1(REAR_LAT))
+        d += `M ${p.x.toFixed(1)} ${p.y.toFixed(1)} L ${q.x.toFixed(1)} ${q.y.toFixed(1)} `
+      }
+      return d
     })(),
     roofRail: Array.from({ length: 25 }, (_, i) => ptAt(a0 + ((a1 - a0) * i) / 24, u1(TERRACE_BACK))),
     plant: Array.from({ length: 7 }, (_, i) => {

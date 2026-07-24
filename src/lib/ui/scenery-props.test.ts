@@ -1,10 +1,10 @@
 // #sim-2d — the furniture and land-parcel builders. track-scenery.test.ts only asserts these return
 // non-empty arrays across the circuits; these pin the actual rules with hand-built inputs, because
-// each one encodes a specific past failure (barriers running across the pit mouths, fields laid as
+// each one encodes a specific past failure (fencing running across the pit mouths, fields laid as
 // disconnected blobs, a keep-out so wide it stripped the landscape bare).
 
 import { describe, it, expect } from 'vitest'
-import { buildBarriers, buildFields, buildMarshalPosts, buildTyreWalls, type TrackFrame } from './scenery-props'
+import { buildFences, buildFields, buildMarshalPosts, buildTyreWalls, type TrackFrame } from './scenery-props'
 
 /** A straight 1000-unit run along +x, with the outward normal pointing at -y. 1 unit = 1 metre. */
 function straightFrame(total = 1000): TrackFrame {
@@ -20,26 +20,20 @@ function straightFrame(total = 1000): TrackFrame {
 const numsOf = (d: string) => d.match(/-?\d+(\.\d+)?/g)!.map(Number)
 const ysOf = (d: string) => numsOf(d).filter((_, i) => i % 2 === 1)
 
-describe('buildBarriers', () => {
+describe('buildFences', () => {
   const frame = straightFrame()
 
-  it('runs a wall and a fence down both sides at their own offsets', () => {
-    const out = buildBarriers(frame, { offsetM: 10, fenceOffsetM: 15, skip: () => false })
-    expect(out.filter((b) => b.kind === 'wall')).toHaveLength(2)
-    expect(out.filter((b) => b.kind === 'fence')).toHaveLength(2)
-    // Outward normal is -y, so side +1 sits at y=-10 and side -1 at y=+10.
-    const wallYs = out.filter((b) => b.kind === 'wall').map((b) => ysOf(b.d)[0])
-    expect(wallYs.map(Math.round).sort((a, b) => a - b)).toEqual([-10, 10])
+  it('runs a fence down both sides at its offset', () => {
+    const out = buildFences(frame, { offsetM: 15, skip: () => false })
+    expect(out).toHaveLength(2)
+    // Outward normal is -y, so side +1 sits at y=-15 and side -1 at y=+15.
+    expect(out.map((b) => Math.round(ysOf(b.d)[0])).sort((a, b) => a - b)).toEqual([-15, 15])
   })
 
   it('breaks a run into separate paths at a suppressed stretch instead of leaping across it', () => {
     // Suppress the middle third. Each side should come back as TWO paths, not one that jumps the gap.
-    const out = buildBarriers(frame, {
-      offsetM: 10,
-      fenceOffsetM: 15,
-      skip: (s) => s > 300 && s < 600,
-    })
-    expect(out.filter((b) => b.kind === 'wall')).toHaveLength(4)
+    const out = buildFences(frame, { offsetM: 15, skip: (s) => s > 300 && s < 600 })
+    expect(out).toHaveLength(4)
     for (const b of out) {
       // No emitted path may contain a point inside the suppressed stretch.
       const xs = numsOf(b.d).filter((_, i) => i % 2 === 0)
@@ -48,11 +42,9 @@ describe('buildBarriers', () => {
   })
 
   it('suppresses only the side it is asked to', () => {
-    const out = buildBarriers(frame, {
-      offsetM: 10, fenceOffsetM: 15, skip: (_s, side) => side === 1,
-    })
-    expect(out.filter((b) => b.kind === 'wall')).toHaveLength(1)
-    expect(Math.round(ysOf(out.find((b) => b.kind === 'wall')!.d)[0])).toBe(10)
+    const out = buildFences(frame, { offsetM: 15, skip: (_s, side) => side === 1 })
+    expect(out).toHaveLength(1)
+    expect(Math.round(ysOf(out[0].d)[0])).toBe(15)
   })
 })
 

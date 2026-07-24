@@ -9,11 +9,12 @@
 //  2. The garages are recesses in the front face rather than doors painted on it, which makes the
 //     outline concave — hence a ring extrusion rather than the box extrusion the scenery uses.
 
-import { obliqueRingFaces, ringPath, sweptRing } from '@/lib/ui/extrude'
+import { obliqueRingFaces, quad, ringPath, sweptRing } from '@/lib/ui/extrude'
 import {
   type Lighting, lightDir, litFace, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
+import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { EXTRUDE } from './SceneryLayer'
 
 /** Roofline of the complex. Tall enough to throw a shadow across the lane, low enough that the wall
@@ -44,10 +45,23 @@ export function PitBuildingShadow({ zone, u, lighting }: {
   )
 }
 
+/** The floor of each garage, in that team's colour. Drawn EARLY — before the lane's paint — because
+ *  the recesses reach past the working lane's white edge line, and that line has to run unbroken. */
+export function PitGarageFloors({ zone, lighting, garageColor }: {
+  zone: PitZone; lighting: Lighting; garageColor?: (i: number) => string | undefined
+}) {
+  return (
+    <g>
+      {zone.garageFloors.map((r, i) => (
+        <path key={`gf${i}`} d={ringPath(r)} fill={shadeFace(garageColor?.(i) ?? '#2A2F38', lighting)} />
+      ))}
+    </g>
+  )
+}
+
 export function PitBuilding({ zone, u, lighting, garageColor }: {
   zone: PitZone; u: (m: number) => number; lighting: Lighting
-  /** Team colour for garage i. The recesses are deep enough to see into, and an unpainted floor shows
-   *  the ground through them. */
+  /** Team colour for garage i, for the shutter at the back of its bay. */
   garageColor?: (i: number) => string | undefined
 }) {
   const dir = lightDir(lighting)
@@ -66,21 +80,36 @@ export function PitBuilding({ zone, u, lighting, garageColor }: {
   const ret = tintFace(PIT_WHITE, lighting, -0.45)
   return (
     <g>
-      {/* Garage floors, under everything: only the sliver the overhang does not cover shows, and it
-          should read as that team's box rather than as grass seen through a hole in the building. */}
-      {zone.garageFloors.map((r, i) => (
-        <path key={`gf${i}`} d={ringPath(r)} fill={shadeFace(garageColor?.(i) ?? '#2A2F38', lighting)} />
-      ))}
       {/* Ground floor first, then the storey standing on it. Height draws LATER everywhere in this
           renderer — a roof is painted over its own walls — so the upper storey is the nearer surface,
           and its underside is what closes off the back of each garage recess. Stacked the other way
           round the ground floor paints straight over the wall above it. */}
       <path d={sweptRing(lower, dir.x * mid, dir.y * mid)} fill={wall} />
       <path d={obliqueRingFaces(lower, dir.x * mid, dir.y * mid)} fill={ret} />
+      {/* The garage door, on the back wall of its bay and in that wall's plane. It replaced a flat
+          rounded rectangle laid on the ground, which was drawn when the complex had no perspective at
+          all and read as a sticker once it gained some. */}
+      {zone.garageFloors.map((r, i) => {
+        const h = mid * 0.82
+        const top = (p: { x: number; y: number }) => ({ x: p.x - dir.x * h, y: p.y - dir.y * h })
+        const lintel = (p: { x: number; y: number }) => ({ x: p.x - dir.x * h * 0.82, y: p.y - dir.y * h * 0.82 })
+        return (
+          <g key={`gd${i}`}>
+            <path d={quad(r[3], r[2], top(r[2]), top(r[3]))} fill="#161A21" />
+            <path d={quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3]))} fill={garageColor?.(i) ?? '#9AA3B2'} />
+          </g>
+        )
+      })}
       <path d={sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid))} fill={wall} />
       <path d={obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid))} fill={ret} />
       <path d={ringPath(upper)} fill={litFace(PIT_WHITE, lighting)} />
-      <path d={ringPath(upper)} fill="url(#tm-pitdeck)" />
+      {/* White siding, laid breadth-wise. Drawn as geometry off the zone rather than as a tile
+          pattern: the complex follows the lane's curve, and a tile grid would run straight through
+          it at whatever angle the map happened to sit at. */}
+      <path
+        d={zone.roofSeams} transform={onRoof} fill="none"
+        stroke={tintFace(PIT_WHITE, lighting, -0.16)} strokeWidth={u(0.18)}
+      />
       {/* Viewing terrace along the front of the roof, and its railing. */}
       <path d={zone.roofDeck} transform={onRoof} fill={tintFace(PIT_WHITE, lighting, -0.22)} />
       <path
@@ -97,13 +126,82 @@ export function PitBuilding({ zone, u, lighting, garageColor }: {
   )
 }
 
-/** Roof decking, referenced by `PitBuilding`. A roof is a horizontal plane in this projection, so a
- *  tile pattern genuinely fits it — unlike a wall, whose face is a sheared parallelogram. */
-export function PitBuildingDefs({ u }: { u: (m: number) => number }) {
+
+/** Height of the signage band on the fascia above each garage opening. */
+const SIGN_H_M = 1.5
+/** Pixel size the flag is laid out at inside its foreignObject before being scaled into wall units.
+ *  Sub-pixel layout boxes collapse, so it cannot simply be built at its final size. */
+const FLAG_PX = 40
+
+/** Driver name boards across each garage fascia, laid IN the plane of that wall.
+ *
+ *  A label drawn upright on a map is a map label; a real garage's signage sits on the building, so it
+ *  takes the same basis the windows take — along the wall, and up it. The one concession to
+ *  readability is that the run direction flips when it would otherwise write right-to-left. */
+export function PitGarageSigns({ zone, u, lighting, drivers }: {
+  zone: PitZone; u: (m: number) => number; lighting: Lighting
+  drivers: (i: number) => Array<{ name: string; nationality?: string }>
+}) {
+  const dir = lightDir(lighting)
+  const mid = u(GARAGE_H_M * EXTRUDE)
+  const band = u(SIGN_H_M * EXTRUDE)
   return (
-    <pattern id="tm-pitdeck" width={u(4.2)} height={u(4.2)} patternUnits="userSpaceOnUse">
-      <rect width={u(0.4)} height={u(4.2)} fill="#000000" opacity={0.06} />
-      <rect x={u(0.4)} width={u(0.35)} height={u(4.2)} fill="#FFFFFF" opacity={0.05} />
-    </pattern>
+    <g style={{ userSelect: 'none', pointerEvents: 'none' }}>
+      {zone.garageFloors.map((r, i) => {
+        const crew = drivers(i)
+        if (crew.length === 0) return null
+        // Baseline runs along the fascia's ground edge; text hangs from the top of the band.
+        const rev = r[1].x < r[0].x
+        const a = rev ? r[1] : r[0]
+        const b = rev ? r[0] : r[1]
+        const len = Math.hypot(b.x - a.x, b.y - a.y)
+        if (len < 1e-6) return null
+        const ex = (b.x - a.x) / len
+        const ey = (b.y - a.y) / len
+        // "Up the wall" is -dir, so the text's own +y (downward) is +dir.
+        const lift = mid + band
+        const org = { x: a.x - dir.x * lift, y: a.y - dir.y * lift }
+        const m = `matrix(${ex} ${ey} ${dir.x} ${dir.y} ${org.x} ${org.y})`
+        const size = band * 0.62
+        return (
+          <g key={`sg${i}`} transform={m}>
+            <rect x={0} y={0} width={len} height={band} fill={shadeFace(PIT_WHITE, lighting)} />
+            {crew.slice(0, 2).map((d, k) => {
+              // Centred on the midpoint of its own half of the board, flag and name measured together,
+              // so a long surname stays balanced against a short one on the other side.
+              const label = shortName(d.name)
+              const flagW = size * 1.33
+              const textW = label.length * size * 0.52
+              const gap = size * 0.34
+              const x = len * (0.25 + k * 0.5) - (flagW + gap + textW) / 2
+              return (
+                <g key={d.name}>
+                  {/* The flag goes through the app's own component rather than an SVG <image>: the
+                      flag artwork carries a viewBox and no intrinsic size, and an <image> pointed at
+                      it renders at nothing. A foreignObject lays out in CSS pixels, so it is built at
+                      a workable pixel size and scaled down into the wall's units. */}
+                  <g transform={`translate(${x} ${band * 0.24}) scale(${flagW / FLAG_PX})`}>
+                    <foreignObject width={FLAG_PX} height={FLAG_PX * 0.75}>
+                      <div style={{ lineHeight: 0 }}>
+                        <NationalityFlag code={d.nationality} size={`${FLAG_PX}px`} />
+                      </div>
+                    </foreignObject>
+                  </g>
+                  <text x={x + flagW + gap} y={band * 0.76} fontSize={size} fontWeight={600} fill="#14181F">
+                    {label}
+                  </text>
+                </g>
+              )
+            })}
+          </g>
+        )
+      })}
+    </g>
   )
+}
+
+/** "Kimi Raikkonen" -> "K Raikkonen", the form a garage board actually carries. */
+function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  return parts.length < 2 ? name : `${parts[0][0]} ${parts.slice(1).join(' ')}`
 }

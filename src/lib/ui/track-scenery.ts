@@ -15,8 +15,8 @@ import { blobPath, buildingParts, pickArchetype, type SceneryPart } from './scen
 import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
-  BARRIER_OFFSET_M, FENCE_OFFSET_M, buildBarriers, buildFields, buildMarshalPosts, buildTyreWalls,
-  type SceneryBarrier, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
+  TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts, buildTyreWalls,
+  type SceneryFence, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
 } from './scenery-props'
 
 export type { SceneryPart } from './scenery-shapes'
@@ -57,7 +57,7 @@ export interface Scenery {
   /** Ground plane colour, taken from the biome ramp so the bands read as steps out of it. */
   base: string
   fields: SceneryField[]
-  barriers: SceneryBarrier[]
+  fences: SceneryFence[]
   tyreWalls: SceneryTyreWall[]
   marshals: SceneryMarshal[]
   terrain: SceneryBlob[]
@@ -178,7 +178,7 @@ export function buildScenery(
     if (rng() >= bio.water) continue // ground variation is the relief bands' job now
     const ry = r * (0.55 + rng() * 0.5)
     const rot = rng() * Math.PI
-    // A lake lapping the barriers is implausible, and because water excludes everything it was
+    // A lake lapping the fencing is implausible, and because water excludes everything it was
     // squeezing the grandstands off the circuit at the wettest venues.
     if (trackDist(c) - Math.max(r, ry) * 1.15 < u(60)) continue
     terrain.push({
@@ -235,12 +235,11 @@ export function buildScenery(
     }
   }
 
-  // ── Barriers, fencing, tyre walls and marshal posts ──
+  // ── Fencing, tyre walls and marshal posts ──
   const pitSide = pitOutside ? 1 : -1
-  const barriers = buildBarriers(frame, {
-    offsetM: BARRIER_OFFSET_M,
-    fenceOffsetM: FENCE_OFFSET_M,
-    // No wall across either pit mouth on the side the lane actually lives.
+  const fences = buildFences(frame, {
+    offsetM: FENCE_OFFSET_M,
+    // No fence across either pit mouth on the side the lane actually lives.
     skip: (s, side) => side === pitSide && inPitZone(s),
   })
 
@@ -278,7 +277,7 @@ export function buildScenery(
   // i.e. on the racing surface. Drop anything the exact distance test rejects.
   const MARSHAL_HALF_DEPTH_M = 1.6
   const tyreWalls = buildTyreWalls(frame, cornerIdx.map((i) => i * STEP), {
-    offsetM: BARRIER_OFFSET_M - 1.5, spanM: 46,
+    offsetM: TYRE_REF_OFFSET_M - 1.5, spanM: 46,
   }).filter((t) => t.pts.every((p) => trackDist(p) > u(TRACK_HALF_M + 1.5)))
   const marshals = buildMarshalPosts(frame, { everyM: 240, offsetM: FENCE_OFFSET_M + 5 })
     .filter((m) => trackDist({ x: m.x, y: m.y }) > u(FENCE_OFFSET_M + MARSHAL_HALF_DEPTH_M + 0.5))
@@ -315,7 +314,7 @@ export function buildScenery(
     keepOut: (p) => {
       // Measured from the field's CENTRE with a modest margin. Subtracting the cell radius here
       // pushed the exclusion out to a quarter-kilometre and stripped the landscape bare anywhere
-      // near the circuit — farmland runs right up to the barriers in reality.
+      // near the circuit — farmland runs right up to the fencing in reality.
       const m = u(120)
       if (p.x < tb.x0 - m || p.x > tb.x1 + m || p.y < tb.y0 - m || p.y > tb.y1 + m) return false
       return trackDist(p) < u(55) || pitDist(p) < u(80)
@@ -478,7 +477,7 @@ export function buildScenery(
   }
 
   return {
-    bands, base: bio.base, fields, barriers, tyreWalls, marshals,
+    bands, base: bio.base, fields, fences, tyreWalls, marshals,
     terrain, runoffs, kerbs, stands, buildings, trees,
   }
 }

@@ -13,7 +13,9 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { TARMAC_WIDTH_M, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
-import { PitBuilding, PitBuildingDefs, PitBuildingShadow } from '../src/components/race/PitBuilding'
+import {
+  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
+} from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
 
@@ -95,9 +97,16 @@ for (const id of ids) {
           strokeLinejoin: 'round', strokeLinecap: 'round',
         })),
         renderToStaticMarkup(createElement('path', { d: zone.work, fill: '#33383E' })),
-        renderToStaticMarkup(createElement('defs', {}, createElement(PitBuildingDefs, { u }))),
+        renderToStaticMarkup(createElement(PitGarageFloors, { zone, lighting })),
         renderToStaticMarkup(createElement(PitBuildingShadow, { zone, u, lighting })),
         renderToStaticMarkup(createElement(PitBuilding, { zone, u, lighting })),
+        renderToStaticMarkup(createElement(PitGarageSigns, {
+          zone, u, lighting,
+          drivers: () => [
+            { name: 'Kimi Raikkonen', nationality: 'FI' },
+            { name: 'Felipe Massa', nationality: 'BR' },
+          ],
+        })),
       ]
     })(),
   ].join('\n')

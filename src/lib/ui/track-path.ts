@@ -102,7 +102,6 @@ export interface PitLane {
    * builds one pit box per team from these, spaced and interpolated to the grid's size. */
   slotStations: Array<{ x: number; y: number; nx: number; ny: number; rot: number }>
   /** Hatched keep-clear wedges where the lane splits from / rejoins the track. */
-  hatches: string[]
 }
 
 /** Drawn track cross-section, in metres: white casing overall, dark asphalt inside it.
@@ -248,17 +247,8 @@ export function buildPitLane(
   // Cross-section (lateral metres from the lane path, + = garage): fast lane −4.3..−1.3 (3.0m wide,
   // transit runs its centre at −2.8; the sprite is ~2.95m with wings), stripe at −1.3 (drawn by the
   // renderer, only along the box zone), working apron −1.0..+4.75.
-  // The boundary lines are the stroke of the UNIONED tarmac (renderer draws casing-then-
-  // asphalt for track and lane alike); the only extra paint out here is the hatch wedges.
-  const fullIdxs = all.filter((st) => st.ease > 0.999).map((st) => st.k)
-  const firstFull = fullIdxs[0] ?? 0
-  const lastFull = fullIdxs[fullIdxs.length - 1] ?? all.length - 1
-  const trackPt = (s: number, lat: number): Vec => {
-    const p = at(s)
-    const dir = unit(sub(at(s + 2), at(s - 2)))
-    const nn: Vec = { x: inSign * -dir.y, y: inSign * dir.x }
-    return add(p, scale(nn, lat))
-  }
+  // The boundary lines are the stroke of the UNIONED tarmac: the renderer draws casing-then-asphalt
+  // for track and lane alike, and there is no extra paint out here.
   const laneNormalAt = (k: number): Vec => {
     const a = pts[Math.max(0, k - 1)]
     const b = pts[Math.min(STEPS, k + 1)]
@@ -266,55 +256,13 @@ export function buildPitLane(
     return { x: inSign * -dd.y, y: inSign * dd.x }
   }
   const laneOffset = (k: number, lat: number): Vec => add(pts[k], scale(laneNormalAt(k), lat))
-  const trackLatOf = (q: Vec): { lat: number; s: number } => {
-    let bestS = startS
-    let bestD = Infinity
-    for (let s = startS - uu(60); s <= startS + span + uu(60); s += uu(3)) {
-      const p = at(s)
-      const dd = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y)
-      if (dd < bestD) {
-        bestD = dd
-        bestS = s
-      }
-    }
-    const p = at(bestS)
-    const dir2 = unit(sub(at(bestS + 2), at(bestS - 2)))
-    const nn: Vec = { x: inSign * -dir2.y, y: inSign * dir2.x }
-    return { lat: (q.x - p.x) * nn.x + (q.y - p.y) * nn.y, s: bestS }
-  }
   const fastD = smoothOpenPath(Array.from({ length: STEPS + 1 }, (_, k) => laneOffset(k, -uu(2.8))))
 
   const slotStations: PitLane['slotStations'] = straight.map((st) => ({
     x: st.ctr.x, y: st.ctr.y, nx: st.normal.x, ny: st.normal.y, rot: Math.atan2(st.dir.y, st.dir.x),
   }))
 
-  // Hatch wedges: the area between the lane's track-side edge and the track's own edge, over the
-  // portion of each taper where a real gap has opened but the lane hasn't fully separated.
-  const hatches: string[] = []
-  for (const [k0, k1] of [[0, firstFull], [lastFull, STEPS]] as const) {
-    const ks: number[] = []
-    for (let k = k0; k <= k1; k++) {
-      const edgeLat = trackLatOf(laneOffset(k, -uu(4.75))).lat
-      if (edgeLat > uu(7.8) && edgeLat < uu(11.5)) ks.push(k)
-    }
-    // Only substantial CONTIGUOUS gaps get a hatch — scattered matches painted stray
-    // patches on the exit sweep's corner.
-    const runs: number[][] = []
-    for (const k of ks) {
-      const cur = runs[runs.length - 1]
-      if (cur && k === cur[cur.length - 1] + 1) cur.push(k)
-      else runs.push([k])
-    }
-    for (const run of runs) {
-      if (run.length < 5) continue
-      const laneEdge = run.map((k) => laneOffset(k, -uu(3.5)))
-      const trackEdge = run.map((k) => trackPt(trackLatOf(pts[k]).s, uu(7.2))).reverse()
-      const ring = [...laneEdge, ...trackEdge]
-      hatches.push(`M ${ring.map((p) => `${fmt(p.x)} ${fmt(p.y)}`).join(' L ')} Z`)
-    }
-  }
-
-  return { d, box: { x: box.x, y: box.y }, latSign: inSign, fastD, slotStations, hatches }
+  return { d, box: { x: box.x, y: box.y }, latSign: inSign, fastD, slotStations }
 }
 
 const DEFAULT_RADIUS = 12
