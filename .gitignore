@@ -47,3 +47,7 @@ raceworld.db-wal
 /news-playthrough*.md
 /news*.md
 scripts/.preview/
+
+# Subagent review scratch (never committed)
+scripts/_tmp_*
+**/zz-scratch-*
