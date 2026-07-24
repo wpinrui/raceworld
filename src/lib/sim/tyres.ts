@@ -49,9 +49,12 @@ export function degradeTyre(tyre: TyreState): number {
 
 // Actual per-lap wear: the baseline drop jittered ±30% so the real condition path is noisy and the
 // exact cliff lap can't be predicted. degradeTyre stays the deterministic preview for the UI.
-export function wearTyre(tyre: TyreState, wearMult = 1): number {
+// `frac` scales the drop to a sub-lap slice (#sector-engine); rounding only applies to whole laps —
+// per-slice rounding would erase 1/8-lap wear entirely, so condition runs as a float in sector mode.
+export function wearTyre(tyre: TyreState, wearMult = 1, frac = 1): number {
   const baseline = (100 / tyre.maxLifeLaps) * wearMult // wearMult > 1 for dirty air (running close behind)
-  return Math.max(0, Math.round(tyre.condition - baseline * (0.7 + Math.random() * 0.6)))
+  const next = tyre.condition - baseline * frac * (0.7 + Math.random() * 0.6)
+  return Math.max(0, frac === 1 ? Math.round(next) : next)
 }
 
 export function tyreStepsOutOfWindow(compound: TyreCompound, moisture: number): number {

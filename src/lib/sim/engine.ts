@@ -2,6 +2,7 @@ import type { Driver, Team, TyreState, WeatherPoint, TyreCompound } from './type
 import { getMoistureAtLap } from './weather'
 import { tyreStepsOutOfWindow } from './tyres'
 import { effectiveCarPace } from './car-rating'
+import { perSliceProb } from './rng-utils'
 
 export interface LapInput {
   driver: Driver
@@ -21,10 +22,13 @@ export interface LapInput {
                               // pace so pushing genuinely helps attack/defend and cold tyres are easy to pass
   defenderDriver?: Driver     // car directly ahead, for the contested-overtake crash roll (issue #60)
   noiseOverride?: number      // qualifying supplies its own noise model (more quali variation); races use the default
+  frac?: number               // fraction of a lap this call covers (#sector-engine): 1 = whole lap (default,
+                              // bit-compatible), 1/8 = one sector. Gates stay lap-scale (paceEdge, ranges);
+                              // emitted times scale by frac and probabilities rescale via perSliceProb.
 }
 
 export interface LapResult {
-  lapTime: number
+  lapTime: number             // time for the slice this call covers (the whole lap at frac = 1)
   overtook: boolean
   freeAir: number             // this car's clean-air pace this lap (the next car back gates its pass on it)
   defenderPenalty?: number    // on a completed pass, the time the overtaken car loses (race.ts applies it)
@@ -130,13 +134,15 @@ export function computeLapTime(input: LapInput): LapResult {
     (input.paceDelta ?? 0) +
     noise
 
-  // FREE-AIR PACE is rawTime. Traffic — dirty air, the contested pass, its crash roll, and the time a
-  // pass costs both cars — is resolved here from the car AHEAD's clean-air pace, which race.ts threads in
-  // (carAheadFreeAir) as it walks the field front-to-back.
+  // FREE-AIR PACE is rawTime, always LAP-scale — paceEdge below keeps its per-lap meaning in both modes.
+  // Traffic — dirty air, the contested pass, its crash roll, and the time a pass costs both cars — is
+  // resolved here from the car AHEAD's clean-air pace, which the slice core threads in (carAheadFreeAir)
+  // as it walks the field front-to-back. Emitted times scale by frac; carAheadLapTime arrives slice-scale.
   const freeAir = rawTime
+  const frac = input.frac ?? 1
 
   if (gapToCarAhead === Infinity || carAheadLapTime === null || input.carAheadFreeAir == null) {
-    return { lapTime: rawTime, overtook: false, freeAir }
+    return { lapTime: rawTime * frac, overtook: false, freeAir }
   }
 
   // DIRTY AIR: a follower within DIRTY_RANGE loses pace, worse the closer it sits. A car only slightly
@@ -147,8 +153,8 @@ export function computeLapTime(input: LapInput): LapResult {
   // calculations — it runs this much faster, easing the pass (bigger pace edge, closes the gap quicker) and
   // partly offsetting dirty air. Its own clean-air pace (freeAir, what the next car back gates on) is unchanged.
   const tow = gapToCarAhead < DIRTY_RANGE ? SLIPSTREAM * (0.3 + 0.7 * (input.circuitStraightness ?? 0.5)) : 0
-  const dirtyLapTime = rawTime + dirty - tow
-  const wouldGap = gapToCarAhead + (dirtyLapTime - carAheadLapTime) // gap after running this (towed) pace
+  const dirtySliceTime = (rawTime + dirty - tow) * frac
+  const wouldGap = gapToCarAhead + (dirtySliceTime - carAheadLapTime) // gap after running this (towed) pace
   // The pass is gated on the CLEAN pace edge — raw pace delta, no tow. The tow's job is to help you close up
   // and hang on in the dirty air (via dirtyLapTime above), not to manufacture a pass you don't have the legs for.
   const paceEdge = input.carAheadFreeAir - freeAir
@@ -161,7 +167,8 @@ export function computeLapTime(input: LapInput): LapResult {
   //      that scales with how much faster it is (and its overtaking), capped well under 1. A marginally
   //      quicker car still gets a small chance every lap (never walled to zero); a clearly-but-not-hugely
   //      faster car doesn't simply breeze by. It harries in the dirty air until a chance comes off.
-  const blowPast = wouldGap < -PASS_MARGIN && paceEdge > 0
+  // The overshoot a blow-past needs scales with the slice (a slice only closes frac of a lap's worth).
+  const blowPast = wouldGap < -PASS_MARGIN * frac && paceEdge > 0
   const inRange = gapToCarAhead <= STRIKE_RANGE && paceEdge > 0
   // Where a car that can't pass settles: HOLD_GAP with per-lap jitter, so a train shows living, varied
   // intervals (+0.27, +0.41, +0.19…) instead of every car pinned to an identical +0.300.
@@ -173,9 +180,9 @@ export function computeLapTime(input: LapInput): LapResult {
       const f = (c: number) => k * (100 - c) ** 2
       const fa = f(driver.consistency)
       const fd = f(input.defenderDriver.consistency)
-      if (Math.random() < fa + fd - fa * fd) {
+      if (Math.random() < perSliceProb(fa + fd - fa * fd, frac)) {
         const r = Math.random()
-        return { lapTime: dirtyLapTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 }, freeAir }
+        return { lapTime: dirtySliceTime, overtook: false, crash: { happened: true, attacker: r < 2 / 3, defender: r >= 1 / 3 }, freeAir }
       }
     }
     // Blow-past goes through; a contest is a hard, edge-scaled roll (overtaking rated against a 75 baseline).
@@ -184,9 +191,9 @@ export function computeLapTime(input: LapInput): LapResult {
     const s = input.circuitStraightness ?? 0.5
     const sens = OVERTAKE_SENS_MIN * (OVERTAKE_SENS_MAX / OVERTAKE_SENS_MIN) ** s
     const prob = Math.min(MAX_CONTEST, paceEdge * sens * (driver.overtaking / 75))
-    if (blowPast || Math.random() < prob) {
+    if (blowPast || Math.random() < perSliceProb(prob, frac)) {
       // A completed pass costs both cars time: the attacker a little, the defender more.
-      return { lapTime: freeAir + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
+      return { lapTime: freeAir * frac + ATTACKER_PENALTY, overtook: true, defenderPenalty: DEFENDER_PENALTY, freeAir }
     }
     // No way through this lap: hold station in the dirty air, no closer than the (jittered) harry gap.
     const heldGap = Math.max(harryGap, wouldGap)
@@ -200,5 +207,5 @@ export function computeLapTime(input: LapInput): LapResult {
   }
 
   // Approaching slowly, or sitting at the dirty-air equilibrium (a train).
-  return { lapTime: dirtyLapTime, overtook: false, freeAir }
+  return { lapTime: dirtySliceTime, overtook: false, freeAir }
 }

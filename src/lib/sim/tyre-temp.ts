@@ -84,8 +84,10 @@ export function tempDrift(intensity: number, temp: number, tyreWarming: number):
   return push + recover
 }
 
-export function nextTyreTemp(temp: number, intensity: number, tyreWarming: number): number {
-  return clamp(temp + tempDrift(intensity, temp, tyreWarming), TEMP.MIN, TEMP.MAX)
+// `frac` scales the drift to a sub-lap slice (#sector-engine): a finer Euler step of the same ODE.
+// Multiplying by 1 is IEEE-exact, so the whole-lap path is bit-untouched.
+export function nextTyreTemp(temp: number, intensity: number, tyreWarming: number, frac = 1): number {
+  return clamp(temp + tempDrift(intensity, temp, tyreWarming) * frac, TEMP.MIN, TEMP.MAX)
 }
 
 // Per-lap wear multiplier from the car's tyre-wear rating: higher = slower wear. Centered ~60 so an average

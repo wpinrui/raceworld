@@ -16,7 +16,7 @@ import { resolveIntensity, advancePreset, resolvePlayerPush, NORMAL } from './pu
 import { decidePit, planStrategy, observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { generateCommentary } from './commentary'
-import { sampleExponential } from './rng-utils'
+import { perSliceProb, sampleExponential } from './rng-utils'
 import { perLapTechnicalDNF, sampleTechnicalFailure } from './reliability'
 
 // The shared race-tick core (#sector-engine). simulateSlice advances every car by one SLICE of a lap:
@@ -195,8 +195,9 @@ export function simulateSlice(
   for (const ds of sortedByPosition) {
     let current = { ...updatedStates.get(ds.driverId)!, currentTyre: { ...updatedStates.get(ds.driverId)!.currentTyre } }
 
-    // 2a. Technical failure (issue #61) — era-scaled per-lap chance, a specific failure type.
-    if (!current.retired && Math.random() < techDNFPerLap) {
+    // 2a. Technical failure (issue #61) — era-scaled per-lap chance (rescaled to the slice), a specific
+    // failure type.
+    if (!current.retired && Math.random() < perSliceProb(techDNFPerLap, spec.frac)) {
       current = {
         ...current,
         retired: true,
@@ -243,11 +244,12 @@ export function simulateSlice(
     const intensity = resolveIntensity(push)
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
-    // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap). On a mistake: 20% crash out (collision-damage DNF),
-    // else a one-lap time loss of 2 + Exp(mean 3) s clamped to [2, 25].
+    // (c=65 -> 1.6%, 75 -> 0.8%, 90 -> 0.13%/lap), rescaled to the slice — the loss magnitude stays
+    // per-event (frequency carries the scaling). On a mistake: 20% crash out (collision-damage DNF),
+    // else a one-off time loss of 2 + Exp(mean 3) s clamped to [2, 25].
     let mistakeTimeLoss = 0
     const consistency = driver.consistency
-    if (Math.random() < 1.3e-5 * (100 - consistency) ** 2) {
+    if (Math.random() < perSliceProb(1.3e-5 * (100 - consistency) ** 2, spec.frac)) {
       current = { ...current, mistakeCount: current.mistakeCount + 1 }
       if (Math.random() < 0.2) {
         current = {
@@ -401,9 +403,14 @@ export function simulateSlice(
       circuitStraightness: circuit.straightness,
       paceDelta: pacePush(intensity) + coldPenalty(tempIn) + hotPenalty(tempIn),
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
+      frac: spec.frac,
     })
 
-    const finalLapTime = lapResult.lapTime + pitPenalty + mistakeTimeLoss
+    // Atomic penalties (pit, mistake) land whole in the slice they happen. Sector mode floors the
+    // emitted time — the hold-station arithmetic can go non-positive on slice scale (frac=1 untouched).
+    const finalLapTime = spec.frac === 1
+      ? lapResult.lapTime + pitPenalty + mistakeTimeLoss
+      : Math.max(0.001, lapResult.lapTime + pitPenalty + mistakeTimeLoss)
     lapTimesThisLap.set(current.driverId, finalLapTime)
     freeAirThisLap.set(current.driverId, lapResult.freeAir)
 
@@ -448,10 +455,10 @@ export function simulateSlice(
       tyreWearRatingMult(team.tyreWear ?? team.carPace) *
       pushWearMult(intensity) *
       overheatWearMult(tempIn)
-    const newCondition = wearTyre(current.currentTyre, wearMult)
+    const newCondition = wearTyre(current.currentTyre, wearMult, spec.frac)
     // A fresh set comes out of the pits cold (slightly below the window); it warms on the out-lap. Otherwise
     // `tempIn` (captured before the stop) would evolve the OLD tyre's heat onto the new set and never reset.
-    const newTemp = pitted ? TEMP.FRESH_TEMP : nextTyreTemp(tempIn, intensity, tyreWarming)
+    const newTemp = pitted ? TEMP.FRESH_TEMP : nextTyreTemp(tempIn, intensity, tyreWarming, spec.frac)
     // Carry the push state to next lap by mode:
     //  manual     → advance the preset (it auto-reverts once its goal is met).
     //  auto       → store the AI's live pick, so a Team-Manager player sees what their car is doing. No revert.
@@ -469,8 +476,8 @@ export function simulateSlice(
       defending,
     }
 
-    // 2i. Decrement fuelLaps
-    current = { ...current, fuelLaps: Math.max(0, current.fuelLaps - 1) }
+    // 2i. Decrement fuelLaps (fractionally mid-lap; fuelMod is already continuous in fuelLaps)
+    current = { ...current, fuelLaps: Math.max(0, current.fuelLaps - spec.frac) }
 
     // 2j. Accumulate totalTime
     current = { ...current, totalTime: current.totalTime + finalLapTime }
