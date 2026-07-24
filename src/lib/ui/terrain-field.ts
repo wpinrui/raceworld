@@ -37,8 +37,6 @@ function valueNoise(x: number, y: number, seed: number): number {
 export interface HeightField {
   /** Height in metres at a world point. */
   at(p: Vec): number
-  /** Local steepness, as the height delta over a short baseline. */
-  slopeAt(p: Vec): number
 }
 
 /** Fractal height field. `featureM` is the size of the largest landform in METRES — keyed on real
@@ -63,15 +61,7 @@ export function makeHeightField(
     }
     return (sum / norm) * reliefM
   }
-  const step = 8 / metresPerUnit // an 8 m baseline
-  return {
-    at,
-    slopeAt: (p) => {
-      const dx = at({ x: p.x + step, y: p.y }) - at({ x: p.x - step, y: p.y })
-      const dy = at({ x: p.x, y: p.y + step }) - at({ x: p.x, y: p.y - step })
-      return Math.hypot(dx, dy) / (2 * 8)
-    },
-  }
+  return { at }
 }
 
 /** Blend the field toward the circuit's own smoothed elevation profile near the track, so the
@@ -96,7 +86,8 @@ export function gradeToTrack(
     acc -= raw[((i - win) % n + n) % n]
     acc += raw[((i + win + 1) % n + n) % n]
   }
-  // Nearest profile height, found through the same index the clearance rules use.
+  // Nearest profile height. A strided nearest-VERTEX scan is adequate here and only here: the
+  // result is blended by distance anyway, and it only runs for samples inside the corridor.
   const profileAt = (p: Vec): number => {
     let best = Infinity
     let bi = 0
@@ -128,18 +119,9 @@ export function gradeToTrack(
     const t = smoothstep(d / corridorU) // 0 at the track, 1 at the corridor edge
     return profileAt(p) * (1 - t) + field.at(p) * t
   }
-  const step = 4
-  return {
-    at,
-    slopeAt: (p) => {
-      const dx = at({ x: p.x + step, y: p.y }) - at({ x: p.x - step, y: p.y })
-      const dy = at({ x: p.x, y: p.y + step }) - at({ x: p.x, y: p.y - step })
-      return Math.hypot(dx, dy) / (2 * step)
-    },
-  }
+  return { at }
 }
 
-const kx = (v: number) => Math.round(v * 100) / 100
 
 /** Marching squares over `box`, returning the CLOSED loops bounding the region at or above `level`.
  *  The sampler is damped to below every level at the box edge (see `bandsFor`), so no contour runs
@@ -156,7 +138,17 @@ export function isoLoops(
     return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t }
   }
 
-  const segs: Array<[Vec, Vec]> = []
+  // Crossings are keyed by EDGE IDENTITY, not by rounded coordinates. Two cells that meet on an
+  // edge compute the same crossing there, so the shared edge index joins them exactly. Rounding the
+  // coordinates instead is not collision-free: on the shipped circuits, near-degenerate cells emit
+  // sub-micron segments whose two ends round to the SAME key, and the chainer could then take the
+  // wrong continuation and leave a loop open — which `Z` would close with a chord straight across a
+  // terrain band. Edge ids make the join exact regardless of the field's scale or seed.
+  const hEdge = (i: number, j: number) => (j * (nx + 1) + i) * 2 // between (i,j) and (i+1,j)
+  const vEdge = (i: number, j: number) => (j * (nx + 1) + i) * 2 + 1 // between (i,j) and (i,j+1)
+
+  type Cross = { p: Vec; e: number }
+  const segs: Array<[Cross, Cross]> = []
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) {
       const x0 = box.x + i * gw
@@ -169,10 +161,10 @@ export function isoLoops(
       const bl = v(i, j + 1)
       const code = (tl >= level ? 8 : 0) | (tr >= level ? 4 : 0) | (br >= level ? 2 : 0) | (bl >= level ? 1 : 0)
       if (code === 0 || code === 15) continue
-      const top = () => lerp(x0, y0, tl, x1, y0, tr)
-      const right = () => lerp(x1, y0, tr, x1, y1, br)
-      const bottom = () => lerp(x0, y1, bl, x1, y1, br)
-      const left = () => lerp(x0, y0, tl, x0, y1, bl)
+      const top = (): Cross => ({ p: lerp(x0, y0, tl, x1, y0, tr), e: hEdge(i, j) })
+      const right = (): Cross => ({ p: lerp(x1, y0, tr, x1, y1, br), e: vEdge(i + 1, j) })
+      const bottom = (): Cross => ({ p: lerp(x0, y1, bl, x1, y1, br), e: hEdge(i, j + 1) })
+      const left = (): Cross => ({ p: lerp(x0, y0, tl, x0, y1, bl), e: vEdge(i, j) })
       // Segments are wound so the region ABOVE the level lies to the left of travel.
       switch (code) {
         case 1: segs.push([left(), bottom()]); break
@@ -193,26 +185,24 @@ export function isoLoops(
     }
   }
 
-  // Chain segments end-to-start into loops.
-  const byStart = new Map<string, number[]>()
+  // Chain segments end-to-start into loops, joining on the shared edge id.
+  const byStart = new Map<number, number[]>()
   segs.forEach(([a], idx) => {
-    const k = `${kx(a.x)},${kx(a.y)}`
-    const b = byStart.get(k)
+    const b = byStart.get(a.e)
     if (b) b.push(idx)
-    else byStart.set(k, [idx])
+    else byStart.set(a.e, [idx])
   })
   const used = new Uint8Array(segs.length)
   const loops: Vec[][] = []
   for (let s = 0; s < segs.length; s++) {
     if (used[s]) continue
-    const loop: Vec[] = [segs[s][0]]
+    const loop: Vec[] = [segs[s][0].p]
     let cur = s
     used[cur] = 1
     for (let guard = 0; guard < segs.length + 2; guard++) {
       const end = segs[cur][1]
-      loop.push(end)
-      const cand = byStart.get(`${kx(end.x)},${kx(end.y)}`)
-      const next = cand?.find((i) => !used[i])
+      loop.push(end.p)
+      const next = byStart.get(end.e)?.find((i) => !used[i])
       if (next === undefined) break
       used[next] = 1
       cur = next

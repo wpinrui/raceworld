@@ -149,20 +149,18 @@ export function buildScenery(
   for (let i = 0; i < terrainCount; i++) {
     const c = randPoint()
     const r = u(70 + rng() * 190)
-    const water = rng() < bio.water
-    if (!water) continue // ground variation is the relief bands' job now
+    if (rng() >= bio.water) continue // ground variation is the relief bands' job now
     const ry = r * (0.55 + rng() * 0.5)
     const rot = rng() * Math.PI
     // A lake lapping the barriers is implausible, and because water excludes everything it was
     // squeezing the grandstands off the circuit at the wettest venues.
     if (trackDist(c) - Math.max(r, ry) * 1.15 < u(60)) continue
     terrain.push({
-      d: blobPath(c.x, c.y, r, ry, rot, rng, 10, water ? 0.8 : 0.65, water ? 0.35 : 0.6),
-      fill: water ? '#3E6E86' : bio.ramp[Math.floor(rng() * bio.ramp.length)],
-      water,
+      d: blobPath(c.x, c.y, r, ry, rot, rng, 10, 0.8, 0.35),
+      fill: '#3E6E86',
+      water: true,
     })
-    // Only water excludes; grass patches are just tint.
-    if (water) addBlobExclusion(c.x, c.y, r * 1.15, ry * 1.15, rot)
+    addBlobExclusion(c.x, c.y, r * 1.15, ry * 1.15, rot)
   }
 
   // ── Corner regions (for runoffs and kerbs) ──

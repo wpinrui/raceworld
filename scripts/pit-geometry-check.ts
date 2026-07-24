@@ -1,6 +1,12 @@
 // TEMP probe: numeric verification of pit-lane paint geometry for every track layout.
 // No kinks (max consecutive-point jump), sane lateral release line, endpoints reported.
 import { TRACK_LAYOUTS } from '../src/data/tracks'
+import { TRACK as monaco } from '../src/data/tracks/monaco'
+
+// Layouts whose working section is deliberately NOT straightened.
+const STRAIGHTENED = new Set(
+  Object.keys(TRACK_LAYOUTS).filter((id) => !(id === 'monaco' && monaco.pitStraighten === false)),
+)
 
 const nums = (d: string) => d.match(/-?\d+(\.\d+)?/g)!.map(Number)
 const ptsOf = (d: string) => {
@@ -33,25 +39,18 @@ const worstTurn = (d: string, mpu: number) => {
   }
   return worst
 }
-const dist = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1])
-
 let bad = 0
 for (const [id, layout] of Object.entries(TRACK_LAYOUTS)) {
-  const lay = layout as unknown as { metresPerUnit: number; pit?: { d: string } }
-  if (!lay.pit) { console.log(`${id}: no pit`); continue }
-  const mpu = lay.metresPerUnit
-  const rows: string[] = []
-  for (const key of ['d'] as const) {
-    const j = maxJump(lay.pit[key]) * mpu
-    const turn = worstTurn(lay.pit[key], mpu)
-    // dot < -0.2 = a turn sharper than ~102 degrees between successive segments = fold/hairpin.
-    const flag = j > 35 ? '  <<< KINK' : turn < -0.2 ? `  <<< FOLD(${turn.toFixed(2)})` : ''
-    if (flag) bad++
-    rows.push(`${key}=${j.toFixed(1)}m,${turn.toFixed(2)}${flag}`)
-  }
+  const mpu = layout.metresPerUnit
+  const j = maxJump(layout.pit.d) * mpu
+  const turn = worstTurn(layout.pit.d, mpu)
+  // dot < -0.2 = a turn sharper than ~102 degrees between successive segments = fold/hairpin.
+  const flag = j > 35 ? '  <<< KINK' : turn < -0.2 ? `  <<< FOLD(${turn.toFixed(2)})` : ''
+  if (flag) bad++
+  const row = `d=${j.toFixed(1)}m,${turn.toFixed(2)}${flag}`
   // Straightness of the working section: max perpendicular deviation of slotStations (source of
   // the box row, stripe and building) and of the fastEdge from their own endpoint chords.
-  const stns = (lay.pit as unknown as { slotStations: Array<{ x: number; y: number }> }).slotStations
+  const stns = layout.pit.slotStations
   const chordDev = (q: Array<[number, number]>) => {
     const A = q[0]
     const B = q[q.length - 1]
@@ -62,10 +61,14 @@ for (const [id, layout] of Object.entries(TRACK_LAYOUTS)) {
     for (const v of q) dev = Math.max(dev, Math.abs(((v[0] - A[0]) * dy - (v[1] - A[1]) * dx) / L))
     return dev * mpu
   }
+  // Only meaningful where the working section was straightened at all. Monaco is authored
+  // pitStraighten:false (its pit straight genuinely isn't straight), so measuring its deviation
+  // from a chord flags a deliberate choice as a defect.
   const devSt = chordDev(stns.map((q): [number, number] => [q.x, q.y]))
-  const devFlag = devSt > 0.5 ? '  <<< NOT STRAIGHT' : ''
+  const straightened = STRAIGHTENED.has(id)
+  const devFlag = straightened && devSt > 0.5 ? '  <<< NOT STRAIGHT' : ''
   if (devFlag) bad++
-  console.log(`${id}: maxJump ${rows.join(' | ')}`)
-  console.log(`   straightDev slots=${devSt.toFixed(2)}m${devFlag}`)
+  console.log(`${id}: maxJump ${row}`)
+  console.log(`   straightDev slots=${devSt.toFixed(2)}m${straightened ? '' : ' (not straightened)'}${devFlag}`)
 }
 console.log(bad === 0 ? 'ALL GEOMETRY CHECKS PASS' : `${bad} PROBLEMS FLAGGED`)

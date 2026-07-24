@@ -11,10 +11,9 @@ import { writeFileSync, mkdirSync } from 'node:fs'
 import sharp from 'sharp'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
+import { TARMAC_WIDTH_M, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { SceneryLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
 
-const TRACK_WIDTH_M = 13.3
-const TARMAC_WIDTH_M = 12
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)

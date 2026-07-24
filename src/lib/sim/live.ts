@@ -718,10 +718,18 @@ export class LiveRace {
 
   // ── Projection: the RaceState the UI reads ───────────────────────────────────────────────────────
 
-  /** Live classification: finishers by the order they took the flag, running cars by continuous
-   * position, retirees last (latest first). Post-flag cruising must not reshuffle the result. */
+  /** Live classification: finishers by DISTANCE COVERED then the order they took the flag, running
+   * cars by continuous position, retirees last (latest first). Post-flag cruising must not reshuffle
+   * the result.
+   *
+   * Laps have to come first. `finishOrder` is pure crossing order after the leader takes the flag,
+   * so a car several laps down that happened to be just before the line was classified ahead of a
+   * car on the lead lap — measured at 30 violations over 20 seeded races, once putting a car 3 laps
+   * down in P2 ahead of the winner. This is not display-only: race-results.ts sorts on `position`
+   * and awards championship points from it. */
   snapshot(): RaceState {
-    const finished = this.cars.filter((c) => c.finished && !c.ds.retired).sort((a, b) => a.finishOrder - b.finishOrder)
+    const finished = this.cars.filter((c) => c.finished && !c.ds.retired)
+      .sort((a, b) => b.ds.lapTimes.length - a.ds.lapTimes.length || a.finishOrder - b.finishOrder)
     const running = this.cars.filter((c) => !c.ds.retired && !c.finished).sort((a, b) => b.pos - a.pos)
     const retired = this.cars.filter((c) => c.ds.retired).sort((a, b) => (b.ds.retirementLap ?? 0) - (a.ds.retirementLap ?? 0))
     const ordered = [...finished, ...running, ...retired]
@@ -730,6 +738,12 @@ export class LiveRace {
       const gap = aheadCar ? Math.max(0, (aheadCar.pos - car.pos) * car.cleanT) : 0
       return {
         ...car.ds,
+        // A shallow spread hands the store the engine's OWN tyre object and lap array, which the
+        // step loop then keeps mutating (wear every step, lapTimes.push at each crossing). The
+        // store's state would change under it with no write, and any identity-based memo would
+        // silently never invalidate.
+        currentTyre: { ...car.ds.currentTyre },
+        lapTimes: [...car.ds.lapTimes],
         position: i + 1,
         gap: car.ds.retired || car.finished ? 0 : gap,
         lapsDown: car.ds.retired || car.finished ? car.ds.lapsDown : this.lapsDownOf(car),

@@ -1,3 +1,4 @@
+import { shade } from '@/lib/color'
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
 
 // Static scenery layer: generated once per circuit, transforms with the camera. The seat-stripe and
@@ -18,13 +19,6 @@ const partsOf = (r: { w: number; h: number; parts?: SceneryPart[] }): SceneryPar
   r.parts ?? [{ dx: 0, dy: 0, w: r.w, h: r.h }]
 
 const heightM = (r: { storeys?: number }) => (r.storeys ?? 1) * STOREY_M
-
-/** Darken a hex fill toward black, for the extruded wall faces. */
-function shade(hex: string, k: number): string {
-  const n = parseInt(hex.slice(1), 16)
-  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v * k))
-  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`
-}
 
 /** Every part of a footprint as subpaths of ONE path. Filled nonzero (all rects wound the same way)
  *  this renders as their union, which keeps a multi-part building to a couple of DOM nodes instead

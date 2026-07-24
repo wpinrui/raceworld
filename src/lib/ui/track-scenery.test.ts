@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
-import { densifyTrace } from './track-path'
+import { densifyTrace, TRACK_WIDTH_M } from './track-path'
 import { buildScenery, type Scenery } from './track-scenery'
 import { biomeOf } from './biomes'
 import {
@@ -16,7 +16,7 @@ import {
   type Vec, type Obb,
 } from './geom'
 
-const TRACK_HALF_M = 13.3 / 2 // the drawn ribbon's casing, from RaceTrackMap's TRACK_WIDTH_M
+const TRACK_HALF_M = TRACK_WIDTH_M / 2
 const ids = Object.keys(TRACK_LAYOUTS)
 
 function sceneryFor(id: string) {

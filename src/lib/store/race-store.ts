@@ -104,7 +104,6 @@ interface RaceStore {
   setPushPreset: (driverId: string, preset: PushPreset) => void       // transient preset (overtake/push/conserve)
   setPushAuto: (driverId: string, on: boolean) => void                // Team Manager: hand a car's push to the AI
   setAutoDefend: (driverId: string, on: boolean) => void              // Driver mode: arm auto-defend (only from Normal)
-  clearHolds: () => void                                              // drop all HOLDs back to auto (FF)
   setStrategyNoise: (n: number) => void
   initSession: () => void
   tickLap: (godModeActions?: GodModeAction[]) => void
@@ -228,14 +227,6 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
     set((state) => (state.raceState
       ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, patch) } }
       : {}))
-  },
-
-  clearHolds: () => {
-    set((state) => {
-      const next: Record<string, PitCommand> = {}
-      for (const [id, cmd] of Object.entries(state.pitCommands)) if (cmd !== 'hold') next[id] = cmd
-      return { pitCommands: next }
-    })
   },
 
   setStrategyNoise: (n) => set({ strategyNoise: Math.min(1, Math.max(0, n)) }),

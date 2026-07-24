@@ -1,11 +1,12 @@
 # RaceWorld — Dev Reference
 
 ## Stack
-Next.js 15 (App Router) · TypeScript · Tailwind CSS · better-sqlite3 · Zustand · Anthropic SDK · Lucide React
+Next.js 16 (App Router) · TypeScript · Tailwind CSS · better-sqlite3 · Zustand · Anthropic SDK · Lucide React
 
 ## Architecture
 - **Race simulation** runs entirely client-side as a Zustand store. No DB writes mid-race; flush to SQLite at race end via Server Action.
-- **Two tick granularities, one core** (#sector-engine): `simulateSlice` (src/lib/sim/slice.ts) advances the field by a fraction of a lap. Played races tick 8 sectors per lap via `simulateSector` (store action `tickSector`), so the board, gaps and player commands are at most 1/8 lap stale. Headless racing (sim-ahead fast-forward, probe scripts) calls `simulateLap`, a frac=1 delegate that is bit-compatible with the historical lap engine — race.test.ts's seeded snapshot locks it. Statistical parity between the two is measured by `npx tsx scripts/sector-parity.ts` (paired-seed races, streamed metrics); the scaling rules (probability rescale, per-lap atomic decisions at lap boundaries, one pass per car per lap) live in slice.ts/engine.ts comments.
+- **Played races run the live engine** (#live-engine): `LiveRace` (src/lib/sim/live.ts) steps the world in fixed 0.5 s race-seconds, holding each car as a continuous position (laps + fraction) driven by the lap model's `freeAirPace`. `useLiveRace` drives it from a rAF loop and projects into the Zustand store at 4 Hz; store commands reach the engine through `live-bridge.ts`. The 2D map samples the engine directly per frame.
+- **Two tick granularities, one core** (#sector-engine): `simulateSlice` (src/lib/sim/slice.ts) advances the field by a fraction of a lap. `simulateSector`/`tickSector` remain for the parity probe and tests, NOT for played races. Headless racing (sim-ahead fast-forward, probe scripts) calls `simulateLap`, a frac=1 delegate that is bit-compatible with the historical lap engine — race.test.ts's seeded snapshot locks it. Statistical parity between the two is measured by `npx tsx scripts/sector-parity.ts` (paired-seed races, streamed metrics); the scaling rules (probability rescale, per-lap atomic decisions at lap boundaries, one pass per car per lap) live in slice.ts/engine.ts comments.
 - **Stats engine** lives server-side: SQL queries via Server Actions, called from Standings and Newsroom screens.
 - **Newsroom LLM** is a Server Action calling Claude with tool-calling against the stats DB. API key never leaves the server.
 

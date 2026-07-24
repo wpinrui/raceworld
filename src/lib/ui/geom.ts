@@ -126,19 +126,6 @@ export function obbOverlap(a: Obb, b: Obb, pad = 0): boolean {
   return true
 }
 
-/** Even-odd ray cast. `ring` is an implicitly closed polygon. */
-export function pointInRing(p: Vec, ring: Vec[]): boolean {
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const a = ring[i]
-    const b = ring[j]
-    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
-      inside = !inside
-    }
-  }
-  return inside
-}
-
 // Numeric cell keys. These indexes are queried thousands of times per scenery build, and string
 // keys plus a per-query Set were costing more than the exact geometry they were meant to make
 // affordable. Coordinates are viewBox units, comfortably inside +/-32768.
@@ -184,6 +171,9 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
 
   /** Exact distance from p to the polyline. */
   const dist = (p: Vec): number => {
+    // A non-finite query makes every ring bound NaN, so no break condition can ever fire and the
+    // expansion spins forever — a silent browser hang on the render path rather than an error.
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return Infinity
     const px = Math.floor(p.x / cell)
     const py = Math.floor(p.y / cell)
     let best = Infinity
@@ -313,5 +303,3 @@ export function makeOccupancy(cell: number) {
     get count() { return all.length },
   }
 }
-
-export type Occupancy = ReturnType<typeof makeOccupancy>

@@ -3,7 +3,7 @@
 // Split out of track-scenery.ts so that file stays about WHAT gets placed rather than how distance
 // to the circuit is computed, and to keep both under the 500-line cap.
 
-import { makeOccupancy, makePolylineIndex, obbCorners, type Obb, type Vec } from './geom'
+import { makePolylineIndex, obbCorners, type Obb, type Vec } from './geom'
 import { densifyTrace, type PitLane, type TrackTrace } from './track-path'
 import type { TrackFrame } from './scenery-props'
 
@@ -156,5 +156,3 @@ export function makeSceneryFrame(
     },
   }
 }
-
-export { makeOccupancy }

@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   distPointToSegment, distToPolyline, obbCorners, obbRadius, distPointToObb, obbOverlap,
-  pointInRing, makePolylineIndex, makeOccupancy, closestPointOnPolyline, type Obb,
+  makePolylineIndex, makeOccupancy, closestPointOnPolyline, type Obb,
 } from './geom'
 
 const P = (x: number, y: number) => ({ x, y })
@@ -115,22 +115,6 @@ describe('obbOverlap', () => {
     const near: Obb = { x: 14, y: 0, w: 10, h: 10, rot: 0 }
     expect(obbOverlap(a, near)).toBe(false) // 4 units apart
     expect(obbOverlap(a, near, 6)).toBe(true) // but not 6 units clear
-  })
-})
-
-describe('pointInRing', () => {
-  const square = [P(0, 0), P(10, 0), P(10, 10), P(0, 10)]
-
-  it('separates inside from outside', () => {
-    expect(pointInRing(P(5, 5), square)).toBe(true)
-    expect(pointInRing(P(15, 5), square)).toBe(false)
-    expect(pointInRing(P(5, -1), square)).toBe(false)
-  })
-
-  it('handles a concave ring', () => {
-    const u = [P(0, 0), P(10, 0), P(10, 10), P(7, 10), P(7, 3), P(3, 3), P(3, 10), P(0, 10)]
-    expect(pointInRing(P(5, 1), u)).toBe(true)
-    expect(pointInRing(P(5, 7), u)).toBe(false) // in the notch
   })
 })
 

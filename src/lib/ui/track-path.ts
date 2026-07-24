@@ -105,6 +105,12 @@ export interface PitLane {
   hatches: string[]
 }
 
+/** Drawn track cross-section, in metres: white casing overall, dark asphalt inside it.
+ *  Owned here because the renderer, the scenery clearance rules and their probes must all agree —
+ *  the test oracles measure "is this on the track?" against it. */
+export const TRACK_WIDTH_M = 13.3
+export const TARMAC_WIDTH_M = 12
+
 export const PIT_ENTRY_FRAC = 0.93 // lap fraction where the lane leaves the racing line
 export const PIT_EXIT_FRAC = 0.07  // lap fraction (of the next lap) where it rejoins
 const PIT_OFFSET = 16       // parallel offset in viewBox units
@@ -191,19 +197,37 @@ export function buildPitLane(
       pts[k] = add(base, scale(dir, x0 + (x1 - x0) * t))
       stations[k] = { p: sub(pts[k], scale(normal, offset)), normal, dir, ease: 1 }
     }
-    const taper = (k: number, e: number) => {
+    // The taper blends the real offset track onto the straight's line. Its target used to be the
+    // raw point's own projection, which is NOT monotone along `dir`: where the track curves back
+    // relative to the straight's direction (sampled once at the span midpoint) the projection
+    // DECREASES, and the lane ran backwards at the junction — a fold of up to 17 m against the
+    // direction of travel on 8 of the 37 circuits, which scripts/pit-geometry-check.ts reported.
+    // Clamping the longitudinal coordinate so it can never pass the straight's own endpoint keeps
+    // the lane monotone through both junctions.
+    const taper = (k: number, e: number, cap: number, entry: boolean): number => {
       const raw = add(stations[k].p, scale(stations[k].normal, offset * e))
-      const f = add(base, scale(dir, xOf(raw)))
+      const x = entry ? Math.min(xOf(raw), cap) : Math.max(xOf(raw), cap)
+      const f = add(base, scale(dir, x))
       pts[k] = { x: raw.x + (f.x - raw.x) * e, y: raw.y + (f.y - raw.y) * e }
       stations[k].ease = Math.min(0.998, e)
+      return x
     }
-    for (let k = 1; k < i0; k++) {
+    // Walk the entry taper BACKWARDS from the straight so each point's cap is its neighbour toward
+    // the working section; forwards for the exit. Either way x advances with travel.
+    // Monotone is necessary but not sufficient: where the track runs almost parallel to the
+    // straight, consecutive taper points barely advance along `dir`, so the small lateral residue
+    // still being blended out dominates the step and the join reads as a kink. Requiring at least
+    // half the straight's own point spacing keeps the longitudinal component in charge.
+    const minStep = Math.abs(x1 - x0) / Math.max(1, i1 - i0) * 0.5
+    let cap = x0
+    for (let k = i0 - 1; k >= 1; k--) {
       const u3 = k / i0
-      taper(k, u3 * u3 * (3 - 2 * u3))
+      cap = taper(k, u3 * u3 * (3 - 2 * u3), cap - minStep, true)
     }
+    cap = x1
     for (let k = i1 + 1; k < STEPS; k++) {
       const r = (STEPS - k) / (STEPS - i1)
-      taper(k, r * r * (3 - 2 * r))
+      cap = taper(k, r * r * (3 - 2 * r), cap + minStep, false)
     }
     pts[0] = stations[0].p
     stations[0].ease = 0

@@ -5,10 +5,10 @@
 
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
-import { densifyTrace } from '../src/lib/ui/track-path'
+import { densifyTrace, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { distToPolyline, distPointToObb, obbOverlap, obbCorners, type Vec } from '../src/lib/ui/geom'
 
-const TRACK_HALF_M = 13.3 / 2
+const TRACK_HALF_M = TRACK_WIDTH_M / 2
 
 const ids = Object.keys(TRACK_LAYOUTS).sort()
 let flagged = 0

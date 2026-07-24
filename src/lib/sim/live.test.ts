@@ -199,3 +199,53 @@ describe('LiveRace', () => {
     expect([...snap.drivers.map((d) => d.position)].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6])
   })
 })
+
+// Classification with a lapped field. The default DRIVERS above are too evenly matched over 12 laps
+// to lap anybody, so this uses a deliberately wide pace spread over a long race — which is exactly
+// why the ordering bug survived: the existing suite never produced a lapped finisher.
+const SPREAD: Driver[] = [
+  makeDriver('s1', 'sA', 99), makeDriver('s2', 'sA', 97),
+  makeDriver('s3', 'sB', 80), makeDriver('s4', 'sB', 70),
+  makeDriver('s5', 'sC', 40), makeDriver('s6', 'sC', 20),
+  makeDriver('s7', 'sD', 15), makeDriver('s8', 'sD', 10),
+]
+const SPREAD_TEAMS: Team[] = [makeTeam('sA', 99), makeTeam('sB', 78), makeTeam('sC', 40), makeTeam('sD', 12)]
+const LONG: Circuit = { ...CIRCUIT, laps: 40 }
+
+describe('LiveRace classification', () => {
+  function spreadState(seed: number): RaceState {
+    vi.spyOn(Math, 'random').mockImplementation(lcg(seed))
+    const forms = Object.fromEntries(SPREAD.map((d) => [d.id, 5]))
+    const q = SPREAD.map((d, i) => ({
+      driverId: d.id, gridPosition: i + 1, bestTime: 80 + i * 0.1, q1Time: null, q2Time: null, q3Time: null,
+    }))
+    return { ...initRaceState(SPREAD, SPREAD_TEAMS, LONG, q, [], forms, 2025), phase: 'racing' }
+  }
+
+  it('never classifies a lapped finisher ahead of one that covered more laps', () => {
+    // finishOrder is pure crossing order after the flag, so without a laps tiebreak a car three laps
+    // down that was just before the line took P2 ahead of the winner. race-results.ts awards points
+    // straight off `position`, so this decided championships.
+    const violations: string[] = []
+    for (let seed = 1; seed <= 20; seed++) {
+      const final = runLiveRaceToEnd(spreadState(seed), SPREAD, SPREAD_TEAMS, LONG, 2025)
+      const classified = final.drivers.filter((d) => !d.retired)
+      for (let i = 1; i < classified.length; i++) {
+        if (classified[i].lapTimes.length > classified[i - 1].lapTimes.length) {
+          violations.push(
+            `seed ${seed}: P${classified[i - 1].position} on ${classified[i - 1].lapTimes.length} laps `
+            + `ahead of P${classified[i].position} on ${classified[i].lapTimes.length}`,
+          )
+        }
+      }
+      vi.restoreAllMocks()
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('actually produces a lapped field, so the check above has teeth', () => {
+    const final = runLiveRaceToEnd(spreadState(1), SPREAD, SPREAD_TEAMS, LONG, 2025)
+    const laps = final.drivers.filter((d) => !d.retired).map((d) => d.lapTimes.length)
+    expect(Math.max(...laps) - Math.min(...laps)).toBeGreaterThan(0)
+  })
+})

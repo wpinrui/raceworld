@@ -6,8 +6,9 @@ import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import { SceneryLayer, TrackFurnitureLayer } from './SceneryLayer'
 import { COMPOUND_COLORS } from './TyreIndicator'
+import { shade } from '@/lib/color'
 import type { TyreCompound } from '@/lib/sim/types'
-import { densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC } from '@/lib/ui/track-path'
+import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
@@ -49,8 +50,6 @@ const A_ACCEL_M = 12.75
 const A_BRAKE_M = 41
 
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit.
-const TRACK_WIDTH_M = 13.3 // 12m asphalt + a 0.65m painted boundary band each side
-const TARMAC_WIDTH_M = 12
 const PIT_WIDTH_M = 9.5 // lane + working apron: the boxes sit 1.6m off-centre and their markings and
                         // gantries reach ~3.8m out — a 7m ribbon put them on the grass
 const CAR_LENGTH_M = 5.63
@@ -224,21 +223,10 @@ function timeToDistance(profile: Float64Array, f: number): number {
 const SPRITE_VIEWBOX = '-16 0 272 520'
 const SPRITE_ASPECT = 272 / 520
 
-// Derive the darker livery accents from the team's single colour.
-function shade(hex: string, f: number): string {
-  const v = hex.replace('#', '')
-  const n = parseInt(v.length === 3 ? v.split('').map((c) => c + c).join('') : v, 16)
-  const ch = (x: number) => Math.max(0, Math.min(255, Math.round(x * (1 + f))))
-  const r = ch((n >> 16) & 255)
-  const g = ch((n >> 8) & 255)
-  const b = ch(n & 255)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
-}
-
 const CarSprite = memo(function CarSprite({ color, length, compound }: { color: string; length: number; compound?: TyreCompound }) {
   const band = compound ? COMPOUND_COLORS[compound] : null
   const p = color
-  const sec = shade(color, -0.38)
+  const sec = shade(color, 0.62)
   const t = '#969CA6'
   return (
     <svg width={length * SPRITE_ASPECT} height={length} viewBox={SPRITE_VIEWBOX} className="block" style={{ overflow: 'visible' }}>
@@ -396,7 +384,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const crewRefs = useRef(new Map<number, SVGGElement>()) // per-slot pit crew overlays (root visibility)
   const crewPartsRef = useRef(new Map<string, SVGGElement>()) // `slot:role` -> member/prop group
   const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
-  const slotSideRef = useRef(new Map<number, number>()) // lat sign of the garage side at each slot
   const crewAnimRef = useRef(new Map<number, {
     mode: 'hidden' | 'active' | 'retreat'
     pos: Record<string, [number, number]>
@@ -1099,7 +1086,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               // flips with curvature through the tapers, which drove cars up the wrong side of
               // the lane (and, once the working lane was trimmed, onto the grass).
               const sideSign = layout.pit.latSign
-              if (slotIdx != null) slotSideRef.current.set(slotIdx, sideSign)
               let lat = -sideSign * uu(2.8) // centred in the marked fast lane (−4.3 line to −1.3 stripe)
               const boxDist = slotIdx != null ? slotDistsRef.current[slotIdx] : undefined
               // Only the arrival and the stop swing across to the boxes; a car on its way out
