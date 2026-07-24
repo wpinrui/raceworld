@@ -109,6 +109,9 @@ export interface DriverRaceState {
                          // until the next lap — the lap engine structurally allows one contest per car
                          // per lap, and uncapped sector contests chained multi-pass laps (+14% places
                          // gained, measured). Cleared on the lap's first slice; never set at frac=1.
+  contestArmed?: boolean // sector engine: within strike range at the LAP BOUNDARY — the lap engine's
+                         // contest gate. Without it a car attacked in the same lap it caught up,
+                         // gaining fractional contest exposure on every catch-up. Set each lap start.
   currentTyre: TyreState
   tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
                          // Absent (legacy/forecast states) → treated as a fresh-tyre temp.

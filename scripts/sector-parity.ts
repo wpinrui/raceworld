@@ -51,6 +51,7 @@ const forms: Record<string, number> = Object.fromEntries(drivers.map((d) => [d.i
 interface Agg {
   races: number
   overtakes: number
+  lapMoves: number   // places gained measured at LAP boundaries only — granularity-independent parity metric
   dnfs: number
   dnfTech: number
   dnfCollision: number
@@ -63,7 +64,7 @@ interface Agg {
   winsByTeam: number[]
 }
 const newAgg = (): Agg => ({
-  races: 0, overtakes: 0, dnfs: 0, dnfTech: 0, dnfCollision: 0, pitStops: 0, firstPitSum: 0, firstPitN: 0, winTimeSum: 0,
+  races: 0, overtakes: 0, lapMoves: 0, dnfs: 0, dnfTech: 0, dnfCollision: 0, pitStops: 0, firstPitSum: 0, firstPitN: 0, winTimeSum: 0,
   finSum: new Array(N_DRIVERS).fill(0), finSq: new Array(N_DRIVERS).fill(0), winsByTeam: new Array(N_TEAMS).fill(0),
 })
 
@@ -75,26 +76,39 @@ function runRace(engine: 'lap' | 'sector', circuit: Circuit, raceIdx: number, ag
   let state: RaceState = { ...initRaceState(drivers, teams, circuit, qr, sessions, forms, YEAR, 0.35, seedStr), phase: 'racing' }
 
   let overtakes = 0
+  let lapMoves = 0
   let guard = 0
+  let lapBoundaryPos = new Map(state.drivers.map((d) => [d.driverId, d.position]))
   const maxTicks = (circuit.laps + 2) * (engine === 'sector' ? SECTORS_PER_LAP : 1)
   while (state.phase === 'racing' && guard++ < maxTicks) {
     const prev = state
     state = engine === 'sector'
       ? simulateSector(state, drivers, teams, circuit, YEAR)
       : simulateLap(state, drivers, teams, circuit, YEAR)
-    // PLACES gained by running cars outside their own pit tick — granularity-invariant (a two-place
-    // gain counts 2 whether it happened in one lap tick or across two sector ticks), unlike event
-    // counts, which inflate mechanically under finer diffing.
+    // Per-tick PLACES gained by running cars outside their own pit tick. Intra-lap dynamics are
+    // EXPECTED to differ (that's the sector engine's point), so this row is context, not a criterion.
     const prevPos = new Map(prev.drivers.map((d) => [d.driverId, d.position]))
     for (const d of state.drivers) {
       if (d.retired) continue
       const pp = prevPos.get(d.driverId) ?? d.position
       if (d.position < pp && d.lastPitLap !== prev.currentLap) overtakes += pp - d.position
     }
+    // LAP-BOUNDARY places gained — the parity criterion: how the classification evolves lap to lap,
+    // regardless of tick granularity. The lap engine crosses a boundary every tick.
+    if (state.currentLap !== prev.currentLap) {
+      const lapDone = prev.currentLap
+      for (const d of state.drivers) {
+        if (d.retired) continue
+        const pp = lapBoundaryPos.get(d.driverId) ?? d.position
+        if (d.position < pp && d.lastPitLap !== lapDone) lapMoves += pp - d.position
+      }
+      lapBoundaryPos = new Map(state.drivers.map((d) => [d.driverId, d.position]))
+    }
   }
 
   agg.races++
   agg.overtakes += overtakes
+  agg.lapMoves += lapMoves
   for (const d of state.drivers) {
     if (d.retired) {
       agg.dnfs++
@@ -125,7 +139,8 @@ function report(circuit: Circuit, lap: Agg, sec: Agg): void {
   const rel = (a: number, b: number) => (a === 0 ? '—' : `${(((b - a) / a) * 100).toFixed(1)}%`)
   const push = (label: string, a: number, b: number, mode: 'rel' | 'abs' | 's' = 'rel') =>
     rows.push([label, a, b, mode === 'rel' ? rel(a, b) : mode === 's' ? `${(b - a).toFixed(2)}s` : (b - a).toFixed(3)])
-  push('places gained/race', lap.overtakes / lap.races, sec.overtakes / sec.races)
+  push('lap-boundary moves/race', lap.lapMoves / lap.races, sec.lapMoves / sec.races)
+  push('per-tick places (context)', lap.overtakes / lap.races, sec.overtakes / sec.races)
   push('DNFs/race', lap.dnfs / lap.races, sec.dnfs / sec.races, 'abs')
   push('  technical', lap.dnfTech / lap.races, sec.dnfTech / sec.races, 'abs')
   push('  collision', lap.dnfCollision / lap.races, sec.dnfCollision / sec.races, 'abs')

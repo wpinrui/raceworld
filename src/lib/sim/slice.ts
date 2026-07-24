@@ -10,7 +10,7 @@ import type {
 } from './types'
 import { getMoistureAtLap } from './weather'
 import { computeTyreLife, wearTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
-import { computeLapTime } from './engine'
+import { computeLapTime, TRAFFIC } from './engine'
 import { applyCarForm, effectiveCarPace } from './car-rating'
 import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, hotPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
 import { resolveIntensity, advancePreset, resolvePlayerPush, NORMAL } from './push'
@@ -132,8 +132,11 @@ export function simulateSlice(
       continue
     }
 
-    // Sector mode: the one-pass-per-lap latch resets on the lap's first slice.
-    if (spec.lapStart && current.passedThisLap) current = { ...current, passedThisLap: undefined }
+    // Sector mode: the one-pass-per-lap latch resets on the lap's first slice, and the contest gate
+    // arms from the LAP-BOUNDARY gap — the same information set the lap engine contests on.
+    if (spec.frac !== 1 && spec.lapStart) {
+      current = { ...current, passedThisLap: undefined, contestArmed: current.gap <= TRAFFIC.STRIKE_RANGE }
+    }
 
     // Resolve driver/team early — needed for pit AI and lap time
     const driver = driverMap.get(current.driverId)!
@@ -336,6 +339,7 @@ export function simulateSlice(
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
       frac: spec.frac,
       contestBlocked: spec.frac !== 1 && !!current.passedThisLap,
+      contestArmed: spec.frac === 1 ? undefined : !!current.contestArmed,
     })
 
     // Atomic penalties (pit, mistake) land whole in the slice they happen. Sector mode floors the
