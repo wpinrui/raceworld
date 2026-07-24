@@ -25,6 +25,9 @@ export interface LapInput {
   frac?: number               // fraction of a lap this call covers (#sector-engine): 1 = whole lap (default,
                               // bit-compatible), 1/8 = one sector. Gates stay lap-scale (paceEdge, ranges);
                               // emitted times scale by frac and probabilities rescale via perSliceProb.
+  contestBlocked?: boolean    // sector engine: this car already completed a pass this lap — no further
+                              // contests (or their crash rolls) until the next lap, matching the lap
+                              // engine's one-contest-per-car-per-lap structure. Always false at frac=1.
 }
 
 export interface LapResult {
@@ -168,8 +171,8 @@ export function computeLapTime(input: LapInput): LapResult {
   //      quicker car still gets a small chance every lap (never walled to zero); a clearly-but-not-hugely
   //      faster car doesn't simply breeze by. It harries in the dirty air until a chance comes off.
   // The overshoot a blow-past needs scales with the slice (a slice only closes frac of a lap's worth).
-  const blowPast = wouldGap < -PASS_MARGIN * frac && paceEdge > 0
-  const inRange = gapToCarAhead <= STRIKE_RANGE && paceEdge > 0
+  const blowPast = !input.contestBlocked && wouldGap < -PASS_MARGIN * frac && paceEdge > 0
+  const inRange = !input.contestBlocked && gapToCarAhead <= STRIKE_RANGE && paceEdge > 0
   // Where a car that can't pass settles: HOLD_GAP with per-lap jitter, so a train shows living, varied
   // intervals (+0.27, +0.41, +0.19…) instead of every car pinned to an identical +0.300.
   const harryGap = HOLD_GAP + (Math.random() - 0.5) * HOLD_JITTER

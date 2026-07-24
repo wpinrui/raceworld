@@ -6,6 +6,7 @@ import type {
   DriverRaceState,
   GodModeAction,
   PushState,
+  TyreCompound,
 } from './types'
 import { getMoistureAtLap } from './weather'
 import { computeTyreLife, wearTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
@@ -34,11 +35,15 @@ export interface SliceSpec {
   lapStart: boolean
   /** lapTimes append, stint bookkeeping, lap counter, lapped-runner accounting, finish check. */
   lapEnd: boolean
-  /** Strategy replan + pit decision + pit execution (and god-mode pit overrides). */
-  pitSlice: boolean
+  /** Strategy replan + the pit call — on the lap's FIRST slice, so the decision sees exactly the
+   * lap-boundary state the lap engine decides on (deciding late in the lap read a ~7/8-lap-more-worn
+   * tyre and pitted the field ~2 laps early — measured by scripts/sector-parity.ts). */
+  pitDecide: boolean
+  /** Pit execution + god-mode pit overrides — in the lap's FINAL sector, where the pit entry sits. */
+  pitExec: boolean
 }
 
-export const LAP_SLICE: SliceSpec = { frac: 1, lapStart: true, lapEnd: true, pitSlice: true }
+export const LAP_SLICE: SliceSpec = { frac: 1, lapStart: true, lapEnd: true, pitDecide: true, pitExec: true }
 
 // ---- slice phases ---------------------------------------------------------------------------------
 // The tick's bookend phases, named and lifted out of the core. The per-driver race loop (lap time,
@@ -214,6 +219,9 @@ export function simulateSlice(
       continue
     }
 
+    // Sector mode: the one-pass-per-lap latch resets on the lap's first slice.
+    if (spec.lapStart && current.passedThisLap) current = { ...current, passedThisLap: undefined }
+
     // Resolve driver/team early — needed for pit AI and lap time
     const driver = driverMap.get(current.driverId)!
     const team = teamMap.get(driver.teamId)!
@@ -267,8 +275,11 @@ export function simulateSlice(
 
     let pitPenalty = 0
     let pitted = false
+    // The pit call for this lap: decided on the pitDecide slice, executed on the pitExec slice. At
+    // frac=1 both run back-to-back in this iteration and the stash never touches driver state.
+    let pitPlan: { pit: boolean; compound: TyreCompound } | null = null
 
-    if (spec.pitSlice) {
+    if (spec.pitDecide) {
       // 2c. Re-solve strategy this lap. The team plans on its PROJECTED condition (100 − believed wear
       // rate × laps on the tyre), not the coarse bucket reading — a smooth, stint-anchored guess of where
       // the tyre is, so it aims for ~the cliff buffer without the target lap receding. Buckets still feed
@@ -298,7 +309,7 @@ export function simulateSlice(
 
       // 2d. Decide whether to pit this lap — window + undercut / clear-air, forced at the real cliff.
       const selfField = fieldByDriver.get(current.driverId)!
-      let pitDecision = decidePit(
+      const pitDecision = decidePit(
         plan,
         current.currentTyre.condition,
         projectedCond,
@@ -308,18 +319,25 @@ export function simulateSlice(
         field,
         pitLoss,
       )
+      pitPlan = { pit: pitDecision.shouldPit, compound: pitDecision.targetCompound }
+      // Sector mode decides sectors before it executes — stash the call on the driver state.
+      if (!spec.pitExec) current = { ...current, pendingPit: pitPlan }
+    }
 
-      // God mode pit overrides
+    if (spec.pitExec) {
+      const stash = pitPlan ?? current.pendingPit ?? { pit: false, compound: current.targetNextCompound }
+      // God-mode pit overrides (RNG-free), applied at execution: force wins over the plan, cancel kills it.
       const godActionsForDriver = (godModeActions ?? []).filter(a => a.driverId === current.driverId)
       const forcePit = [...godActionsForDriver].reverse().find(a => a.type === 'force-pit')
       const cancelPit = godActionsForDriver.find(a => a.type === 'cancel-pit')
-      if (forcePit) {
-        pitDecision = { shouldPit: true, targetCompound: forcePit.compound ?? pitDecision.targetCompound }
-      } else if (cancelPit) {
-        pitDecision = { shouldPit: false, targetCompound: pitDecision.targetCompound }
-      }
+      const decision = forcePit
+        ? { pit: true, compound: forcePit.compound ?? stash.compound }
+        : cancelPit
+          ? { pit: false, compound: stash.compound }
+          : stash
+      if (current.pendingPit) current = { ...current, pendingPit: undefined }
 
-      if (pitDecision.shouldPit) {
+      if (decision.pit) {
         pitted = true
         // Double-stack (issue #101): if a teammate already pitted THIS lap (processed earlier = ahead on
         // track), the crew is still busy when this, the latter car, arrives. It only waits out the crew-
@@ -336,14 +354,14 @@ export function simulateSlice(
         // Era pit-lane loss + a small execution jitter (clean vs scruffy stop), plus any stacking wait.
         pitPenalty = pitLoss + (Math.random() * 2 - 1) * 1.5 + stackExtra
         const newMaxLifeLaps = computeTyreLife(
-          state.tyreBaseLife[pitDecision.targetCompound],
+          state.tyreBaseLife[decision.compound],
           driver.smoothness,
           state.totalLaps,
         )
         current = {
           ...current,
           currentTyre: {
-            compound: pitDecision.targetCompound,
+            compound: decision.compound,
             condition: 100,
             maxLifeLaps: newMaxLifeLaps,
           },
@@ -404,11 +422,12 @@ export function simulateSlice(
       paceDelta: pacePush(intensity) + coldPenalty(tempIn) + hotPenalty(tempIn),
       defenderDriver: carAheadState ? driverMap.get(carAheadState.driverId) : undefined,
       frac: spec.frac,
+      contestBlocked: spec.frac !== 1 && !!current.passedThisLap,
     })
 
     // Atomic penalties (pit, mistake) land whole in the slice they happen. Sector mode floors the
     // emitted time — the hold-station arithmetic can go non-positive on slice scale (frac=1 untouched).
-    const finalLapTime = spec.frac === 1
+    let finalLapTime = spec.frac === 1
       ? lapResult.lapTime + pitPenalty + mistakeTimeLoss
       : Math.max(0.001, lapResult.lapTime + pitPenalty + mistakeTimeLoss)
     lapTimesThisLap.set(current.driverId, finalLapTime)
@@ -434,24 +453,42 @@ export function simulateSlice(
     if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
       const pen = lapResult.defenderPenalty ?? 0
-      // The penalty lands in the defender's CURRENT slice bookkeeping. lapTimes' last entry holds this
+      // Sector mode: one slice's differential often can't cross the pair's CUMULATIVE times, and the
+      // by-time classification below would silently revert the pass — the pair then re-contests every
+      // sector, churning phantom passes (+15% places gained, measured). A full lap's differential
+      // crosses naturally at frac=1. Enforce what the lap engine achieves: exchange the pair's
+      // post-slice cumulative times (net race time conserved) through this car's slice time and the
+      // defender's current split.
+      let extra = 0 // added to the defender beyond pen; the same amount comes off the attacker
+      if (spec.frac !== 1) {
+        const myTotal = current.totalTime + finalLapTime
+        const defTotal = aheadUpdated.totalTime + pen
+        if (myTotal > defTotal) extra = Math.min(myTotal - defTotal, finalLapTime - 0.001)
+      }
+      if (extra > 0) {
+        finalLapTime -= extra
+        lapTimesThisLap.set(current.driverId, finalLapTime)
+      }
+      const defLoss = pen + extra
+      // The loss lands in the defender's CURRENT slice bookkeeping. lapTimes' last entry holds this
       // lap only on a lap-end slice (always true at frac=1); on a mid-lap sector it holds a PREVIOUS lap
-      // and must not be touched — the sector split carries the penalty into the lap sum instead.
-      const aheadLaps = spec.lapEnd && pen > 0 && aheadUpdated.lapTimes.length
-        ? aheadUpdated.lapTimes.map((t, i) => (i === aheadUpdated.lapTimes.length - 1 ? t + pen : t))
+      // and must not be touched — the sector split carries the loss into the lap sum instead.
+      const aheadLaps = spec.lapEnd && defLoss > 0 && aheadUpdated.lapTimes.length
+        ? aheadUpdated.lapTimes.map((t, i) => (i === aheadUpdated.lapTimes.length - 1 ? t + defLoss : t))
         : aheadUpdated.lapTimes
-      const aheadSectors = spec.frac !== 1 && pen > 0 && (aheadUpdated.sectorTimes?.length ?? 0) > 0
-        ? aheadUpdated.sectorTimes!.map((t, i) => (i === aheadUpdated.sectorTimes!.length - 1 ? t + pen : t))
+      const aheadSectors = spec.frac !== 1 && defLoss > 0 && (aheadUpdated.sectorTimes?.length ?? 0) > 0
+        ? aheadUpdated.sectorTimes!.map((t, i) => (i === aheadUpdated.sectorTimes!.length - 1 ? t + defLoss : t))
         : aheadUpdated.sectorTimes
       updatedStates.set(carAheadState.driverId, {
         ...aheadUpdated,
         position: current.position,
-        totalTime: aheadUpdated.totalTime + pen,
+        totalTime: aheadUpdated.totalTime + defLoss,
         lapTimes: aheadLaps,
         sectorTimes: aheadSectors,
       })
-      if (pen > 0) lapTimesThisLap.set(carAheadState.driverId, (lapTimesThisLap.get(carAheadState.driverId) ?? 0) + pen)
+      if (defLoss > 0) lapTimesThisLap.set(carAheadState.driverId, (lapTimesThisLap.get(carAheadState.driverId) ?? 0) + defLoss)
       current = { ...current, position: aheadUpdated.position }
+      if (spec.frac !== 1) current = { ...current, passedThisLap: true }
     }
 
     // 2h. Degrade tyre — multipliers stack on the noisy base: dirty air (within ~1s) wears it faster, the

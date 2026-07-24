@@ -102,6 +102,13 @@ export interface DriverRaceState {
   sectorTimes?: number[] // played-race sector engine (#sector-engine): this lap's sub-lap splits, appended
                          // per sector tick. Length 8 ⇔ they describe lapTimes' last entry; <8 ⇔ the lap in
                          // progress. Absent on headless/legacy states (whole-lap ticks).
+  pendingPit?: { pit: boolean; compound: TyreCompound } // sector engine: the pit call taken on the lap's
+                         // first slice (same decision state as the lap engine), executed in the final
+                         // sector. Absent at frac=1, where decision and execution share the tick.
+  passedThisLap?: boolean // sector engine: this car completed a pass this lap, so it contests no further
+                         // until the next lap — the lap engine structurally allows one contest per car
+                         // per lap, and uncapped sector contests chained multi-pass laps (+14% places
+                         // gained, measured). Cleared on the lap's first slice; never set at frac=1.
   currentTyre: TyreState
   tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
                          // Absent (legacy/forecast states) → treated as a fresh-tyre temp.

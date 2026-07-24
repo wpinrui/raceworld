@@ -8,8 +8,9 @@ import { simulateSlice } from './slice'
 
 export const SECTORS_PER_LAP = 8
 export const SECTOR_FRAC = 1 / SECTORS_PER_LAP
-// Strategy replan + pit decision + pit execution run in the lap's FINAL sector — the pit entry sits at
-// 0.93 of the lap (track-path.ts PIT_ENTRY_FRAC), inside sector 7's [0.875, 1) span.
+// Pit EXECUTION runs in the lap's final sector — the pit entry sits at 0.93 of the lap (track-path.ts
+// PIT_ENTRY_FRAC), inside sector 7's [0.875, 1) span. The pit DECISION runs on the lap's first slice,
+// where the field state matches the lap engine's decision point (see SliceSpec.pitDecide).
 export const PIT_SECTOR = SECTORS_PER_LAP - 1
 
 export function simulateSector(
@@ -28,7 +29,7 @@ export function simulateSector(
     teams,
     circuit,
     year,
-    { frac: SECTOR_FRAC, lapStart: s === 0, lapEnd: s === SECTORS_PER_LAP - 1, pitSlice: s === PIT_SECTOR },
+    { frac: SECTOR_FRAC, lapStart: s === 0, lapEnd: s === SECTORS_PER_LAP - 1, pitDecide: s === 0, pitExec: s === PIT_SECTOR },
     godModeActions,
     false,
     playerControlledIds,
