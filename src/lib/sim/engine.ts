@@ -65,19 +65,12 @@ const HOLD_JITTER = 0.3       // s: spread on the harry distance so a train isn'
 // The traffic tunables, exported so race.ts (and the pace-mode logic) share the engine's exact numbers.
 export const TRAFFIC = { DIRTY_RANGE, MAX_DIRTY, SLIPSTREAM, STRIKE_RANGE, PASS_MARGIN, OVERTAKE_SENS_MIN, OVERTAKE_SENS_MAX, MAX_CONTEST, ATTACKER_PENALTY, DEFENDER_PENALTY, HOLD_GAP } as const
 
-export function computeLapTime(input: LapInput): LapResult {
-  const {
-    driver,
-    team,
-    tyre,
-    form,
-    fuelLaps,
-    lap,
-    weather,
-    gapToCarAhead,
-    carAheadLapTime,
-    circuitFlatModifier,
-  } = input
+// The CLEAN-AIR lap pace (steps 1-13 of the lap model), shared by the whole-lap engine below and the
+// live engine (#live-engine), which evaluates it continuously with a per-lap noiseOverride it draws at
+// each car's own line crossing. Draw order matters at the whole-lap call site: when noiseOverride is
+// absent this consumes exactly one Math.random(), at the same point the inline code always did.
+export function freeAirPace(input: LapInput): number {
+  const { driver, team, tyre, form, fuelLaps, lap, weather, circuitFlatModifier } = input
 
   // 1. base
   const base = 100
@@ -126,7 +119,7 @@ export function computeLapTime(input: LapInput): LapResult {
   // 13. rawTime — the driver's push / cold-tyre adjustment (#sim-overhaul) is part of clean-air pace, so it
   // flows through dirty air + the overtake gate below (pushing helps you pass; cold tyres make you easy prey).
   const flatModifier = circuitFlatModifier
-  const rawTime =
+  return (
     base +
     carMod +
     driverMod +
@@ -139,6 +132,13 @@ export function computeLapTime(input: LapInput): LapResult {
     flatModifier +
     (input.paceDelta ?? 0) +
     noise
+  )
+}
+
+export function computeLapTime(input: LapInput): LapResult {
+  const { driver, gapToCarAhead, carAheadLapTime } = input
+
+  const rawTime = freeAirPace(input)
 
   // FREE-AIR PACE is rawTime, always LAP-scale — paceEdge below keeps its per-lap meaning in both modes.
   // Traffic — dirty air, the contested pass, its crash roll, and the time a pass costs both cars — is
