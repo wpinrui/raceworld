@@ -59,6 +59,8 @@ export interface TrackLayout {
   metresPerUnit: number
   /** The raw imported trace (scenery generation samples it). */
   trace: TrackTrace
+  /** True when the pit complex is authored on the OUTSIDE of the loop (e.g. Montreal). */
+  pitOutside: boolean
 }
 
 function traceLength(trace: TrackTrace): number {
@@ -71,7 +73,10 @@ function traceLength(trace: TrackTrace): number {
   return total
 }
 
-type ImportedTrack = { viewBox: string; trace: TrackTrace; lengthM: number }
+// Optional per-track pit authoring: lap fractions where the lane leaves/rejoins the track.
+// Defaults (0.93/0.07) are correct where the trace closes on the pit straight (e.g. Istanbul);
+// tracks whose seam lands elsewhere get hand-authored values in their own file.
+type ImportedTrack = { viewBox: string; trace: TrackTrace; lengthM: number; pitEntry?: number; pitExit?: number; pitStraighten?: boolean; pitSide?: 'inside' | 'outside' }
 
 function traceLayout(circuitId: string, track: ImportedTrack): TrackLayout {
   const { d, start } = buildTracePath(track.trace)
@@ -81,9 +86,10 @@ function traceLayout(circuitId: string, track: ImportedTrack): TrackLayout {
     viewBox: track.viewBox,
     d,
     start,
-    pit: buildPitLane(track.trace, { offset: PIT_LANE_OFFSET_M / metresPerUnit, metresPerUnit }),
+    pit: buildPitLane(track.trace, { entry: track.pitEntry, exit: track.pitExit, straighten: track.pitStraighten, side: track.pitSide, offset: PIT_LANE_OFFSET_M / metresPerUnit, metresPerUnit }),
     metresPerUnit,
     trace: track.trace,
+    pitOutside: track.pitSide === 'outside',
   }
 }
 
