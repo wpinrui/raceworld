@@ -9,7 +9,7 @@ import type {
   TyreCompound,
 } from './types'
 import { getMoistureAtLap } from './weather'
-import { computeTyreLife, wearTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
+import { wearTyre, DIRTY_AIR_WEAR_MULT } from './tyres'
 import { computeLapTime, TRAFFIC } from './engine'
 import { applyCarForm, effectiveCarPace } from './car-rating'
 import { TEMP, nextTyreTemp, pacePush, pushWearMult, coldPenalty, hotPenalty, overheatWearMult, tyreWearRatingMult } from './tyre-temp'
@@ -18,7 +18,7 @@ import { decidePit, planStrategy, bucketCondition, type FieldCar } from './pit-a
 import { pitLaneLoss, doubleStackPenalty } from './pit-loss'
 import { perSliceProb, sampleExponential } from './rng-utils'
 import { perLapTechnicalDNF, sampleTechnicalFailure } from './reliability'
-import { applyGodModeActions, updateTeamBeliefs, classifyByResult, recomputeGaps, applyLappedRunners, sliceCommentary } from './slice-phases'
+import { applyGodModeActions, updateTeamBeliefs, classifyByResult, recomputeGaps, applyLappedRunners, sliceCommentary, executePitStop } from './slice-phases'
 
 // The shared race-tick core (#sector-engine). simulateSlice advances every car by one SLICE of a lap:
 // a whole lap (spec = LAP_SLICE, the headless/simulated path — bit-compatible with the historical
@@ -263,39 +263,9 @@ export function simulateSlice(
 
       if (decision.pit) {
         pitted = true
-        // Double-stack (issue #101): if a teammate already pitted THIS lap (processed earlier = ahead on
-        // track), the crew is still busy when this, the latter car, arrives. It only waits out the crew-
-        // busy time the on-track gap hasn't already absorbed: max(0, stackPenalty - gap). Right behind ->
-        // the full wait; a few seconds back -> little or none.
-        let stackExtra = 0
-        for (const [id, st] of updatedStates) {
-          if (id === current.driverId || st.lastPitLap !== state.currentLap) continue
-          if (driverMap.get(id)?.teamId !== driver.teamId) continue
-          const myT = fieldByDriver.get(current.driverId)?.totalTime ?? 0
-          const tmT = fieldByDriver.get(id)?.totalTime ?? 0
-          stackExtra = Math.max(stackExtra, Math.max(0, stackPenalty - Math.abs(myT - tmT)))
-        }
-        // Era pit-lane loss + a small execution jitter (clean vs scruffy stop), plus any stacking wait.
-        pitPenalty = pitLoss + (Math.random() * 2 - 1) * 1.5 + stackExtra
-        const newMaxLifeLaps = computeTyreLife(
-          state.tyreBaseLife[decision.compound],
-          driver.smoothness,
-          state.totalLaps,
-        )
-        current = {
-          ...current,
-          currentTyre: {
-            compound: decision.compound,
-            condition: 100,
-            maxLifeLaps: newMaxLifeLaps,
-          },
-          // tyreTemp is reset to FRESH_TEMP in the end-of-lap temp step (which keys off `pitted`) — don't also
-          // set it here, so the two sites can't drift apart (the bug this replaced came from a stale double-write).
-          stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap + 1 }],
-          stintLap: 0,
-          lastPitLap: state.currentLap,
-          pitStops: current.pitStops + 1,
-        }
+        const stop = executePitStop(current, decision.compound, state, driver, driverMap, updatedStates, fieldByDriver, pitLoss, stackPenalty)
+        pitPenalty = stop.pitPenalty
+        current = stop.next
       }
     }
 

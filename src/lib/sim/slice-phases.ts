@@ -1,7 +1,8 @@
-import type { CommentaryEntry, Driver, DriverRaceState, GodModeAction, RaceState } from './types'
-import { observeTyre, bucketCondition, type TeamBelief } from './pit-ai'
+import type { CommentaryEntry, Driver, DriverRaceState, GodModeAction, RaceState, TyreCompound } from './types'
+import { observeTyre, bucketCondition, type TeamBelief, type FieldCar } from './pit-ai'
 import { sampleTechnicalFailure } from './reliability'
 import { generateCommentary } from './commentary'
+import { computeTyreLife } from './tyres'
 
 // The slice tick’s bookend phases (#sector-engine), lifted out of simulateSlice — see slice.ts.
 // ---- slice phases ---------------------------------------------------------------------------------
@@ -91,6 +92,50 @@ export function applyLappedRunners(withGaps: DriverRaceState[], currentLap: numb
   )
 }
 
+
+// Pit execution: the double-stack wait, the era pit-lane loss + execution jitter, and the fresh set.
+// RNG draw order matters (the jitter draw, then computeTyreLife's set-modifier draws) — it must match
+// the historical inline block exactly, which the race.test.ts snapshot locks.
+export function executePitStop(
+  current: DriverRaceState,
+  compound: TyreCompound,
+  state: RaceState,
+  driver: Driver,
+  driverMap: Map<string, Driver>,
+  updatedStates: Map<string, DriverRaceState>,
+  fieldByDriver: Map<string, FieldCar>,
+  pitLoss: number,
+  stackPenalty: number,
+): { next: DriverRaceState; pitPenalty: number } {
+  // Double-stack (issue #101): if a teammate already pitted THIS lap (processed earlier = ahead on
+  // track), the crew is still busy when this, the latter car, arrives. It only waits out the crew-
+  // busy time the on-track gap hasn't already absorbed: max(0, stackPenalty - gap). Right behind ->
+  // the full wait; a few seconds back -> little or none.
+  let stackExtra = 0
+  for (const [id, st] of updatedStates) {
+    if (id === current.driverId || st.lastPitLap !== state.currentLap) continue
+    if (driverMap.get(id)?.teamId !== driver.teamId) continue
+    const myT = fieldByDriver.get(current.driverId)?.totalTime ?? 0
+    const tmT = fieldByDriver.get(id)?.totalTime ?? 0
+    stackExtra = Math.max(stackExtra, Math.max(0, stackPenalty - Math.abs(myT - tmT)))
+  }
+  // Era pit-lane loss + a small execution jitter (clean vs scruffy stop), plus any stacking wait.
+  const pitPenalty = pitLoss + (Math.random() * 2 - 1) * 1.5 + stackExtra
+  const newMaxLifeLaps = computeTyreLife(state.tyreBaseLife[compound], driver.smoothness, state.totalLaps)
+  return {
+    pitPenalty,
+    next: {
+      ...current,
+      currentTyre: { compound, condition: 100, maxLifeLaps: newMaxLifeLaps },
+      // tyreTemp is reset to FRESH_TEMP in the end-of-lap temp step (which keys off `pitted`) — don't also
+      // set it here, so the two sites can't drift apart (the bug this replaced came from a stale double-write).
+      stintHistory: [...current.stintHistory, { compound: current.currentTyre.compound, laps: current.stintLap + 1 }],
+      stintLap: 0,
+      lastPitLap: state.currentLap,
+      pitStops: current.pitStops + 1,
+    },
+  }
+}
 
 // Step 6: per-slice commentary — diff the slice-start states against the classified result.
 export function sliceCommentary(
