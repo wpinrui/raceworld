@@ -111,11 +111,18 @@ describe.each(ids)('%s', (id) => {
     expect(scenery.stands.length).toBeGreaterThan(10)
   })
 
-  it('lays relief and fields over the whole visible world', () => {
-    // The flat-runway fix: bands and fields must cover far beyond the viewBox, since the ground
-    // plane extends kilometres past it and that emptiness is what read as a runway.
+  it('lays relief over the whole visible world', () => {
+    // The flat-runway fix: relief must cover far beyond the viewBox, since the ground plane extends
+    // kilometres past it and that emptiness is what read as a runway.
     expect(scenery.bands.length).toBeGreaterThan(2)
-    expect(scenery.fields.length).toBeGreaterThan(40)
+  })
+
+  it('encloses farmland only where the biome calls for it', () => {
+    // A desert or a street circuit should NOT be quilted with fields, so the floor is tied to the
+    // biome's enclosure rate rather than being a flat minimum.
+    const bio = biomeOf(TRACK_LAYOUTS[id].biome)
+    if (bio.fields >= 0.3) expect(scenery.fields.length).toBeGreaterThan(40)
+    else expect(scenery.fields.length).toBeLessThan(120)
   })
 
   it('rings the circuit with barriers and furniture', () => {

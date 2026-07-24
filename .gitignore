@@ -46,3 +46,4 @@ raceworld.db-wal
 # generated news-playthrough output (organic analysis dumps)
 /news-playthrough*.md
 /news*.md
+scripts/.preview/

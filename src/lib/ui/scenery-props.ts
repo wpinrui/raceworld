@@ -4,7 +4,6 @@
 // polylines and pattern-filled rects, next to nothing beside the ~1140 tree canopies.
 
 import { smoothOpenPath } from './track-path'
-import { blobPath } from './scenery-shapes'
 import type { Vec } from './geom'
 
 export interface SceneryBarrier {
@@ -15,7 +14,6 @@ export interface SceneryBarrier {
 export interface SceneryTyreWall { d: string; bands: string[] }
 export interface SceneryMarshal { x: number; y: number; rot: number }
 export interface SceneryField { d: string; fill: string; crop: boolean }
-export interface SceneryCarPark { x: number; y: number; w: number; h: number; rot: number }
 
 export interface TrackFrame {
   /** Point at arc position s. */
@@ -104,52 +102,51 @@ export function buildFields(
   box: { x: number; y: number; w: number; h: number },
   rng: () => number,
   {
-    cellU, cropChance, palette, keepOut,
+    cellU, enclosure, palette, keepOut,
   }: {
     cellU: number
-    cropChance: number
+    /** Chance a parcel is ENCLOSED farmland at all. Cells that fail show bare ground — the relief
+     *  band underneath — so a forest or a desert is not covered in a farm quilt. */
+    enclosure: number
     palette: string[]
-    keepOut: (p: Vec, r: number) => boolean
+    keepOut: (p: Vec) => boolean
   },
 ): SceneryField[] {
-  const out: SceneryField[] = []
   const cols = Math.max(1, Math.ceil(box.w / cellU))
   const rows = Math.max(1, Math.ceil(box.h / cellU))
-  for (let gx = 0; gx < cols; gx++) {
-    for (let gy = 0; gy < rows; gy++) {
-      // Jitter each cell's centre and radii so the quilt is irregular rather than a checkerboard.
-      const cx = box.x + (gx + 0.15 + rng() * 0.7) * cellU
-      const cy = box.y + (gy + 0.15 + rng() * 0.7) * cellU
-      const rx = cellU * (0.42 + rng() * 0.26)
-      const ry = cellU * (0.42 + rng() * 0.26)
-      if (keepOut({ x: cx, y: cy }, Math.max(rx, ry))) continue
-      const crop = rng() < cropChance
+  // A JITTERED LATTICE, not independent blobs. Each field is the quad between four lattice points,
+  // and neighbours share those points, so the fields tessellate into a continuous quilt with hedge
+  // lines between them. Independently-placed ellipses left gaps and read as scattered circles.
+  const jitter = cellU * 0.3
+  const lat: Vec[][] = []
+  for (let gy = 0; gy <= rows; gy++) {
+    const row: Vec[] = []
+    for (let gx = 0; gx <= cols; gx++) {
+      row.push({
+        x: box.x + gx * cellU + (rng() * 2 - 1) * jitter,
+        y: box.y + gy * cellU + (rng() * 2 - 1) * jitter,
+      })
+    }
+    lat.push(row)
+  }
+
+  const out: SceneryField[] = []
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      const ring = [lat[gy][gx], lat[gy][gx + 1], lat[gy + 1][gx + 1], lat[gy + 1][gx]]
+      const cx = (ring[0].x + ring[1].x + ring[2].x + ring[3].x) / 4
+      const cy = (ring[0].y + ring[1].y + ring[2].y + ring[3].y) / 4
+      const enclosed = rng() < enclosure
+      const fill = palette[Math.floor(rng() * palette.length)]
+      const crop = rng() < 0.6
+      if (!enclosed) continue
+      if (keepOut({ x: cx, y: cy })) continue
       out.push({
-        // Low jitter: field boundaries are hedge lines and walls, not coastlines.
-        d: blobPath(cx, cy, rx, ry, rng() * Math.PI, rng, 7, 0.88, 0.2),
-        fill: palette[Math.floor(rng() * palette.length)],
+        d: `M ${ring.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')} Z`,
+        fill,
         crop,
       })
     }
-  }
-  return out
-}
-
-/** Spectator car parks, sited out past the buildings where there is room for them. */
-export function buildCarParks(
-  rng: () => number, count: number,
-  { pick, fits, u }: { pick: () => Vec; fits: (o: { x: number; y: number; w: number; h: number; rot: number }) => boolean; u: (m: number) => number },
-): SceneryCarPark[] {
-  const out: SceneryCarPark[] = []
-  for (let i = 0, tries = 0; i < count && tries < count * 8; tries++) {
-    const c = pick()
-    const w = u(60 + rng() * 90)
-    const h = u(45 + rng() * 70)
-    const rot = rng() * Math.PI
-    const box = { x: c.x, y: c.y, w, h, rot }
-    if (!fits(box)) continue
-    out.push(box)
-    i++
   }
   return out
 }

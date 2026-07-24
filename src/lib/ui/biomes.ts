@@ -19,7 +19,7 @@ export interface BiomePreset {
   buildings: number
   /** Chance a terrain patch is water. */
   water: number
-  /** Chance a rural polygon is a cultivated field rather than rough ground. */
+  /** Chance a land parcel is enclosed farmland rather than open/rough ground. */
   fields: number
   /** Rooftop palette. */
   roofs: string[]

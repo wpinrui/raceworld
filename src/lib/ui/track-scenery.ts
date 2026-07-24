@@ -125,9 +125,10 @@ export function buildScenery(
   const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
   const bands = bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM })
 
-  // ── Terrain: large soft patches, drawn under everything; some are water ──
-  // Water and gravel take part in the occupancy rules. They used to be outside the collision system
-  // entirely, so lakes had buildings standing in them and trees growing out of them.
+  // ── Water bodies ──
+  // Lakes only: the relief bands carry ground tone now, so the old translucent tint patches just
+  // washed the terracing out. Water and gravel take part in the occupancy rules — they used to be
+  // outside the collision system entirely, so lakes had buildings in them and trees growing out.
   // Blobs are elongated ellipses; a bounding RECTANGLE over-excludes badly at the corners (a lake
   // 600 m across would sterilise its whole bounding box). Approximate each as a run of discs along
   // its major axis instead — a capsule that tracks the drawn shape closely.
@@ -149,8 +150,12 @@ export function buildScenery(
     const c = randPoint()
     const r = u(70 + rng() * 190)
     const water = rng() < bio.water
+    if (!water) continue // ground variation is the relief bands' job now
     const ry = r * (0.55 + rng() * 0.5)
     const rot = rng() * Math.PI
+    // A lake lapping the barriers is implausible, and because water excludes everything it was
+    // squeezing the grandstands off the circuit at the wettest venues.
+    if (trackDist(c) - Math.max(r, ry) * 1.15 < u(60)) continue
     terrain.push({
       d: blobPath(c.x, c.y, r, ry, rot, rng, 10, water ? 0.8 : 0.65, water ? 0.35 : 0.6),
       fill: water ? '#3E6E86' : bio.ramp[Math.floor(rng() * bio.ramp.length)],
@@ -265,13 +270,16 @@ export function buildScenery(
   // two spatial-index queries from 1.5 km away.
   const fields = buildFields(farBox, fieldRng, {
     cellU: u(230),
-    cropChance: bio.fields,
+    enclosure: bio.fields,
     palette: bio.ramp,
     // Fields stop at the circuit itself; the venue is not farmland.
-    keepOut: (p, r) => {
-      const m = u(90) + r
+    keepOut: (p) => {
+      // Measured from the field's CENTRE with a modest margin. Subtracting the cell radius here
+      // pushed the exclusion out to a quarter-kilometre and stripped the landscape bare anywhere
+      // near the circuit — farmland runs right up to the barriers in reality.
+      const m = u(120)
       if (p.x < tb.x0 - m || p.x > tb.x1 + m || p.y < tb.y0 - m || p.y > tb.y1 + m) return false
-      return trackDist(p) - r < u(70) || pitDist(p) - r < u(90)
+      return trackDist(p) < u(55) || pitDist(p) < u(80)
     },
   })
 

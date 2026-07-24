@@ -111,8 +111,8 @@ export function SceneryLayer({ scenery, u, detail = 'full' }: {
       {scenery.bands.map((b, i) => (
         <g key={`hb${i}`}>
           <path
-            d={b.d} fillRule="evenodd" fill="#000000" opacity={0.20}
-            transform={`translate(${u(9)} ${u(11)})`}
+            d={b.d} fillRule="evenodd" fill="#000000" opacity={0.30}
+            transform={`translate(${u(14)} ${u(17)})`}
           />
           <path d={b.d} fillRule="evenodd" fill={b.fill} />
         </g>
@@ -122,7 +122,7 @@ export function SceneryLayer({ scenery, u, detail = 'full' }: {
           the main reason the surround read as a runway extending forever. */}
       {scenery.fields.map((f, i) => (
         <g key={`fd${i}`}>
-          <path d={f.d} fill={f.fill} opacity={0.55} />
+          <path d={f.d} fill={f.fill} opacity={0.75} />
           {/* Crop rows and hedgerows are per-field detail; zoomed out only the tint is legible, and
               this layer draws at BOTH tiers, so the extras come off at low LOD. */}
           {full && f.crop && <path d={f.d} fill="url(#tm-crop)" />}
@@ -132,7 +132,7 @@ export function SceneryLayer({ scenery, u, detail = 'full' }: {
 
       {scenery.terrain.map((b, i) => (
         <g key={`t${i}`}>
-          <path d={b.d} fill={b.fill} opacity={b.water ? 1 : 0.5} />
+          <path d={b.d} fill={b.fill} />
           {b.water && <path d={b.d} fill="url(#tm-water)" />}
         </g>
       ))}

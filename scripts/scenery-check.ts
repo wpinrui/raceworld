@@ -12,7 +12,7 @@ const TRACK_HALF_M = 13.3 / 2
 
 const ids = Object.keys(TRACK_LAYOUTS).sort()
 let flagged = 0
-const totals = { onTrack: 0, treeStruct: 0, structStruct: 0, structTrack: 0 }
+const totals = { onTrack: 0, treeStruct: 0, structStruct: 0, structTrack: 0, badPath: 0, badNum: 0 }
 
 /** Rough SVG node count, split by LOD tier. Low-tier nodes are the ones drawn at full zoom-out,
  *  where this branch has already regressed performance three times — worth a number, not a guess. */
@@ -82,7 +82,23 @@ for (const id of ids) {
   totals.structStruct += structStruct
   totals.structTrack += structTrack
 
-  const bad = onTrack + treeStruct + structStruct + structTrack
+  // A single NaN in a path string makes SVG drop the whole element silently, so geometry that is
+  // "correct" by every overlap test can still render as nothing at all.
+  const paths = [
+    ...scenery.bands.map((b) => b.d), ...scenery.fields.map((f) => f.d),
+    ...scenery.terrain.map((t) => t.d), ...scenery.runoffs.map((r) => r.d),
+    ...scenery.kerbs.map((k) => k.d), ...scenery.barriers.map((b) => b.d),
+    ...scenery.tyreWalls.map((t) => t.d), ...scenery.trees.flatMap((t) => [t.d, t.hd]),
+  ]
+  const badPath = paths.filter((d) => !d || /NaN|Infinity|undefined/.test(d)).length
+  const badNum = [...scenery.stands, ...scenery.buildings].filter((r) => (
+    !Number.isFinite(r.x) || !Number.isFinite(r.y) || !Number.isFinite(r.w)
+    || !Number.isFinite(r.h) || !Number.isFinite(r.rot)
+  )).length + scenery.marshals.filter((m) => !Number.isFinite(m.x) || !Number.isFinite(m.rot)).length
+  totals.badPath += badPath
+  totals.badNum += badNum
+
+  const bad = onTrack + treeStruct + structStruct + structTrack + badPath + badNum
   if (bad > 0) flagged++
   const mark = bad > 0 ? '  <<<' : ''
   const deep = worstOnTrack > 0 ? ` (${worstOnTrack.toFixed(0)}m deep)` : ''
@@ -100,6 +116,7 @@ for (const id of ids) {
 console.log('-'.repeat(80))
 console.log(
   `TOTALS  trees on track ${totals.onTrack} | trees on structures ${totals.treeStruct} | ` +
-  `structure overlaps ${totals.structStruct} | structures on track ${totals.structTrack}`,
+  `structure overlaps ${totals.structStruct} | structures on track ${totals.structTrack} | ` +
+  `malformed paths ${totals.badPath} | non-finite props ${totals.badNum}`,
 )
 console.log(flagged === 0 ? 'ALL SCENERY CHECKS PASS' : `${flagged}/${ids.length} CIRCUITS FLAGGED`)
