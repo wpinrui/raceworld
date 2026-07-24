@@ -30,9 +30,11 @@ import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 import { RaceDayView } from '@/components/race/RaceDayView'
 import { useRaceMapSampler } from '@/components/race/useRaceMapSampler'
 import { TRACK_LAYOUTS } from '@/data/tracks'
+import { SECTORS_PER_LAP } from '@/lib/sim/sector'
 
-// Race playback multipliers (#sim-2d): 1x is REAL TIME — one tick animates the leader's lap over its
-// actual duration — and the rest divide it. The old instant fast-forward is gone; 25x is the ceiling.
+// Race playback multipliers (#sim-2d): 1x is REAL TIME — one tick animates the leader's just-resolved
+// sector over its actual duration — and the rest divide it. The old instant fast-forward is gone; 25x
+// is the ceiling.
 const SPEED_MULTS: Record<SimSpeed, number> = { 1: 1, 2: 2, 3: 5, 4: 10, 5: 25 }
 // The pre-race grid wait before lap 1 starts animating.
 const GRID_HOLD_MS = 2000
@@ -43,7 +45,7 @@ export default function RacePage() {
   const {
     raceState, drivers, teams, forms, godModeDriverId,
     loadFromSeason, updateDriverForm, setGodModeDriver,
-    tickLap, setSpeed, setPaused,
+    tickSector, setSpeed, setPaused,
   } = useRaceStore()
 
   const phase = raceState?.phase ?? 'pre-qualifying'
@@ -131,24 +133,24 @@ export default function RacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, paused])
 
-  // The 2D view animates the lap the sim JUST resolved, so everything the player reads (board, gaps,
-  // stops, commentary, championship) must show the state from the START of that lap and flip forward
-  // exactly as the cars cross the line — broadcast-style. The pre-tick snapshot is that display state;
-  // the sim itself stays a lap ahead internally.
+  // The 2D view animates the SECTOR the sim just resolved (#sector-engine), so everything the player
+  // reads (board, gaps, stops, commentary, championship) must show the state from the start of that
+  // slice and flip forward as the cars reach it — broadcast-style, now at most 1/8 lap stale. The
+  // pre-tick snapshot is that display state; the sim itself stays one sector ahead internally.
   const [displayState, setDisplayState] = useState<RaceState | null>(null)
 
   const doTick = useCallback(() => {
     setDisplayState(useRaceStore.getState().raceState)
     const actions = pendingGodModeActions.length > 0 ? [...pendingGodModeActions] : undefined
     if (actions) setPendingGodModeActions([])
-    tickLap(actions)
-  }, [pendingGodModeActions, tickLap])
+    tickSector(actions)
+  }, [pendingGodModeActions, tickSector])
 
   useEffect(() => { doTickRef.current = doTick }, [doTick])
 
-  // Tick scheduler: each interval animates the leader's JUST-COMPLETED lap, so its duration is that
-  // lap's real time divided by the speed multiplier (1x = real time). The first interval (no lap yet)
-  // is a short grid hold before lights out.
+  // Tick scheduler: each interval animates the leader's JUST-COMPLETED sector, so its duration is
+  // that slice's real time divided by the speed multiplier (1x = real time). The first interval (no
+  // slice yet) is a short grid hold before lights out.
   useEffect(() => {
     if (phase !== 'racing' || paused) {
       if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
@@ -159,13 +161,15 @@ export default function RacePage() {
       if (!s) return GRID_HOLD_MS
       const running = s.drivers.filter((d) => !d.retired)
       const leader = running.reduce((a, b) => (a.totalTime <= b.totalTime ? a : b), running[0])
-      const last = leader?.lapTimes[leader.lapTimes.length - 1]
+      const last = leader?.sectorTimes?.[leader.sectorTimes.length - 1]
+        ?? (leader?.lapTimes[leader.lapTimes.length - 1] ?? NaN) / SECTORS_PER_LAP
       const ms = last ? (last * 1000) / (SPEED_MULTS[s.speed as SimSpeed] ?? 1) : GRID_HOLD_MS
       // NaN is sticky through the clock refs (it survives clamps), so never let one out of here.
       return Number.isFinite(ms) && ms > 0 ? ms : GRID_HOLD_MS
     }
-    // `fullMs` is the whole lap's animation window (what the sampler divides by); `delay` is the part
-    // still to play. Keeping them separate lets a speed change resume mid-lap instead of restarting it.
+    // `fullMs` is the whole slice's animation window (what the sampler divides by); `delay` is the
+    // part still to play. Keeping them separate lets a speed change resume mid-slice instead of
+    // restarting it.
     const schedule = (fullMs: number, delay: number) => {
       tickIntervalRef.current = fullMs
       nextTickAtRef.current = Date.now() + delay
@@ -190,14 +194,23 @@ export default function RacePage() {
     }
   }, [phase, paused, speed])
 
+  // Whole-lap progress for the classic header bar: the tick window is one SECTOR, so fold the
+  // fraction-through-window into the sector being animated ((currentSector − 1) mod 8 — the sim sits
+  // one slice ahead of the animation). Before any slice has resolved the bar just sits at zero.
   useEffect(() => {
+    const lapFrac = () => {
+      const s = useRaceStore.getState().raceState
+      const started = s?.drivers.some((d) => (d.sectorTimes?.length ?? 0) > 0 || d.lapTimes.length > 0)
+      if (!s || !started) return 0
+      const tickFrac = Math.max(0, Math.min(1, 1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current))
+      const sec = ((s.currentSector ?? 0) - 1 + SECTORS_PER_LAP) % SECTORS_PER_LAP
+      return Math.max(0, Math.min(100, ((sec + tickFrac) / SECTORS_PER_LAP) * 100))
+    }
     if (phase !== 'racing' || paused) {
-      setLapProgress(paused ? Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current) * 100)) : 0)
+      setLapProgress(paused ? lapFrac() : 0)
       return
     }
-    const timer = setInterval(() => {
-      setLapProgress(Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current) * 100)))
-    }, 50)
+    const timer = setInterval(() => setLapProgress(lapFrac()), 50)
     return () => clearInterval(timer)
   }, [phase, paused, speed])
 
