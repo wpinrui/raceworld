@@ -151,7 +151,7 @@ export default function GodModePanel({ drivers, teams, states, raceState, select
               <span className="text-[#FFFFFF]">Tyre</span>
               <div className="flex items-center gap-1.5">
                 <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
-                <span className={`text-sm ${condColor}`}>{ds.currentTyre.condition}%</span>
+                <span className={`text-sm ${condColor}`}>{Math.round(ds.currentTyre.condition)}%</span>
               </div>
             </div>
             <div className="flex justify-between">

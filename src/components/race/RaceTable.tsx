@@ -206,7 +206,7 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                       <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
                       {!ds.retired && (
                         <span className={`text-xs ${condColor}`}>
-                          {ds.currentTyre.condition}%
+                          {Math.round(ds.currentTyre.condition)}%
                         </span>
                       )}
                     </div>
