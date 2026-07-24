@@ -2,7 +2,7 @@
 // without starting the app. Mirrors the draw order RaceTrackMap uses (ground, scenery, track
 // ribbon, kerbs, furniture). Follows scripts/team-colours-preview.ts: emit a static artefact to
 // look at before merging.
-// Run: npx tsx scripts/scenery-preview.ts [--low] [circuitId ...]
+// Run: npx tsx scripts/scenery-preview.ts [--low] [--mood=afternoon|midday|dusk|overcast|night] [circuitId ...]
 // --low renders the zoom-out LOD tier, which is the one that has regressed performance before.
 
 import { createElement } from 'react'
@@ -13,12 +13,15 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { TARMAC_WIDTH_M, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { SceneryLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
+import { MOODS, type Mood } from '../src/lib/ui/lighting'
 
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
 const low = argv.includes('--low')
 const detail = low ? 'low' : 'full'
+const moodArg = (argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon') as Mood
+const lighting = MOODS[moodArg] ?? MOODS.afternoon
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
 
@@ -49,7 +52,7 @@ for (const id of ids) {
     renderToStaticMarkup(createElement('rect', {
       x: vb.x - 4000, y: vb.y - 4000, width: vb.w + 8000, height: vb.h + 8000, fill: scenery.base,
     })),
-    renderToStaticMarkup(createElement(SceneryLayer, { scenery, u, detail })),
+    renderToStaticMarkup(createElement(SceneryLayer, { scenery, u, lighting, detail })),
     renderToStaticMarkup(createElement('path', {
       d: layout.d, fill: 'none', stroke: '#D8D8D2', strokeWidth: u(TRACK_WIDTH_M), strokeLinejoin: 'round',
     })),
@@ -64,17 +67,17 @@ for (const id of ids) {
         d: k.d, fill: 'none', stroke: '#C8352F', strokeWidth: u(1.3), strokeDasharray: `${u(3)} ${u(3)}`,
       })),
     ]),
-    renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, detail })),
+    renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, lighting, detail })),
   ].join('\n')
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${Math.round(vb.w * 2)}" height="${Math.round(vb.h * 2)}">${body}</svg>`
-  const tag = low ? `${id}-low` : id
+  const tag = `${id}${low ? '-low' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}`
   writeFileSync(`${OUT}/${tag}.svg`, svg)
   const counts = `bands ${scenery.bands.length}, fields ${scenery.fields.length}, trees ${scenery.trees.length}, `
     + `stands ${scenery.stands.length}, buildings ${scenery.buildings.length}, barriers ${scenery.barriers.length}`
   try {
     await sharp(Buffer.from(svg)).png().toFile(`${OUT}/${tag}.png`)
-    console.log(`${tag.padEnd(16)} ${layout.biome.padEnd(10)} -> ${OUT}/${tag}.png   (${counts})`)
+    console.log(`${tag.padEnd(16)} ${layout.biome.padEnd(10)} ${moodArg.padEnd(9)} -> ${OUT}/${tag}.png   (${counts})`)
   } catch (err) {
     console.log(`${id.padEnd(12)} SVG written, raster failed: ${(err as Error).message}`)
   }

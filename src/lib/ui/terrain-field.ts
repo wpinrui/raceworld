@@ -7,6 +7,8 @@
 // top-left exactly like every other prop's drop shadow. Bands are a few dozen large paths, which is
 // what makes them survive full zoom-out — the one place the old flat ground plane was most obvious.
 
+import { smoothClosed } from './scenery-shapes'
+
 export type Vec = { x: number; y: number }
 
 /** Sampling box in world (viewBox) units. */
@@ -86,16 +88,30 @@ export function gradeToTrack(
     acc -= raw[((i - win) % n + n) % n]
     acc += raw[((i + win + 1) % n + n) % n]
   }
-  // Nearest profile height. A strided nearest-VERTEX scan is adequate here and only here: the
-  // result is blended by distance anyway, and it only runs for samples inside the corridor.
+  // Corridor height at a point, interpolated CONTINUOUSLY along the centreline. A nearest-vertex
+  // lookup is piecewise constant, so the graded height jumped as a sample crossed from one vertex's
+  // territory to the next — and because the contour bands are level sets of this field, those jumps
+  // came out as hard dark wedges radiating off the circuit. Projecting onto the segments and
+  // interpolating between stations removes the discontinuity at its source.
   const profileAt = (p: Vec): number => {
     let best = Infinity
-    let bi = 0
-    for (let i = 0; i < n; i += 3) {
-      const d = (centreline[i].x - p.x) ** 2 + (centreline[i].y - p.y) ** 2
-      if (d < best) { best = d; bi = i }
+    let bestIdx = 0
+    for (let i = 0; i < n; i++) {
+      const a = centreline[i]
+      const b = centreline[(i + 1) % n]
+      const vx = b.x - a.x
+      const vy = b.y - a.y
+      const l2 = vx * vx + vy * vy
+      let t = l2 === 0 ? 0 : ((p.x - a.x) * vx + (p.y - a.y) * vy) / l2
+      t = t < 0 ? 0 : t > 1 ? 1 : t
+      const qx = a.x + t * vx - p.x
+      const qy = a.y + t * vy - p.y
+      const d = qx * qx + qy * qy
+      if (d < best) { best = d; bestIdx = i + t }
     }
-    return smooth[bi]
+    const i0 = Math.floor(bestIdx) % n
+    const frac = bestIdx - Math.floor(bestIdx)
+    return smooth[i0] * (1 - frac) + smooth[(i0 + 1) % n] * frac
   }
   // Grading only matters within `corridorU` of the track, but the sampled world reaches ~1.5 km
   // past the circuit. Bounding the track first turns the overwhelming majority of samples into one
@@ -248,9 +264,12 @@ export function bandsFor(
     const level = ((k + 1) / (ramp.length + 1)) * reliefM
     const loops = isoLoops(val, box, level, nx, ny)
     if (!loops.length) continue
-    const d = loops
-      .map((l) => `M ${l.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')} Z`)
-      .join(' ')
+    // Smooth each ring rather than emitting the raw marching-squares polygon. The grid is ~40 m per
+    // cell over a kilometre-wide box, so straight contour segments are clearly visible once the
+    // camera is anywhere near the track, and terrain reads as faceted wedges instead of landform.
+    // Quadratics through the midpoints cost the same node count as the line segments they replace.
+    const d = loops.map((l) => (l.length >= 4 ? smoothClosed(l) : '')).filter(Boolean).join(' ')
+    if (!d) continue
     out.push({ d, fill: ramp[k] })
   }
   return out

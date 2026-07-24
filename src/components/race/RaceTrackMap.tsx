@@ -5,6 +5,7 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import { SceneryLayer, TrackFurnitureLayer } from './SceneryLayer'
+import { MOODS } from '@/lib/ui/lighting'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import { shade } from '@/lib/color'
 import type { TyreCompound } from '@/lib/sim/types'
@@ -1456,13 +1457,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }),
     [layout, sceneryDensity],
   )
+  // One fake sun for the whole map. A low afternoon light is the dry-race default; moods become
+  // data here later (weather, night) rather than separate rendering paths.
+  const lighting = MOODS.afternoon
   const sceneryNode = useMemo(
-    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lodLow],
+    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, lodLow],
   )
   const furnitureNode = useMemo(
-    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lodLow],
+    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, lodLow],
   )
 
   return (
