@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { densifyTrace } from './track-path'
 import { buildScenery, type Scenery } from './track-scenery'
+import { biomeOf } from './biomes'
 import {
   distToPolyline, distPointToObb, obbOverlap, obbCorners, closestPointOnPolyline,
   type Vec, type Obb,
@@ -25,6 +26,7 @@ function sceneryFor(id: string) {
     metresPerUnit: layout.metresPerUnit,
     viewBox: layout.viewBox,
     pitOutside: layout.pitOutside,
+    biome: layout.biome,
   })
   const centre: Vec[] = densifyTrace(layout.trace).map(([x, y]) => ({ x, y }))
   return { layout, scenery, centre, u: (m: number) => m / layout.metresPerUnit }
@@ -100,11 +102,27 @@ describe.each(ids)('%s', (id) => {
   })
 
   it('still fills the world', () => {
-    // Guards the opposite failure: clearance rules strict enough to empty the map. Floors sit just
-    // under the measured minimum across all circuits, so tightening a rule too far trips here.
-    expect(scenery.trees.length).toBeGreaterThan(900)
-    expect(scenery.buildings.length).toBeGreaterThan(100)
+    // Guards the opposite failure: clearance rules strict enough to empty the map. The tree floor is
+    // relative to the biome's own target, because a desert circuit is SUPPOSED to be nearly bare —
+    // an absolute floor would either pass Bahrain trivially or fail it wrongly.
+    const target = 380 * biomeOf(TRACK_LAYOUTS[id].biome).trees
+    expect(scenery.trees.length).toBeGreaterThan(target * 0.8)
+    expect(scenery.buildings.length).toBeGreaterThan(40)
     expect(scenery.stands.length).toBeGreaterThan(10)
+  })
+
+  it('lays relief and fields over the whole visible world', () => {
+    // The flat-runway fix: bands and fields must cover far beyond the viewBox, since the ground
+    // plane extends kilometres past it and that emptiness is what read as a runway.
+    expect(scenery.bands.length).toBeGreaterThan(2)
+    expect(scenery.fields.length).toBeGreaterThan(40)
+  })
+
+  it('rings the circuit with barriers and furniture', () => {
+    expect(scenery.barriers.some((b) => b.kind === 'wall')).toBe(true)
+    expect(scenery.barriers.some((b) => b.kind === 'fence')).toBe(true)
+    expect(scenery.tyreWalls.length).toBeGreaterThan(0)
+    expect(scenery.marshals.length).toBeGreaterThan(3)
   })
 })
 

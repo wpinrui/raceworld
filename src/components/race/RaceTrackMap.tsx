@@ -4,7 +4,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { SceneryLayer } from './SceneryLayer'
+import { SceneryLayer, TrackFurnitureLayer } from './SceneryLayer'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC } from '@/lib/ui/track-path'
@@ -1466,11 +1466,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       viewBox: layout.viewBox,
       density: sceneryDensity,
       pitOutside: layout.pitOutside,
+      biome: layout.biome,
     }),
     [layout, sceneryDensity],
   )
   const sceneryNode = useMemo(
     () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lodLow],
+  )
+  const furnitureNode = useMemo(
+    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} detail={lodLow ? 'low' : 'full'} />,
     [scenery, layout.metresPerUnit, lodLow],
   )
 
@@ -1490,7 +1495,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
             {/* Grass ground plane, far beyond the canvas so the camera never sees the edge of the world.
                 The static map view drops the scenery for a clean dark minimap. */}
-            <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : '#2F4A28'} />
+            <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             {view === 'live' && sceneryNode}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
@@ -1628,6 +1633,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 <path d={k.d} fill="none" stroke="#C8352F" strokeWidth={u(1.3)} strokeDasharray={`${u(3)} ${u(3)}`} />
               </g>
             ))}
+            {/* Barriers, tyre walls and marshal posts: circuit furniture sits ON the tarmac's edge,
+                so it draws after the ribbon rather than with the scenery underneath it. */}
+            {view === 'live' && furnitureNode}
             <g transform={`translate(${sf.x} ${sf.y}) rotate(${sf.deg})`}>
               {Array.from({ length: 72 }, (_, i) => {
                 const row = i % 3

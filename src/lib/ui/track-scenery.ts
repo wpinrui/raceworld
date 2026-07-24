@@ -6,11 +6,16 @@
 // All coordinates are viewBox units; real-world sizes convert through metresPerUnit.
 
 import { seededRng } from '@/lib/sim/rng-utils'
-import {
-  densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type PitLane, type TrackTrace,
-} from './track-path'
-import { makeOccupancy, makePolylineIndex, obbCorners, type Obb } from './geom'
+import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type PitLane, type TrackTrace } from './track-path'
+import { makeOccupancy, type Obb } from './geom'
+import { makeSceneryFrame, STEP } from './scenery-frame'
 import { blobPath, buildingParts, pickArchetype, pointOnParts, type SceneryPart } from './scenery-shapes'
+import { biomeOf, type Biome } from './biomes'
+import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
+import {
+  buildBarriers, buildFields, buildMarshalPosts, buildTyreWalls,
+  type SceneryBarrier, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
+} from './scenery-props'
 
 export type { SceneryPart } from './scenery-shapes'
 
@@ -43,6 +48,14 @@ export interface SceneryKerb { d: string }
 export interface SceneryDensity { trees?: number; buildings?: number }
 
 export interface Scenery {
+  /** Terraced relief bands, lowest first — drawn under everything as the ground itself. */
+  bands: TerrainBand[]
+  /** Ground plane colour, taken from the biome ramp so the bands read as steps out of it. */
+  base: string
+  fields: SceneryField[]
+  barriers: SceneryBarrier[]
+  tyreWalls: SceneryTyreWall[]
+  marshals: SceneryMarshal[]
   terrain: SceneryBlob[]
   runoffs: SceneryBlob[]
   kerbs: SceneryKerb[]
@@ -53,123 +66,64 @@ export interface Scenery {
 
 type Vec = { x: number; y: number }
 
-// Daylight palette: grass and dirt terrain, gravel/asphalt runoffs, urban rooftops.
-const TERRAIN_FILLS = ['#2E4826', '#33502B', '#2A421F', '#514336', '#3A5730']
-const RUNOFF_FILLS = ['#8F8568', '#565C66']
 // Canopy lobe jitter, as a fraction of the nominal radius: the drawn blob spans [BASE, BASE+SPAN].
 const TREE_JITTER_BASE = 0.8
 const TREE_JITTER_SPAN = 0.35
-const BUILDING_FILLS = ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147']
+
+/** FNV-1a over a string — the noise lattice needs a numeric seed, seededRng takes a string. */
+function hashSeed(str: string): number {
+  let h = 2166136261 >>> 0
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
 
 export function buildScenery(
   rawTrace: TrackTrace,
   pit: PitLane,
   {
-    circuitId, metresPerUnit, viewBox, density = {}, pitOutside = false,
-  }: { circuitId: string; metresPerUnit: number; viewBox: string; density?: SceneryDensity; pitOutside?: boolean },
+    circuitId, metresPerUnit, viewBox, density = {}, pitOutside = false, biome,
+  }: {
+    circuitId: string; metresPerUnit: number; viewBox: string
+    density?: SceneryDensity; pitOutside?: boolean; biome?: Biome
+  },
 ): Scenery {
   const rng = seededRng(`scenery:${circuitId}`)
-  // Work on the SMOOTHED geometry the ribbon is actually drawn with — offsets from the raw polyline
-  // (kerbs especially) drift off the ribbon's edge in corners.
-  const trace = densifyTrace(rawTrace)
   const u = (m: number) => m / metresPerUnit
-  // Default density is deliberately rich (the old tuning slider's ceiling and change).
-  const treeMult = density.trees ?? 3
-  const buildingMult = density.buildings ?? 3
+  // Densities come from the circuit's biome (Spa is forest, Monaco is city), with the explicit
+  // density prop still winning when one is passed.
+  const bio = biomeOf(biome)
+  const treeMult = density.trees ?? bio.trees
+  const buildingMult = density.buildings ?? bio.buildings
 
-  // ── Track sampling: points, tangents, outward normals ──
-  const n = trace.length
-  const pt = (i: number): Vec => ({ x: trace[i % n][0], y: trace[i % n][1] })
-  const cum: number[] = [0]
-  for (let i = 1; i <= n; i++) {
-    const a = pt(i - 1)
-    const b = pt(i)
-    cum.push(cum[i - 1] + Math.hypot(b.x - a.x, b.y - a.y))
-  }
-  const total = cum[n]
-  const at = (s: number): Vec => {
-    const w = ((s % total) + total) % total
-    let i = 1
-    while (i <= n && cum[i] < w) i++
-    const a = pt(i - 1)
-    const b = pt(i)
-    const f = (w - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)
-    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }
-  }
-
-  // The interior side follows the loop's ORIENTATION (shoelace sign), which is exact at every point —
-  // a centroid heuristic flips on non-convex circuits where sections fold back near each other.
-  const area = trace.reduce((s, p, i) => {
-    const q = trace[(i + 1) % n]
-    return s + (p[0] * q[1] - q[0] * p[1])
-  }, 0)
-  const outSign = area > 0 ? -1 : 1 // clockwise (y-down): interior = (-t.y, t.x), so outward is its negation
-
-  const STEP = 4
-  const samples: Array<{ p: Vec; t: Vec; nOut: Vec }> = []
-  for (let s = 0; s < total; s += STEP) {
-    const p = at(s)
-    const a = at(s - 3)
-    const b = at(s + 3)
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
-    const t = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }
-    samples.push({ p, t, nOut: { x: outSign * -t.y, y: outSign * t.x } })
-  }
+  const {
+    centreline, at, total, samples, theta, outSign, trackDist, pitDist, obbClearsTrack, bounds: tb, frame,
+  } = makeSceneryFrame(rawTrace, pit, metresPerUnit)
   const S = samples.length
 
-  const theta = samples.map((_, i) => {
-    const a = samples[(i - 3 + S) % S].t
-    const b = samples[(i + 3) % S].t
-    let th = Math.abs(Math.atan2(b.y, b.x) - Math.atan2(a.y, a.x))
-    if (th > Math.PI) th = 2 * Math.PI - th
-    return th
-  })
-
-  // Exact distance to the drawn centreline. The old version scanned every SECOND sample of a
-  // 4-unit sampling and took the nearest VERTEX, so the smallest value it could return near the
-  // track was 4 units — on circuits above ~2.6 metres/unit that is more than the clearance trees
-  // are asked for, and they were planted on the racing line. Indexing the polyline once makes the
-  // exact test cheaper than the broken approximation was.
-  const centreline = trace.map(([x, y]) => ({ x, y }))
-  const trackIndex = makePolylineIndex(centreline, u(40))
-  const trackDist = (p: Vec): number => trackIndex.dist(p)
-
-  /** Does this footprint keep `clearM` metres between its whole outline and the centreline?
-   *  Corner-only checks miss a track that cuts through the middle of a long stand beside a curve,
-   *  so the perimeter is walked — but only after two cheap tests have failed to settle it. */
-  const obbClearsTrack = (o: Obb, clearM: number, stepM = 6): boolean => {
-    const need = u(clearM)
-    const dc = trackDist({ x: o.x, y: o.y })
-    const rad = Math.hypot(o.w, o.h) / 2
-    if (dc - rad >= need) return true // every point of the footprint is within `rad` of the centre
-    if (dc < need) return false // the centre alone is already too close
-    const cs = obbCorners(o)
-    for (let i = 0; i < 4; i++) {
-      const a = cs[i]
-      const b = cs[(i + 1) % 4]
-      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / u(stepM)))
-      for (let k = 0; k <= steps; k++) {
-        const t = k / steps
-        if (trackDist({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }) < need) return false
-      }
-    }
-    return true
-  }
-
-  // The pit complex is a ~250 m ribbon of garages, boxes and tapers, but scenery only ever got its
-  // MIDPOINT and excluded a circle around it. A 120 m radius does not cover +/-125 m of arc, so
-  // props were generated on the ends of the pit building. Measure to the lane itself instead.
-  const pitPath = pit.slotStations.length >= 2
-    ? pit.slotStations.map((st) => ({ x: st.x, y: st.y }))
-    : [pit.box, pit.box]
-  const pitIndex = makePolylineIndex(pitPath, u(40), false)
-  const pitDist = (p: Vec): number => pitIndex.dist(p)
   const PIT_CLEAR_M = 55 // paddock side: garages, transporters, hospitality — nothing planted
   const PIT_CLEAR_STAND_M = 35
 
   const [vx, vy, vw, vh] = viewBox.split(' ').map(Number)
   const M = u(260)
   const randPoint = (): Vec => ({ x: vx - M + rng() * (vw + 2 * M), y: vy - M + rng() * (vh + 2 * M) })
+
+  // ── Relief ──
+  // The ground plane extends ~9 km beyond the viewBox while the built world only ever reached
+  // 260 m past it, so at any zoom-out over 95% of what you saw was one flat fill — the "runway that
+  // extends forever". Bands and fields are a few dozen large paths, so they can cover a far wider
+  // area than the per-instance props without costing anything like as much.
+  const FAR = u(1500)
+  const farBox = { x: vx - FAR, y: vy - FAR, w: vw + 2 * FAR, h: vh + 2 * FAR }
+  const rawField = makeHeightField(hashSeed(`terrain:${circuitId}`), {
+    metresPerUnit, featureM: bio.featureM, reliefM: bio.reliefM,
+  })
+  // Grade the land to the circuit's own smoothed profile, so the track sits in a corridor of
+  // cuttings and embankments rather than on a shelf laid over the noise.
+  const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
+  const bands = bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM })
 
   // ── Terrain: large soft patches, drawn under everything; some are water ──
   // Water and gravel take part in the occupancy rules. They used to be outside the collision system
@@ -194,12 +148,12 @@ export function buildScenery(
   for (let i = 0; i < terrainCount; i++) {
     const c = randPoint()
     const r = u(70 + rng() * 190)
-    const water = rng() < 0.18
+    const water = rng() < bio.water
     const ry = r * (0.55 + rng() * 0.5)
     const rot = rng() * Math.PI
     terrain.push({
       d: blobPath(c.x, c.y, r, ry, rot, rng, 10, water ? 0.8 : 0.65, water ? 0.35 : 0.6),
-      fill: water ? '#3E6E86' : TERRAIN_FILLS[Math.floor(rng() * TERRAIN_FILLS.length)],
+      fill: water ? '#3E6E86' : bio.ramp[Math.floor(rng() * bio.ramp.length)],
       water,
     })
     // Only water excludes; grass patches are just tint.
@@ -252,6 +206,15 @@ export function buildScenery(
     }
   }
 
+  // ── Barriers, fencing, tyre walls and marshal posts ──
+  const pitSide = pitOutside ? 1 : -1
+  const barriers = buildBarriers(frame, {
+    offsetM: 11.5,
+    fenceOffsetM: 15.5,
+    // No wall across either pit mouth on the side the lane actually lives.
+    skip: (s, side) => side === pitSide && inPitZone(s),
+  })
+
   // ── Runoff aprons on the outside of the sharpest corners ──
   const runoffs: SceneryBlob[] = []
   const peaks = [...theta.keys()].sort((a, b) => theta[b] - theta[a])
@@ -270,11 +233,15 @@ export function buildScenery(
     const rot = Math.atan2(t.y, t.x)
     runoffs.push({
       d: blobPath(cx, cy, rx, ry, rot, rng),
-      fill: RUNOFF_FILLS[Math.floor(rng() * RUNOFF_FILLS.length)],
+      fill: bio.runoff[Math.floor(rng() * bio.runoff.length)],
     })
     // Gravel and tarmac run-off is the car's escape road; nothing gets planted or built on it.
     addBlobExclusion(cx, cy, rx * 1.25, ry * 1.25, rot)
   }
+
+  // Tyre walls face the same corners the run-off aprons do, sitting just beyond the barrier line.
+  const tyreWalls = buildTyreWalls(frame, cornerIdx.map((i) => i * STEP), { offsetM: 13, spanM: 46 })
+  const marshals = buildMarshalPosts(frame, { everyM: 240, offsetM: 18 })
 
   // Occupancy. Structures and canopies are tracked separately: a tree must clear a building's TRUE
   // footprint completely, but trees are allowed to crowd each other, which is what makes a grove
@@ -290,6 +257,23 @@ export function buildScenery(
   const MIN_PART_M = 8 // narrowest a building wing may be before it stops reading as architecture
   // Lakes and run-off join the registry before anything is sited, so they exclude like a structure.
   noBuild.forEach((o) => structOcc.addDisc(o.x, o.y, o.r))
+
+  // ── Field patchwork over the rural surround ──
+  // Covers the far box, well outside the built world, since that emptiness is what read as a runway.
+  const fieldRng = seededRng(`scenery:${circuitId}:fields`)
+  // tb is the circuit's bounding box: far-field cells settle with one rectangle test instead of
+  // two spatial-index queries from 1.5 km away.
+  const fields = buildFields(farBox, fieldRng, {
+    cellU: u(230),
+    cropChance: bio.fields,
+    palette: bio.ramp,
+    // Fields stop at the circuit itself; the venue is not farmland.
+    keepOut: (p, r) => {
+      const m = u(90) + r
+      if (p.x < tb.x0 - m || p.x > tb.x1 + m || p.y < tb.y0 - m || p.y > tb.y1 + m) return false
+      return trackDist(p) - r < u(70) || pitDist(p) - r < u(90)
+    },
+  })
 
   // ── Grandstands: seek the track, prefer corners, mostly outside ──
   const stands: SceneryStand[] = []
@@ -378,7 +362,7 @@ export function buildScenery(
         const big = w * metresPerUnit > 22
         buildings.push({
           x: bx, y: by, w, h, rot: brot,
-          fill: BUILDING_FILLS[Math.floor(rng() * BUILDING_FILLS.length)],
+          fill: bio.roofs[Math.floor(rng() * bio.roofs.length)],
           parts,
           storeys: 1 + Math.floor(rng() * (big ? 5 : 3)),
           // Rooftop clutter has to sit ON a roof: scattering it over the bounding box left vents
@@ -441,5 +425,8 @@ export function buildScenery(
     })
   }
 
-  return { terrain, runoffs, kerbs, stands, buildings, trees }
+  return {
+    bands, base: bio.base, fields, barriers, tyreWalls, marshals,
+    terrain, runoffs, kerbs, stands, buildings, trees,
+  }
 }

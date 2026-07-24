@@ -5,6 +5,7 @@
 // those circuits fall back to the classic race screen until covered.
 
 import { buildPitLane, buildTracePath, type PitLane, type TrackStart, type TrackTrace } from '@/lib/ui/track-path'
+import { CIRCUIT_BIOMES, type Biome } from '@/lib/ui/biomes'
 import { TRACK as abuDhabi } from './abu-dhabi'
 import { TRACK as argentina } from './argentina'
 import { TRACK as australia } from './australia'
@@ -61,6 +62,8 @@ export interface TrackLayout {
   trace: TrackTrace
   /** True when the pit complex is authored on the OUTSIDE of the loop (e.g. Montreal). */
   pitOutside: boolean
+  /** Landscape character, driving the scenery palette and densities. */
+  biome: Biome
 }
 
 function traceLength(trace: TrackTrace): number {
@@ -90,6 +93,7 @@ function traceLayout(circuitId: string, track: ImportedTrack): TrackLayout {
     metresPerUnit,
     trace: track.trace,
     pitOutside: track.pitSide === 'outside',
+    biome: CIRCUIT_BIOMES[circuitId] ?? 'temperate',
   }
 }
 
