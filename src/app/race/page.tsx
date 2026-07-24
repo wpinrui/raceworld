@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
-import type { GodModeAction, RaceResult, RaceState, SimSpeed } from '@/lib/sim/types'
+import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
@@ -28,16 +28,9 @@ import { TrackMap } from '@/components/race/TrackMap'
 import { UpgradeRevealModal } from '@/components/race/UpgradeRevealModal'
 import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
 import { RaceDayView } from '@/components/race/RaceDayView'
-import { useRaceMapSampler } from '@/components/race/useRaceMapSampler'
+import { useLiveRace } from '@/components/race/useLiveRace'
+import { liveBridge } from '@/lib/store/live-bridge'
 import { TRACK_LAYOUTS } from '@/data/tracks'
-import { SECTORS_PER_LAP } from '@/lib/sim/sector'
-
-// Race playback multipliers (#sim-2d): 1x is REAL TIME — one tick animates the leader's just-resolved
-// sector over its actual duration — and the rest divide it. The old instant fast-forward is gone; 25x
-// is the ceiling.
-const SPEED_MULTS: Record<SimSpeed, number> = { 1: 1, 2: 2, 3: 5, 4: 10, 5: 25 }
-// The pre-race grid wait before lap 1 starts animating.
-const GRID_HOLD_MS = 2000
 
 export default function RacePage() {
   const router = useRouter()
@@ -45,7 +38,7 @@ export default function RacePage() {
   const {
     raceState, drivers, teams, forms, godModeDriverId,
     loadFromSeason, updateDriverForm, setGodModeDriver,
-    tickSector, setSpeed, setPaused,
+    setSpeed, setPaused,
   } = useRaceStore()
 
   const phase = raceState?.phase ?? 'pre-qualifying'
@@ -54,18 +47,11 @@ export default function RacePage() {
 
   const qe = useQualifyingEngine(raceState, drivers, teams, season.constructorStandings, season.currentRound)
 
-  const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
   const [showQualyFFModal, setShowQualyFFModal] = useState(false)
   const hydrated = useHydrated()
-  const [lapProgress, setLapProgress] = useState(0)
   // Team Manager: the pre-race upgrade reveal shows once per upgrade; dismissing latches this round.
   const [acknowledgedRound, setAcknowledgedRound] = useState<number | null>(null)
 
-  const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const nextTickAtRef = useRef<number>(0)
-  const tickIntervalRef = useRef<number>(GRID_HOLD_MS)
-  const lapFracDoneRef = useRef(0)
-  const doTickRef = useRef<() => void>(() => {})
   // Once the race has finished, raceState going null means End Race fired and we're navigating to Home;
   // render nothing instead of flashing the (now-advanced) next round's pre-qualifying for a frame (#113).
   const endedRef = useRef(false)
@@ -76,11 +62,11 @@ export default function RacePage() {
   // The 2D race-day view runs wherever the circuit has an authored track layout; others keep the
   // classic screen until their traces are imported (#sim-2d).
   const trackLayout = currentCircuit ? TRACK_LAYOUTS[currentCircuit.id] : undefined
-  const gridPosMap = useMemo(
-    () => Object.fromEntries((raceState?.qualifyingResults ?? []).map((q) => [q.driverId, q.gridPosition])),
-    [raceState?.qualifyingResults],
-  )
-  const mapSampleRef = useRaceMapSampler(gridPosMap, nextTickAtRef, tickIntervalRef, raceState?.paused ?? false)
+
+  // The live engine (#live-engine): steps the world in real time, commits the UI projection to the
+  // store, serves the map's per-frame positions. God-mode actions apply to it immediately.
+  const { sampleRef: mapSampleRef, lapProgress } = useLiveRace()
+  const applyGodActions = (actions: GodModeAction[]) => liveBridge.current?.applyGodActions(actions)
 
   // Driver hover card data: career totals (through last season, folded with this season's results) + this
   // year's WDC standing, so a name in the race table opens the same expanded card used around the app.
@@ -133,87 +119,6 @@ export default function RacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, paused])
 
-  // The 2D view animates the SECTOR the sim just resolved (#sector-engine), so everything the player
-  // reads (board, gaps, stops, commentary, championship) must show the state from the start of that
-  // slice and flip forward as the cars reach it — broadcast-style, now at most 1/8 lap stale. The
-  // pre-tick snapshot is that display state; the sim itself stays one sector ahead internally.
-  const [displayState, setDisplayState] = useState<RaceState | null>(null)
-
-  const doTick = useCallback(() => {
-    setDisplayState(useRaceStore.getState().raceState)
-    const actions = pendingGodModeActions.length > 0 ? [...pendingGodModeActions] : undefined
-    if (actions) setPendingGodModeActions([])
-    tickSector(actions)
-  }, [pendingGodModeActions, tickSector])
-
-  useEffect(() => { doTickRef.current = doTick }, [doTick])
-
-  // Tick scheduler: each interval animates the leader's JUST-COMPLETED sector, so its duration is
-  // that slice's real time divided by the speed multiplier (1x = real time). The first interval (no
-  // slice yet) is a short grid hold before lights out.
-  useEffect(() => {
-    if (phase !== 'racing' || paused) {
-      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
-      return
-    }
-    const nextMs = () => {
-      const s = useRaceStore.getState().raceState
-      if (!s) return GRID_HOLD_MS
-      const running = s.drivers.filter((d) => !d.retired)
-      const leader = running.reduce((a, b) => (a.totalTime <= b.totalTime ? a : b), running[0])
-      const last = leader?.sectorTimes?.[leader.sectorTimes.length - 1]
-        ?? (leader?.lapTimes[leader.lapTimes.length - 1] ?? NaN) / SECTORS_PER_LAP
-      const ms = last ? (last * 1000) / (SPEED_MULTS[s.speed as SimSpeed] ?? 1) : GRID_HOLD_MS
-      // NaN is sticky through the clock refs (it survives clamps), so never let one out of here.
-      return Number.isFinite(ms) && ms > 0 ? ms : GRID_HOLD_MS
-    }
-    // `fullMs` is the whole slice's animation window (what the sampler divides by); `delay` is the
-    // part still to play. Keeping them separate lets a speed change resume mid-slice instead of
-    // restarting it.
-    const schedule = (fullMs: number, delay: number) => {
-      tickIntervalRef.current = fullMs
-      nextTickAtRef.current = Date.now() + delay
-      tickTimerRef.current = setTimeout(() => {
-        doTickRef.current()
-        lapFracDoneRef.current = 0
-        const s = useRaceStore.getState().raceState
-        if (s?.phase === 'racing' && !s.paused) {
-          const m = nextMs()
-          schedule(m, m)
-        }
-      }, delay)
-    }
-    const ms = nextMs()
-    if (!Number.isFinite(lapFracDoneRef.current)) lapFracDoneRef.current = 0
-    schedule(ms, (1 - lapFracDoneRef.current) * ms)
-    return () => {
-      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
-      // Remember how far through the lap we were, for the next run (speed change or unpause).
-      const done = 1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current
-      lapFracDoneRef.current = Number.isFinite(done) ? Math.min(1, Math.max(0, done)) : 0
-    }
-  }, [phase, paused, speed])
-
-  // Whole-lap progress for the classic header bar: the tick window is one SECTOR, so fold the
-  // fraction-through-window into the sector being animated ((currentSector − 1) mod 8 — the sim sits
-  // one slice ahead of the animation). Before any slice has resolved the bar just sits at zero.
-  useEffect(() => {
-    const lapFrac = () => {
-      const s = useRaceStore.getState().raceState
-      const started = s?.drivers.some((d) => (d.sectorTimes?.length ?? 0) > 0 || d.lapTimes.length > 0)
-      if (!s || !started) return 0
-      const tickFrac = Math.max(0, Math.min(1, 1 - (nextTickAtRef.current - Date.now()) / tickIntervalRef.current))
-      const sec = ((s.currentSector ?? 0) - 1 + SECTORS_PER_LAP) % SECTORS_PER_LAP
-      return Math.max(0, Math.min(100, ((sec + tickFrac) / SECTORS_PER_LAP) * 100))
-    }
-    if (phase !== 'racing' || paused) {
-      setLapProgress(paused ? lapFrac() : 0)
-      return
-    }
-    const timer = setInterval(() => setLapProgress(lapFrac()), 50)
-    return () => clearInterval(timer)
-  }, [phase, paused, speed])
-
   const confirmQualyFF = () => { setShowQualyFFModal(false); setSpeed(5); setPaused(false) }
 
   function computeResults(): RaceResult[] {
@@ -243,12 +148,9 @@ export default function RacePage() {
 
   const useNewView = !!trackLayout && !!raceState && (phase === 'racing' || phase === 'finished')
 
-  // What the player READS during racing: the pre-tick snapshot, in lockstep with the animated lap.
-  // Falls back to the live state at the lights, after the flag, and across a restart (lap regression).
-  const shownRace =
-    phase === 'racing' && displayState && raceState && displayState.currentLap <= raceState.currentLap
-      ? displayState
-      : raceState
+  // One clock (#live-engine): the store's raceState IS the live projection — the tower, panels and
+  // the map all read the same instant. No display snapshot, no broadcast delay.
+  const shownRace = raceState
 
   return (
     <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
@@ -282,8 +184,8 @@ export default function RacePage() {
           playerTeamId={season.playerTeamId ?? null}
           godSelectedId={godModeDriverId}
           onGodSelect={setGodModeDriver}
-          onGodActions={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
-          onRetire={(driverId) => setPendingGodModeActions((prev) => [...prev, { type: 'force-retire', driverId }])}
+          onGodActions={applyGodActions}
+          onRetire={(driverId) => applyGodActions([{ type: 'force-retire', driverId }])}
         />
       )}
 
@@ -353,14 +255,14 @@ export default function RacePage() {
                     <PitWallPanel
                       drivers={drivers} teams={teams} states={shownRace!.drivers}
                       raceState={shownRace!}
-                      onRetire={(driverId) => setPendingGodModeActions((prev) => [...prev, { type: 'force-retire', driverId }])}
+                      onRetire={(driverId) => applyGodActions([{ type: 'force-retire', driverId }])}
                     />
                   ) : (
                     <GodModePanel
                       drivers={drivers} teams={teams} states={shownRace!.drivers}
                       raceState={shownRace!}
                       selectedDriverId={selectedDriverId ?? drivers[0]?.id ?? ''}
-                      onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
+                      onAction={applyGodActions}
                     />
                   )
                 ) : raceState && phase === 'pre-race' && (season.teamManagerMode || season.driverMode) ? (

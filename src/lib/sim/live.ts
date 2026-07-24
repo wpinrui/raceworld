@@ -97,6 +97,7 @@ export class LiveRace {
   private readonly entryFrac: number
   private readonly exitFrac: number
   private leaderFinished = false
+  private readonly holds = new Set<string>() // standing pit-wall HOLDs: the AI never boxes these cars
 
   constructor(
     raceState: RaceState,
@@ -425,6 +426,7 @@ export class LiveRace {
     car.ds.targetNextCompound = plan.targetNextCompound
 
     if (car.pit?.forced) return // a player/god call stands regardless of the AI's opinion
+    if (this.holds.has(car.ds.driverId)) { car.pit = null; return } // pit wall says stay out
     const moisture = getMoistureAtLap(this.state.weather, lap)
     const field: FieldCar[] = this.cars.map((c) => ({
       driverId: c.ds.driverId, position: c.ds.position, totalTime: c.ds.totalTime,
@@ -518,6 +520,36 @@ export class LiveRace {
   commandStay(driverId: string): void {
     const car = this.cars.find((c) => c.ds.driverId === driverId)
     if (car?.pit?.phase === 'called') car.pit = null
+  }
+
+  /** Standing HOLD: the AI never calls this car in; pending unforced calls are dropped. */
+  setHold(driverId: string, on: boolean): void {
+    if (on) this.holds.add(driverId)
+    else this.holds.delete(driverId)
+    const car = this.cars.find((c) => c.ds.driverId === driverId)
+    if (on && car?.pit?.phase === 'called') car.pit = null
+  }
+
+  /** Back to AI strategy: drop a forced call that hasn't reached the lane, release any hold. */
+  clearPitOverrides(driverId: string): void {
+    this.holds.delete(driverId)
+    const car = this.cars.find((c) => c.ds.driverId === driverId)
+    if (car?.pit?.phase === 'called') car.pit = null
+  }
+
+  /** Player push controls write straight onto the live car (the engine reads them next step). */
+  setPushFields(driverId: string, patch: Partial<Pick<DriverRaceState, 'push' | 'pushAuto' | 'autoDefend'>>): void {
+    const car = this.cars.find((c) => c.ds.driverId === driverId)
+    if (!car || car.ds.retired) return
+    Object.assign(car.ds, patch)
+  }
+
+  /** The leader's fraction through its current lap — drives the classic header's lap bar. */
+  leaderLapFrac(): number {
+    const running = this.cars.filter((c) => !c.ds.retired && !c.finished)
+    if (running.length === 0) return 0
+    const leader = running.reduce((a, b) => (a.pos >= b.pos ? a : b))
+    return Math.max(0, leader.pos - Math.floor(leader.pos))
   }
 
   applyGodActions(actions: GodModeAction[]): void {

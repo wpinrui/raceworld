@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Driver, Team, Circuit, RaceState, DriverRaceState, GodModeAction, SimSpeed, TyreCompound, SliderLevel, PushPreset } from '@/lib/sim/types'
 import { rollForms, initRaceState, simulateLap } from '@/lib/sim/race'
 import { simulateSector, PIT_SECTOR } from '@/lib/sim/sector'
+import { liveBridge } from './live-bridge'
 import { NORMAL } from '@/lib/sim/push'
 import { computeTyreLife } from '@/lib/sim/tyres'
 import { runQualifying } from '@/lib/sim/qualifying'
@@ -177,6 +178,13 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   },
 
   setPitCommand: (driverId, cmd) => {
+    // A live race takes the command directly (#live-engine): pit calls are physical there.
+    const live = liveBridge.current
+    if (live) {
+      if (cmd === 'auto') live.clearPitOverrides(driverId)
+      else if (cmd === 'hold') live.setHold(driverId, true)
+      else { live.setHold(driverId, false); live.commandPit(driverId, cmd.pit) }
+    }
     set((state) => {
       const next = { ...state.pitCommands }
       if (cmd === 'auto') delete next[driverId] // auto = no standing instruction (also the cancel/unset)
@@ -190,27 +198,35 @@ export const useRaceStore = create<RaceStore>((set, get) => ({
   // Normal (level 0), where auto-defend is allowed to stay armed. A preset (overtake/push/conserve) is never
   // Normal, so it always exits auto-defend.
   setPushSlider: (driverId, level) => {
+    const patch = { push: { kind: 'manual', level }, pushAuto: false, ...(level !== 0 ? { autoDefend: false } : {}) } as const
+    liveBridge.current?.setPushFields(driverId, patch)
     set((state) => (state.raceState
-      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { push: { kind: 'manual', level }, pushAuto: false, ...(level !== 0 ? { autoDefend: false } : {}) }) } }
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, patch) } }
       : {}))
   },
   setPushPreset: (driverId, preset) => {
+    const patch = { push: { kind: 'preset', preset }, pushAuto: false, autoDefend: false } as const
+    liveBridge.current?.setPushFields(driverId, patch)
     set((state) => (state.raceState
-      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { push: { kind: 'preset', preset }, pushAuto: false, autoDefend: false }) } }
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, patch) } }
       : {}))
   },
   // Team Manager: hand a car's push to the AI (on) or take it back (off). Leaving auto keeps the AI's last pick
   // as the manual selection — a smooth handoff. Mutually exclusive with auto-defend.
   setPushAuto: (driverId, on) => {
+    const patch = { pushAuto: on, autoDefend: false } as const
+    liveBridge.current?.setPushFields(driverId, patch)
     set((state) => (state.raceState
-      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { pushAuto: on, autoDefend: false }) } }
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, patch) } }
       : {}))
   },
   // Driver mode: arm/disarm auto-defend. Only valid from Normal, so force the selection to Normal when arming —
   // intent and the toggle then agree, and the sim's transient defensive pushes never alter that intent.
   setAutoDefend: (driverId, on) => {
+    const patch = { autoDefend: on, pushAuto: false, ...(on ? { push: NORMAL } : {}) } as const
+    liveBridge.current?.setPushFields(driverId, patch)
     set((state) => (state.raceState
-      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, { autoDefend: on, pushAuto: false, ...(on ? { push: NORMAL } : {}) }) } }
+      ? { raceState: { ...state.raceState, drivers: patchCar(state.raceState.drivers, driverId, patch) } }
       : {}))
   },
 
