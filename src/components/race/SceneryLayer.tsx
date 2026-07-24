@@ -20,8 +20,6 @@ import {
 const STOREY_M = 4.6
 /** Wall depth as a fraction of height — how much of the side face the oblique view reveals. */
 const EXTRUDE = 0.62
-/** Apparent height of one terrace step in the relief bands. */
-const BAND_STEP_M = 6
 /** A grandstand's front (trackside) and rear heights in metres. Real seating banks rake up away
  *  from the circuit; extruding one uniformly made them read as tall slabs beside the track.
  *
@@ -66,9 +64,6 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
 }) {
   const full = detail === 'full'
   const dir = lightDir(lighting)
-  const reach = shadowReach(lighting)
-  const shFill = shadowFill(lighting)
-  const shOp = shadowOpacity(lighting)
   return (
     <g>
       <defs>
@@ -92,12 +87,17 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
             fill="none" stroke="#A8D4E6" strokeWidth={u(0.35)} opacity={0.2}
           />
         </pattern>
-        <radialGradient id="tm-tree0">
-          <stop offset="0%" stopColor="#4F7B3A" />
+        {/* The canopy's lit side IS the gradient's focal point, pulled toward the sun. It used to be
+            a second path per tree, which cost an element for every tree on the circuit and was baked
+            at generation time so it never moved when the light did. */}
+        <radialGradient id="tm-tree0" fx={0.5 - dir.x * 0.3} fy={0.5 - dir.y * 0.3}>
+          <stop offset="0%" stopColor="#8FB35F" />
+          <stop offset="45%" stopColor="#4F7B3A" />
           <stop offset="100%" stopColor="#2C4B22" />
         </radialGradient>
-        <radialGradient id="tm-tree1">
-          <stop offset="0%" stopColor="#6B7A35" />
+        <radialGradient id="tm-tree1" fx={0.5 - dir.x * 0.3} fy={0.5 - dir.y * 0.3}>
+          <stop offset="0%" stopColor="#A8B368" />
+          <stop offset="45%" stopColor="#6B7A35" />
           <stop offset="100%" stopColor="#3D4A1E" />
         </radialGradient>
         <linearGradient
@@ -128,13 +128,7 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
           terrace steps catch the same top-left key light as every prop shadow. Big paths, few of
           them — they stay affordable at full zoom-out, which is where the flat plane showed. */}
       {scenery.bands.map((b, i) => (
-        <g key={`hb${i}`}>
-          <path
-            d={b.d} fillRule="evenodd" fill={shFill} opacity={shOp * 0.9}
-            transform={`translate(${dir.x * u(BAND_STEP_M * reach)} ${dir.y * u(BAND_STEP_M * reach)})`}
-          />
-          <path d={b.d} fillRule="evenodd" fill={b.fill} />
-        </g>
+        <path key={`hb${i}`} d={b.d} fillRule="evenodd" fill={b.fill} opacity={b.soft ? 0.30 : 1} />
       ))}
 
       {/* Field patchwork: the quilt of cultivated land a circuit sits in. A single flat green was
@@ -327,7 +321,6 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
             strokeWidth={Math.max(u(0.8), t.r * 0.34)} strokeLinecap="round"
           />
           <path d={t.d} fill={`url(#tm-tree${t.variant})`} />
-          <path d={t.hd} fill="#8FB35F" opacity={0.3} />
         </Fragment>
       ))}
     </g>

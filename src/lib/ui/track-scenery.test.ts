@@ -127,8 +127,9 @@ describe.each(ids)('%s', (id) => {
     }
   })
 
-  it('leaves the ground plain unless terrain detail is asked for', () => {
-    expect(scenery.bands).toEqual([])
+  it('tints the ground softly by default, with no field quilt', () => {
+    expect(scenery.bands.length).toBeGreaterThan(0)
+    expect(scenery.bands.every((b) => b.soft)).toBe(true)
     expect(scenery.fields).toEqual([])
   })
 
@@ -153,15 +154,17 @@ describe('terrainDetail', () => {
     terrainDetail,
   })
 
-  it('draws relief and fields when switched on', () => {
+  it('draws hard terracing and the field quilt when switched on', () => {
     const on = build(true)
     expect(on.bands.length).toBeGreaterThan(2)
+    expect(on.bands.every((b) => b.soft)).toBe(false)
     expect(on.fields.length).toBeGreaterThan(40)
   })
 
-  it('leaves both out by default, and changes nothing else', () => {
+  it('falls back to a soft tint and no quilt, and changes nothing else', () => {
     const off = build(false)
-    expect(off.bands).toEqual([])
+    expect(off.bands.every((b) => b.soft)).toBe(true)
+    expect(off.bands.length).toBeLessThan(build(true).bands.length)
     expect(off.fields).toEqual([])
     // The flag must not disturb placement: same trees, stands and buildings either way.
     const on = build(true)

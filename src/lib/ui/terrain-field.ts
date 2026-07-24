@@ -232,12 +232,17 @@ export interface TerrainBand {
   /** All loops of this level as one even-odd path, so nested hills and basins fill correctly. */
   d: string
   fill: string
+  /** Drawn as a faint wash rather than a distinct terrace. What read as noise was the STEPPING —
+   *  hard-edged levels each with a dark offset edge beneath it, which is a topographic map, not
+   *  ground. A few levels at low opacity with no step shadow is just gentle large-scale variation. */
+  soft?: boolean
 }
 
 /** Terraced bands over `box`, lowest first. `ramp` supplies the fill per level (0 = lowest). */
 export function bandsFor(
   field: HeightField, box: FieldBox, ramp: string[],
-  { nx = 104, ny = 96, reliefM = 55 }: { nx?: number; ny?: number; reliefM?: number } = {},
+  { nx = 104, ny = 96, reliefM = 55, soft = false }:
+  { nx?: number; ny?: number; reliefM?: number; soft?: boolean } = {},
 ): TerrainBand[] {
   // Damp toward the box edge so every contour closes inside it. Without this, contours run off the
   // edge as open curves and cannot be filled as a region.
@@ -270,7 +275,7 @@ export function bandsFor(
     // Quadratics through the midpoints cost the same node count as the line segments they replace.
     const d = loops.map((l) => (l.length >= 4 ? smoothClosed(l) : '')).filter(Boolean).join(' ')
     if (!d) continue
-    out.push({ d, fill: ramp[k] })
+    out.push({ d, fill: ramp[k], soft })
   }
   return out
 }

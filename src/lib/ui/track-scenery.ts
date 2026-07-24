@@ -38,7 +38,7 @@ export interface SceneryStand extends SceneryRect {
   facing: boolean
 }
 export interface SceneryTree {
-  d: string; hd: string; variant: 0 | 1
+  d: string; variant: 0 | 1
   /** Height in metres. A tree is scaled as a whole, so a big canopy stands on a tall trunk — with a
    *  single global height every tree was the same height regardless of how wide it was. */
   h: number
@@ -145,7 +145,11 @@ export function buildScenery(
   // Grade the land to the circuit's own smoothed profile, so the track sits in a corridor of
   // cuttings and embankments rather than on a shelf laid over the noise.
   const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
-  const bands = terrainDetail ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM }) : []
+  // Off the flag, a handful of very low-contrast levels: enough that the ground is not one flat
+  // sheet stretching to the horizon, without the map-like terracing.
+  const bands = terrainDetail
+    ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM })
+    : bandsFor(field, farBox, [bio.ramp[2], bio.ramp[4]], { reliefM: bio.reliefM, soft: true })
 
   // ── Water bodies ──
   // Lakes only: the relief bands carry ground tone now, so the old translucent tint patches just
@@ -468,7 +472,6 @@ export function buildScenery(
     treeOcc.addDisc(p.x, p.y, r * 0.38)
     trees.push({
       d: blobPath(p.x, p.y, rNom, rNom * 0.92, rng() * Math.PI, rng, 7, TREE_JITTER_BASE, TREE_JITTER_SPAN),
-      hd: blobPath(p.x - rNom * 0.28, p.y - rNom * 0.32, rNom * 0.5, rNom * 0.42, rng() * Math.PI, rng, 6, 0.8, 0.3),
       variant: rng() < 0.75 ? 0 : 1,
       x: p.x, y: p.y, r, h: TREE_BASE_H_M * scale,
     })
