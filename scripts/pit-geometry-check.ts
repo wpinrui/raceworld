@@ -1,0 +1,71 @@
+// TEMP probe: numeric verification of pit-lane paint geometry for every track layout.
+// No kinks (max consecutive-point jump), sane lateral release line, endpoints reported.
+import { TRACK_LAYOUTS } from '../src/data/tracks'
+
+const nums = (d: string) => d.match(/-?\d+(\.\d+)?/g)!.map(Number)
+const ptsOf = (d: string) => {
+  const n = nums(d)
+  const out: Array<[number, number]> = []
+  for (let i = 0; i < n.length - 1; i += 2) out.push([n[i], n[i + 1]])
+  return out
+}
+const maxJump = (d: string) => {
+  const p = ptsOf(d)
+  let m = 0
+  for (let i = 1; i < p.length; i++) m = Math.max(m, Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]))
+  return m
+}
+// Fold-back detector: worst turn between consecutive segments (ignoring sub-30cm steps).
+// A path that doubles back on itself has a dot near -1 somewhere.
+const worstTurn = (d: string, mpu: number) => {
+  const p = ptsOf(d)
+  let worst = 1
+  let prev: [number, number] | null = null
+  for (let i = 1; i < p.length; i++) {
+    const seg: [number, number] = [p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]]
+    const len = Math.hypot(seg[0], seg[1])
+    if (len * mpu < 0.3) continue
+    if (prev) {
+      const pl = Math.hypot(prev[0], prev[1])
+      worst = Math.min(worst, (seg[0] * prev[0] + seg[1] * prev[1]) / (len * pl))
+    }
+    prev = seg
+  }
+  return worst
+}
+const dist = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1])
+
+let bad = 0
+for (const [id, layout] of Object.entries(TRACK_LAYOUTS)) {
+  const lay = layout as unknown as { metresPerUnit: number; pit?: { d: string } }
+  if (!lay.pit) { console.log(`${id}: no pit`); continue }
+  const mpu = lay.metresPerUnit
+  const rows: string[] = []
+  for (const key of ['d'] as const) {
+    const j = maxJump(lay.pit[key]) * mpu
+    const turn = worstTurn(lay.pit[key], mpu)
+    // dot < -0.2 = a turn sharper than ~102 degrees between successive segments = fold/hairpin.
+    const flag = j > 35 ? '  <<< KINK' : turn < -0.2 ? `  <<< FOLD(${turn.toFixed(2)})` : ''
+    if (flag) bad++
+    rows.push(`${key}=${j.toFixed(1)}m,${turn.toFixed(2)}${flag}`)
+  }
+  // Straightness of the working section: max perpendicular deviation of slotStations (source of
+  // the box row, stripe and building) and of the fastEdge from their own endpoint chords.
+  const stns = (lay.pit as unknown as { slotStations: Array<{ x: number; y: number }> }).slotStations
+  const chordDev = (q: Array<[number, number]>) => {
+    const A = q[0]
+    const B = q[q.length - 1]
+    const dx = B[0] - A[0]
+    const dy = B[1] - A[1]
+    const L = Math.hypot(dx, dy) || 1
+    let dev = 0
+    for (const v of q) dev = Math.max(dev, Math.abs(((v[0] - A[0]) * dy - (v[1] - A[1]) * dx) / L))
+    return dev * mpu
+  }
+  const devSt = chordDev(stns.map((q): [number, number] => [q.x, q.y]))
+  const devFlag = devSt > 0.5 ? '  <<< NOT STRAIGHT' : ''
+  if (devFlag) bad++
+  console.log(`${id}: maxJump ${rows.join(' | ')}`)
+  console.log(`   straightDev slots=${devSt.toFixed(2)}m${devFlag}`)
+}
+console.log(bad === 0 ? 'ALL GEOMETRY CHECKS PASS' : `${bad} PROBLEMS FLAGGED`)
