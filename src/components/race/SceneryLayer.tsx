@@ -26,24 +26,30 @@ function shade(hex: string, k: number): string {
   return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`
 }
 
-/** A footprint drawn as ONE silhouette. Pass 1 strokes every part in the outline colour, dilating
- *  the union; pass 2 fills them with no stroke, covering every internal seam. The outline survives
- *  only around the union, so an L or U footprint reads as one building instead of loose rectangles
- *  with edges showing where the parts meet. */
-function Footprint({ parts, fill, stroke, sw, rx }: {
-  parts: SceneryPart[]; fill: string; stroke: string; sw: number; rx: number
+/** Every part of a footprint as subpaths of ONE path. Filled nonzero (all rects wound the same way)
+ *  this renders as their union, which keeps a multi-part building to a couple of DOM nodes instead
+ *  of a couple per part — the scene is plain SVG with no culling, so element count is the budget. */
+function partsPath(parts: SceneryPart[]): string {
+  let d = ''
+  for (const p of parts) {
+    const x0 = p.dx - p.w / 2
+    const y0 = p.dy - p.h / 2
+    d += `M ${x0.toFixed(2)} ${y0.toFixed(2)} h ${p.w.toFixed(2)} v ${p.h.toFixed(2)} h ${(-p.w).toFixed(2)} Z `
+  }
+  return d
+}
+
+/** A footprint drawn as ONE silhouette. Pass 1 strokes the whole path in the outline colour,
+ *  dilating the union; pass 2 fills it with no stroke, covering every internal seam. The outline
+ *  survives only around the union, so an L or U footprint reads as one building instead of loose
+ *  rectangles with edges showing where the parts meet. */
+function Footprint({ d, fill, stroke, sw }: {
+  d: string; fill: string; stroke: string; sw: number
 }) {
   return (
     <>
-      {parts.map((p, j) => (
-        <rect
-          key={`o${j}`} x={p.dx - p.w / 2} y={p.dy - p.h / 2} width={p.w} height={p.h} rx={rx}
-          fill={stroke} stroke={stroke} strokeWidth={sw} strokeLinejoin="round"
-        />
-      ))}
-      {parts.map((p, j) => (
-        <rect key={`f${j}`} x={p.dx - p.w / 2} y={p.dy - p.h / 2} width={p.w} height={p.h} rx={rx} fill={fill} />
-      ))}
+      <path d={d} fill={stroke} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
+      <path d={d} fill={fill} />
     </>
   )
 }
@@ -144,11 +150,10 @@ export function SceneryLayer({ scenery, u, detail = 'full' }: {
           {structures.map((r, i) => {
             const t = u(heightM(r) * SHADOW_PER_M)
             return (
-              <g key={`sh${i}`} transform={`translate(${r.x + LIGHT.x * t} ${r.y + LIGHT.y * t}) rotate(${deg(r.rot)})`}>
-                {partsOf(r).map((p, j) => (
-                  <rect key={j} x={p.dx - p.w / 2} y={p.dy - p.h / 2} width={p.w} height={p.h} rx={u(0.8)} />
-                ))}
-              </g>
+              <path
+                key={`sh${i}`} d={partsPath(partsOf(r))}
+                transform={`translate(${r.x + LIGHT.x * t} ${r.y + LIGHT.y * t}) rotate(${deg(r.rot)})`}
+              />
             )
           })}
         </g>
@@ -160,8 +165,8 @@ export function SceneryLayer({ scenery, u, detail = 'full' }: {
         return (
           <g key={`wl${i}`} transform={`translate(${r.x + LIGHT.x * t} ${r.y + LIGHT.y * t}) rotate(${deg(r.rot)})`}>
             <Footprint
-              parts={partsOf(r)} fill={shade(r.fill, 0.62)} stroke={shade(r.fill, 0.45)}
-              sw={u(0.5)} rx={u(0.8)}
+              d={partsPath(partsOf(r))} fill={shade(r.fill, 0.62)} stroke={shade(r.fill, 0.45)}
+              sw={u(0.5)}
             />
           </g>
         )
@@ -188,18 +193,16 @@ export function SceneryLayer({ scenery, u, detail = 'full' }: {
       })}
 
       {scenery.buildings.map((b, i) => {
-        const parts = partsOf(b)
+        const d = partsPath(partsOf(b))
         return (
           <g key={`b${i}`} transform={`translate(${b.x} ${b.y}) rotate(${deg(b.rot)})`}>
-            <Footprint parts={parts} fill={b.fill} stroke="#2E333B" sw={u(0.5)} rx={u(0.8)} />
+            <Footprint d={d} fill={b.fill} stroke="#2E333B" sw={u(0.5)} />
             {/* One bevel over the whole silhouette, clipped to the union. Drawing it per part gave
                 every sub-rect its own full light-to-dark ramp, seaming at each internal edge. */}
             {full && (
               <>
                 <clipPath id={`tm-bc${i}`}>
-                  {parts.map((p, j) => (
-                    <rect key={j} x={p.dx - p.w / 2} y={p.dy - p.h / 2} width={p.w} height={p.h} rx={u(0.8)} />
-                  ))}
+                  <path d={d} />
                 </clipPath>
                 <g clipPath={`url(#tm-bc${i})`}>
                   <rect x={-b.w / 2} y={-b.h / 2} width={b.w} height={b.h} fill="url(#tm-bevel)" />
