@@ -161,10 +161,18 @@ export function simulateSlice(
       chaserPaceEdge = dryPaceProxy(driver, team) - dryPaceProxy(chaser, chaserTeam)
     }
     const pushCtx = { gapAhead: current.gap, gapBehind, chaserPaceEdge, condition: current.currentTyre.condition, temp: tempIn }
-    const pushMode: 'auto' | 'autoDefend' | 'manual' = !playerSet.has(current.driverId)
+    const isPlayerCar = playerSet.has(current.driverId)
+    const pushMode: 'auto' | 'autoDefend' | 'manual' = !isPlayerCar
       ? 'auto'
       : current.pushAuto ? 'auto' : current.autoDefend ? 'autoDefend' : 'manual'
-    const { push, defending } = resolvePlayerPush(pushMode, current.push ?? NORMAL, pushCtx)
+    // AI cars pick their push ONCE per lap (the lap engine's cadence — re-picking every sector held
+    // attackers in overtake-push through more of the racing and flattened the win distribution,
+    // measured by scripts/sector-parity.ts). Player cars resolve every slice: sub-lap responsiveness
+    // to the player's own commands is the point of the sector engine.
+    const resolveNow = spec.frac === 1 || spec.lapStart || isPlayerCar
+    const { push, defending } = resolveNow
+      ? resolvePlayerPush(pushMode, current.push ?? NORMAL, pushCtx)
+      : { push: current.push ?? NORMAL, defending: current.defending ?? false }
     const intensity = resolveIntensity(push)
 
     // 2b'. Consistency mistake roll (issue #59). Per-lap chance rate(c) = 1.3e-5·(100 - c)²
