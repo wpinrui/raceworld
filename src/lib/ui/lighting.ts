@@ -50,8 +50,31 @@ export function shadowOffset(l: Lighting, heightM: number): { x: number; y: numb
 }
 
 /** Unit vector along the light, for extruded wall faces. */
+/** The bearing that makes every solid lean UP the screen at a given camera rotation.
+ *
+ *  The oblique projection displaces a point by `-dir * height`, so `dir` has to point DOWN the screen
+ *  for things to lean up it. `dir` lives in world space and the camera rotates the world, so keeping
+ *  the lean screen-upright means turning the bearing against the camera. Its own inverse: feeding it a
+ *  bearing gives back the camera rotation that would produce it. */
+export function screenUpAzimuth(camRot: number): number {
+  return Math.PI / 2 - camRot
+}
+
+/** A unit vector on a bearing. Two INDEPENDENT bearings drive this map and they must not be confused:
+ *
+ *  - the LIGHT bearing says where the sun is. It is fixed in the world, so a shadow keeps pointing at
+ *    the same corner of the circuit however the player turns the camera.
+ *  - the VIEW bearing says which way solids lean, and therefore which of their faces are visible. It
+ *    turns WITH the camera, so a building always leans up the screen.
+ *
+ *  They were one value until the camera could rotate, and merging them made the sun follow the player
+ *  around the track. */
+export function dirAt(azimuth: number): { x: number; y: number } {
+  return { x: Math.cos(azimuth), y: Math.sin(azimuth) }
+}
+
 export function lightDir(l: Lighting): { x: number; y: number } {
-  return { x: Math.cos(l.azimuth), y: Math.sin(l.azimuth) }
+  return dirAt(l.azimuth)
 }
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)

@@ -2,6 +2,7 @@
 // preview script and the geometry probe all measure the same numbers, and none of it needs a DOM.
 
 import type { TrackLayout } from '@/data/tracks'
+import { screenUpAzimuth } from './lighting'
 
 /** Lateral offsets from the lane centreline, in metres, that shape the complex. */
 const GARAGE_FACE = 4.45
@@ -78,9 +79,9 @@ export function pitViewAzimuth(layout: TrackLayout): number | null {
  *  tracks a car, just from a known heading. */
 export function pitCameraRotation(layout: TrackLayout): number | null {
   const az = pitViewAzimuth(layout)
-  // The view runs from the building out across the lane, so the garage side is the opposite bearing;
-  // rotate until that bearing points up the screen, which in y-down screen space is -PI/2.
-  return az === null ? null : Math.PI / 2 - az
+  // `screenUpAzimuth` is its own inverse, so the rotation that produces a bearing is that same map
+  // applied to the bearing. Rotating this far puts the garage side up the screen.
+  return az === null ? null : screenUpAzimuth(az)
 }
 
 /** Where each garage box sits along the lane: evenly spread through the authored slot band, then

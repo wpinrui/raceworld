@@ -4,7 +4,7 @@ import {
   mapPathPoints, partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull, wallWindows,
 } from '@/lib/ui/extrude'
 import {
-  lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
+  dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
   type Lighting,
 } from '@/lib/ui/lighting'
 
@@ -166,12 +166,16 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
  *  tarmac painted straight over every shadow and they stopped dead at the grass verge. Drawing them
  *  here is safe because the generator guarantees no prop overlaps the track — see
  *  track-scenery.test.ts — so nothing casting a shadow can be occluded by the road it falls on. */
-export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
+export function SceneryShadowLayer({ scenery, u, lighting, view, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
+  // Two bearings, deliberately: `dir` is the sun and sweeps the shadow, `vdir` is the camera and says
+  // where the object's BASE was drawn. A shadow starts at the base and runs down-light, so it needs
+  // both, and merging them makes the sun swing round with the player.
   const dir = lightDir(lighting)
+  const vdir = dirAt(view)
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
@@ -188,7 +192,7 @@ export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
             return (
               <path
                 key={`sh${i}`} d={sweptHull(partsOf(r), o.x, o.y)}
-                transform={`translate(${r.x + dir.x * b} ${r.y + dir.y * b}) rotate(${deg(r.rot)})`}
+                transform={`translate(${r.x + vdir.x * b} ${r.y + vdir.y * b}) rotate(${deg(r.rot)})`}
               />
             )
           })}
@@ -218,8 +222,8 @@ export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
             // this is a single element for a whole circuit's trees instead of eleven hundred, each
             // of which the browser would otherwise resolve a matrix for every frame.
             const sx = (2 * t.r + len) / (2 * t.r)
-            const cx = t.x + dir.x * (trunk + len / 2)
-            const cy = t.y + dir.y * (trunk + len / 2)
+            const cx = t.x + vdir.x * trunk + dir.x * (len / 2)
+            const cy = t.y + vdir.y * trunk + dir.y * (len / 2)
             return mapPathPoints(t.d, (px, py) => {
               const vx = px - t.x
               const vy = py - t.y
@@ -237,11 +241,11 @@ export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
 }
 
 /** The solids themselves: walls, roofs, stands and canopies, all above the shadows. */
-export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
+export function ScenerySolidsLayer({ scenery, u, lighting, view, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
-  const dir = lightDir(lighting)
+  const dir = dirAt(view)
   // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
@@ -339,11 +343,12 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
  *  them with the rest of the scenery (which is painted before the ribbon) would bury them under it.
  *  All long polylines, so both LOD tiers can afford them — they are what makes the place read as a
  *  racing circuit rather than a road. */
-export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
+export function TrackFurnitureLayer({ scenery, u, lighting, view, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
-  const dir = lightDir(lighting)
+  const dir = dirAt(view)
+  const ldir = lightDir(lighting)
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
@@ -390,7 +395,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
               key={`ts${i}`} strokeWidth={u(3.4)}
               d={ribbon(
                 t.pts.map((p) => ({ x: p.x + dir.x * tyreB, y: p.y + dir.y * tyreB })),
-                dir.x * tyreT, dir.y * tyreT,
+                ldir.x * tyreT, ldir.y * tyreT,
               )}
             />
           ))}
@@ -401,7 +406,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
               key={`fs${i}`} opacity={0.35} stroke="none"
               d={ribbon(
                 b.pts.map((p) => ({ x: p.x + dir.x * fenceB, y: p.y + dir.y * fenceB })),
-                dir.x * fenceT, dir.y * fenceT,
+                ldir.x * fenceT, ldir.y * fenceT,
               )}
             />
           ))}
@@ -441,7 +446,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
         const t = u(MARSHAL_H_M * EXTRUDE)
         const o = toLocal(dir.x * t, dir.y * t, m.rot)
         const sh = u(MARSHAL_H_M * reach)
-        const so = toLocal(dir.x * sh, dir.y * sh, m.rot)
+        const so = toLocal(ldir.x * sh, ldir.y * sh, m.rot)
         const deg2 = (m.rot * 180) / Math.PI
         return (
           <g key={`mp${i}`} transform={`translate(${m.x} ${m.y}) rotate(${deg2})`}>

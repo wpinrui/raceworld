@@ -11,7 +11,8 @@
 
 import { obliqueRingFaces, quad, ringPath, sweptRing } from '@/lib/ui/extrude'
 import {
-  type Lighting, lightDir, litFace, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
+  type Lighting, dirAt, lightDir, litFace, shadeFace, shadowFill, shadowOpacity, shadowReach,
+  tintFace,
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
@@ -33,6 +34,7 @@ const PIT_WHITE = '#E4E2DC'
 export function PitBuildingShadow({ zone, u, lighting }: {
   zone: PitZone; u: (m: number) => number; lighting: Lighting
 }) {
+  // Cast from the footprint along the SUN, so it stays put on the circuit as the camera turns.
   const dir = lightDir(lighting)
   const cast = u(PIT_BUILDING_H_M * shadowReach(lighting))
   // Cast from the UPPER outline: it is the outer envelope, since the storey above overhangs the
@@ -59,12 +61,12 @@ export function PitGarageFloors({ zone, lighting, garageColor }: {
   )
 }
 
-export function PitBuilding({ zone, u, lighting, garageColor }: {
-  zone: PitZone; u: (m: number) => number; lighting: Lighting
+export function PitBuilding({ zone, u, lighting, view, garageColor }: {
+  zone: PitZone; u: (m: number) => number; lighting: Lighting; view: number
   /** Team colour for garage i, for the shutter at the back of its bay. */
   garageColor?: (i: number) => string | undefined
 }) {
-  const dir = lightDir(lighting)
+  const dir = dirAt(view)
   const lift = u(PIT_BUILDING_H_M * EXTRUDE)
   const mid = u(GARAGE_H_M * EXTRUDE)
   const plantLift = u(PLANT_H_M * EXTRUDE)
@@ -143,11 +145,11 @@ const FLAG_PX = 40
  *  A label drawn upright on a map is a map label; a real garage's signage sits on the building, so it
  *  takes the same basis the windows take — along the wall, and up it. The one concession to
  *  readability is that the run direction flips when it would otherwise write right-to-left. */
-export function PitGarageSigns({ zone, u, lighting, drivers }: {
-  zone: PitZone; u: (m: number) => number; lighting: Lighting
+export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
+  zone: PitZone; u: (m: number) => number; lighting: Lighting; view: number
   drivers: (i: number) => Array<{ name: string; nationality?: string }>
 }) {
-  const dir = lightDir(lighting)
+  const dir = dirAt(view)
   const mid = u(GARAGE_H_M * EXTRUDE)
   const band = u(SIGN_H_M * EXTRUDE)
   return (

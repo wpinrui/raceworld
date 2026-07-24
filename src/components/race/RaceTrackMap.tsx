@@ -6,7 +6,7 @@ import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE } from './SceneryLayer'
 import {
-  MOODS, lightDir, shadowFill, shadowOpacity, shadowReach,
+  MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowOpacity, shadowReach,
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import {
@@ -52,6 +52,8 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
+/** Quiet period after the last rotation input before the scene is rebuilt on the new bearing. */
+const ROT_SETTLE_MS = 120
 const GANTRY_H_M = 2.2
 /** Boom length: back to the building's front face, with a few centimetres of overlap so the join is
  *  visible rather than exact. Shared with its shadow, which has to stay exactly the same shape. */
@@ -396,15 +398,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const slotDistsRef = useRef<number[]>([]) // arc position of each pit box along the lane path
   const crewRefs = useRef(new Map<number, SVGGElement>()) // per-slot pit crew overlays (root visibility)
   const crewPartsRef = useRef(new Map<string, SVGGElement>()) // `slot:role` -> member/prop group
-  // Perspective is standardised against the pit complex rather than against world north.
-  const lighting = useMemo(() => {
-    const azimuth = pitViewAzimuth(layout)
-    return azimuth === null ? MOODS.afternoon : { ...MOODS.afternoon, azimuth }
-  }, [layout])
-  const ldir = useMemo(() => lightDir(lighting), [lighting])
   const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
   const gantryShRefs = useRef(new Map<number, SVGGElement>()) // gantry shadow, offset against that flip
   const gantryRefs = useRef(new Map<number, SVGGElement>()) // gantry booms, lifted off the box floor
+  const slotFlipRef = useRef<number[]>([]) // which way each box was mirrored, measured in the layout pass
   const crewAnimRef = useRef(new Map<number, {
     mode: 'hidden' | 'active' | 'retreat'
     pos: Record<string, [number, number]>
@@ -435,6 +432,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // the pan is owned by the follow logic; dragging breaks the lock and pans freely.
   const defaultRot = useMemo(() => pitCameraRotation(layout) ?? 0, [layout])
   const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot })
+  // Mirrored into state so the SCENERY can follow the camera. The map's whole sense of depth is one
+  // bearing, and that bearing lives in world space, so rotating the camera would otherwise tip every
+  // solid over sideways. Every path that carries height is rebuilt from it, which is why this is
+  // state and not just a ref.
+  const [camRot, setCamRot] = useState(defaultRot)
+  // TWO bearings. The sun is fixed to the circuit, standardised against the pit complex so the light
+  // falls the same way on every track; it must NOT move with the camera, or shadows would sit still
+  // on screen while the world turned under them, which reads as the sun following the player. The
+  // view bearing is the camera's, and keeps every solid leaning up the screen however far it turns.
+  const lighting = useMemo(
+    () => ({ ...MOODS.afternoon, azimuth: pitViewAzimuth(layout) ?? MOODS.afternoon.azimuth }),
+    [layout],
+  )
+  const viewAz = screenUpAzimuth(camRot)
+  const ldir = useMemo(() => lightDir(lighting), [lighting])
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
@@ -442,6 +454,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Scenery LOD: below LOD_ZOOM the heavy layers drop out (state flips only on threshold crossings).
   const [lodLow, setLodLow] = useState(false)
   const lodLowRef = useRef(false)
+
+  // Rebuilding the world on a new bearing means regenerating every path that carries height, which is
+  // a full re-render of a few thousand nodes. Far too slow to do on each frame of a rotate, so the
+  // camera turns on its own (the transform is imperative and cheap) and the SOLIDS catch up once the
+  // gesture settles. The wheel has no end event, so it gets a short quiet period instead.
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settleRot = () => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
+    settleTimerRef.current = setTimeout(() => setCamRot(camRef.current.rot), ROT_SETTLE_MS)
+  }
+  useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current) }, [])
 
   const applyCam = () => {
     const world = worldRef.current
@@ -513,6 +536,27 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // it; the pit building runs behind the garages so no team works off a grass verge.
   const pitZone = useMemo(() => buildPitZone(layout, pitSlots), [layout, pitSlots])
 
+  // Gantry placement, kept off the layout pass because it changes with the CAMERA: the booms lift
+  // against the view bearing, their shadow falls along the sun, and only the first of those moves
+  // when the player rotates. Both live inside the slot's mirrored group, so each displacement is
+  // pre-flipped in y or it would land on the wrong side for half the grid.
+  useEffect(() => {
+    const vdir = dirAt(viewAz)
+    const lift = -(GANTRY_H_M * EXTRUDE) / layout.metresPerUnit
+    const cast = (GANTRY_H_M * shadowReach(lighting)) / layout.metresPerUnit
+    pitSlots.forEach((slot, si) => {
+      const flip = slotFlipRef.current[si] ?? 1
+      const local = (d: { x: number; y: number }) => ({
+        x: Math.cos(slot.rot) * d.x + Math.sin(slot.rot) * d.y,
+        y: -Math.sin(slot.rot) * d.x + Math.cos(slot.rot) * d.y,
+      })
+      const v = local(vdir)
+      const l = local(ldir)
+      gantryRefs.current.get(si)?.setAttribute('transform', `translate(${v.x * lift} ${v.y * lift * flip})`)
+      gantryShRefs.current.get(si)?.setAttribute('transform', `translate(${l.x * cast} ${l.y * cast * flip})`)
+    })
+  }, [pitSlots, layout.metresPerUnit, viewAz, ldir, lighting])
+
   const slotOf = useMemo(() => {
     // Garage order: previous standings best-first (P1 gets the first box), alphabetical fallback for
     // anything unranked. NEVER derived from the live car list order — that reshuffles mid-race.
@@ -582,6 +626,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         const { x, y } = cam
         cam.x = x * cos - y * sin
         cam.y = x * sin + y * cos
+        settleRot()
       } else {
         const stageEl = stageRef.current
         if (!stageEl) return
@@ -642,8 +687,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     applyCam()
   }
   const onPointerUp = () => {
-    suppressClickRef.current = !!dragRef.current?.moved
+    const drag = dragRef.current
+    suppressClickRef.current = !!drag?.moved
     dragRef.current = null
+    // A rotate gesture ends here, which is when the scene is rebuilt on the new bearing.
+    if (drag?.moved && drag.mode === 'rotate') settleRot()
   }
 
   const clickCar = (id: string) => {
@@ -671,6 +719,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     camRef.current = view === 'map'
       ? { x: 0, y: 0, z: 1, rot: 0 }
       : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
+    setCamRot(camRef.current.rot)
     applyCam()
   }, [view, defaultRot])  
 
@@ -733,17 +782,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const yLocal = -Math.sin(slot.rot) * (lane.x - slot.x) + Math.cos(slot.rot) * (lane.y - slot.y)
             const flip = yLocal > 0 ? -1 : 1
             slotInnerRefs.current.get(si)?.setAttribute('transform', `scale(1 ${flip})`)
-            // The gantry's shadow lives inside that flipped group, so its own displacement has to be
-            // pre-flipped in y or it would fall up-light on half the grid. Rotating the world light
-            // into the slot's frame is the same trick the scenery uses for a rotated building.
-            const gl = (GANTRY_H_M * shadowReach(lighting)) / layout.metresPerUnit
-            const gx = Math.cos(slot.rot) * ldir.x + Math.sin(slot.rot) * ldir.y
-            const gy = -Math.sin(slot.rot) * ldir.x + Math.cos(slot.rot) * ldir.y
-            gantryShRefs.current.get(si)?.setAttribute('transform', `translate(${gx * gl} ${gy * gl * flip})`)
-            // And the booms themselves lift OFF the ground, up-light, or they read as painted on the
-            // box floor no matter how good their shadow is.
-            const gu = -(GANTRY_H_M * EXTRUDE) / layout.metresPerUnit
-            gantryRefs.current.get(si)?.setAttribute('transform', `translate(${gx * gu} ${gy * gu * flip})`)
+            slotFlipRef.current[si] = flip
             return bestS
           })
         }
@@ -1290,16 +1329,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     [scenery, layout.metresPerUnit, lighting, lodLow],
   )
   const shadowNode = useMemo(
-    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, lodLow],
+    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, lodLow],
   )
   const solidsNode = useMemo(
-    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, lodLow],
+    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, lodLow],
   )
   const furnitureNode = useMemo(
-    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, lodLow],
+    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, lodLow],
   )
 
   return (
@@ -1335,8 +1374,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 track-side line, entry/exit guide lines reaching onto the track, the white–blue–white
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
             {pitZone && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
-            {pitZone && <PitBuilding zone={pitZone} u={u} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
-            {pitZone && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} drivers={(gi) => garageCars[gi] ?? []} />}
+            {pitZone && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
+            {pitZone && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
             {pitZone && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />

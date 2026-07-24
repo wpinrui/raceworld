@@ -86,9 +86,9 @@ for (const id of ids) {
         d: k.d, fill: 'none', stroke: '#C8352F', strokeWidth: u(1.3), strokeDasharray: `${u(3)} ${u(3)}`,
       })),
     ]),
-    renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, detail })),
-    renderToStaticMarkup(createElement(ScenerySolidsLayer, { scenery, u, lighting, detail })),
-    renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, lighting, detail })),
+    renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
+    renderToStaticMarkup(createElement(ScenerySolidsLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
+    renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
     ...(() => {
       // The pit complex, drawn from the same pure geometry the map uses, so this preview checks it
       // rather than checking the scenery alone.
@@ -102,9 +102,9 @@ for (const id of ids) {
         renderToStaticMarkup(createElement('path', { d: zone.work, fill: '#33383E' })),
         renderToStaticMarkup(createElement(PitGarageFloors, { zone, lighting })),
         renderToStaticMarkup(createElement(PitBuildingShadow, { zone, u, lighting })),
-        renderToStaticMarkup(createElement(PitBuilding, { zone, u, lighting })),
+        renderToStaticMarkup(createElement(PitBuilding, { zone, u, lighting, view: az ?? mood.azimuth })),
         renderToStaticMarkup(createElement(PitGarageSigns, {
-          zone, u, lighting,
+          zone, u, lighting, view: az ?? mood.azimuth,
           drivers: () => [
             { name: 'Kimi Raikkonen', nationality: 'FI' },
             { name: 'Felipe Massa', nationality: 'BR' },

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from './pit-zone'
+import { screenUpAzimuth } from './lighting'
 
 const IDS = Object.keys(TRACK_LAYOUTS)
 
@@ -122,6 +123,34 @@ describe('pitCameraRotation', () => {
       const sx = ((nx / len) * c - (ny / len) * sn)
       expect(sy, `${id}: garages are not at the top`).toBeCloseTo(-1, 6)
       expect(sx, `${id}: pit lane is not horizontal`).toBeCloseTo(0, 6)
+    }
+  })
+})
+
+describe('screenUpAzimuth', () => {
+  it('is its own inverse, which is what ties the camera to the bearing', () => {
+    for (const r of [-3, -1.1, 0, 0.4, 2.7]) expect(screenUpAzimuth(screenUpAzimuth(r))).toBeCloseTo(r, 12)
+  })
+
+  it('reproduces the pit-standardised bearing at the default camera rotation', () => {
+    // The map derives its bearing from wherever the camera is; opening at `pitCameraRotation` has to
+    // land exactly on `pitViewAzimuth`, or the default view would not be the standardised one.
+    for (const id of IDS) {
+      const layout = TRACK_LAYOUTS[id]
+      expect(screenUpAzimuth(pitCameraRotation(layout)!), id).toBeCloseTo(pitViewAzimuth(layout)!, 12)
+    }
+  })
+
+  it('leans solids up the screen at any rotation', () => {
+    for (const rot of [-2.4, -0.7, 0, 0.9, 1.6, 3.0]) {
+      const az = screenUpAzimuth(rot)
+      // World bearing, then through the camera's own rotation, must come out pointing down-screen —
+      // solids displace by MINUS this, so down here means leaning up there.
+      const d = { x: Math.cos(az), y: Math.sin(az) }
+      const sx = d.x * Math.cos(rot) - d.y * Math.sin(rot)
+      const sy = d.x * Math.sin(rot) + d.y * Math.cos(rot)
+      expect(sx).toBeCloseTo(0, 12)
+      expect(sy).toBeCloseTo(1, 12)
     }
   })
 })
