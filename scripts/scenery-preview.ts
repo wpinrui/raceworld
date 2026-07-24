@@ -13,6 +13,8 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { TARMAC_WIDTH_M, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
+import { PitBuilding, PitBuildingDefs, PitBuildingShadow } from '../src/components/race/PitBuilding'
+import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
 
 
@@ -23,6 +25,10 @@ const terrainDetail = argv.includes('--terrain')
 const detail = low ? 'low' : 'full'
 const moodArg = (argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon') as Mood
 const lighting = MOODS[moodArg] ?? MOODS.afternoon
+// Crop to a fraction of the viewBox around a normalised centre, so detail that only exists at
+// racing zoom (glazing, kerb faces, tyre stacks) can actually be judged from a still.
+const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
+const [cxf, cyf] = (argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5').split(',').map(Number)
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
 
@@ -48,7 +54,13 @@ for (const id of ids) {
 
   const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
   const m = TRACK_WIDTH_M / mpu / 2 + 8
-  const vb = { x: vx - m, y: vy - m, w: vw + 2 * m, h: vh + 2 * m }
+  const full = { x: vx - m, y: vy - m, w: vw + 2 * m, h: vh + 2 * m }
+  const vb = zoom > 1
+    ? {
+      x: full.x + full.w * cxf - full.w / zoom / 2, y: full.y + full.h * cyf - full.h / zoom / 2,
+      w: full.w / zoom, h: full.h / zoom,
+    }
+    : full
 
   const body = [
     renderToStaticMarkup(createElement('rect', {
@@ -72,10 +84,26 @@ for (const id of ids) {
     renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, detail })),
     renderToStaticMarkup(createElement(ScenerySolidsLayer, { scenery, u, lighting, detail })),
     renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, lighting, detail })),
+    ...(() => {
+      // The pit complex, drawn from the same pure geometry the map uses, so this preview checks it
+      // rather than checking the scenery alone.
+      const zone = buildPitZone(layout, buildPitSlots(layout, 10))
+      if (!zone) return []
+      return [
+        renderToStaticMarkup(createElement('path', {
+          d: layout.pit.fastD, fill: 'none', stroke: '#33383E', strokeWidth: u(4.2),
+          strokeLinejoin: 'round', strokeLinecap: 'round',
+        })),
+        renderToStaticMarkup(createElement('path', { d: zone.work, fill: '#33383E' })),
+        renderToStaticMarkup(createElement('defs', {}, createElement(PitBuildingDefs, { u }))),
+        renderToStaticMarkup(createElement(PitBuildingShadow, { zone, u, lighting })),
+        renderToStaticMarkup(createElement(PitBuilding, { zone, u, lighting })),
+      ]
+    })(),
   ].join('\n')
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${Math.round(vb.w * 2)}" height="${Math.round(vb.h * 2)}">${body}</svg>`
-  const tag = `${id}${low ? '-low' : ''}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${Math.round(vb.w * 2 * Math.min(zoom, 14))}" height="${Math.round(vb.h * 2 * Math.min(zoom, 14))}">${body}</svg>`
+  const tag = `${id}${low ? '-low' : ''}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}${zoom > 1 ? `-z${zoom}` : ''}`
   writeFileSync(`${OUT}/${tag}.svg`, svg)
   // Counted off the rendered markup, not estimated: an estimate drifts from the renderer the moment
   // the renderer changes, and a wrong performance number is worse than none.

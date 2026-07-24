@@ -4,8 +4,12 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from './SceneryLayer'
-import { MOODS } from '@/lib/ui/lighting'
+import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE } from './SceneryLayer'
+import {
+  MOODS, lightDir, shadowFill, shadowOpacity, shadowReach,
+} from '@/lib/ui/lighting'
+import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
+import { PitBuilding, PitBuildingDefs, PitBuildingShadow } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import { shade } from '@/lib/color'
 import type { TyreCompound } from '@/lib/sim/types'
@@ -44,6 +48,11 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 // the hairpin floor, lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and
 // traction/braking limits that smear speed changes over real distance.
 const PROFILE_N = 256
+/** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
+ *  the lift off the box floor and the shadow they throw are short. */
+const GANTRY_H_M = 2.2
+/** Boom length. Shared with its shadow, which has to stay exactly the same shape. */
+const GANTRY_REACH_M = 3.5
 const V_TOP_M = 87
 const V_FLOOR_M = 10
 const A_LAT_M = 14
@@ -384,7 +393,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const slotDistsRef = useRef<number[]>([]) // arc position of each pit box along the lane path
   const crewRefs = useRef(new Map<number, SVGGElement>()) // per-slot pit crew overlays (root visibility)
   const crewPartsRef = useRef(new Map<string, SVGGElement>()) // `slot:role` -> member/prop group
+  const lighting = MOODS.afternoon
+  const ldir = useMemo(() => lightDir(lighting), [lighting])
   const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
+  const gantryShRefs = useRef(new Map<number, SVGGElement>()) // gantry shadow, offset against that flip
+  const gantryRefs = useRef(new Map<number, SVGGElement>()) // gantry booms, lifted off the box floor
   const crewAnimRef = useRef(new Map<number, {
     mode: 'hidden' | 'active' | 'retreat'
     pos: Record<string, [number, number]>
@@ -458,32 +471,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // One pit box per team on this grid, spaced ~2.5 car lengths and INTERPOLATED along the lane
   // (station-rounding collapsed neighbouring boxes onto one point on coarse lanes).
   const teamCount = useMemo(() => Math.max(1, new Set(cars.map((c) => c.team ?? c.id)).size), [cars])
-  const pitSlots = useMemo(() => {
-    const st = layout.pit.slotStations
-    if (st.length < 2) return []
-    const cum = [0]
-    for (let k = 1; k < st.length; k++) cum.push(cum[k - 1] + Math.hypot(st[k].x - st[k - 1].x, st[k].y - st[k - 1].y))
-    const arc = cum[cum.length - 1]
-    const count = teamCount
-    // Spread into the available room: 70% of the band per team, floored at the old tight
-    // 14m pitch, capped at 26m so huge straights don't scatter the row.
-    const mpu2 = layout.metresPerUnit
-    const spacing = Math.min(arc / count, Math.max(14 / mpu2, Math.min(26 / mpu2, (0.7 * arc) / count)))
-    const off16 = 1.6 / layout.metresPerUnit
-    return Array.from({ length: count }, (_, i) => {
-      const target = arc / 2 + (i - (count - 1) / 2) * spacing
-      let k = 0
-      while (k < st.length - 2 && cum[k + 1] < target) k++
-      const f = Math.max(0, Math.min(1, (target - cum[k]) / (cum[k + 1] - cum[k] || 1)))
-      const x = st[k].x + (st[k + 1].x - st[k].x) * f
-      const y = st[k].y + (st[k + 1].y - st[k].y) * f
-      const nx = st[k].nx + (st[k + 1].nx - st[k].nx) * f
-      const ny = st[k].ny + (st[k + 1].ny - st[k].ny) * f
-      const nl = Math.hypot(nx, ny) || 1
-      const rot = st[k].rot + (st[k + 1].rot - st[k].rot) * f
-      return { x: x + (nx / nl) * off16, y: y + (ny / nl) * off16, nx: nx / nl, ny: ny / nl, rot }
-    })
-  }, [layout, teamCount])
+  const pitSlots = useMemo(() => buildPitSlots(layout, teamCount), [layout, teamCount])
 
   // Starting grid: one box per car, staggered EXACTLY like the launch frames (8m pitch,
   // centres 3+(n-1)*8 m behind the S/F, +-1.7m with lat positive = driver's right). Marks are
@@ -515,199 +503,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
   // Zone furniture: the working-lane stripe exists ONLY along the box cluster; limiter lines bound
   // it; the pit building runs behind the garages so no team works off a grass verge.
-  const pitZone = useMemo(() => {
-    const st0 = layout.pit.slotStations
-    if (st0.length < 2 || pitSlots.length === 0) return null
-    // Sample the SAME quad-midpoint curve the ribbons are stroked from — chord positions sit
-    // up to ~0.5m off the drawn tarmac on curved lanes, which left zone furniture (limiters
-    // especially) gapping one boundary and overshooting the other.
-    const raw: Array<[number, number]> = [[st0[0].x, st0[0].y], [(st0[0].x + st0[1].x) / 2, (st0[0].y + st0[1].y) / 2]]
-    for (let k = 1; k < st0.length - 1; k++) {
-      const ax = (st0[k - 1].x + st0[k].x) / 2
-      const ay = (st0[k - 1].y + st0[k].y) / 2
-      const bx = (st0[k].x + st0[k + 1].x) / 2
-      const by = (st0[k].y + st0[k + 1].y) / 2
-      for (let q = 1; q <= 4; q++) {
-        const t = q / 4
-        const s2 = 1 - t
-        raw.push([s2 * s2 * ax + 2 * s2 * t * st0[k].x + t * t * bx, s2 * s2 * ay + 2 * s2 * t * st0[k].y + t * t * by])
-      }
-    }
-    raw.push([st0[st0.length - 1].x, st0[st0.length - 1].y])
-    const st = raw.map(([x, y], i) => {
-      const a = raw[Math.max(0, i - 1)]
-      const b = raw[Math.min(raw.length - 1, i + 1)]
-      const dl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
-      let nx = -(b[1] - a[1]) / dl
-      let ny = (b[0] - a[0]) / dl
-      const ref = st0[Math.min(st0.length - 1, Math.round((i / (raw.length - 1)) * (st0.length - 1)))]
-      if (nx * ref.nx + ny * ref.ny < 0) {
-        nx = -nx
-        ny = -ny
-      }
-      return { x, y, nx, ny }
-    })
-    const u1 = (m: number) => m / layout.metresPerUnit
-    const cum = [0]
-    for (let k = 1; k < st.length; k++) cum.push(cum[k - 1] + Math.hypot(st[k].x - st[k - 1].x, st[k].y - st[k - 1].y))
-    const arc = cum[cum.length - 1]
-    // Zone bounds from the ACTUAL rendered box row (projected onto this polyline) — a
-    // parallel spacing formula drifted from the boxes on curved lanes, leaving end boxes
-    // outside the working lane.
-    const projArc = (q: { x: number; y: number }) => {
-      let best = 0
-      let bd = Infinity
-      for (let i = 0; i < st.length; i++) {
-        const dx = st[i].x - q.x
-        const dy = st[i].y - q.y
-        if (dx * dx + dy * dy < bd) {
-          bd = dx * dx + dy * dy
-          best = i
-        }
-      }
-      return cum[best]
-    }
-    const pA = projArc(pitSlots[0])
-    const pB = projArc(pitSlots[pitSlots.length - 1])
-    const rowLo = Math.min(pA, pB)
-    const rowHi = Math.max(pA, pB)
-    const a0 = Math.max(0, rowLo - u1(11.5))
-    const a1 = Math.min(arc, rowHi + u1(11.5))
-    const ptAt = (target: number, lat: number): { x: number; y: number } => {
-      let k = 0
-      while (k < st.length - 2 && cum[k + 1] < target) k++
-      const f = Math.max(0, Math.min(1, (target - cum[k]) / (cum[k + 1] - cum[k] || 1)))
-      const x = st[k].x + (st[k + 1].x - st[k].x) * f
-      const y = st[k].y + (st[k + 1].y - st[k].y) * f
-      const nx = st[k].nx + (st[k + 1].nx - st[k].nx) * f
-      const ny = st[k].ny + (st[k + 1].ny - st[k].ny) * f
-      const nl = Math.hypot(nx, ny) || 1
-      return { x: x + (nx / nl) * lat, y: y + (ny / nl) * lat }
-    }
-    const line = (lat: number, from: number, to: number, steps = 24) => {
-      const pts = Array.from({ length: steps + 1 }, (_, i) => ptAt(from + ((to - from) * i) / steps, lat))
-      return `M ${pts.map((q) => `${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(' L ')}`
-    }
-    // Limiters anchored by PROJECTION onto the drawn fast ribbon: the zone polyline keeps its
-    // end vertices exact while the drawn curve is smoothing-pulled there (~L^2/8R), which
-    // shifted the lines ~0.3m laterally on curved lanes. Projection is exact by construction:
-    // centre ON the ribbon, endpoints symmetric +-1.95m along its true perpendicular.
-    const fastPts: Array<[number, number]> = (() => {
-      const tokens = layout.pit.fastD.match(/[MLQ]|-?\d+(\.\d+)?/g) ?? []
-      const out: Array<[number, number]> = []
-      let i = 0
-      let cur: [number, number] = [0, 0]
-      while (i < tokens.length) {
-        const t = tokens[i]
-        if (t === 'M' || t === 'L') {
-          cur = [Number(tokens[i + 1]), Number(tokens[i + 2])]
-          out.push(cur)
-          i += 3
-        } else if (t === 'Q') {
-          const c: [number, number] = [Number(tokens[i + 1]), Number(tokens[i + 2])]
-          const e: [number, number] = [Number(tokens[i + 3]), Number(tokens[i + 4])]
-          for (let q = 1; q <= 6; q++) {
-            const tt = q / 6
-            const ss = 1 - tt
-            out.push([ss * ss * cur[0] + 2 * ss * tt * c[0] + tt * tt * e[0], ss * ss * cur[1] + 2 * ss * tt * c[1] + tt * tt * e[1]])
-          }
-          cur = e
-          i += 5
-        } else i++
-      }
-      return out
-    })()
-    // Working-lane geometry, hoisted: the limiter's garage-side end must land on the work
-    // lane's drawn outer edge wherever its taper has already widened the road at the limiter's
-    // station (spanning only the fast lane leaves a gap there).
-    const WLAT_IN = -u1(1.0)
-    const WLAT_OUT = u1(4.7)
-    const w0 = Math.max(u1(2), a0 - u1(4))
-    const w1 = Math.min(arc - u1(2), a1 + u1(4))
-    const wt0 = Math.max(0, w0 - u1(35))
-    const wt1 = Math.min(arc, w1 + u1(35))
-    const workOuterLat = (sA: number) => {
-      if (sA < wt0 || sA > wt1) return WLAT_IN
-      let f = 1
-      if (sA < w0) f = (sA - wt0) / (w0 - wt0 || 1)
-      else if (sA > w1) f = (wt1 - sA) / (wt1 - w1 || 1)
-      const e = f * f * (3 - 2 * f)
-      return WLAT_IN + (WLAT_OUT - WLAT_IN) * e
-    }
-    const limiter = (target: number) => {
-      const c0 = ptAt(target, -u1(2.8))
-      let bi = 1
-      let bf = 0
-      let bd = Infinity
-      for (let i = 1; i < fastPts.length; i++) {
-        const ax = fastPts[i - 1][0]
-        const ay = fastPts[i - 1][1]
-        const dx = fastPts[i][0] - ax
-        const dy = fastPts[i][1] - ay
-        const L2 = dx * dx + dy * dy || 1
-        const f = Math.max(0, Math.min(1, ((c0.x - ax) * dx + (c0.y - ay) * dy) / L2))
-        const px = ax + dx * f
-        const py = ay + dy * f
-        const dd = (c0.x - px) * (c0.x - px) + (c0.y - py) * (c0.y - py)
-        if (dd < bd) {
-          bd = dd
-          bi = i
-          bf = f
-        }
-      }
-      const ax = fastPts[bi - 1][0]
-      const ay = fastPts[bi - 1][1]
-      const cx = ax + (fastPts[bi][0] - ax) * bf
-      const cy = ay + (fastPts[bi][1] - ay) * bf
-      const dl = Math.hypot(fastPts[bi][0] - ax, fastPts[bi][1] - ay) || 1
-      const nx = -(fastPts[bi][1] - ay) / dl
-      const ny = (fastPts[bi][0] - ax) / dl
-      const h = u1(2.1)
-      const gp = ptAt(target, u1(1.6))
-      const candA = { x: cx + nx * h, y: cy + ny * h }
-      const candB = { x: cx - nx * h, y: cy - ny * h }
-      const dA = (candA.x - gp.x) * (candA.x - gp.x) + (candA.y - gp.y) * (candA.y - gp.y)
-      const dB = (candB.x - gp.x) * (candB.x - gp.x) + (candB.y - gp.y) * (candB.y - gp.y)
-      const trackEnd = dA > dB ? candA : candB
-      const wl = workOuterLat(target)
-      const garageEnd = wl > WLAT_IN + u1(0.05) ? ptAt(target, wl) : dA > dB ? candB : candA
-      return `M ${trackEnd.x.toFixed(2)} ${trackEnd.y.toFixed(2)} L ${garageEnd.x.toFixed(2)} ${garageEnd.y.toFixed(2)}`
-    }
-
-    // Articulated footprint, not a slab: a pilaster at every garage boundary overhanging the
-    // lane face, and a deeper centre block on the back face.
-    const V: Array<{ s: number; lat: number }> = []
-    const bay = (a1 - a0) / Math.max(1, pitSlots.length)
-    V.push({ s: a0, lat: 4.95 })
-    for (let i = 0; i <= pitSlots.length; i++) {
-      const sB = a0 + i * bay
-      const p0 = Math.max(a0, sB - u1(0.7))
-      const p1 = Math.min(a1, sB + u1(0.7))
-      V.push({ s: p0, lat: 4.95 }, { s: p0, lat: 4.45 }, { s: p1, lat: 4.45 }, { s: p1, lat: 4.95 })
-    }
-    V.push({ s: a1, lat: 4.95 }, { s: a1, lat: 11.0 })
-    const c0 = a0 + (a1 - a0) * 0.35
-    const c1 = a0 + (a1 - a0) * 0.65
-    V.push({ s: c1, lat: 11.0 }, { s: c1, lat: 13.2 }, { s: c0, lat: 13.2 }, { s: c0, lat: 11.0 }, { s: a0, lat: 11.0 })
-    const building = `M ${V.map(({ s: vs, lat }) => { const q = ptAt(vs, u1(lat)); return `${q.x.toFixed(1)} ${q.y.toFixed(1)}` }).join(' L ')} Z`
-    return {
-      work: (() => {
-        const N = 36
-        const ring: Array<{ x: number; y: number }> = []
-        for (let i = 0; i <= N; i++) {
-          const sA = wt0 + ((wt1 - wt0) * i) / N
-          ring.push(ptAt(sA, workOuterLat(sA)))
-        }
-        for (let i = N; i >= 0; i--) ring.push(ptAt(wt0 + ((wt1 - wt0) * i) / N, WLAT_IN))
-        return `M ${ring.map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`
-      })(),
-      sep: line(-u1(1.3), a0, a1),
-      limiterIn: limiter(0),
-      limiterOut: limiter(arc),
-      building,
-      ridge: line(u1(8.0), a0, a1, 12),
-    }
-  }, [layout, pitSlots])
+  const pitZone = useMemo(() => buildPitZone(layout, pitSlots), [layout, pitSlots])
 
   const slotOf = useMemo(() => {
     // Garage order: previous standings best-first (P1 gets the first box), alphabetical fallback for
@@ -918,6 +714,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const yLocal = -Math.sin(slot.rot) * (lane.x - slot.x) + Math.cos(slot.rot) * (lane.y - slot.y)
             const flip = yLocal > 0 ? -1 : 1
             slotInnerRefs.current.get(si)?.setAttribute('transform', `scale(1 ${flip})`)
+            // The gantry's shadow lives inside that flipped group, so its own displacement has to be
+            // pre-flipped in y or it would fall up-light on half the grid. Rotating the world light
+            // into the slot's frame is the same trick the scenery uses for a rotated building.
+            const gl = (GANTRY_H_M * shadowReach(lighting)) / layout.metresPerUnit
+            const gx = Math.cos(slot.rot) * ldir.x + Math.sin(slot.rot) * ldir.y
+            const gy = -Math.sin(slot.rot) * ldir.x + Math.cos(slot.rot) * ldir.y
+            gantryShRefs.current.get(si)?.setAttribute('transform', `translate(${gx * gl} ${gy * gl * flip})`)
+            // And the booms themselves lift OFF the ground, up-light, or they read as painted on the
+            // box floor no matter how good their shadow is.
+            const gu = -(GANTRY_H_M * EXTRUDE) / layout.metresPerUnit
+            gantryRefs.current.get(si)?.setAttribute('transform', `translate(${gx * gu} ${gy * gu * flip})`)
             return bestS
           })
         }
@@ -1426,7 +1233,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign])
+  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign, ldir, lighting])
 
   // S/F line: a chequered band (3 rows of 0.5m squares) spanning EXACTLY the tarmac width.
   const sf = useMemo(() => {
@@ -1459,7 +1266,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
   // One fake sun for the whole map. A low afternoon light is the dry-race default; moods become
   // data here later (weather, night) rather than separate rendering paths.
-  const lighting = MOODS.afternoon
   const sceneryNode = useMemo(
     () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
     [scenery, layout.metresPerUnit, lighting, lodLow],
@@ -1505,9 +1311,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {pitZone && <path d={pitZone.work} fill="#33383E" />}
             {/* Pit lane: an asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
             <defs>
-              <pattern id="tm-hatch" width={u(2.2)} height={u(2.2)} patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
-                <rect width={u(0.7)} height={u(2.2)} fill="#E6E3DC" opacity={0.45} />
+              <pattern id="tm-hatch" width={u(2.6)} height={u(2.6)} patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+                <rect width={u(0.3)} height={u(2.6)} fill="#E6E3DC" opacity={0.3} />
               </pattern>
+              <PitBuildingDefs u={u} />
             </defs>
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
             {layout.pit.hatches.map((d, i) => (
@@ -1516,12 +1323,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's
                 track-side line, entry/exit guide lines reaching onto the track, the white–blue–white
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
-            {pitZone && (
-              <g>
-                <path d={pitZone.building} fill="#262B33" stroke="#1B1F26" strokeWidth={u(0.3)} strokeLinejoin="round" />
-                <path d={pitZone.ridge} fill="none" stroke="#303641" strokeWidth={u(0.5)} />
-              </g>
-            )}
+            {pitZone && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
+            {pitZone && <PitBuilding zone={pitZone} u={u} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {pitZone && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
@@ -1559,14 +1362,27 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                     fill="none" stroke="#E8C33A" strokeWidth={u(0.14)} strokeLinecap="round"
                   />
                 ))}
+                {/* The booms sit four metres up over the box, so they throw the one shadow a pit stop
+                    is actually watched under. Placed by the layout pass, which is the only thing that
+                    knows which way this slot is flipped. */}
+                <g
+                  ref={(el) => { if (el) gantryShRefs.current.set(i, el); else gantryShRefs.current.delete(i) }}
+                  fill={shadowFill(lighting)} opacity={shadowOpacity(lighting)}
+                >
+                  {([1.5, -1.5] as const).map((bx) => (
+                    <rect key={bx} x={u(bx) - u(0.16)} y={-u(1.35)} width={u(0.32)} height={u(GANTRY_REACH_M)} rx={u(0.14)} />
+                  ))}
+                </g>
                 {/* Overhead gantry: two booms from the garage out over the box — black, team accents. */}
+                <g ref={(el) => { if (el) gantryRefs.current.set(i, el); else gantryRefs.current.delete(i) }}>
                 {([1.5, -1.5] as const).map((bx) => (
                   <g key={bx}>
-                    <rect x={u(bx) - u(0.16)} y={-u(1.35)} width={u(0.32)} height={u(3.5)} rx={u(0.14)} fill="#14171C" />
+                    <rect x={u(bx) - u(0.16)} y={-u(1.35)} width={u(0.32)} height={u(GANTRY_REACH_M)} rx={u(0.14)} fill="#14171C" />
                     <rect x={u(bx) - u(0.16)} y={u(1.6)} width={u(0.32)} height={u(0.55)} rx={u(0.1)} fill={slotOf.colors[i] ?? '#9AA3B2'} />
                     <rect x={u(bx) - u(0.24)} y={-u(1.45)} width={u(0.48)} height={u(0.22)} rx={u(0.1)} fill="#20242B" />
                   </g>
                 ))}
+                </g>
                 {/* Crew: static parts registered by role; the rAF choreography drives every
                     transform (deploy from the garage, jacks on stop, tyre swaps, retreat). */}
                 <g

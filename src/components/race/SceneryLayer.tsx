@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
 import {
-  mapPathPoints, partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull,
+  mapPathPoints, partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull, wallWindows,
 } from '@/lib/ui/extrude'
 import {
   lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
@@ -18,8 +18,10 @@ import {
 
 /** Metres of apparent height per storey. Diorama scale: tall enough that height is unmistakable. */
 const STOREY_M = 4.6
+/** Structural bay: how wide one window-and-pier module is on a wall. */
+const WINDOW_BAY_M = 5.4
 /** Wall depth as a fraction of height — how much of the side face the oblique view reveals. */
-const EXTRUDE = 0.62
+export const EXTRUDE = 0.62
 /** A grandstand's front (trackside) and rear heights in metres. Real seating banks rake up away
  *  from the circuit; extruding one uniformly made them read as tall slabs beside the track.
  *
@@ -76,6 +78,12 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
           <circle cx={u(2.2)} cy={u(1.7)} r={u(0.3)} fill="#00D9FF" opacity={0.45} />
           <circle cx={u(1.3)} cy={u(2.6)} r={u(0.3)} fill="#E8B923" opacity={0.45} />
           <circle cx={u(2.7)} cy={u(0.5)} r={u(0.3)} fill="#FFFFFF" opacity={0.4} />
+        </pattern>
+        {/* Roof decking. A big roof plane is the largest flat area on the map and the one thing that
+            still read as paper; seams give it a material without adding an object to the scene. */}
+        <pattern id="tm-roof" width={u(3.6)} height={u(3.6)} patternUnits="userSpaceOnUse">
+          <rect width={u(0.35)} height={u(3.6)} fill="#000000" opacity={0.055} />
+          <rect x={u(0.35)} width={u(0.3)} height={u(3.6)} fill="#FFFFFF" opacity={0.04} />
         </pattern>
         <pattern id="tm-water" width={u(9)} height={u(6)} patternUnits="userSpaceOnUse">
           <path
@@ -252,13 +260,19 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
         const t = u(heightM(r) * EXTRUDE)
         const o = toLocal(dir.x * t, dir.y * t, r.rot)
         const parts = partsOf(r)
+        const hull = sweptHull(parts, o.x, o.y)
         return (
           <g key={`wl${i}`} transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}>
             {/* The whole solid's silhouette, outlined once. */}
-            <path d={sweptHull(parts, o.x, o.y)} fill={shadeFace(r.fill, lighting)} />
+            <path d={hull} fill={shadeFace(r.fill, lighting)} />
             {/* The left/right height faces, a shade apart from the top/bottom ones so the two
                 visible planes of the box are distinguishable. */}
             <path d={sideFacesX(parts, o.x, o.y)} fill={tintFace(r.fill, lighting, -0.45)} />
+            {/* Glazing, gridded in each wall's own plane. */}
+            <path
+              d={wallWindows(parts, o.x, o.y, u(WINDOW_BAY_M), Math.max(1, Math.round(heightM(r) / STOREY_M)))}
+              fill="#0E1319" opacity={0.42}
+            />
           </g>
         )
       })}
@@ -292,18 +306,13 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
         return (
           <g key={`b${i}`} transform={`translate(${b.x} ${b.y}) rotate(${deg(b.rot)})`}>
             <path d={d} fill={b.fill} />
-            {/* One bevel over the whole silhouette, clipped to the union. Drawing it per part gave
-                every sub-rect its own full light-to-dark ramp, seaming at each internal edge. */}
-            {full && (
-              <>
-                <clipPath id={`tm-bc${i}`}>
-                  <path d={d} />
-                </clipPath>
-                <g clipPath={`url(#tm-bc${i})`}>
-                  <rect x={-b.w / 2} y={-b.h / 2} width={b.w} height={b.h} fill="url(#tm-bevel)" />
-                </g>
-              </>
-            )}
+            {/* One bevel over the whole silhouette. Filling the union path directly rather than
+                clipping a rect to it drops three nodes per building for the same picture: an
+                objectBoundingBox gradient already resolves against the path's own extent. Drawing it
+                per PART is what has to be avoided — that gave every sub-rect its own full
+                light-to-dark ramp, seaming at each internal edge. */}
+            {full && <path d={d} fill="url(#tm-roof)" />}
+            {full && <path d={d} fill="url(#tm-bevel)" />}
           </g>
         )
       })}

@@ -2,6 +2,9 @@
 // No kinks (max consecutive-point jump), sane lateral release line, endpoints reported.
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { TRACK as monaco } from '../src/data/tracks/monaco'
+import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
+import { makePolylineIndex } from '../src/lib/ui/geom'
+import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 
 // Layouts whose working section is deliberately NOT straightened.
 const STRAIGHTENED = new Set(
@@ -71,4 +74,20 @@ for (const [id, layout] of Object.entries(TRACK_LAYOUTS)) {
   console.log(`${id}: maxJump ${row}`)
   console.log(`   straightDev slots=${devSt.toFixed(2)}m${straightened ? '' : ' (not straightened)'}${devFlag}`)
 }
+// The pit complex is deep enough to matter on a tight circuit: it must stay clear of the racing
+// surface it sits beside, on every layout, not just the roomy ones.
+let tightest = { id: '', m: Infinity }
+for (const [id, layout] of Object.entries(TRACK_LAYOUTS)) {
+  const zone = buildPitZone(layout, buildPitSlots(layout, 10))
+  if (!zone) continue
+  const idx = makePolylineIndex(ptsOf(layout.d).map(([x, y]) => ({ x, y })), 40 / layout.metresPerUnit)
+  let near = Infinity
+  for (const p of [...zone.buildingPts, ...zone.upperPts]) near = Math.min(near, idx.dist(p))
+  const clear = (near - TRACK_WIDTH_M / 2 / layout.metresPerUnit) * layout.metresPerUnit
+  if (clear < tightest.m) tightest = { id, m: clear }
+  // Reported, not failed: these clearances are identical with the building at any depth, so what
+  // they measure is the authored front face sitting close to the pit straight. Pre-existing.
+  if (clear < 0) console.log(`${id}: pit building ${(-clear).toFixed(1)}m inside the track edge`)
+}
+console.log(`tightest pit-building clearance: ${tightest.id} ${tightest.m.toFixed(1)}m`)
 console.log(bad === 0 ? 'ALL GEOMETRY CHECKS PASS' : `${bad} PROBLEMS FLAGGED`)

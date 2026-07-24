@@ -3,8 +3,10 @@
 // second staggered copy of the roof, and every diagonal edge coming out as a staircase.
 
 import { describe, it, expect } from 'vitest'
+import { buildingParts } from './scenery-shapes'
 import {
-  partsPath, quad, ringArea, sweptHull, sideFacesX, rakedStand, ribbon, posts, mapPathPoints,
+  partsPath, quad, ringArea, ringPath, sweptRing, sweptHull, sideFacesX, rakedStand, ribbon,
+  posts, mapPathPoints, obliqueRingFaces, wallWindows,
   type Part, type Vec,
 } from './extrude'
 
@@ -236,3 +238,150 @@ describe('mapPathPoints', () => {
     expect(() => mapPathPoints('M 0 0 h 10 Z', (x, y) => ({ x, y }))).toThrow(/unsupported/)
   })
 })
+
+describe('ringPath / sweptRing', () => {
+  // A square, wound the OPPOSITE way to the `partsPath` convention, to prove normalisation.
+  const sq: Vec[] = [{ x: 0, y: 0 }, { x: 0, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 0 }]
+  // Concave: a square with a notch bitten out of its -y edge.
+  const notched: Vec[] = [
+    { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 6, y: 4 },
+    { x: 6, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 },
+  ]
+
+  it('normalises winding to the partsPath convention, so nonzero fill unions', () => {
+    expect(ringArea(parseRing(ringPath(sq)))).toBeLessThanOrEqual(0)
+    expect(ringArea(parseRing(ringPath([...sq].reverse())))).toBeLessThanOrEqual(0)
+  })
+
+  it('emits every subpath in that same winding, or the walls punch holes in the roof', () => {
+    for (const ring of parseAll(sweptRing(notched, 6, 6))) {
+      expect(ringArea(ring)).toBeLessThanOrEqual(0)
+    }
+  })
+
+  it('degenerates to the flat ring when there is no offset', () => {
+    expect(sweptRing(sq, 0, 0)).toBe(ringPath(sq))
+    expect(sweptRing([{ x: 0, y: 0 }, { x: 1, y: 1 }], 3, 3)).toBe('')
+  })
+
+  it('skips back-facing edges — on a concave ring their quads escape through the wall', () => {
+    // The notch's two side walls face opposite ways in x, so exactly one can face any sweep.
+    const right = parseAll(sweptRing(notched, 6, 6)).length
+    const left = parseAll(sweptRing(notched, -6, 6)).length
+    expect(right).toBeGreaterThan(2) // roof + base + at least one face
+    expect(left).toBeGreaterThan(2)
+    // Every emitted face must genuinely face the sweep.
+    const r = parseRing(ringPath(notched))
+    for (let i = 0; i < r.length; i++) {
+      const p = r[i]
+      const q = r[(i + 1) % r.length]
+      const faces = (q.y - p.y) * 6 - (q.x - p.x) * 6 > 0
+      const has = sweptRing(notched, 6, 6).includes(`${p.x.toFixed(2)} ${p.y.toFixed(2)} L ${q.x.toFixed(2)} ${q.y.toFixed(2)}`)
+        || sweptRing(notched, 6, 6).includes(`${q.x.toFixed(2)} ${q.y.toFixed(2)} L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
+      if (!faces) continue
+      expect(has, `edge ${i} faces the sweep but no quad was emitted`).toBe(true)
+    }
+  })
+
+  it('spans from the top ring to the base ring', () => {
+    const d = sweptRing(sq, 5, 7)
+    const ys = parseAll(d).flat().map((p) => p.y)
+    expect(Math.min(...ys)).toBeCloseTo(0, 6)
+    expect(Math.max(...ys)).toBeCloseTo(17, 6)
+  })
+})
+
+/** Every subpath of a path built from absolute M/L/Z, as rings. */
+function parseAll(d: string): Vec[][] {
+  return d.split('M').filter((s) => s.trim()).map((s) => parseRing(`M${s}`))
+}
+
+function parseRing(d: string): Vec[] {
+  const n = d.replace(/[MLZ]/g, ' ').trim().split(/\s+/).map(Number)
+  const out: Vec[] = []
+  for (let i = 0; i + 1 < n.length; i += 2) out.push({ x: n[i], y: n[i + 1] })
+  return out
+}
+
+describe('obliqueRingFaces', () => {
+  const sq: Vec[] = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }]
+
+  it('picks out the faces angled away from the sweep, and only those', () => {
+    // Sweeping mostly down: the square's bottom edge is nearly square-on to it and its right edge is
+    // nearly edge-on, so exactly one of the two visible faces is oblique.
+    expect(parseAll(obliqueRingFaces(sq, 1, 9)).length).toBe(1)
+    // A cut below even that face's angle leaves nothing oblique at all.
+    expect(obliqueRingFaces(sq, 1, 9, 0.05)).toBe('')
+  })
+
+  it('splits a 45-degree sweep the same way every time, not on a floating-point coin toss', () => {
+    expect(obliqueRingFaces(sq, 5, 5)).toBe('')
+  })
+
+  it('is a strict subset of the faces sweptRing draws, so the overlay never spills', () => {
+    const hull = sweptRing(sq, 2, 7)
+    for (const ring of parseAll(obliqueRingFaces(sq, 2, 7))) {
+      const key = ring.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')
+      expect(hull).toContain(key)
+    }
+  })
+
+  it('emits nothing without a sweep', () => {
+    expect(obliqueRingFaces(sq, 0, 0)).toBe('')
+  })
+})
+
+describe('wallWindows', () => {
+  // The bug this pins was visible, not arithmetic: windows from two parts of one footprint overlapped
+  // in projection and unioned under `nonzero` into stepped chevrons and plus signs.
+  it('never overlaps two windows, for any archetype at any sweep', () => {
+    for (let type = 0; type < 10; type++) {
+      const parts = buildingParts(type, 44, 32)
+      for (const [ox, oy] of [[6, 6], [-6, 6], [6, -6], [-6, -6], [0, 7], [7, 0]]) {
+        const quads = parseAll(wallWindows(parts, ox, oy, 5, 2))
+        for (let i = 0; i < quads.length; i++) {
+          for (let j = i + 1; j < quads.length; j++) {
+            expect(overlaps(quads[i], quads[j]), `type ${type} sweep ${ox},${oy}: windows ${i}/${j} overlap`).toBe(false)
+          }
+        }
+      }
+    }
+  })
+
+  it('lays windows IN the wall plane, so every one is a translate of the same parallelogram', () => {
+    const quads = parseAll(wallWindows([{ dx: 0, dy: 0, w: 40, h: 40 }], 8, 3, 5, 2))
+    expect(quads.length).toBeGreaterThan(3)
+    // Two edge directions only (one per visible face), never the map's axes by accident.
+    const dirs = new Set(quads.map((q) => {
+      const a = Math.atan2(q[1].y - q[0].y, q[1].x - q[0].x)
+      return (Math.round((a * 180) / Math.PI) + 360) % 180
+    }))
+    expect(dirs.size).toBeLessThanOrEqual(2)
+  })
+
+  it('emits nothing when asked for no rows, no bay or no sweep', () => {
+    const parts = [{ dx: 0, dy: 0, w: 40, h: 40 }]
+    expect(wallWindows(parts, 8, 3, 5, 0)).toBe('')
+    expect(wallWindows(parts, 8, 3, 0, 2)).toBe('')
+    expect(wallWindows(parts, 0, 0, 5, 2)).toBe('')
+  })
+})
+
+/** Convex overlap by separating axis, with a tolerance so a shared edge does not count. */
+function overlaps(a: Vec[], b: Vec[]): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i]
+      const q = poly[(i + 1) % poly.length]
+      const nx = q.y - p.y
+      const ny = -(q.x - p.x)
+      const len = Math.hypot(nx, ny)
+      if (len < 1e-9) continue
+      const proj = (r: Vec[]) => r.map((v) => (v.x * nx + v.y * ny) / len)
+      const pa = proj(a)
+      const pb = proj(b)
+      if (Math.min(...pa) >= Math.max(...pb) - 1e-6 || Math.min(...pb) >= Math.max(...pa) - 1e-6) return false
+    }
+  }
+  return true
+}

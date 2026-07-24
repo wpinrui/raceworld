@@ -73,6 +73,197 @@ export function sweptHull(parts: Part[], ox: number, oy: number): string {
   return d
 }
 
+/** A closed ring as one subpath, wound to match `partsPath`. */
+export function ringPath(pts: Vec[]): string {
+  if (pts.length < 3) return ''
+  const r = ringArea(pts) <= 0 ? pts : [...pts].reverse()
+  return `M ${r.map((p) => `${f2(p.x)} ${f2(p.y)}`).join(' L ')} Z `
+}
+
+/** The swept hull of a CLOSED RING under a translation: the top ring, the base ring, and a quad for
+ *  every edge whose outward normal faces the sweep.
+ *
+ *  `sweptHull` only speaks rectangles, and some solids are not sets of boxes — a pit building is one
+ *  articulated concave outline with a pilaster at every garage boundary. Back-facing edges have to be
+ *  skipped rather than emitted-and-ignored: on a convex shape their quads fall inside the hull
+ *  harmlessly, but on a concave one they poke out through the wall. */
+export function sweptRing(pts: Vec[], ox: number, oy: number): string {
+  if (pts.length < 3) return ''
+  const r = ringArea(pts) <= 0 ? pts : [...pts].reverse()
+  if (Math.hypot(ox, oy) < 1e-6) return ringPath(r)
+  let d = ringPath(r) + ringPath(r.map((p) => ({ x: p.x + ox, y: p.y + oy })))
+  for (let i = 0; i < r.length; i++) {
+    const p = r[i]
+    const q = r[(i + 1) % r.length]
+    // Outward normal of an edge on a ring wound in this convention is the direction turned -90.
+    if ((q.y - p.y) * ox - (q.x - p.x) * oy <= 0) continue
+    d += quad(p, q, { x: q.x + ox, y: q.y + oy }, { x: p.x + ox, y: p.y + oy })
+  }
+  return d
+}
+
+/** The wall faces of a ring that are angled AWAY from the sweep, as opposed to squarely facing it.
+ *
+ *  One flat tone across every wall of a solid collapses its perspective: with nothing separating the
+ *  front of the building from its returns, the eye cannot tell which plane is which. This is the ring
+ *  equivalent of `sideFacesX`, and it exists for the same reason — two adjoining planes at different
+ *  angles to the sky is what reads as a box. Overlay it on `sweptRing` in a second tone.
+ *
+ *  `cut` is the cosine of the angle at which a face stops counting as front-on. */
+export function obliqueRingFaces(pts: Vec[], ox: number, oy: number, cut = Math.SQRT1_2): string {
+  if (pts.length < 3) return ''
+  const ol = Math.hypot(ox, oy)
+  if (ol < 1e-6) return ''
+  const r = ringArea(pts) <= 0 ? pts : [...pts].reverse()
+  let d = ''
+  for (let i = 0; i < r.length; i++) {
+    const p = r[i]
+    const q = r[(i + 1) % r.length]
+    const el = Math.hypot(q.x - p.x, q.y - p.y)
+    if (el < 1e-9) continue
+    // Outward normal of an edge on a ring wound in this convention is its direction turned -90.
+    const dot = ((q.y - p.y) * ox - (q.x - p.x) * oy) / (el * ol)
+    // Epsilon so a face sitting exactly on the cut lands the same way every time; a 45-degree
+    // sweep puts both of a square's visible faces precisely there.
+    if (dot <= 0 || dot >= cut - 1e-9) continue
+    d += quad(p, q, { x: q.x + ox, y: q.y + oy }, { x: p.x + ox, y: p.y + oy })
+  }
+  return d
+}
+
+export interface FaceEdge { a: Vec; b: Vec; axis: 'x' | 'y'; part: Part }
+
+/** Every footprint edge that generates a VISIBLE height face: it faces the sweep, and it is not
+ *  buried inside the union.
+ *
+ *  Buried edges matter because a multi-part footprint (a tower on a podium) has edges interior to its
+ *  own silhouette. `sweptHull` can emit those harmlessly since they share its fill, but anything
+ *  drawn differently on them paints a sliver straight across the wall. */
+export function visibleEdges(parts: Part[], ox: number, oy: number): FaceEdge[] {
+  const out: FaceEdge[] = []
+  for (const p of parts) {
+    const x0 = p.dx - p.w / 2
+    const x1 = p.dx + p.w / 2
+    const y0 = p.dy - p.h / 2
+    const y1 = p.dy + p.h / 2
+    // Probe just outside the edge at three points: covered everywhere means interior.
+    const buried = (fx: (t: number) => number, fy: (t: number) => number) => (
+      [0.15, 0.5, 0.85].every((t) => parts.some((q) => (
+        q !== p && Math.abs(fx(t) - q.dx) < q.w / 2 && Math.abs(fy(t) - q.dy) < q.h / 2
+      )))
+    )
+    const eps = 1e-3
+    if (Math.abs(ox) > 1e-6) {
+      const xe = ox > 0 ? x1 : x0
+      const xp = xe + Math.sign(ox) * eps
+      if (!buried(() => xp, (t) => y0 + (y1 - y0) * t)) out.push({ a: { x: xe, y: y0 }, b: { x: xe, y: y1 }, axis: 'x', part: p })
+    }
+    if (Math.abs(oy) > 1e-6) {
+      const ye = oy > 0 ? y1 : y0
+      const yp = ye + Math.sign(oy) * eps
+      if (!buried((t) => x0 + (x1 - x0) * t, () => yp)) out.push({ a: { x: x0, y: ye }, b: { x: x1, y: ye }, axis: 'y', part: p })
+    }
+  }
+  return out
+}
+
+/** Windows laid out IN THE PLANE OF EACH WALL.
+ *
+ *  A tile pattern cannot do this and it is not a matter of tuning. A wall face is the parallelogram
+ *  spanned by its ground edge and the extrusion offset, so an axis-aligned grid puts every window at
+ *  the wrong angle on every wall whose building is rotated, and puts the ROWS along the map's y axis
+ *  rather than up the wall. It reads as a decal stuck on a solid. Gridding the face in its own basis
+ *  costs one path per building, the same as the pattern did.
+ *
+ *  `cell` is the bay width in local units, `rows` the storey count, and the fractions how much of
+ *  each bay is glass. */
+export function wallWindows(
+  parts: Part[], ox: number, oy: number, cell: number, rows: number, wFrac = 0.42, hFrac = 0.46,
+): string {
+  if (rows < 1 || cell <= 0 || Math.hypot(ox, oy) < 1e-6) return ''
+  let d = ''
+  for (const e of visibleEdges(parts, ox, oy)) {
+    // Cull each window against the SWEPT HULLS of the other parts, not just their footprints.
+    //
+    // Two things go wrong without this, and both showed up as overlapping glass rather than as a
+    // shading bug. An edge only PARTLY covered by a neighbour is not buried, so it used to glaze its
+    // whole length including the stretch its neighbour also glazed; and where an articulated
+    // footprint steps, one part's side wall and another's front wall genuinely overlap in projection,
+    // so windows on the hidden one crossed windows on the visible one. A point inside another part's
+    // swept hull is a point on a face that part covers, whichever of the two it is.
+    const hidden = (p: Vec) => parts.some((q) => q !== e.part && inSweptHull(p, q, ox, oy))
+    d += gridFace(e.a, e.b, ox, oy, cell, rows, wFrac, hFrac, hidden)
+  }
+  return d
+}
+
+/** Is `p` inside the region a rect sweeps under the translation `(ox, oy)`? True when some point of
+ *  the sweep lands on it: `p - t*o` is inside the rect for a `t` in `[0, 1]`. Each axis gives an
+ *  interval in `t`, so the test is an interval intersection. */
+function inSweptHull(p: Vec, q: Part, ox: number, oy: number): boolean {
+  let lo = 0
+  let hi = 1
+  const clip = (c: number, cq: number, half: number, o: number) => {
+    if (Math.abs(o) < 1e-9) {
+      if (Math.abs(c - cq) >= half) hi = -1
+      return
+    }
+    const t0 = (c - cq - half) / o
+    const t1 = (c - cq + half) / o
+    lo = Math.max(lo, Math.min(t0, t1))
+    hi = Math.min(hi, Math.max(t0, t1))
+  }
+  const eps = 1e-6
+  clip(p.x, q.dx, q.w / 2 - eps, ox)
+  clip(p.y, q.dy, q.h / 2 - eps, oy)
+  return lo <= hi
+}
+
+/** `wallWindows` for a closed ring — the pit complex is one articulated outline, not a set of boxes. */
+export function ringWindows(
+  pts: Vec[], ox: number, oy: number, cell: number, rows: number, wFrac = 0.42, hFrac = 0.46,
+): string {
+  if (pts.length < 3 || rows < 1 || cell <= 0 || Math.hypot(ox, oy) < 1e-6) return ''
+  const r = ringArea(pts) <= 0 ? pts : [...pts].reverse()
+  let d = ''
+  for (let i = 0; i < r.length; i++) {
+    const p = r[i]
+    const q = r[(i + 1) % r.length]
+    if ((q.y - p.y) * ox - (q.x - p.x) * oy <= 0) continue
+    d += gridFace(p, q, ox, oy, cell, rows, wFrac, hFrac)
+  }
+  return d
+}
+
+/** One wall's grid, in the basis {edge, offset}: `u` runs along the ground edge, `v` up the wall. */
+function gridFace(
+  a: Vec, b: Vec, ox: number, oy: number, cell: number, rows: number, wFrac: number, hFrac: number,
+  hidden: (p: Vec) => boolean = () => false,
+): string {
+  const len = Math.hypot(b.x - a.x, b.y - a.y)
+  const cols = Math.floor(len / cell)
+  if (cols < 1) return ''
+  const at = (uu: number, vv: number): Vec => ({
+    x: a.x + (b.x - a.x) * uu + ox * vv,
+    y: a.y + (b.y - a.y) * uu + oy * vv,
+  })
+  // Centre the run of bays on the wall so a window never bleeds off the corner.
+  const pad = (1 - (cols * cell) / len) / 2
+  const bay = cell / len
+  let d = ''
+  for (let c = 0; c < cols; c++) {
+    const u0 = pad + (c + (1 - wFrac) / 2) * bay
+    const u1 = u0 + wFrac * bay
+    for (let r = 0; r < rows; r++) {
+      const v0 = (r + (1 - hFrac) / 2) / rows
+      const v1 = v0 + hFrac / rows
+      if (hidden(at((u0 + u1) / 2, (v0 + v1) / 2))) continue
+      d += quad(at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1))
+    }
+  }
+  return d
+}
+
 /** Only the height faces from the LEFT/RIGHT edges. Drawn a shade apart from the top/bottom ones:
  *  two adjoining planes at different angles to the sky is what reads as a box rather than as a flat
  *  patch of dark colour.
