@@ -21,6 +21,8 @@ export interface BiomePreset {
   water: number
   /** Chance a land parcel is enclosed farmland rather than open/rough ground. */
   fields: number
+  /** How tall this venue's tallest buildings get. A street circuit has a skyline; a forest does not. */
+  towers: number
   /** Rooftop palette. */
   roofs: string[]
   /** Run-off surfacing: gravel-first for classic circuits, tarmac-first for modern ones. */
@@ -33,42 +35,42 @@ export const BIOMES: Record<Biome, BiomePreset> = {
   temperate: {
     ramp: ['#25401F', '#2C4A24', '#34552A', '#3D6031', '#496C39', '#587A45'],
     base: '#223C1D',
-    reliefM: 55, featureM: 900, trees: 3, buildings: 3, water: 0.16, fields: 0.35,
+    reliefM: 55, featureM: 900, trees: 3, buildings: 3, water: 0.16, fields: 0.35, towers: 1.0,
     roofs: ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147'],
     runoff: ['#8F8568', '#565C66'],
   },
   farmland: {
     ramp: ['#2B4522', '#35512A', '#405C31', '#4B683A', '#587444', '#658050'],
     base: '#27401F',
-    reliefM: 32, featureM: 1200, trees: 2.2, buildings: 2.4, water: 0.14, fields: 0.78,
+    reliefM: 32, featureM: 1200, trees: 2.2, buildings: 2.4, water: 0.14, fields: 0.78, towers: 0.45,
     roofs: ['#6B5F52', '#7A5147', '#5A5348', '#655C50', '#4E5663'],
     runoff: ['#8F8568', '#565C66'],
   },
   forest: {
     ramp: ['#1B3317', '#213C1C', '#284622', '#305128', '#3A5C31', '#46683B'],
     base: '#183014',
-    reliefM: 85, featureM: 750, trees: 4.4, buildings: 1.8, water: 0.2, fields: 0.12,
+    reliefM: 85, featureM: 750, trees: 4.4, buildings: 1.8, water: 0.2, fields: 0.12, towers: 0.5,
     roofs: ['#54524A', '#5E5548', '#4A4F52', '#665D52', '#57504A'],
     runoff: ['#8F8568', '#6E6A5C'],
   },
   arid: {
     ramp: ['#6B5A3E', '#786547', '#856F4E', '#927B58', '#9E8763', '#AB936F'],
     base: '#63533A',
-    reliefM: 40, featureM: 1400, trees: 0.35, buildings: 2.6, water: 0, fields: 0.05,
+    reliefM: 40, featureM: 1400, trees: 0.35, buildings: 2.6, water: 0, fields: 0.05, towers: 1.1,
     roofs: ['#8C8478', '#9A9184', '#7E766B', '#A39887', '#6F685E'],
     runoff: ['#565C66', '#8F8568'],
   },
   urban: {
     ramp: ['#33402E', '#3A4834', '#42513A', '#4A5941', '#536248', '#5C6B50'],
     base: '#2F3C2B',
-    reliefM: 22, featureM: 1100, trees: 1.3, buildings: 5.5, water: 0.1, fields: 0.05,
+    reliefM: 22, featureM: 1100, trees: 1.3, buildings: 5.5, water: 0.1, fields: 0.05, towers: 1.9,
     roofs: ['#59616E', '#4E5663', '#6A7180', '#525A67', '#7A5147'],
     runoff: ['#565C66', '#6E6A5C'],
   },
   coastal: {
     ramp: ['#3E4A32', '#4A553A', '#576044', '#656C4F', '#74795B', '#878A6B'],
     base: '#39442E',
-    reliefM: 45, featureM: 850, trees: 1.6, buildings: 2.6, water: 0.34, fields: 0.2,
+    reliefM: 45, featureM: 850, trees: 1.6, buildings: 2.6, water: 0.34, fields: 0.2, towers: 1.0,
     roofs: ['#6E7480', '#5C636E', '#7A7266', '#665D52', '#87796B'],
     runoff: ['#8F8568', '#565C66'],
   },

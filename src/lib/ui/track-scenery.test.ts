@@ -9,8 +9,9 @@
 import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { densifyTrace, TRACK_WIDTH_M } from './track-path'
-import { buildScenery, type Scenery } from './track-scenery'
+import { buildScenery, TREE_TARGET_BASE, type Scenery } from './track-scenery'
 import { biomeOf } from './biomes'
+import { BARRIER_OFFSET_M, FENCE_OFFSET_M } from './scenery-props'
 import {
   distToPolyline, distPointToObb, obbOverlap, obbCorners, closestPointOnPolyline,
   type Vec, type Obb,
@@ -90,22 +91,12 @@ describe.each(ids)('%s', (id) => {
     expect(backwards).toHaveLength(0)
   })
 
-  it('keeps rooftop vents on a roof', () => {
-    // The cross and courtyard archetypes have holes; vents scattered over the bounding box floated
-    // in them.
-    const floating = scenery.buildings.flatMap((b) => (
-      (b.vents ?? []).filter((v) => !(b.parts ?? []).some((p) => (
-        Math.abs(v.dx - p.dx) <= p.w / 2 && Math.abs(v.dy - p.dy) <= p.h / 2
-      )))
-    ))
-    expect(floating).toHaveLength(0)
-  })
 
   it('still fills the world', () => {
     // Guards the opposite failure: clearance rules strict enough to empty the map. The tree floor is
     // relative to the biome's own target, because a desert circuit is SUPPOSED to be nearly bare —
     // an absolute floor would either pass Bahrain trivially or fail it wrongly.
-    const target = 380 * biomeOf(TRACK_LAYOUTS[id].biome).trees
+    const target = TREE_TARGET_BASE * biomeOf(TRACK_LAYOUTS[id].biome).trees
     expect(scenery.trees.length).toBeGreaterThan(target * 0.8)
     expect(scenery.buildings.length).toBeGreaterThan(40)
     expect(scenery.stands.length).toBeGreaterThan(10)
@@ -123,6 +114,29 @@ describe.each(ids)('%s', (id) => {
     const bio = biomeOf(TRACK_LAYOUTS[id].biome)
     if (bio.fields >= 0.3) expect(scenery.fields.length).toBeGreaterThan(40)
     else expect(scenery.fields.length).toBeLessThan(120)
+  })
+
+  it('keeps the trackside cross-section in order', () => {
+    // Every one of these was a hand-picked offset that silently disagreed with the barrier geometry:
+    // stands sited inside their own fence, marshal posts straddling it, tyre walls stacked BEHIND
+    // the wall they exist to protect. The whole cross-section is derived now, and this pins it.
+    const MARSHAL_HALF_DEPTH_M = 1.6
+    for (const m of scenery.marshals) {
+      const d = distToPolyline({ x: m.x, y: m.y }, centre) * TRACK_LAYOUTS[id].metresPerUnit
+      expect(d - MARSHAL_HALF_DEPTH_M).toBeGreaterThan(FENCE_OFFSET_M)
+    }
+    for (const s of structuresOf(scenery)) {
+      const near = Math.min(...obbCorners(s).map((c) => distToPolyline(c, centre)))
+      expect(near * TRACK_LAYOUTS[id].metresPerUnit).toBeGreaterThan(FENCE_OFFSET_M)
+    }
+  })
+
+  it('stacks the tyre walls in FRONT of the barrier they protect', () => {
+    for (const t of scenery.tyreWalls) {
+      const d = Math.min(...t.pts.map((p) => distToPolyline(p, centre))) * TRACK_LAYOUTS[id].metresPerUnit
+      expect(d).toBeLessThan(BARRIER_OFFSET_M)
+      expect(d).toBeGreaterThan(TRACK_HALF_M) // but never on the racing surface
+    }
   })
 
   it('rings the circuit with barriers and furniture', () => {

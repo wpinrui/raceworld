@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  MOODS, shadowReach, shadowOffset, lightDir, shadowFill, shadowOpacity, contactOpacity,
+  MOODS, shadowReach, shadowOffset, lightDir, shadowFill, shadowOpacity,
   litFace, shadeFace, edgeFace, tintFace, type Lighting,
 } from './lighting'
 import { hexToRgb } from '@/lib/color'
@@ -85,25 +85,18 @@ describe('shadowFill', () => {
   })
 })
 
-describe('shadowOpacity / contactOpacity', () => {
+describe('shadowOpacity', () => {
   it('fades directional shadows as ambient rises', () => {
     expect(shadowOpacity({ ...MOODS.afternoon, ambient: 0 }))
       .toBeGreaterThan(shadowOpacity({ ...MOODS.afternoon, ambient: 1 }))
     expect(shadowOpacity(MOODS.overcast)).toBeLessThan(shadowOpacity(MOODS.afternoon))
   })
 
-  it('keeps contact occlusion alive under overcast, because it is ambient not directional', () => {
-    // This is what still grounds objects on a flat grey day, when the cast shadow has gone.
-    expect(contactOpacity(MOODS.overcast)).toBeGreaterThan(0.15)
-    expect(contactOpacity(MOODS.overcast)).toBeGreaterThan(contactOpacity(MOODS.afternoon))
-  })
 
   it('stays inside 0..1 for every mood', () => {
     for (const mood of Object.values(MOODS)) {
       expect(shadowOpacity(mood)).toBeGreaterThan(0)
       expect(shadowOpacity(mood)).toBeLessThanOrEqual(1)
-      expect(contactOpacity(mood)).toBeGreaterThan(0)
-      expect(contactOpacity(mood)).toBeLessThanOrEqual(1)
     }
   })
 })

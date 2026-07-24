@@ -1,7 +1,8 @@
+import { Fragment } from 'react'
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
 import { partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull } from '@/lib/ui/extrude'
 import {
-  contactOpacity, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
+  lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
   type Lighting,
 } from '@/lib/ui/lighting'
 
@@ -34,9 +35,12 @@ const MARSHAL_H_M = 2.8
 /** Trackside wall heights: armco/concrete, then the debris fencing standing behind it. */
 const BARRIER_H_M = 1.3
 const FENCE_H_M = 4
-/** Canopy height, for the tree shadow. Kept short of the true cast length: 1140 blobs cannot afford
- *  a swept shadow each, and a fully-detached round shadow reads worse than a slightly short one. */
-const TREE_H_M = 5
+/** A stacked tyre barrier stands about as tall as the wall it fronts. */
+const TYRE_H_M = 1.5
+/** Tree shadow length as a multiple of the TRUNK's own length, so the two can never disagree: the
+ *  trunk says how tall the tree is, and the shadow has to say the same thing. Still responds to the
+ *  sun's height, just bounded so it stays tied to the trunk. */
+const treeShadowRatio = (reachV: number) => Math.max(0.3, Math.min(0.8, reachV))
 
 const deg = (r: number) => (r * 180) / Math.PI
 
@@ -168,22 +172,8 @@ export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
-  const contactOp = contactOpacity(lighting)
   return (
     <g>
-      {/* Contact occlusion, hugging the base. Ambient rather than directional, so it survives
-          overcast and keeps things sitting in the ground. Cheap enough for both LOD tiers. */}
-      <g fill={shFill} stroke={shFill} opacity={contactOp}>
-        {structures.map((r, i) => {
-          const b = u(solidHeightM(r) * EXTRUDE)
-          return (
-            <path
-              key={`ao${i}`} d={partsPath(partsOf(r))} strokeWidth={u(2.2)} strokeLinejoin="round"
-              transform={`translate(${r.x + dir.x * b} ${r.y + dir.y * b}) rotate(${deg(r.rot)})`}
-            />
-          )
-        })}
-      </g>
 
       {/* Cast shadow, swept along the ground FROM THE BASE so its near end tucks under the solid. */}
       {full && (
@@ -202,13 +192,39 @@ export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
         </g>
       )}
 
-      {/* Tree shadows travel with the same light. */}
+      {/* Tree shadows, STRETCHED from the trunk's base along the light rather than dropped as a
+          loose blob at the far end of the cast. The blob was geometrically where a canopy's shadow
+          lands, but with nothing joining it to the tree it read as litter on the grass — every other
+          solid here has an attached shadow, and a tree has to match. One ellipse each, so the cost
+          is the same as the blob it replaces.
+
+          The shadow is the CANOPY'S OWN outline, stretched along the light — not an ellipse. A
+          canopy is a lumpy blob, and a lumpy blob does not cast an elliptical shadow; the giveaway
+          was a field of perfect ovals under irregular trees.
+
+          Lighter than the solids' shadows: a grove's overlap heavily, and at full strength they
+          merge into one dark mass rather than dappled shade. */}
       {full && (
-        <g
-          transform={`translate(${dir.x * u(TREE_H_M * reach)} ${dir.y * u(TREE_H_M * reach)})`}
-          fill={shFill} opacity={shOp * 0.85}
-        >
-          {scenery.trees.map((t, i) => <path key={`ts${i}`} d={t.d} />)}
+        <g fill={shFill} opacity={shOp * 0.55}>
+          {scenery.trees.map((t, i) => {
+            const trunk = u(t.h * EXTRUDE)
+            const len = trunk * treeShadowRatio(reach)
+            const bx = t.x + dir.x * trunk
+            const by = t.y + dir.y * trunk
+            // Stretch the blob about its own centre along the light, then plant it at the base.
+            const sx = (2 * t.r + len) / (2 * t.r)
+            const a = deg(Math.atan2(dir.y, dir.x)).toFixed(1)
+            return (
+              <path
+                key={`ts${i}`} d={t.d}
+                transform={
+                  `translate(${(bx + dir.x * len / 2).toFixed(1)} ${(by + dir.y * len / 2).toFixed(1)}) `
+                  + `rotate(${a}) scale(${sx.toFixed(3)} 1) rotate(${-Number(a)}) `
+                  + `translate(${(-t.x).toFixed(1)} ${(-t.y).toFixed(1)})`
+                }
+              />
+            )
+          })}
         </g>
       )}
     </g>
@@ -221,6 +237,15 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
 }) {
   const full = detail === 'full'
   const dir = lightDir(lighting)
+  // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
+  // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
+  // the painter's order comes out right.
+  const treesByDepth = scenery.trees
+    .map((t, i) => ({ ...t, i }))
+    .sort((a, b) => (a.x * dir.x + a.y * dir.y) - (b.x * dir.x + b.y * dir.y))
+  // Trees lean exactly as much as buildings do. Giving them their own, steeper lean put two
+  // different cameras in one scene; the height variation belongs in each tree's own scale.
+  const trunkOf = (t: { h: number }) => u(t.h * EXTRUDE)
   return (
     <g>
       {/* Walls: the swept band from roof outline to base outline, as one silhouette. The roof is
@@ -281,19 +306,25 @@ export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
                 </g>
               </>
             )}
-            {full && b.vents?.map((v, j) => (
-              <rect key={`n${j}`} x={v.dx - v.s / 2} y={v.dy - v.s / 2} width={v.s} height={v.s} fill="#333944" />
-            ))}
           </g>
         )
       })}
 
-      {/* Canopies with their lit side — the biggest node count, dropped at low LOD. */}
-      {full && scenery.trees.map((t, i) => (
-        <g key={`v${i}`}>
+      {/* Canopies, DEPTH-SORTED so a nearer tree covers a further one. Drawn in array order they
+          overlapped arbitrarily, which is the one thing that breaks a grove's read. Each tree's
+          trunk goes with it rather than in a shared layer underneath, or a near trunk would be
+          buried by a far canopy. Trunk width scales with the canopy it carries — a constant width
+          made every tree a lollipop on a stick. */}
+      {full && treesByDepth.map((t) => (
+        <Fragment key={`v${t.i}`}>
+          <path
+            d={`M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * trunkOf(t)).toFixed(1)} ${(t.y + dir.y * trunkOf(t)).toFixed(1)}`}
+            fill="none" stroke={shadeFace('#6B5138', lighting)}
+            strokeWidth={Math.max(u(0.8), t.r * 0.34)} strokeLinecap="round"
+          />
           <path d={t.d} fill={`url(#tm-tree${t.variant})`} />
           <path d={t.hd} fill="#8FB35F" opacity={0.3} />
-        </g>
+        </Fragment>
       ))}
     </g>
   )
@@ -311,29 +342,80 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
-  // Barriers and tyre walls throw a short hard shadow, cast from their BASE like every other solid.
-  const wallT = u(BARRIER_H_M * reach)
+  // Every piece of furniture casts from its BASE, like every other solid on the map.
   const wallB = u(BARRIER_H_M * EXTRUDE)
+  const wallT = u(BARRIER_H_M * reach)
+  const tyreB = u(TYRE_H_M * EXTRUDE)
+  const tyreT = u(TYRE_H_M * reach)
+  const fenceB = u(FENCE_H_M * EXTRUDE)
+  const fenceT = u(FENCE_H_M * reach)
+
+  // Depth convention: raising a point pushes its image AWAY from the camera, exactly as a light
+  // pushes a shadow away from itself. Tops are drawn displaced by -dir (a roof sits up-light of its
+  // base), so "away" is -dir and the CAMERA sits at +dir. Nearer therefore means a LARGER projection
+  // along dir, and nearer draws last.
+  //
+  // A tyre wall is inboard of the barrier, so where the outward normal points toward the camera the
+  // barrier is the nearer of the two and the tyres go under it; where it points away, the tyres are
+  // nearer and go on top.
+  const withIdx = scenery.tyreWalls.map((t, i) => ({ t, i }))
+  const nearTyres = withIdx.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0)
+  const farTyres = withIdx.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0)
+  const TyreWalls = (list: typeof withIdx) => list.map(({ t, i }) => (
+    <g key={`tw${i}`}>
+      <path d={t.d} fill="none" stroke="#1B1F26" strokeWidth={u(3.4)} strokeLinecap="round" />
+      {full && t.bands.map((c, j) => (
+        <path
+          key={j} d={t.d} fill="none" stroke={c} strokeWidth={u(2.6)} strokeLinecap="butt"
+          strokeDasharray={`${u(2.4)} ${u(4.8)}`} strokeDashoffset={u(2.4 * j)}
+        />
+      ))}
+    </g>
+  ))
   return (
     <g>
       {/* Furniture obeys the same light as the buildings. Without this the barriers read as painted
           lines while everything behind them reads as solid, which breaks the whole illusion. */}
       {full && (
-        <g fill="none" stroke={shFill} opacity={shOp} strokeLinecap="round">
+        <g fill={shFill} stroke={shFill} opacity={shOp} strokeLinejoin="round">
+          {/* A shadow is SWEPT from the object's base, never a displaced copy of it. A stroked copy
+              offset by the cast distance leaves a gap between the wall and its own shadow, which
+              reads as the wall levitating — and implies a taller wall than the one drawn. The fill
+              covers the swept ground; the stroke dilates it to the object's real thickness. */}
           {scenery.barriers.filter((b) => b.kind === 'wall').map((b, i) => (
             <path
-              key={`bs${i}`} d={b.d} strokeWidth={u(1.6)}
-              transform={`translate(${dir.x * wallB + dir.x * wallT} ${dir.y * wallB + dir.y * wallT})`}
+              key={`bs${i}`} strokeWidth={u(1.1)}
+              d={ribbon(
+                b.pts.map((p) => ({ x: p.x + dir.x * wallB, y: p.y + dir.y * wallB })),
+                dir.x * wallT, dir.y * wallT,
+              )}
             />
           ))}
           {scenery.tyreWalls.map((t, i) => (
             <path
-              key={`ts${i}`} d={t.d} strokeWidth={u(3.6)}
-              transform={`translate(${dir.x * wallT} ${dir.y * wallT})`}
+              key={`ts${i}`} strokeWidth={u(3.4)}
+              d={ribbon(
+                t.pts.map((p) => ({ x: p.x + dir.x * tyreB, y: p.y + dir.y * tyreB })),
+                dir.x * tyreT, dir.y * tyreT,
+              )}
+            />
+          ))}
+          {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
+              mesh, so what it casts is faint. */}
+          {full && scenery.barriers.filter((b) => b.kind === 'fence').map((b, i) => (
+            <path
+              key={`fs${i}`} opacity={0.35} stroke="none"
+              d={ribbon(
+                b.pts.map((p) => ({ x: p.x + dir.x * fenceB, y: p.y + dir.y * fenceB })),
+                dir.x * fenceT, dir.y * fenceT,
+              )}
             />
           ))}
         </g>
       )}
+
+      {/* Tyre walls FURTHER from the viewer than the barrier go under it. */}
+      {TyreWalls(farTyres)}
 
       {/* Barriers and fencing are solids on a curve. Each needs the height face between its top line
           and its base, or it is a line plus a detached shadow and reads as floating above the
@@ -368,18 +450,8 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
         )
       })}
 
-      {/* Tyre walls: banded so they read as stacked tyres even when only a few pixels wide. */}
-      {scenery.tyreWalls.map((t, i) => (
-        <g key={`tw${i}`}>
-          <path d={t.d} fill="none" stroke="#1B1F26" strokeWidth={u(3.4)} strokeLinecap="round" />
-          {full && t.bands.map((c, j) => (
-            <path
-              key={j} d={t.d} fill="none" stroke={c} strokeWidth={u(2.6)} strokeLinecap="butt"
-              strokeDasharray={`${u(2.4)} ${u(4.8)}`} strokeDashoffset={u(2.4 * j)}
-            />
-          ))}
-        </g>
-      ))}
+      {/* Tyre walls NEARER than the barrier go over it. */}
+      {TyreWalls(nearTyres)}
 
       {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of
           themselves — the same mistake the buildings started with. */}

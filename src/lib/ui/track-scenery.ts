@@ -6,10 +6,12 @@
 // All coordinates are viewBox units; real-world sizes convert through metresPerUnit.
 
 import { seededRng } from '@/lib/sim/rng-utils'
-import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type PitLane, type TrackTrace } from './track-path'
+import {
+  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M, smoothOpenPath, type PitLane, type TrackTrace,
+} from './track-path'
 import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'
-import { blobPath, buildingParts, pickArchetype, pointOnParts, type SceneryPart } from './scenery-shapes'
+import { blobPath, buildingParts, pickArchetype, type SceneryPart } from './scenery-shapes'
 import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
@@ -25,7 +27,6 @@ export interface SceneryRect {
   fill: string
   /** Footprint as a union of rects in local coords; absent = a single w×h slab. */
   parts?: SceneryPart[]
-  vents?: Array<{ dx: number; dy: number; s: number }>
   /** Storey count, driving the fake extrusion depth and the drop-shadow length. */
   storeys?: number
 }
@@ -38,6 +39,9 @@ export interface SceneryStand extends SceneryRect {
 }
 export interface SceneryTree {
   d: string; hd: string; variant: 0 | 1
+  /** Height in metres. A tree is scaled as a whole, so a big canopy stands on a tall trunk — with a
+   *  single global height every tree was the same height regardless of how wide it was. */
+  h: number
   /** Canopy centre, and the radius that BOUNDS the drawn blob (its jittered lobes reach past the
    *  nominal radius). Carried on the data so clearance rules — and the tests pinning them — read the
    *  real footprint instead of re-deriving it from the path string. */
@@ -69,6 +73,18 @@ type Vec = { x: number; y: number }
 // Canopy lobe jitter, as a fraction of the nominal radius: the drawn blob spans [BASE, BASE+SPAN].
 const TREE_JITTER_BASE = 0.8
 const TREE_JITTER_SPAN = 0.35
+/** Trees are scaled as a whole rather than having their canopy and height drawn independently, so
+ *  proportions hold from sapling to mature tree. The exponent skews the population small: mostly
+ *  ordinary trees with the occasional big one, which is what a real treeline looks like. */
+// Not below this: a sapling a metre and a half across costs the same three DOM nodes as a mature
+// tree and reads as a speck of noise on the grass.
+const TREE_MIN_SCALE = 0.8
+const TREE_MAX_SCALE = 2.1
+const TREE_SCALE_SKEW = 1.9
+const TREE_BASE_R_M = 3.3
+const TREE_BASE_H_M = 8.5
+/** Trees per unit of biome density. */
+export const TREE_TARGET_BASE = 520
 
 /** FNV-1a over a string — the noise lattice needs a numeric seed, seededRng takes a string. */
 function hashSeed(str: string): number {
@@ -103,6 +119,7 @@ export function buildScenery(
   } = makeSceneryFrame(rawTrace, pit, metresPerUnit)
   const S = samples.length
 
+  const TRACK_HALF_M = TRACK_WIDTH_M / 2
   const PIT_CLEAR_M = 55 // paddock side: garages, transporters, hospitality — nothing planted
   const PIT_CLEAR_STAND_M = 35
 
@@ -243,8 +260,19 @@ export function buildScenery(
   }
 
   // Tyre walls face the same corners the run-off aprons do, sitting just beyond the barrier line.
-  const tyreWalls = buildTyreWalls(frame, cornerIdx.map((i) => i * STEP), { offsetM: 13, spanM: 46 })
-  const marshals = buildMarshalPosts(frame, { everyM: 240, offsetM: 18 })
+  // Furniture offsets derive from the wall line too, so the trackside cross-section stays coherent:
+  // tyres are stacked AGAINST the front of the barrier they protect (at 13 m they sat behind it),
+  // and the marshal post stands well back of the debris fence rather than straddling it.
+  // Both are offset along the outward normal from ONE point on the circuit, which is not the same as
+  // being clear of the whole circuit: at a hairpin the outward normal from one side lands on the
+  // track coming back the other way. Monaco put a marshal post at 6.8 m and a tyre wall at 6.4 m,
+  // i.e. on the racing surface. Drop anything the exact distance test rejects.
+  const MARSHAL_HALF_DEPTH_M = 1.6
+  const tyreWalls = buildTyreWalls(frame, cornerIdx.map((i) => i * STEP), {
+    offsetM: BARRIER_OFFSET_M - 1.5, spanM: 46,
+  }).filter((t) => t.pts.every((p) => trackDist(p) > u(TRACK_HALF_M + 1.5)))
+  const marshals = buildMarshalPosts(frame, { everyM: 240, offsetM: FENCE_OFFSET_M + 5 })
+    .filter((m) => trackDist({ x: m.x, y: m.y }) > u(FENCE_OFFSET_M + MARSHAL_HALF_DEPTH_M + 0.5))
 
   // Occupancy. Structures and canopies are tracked separately: a tree must clear a building's TRUE
   // footprint completely, but trees are allowed to crowd each other, which is what makes a grove
@@ -383,16 +411,10 @@ export function buildScenery(
           x: bx, y: by, w, h, rot: brot,
           fill: bio.roofs[Math.floor(rng() * bio.roofs.length)],
           parts,
-          storeys: 1 + Math.floor(rng() * (big ? 5 : 3)),
-          // Rooftop clutter has to sit ON a roof: scattering it over the bounding box left vents
-          // floating in the holes of the cross and courtyard footprints.
-          vents: big
-            ? Array.from({ length: 1 + Math.floor(rng() * 2) }, () => {
-                const s = u(1.6 + rng() * 1.4)
-                const at = pointOnParts(parts, rng, s)
-                return { dx: at.x, dy: at.y, s }
-              })
-            : undefined,
+          // Skewed low: most of a venue is two or three storeys, but the tail runs to a genuine
+          // tower. A flat 1-5 gave every cluster the same monotonous mid-rise silhouette. Only the
+          // larger footprints can carry height, and how far the tail reaches is the biome's call.
+          storeys: 1 + Math.floor(Math.pow(rng(), 2.3) * (big ? 15 : 5) * bio.towers),
         })
       }
     }
@@ -400,7 +422,7 @@ export function buildScenery(
 
   // ── Trees: lobed canopies with a lit side, in groves plus scatter ──
   const trees: SceneryTree[] = []
-  const treeTarget = Math.round(380 * treeMult)
+  const treeTarget = Math.round(TREE_TARGET_BASE * treeMult)
   const groves = Array.from({ length: 7 }, randPoint)
   for (let i = 0; i < treeTarget * 2.4 && trees.length < treeTarget; i++) {
     let p: Vec
@@ -425,7 +447,8 @@ export function buildScenery(
     // The canopy radius is drawn BEFORE the clearance tests, because every one of them needs it.
     // Drawing it afterwards meant a tree cleared as a point then grew up to 6.8 m of canopy over
     // whatever it had just cleared.
-    const rNom = u(3.2 + rng() * 3.6)
+    const scale = TREE_MIN_SCALE + (TREE_MAX_SCALE - TREE_MIN_SCALE) * Math.pow(rng(), TREE_SCALE_SKEW)
+    const rNom = u(TREE_BASE_R_M * scale)
     // blobPath jitters each lobe to (jBase + jSpan) of the nominal radius, so the drawn canopy
     // reaches further than rNom; clearance must be measured against the bounding radius.
     const r = rNom * (TREE_JITTER_BASE + TREE_JITTER_SPAN)
@@ -434,13 +457,15 @@ export function buildScenery(
     if (structOcc.hitsDisc(p.x, p.y, r, u(1.5))) continue
     // Canopies may crowd, but not coincide: testing a reduced radius lets a grove close up into
     // woodland while still keeping the trunks apart.
-    if (treeOcc.hitsDisc(p.x, p.y, r * 0.5)) continue
-    treeOcc.addDisc(p.x, p.y, r * 0.5)
+    // Canopies may crowd closely: a treeline is dense, and overlapping crowns are what makes it
+    // read as woodland rather than a dot grid.
+    if (treeOcc.hitsDisc(p.x, p.y, r * 0.38)) continue
+    treeOcc.addDisc(p.x, p.y, r * 0.38)
     trees.push({
       d: blobPath(p.x, p.y, rNom, rNom * 0.92, rng() * Math.PI, rng, 7, TREE_JITTER_BASE, TREE_JITTER_SPAN),
       hd: blobPath(p.x - rNom * 0.28, p.y - rNom * 0.32, rNom * 0.5, rNom * 0.42, rng() * Math.PI, rng, 6, 0.8, 0.3),
       variant: rng() < 0.75 ? 0 : 1,
-      x: p.x, y: p.y, r,
+      x: p.x, y: p.y, r, h: TREE_BASE_H_M * scale,
     })
   }
 

@@ -1,9 +1,9 @@
-// #sim-2d — building form. `pickArchetype` and `pointOnParts` each fix a specific visual defect:
-// articulated footprints coming out as slivers a few metres wide, and rooftop clutter floating in
-// the holes of the cross and courtyard archetypes.
+// #sim-2d — building form. `pickArchetype` fixes a specific visual defect: articulated footprints
+// coming out as slivers a few metres wide, which made clusters read as debris rather than
+// architecture.
 
 import { describe, it, expect } from 'vitest'
-import { buildingParts, pickArchetype, pointOnParts, blobPath, smoothClosed } from './scenery-shapes'
+import { buildingParts, pickArchetype, blobPath, smoothClosed } from './scenery-shapes'
 
 describe('buildingParts', () => {
   it('keeps every part inside the overall footprint, for all ten archetypes', () => {
@@ -47,33 +47,6 @@ describe('pickArchetype', () => {
     // The same 12-unit footprint is 3.4 m of wing at 1 m/unit but 17 m at 5 m/unit.
     expect([0, 8]).toContain(pickArchetype(12, 12, 8, 1, 0.9))
     expect(pickArchetype(12, 12, 8, 5, 0.9)).toBe(9)
-  })
-})
-
-describe('pointOnParts', () => {
-  it('always lands inside one of the parts, inset from its edges', () => {
-    const parts = buildingParts(7, 60, 60) // courtyard: a hole in the middle
-    let n = 0.3
-    const rng = () => { n = (n * 9301 + 49297) % 233280 / 233280; return n }
-    for (let i = 0; i < 200; i++) {
-      const p = pointOnParts(parts, rng, 2)
-      const inside = parts.some((q) => (
-        Math.abs(p.x - q.dx) <= q.w / 2 && Math.abs(p.y - q.dy) <= q.h / 2
-      ))
-      expect(inside).toBe(true)
-    }
-  })
-
-  it('never lands in the courtyard hole', () => {
-    const parts = buildingParts(7, 60, 60)
-    let n = 0.7
-    const rng = () => { n = (n * 9301 + 49297) % 233280 / 233280; return n }
-    // The centre of a courtyard archetype is empty (the ring is 0.28 of each side).
-    for (let i = 0; i < 200; i++) {
-      const p = pointOnParts(parts, rng, 1)
-      const inHole = Math.abs(p.x) < 60 * 0.2 && Math.abs(p.y) < 60 * 0.2
-      expect(inHole).toBe(false)
-    }
   })
 })
 

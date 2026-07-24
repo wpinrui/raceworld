@@ -21,7 +21,15 @@ export interface SceneryBarrier {
   /** 'wall' = concrete/armco at the track edge, 'fence' = debris fencing set back behind it. */
   kind: 'wall' | 'fence'
 }
-export interface SceneryTyreWall { d: string; bands: string[] }
+export interface SceneryTyreWall {
+  d: string
+  pts: Vec[]
+  bands: string[]
+  /** Outward normal at this corner. The tyre wall sits INBOARD of the barrier, so whether it is
+   *  nearer or further than the barrier from the viewer depends on which way the circuit faces here
+   *  — and that flips around the lap. The renderer dots this with the light to order the two. */
+  nOut: Vec
+}
 export interface SceneryMarshal { x: number; y: number; rot: number }
 export interface SceneryField { d: string; fill: string; crop: boolean }
 
@@ -82,7 +90,7 @@ export function buildTyreWalls(
       const nrm = frame.normalAt(s + u(d))
       pts.push({ x: p.x + nrm.x * u(offsetM), y: p.y + nrm.y * u(offsetM) })
     }
-    return { d: smoothOpenPath(pts), bands: TYRE_BANDS }
+    return { d: smoothOpenPath(pts), pts, bands: TYRE_BANDS, nOut: frame.normalAt(s) }
   })
 }
 

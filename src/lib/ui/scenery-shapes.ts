@@ -105,13 +105,3 @@ export function pickArchetype(w: number, h: number, minPartM: number, mpu: numbe
   if (thinnest < minPartM) return roll < 0.5 ? 0 : 8
   return Math.floor(roll * 10)
 }
-
-/** A point on a random part of the footprint, inset from that part's edges. Rooftop clutter used to
- *  be scattered over the bounding box, so on the cross and courtyard archetypes it floated in the
- *  holes where there is no roof. */
-export function pointOnParts(parts: SceneryPart[], rng: () => number, inset: number): Vec {
-  const p = parts[Math.floor(rng() * parts.length)]
-  const iw = Math.max(0, p.w / 2 - inset)
-  const ih = Math.max(0, p.h / 2 - inset)
-  return { x: p.dx + (rng() * 2 - 1) * iw, y: p.dy + (rng() * 2 - 1) * ih }
-}
