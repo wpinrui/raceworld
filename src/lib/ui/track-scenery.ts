@@ -7,6 +7,7 @@
 
 import { seededRng } from '@/lib/sim/rng-utils'
 import { densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type TrackTrace } from './track-path'
+import { makeOccupancy, makePolylineIndex, obbCorners, type Obb } from './geom'
 
 export interface SceneryBlob { d: string; fill: string; water?: boolean }
 export interface SceneryPart { dx: number; dy: number; w: number; h: number }
@@ -21,7 +22,13 @@ export interface SceneryStand extends SceneryRect {
   /** True when the trackside (roof) edge is the local +y edge. */
   flipped: boolean
 }
-export interface SceneryTree { d: string; hd: string; variant: 0 | 1 }
+export interface SceneryTree {
+  d: string; hd: string; variant: 0 | 1
+  /** Canopy centre, and the radius that BOUNDS the drawn blob (its jittered lobes reach past the
+   *  nominal radius). Carried on the data so clearance rules — and the tests pinning them — read the
+   *  real footprint instead of re-deriving it from the path string. */
+  x: number; y: number; r: number
+}
 export interface SceneryKerb { d: string }
 
 export interface SceneryDensity { trees?: number; buildings?: number }
@@ -41,6 +48,9 @@ type Vec = { x: number; y: number }
 // Daylight palette: grass and dirt terrain, gravel/asphalt runoffs, urban rooftops.
 const TERRAIN_FILLS = ['#2E4826', '#33502B', '#2A421F', '#514336', '#3A5730']
 const RUNOFF_FILLS = ['#8F8568', '#565C66']
+// Canopy lobe jitter, as a fraction of the nominal radius: the drawn blob spans [BASE, BASE+SPAN].
+const TREE_JITTER_BASE = 0.8
+const TREE_JITTER_SPAN = 0.35
 const BUILDING_FILLS = ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147']
 
 // Smooth closed path through jittered points (quadratic through midpoints).
@@ -190,14 +200,35 @@ export function buildScenery(
     return th
   })
 
-  const distToTrack = (x: number, y: number): number => {
-    let best = Infinity
-    for (let i = 0; i < S; i += 2) {
-      const p = samples[i].p
-      const d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
-      if (d < best) best = d
+  // Exact distance to the drawn centreline. The old version scanned every SECOND sample of a
+  // 4-unit sampling and took the nearest VERTEX, so the smallest value it could return near the
+  // track was 4 units — on circuits above ~2.6 metres/unit that is more than the clearance trees
+  // are asked for, and they were planted on the racing line. Indexing the polyline once makes the
+  // exact test cheaper than the broken approximation was.
+  const centreline = trace.map(([x, y]) => ({ x, y }))
+  const trackIndex = makePolylineIndex(centreline, u(40))
+  const trackDist = (p: Vec): number => trackIndex.dist(p)
+
+  /** Does this footprint keep `clearM` metres between its whole outline and the centreline?
+   *  Corner-only checks miss a track that cuts through the middle of a long stand beside a curve,
+   *  so the perimeter is walked — but only after two cheap tests have failed to settle it. */
+  const obbClearsTrack = (o: Obb, clearM: number, stepM = 6): boolean => {
+    const need = u(clearM)
+    const dc = trackDist({ x: o.x, y: o.y })
+    const rad = Math.hypot(o.w, o.h) / 2
+    if (dc - rad >= need) return true // every point of the footprint is within `rad` of the centre
+    if (dc < need) return false // the centre alone is already too close
+    const cs = obbCorners(o)
+    for (let i = 0; i < 4; i++) {
+      const a = cs[i]
+      const b = cs[(i + 1) % 4]
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / u(stepM)))
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps
+        if (trackDist({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }) < need) return false
+      }
     }
-    return Math.sqrt(best)
+    return true
   }
 
   const [vx, vy, vw, vh] = viewBox.split(' ').map(Number)
@@ -285,14 +316,17 @@ export function buildScenery(
   // and fought the real per-team pit building). Scenery keeps the area clear instead. ──
   const plaza: SceneryRect[] = []
 
-  // Overlap bookkeeping for every placed rectangle (bounding-circle test).
-  const placed: Array<{ x: number; y: number; r: number }> = []
-  const overlaps = (x: number, y: number, w: number, h: number) => {
-    const r = Math.hypot(w, h) / 2
-    return placed.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + r - u(2))
-  }
-  const claim = (x: number, y: number, w: number, h: number) => placed.push({ x, y, r: Math.hypot(w, h) / 2 })
-  plaza.forEach((r) => claim(r.x, r.y, r.w, r.h))
+  // Occupancy. Structures and canopies are tracked separately: a tree must clear a building's TRUE
+  // footprint completely, but trees are allowed to crowd each other, which is what makes a grove
+  // read as woodland instead of a dot grid. The old single registry used a CIRCUMSCRIBED circle,
+  // so a 95x17 m grandstand claimed a 48 m radius and carved a hole in the building field, while
+  // simultaneously letting rotated footprints through because the tree test ignored rotation.
+  const structOcc = makeOccupancy(u(60))
+  const treeOcc = makeOccupancy(u(20))
+  const STRUCT_GAP = u(5) // clearance between neighbouring structures
+  const TREE_TRACK_CLEAR_M = 13 // canopy EDGE, not centre, from the centreline
+  const STAND_TRACK_CLEAR_M = 9
+  const BUILDING_TRACK_CLEAR_M = 18
 
   // ── Grandstands: seek the track, prefer corners, mostly outside ──
   const stands: SceneryStand[] = []
@@ -311,21 +345,15 @@ export function buildScenery(
     const w = u(45 + rng() * 50)
     const h = u(12 + rng() * 5)
     const rot = Math.atan2(t.y, t.x)
-    // A long stand beside a curving track can reach the ribbon with its ENDS — verify clearance along
-    // the whole length, not just at the centre.
-    const ex = Math.cos(rot) * (w / 2)
-    const ey = Math.sin(rot) * (w / 2)
-    const clearance = h / 2 + u(8)
-    if (
-      distToTrack(cx, cy) < clearance ||
-      distToTrack(cx - ex, cy - ey) < clearance ||
-      distToTrack(cx + ex, cy + ey) < clearance
-    ) continue
-    if (overlaps(cx, cy, w, h)) continue
-    // Local +y in world space is (-t.y, t.x); the roof strip sits on the edge facing the track.
+    const obb: Obb = { x: cx, y: cy, w, h, rot }
+    // A long stand beside a curving track can reach the ribbon with its ENDS, so clearance is
+    // measured around the whole footprint rather than at three sampled points.
+    if (!obbClearsTrack(obb, STAND_TRACK_CLEAR_M)) continue
+    if (structOcc.hitsObb(obb, STRUCT_GAP)) continue
+    // Local +y in world space is (-t.y, t.x); `flipped` marks the edge FACING the track.
     const flipped = -dir.x * -t.y + -dir.y * t.x > 0
     stands.push({ x: cx, y: cy, w, h, rot, fill: '#4A5260', flipped })
-    claim(cx, cy, w, h)
+    structOcc.addObb(obb)
   }
 
   // ── Building clusters, clear of the track ──
@@ -333,31 +361,40 @@ export function buildScenery(
   const clusterTarget = Math.round((13 + rng() * 5) * buildingMult)
   for (let c = 0, tries = 0; c < clusterTarget && tries < clusterTarget * 3; tries++) {
     const seed = randPoint()
-    if (distToTrack(seed.x, seed.y) < u(40)) continue
+    if (trackDist(seed) < u(40)) continue
     c++
     const rot = rng() * Math.PI
     const cos = Math.cos(rot)
     const sin = Math.sin(rot)
     const cols = 2 + Math.floor(rng() * 3)
     const rows = 2 + Math.floor(rng() * 2)
-    const cell = u(24 + rng() * 12)
+    // One size band per cluster, with the grid pitch derived FROM it. The pitch used to be drawn
+    // independently of the footprints, so neighbours in the same block routinely overlapped and
+    // were rejected — every cluster collapsed to one or two lone boxes.
+    const baseW = u(18 + rng() * 22)
+    const baseH = u(15 + rng() * 18)
+    const cell = Math.max(baseW, baseH) * (1.3 + rng() * 0.4)
     for (let gx = 0; gx < cols; gx++) {
       for (let gy = 0; gy < rows; gy++) {
-        if (rng() > 0.72) continue
+        if (rng() > 0.78) continue
         const lx = (gx - (cols - 1) / 2) * cell
         const ly = (gy - (rows - 1) / 2) * cell
         const bx = seed.x + lx * cos - ly * sin
         const by = seed.y + lx * sin + ly * cos
-        if (distToTrack(bx, by) < u(26)) continue
         if (Math.hypot(bx - pitBox.x, by - pitBox.y) < u(120)) continue
-        const w = u(16 + rng() * 20)
-        const h = u(13 + rng() * 16)
-        if (overlaps(bx, by, w, h)) continue
-        claim(bx, by, w, h)
+        const w = baseW * (0.82 + rng() * 0.36)
+        const h = baseH * (0.82 + rng() * 0.36)
+        const brot = rot + (rng() - 0.5) * 0.12
+        const obb: Obb = { x: bx, y: by, w, h, rot: brot }
+        // Corner-aware, like the stands: a centre-only test let a 36 m building sit 26 m from the
+        // centreline with a corner on the tarmac.
+        if (!obbClearsTrack(obb, BUILDING_TRACK_CLEAR_M)) continue
+        if (structOcc.hitsObb(obb, STRUCT_GAP)) continue
+        structOcc.addObb(obb)
         const type = Math.floor(rng() * 10)
         const big = w * metresPerUnit > 22
         buildings.push({
-          x: bx, y: by, w, h, rot: rot + (rng() - 0.5) * 0.12,
+          x: bx, y: by, w, h, rot: brot,
           fill: BUILDING_FILLS[Math.floor(rng() * BUILDING_FILLS.length)],
           parts: buildingParts(type, w, h),
           vents: big
@@ -374,10 +411,7 @@ export function buildScenery(
   const trees: SceneryTree[] = []
   const treeTarget = Math.round(380 * treeMult)
   const groves = Array.from({ length: 7 }, randPoint)
-  const rects = [...stands, ...buildings, ...plaza]
-  const clearOfRects = (x: number, y: number) =>
-    rects.every((r) => Math.abs(x - r.x) > r.w / 2 + u(4) || Math.abs(y - r.y) > r.h / 2 + u(4))
-  for (let i = 0; i < treeTarget * 1.6 && trees.length < treeTarget; i++) {
+  for (let i = 0; i < treeTarget * 2.4 && trees.length < treeTarget; i++) {
     let p: Vec
     const roll = rng()
     if (roll < 0.35) {
@@ -397,14 +431,25 @@ export function buildScenery(
     } else {
       p = randPoint()
     }
-    if (distToTrack(p.x, p.y) < u(15)) continue
+    // The canopy radius is drawn BEFORE the clearance tests, because every one of them needs it.
+    // Drawing it afterwards meant a tree cleared as a point then grew up to 6.8 m of canopy over
+    // whatever it had just cleared.
+    const rNom = u(3.2 + rng() * 3.6)
+    // blobPath jitters each lobe to (jBase + jSpan) of the nominal radius, so the drawn canopy
+    // reaches further than rNom; clearance must be measured against the bounding radius.
+    const r = rNom * (TREE_JITTER_BASE + TREE_JITTER_SPAN)
+    if (trackDist(p) - r < u(TREE_TRACK_CLEAR_M)) continue
     if (Math.hypot(p.x - pitBox.x, p.y - pitBox.y) < u(120)) continue // pit complex is built, not planted
-    if (!clearOfRects(p.x, p.y)) continue
-    const r = u(3.2 + rng() * 3.6)
+    if (structOcc.hitsDisc(p.x, p.y, r, u(1.5))) continue
+    // Canopies may crowd, but not coincide: testing a reduced radius lets a grove close up into
+    // woodland while still keeping the trunks apart.
+    if (treeOcc.hitsDisc(p.x, p.y, r * 0.5)) continue
+    treeOcc.addDisc(p.x, p.y, r * 0.5)
     trees.push({
-      d: blobPath(p.x, p.y, r, r * 0.92, rng() * Math.PI, rng, 7, 0.8, 0.35),
-      hd: blobPath(p.x - r * 0.28, p.y - r * 0.32, r * 0.5, r * 0.42, rng() * Math.PI, rng, 6, 0.8, 0.3),
+      d: blobPath(p.x, p.y, rNom, rNom * 0.92, rng() * Math.PI, rng, 7, TREE_JITTER_BASE, TREE_JITTER_SPAN),
+      hd: blobPath(p.x - rNom * 0.28, p.y - rNom * 0.32, rNom * 0.5, rNom * 0.42, rng() * Math.PI, rng, 6, 0.8, 0.3),
       variant: rng() < 0.75 ? 0 : 1,
+      x: p.x, y: p.y, r,
     })
   }
 

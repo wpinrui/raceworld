@@ -112,13 +112,17 @@ export function pointInRing(p: Vec, ring: Vec[]): boolean {
   return inside
 }
 
-const key = (cx: number, cy: number) => `${cx},${cy}`
+// Numeric cell keys. These indexes are queried thousands of times per scenery build, and string
+// keys plus a per-query Set were costing more than the exact geometry they were meant to make
+// affordable. Coordinates are viewBox units, comfortably inside +/-32768.
+const KEY_BIAS = 32768
+const key = (cx: number, cy: number) => (cx + KEY_BIAS) * 65536 + (cy + KEY_BIAS)
 
 /** Grid-bucketed polyline, for repeated exact distance queries against the same track centreline.
  *  A linear scan per candidate was the dominant cost of the scenery build; there are thousands of
  *  candidates and only one centreline, so it pays to index it once. */
 export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
-  const buckets = new Map<string, number[]>()
+  const buckets = new Map<number, number[]>()
   const put = (cx: number, cy: number, i: number) => {
     const k = key(cx, cy)
     const b = buckets.get(k)
@@ -126,6 +130,10 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
     else buckets.set(k, [i])
   }
   const last = closed ? pts.length : pts.length - 1
+  let minCx = Infinity
+  let maxCx = -Infinity
+  let minCy = Infinity
+  let maxCy = -Infinity
   for (let i = 0; i < last; i++) {
     const a = pts[i]
     const b = pts[(i + 1) % pts.length]
@@ -136,36 +144,45 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
     const y0 = Math.floor(Math.min(a.y, b.y) / cell)
     const y1 = Math.floor(Math.max(a.y, b.y) / cell)
     for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) put(cx, cy, i)
+    if (x0 < minCx) minCx = x0
+    if (x1 > maxCx) maxCx = x1
+    if (y0 < minCy) minCy = y0
+    if (y1 > maxCy) maxCy = y1
   }
+
+  // Visit marks instead of a per-query Set: dist() runs thousands of times per build and the
+  // allocation dominated the measured cost.
+  const stamp = new Int32Array(last)
+  let gen = 0
 
   /** Exact distance from p to the polyline. */
   const dist = (p: Vec): number => {
     const px = Math.floor(p.x / cell)
     const py = Math.floor(p.y / cell)
     let best = Infinity
-    const seen = new Set<number>()
+    gen++
     // Expand in Chebyshev rings. Any segment stored in ring k sits at least (k-1)*cell away from a
     // point inside the centre cell, so once that bound exceeds the best distance found we can stop.
     for (let k = 0; ; k++) {
       if (k > 0 && (k - 1) * cell > best) break
-      let any = false
       for (let cx = px - k; cx <= px + k; cx++) {
+        const edgeX = cx === px - k || cx === px + k
         for (let cy = py - k; cy <= py + k; cy++) {
-          // Ring only: skip the interior, already visited on an earlier pass.
-          if (k > 0 && Math.abs(cx - px) !== k && Math.abs(cy - py) !== k) continue
+          // Ring only: the interior was covered on an earlier pass.
+          if (k > 0 && !edgeX && cy !== py - k && cy !== py + k) continue
           const b = buckets.get(key(cx, cy))
           if (!b) continue
-          any = true
           for (const i of b) {
-            if (seen.has(i)) continue
-            seen.add(i)
+            if (stamp[i] === gen) continue
+            stamp[i] = gen
             const d = distPointToSegment(p, pts[i], pts[(i + 1) % pts.length])
             if (d < best) best = d
           }
         }
       }
-      // Guard against an unbounded walk when the point is far outside the indexed area.
-      if (!any && best === Infinity && k > 512) break
+      // Once the ring encloses every occupied cell, every segment has been tested — without this
+      // a query far outside the track walks rings forever.
+      if (px - k <= minCx && px + k >= maxCx && py - k <= minCy && py + k >= maxCy) break
     }
     return best
   }
@@ -180,43 +197,56 @@ type Occupant = { kind: 'obb'; obb: Obb } | { kind: 'disc'; x: number; y: number
  *  tests against everything already claimed, so overlap rules are one shared invariant rather than
  *  a different ad-hoc test per prop type. */
 export function makeOccupancy(cell: number) {
-  const buckets = new Map<string, Occupant[]>()
+  const buckets = new Map<number, number[]>()
   const all: Occupant[] = []
+  // Visit marks, grown in step with `all`, so a query never allocates.
+  let stamp = new Int32Array(64)
+  let gen = 0
 
-  const cellsFor = (x: number, y: number, r: number) => {
+  const add = (o: Occupant) => {
+    const id = all.length
+    all.push(o)
+    if (id >= stamp.length) {
+      const next = new Int32Array(stamp.length * 2)
+      next.set(stamp)
+      stamp = next
+    }
+    const x = o.kind === 'obb' ? o.obb.x : o.x
+    const y = o.kind === 'obb' ? o.obb.y : o.y
+    const r = o.kind === 'obb' ? obbRadius(o.obb) : o.r
     const x0 = Math.floor((x - r) / cell)
     const x1 = Math.floor((x + r) / cell)
     const y0 = Math.floor((y - r) / cell)
     const y1 = Math.floor((y + r) / cell)
-    return { x0, x1, y0, y1 }
-  }
-
-  const add = (o: Occupant) => {
-    all.push(o)
-    const [x, y, r] = o.kind === 'obb'
-      ? [o.obb.x, o.obb.y, obbRadius(o.obb)]
-      : [o.x, o.y, o.r]
-    const { x0, x1, y0, y1 } = cellsFor(x, y, r)
     for (let cx = x0; cx <= x1; cx++) {
       for (let cy = y0; cy <= y1; cy++) {
         const k = key(cx, cy)
         const b = buckets.get(k)
-        if (b) b.push(o)
-        else buckets.set(k, [o])
+        if (b) b.push(id)
+        else buckets.set(k, [id])
       }
     }
   }
 
-  const near = (x: number, y: number, r: number): Occupant[] => {
-    const { x0, x1, y0, y1 } = cellsFor(x, y, r)
-    const out = new Set<Occupant>()
+  /** Walk every distinct occupant whose cell range meets the query disc, stopping at the first hit. */
+  const anyNear = (x: number, y: number, r: number, hit: (o: Occupant) => boolean): boolean => {
+    const x0 = Math.floor((x - r) / cell)
+    const x1 = Math.floor((x + r) / cell)
+    const y0 = Math.floor((y - r) / cell)
+    const y1 = Math.floor((y + r) / cell)
+    gen++
     for (let cx = x0; cx <= x1; cx++) {
       for (let cy = y0; cy <= y1; cy++) {
         const b = buckets.get(key(cx, cy))
-        if (b) for (const o of b) out.add(o)
+        if (!b) continue
+        for (const id of b) {
+          if (stamp[id] === gen) continue
+          stamp[id] = gen
+          if (hit(all[id])) return true
+        }
       }
     }
-    return [...out]
+    return false
   }
 
   return {
@@ -224,21 +254,19 @@ export function makeOccupancy(cell: number) {
     addDisc: (x: number, y: number, r: number) => add({ kind: 'disc', x, y, r }),
     /** True when this footprint would touch anything already claimed, within `pad` clearance. */
     hitsObb(obb: Obb, pad = 0): boolean {
-      for (const o of near(obb.x, obb.y, obbRadius(obb) + pad)) {
-        if (o.kind === 'obb') {
-          if (obbOverlap(obb, o.obb, pad)) return true
-        } else if (distPointToObb({ x: o.x, y: o.y }, obb) < o.r + pad) return true
-      }
-      return false
+      return anyNear(obb.x, obb.y, obbRadius(obb) + pad, (o) => (
+        o.kind === 'obb'
+          ? obbOverlap(obb, o.obb, pad)
+          : distPointToObb({ x: o.x, y: o.y }, obb) < o.r + pad
+      ))
     },
     /** True when this disc would touch anything already claimed, within `pad` clearance. */
     hitsDisc(x: number, y: number, r: number, pad = 0): boolean {
-      for (const o of near(x, y, r + pad)) {
-        if (o.kind === 'obb') {
-          if (distPointToObb({ x, y }, o.obb) < r + pad) return true
-        } else if (Math.hypot(o.x - x, o.y - y) < o.r + r + pad) return true
-      }
-      return false
+      return anyNear(x, y, r + pad, (o) => (
+        o.kind === 'obb'
+          ? distPointToObb({ x, y }, o.obb) < r + pad
+          : Math.hypot(o.x - x, o.y - y) < o.r + r + pad
+      ))
     },
     get count() { return all.length },
   }
