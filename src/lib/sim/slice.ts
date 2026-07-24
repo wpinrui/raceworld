@@ -434,14 +434,21 @@ export function simulateSlice(
     if (lapResult.overtook && carAheadState) {
       const aheadUpdated = updatedStates.get(carAheadState.driverId)!
       const pen = lapResult.defenderPenalty ?? 0
-      const aheadLaps = pen > 0 && aheadUpdated.lapTimes.length
+      // The penalty lands in the defender's CURRENT slice bookkeeping. lapTimes' last entry holds this
+      // lap only on a lap-end slice (always true at frac=1); on a mid-lap sector it holds a PREVIOUS lap
+      // and must not be touched — the sector split carries the penalty into the lap sum instead.
+      const aheadLaps = spec.lapEnd && pen > 0 && aheadUpdated.lapTimes.length
         ? aheadUpdated.lapTimes.map((t, i) => (i === aheadUpdated.lapTimes.length - 1 ? t + pen : t))
         : aheadUpdated.lapTimes
+      const aheadSectors = spec.frac !== 1 && pen > 0 && (aheadUpdated.sectorTimes?.length ?? 0) > 0
+        ? aheadUpdated.sectorTimes!.map((t, i) => (i === aheadUpdated.sectorTimes!.length - 1 ? t + pen : t))
+        : aheadUpdated.sectorTimes
       updatedStates.set(carAheadState.driverId, {
         ...aheadUpdated,
         position: current.position,
         totalTime: aheadUpdated.totalTime + pen,
         lapTimes: aheadLaps,
+        sectorTimes: aheadSectors,
       })
       if (pen > 0) lapTimesThisLap.set(carAheadState.driverId, (lapTimesThisLap.get(carAheadState.driverId) ?? 0) + pen)
       current = { ...current, position: aheadUpdated.position }
@@ -482,12 +489,25 @@ export function simulateSlice(
     // 2j. Accumulate totalTime
     current = { ...current, totalTime: current.totalTime + finalLapTime }
 
+    // Sector split bookkeeping (#sector-engine): reset on the lap's first slice, append otherwise.
+    // Kept through the lap end (the client animates the final sector) and replaced next lap.
+    if (spec.frac !== 1) {
+      current = {
+        ...current,
+        sectorTimes: spec.lapStart ? [finalLapTime] : [...(current.sectorTimes ?? []), finalLapTime],
+      }
+    }
+
     if (spec.lapEnd) {
       // 2k. Increment stintLap (unless we just pitted, stintLap was set to 0 above)
       current = { ...current, stintLap: current.stintLap + 1 }
 
-      // 2l. Append lapTime
-      current = { ...current, lapTimes: [...current.lapTimes, finalLapTime] }
+      // 2l. Append lapTime — the whole lap at frac=1; in sector mode the sum of this lap's splits
+      // (which already include this final slice), so Σ sectorTimes === lapTimes' last entry exactly.
+      const lapTotal = spec.frac === 1
+        ? finalLapTime
+        : (current.sectorTimes ?? []).reduce((a, b) => a + b, 0)
+      current = { ...current, lapTimes: [...current.lapTimes, lapTotal] }
 
       // Pit lap belongs to the old stint (already counted via +1 in history).
       // Undo the increment so the new stint starts at 0; out-lap becomes lap 1 next tick.
@@ -523,6 +543,7 @@ export function simulateSlice(
     state.totalLaps,
     prevMoisture,
     currentMoisture,
+    { frac: spec.frac, lapComplete: spec.lapEnd },
   )
 
   // Step 7: Return new state

@@ -99,6 +99,9 @@ export interface DriverRaceState {
   position: number
   totalTime: number
   lapTimes: number[]
+  sectorTimes?: number[] // played-race sector engine (#sector-engine): this lap's sub-lap splits, appended
+                         // per sector tick. Length 8 ⇔ they describe lapTimes' last entry; <8 ⇔ the lap in
+                         // progress. Absent on headless/legacy states (whole-lap ticks).
   currentTyre: TyreState
   tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
                          // Absent (legacy/forecast states) → treated as a fresh-tyre temp.
@@ -166,6 +169,8 @@ export interface RaceState {
   year: number                                             // season year, for era-dependent effects (e.g. pit-lane loss)
   totalLaps: number
   currentLap: number
+  currentSector?: number                                    // played-race sector engine (#sector-engine): the sector
+                                                            // in progress, 0..7 within currentLap. Absent on headless states.
   weather: WeatherPoint[]                                   // the true weather (drives the sim)
   weatherForecast: WeatherPoint[]                           // fallible prediction; blended toward truth as laps near (UI only)
   drivers: DriverRaceState[]

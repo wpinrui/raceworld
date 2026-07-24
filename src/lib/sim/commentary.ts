@@ -22,11 +22,15 @@ export function generateCommentary(
   totalLaps: number,
   prevMoisture: number,
   currentMoisture: number,
+  // Sector engine (#sector-engine): frac is the slice of a lap this diff covers (scales the closing-gap
+  // trigger); lapComplete gates the once-per-lap lines (podium, weather) to the lap's final slice.
+  { frac = 1, lapComplete = true }: { frac?: number; lapComplete?: boolean } = {},
 ): CommentaryEntry[] {
   const prevMap = new Map<string, DriverRaceState>(prevStates.map((d) => [d.driverId, d]))
 
   // Finish lap is handled separately — only the podium is narrated (full results live in
-  // the results panel), so it never floods the feed.
+  // the results panel), so it never floods the feed. Mid-lap sectors of the final lap stay silent.
+  if (lap === totalLaps && !lapComplete) return []
   if (lap === totalLaps) {
     const podium = [...newStates].filter((s) => !s.retired).sort((a, b) => a.position - b.position).slice(0, 3)
     return podium.map((state) => {
@@ -91,7 +95,7 @@ export function generateCommentary(
     if (newState.retired) continue
     const prev = prevMap.get(newState.driverId)
     if (!prev) continue
-    if (prev.gap - newState.gap > 0.1 && newState.gap >= 0.3 && newState.gap <= 3) {
+    if (prev.gap - newState.gap > 0.1 * frac && newState.gap >= 0.3 && newState.gap <= 3) {
       const name = driverNames[newState.driverId] ?? newState.driverId
       const carAhead = newStates.find((d) => d.position === newState.position - 1)
       const aheadName = carAhead ? (driverNames[carAhead.driverId] ?? carAhead.driverId) : 'the leader'
@@ -105,9 +109,10 @@ export function generateCommentary(
   // Take the top MAX_PER_LAP scored candidates.
   const top = candidates.sort((a, b) => b.priority - a.priority).slice(0, MAX_PER_LAP).map((c) => c.entry)
 
-  // Weather changes are infrequent and always worth surfacing — add on top of the cap.
+  // Weather changes are infrequent and always worth surfacing — add on top of the cap. Once per lap:
+  // every sector of a lap sees the same lap-to-lap moisture delta, so only the final slice reports it.
   const moistureDelta = currentMoisture - prevMoisture
-  if (Math.abs(moistureDelta) > 0.1) {
+  if (lapComplete && Math.abs(moistureDelta) > 0.1) {
     top.push({ lap, text: moistureDelta > 0 ? 'Rain is intensifying!' : 'The track is drying!', type: 'weather' })
   }
 
