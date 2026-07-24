@@ -33,6 +33,33 @@ export function distToPolyline(p: Vec, pts: Vec[], closed = true): number {
   return best
 }
 
+/** The closest point ON a polyline, which is generally interior to a segment rather than a vertex.
+ *  Nearest-VERTEX is not a usable substitute: the densified trace carries one long segment across
+ *  the start/finish line, where the nearest vertex can be three times further away than the true
+ *  closest point and sit on a different part of the circuit entirely. */
+export function closestPointOnPolyline(p: Vec, pts: Vec[], closed = true): Vec {
+  let best = Infinity
+  let out = pts[0]
+  const last = closed ? pts.length : pts.length - 1
+  for (let i = 0; i < last; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const vx = b.x - a.x
+    const vy = b.y - a.y
+    const l2 = vx * vx + vy * vy
+    let t = l2 === 0 ? 0 : ((p.x - a.x) * vx + (p.y - a.y) * vy) / l2
+    t = t < 0 ? 0 : t > 1 ? 1 : t
+    const qx = a.x + t * vx
+    const qy = a.y + t * vy
+    const d = (p.x - qx) * (p.x - qx) + (p.y - qy) * (p.y - qy)
+    if (d < best) {
+      best = d
+      out = { x: qx, y: qy }
+    }
+  }
+  return out
+}
+
 /** The four world-space corners, in local order (-,-) (+,-) (+,+) (-,+). */
 export function obbCorners(r: Obb): Vec[] {
   const c = Math.cos(r.rot)

@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   distPointToSegment, distToPolyline, obbCorners, obbRadius, distPointToObb, obbOverlap,
-  pointInRing, makePolylineIndex, makeOccupancy, type Obb,
+  pointInRing, makePolylineIndex, makeOccupancy, closestPointOnPolyline, type Obb,
 } from './geom'
 
 const P = (x: number, y: number) => ({ x, y })
@@ -218,5 +218,24 @@ describe('makeOccupancy', () => {
     occ.addDisc(0, 0, 1)
     occ.addObb({ x: 50, y: 50, w: 4, h: 4, rot: 0 })
     expect(occ.count).toBe(2)
+  })
+})
+
+describe('closestPointOnPolyline', () => {
+  it('lands inside a long segment, not on its endpoints', () => {
+    // The densified track carries one long segment across the start/finish line; a nearest-VERTEX
+    // search there returns a point on a different part of the circuit.
+    const long = [P(0, 0), P(200, 0), P(200, 200)]
+    const q = closestPointOnPolyline(P(100, 30), long, false)
+    expect(q.x).toBeCloseTo(100, 9)
+    expect(q.y).toBeCloseTo(0, 9)
+  })
+
+  it('agrees with distToPolyline', () => {
+    const ring = [P(0, 0), P(100, 0), P(100, 100), P(0, 100)]
+    for (const p of [P(50, 20), P(-10, 50), P(130, 130), P(50, 50)]) {
+      const q = closestPointOnPolyline(p, ring)
+      expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeCloseTo(distToPolyline(p, ring), 6)
+    }
   })
 })

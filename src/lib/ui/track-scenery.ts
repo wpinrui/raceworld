@@ -8,19 +8,26 @@
 import { seededRng } from '@/lib/sim/rng-utils'
 import { densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type TrackTrace } from './track-path'
 import { makeOccupancy, makePolylineIndex, obbCorners, type Obb } from './geom'
+import { blobPath, buildingParts, pickArchetype, pointOnParts, type SceneryPart } from './scenery-shapes'
+
+export type { SceneryPart } from './scenery-shapes'
 
 export interface SceneryBlob { d: string; fill: string; water?: boolean }
-export interface SceneryPart { dx: number; dy: number; w: number; h: number }
 export interface SceneryRect {
   x: number; y: number; w: number; h: number; rot: number // centre, overall size, radians
   fill: string
   /** Footprint as a union of rects in local coords; absent = a single w×h slab. */
   parts?: SceneryPart[]
   vents?: Array<{ dx: number; dy: number; s: number }>
+  /** Storey count, driving the fake extrusion depth and the drop-shadow length. */
+  storeys?: number
 }
 export interface SceneryStand extends SceneryRect {
-  /** True when the trackside (roof) edge is the local +y edge. */
-  flipped: boolean
+  /** True when the edge LOOKING AT the track is the local +y edge.
+   *  The roof and back wall go on the other edge: a real grandstand is roofed at the rear with the
+   *  seating raked down toward the circuit. Drawing the roof band on the trackside edge put a wall
+   *  between the crowd and the race, which read as the spectators facing backwards. */
+  facing: boolean
 }
 export interface SceneryTree {
   d: string; hd: string; variant: 0 | 1
@@ -52,89 +59,6 @@ const RUNOFF_FILLS = ['#8F8568', '#565C66']
 const TREE_JITTER_BASE = 0.8
 const TREE_JITTER_SPAN = 0.35
 const BUILDING_FILLS = ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147']
-
-// Smooth closed path through jittered points (quadratic through midpoints).
-function smoothClosed(pts: Vec[]): string {
-  const n = pts.length
-  const mid = (a: Vec, b: Vec) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
-  const m0 = mid(pts[n - 1], pts[0])
-  let d = `M ${m0.x.toFixed(1)} ${m0.y.toFixed(1)}`
-  for (let i = 0; i < n; i++) {
-    const m = mid(pts[i], pts[(i + 1) % n])
-    d += ` Q ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)} ${m.x.toFixed(1)} ${m.y.toFixed(1)}`
-  }
-  return d + ' Z'
-}
-
-function blobPath(
-  cx: number, cy: number, rx: number, ry: number, rot: number, rng: () => number,
-  n = 10, jBase = 0.65, jSpan = 0.6,
-): string {
-  const pts: Vec[] = []
-  const cos = Math.cos(rot)
-  const sin = Math.sin(rot)
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2
-    const k = jBase + rng() * jSpan
-    const ex = Math.cos(a) * rx * k
-    const ey = Math.sin(a) * ry * k
-    pts.push({ x: cx + ex * cos - ey * sin, y: cy + ex * sin + ey * cos })
-  }
-  return smoothClosed(pts)
-}
-
-// Ten building footprint archetypes as unions of rectangles: slab, L, T, U, H, Z, cross, courtyard,
-// tower-on-podium, stepped terrace.
-function buildingParts(type: number, w: number, h: number): SceneryPart[] {
-  switch (type % 10) {
-    case 1: return [
-      { dx: 0, dy: -h * 0.25, w, h: h * 0.5 },
-      { dx: -w * 0.25, dy: h * 0.25, w: w * 0.5, h: h * 0.5 },
-    ]
-    case 2: return [
-      { dx: 0, dy: -h * 0.25, w, h: h * 0.5 },
-      { dx: 0, dy: h * 0.25, w: w * 0.4, h: h * 0.5 },
-    ]
-    case 3: return [
-      { dx: 0, dy: -h * 0.3, w, h: h * 0.4 },
-      { dx: -w * 0.35, dy: h * 0.15, w: w * 0.3, h: h * 0.7 },
-      { dx: w * 0.35, dy: h * 0.15, w: w * 0.3, h: h * 0.7 },
-    ]
-    case 4: return [
-      { dx: -w * 0.35, dy: 0, w: w * 0.3, h },
-      { dx: w * 0.35, dy: 0, w: w * 0.3, h },
-      { dx: 0, dy: 0, w: w * 0.4, h: h * 0.35 },
-    ]
-    case 5: return [
-      { dx: -w * 0.2, dy: -h * 0.22, w: w * 0.6, h: h * 0.45 },
-      { dx: w * 0.2, dy: h * 0.22, w: w * 0.6, h: h * 0.45 },
-    ]
-    case 6: return [
-      { dx: 0, dy: 0, w, h: h * 0.4 },
-      { dx: 0, dy: 0, w: w * 0.4, h },
-    ]
-    case 7: {
-      const tw = w * 0.28
-      const th = h * 0.28
-      return [
-        { dx: 0, dy: -h / 2 + th / 2, w, h: th },
-        { dx: 0, dy: h / 2 - th / 2, w, h: th },
-        { dx: -w / 2 + tw / 2, dy: 0, w: tw, h },
-        { dx: w / 2 - tw / 2, dy: 0, w: tw, h },
-      ]
-    }
-    case 8: return [
-      { dx: 0, dy: 0, w, h },
-      { dx: w * 0.18, dy: -h * 0.12, w: w * 0.42, h: h * 0.5 },
-    ]
-    case 9: return [
-      { dx: -w * 0.28, dy: -h * 0.2, w: w * 0.44, h: h * 0.6 },
-      { dx: 0, dy: 0, w: w * 0.44, h: h * 0.6 },
-      { dx: w * 0.28, dy: h * 0.2, w: w * 0.44, h: h * 0.6 },
-    ]
-    default: return [{ dx: 0, dy: 0, w, h }]
-  }
-}
 
 export function buildScenery(
   rawTrace: TrackTrace,
@@ -327,6 +251,7 @@ export function buildScenery(
   const TREE_TRACK_CLEAR_M = 13 // canopy EDGE, not centre, from the centreline
   const STAND_TRACK_CLEAR_M = 9
   const BUILDING_TRACK_CLEAR_M = 18
+  const MIN_PART_M = 8 // narrowest a building wing may be before it stops reading as architecture
 
   // ── Grandstands: seek the track, prefer corners, mostly outside ──
   const stands: SceneryStand[] = []
@@ -344,15 +269,30 @@ export function buildScenery(
     if (Math.hypot(cx - pitBox.x, cy - pitBox.y) < u(70)) continue
     const w = u(45 + rng() * 50)
     const h = u(12 + rng() * 5)
-    const rot = Math.atan2(t.y, t.x)
+    // Align to the CHORD the stand actually spans, not the tangent at its midpoint. A 45-95 m stand
+    // beside a corner took the tangent's angle and sat askew to the track it faces.
+    const half = w / 2
+    const a0 = samples[(i - Math.round(half / STEP) + S * 2) % S].p
+    const a1 = samples[(i + Math.round(half / STEP)) % S].p
+    const chord = Math.hypot(a1.x - a0.x, a1.y - a0.y) || 1
+    const ct = { x: (a1.x - a0.x) / chord, y: (a1.y - a0.y) / chord }
+    const rot = Math.atan2(ct.y, ct.x)
+    // A stand faces the section it was anchored to. Where the circuit folds back on itself, some
+    // OTHER section can end up closer, and the stand then reads as facing away from the nearest
+    // piece of track. Those spots are ambiguous whichever way it points, so skip them.
+    if (trackDist({ x: cx, y: cy }) < Math.hypot(cx - p.x, cy - p.y) - u(2)) continue
     const obb: Obb = { x: cx, y: cy, w, h, rot }
     // A long stand beside a curving track can reach the ribbon with its ENDS, so clearance is
     // measured around the whole footprint rather than at three sampled points.
     if (!obbClearsTrack(obb, STAND_TRACK_CLEAR_M)) continue
     if (structOcc.hitsObb(obb, STRUCT_GAP)) continue
-    // Local +y in world space is (-t.y, t.x); `flipped` marks the edge FACING the track.
-    const flipped = -dir.x * -t.y + -dir.y * t.x > 0
-    stands.push({ x: cx, y: cy, w, h, rot, fill: '#4A5260', flipped })
+    // Local +y in world space is (-ct.y, ct.x); `facing` marks the edge that looks AT the track.
+    // The roof and back wall belong on the opposite edge — see SceneryStand.facing.
+    const facing = -dir.x * -ct.y + -dir.y * ct.x > 0
+    stands.push({
+      x: cx, y: cy, w, h, rot, fill: '#4A5260', facing,
+      storeys: 2 + Math.floor(rng() * 3),
+    })
     structOcc.addObb(obb)
   }
 
@@ -391,16 +331,23 @@ export function buildScenery(
         if (!obbClearsTrack(obb, BUILDING_TRACK_CLEAR_M)) continue
         if (structOcc.hitsObb(obb, STRUCT_GAP)) continue
         structOcc.addObb(obb)
-        const type = Math.floor(rng() * 10)
+        // Reject articulated archetypes that would come out as slivers at this size.
+        const type = pickArchetype(w, h, MIN_PART_M, metresPerUnit, rng())
+        const parts = buildingParts(type, w, h)
         const big = w * metresPerUnit > 22
         buildings.push({
           x: bx, y: by, w, h, rot: brot,
           fill: BUILDING_FILLS[Math.floor(rng() * BUILDING_FILLS.length)],
-          parts: buildingParts(type, w, h),
+          parts,
+          storeys: 1 + Math.floor(rng() * (big ? 5 : 3)),
+          // Rooftop clutter has to sit ON a roof: scattering it over the bounding box left vents
+          // floating in the holes of the cross and courtyard footprints.
           vents: big
-            ? Array.from({ length: 1 + Math.floor(rng() * 2) }, () => ({
-                dx: (rng() - 0.5) * w * 0.4, dy: (rng() - 0.5) * h * 0.4, s: u(1.6 + rng() * 1.4),
-              }))
+            ? Array.from({ length: 1 + Math.floor(rng() * 2) }, () => {
+                const s = u(1.6 + rng() * 1.4)
+                const at = pointOnParts(parts, rng, s)
+                return { dx: at.x, dy: at.y, s }
+              })
             : undefined,
         })
       }

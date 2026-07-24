@@ -10,7 +10,10 @@ import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { densifyTrace } from './track-path'
 import { buildScenery, type Scenery } from './track-scenery'
-import { distToPolyline, distPointToObb, obbOverlap, obbCorners, type Vec, type Obb } from './geom'
+import {
+  distToPolyline, distPointToObb, obbOverlap, obbCorners, closestPointOnPolyline,
+  type Vec, type Obb,
+} from './geom'
 
 const TRACK_HALF_M = 13.3 / 2 // the drawn ribbon's casing, from RaceTrackMap's TRACK_WIDTH_M
 const ids = Object.keys(TRACK_LAYOUTS)
@@ -69,6 +72,31 @@ describe.each(ids)('%s', (id) => {
       obbCorners(s).some((c) => distToPolyline(c, centre) < u(TRACK_HALF_M))
     ))
     expect(offenders).toHaveLength(0)
+  })
+
+  it('roofs every grandstand on the edge away from the track', () => {
+    // A real stand is roofed at the rear with the seating raked down toward the circuit. Drawing
+    // the roof on the trackside edge put a wall between the crowd and the race.
+    const backwards = scenery.stands.filter((s) => {
+      const t = { x: Math.cos(s.rot), y: Math.sin(s.rot) }
+      // Local +y maps to world (-t.y, t.x); the roof sits opposite the `facing` edge.
+      const roofOut = s.facing ? { x: t.y, y: -t.x } : { x: -t.y, y: t.x }
+      const near = closestPointOnPolyline({ x: s.x, y: s.y }, centre)
+      // The roof must point away from the track, i.e. oppose the direction toward it.
+      return roofOut.x * (near.x - s.x) + roofOut.y * (near.y - s.y) > 0
+    })
+    expect(backwards).toHaveLength(0)
+  })
+
+  it('keeps rooftop vents on a roof', () => {
+    // The cross and courtyard archetypes have holes; vents scattered over the bounding box floated
+    // in them.
+    const floating = scenery.buildings.flatMap((b) => (
+      (b.vents ?? []).filter((v) => !(b.parts ?? []).some((p) => (
+        Math.abs(v.dx - p.dx) <= p.w / 2 && Math.abs(v.dy - p.dy) <= p.h / 2
+      )))
+    ))
+    expect(floating).toHaveLength(0)
   })
 
   it('still fills the world', () => {
