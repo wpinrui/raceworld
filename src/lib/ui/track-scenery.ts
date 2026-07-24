@@ -42,8 +42,6 @@ type Vec = { x: number; y: number }
 const TERRAIN_FILLS = ['#2E4826', '#33502B', '#2A421F', '#514336', '#3A5730']
 const RUNOFF_FILLS = ['#8F8568', '#565C66']
 const BUILDING_FILLS = ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147']
-const PLAZA_FILL = '#4A505B'
-const PIT_BUILDING_FILL = '#525A68'
 
 // Smooth closed path through jittered points (quadratic through midpoints).
 function smoothClosed(pts: Vec[]): string {
@@ -132,8 +130,8 @@ export function buildScenery(
   rawTrace: TrackTrace,
   pitBox: { x: number; y: number },
   {
-    circuitId, metresPerUnit, viewBox, density = {},
-  }: { circuitId: string; metresPerUnit: number; viewBox: string; density?: SceneryDensity },
+    circuitId, metresPerUnit, viewBox, density = {}, pitOutside = false,
+  }: { circuitId: string; metresPerUnit: number; viewBox: string; density?: SceneryDensity; pitOutside?: boolean },
 ): Scenery {
   const rng = seededRng(`scenery:${circuitId}`)
   // Work on the SMOOTHED geometry the ribbon is actually drawn with — offsets from the raw polyline
@@ -162,10 +160,6 @@ export function buildScenery(
     const b = pt(i)
     const f = (w - cum[i - 1]) / (cum[i] - cum[i - 1] || 1)
     return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f }
-  }
-  const centroid: Vec = {
-    x: trace.reduce((s, p) => s + p[0], 0) / n,
-    y: trace.reduce((s, p) => s + p[1], 0) / n,
   }
 
   // The interior side follows the loop's ORIENTATION (shoelace sign), which is exact at every point —
@@ -241,7 +235,7 @@ export function buildScenery(
   // Kerbs: strips hugging both track edges through every corner. Sampled densely (every ~2 units) at
   // the exact edge offset and smoothed like the track itself, so they track the ribbon's boundary.
   const kerbs: SceneryKerb[] = []
-  const kerbOffset = u(6.0)
+  const kerbOffset = u(7.0)
   // The pit lane occupies the inside edge around the S/F line — no kerbs across its mouth.
   const inPitZone = (s: number) => {
     const f = (((s % total) + total) % total) / total
@@ -251,7 +245,9 @@ export function buildScenery(
     const sa = a * STEP - u(5)
     const sb = b * STEP + u(5)
     for (const side of [1, -1]) {
-      if (side === -1 && (inPitZone(sa) || inPitZone(sb))) continue
+      // No kerbs across the pit mouths — on whichever side the lane actually lives.
+      const pitKerbSide = pitOutside ? 1 : -1
+      if (side === pitKerbSide && (inPitZone(sa) || inPitZone(sb) || inPitZone((sa + sb) / 2))) continue
       const pts: Vec[] = []
       for (let s = sa; s <= sb; s += 2) {
         const p = at(s)
@@ -285,27 +281,9 @@ export function buildScenery(
     })
   }
 
-  // ── Pit complex: plaza + a long pit building on the inside of the pit lane ──
+  // ── Pit complex: owned by the race map's pit layer now (a generated plaza slid under the lane
+  // and fought the real per-team pit building). Scenery keeps the area clear instead. ──
   const plaza: SceneryRect[] = []
-  const pitIn = { x: centroid.x - pitBox.x, y: centroid.y - pitBox.y }
-  const pitInLen = Math.hypot(pitIn.x, pitIn.y) || 1
-  const pin = { x: pitIn.x / pitInLen, y: pitIn.y / pitInLen }
-  let nearestPit = 0
-  let bestPit = Infinity
-  samples.forEach((s, i) => {
-    const d = (s.p.x - pitBox.x) ** 2 + (s.p.y - pitBox.y) ** 2
-    if (d < bestPit) { bestPit = d; nearestPit = i }
-  })
-  const pitRot = Math.atan2(samples[nearestPit].t.y, samples[nearestPit].t.x)
-  plaza.push({
-    x: pitBox.x + pin.x * u(30), y: pitBox.y + pin.y * u(30),
-    w: u(130), h: u(55), rot: pitRot, fill: PLAZA_FILL,
-  })
-  plaza.push({
-    x: pitBox.x + pin.x * u(13), y: pitBox.y + pin.y * u(13),
-    w: u(85), h: u(14), rot: pitRot, fill: PIT_BUILDING_FILL,
-    vents: [{ dx: -u(25), dy: 0, s: u(3) }, { dx: u(5), dy: u(2), s: u(2.5) }, { dx: u(28), dy: -u(2), s: u(3) }],
-  })
 
   // Overlap bookkeeping for every placed rectangle (bounding-circle test).
   const placed: Array<{ x: number; y: number; r: number }> = []
@@ -371,7 +349,7 @@ export function buildScenery(
         const bx = seed.x + lx * cos - ly * sin
         const by = seed.y + lx * sin + ly * cos
         if (distToTrack(bx, by) < u(26)) continue
-        if (Math.hypot(bx - pitBox.x, by - pitBox.y) < u(50)) continue
+        if (Math.hypot(bx - pitBox.x, by - pitBox.y) < u(120)) continue
         const w = u(16 + rng() * 20)
         const h = u(13 + rng() * 16)
         if (overlaps(bx, by, w, h)) continue
@@ -420,6 +398,7 @@ export function buildScenery(
       p = randPoint()
     }
     if (distToTrack(p.x, p.y) < u(15)) continue
+    if (Math.hypot(p.x - pitBox.x, p.y - pitBox.y) < u(120)) continue // pit complex is built, not planted
     if (!clearOfRects(p.x, p.y)) continue
     const r = u(3.2 + rng() * 3.6)
     trees.push({
