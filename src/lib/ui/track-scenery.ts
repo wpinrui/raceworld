@@ -6,7 +6,9 @@
 // All coordinates are viewBox units; real-world sizes convert through metresPerUnit.
 
 import { seededRng } from '@/lib/sim/rng-utils'
-import { densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type TrackTrace } from './track-path'
+import {
+  densifyTrace, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type PitLane, type TrackTrace,
+} from './track-path'
 import { makeOccupancy, makePolylineIndex, obbCorners, type Obb } from './geom'
 import { blobPath, buildingParts, pickArchetype, pointOnParts, type SceneryPart } from './scenery-shapes'
 
@@ -44,7 +46,6 @@ export interface Scenery {
   terrain: SceneryBlob[]
   runoffs: SceneryBlob[]
   kerbs: SceneryKerb[]
-  plaza: SceneryRect[]
   stands: SceneryStand[]
   buildings: SceneryRect[]
   trees: SceneryTree[]
@@ -62,7 +63,7 @@ const BUILDING_FILLS = ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147']
 
 export function buildScenery(
   rawTrace: TrackTrace,
-  pitBox: { x: number; y: number },
+  pit: PitLane,
   {
     circuitId, metresPerUnit, viewBox, density = {}, pitOutside = false,
   }: { circuitId: string; metresPerUnit: number; viewBox: string; density?: SceneryDensity; pitOutside?: boolean },
@@ -155,22 +156,54 @@ export function buildScenery(
     return true
   }
 
+  // The pit complex is a ~250 m ribbon of garages, boxes and tapers, but scenery only ever got its
+  // MIDPOINT and excluded a circle around it. A 120 m radius does not cover +/-125 m of arc, so
+  // props were generated on the ends of the pit building. Measure to the lane itself instead.
+  const pitPath = pit.slotStations.length >= 2
+    ? pit.slotStations.map((st) => ({ x: st.x, y: st.y }))
+    : [pit.box, pit.box]
+  const pitIndex = makePolylineIndex(pitPath, u(40), false)
+  const pitDist = (p: Vec): number => pitIndex.dist(p)
+  const PIT_CLEAR_M = 55 // paddock side: garages, transporters, hospitality — nothing planted
+  const PIT_CLEAR_STAND_M = 35
+
   const [vx, vy, vw, vh] = viewBox.split(' ').map(Number)
   const M = u(260)
   const randPoint = (): Vec => ({ x: vx - M + rng() * (vw + 2 * M), y: vy - M + rng() * (vh + 2 * M) })
 
   // ── Terrain: large soft patches, drawn under everything; some are water ──
+  // Water and gravel take part in the occupancy rules. They used to be outside the collision system
+  // entirely, so lakes had buildings standing in them and trees growing out of them.
+  // Blobs are elongated ellipses; a bounding RECTANGLE over-excludes badly at the corners (a lake
+  // 600 m across would sterilise its whole bounding box). Approximate each as a run of discs along
+  // its major axis instead — a capsule that tracks the drawn shape closely.
+  const noBuild: Array<{ x: number; y: number; r: number }> = []
+  const addBlobExclusion = (cx: number, cy: number, rx: number, ry: number, rot: number) => {
+    const long = Math.max(rx, ry)
+    const short = Math.min(rx, ry)
+    const ang = rx >= ry ? rot : rot + Math.PI / 2
+    const span = long - short
+    const count = Math.max(1, Math.ceil((2 * span) / Math.max(short, 1e-6)) + 1)
+    for (let i = 0; i < count; i++) {
+      const t = count === 1 ? 0 : -span + (2 * span * i) / (count - 1)
+      noBuild.push({ x: cx + Math.cos(ang) * t, y: cy + Math.sin(ang) * t, r: short })
+    }
+  }
   const terrain: SceneryBlob[] = []
   const terrainCount = 12 + Math.floor(rng() * 5)
   for (let i = 0; i < terrainCount; i++) {
     const c = randPoint()
     const r = u(70 + rng() * 190)
     const water = rng() < 0.18
+    const ry = r * (0.55 + rng() * 0.5)
+    const rot = rng() * Math.PI
     terrain.push({
-      d: blobPath(c.x, c.y, r, r * (0.55 + rng() * 0.5), rng() * Math.PI, rng, 10, water ? 0.8 : 0.65, water ? 0.35 : 0.6),
+      d: blobPath(c.x, c.y, r, ry, rot, rng, 10, water ? 0.8 : 0.65, water ? 0.35 : 0.6),
       fill: water ? '#3E6E86' : TERRAIN_FILLS[Math.floor(rng() * TERRAIN_FILLS.length)],
       water,
     })
+    // Only water excludes; grass patches are just tint.
+    if (water) addBlobExclusion(c.x, c.y, r * 1.15, ry * 1.15, rot)
   }
 
   // ── Corner regions (for runoffs and kerbs) ──
@@ -230,15 +263,18 @@ export function buildScenery(
   for (const i of cornerIdx) {
     const { p, t, nOut } = samples[i]
     const off = u(10 + rng() * 5)
+    const cx = p.x + nOut.x * off
+    const cy = p.y + nOut.y * off
+    const rx = u(20 + rng() * 12)
+    const ry = u(8 + rng() * 4)
+    const rot = Math.atan2(t.y, t.x)
     runoffs.push({
-      d: blobPath(p.x + nOut.x * off, p.y + nOut.y * off, u(20 + rng() * 12), u(8 + rng() * 4), Math.atan2(t.y, t.x), rng),
+      d: blobPath(cx, cy, rx, ry, rot, rng),
       fill: RUNOFF_FILLS[Math.floor(rng() * RUNOFF_FILLS.length)],
     })
+    // Gravel and tarmac run-off is the car's escape road; nothing gets planted or built on it.
+    addBlobExclusion(cx, cy, rx * 1.25, ry * 1.25, rot)
   }
-
-  // ── Pit complex: owned by the race map's pit layer now (a generated plaza slid under the lane
-  // and fought the real per-team pit building). Scenery keeps the area clear instead. ──
-  const plaza: SceneryRect[] = []
 
   // Occupancy. Structures and canopies are tracked separately: a tree must clear a building's TRUE
   // footprint completely, but trees are allowed to crowd each other, which is what makes a grove
@@ -252,21 +288,26 @@ export function buildScenery(
   const STAND_TRACK_CLEAR_M = 9
   const BUILDING_TRACK_CLEAR_M = 18
   const MIN_PART_M = 8 // narrowest a building wing may be before it stops reading as architecture
+  // Lakes and run-off join the registry before anything is sited, so they exclude like a structure.
+  noBuild.forEach((o) => structOcc.addDisc(o.x, o.y, o.r))
 
   // ── Grandstands: seek the track, prefer corners, mostly outside ──
   const stands: SceneryStand[] = []
   let arc = rng() * u(80)
   while (arc < total) {
-    arc += u(80 + rng() * 90)
-    if (rng() > 0.78) continue
+    // Denser candidate walk than the arc spacing alone would suggest: real clearance rules reject
+    // far more sites than the old approximate ones did, so more places have to be tried to keep the
+    // circuit ringed with stands.
+    arc += u(55 + rng() * 70)
+    if (rng() > 0.86) continue
     const i = Math.floor((arc % total) / STEP) % S
-    const { p, t, nOut } = samples[i]
+    const { p, nOut } = samples[i]
     const outside = rng() < 0.8
     const dir = outside ? nOut : { x: -nOut.x, y: -nOut.y }
     const off = u(6) + u(10 + rng() * 9)
     const cx = p.x + dir.x * off
     const cy = p.y + dir.y * off
-    if (Math.hypot(cx - pitBox.x, cy - pitBox.y) < u(70)) continue
+    if (pitDist({ x: cx, y: cy }) < u(PIT_CLEAR_STAND_M)) continue
     const w = u(45 + rng() * 50)
     const h = u(12 + rng() * 5)
     // Align to the CHORD the stand actually spans, not the tangent at its midpoint. A 45-95 m stand
@@ -321,7 +362,7 @@ export function buildScenery(
         const ly = (gy - (rows - 1) / 2) * cell
         const bx = seed.x + lx * cos - ly * sin
         const by = seed.y + lx * sin + ly * cos
-        if (Math.hypot(bx - pitBox.x, by - pitBox.y) < u(120)) continue
+        if (pitDist({ x: bx, y: by }) < u(PIT_CLEAR_M)) continue
         const w = baseW * (0.82 + rng() * 0.36)
         const h = baseH * (0.82 + rng() * 0.36)
         const brot = rot + (rng() - 0.5) * 0.12
@@ -386,7 +427,7 @@ export function buildScenery(
     // reaches further than rNom; clearance must be measured against the bounding radius.
     const r = rNom * (TREE_JITTER_BASE + TREE_JITTER_SPAN)
     if (trackDist(p) - r < u(TREE_TRACK_CLEAR_M)) continue
-    if (Math.hypot(p.x - pitBox.x, p.y - pitBox.y) < u(120)) continue // pit complex is built, not planted
+    if (pitDist(p) - r < u(PIT_CLEAR_M)) continue // the pit complex is built, not planted
     if (structOcc.hitsDisc(p.x, p.y, r, u(1.5))) continue
     // Canopies may crowd, but not coincide: testing a reduced radius lets a grove close up into
     // woodland while still keeping the trunks apart.
@@ -400,5 +441,5 @@ export function buildScenery(
     })
   }
 
-  return { terrain, runoffs, kerbs, plaza, stands, buildings, trees }
+  return { terrain, runoffs, kerbs, stands, buildings, trees }
 }

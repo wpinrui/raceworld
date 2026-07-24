@@ -1460,7 +1460,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
   // Scenery is deterministic per circuit and static — build once per layout.
   const scenery = useMemo(
-    () => buildScenery(layout.trace, layout.pit.box, {
+    () => buildScenery(layout.trace, layout.pit, {
       circuitId: layout.circuitId,
       metresPerUnit: layout.metresPerUnit,
       viewBox: layout.viewBox,

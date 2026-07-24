@@ -20,7 +20,7 @@ const ids = Object.keys(TRACK_LAYOUTS)
 
 function sceneryFor(id: string) {
   const layout = TRACK_LAYOUTS[id]
-  const scenery = buildScenery(layout.trace, layout.pit.box, {
+  const scenery = buildScenery(layout.trace, layout.pit, {
     circuitId: layout.circuitId,
     metresPerUnit: layout.metresPerUnit,
     viewBox: layout.viewBox,
@@ -100,10 +100,11 @@ describe.each(ids)('%s', (id) => {
   })
 
   it('still fills the world', () => {
-    // Guards the opposite failure: clearance rules strict enough to empty the map.
-    expect(scenery.trees.length).toBeGreaterThan(600)
-    expect(scenery.buildings.length).toBeGreaterThan(40)
-    expect(scenery.stands.length).toBeGreaterThan(5)
+    // Guards the opposite failure: clearance rules strict enough to empty the map. Floors sit just
+    // under the measured minimum across all circuits, so tightening a rule too far trips here.
+    expect(scenery.trees.length).toBeGreaterThan(900)
+    expect(scenery.buildings.length).toBeGreaterThan(100)
+    expect(scenery.stands.length).toBeGreaterThan(10)
   })
 })
 

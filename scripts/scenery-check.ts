@@ -23,7 +23,7 @@ for (const id of ids) {
   const mpu = layout.metresPerUnit
   const u = (m: number) => m / mpu
   const t0 = Date.now()
-  const scenery = buildScenery(layout.trace, layout.pit.box, {
+  const scenery = buildScenery(layout.trace, layout.pit, {
     circuitId: layout.circuitId,
     metresPerUnit: mpu,
     viewBox: layout.viewBox,

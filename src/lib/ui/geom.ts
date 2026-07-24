@@ -188,27 +188,42 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
     const py = Math.floor(p.y / cell)
     let best = Infinity
     gen++
+
+    const scan = (cx: number, cy: number) => {
+      const b = buckets.get(key(cx, cy))
+      if (!b) return
+      for (const i of b) {
+        if (stamp[i] === gen) continue
+        stamp[i] = gen
+        const d = distPointToSegment(p, pts[i], pts[(i + 1) % pts.length])
+        if (d < best) best = d
+      }
+    }
+
+    // Start at the first ring that can actually reach the indexed area. A query far outside it
+    // (most of the world is far from the pit lane) would otherwise walk every empty ring in between.
+    const k0 = Math.max(
+      0,
+      Math.abs(px - Math.min(Math.max(px, minCx), maxCx)),
+      Math.abs(py - Math.min(Math.max(py, minCy), maxCy)),
+    )
     // Expand in Chebyshev rings. Any segment stored in ring k sits at least (k-1)*cell away from a
     // point inside the centre cell, so once that bound exceeds the best distance found we can stop.
-    for (let k = 0; ; k++) {
+    for (let k = Math.max(0, k0 - 1); ; k++) {
       if (k > 0 && (k - 1) * cell > best) break
-      for (let cx = px - k; cx <= px + k; cx++) {
-        const edgeX = cx === px - k || cx === px + k
-        for (let cy = py - k; cy <= py + k; cy++) {
-          // Ring only: the interior was covered on an earlier pass.
-          if (k > 0 && !edgeX && cy !== py - k && cy !== py + k) continue
-          const b = buckets.get(key(cx, cy))
-          if (!b) continue
-          for (const i of b) {
-            if (stamp[i] === gen) continue
-            stamp[i] = gen
-            const d = distPointToSegment(p, pts[i], pts[(i + 1) % pts.length])
-            if (d < best) best = d
-          }
+      if (k === 0) scan(px, py)
+      else {
+        // The ring perimeter only — walking the filled square makes each step O(k^2).
+        for (let cx = px - k; cx <= px + k; cx++) {
+          scan(cx, py - k)
+          scan(cx, py + k)
+        }
+        for (let cy = py - k + 1; cy <= py + k - 1; cy++) {
+          scan(px - k, cy)
+          scan(px + k, cy)
         }
       }
-      // Once the ring encloses every occupied cell, every segment has been tested — without this
-      // a query far outside the track walks rings forever.
+      // Once the ring encloses every occupied cell, every segment has been tested.
       if (px - k <= minCx && px + k >= maxCx && py - k <= minCy && py + k >= maxCy) break
     }
     return best
