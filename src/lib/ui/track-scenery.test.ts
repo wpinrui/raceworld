@@ -102,19 +102,7 @@ describe.each(ids)('%s', (id) => {
     expect(scenery.stands.length).toBeGreaterThan(10)
   })
 
-  it('lays relief over the whole visible world', () => {
-    // The flat-runway fix: relief must cover far beyond the viewBox, since the ground plane extends
-    // kilometres past it and that emptiness is what read as a runway.
-    expect(scenery.bands.length).toBeGreaterThan(2)
-  })
 
-  it('encloses farmland only where the biome calls for it', () => {
-    // A desert or a street circuit should NOT be quilted with fields, so the floor is tied to the
-    // biome's enclosure rate rather than being a flat minimum.
-    const bio = biomeOf(TRACK_LAYOUTS[id].biome)
-    if (bio.fields >= 0.3) expect(scenery.fields.length).toBeGreaterThan(40)
-    else expect(scenery.fields.length).toBeLessThan(120)
-  })
 
   it('keeps the trackside cross-section in order', () => {
     // Every one of these was a hand-picked offset that silently disagreed with the barrier geometry:
@@ -139,11 +127,47 @@ describe.each(ids)('%s', (id) => {
     }
   })
 
+  it('leaves the ground plain unless terrain detail is asked for', () => {
+    expect(scenery.bands).toEqual([])
+    expect(scenery.fields).toEqual([])
+  })
+
   it('rings the circuit with barriers and furniture', () => {
     expect(scenery.barriers.some((b) => b.kind === 'wall')).toBe(true)
     expect(scenery.barriers.some((b) => b.kind === 'fence')).toBe(true)
     expect(scenery.tyreWalls.length).toBeGreaterThan(0)
     expect(scenery.marshals.length).toBeGreaterThan(3)
+  })
+})
+
+describe('terrainDetail', () => {
+  // Kept behind a flag rather than deleted: the terraced bands and the enclosed-field quilt read as
+  // arbitrary polygons and pinstripes rather than landscape, but the two looks are still comparable.
+  const layout = TRACK_LAYOUTS.britain
+  const build = (terrainDetail: boolean) => buildScenery(layout.trace, layout.pit, {
+    circuitId: layout.circuitId,
+    metresPerUnit: layout.metresPerUnit,
+    viewBox: layout.viewBox,
+    pitOutside: layout.pitOutside,
+    biome: layout.biome,
+    terrainDetail,
+  })
+
+  it('draws relief and fields when switched on', () => {
+    const on = build(true)
+    expect(on.bands.length).toBeGreaterThan(2)
+    expect(on.fields.length).toBeGreaterThan(40)
+  })
+
+  it('leaves both out by default, and changes nothing else', () => {
+    const off = build(false)
+    expect(off.bands).toEqual([])
+    expect(off.fields).toEqual([])
+    // The flag must not disturb placement: same trees, stands and buildings either way.
+    const on = build(true)
+    expect(off.trees.length).toBe(on.trees.length)
+    expect(off.buildings.length).toBe(on.buildings.length)
+    expect(off.stands.length).toBe(on.stands.length)
   })
 })
 

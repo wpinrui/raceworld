@@ -2,7 +2,7 @@
 // without starting the app. Mirrors the draw order RaceTrackMap uses (ground, scenery, track
 // ribbon, kerbs, furniture). Follows scripts/team-colours-preview.ts: emit a static artefact to
 // look at before merging.
-// Run: npx tsx scripts/scenery-preview.ts [--low] [--mood=afternoon|midday|dusk|overcast|night] [circuitId ...]
+// Run: npx tsx scripts/scenery-preview.ts [--low] [--terrain] [--mood=afternoon|midday|dusk|overcast|night] [circuitId ...]
 // --low renders the zoom-out LOD tier, which is the one that has regressed performance before.
 
 import { createElement } from 'react'
@@ -19,6 +19,7 @@ import { MOODS, type Mood } from '../src/lib/ui/lighting'
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
 const low = argv.includes('--low')
+const terrainDetail = argv.includes('--terrain')
 const detail = low ? 'low' : 'full'
 const moodArg = (argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon') as Mood
 const lighting = MOODS[moodArg] ?? MOODS.afternoon
@@ -42,6 +43,7 @@ for (const id of ids) {
     viewBox: layout.viewBox,
     pitOutside: layout.pitOutside,
     biome: layout.biome,
+    terrainDetail,
   })
 
   const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
@@ -73,10 +75,14 @@ for (const id of ids) {
   ].join('\n')
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${Math.round(vb.w * 2)}" height="${Math.round(vb.h * 2)}">${body}</svg>`
-  const tag = `${id}${low ? '-low' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}`
+  const tag = `${id}${low ? '-low' : ''}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}`
   writeFileSync(`${OUT}/${tag}.svg`, svg)
-  const counts = `bands ${scenery.bands.length}, fields ${scenery.fields.length}, trees ${scenery.trees.length}, `
-    + `stands ${scenery.stands.length}, buildings ${scenery.buildings.length}, barriers ${scenery.barriers.length}`
+  // Counted off the rendered markup, not estimated: an estimate drifts from the renderer the moment
+  // the renderer changes, and a wrong performance number is worse than none.
+  const els = (svg.match(/<(path|rect|circle|ellipse|g|clipPath|pattern|linearGradient|radialGradient)[ >]/g) ?? []).length
+  const tfs = (svg.match(/transform="/g) ?? []).length
+  const counts = `${els} elements, ${tfs} transforms; trees ${scenery.trees.length}, `
+    + `stands ${scenery.stands.length}, buildings ${scenery.buildings.length}`
   try {
     await sharp(Buffer.from(svg)).png().toFile(`${OUT}/${tag}.png`)
     console.log(`${tag.padEnd(16)} ${layout.biome.padEnd(10)} ${moodArg.padEnd(9)} -> ${OUT}/${tag}.png   (${counts})`)

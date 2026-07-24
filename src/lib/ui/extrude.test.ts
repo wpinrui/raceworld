@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  partsPath, quad, ringArea, sweptHull, sideFacesX, rakedStand, ribbon, posts,
+  partsPath, quad, ringArea, sweptHull, sideFacesX, rakedStand, ribbon, posts, mapPathPoints,
   type Part, type Vec,
 } from './extrude'
 
@@ -211,5 +211,28 @@ describe('rakedStand', () => {
     const area = (d: string) => Math.abs(ringArea(rings(d)[0])) / 2
     expect(area(roof)).toBeLessThan(area(deck) * 0.5)
     expect(area(roof)).toBeGreaterThan(0)
+  })
+})
+
+describe('mapPathPoints', () => {
+  it('rewrites every coordinate pair, including both of a Q', () => {
+    const out = mapPathPoints('M 1 2 Q 3 4 5 6 Z', (x, y) => ({ x: x + 10, y: y * 2 }))
+    expect(out).toBe('M 11.00 4.00 Q 13.00 8.00 15.00 12.00 Z')
+  })
+
+  it('round-trips an identity transform', () => {
+    const d = 'M 0 0 L 10 0 Q 12 4 10 8 Z'
+    expect(mapPathPoints(d, (x, y) => ({ x, y }))).toBe('M 0.00 0.00 L 10.00 0.00 Q 12.00 4.00 10.00 8.00 Z')
+  })
+
+  it('handles the multi-subpath output the blob emitters produce', () => {
+    const out = mapPathPoints('M 0 0 L 1 1 Z M 5 5 L 6 6 Z', (x, y) => ({ x: -x, y: -y }))
+    expect(out.match(/Z/g)).toHaveLength(2)
+    expect(out).toContain('-5.00 -5.00')
+  })
+
+  it('refuses a command it cannot safely transform', () => {
+    // Relative/shorthand commands would silently corrupt geometry if treated as absolute pairs.
+    expect(() => mapPathPoints('M 0 0 h 10 Z', (x, y) => ({ x, y }))).toThrow(/unsupported/)
   })
 })

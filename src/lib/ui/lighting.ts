@@ -26,7 +26,9 @@ const NW = (5 * Math.PI) / 12 // down-and-right on screen, i.e. the sun sits up-
 /** Named presets. `afternoon` is the default dry-race look: long shadows, warm light, cool shade. */
 export const MOODS: Record<Mood, Lighting> = {
   midday: { azimuth: NW, elevation: 0.8, warmth: 0, ambient: 0.35 },
-  afternoon: { azimuth: NW, elevation: 0.35, warmth: 0.4, ambient: 0.25 },
+  // A ~50-degree sun: shadows a little shorter than the objects casting them. Lower than this
+  // the map fills with long streaks that compete with the props for attention.
+  afternoon: { azimuth: NW, elevation: 0.55, warmth: 0.32, ambient: 0.25 },
   dusk: { azimuth: NW + 0.5, elevation: 0.18, warmth: 0.75, ambient: 0.3 },
   overcast: { azimuth: NW, elevation: 0.6, warmth: -0.2, ambient: 0.75 },
   night: { azimuth: NW, elevation: 0.5, warmth: -0.5, ambient: 0.55 },

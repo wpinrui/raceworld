@@ -14,23 +14,9 @@ const ids = Object.keys(TRACK_LAYOUTS).sort()
 let flagged = 0
 const totals = { onTrack: 0, treeStruct: 0, structStruct: 0, structTrack: 0, badPath: 0, badNum: 0 }
 
-/** Rough SVG node count, split by LOD tier. Low-tier nodes are the ones drawn at full zoom-out,
- *  where this branch has already regressed performance three times — worth a number, not a guess. */
-function nodeCounts(s: ReturnType<typeof buildScenery>) {
-  const structures = s.stands.length + s.buildings.length
-  const low =
-    s.bands.length * 2 + s.fields.length + s.terrain.length + s.runoffs.length + s.kerbs.length * 2 +
-    s.stands.length * 2 + s.buildings.length * 2 +
-    s.barriers.filter((b) => b.kind === 'wall').length * 2 + s.tyreWalls.length
-  const full =
-    low + structures * 2 + s.trees.length * 3 + s.fields.length * 2 +
-    s.barriers.filter((b) => b.kind === 'fence').length + s.tyreWalls.length * 3 + s.marshals.length * 2
-  return { low, full }
-}
-
 console.log(`Scenery checks over ${ids.length} layouts\n`)
-console.log('circuit            mpu  trees  stand  bldg  fld  bnd   ms   nodes(lo/hi)  onTrack  treeXstr  strXstr  strXtrack')
-console.log('-'.repeat(112))
+console.log('circuit            mpu  trees  stand  bldg   ms  onTrack  treeXstr  strXstr  strXtrack')
+console.log('-'.repeat(92))
 
 for (const id of ids) {
   const layout = TRACK_LAYOUTS[id]
@@ -102,13 +88,10 @@ for (const id of ids) {
   if (bad > 0) flagged++
   const mark = bad > 0 ? '  <<<' : ''
   const deep = worstOnTrack > 0 ? ` (${worstOnTrack.toFixed(0)}m deep)` : ''
-  const nodes = nodeCounts(scenery)
   console.log(
     `${id.padEnd(18)} ${mpu.toFixed(2).padStart(4)} ${String(scenery.trees.length).padStart(6)} ` +
     `${String(scenery.stands.length).padStart(6)} ${String(scenery.buildings.length).padStart(5)} ` +
-    `${String(scenery.fields.length).padStart(4)} ${String(scenery.bands.length).padStart(4)} ` +
-    `${String(buildMs).padStart(4)} ${`${nodes.low}/${nodes.full}`.padStart(14)} ` +
-    `${String(onTrack).padStart(8)} ` +
+    `${String(buildMs).padStart(4)} ${String(onTrack).padStart(8)} ` +
     `${String(treeStruct).padStart(9)} ${String(structStruct).padStart(8)} ${String(structTrack).padStart(10)}${mark}${deep}`,
   )
 }

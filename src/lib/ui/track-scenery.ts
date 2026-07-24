@@ -101,9 +101,14 @@ export function buildScenery(
   pit: PitLane,
   {
     circuitId, metresPerUnit, viewBox, density = {}, pitOutside = false, biome,
+    terrainDetail = false,
   }: {
     circuitId: string; metresPerUnit: number; viewBox: string
     density?: SceneryDensity; pitOutside?: boolean; biome?: Biome
+    /** Draw the ground's faux relief: terraced contour bands and the enclosed-field quilt. Off by
+     *  default — both read as arbitrary polygons and pinstriped noise rather than landscape. Kept
+     *  behind a flag rather than deleted so the two looks can still be compared. */
+    terrainDetail?: boolean
   },
 ): Scenery {
   const rng = seededRng(`scenery:${circuitId}`)
@@ -140,7 +145,7 @@ export function buildScenery(
   // Grade the land to the circuit's own smoothed profile, so the track sits in a corridor of
   // cuttings and embankments rather than on a shelf laid over the noise.
   const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
-  const bands = bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM })
+  const bands = terrainDetail ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM }) : []
 
   // ── Water bodies ──
   // Lakes only: the relief bands carry ground tone now, so the old translucent tint patches just
@@ -298,7 +303,7 @@ export function buildScenery(
   const fieldRng = seededRng(`scenery:${circuitId}:fields`)
   // tb is the circuit's bounding box: far-field cells settle with one rectangle test instead of
   // two spatial-index queries from 1.5 km away.
-  const fields = buildFields(farBox, fieldRng, {
+  const fields = terrainDetail ? buildFields(farBox, fieldRng, {
     cellU: u(230),
     enclosure: bio.fields,
     palette: bio.ramp,
@@ -311,7 +316,7 @@ export function buildScenery(
       if (p.x < tb.x0 - m || p.x > tb.x1 + m || p.y < tb.y0 - m || p.y > tb.y1 + m) return false
       return trackDist(p) < u(55) || pitDist(p) < u(80)
     },
-  })
+  }) : []
 
   // ── Grandstands: seek the track, prefer corners, mostly outside ──
   const stands: SceneryStand[] = []

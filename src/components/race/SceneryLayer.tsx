@@ -1,6 +1,8 @@
 import { Fragment } from 'react'
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
-import { partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull } from '@/lib/ui/extrude'
+import {
+  mapPathPoints, partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull,
+} from '@/lib/ui/extrude'
 import {
   lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
   type Lighting,
@@ -205,27 +207,29 @@ export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
           Lighter than the solids' shadows: a grove's overlap heavily, and at full strength they
           merge into one dark mass rather than dappled shade. */}
       {full && (
-        <g fill={shFill} opacity={shOp * 0.55}>
-          {scenery.trees.map((t, i) => {
+        <path
+          fill={shFill} opacity={shOp * 0.55}
+          d={scenery.trees.map((t) => {
             const trunk = u(t.h * EXTRUDE)
             const len = trunk * treeShadowRatio(reach)
-            const bx = t.x + dir.x * trunk
-            const by = t.y + dir.y * trunk
-            // Stretch the blob about its own centre along the light, then plant it at the base.
+            // Stretch the canopy about its own centre along the light, then plant it at the base of
+            // the trunk. Baked into the path data rather than applied as a transform: as one path
+            // this is a single element for a whole circuit's trees instead of eleven hundred, each
+            // of which the browser would otherwise resolve a matrix for every frame.
             const sx = (2 * t.r + len) / (2 * t.r)
-            const a = deg(Math.atan2(dir.y, dir.x)).toFixed(1)
-            return (
-              <path
-                key={`ts${i}`} d={t.d}
-                transform={
-                  `translate(${(bx + dir.x * len / 2).toFixed(1)} ${(by + dir.y * len / 2).toFixed(1)}) `
-                  + `rotate(${a}) scale(${sx.toFixed(3)} 1) rotate(${-Number(a)}) `
-                  + `translate(${(-t.x).toFixed(1)} ${(-t.y).toFixed(1)})`
-                }
-              />
-            )
-          })}
-        </g>
+            const cx = t.x + dir.x * (trunk + len / 2)
+            const cy = t.y + dir.y * (trunk + len / 2)
+            return mapPathPoints(t.d, (px, py) => {
+              const vx = px - t.x
+              const vy = py - t.y
+              // Into the light's frame, stretch along it, back out again.
+              const ax = vx * dir.x + vy * dir.y
+              const ay = -vx * dir.y + vy * dir.x
+              const bx = ax * sx
+              return { x: cx + bx * dir.x - ay * dir.y, y: cy + bx * dir.y + ay * dir.x }
+            })
+          }).join(' ')}
+        />
       )}
     </g>
   )

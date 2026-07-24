@@ -152,7 +152,7 @@ describe('MOODS', () => {
     }
   })
 
-  it('makes afternoon the long-shadow, high-contrast default', () => {
+  it('makes afternoon the warm, high-contrast default', () => {
     expect(shadowReach(MOODS.afternoon)).toBeGreaterThan(shadowReach(MOODS.midday))
     expect(shadowOpacity(MOODS.afternoon)).toBeGreaterThan(shadowOpacity(MOODS.overcast))
     expect(MOODS.afternoon.warmth).toBeGreaterThan(0)

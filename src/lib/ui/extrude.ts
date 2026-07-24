@@ -126,6 +126,35 @@ export function posts(pts: Vec[], ox: number, oy: number, every: number): string
   return d
 }
 
+/** Apply a point transform to every coordinate pair in a path built from absolute M/L/Q commands
+ *  (which is everything `smoothClosed` and `blobPath` emit).
+ *
+ *  This exists to bake a per-element `transform` into the geometry so many shapes can share ONE
+ *  path. A thousand trees each carrying their own transform attribute is a thousand matrices for the
+ *  browser to resolve every frame; as subpaths of a single path they cost one. */
+export function mapPathPoints(d: string, fn: (x: number, y: number) => Vec): string {
+  const parts = d.trim().split(/\s+/)
+  const out: string[] = []
+  for (let i = 0; i < parts.length;) {
+    const tok = parts[i]
+    if (tok === 'Z' || tok === 'z') { out.push('Z'); i += 1; continue }
+    if (tok === 'M' || tok === 'L' || tok === 'Q') {
+      const pairs = tok === 'Q' ? 2 : 1
+      out.push(tok)
+      i += 1
+      for (let k = 0; k < pairs; k++) {
+        const p = fn(Number(parts[i]), Number(parts[i + 1]))
+        out.push(f2(p.x), f2(p.y))
+        i += 2
+      }
+      continue
+    }
+    // Anything else (relative or shorthand commands) is not something the blob emitters produce.
+    throw new Error(`mapPathPoints: unsupported command "${tok}"`)
+  }
+  return out.join(' ')
+}
+
 export interface RakedStand {
   /** The whole solid's outline, for the silhouette and its stroke. */
   hull: string
