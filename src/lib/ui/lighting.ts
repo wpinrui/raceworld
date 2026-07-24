@@ -72,9 +72,11 @@ export function shadowOpacity(l: Lighting): number {
 }
 
 /** The tight dark ring where an object meets the ground. Survives overcast — contact occlusion is
- *  ambient, not directional, which is exactly why it grounds things when shadows alone don't. */
+ *  ambient, not directional, which is exactly why it grounds things when shadows alone don't. It
+ *  also carries the separation that outlines used to: solids no longer draw a boundary line, so this
+ *  is what keeps two neighbouring roofs of similar colour from merging into one shape. */
 export function contactOpacity(l: Lighting): number {
-  return clamp01(0.16 + 0.12 * l.ambient)
+  return clamp01(0.22 + 0.12 * l.ambient)
 }
 
 /** Tint a surface colour by how much light it catches: +1 fully lit, -1 fully shaded. */

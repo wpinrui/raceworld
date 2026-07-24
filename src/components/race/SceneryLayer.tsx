@@ -1,6 +1,7 @@
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
+import { partsPath, rakedStand, sideFacesX, sweptHull } from '@/lib/ui/extrude'
 import {
-  contactOpacity, edgeFace, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach,
+  contactOpacity, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
   type Lighting,
 } from '@/lib/ui/lighting'
 
@@ -18,6 +19,18 @@ const STOREY_M = 4.6
 const EXTRUDE = 0.62
 /** Apparent height of one terrace step in the relief bands. */
 const BAND_STEP_M = 6
+/** A grandstand's front (trackside) and rear heights in metres. Real seating banks rake up away
+ *  from the circuit; extruding one uniformly made them read as tall slabs beside the track.
+ *
+ *  These stay LOW on purpose. A stand is only 12-17 m deep, so displacing its rear edge by the full
+ *  height of a real grandstand shears the deck by nearly half its own depth and the bank reads as a
+ *  ski jump. The rake wants to be a gentle ramp; the height is carried by the roof and the shadow. */
+const STAND_FRONT_M = 1.0
+const STAND_REAR_M = 5.5
+/** How much of the deck the rear roof canopy covers. */
+const STAND_ROOF_FRAC = 0.3
+/** Marshal hut height. */
+const MARSHAL_H_M = 2.8
 /** Canopy height, for the tree shadow. Kept short of the true cast length: 1140 blobs cannot afford
  *  a swept shadow each, and a fully-detached round shadow reads worse than a slightly short one. */
 const TREE_H_M = 5
@@ -28,38 +41,9 @@ const partsOf = (r: { w: number; h: number; parts?: SceneryPart[] }): SceneryPar
   r.parts ?? [{ dx: 0, dy: 0, w: r.w, h: r.h }]
 
 const heightM = (r: { storeys?: number }) => (r.storeys ?? 1) * STOREY_M
-
-/** Every part of a footprint as subpaths of ONE path. Filled nonzero (all rects wound the same way)
- *  this renders as their union, which keeps a multi-part building to a couple of DOM nodes instead
- *  of a couple per part — the scene is plain SVG with no culling, so element count is the budget. */
-function partsPath(parts: SceneryPart[]): string {
-  let d = ''
-  for (const p of parts) {
-    const x0 = p.dx - p.w / 2
-    const y0 = p.dy - p.h / 2
-    d += `M ${x0.toFixed(2)} ${y0.toFixed(2)} h ${p.w.toFixed(2)} v ${p.h.toFixed(2)} h ${(-p.w).toFixed(2)} Z `
-  }
-  return d
-}
-
-/** A footprint SWEPT along the light, as one nonzero path: the same rects repeated at intervals from
- *  the object's base out to the shadow's far end. A shadow is the volume an object sweeps between
- *  itself and the ground it blocks light from, so drawing only the translated copy renders just the
- *  far end and the shadow visibly detaches — at a low sun that gap is longer than the building.
- *  `ox`/`oy` are the offset already rotated into the footprint's LOCAL frame. */
-function sweptPath(parts: SceneryPart[], ox: number, oy: number): string {
-  const len = Math.hypot(ox, oy)
-  if (len < 1e-6) return partsPath(parts)
-  // Step in less than the smallest footprint dimension so consecutive copies always overlap.
-  const minDim = parts.reduce((m, p) => Math.min(m, p.w, p.h), Infinity)
-  const steps = Math.max(1, Math.min(14, Math.ceil(len / Math.max(minDim * 0.8, 1e-6))))
-  let d = ''
-  for (let i = 0; i <= steps; i++) {
-    const f = i / steps
-    d += partsPath(parts.map((p) => ({ ...p, dx: p.dx + ox * f, dy: p.dy + oy * f })))
-  }
-  return d
-}
+/** A stand's effective height for shadow purposes: the rear, which is what casts. */
+const isStand = (r: SceneryRect): r is Scenery['stands'][number] => 'facing' in r
+const solidHeightM = (r: SceneryRect) => (isStand(r) ? STAND_REAR_M : heightM(r))
 
 /** Rotate a world-space vector into a footprint's local frame. */
 function toLocal(x: number, y: number, rot: number): { x: number; y: number } {
@@ -68,31 +52,14 @@ function toLocal(x: number, y: number, rot: number): { x: number; y: number } {
   return { x: x * c - y * s, y: x * s + y * c }
 }
 
-/** A footprint drawn as ONE silhouette. Pass 1 strokes the whole path in the outline colour,
- *  dilating the union; pass 2 fills it with no stroke, covering every internal seam. The outline
- *  survives only around the union, so an L or U footprint reads as one building instead of loose
- *  rectangles with edges showing where the parts meet. */
-function Footprint({ d, fill, stroke, sw }: {
-  d: string; fill: string; stroke: string; sw: number
-}) {
-  return (
-    <>
-      <path d={d} fill={stroke} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
-      <path d={d} fill={fill} />
-    </>
-  )
-}
-
 export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
   scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
-  const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
   const dir = lightDir(lighting)
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
-  const contactOp = contactOpacity(lighting)
   return (
     <g>
       <defs>
@@ -181,64 +148,115 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
       ))}
       {scenery.runoffs.map((b, i) => <path key={`r${i}`} d={b.d} fill={b.fill} />)}
 
-      {/* Contact shadow: the same silhouette, NOT offset, dilated by a stroke. Ambient occlusion
-          rather than a cast shadow, so it survives overcast and keeps objects sitting in the ground
-          when the directional shadow has faded. Drawn at BOTH LOD tiers — it is one path and it is
-          what stops props reading as pasted on at zoom-out. */}
+    </g>
+  )
+}
+
+/** Shadows, drawn AFTER the track ribbon. Everything scenery used to draw came before it, so the
+ *  tarmac painted straight over every shadow and they stopped dead at the grass verge. Drawing them
+ *  here is safe because the generator guarantees no prop overlaps the track — see
+ *  track-scenery.test.ts — so nothing casting a shadow can be occluded by the road it falls on. */
+export function SceneryShadowLayer({ scenery, u, lighting, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
+}) {
+  const full = detail === 'full'
+  const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
+  const dir = lightDir(lighting)
+  const reach = shadowReach(lighting)
+  const shFill = shadowFill(lighting)
+  const shOp = shadowOpacity(lighting)
+  const contactOp = contactOpacity(lighting)
+  return (
+    <g>
+      {/* Contact occlusion, hugging the base. Ambient rather than directional, so it survives
+          overcast and keeps things sitting in the ground. Cheap enough for both LOD tiers. */}
       <g fill={shFill} stroke={shFill} opacity={contactOp}>
-        {structures.map((r, i) => (
-          <path
-            key={`ao${i}`} d={partsPath(partsOf(r))} strokeWidth={u(2.2)} strokeLinejoin="round"
-            transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}
-          />
-        ))}
+        {structures.map((r, i) => {
+          const b = u(solidHeightM(r) * EXTRUDE)
+          return (
+            <path
+              key={`ao${i}`} d={partsPath(partsOf(r))} strokeWidth={u(2.2)} strokeLinejoin="round"
+              transform={`translate(${r.x + dir.x * b} ${r.y + dir.y * b}) rotate(${deg(r.rot)})`}
+            />
+          )
+        })}
       </g>
 
-      {/* Cast shadows, thrown along the light by each structure's height. */}
+      {/* Cast shadow, swept along the ground FROM THE BASE so its near end tucks under the solid. */}
       {full && (
         <g fill={shFill} opacity={shOp}>
           {structures.map((r, i) => {
-            const t = u(heightM(r) * reach)
+            const b = u(solidHeightM(r) * EXTRUDE)
+            const t = u(solidHeightM(r) * reach)
             const o = toLocal(dir.x * t, dir.y * t, r.rot)
             return (
               <path
-                key={`sh${i}`} d={sweptPath(partsOf(r), o.x, o.y)}
-                transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}
+                key={`sh${i}`} d={sweptHull(partsOf(r), o.x, o.y)}
+                transform={`translate(${r.x + dir.x * b} ${r.y + dir.y * b}) rotate(${deg(r.rot)})`}
               />
             )
           })}
         </g>
       )}
 
-      {/* Extruded wall faces: the footprint repeated toward the light's far side, under the roof. */}
-      {full && structures.map((r, i) => {
+      {/* Tree shadows travel with the same light. */}
+      {full && (
+        <g
+          transform={`translate(${dir.x * u(TREE_H_M * reach)} ${dir.y * u(TREE_H_M * reach)})`}
+          fill={shFill} opacity={shOp * 0.85}
+        >
+          {scenery.trees.map((t, i) => <path key={`ts${i}`} d={t.d} />)}
+        </g>
+      )}
+    </g>
+  )
+}
+
+/** The solids themselves: walls, roofs, stands and canopies, all above the shadows. */
+export function ScenerySolidsLayer({ scenery, u, lighting, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
+}) {
+  const full = detail === 'full'
+  const dir = lightDir(lighting)
+  return (
+    <g>
+      {/* Walls: the swept band from roof outline to base outline, as one silhouette. The roof is
+          painted over its near half below, leaving only the faces that actually face the camera. */}
+      {full && scenery.buildings.map((r, i) => {
         const t = u(heightM(r) * EXTRUDE)
+        const o = toLocal(dir.x * t, dir.y * t, r.rot)
+        const parts = partsOf(r)
         return (
-          <g key={`wl${i}`} transform={`translate(${r.x + dir.x * t} ${r.y + dir.y * t}) rotate(${deg(r.rot)})`}>
-            <Footprint
-              d={partsPath(partsOf(r))} fill={shadeFace(r.fill, lighting)} stroke={edgeFace(r.fill, lighting)}
-              sw={u(0.5)}
-            />
+          <g key={`wl${i}`} transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}>
+            {/* The whole solid's silhouette, outlined once. */}
+            <path d={sweptHull(parts, o.x, o.y)} fill={shadeFace(r.fill, lighting)} />
+            {/* The left/right height faces, a shade apart from the top/bottom ones so the two
+                visible planes of the box are distinguishable. */}
+            <path d={sideFacesX(parts, o.x, o.y)} fill={tintFace(r.fill, lighting, -0.45)} />
           </g>
         )
       })}
 
+      {/* Grandstands rake: the trackside front barely lifts, the rear lifts a long way, so the deck
+          climbs away from the circuit like real seating. Extruded uniformly they read as office
+          blocks parked beside the track — they are a bank of seats, not a building. */}
       {scenery.stands.map((s, i) => {
-        // The roof and back wall sit on the edge AWAY from the track; `facing` is the edge that
-        // looks at it. Seating rakes down from the roof toward the circuit.
-        const roofY = s.facing ? -s.h / 2 : s.h / 2 - u(2.6)
+        const t = u(STAND_REAR_M * EXTRUDE)
+        const o = toLocal(dir.x * t, dir.y * t, s.rot)
+        const { hull, deck, roof } = rakedStand(
+          s.w, s.h, s.facing, o, 1 - STAND_FRONT_M / STAND_REAR_M, STAND_ROOF_FRAC,
+        )
         return (
           <g key={`s${i}`} transform={`translate(${s.x} ${s.y}) rotate(${deg(s.rot)})`}>
-            <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-seats)" stroke="#2E333B" strokeWidth={u(0.6)} />
-            {full && <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-crowd)" />}
-            {full && (
-              <rect
-                x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h}
-                fill={s.facing ? 'url(#tm-rake)' : 'url(#tm-rake-flip)'}
-              />
-            )}
-            <rect x={-s.w / 2} y={roofY} width={s.w} height={u(2.6)} fill="#7B8494" stroke="#2E333B" strokeWidth={u(0.4)} />
-            {full && <rect x={-s.w / 2} y={-s.h / 2} width={s.w} height={s.h} fill="url(#tm-bevel)" />}
+            {/* Structure below the deck: the exposed sides of the bank. */}
+            <path d={hull} fill={shadeFace(s.fill, lighting)} />
+            {/* The seating deck itself, patterned and raked. */}
+            <path d={deck} fill="url(#tm-seats)" />
+            {full && <path d={deck} fill="url(#tm-crowd)" />}
+            {full && <path d={deck} fill={s.facing ? 'url(#tm-rake)' : 'url(#tm-rake-flip)'} />}
+            {/* Roof over the rear rows only. */}
+            <path d={roof} fill="#7B8494" />
+            {full && <path d={deck} fill="url(#tm-bevel)" />}
           </g>
         )
       })}
@@ -247,7 +265,7 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
         const d = partsPath(partsOf(b))
         return (
           <g key={`b${i}`} transform={`translate(${b.x} ${b.y}) rotate(${deg(b.rot)})`}>
-            <Footprint d={d} fill={b.fill} stroke="#2E333B" sw={u(0.5)} />
+            <path d={d} fill={b.fill} />
             {/* One bevel over the whole silhouette, clipped to the union. Drawing it per part gave
                 every sub-rect its own full light-to-dark ramp, seaming at each internal edge. */}
             {full && (
@@ -267,18 +285,10 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
         )
       })}
 
-      {/* Tree shadows, then canopies with their lit side — the biggest node count, dropped at low LOD. */}
-      {full && (
-        <g
-          transform={`translate(${dir.x * u(TREE_H_M * reach)} ${dir.y * u(TREE_H_M * reach)})`}
-          fill={shFill} opacity={shOp * 0.85}
-        >
-          {scenery.trees.map((t, i) => <path key={`ts${i}`} d={t.d} />)}
-        </g>
-      )}
+      {/* Canopies with their lit side — the biggest node count, dropped at low LOD. */}
       {full && scenery.trees.map((t, i) => (
         <g key={`v${i}`}>
-          <path d={t.d} fill={`url(#tm-tree${t.variant})`} stroke="#1E3318" strokeWidth={u(0.35)} />
+          <path d={t.d} fill={`url(#tm-tree${t.variant})`} />
           <path d={t.hd} fill="#8FB35F" opacity={0.3} />
         </g>
       ))}
@@ -349,18 +359,25 @@ export function TrackFurnitureLayer({ scenery, u, lighting, detail = 'full' }: {
         </g>
       ))}
 
+      {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of
+          themselves — the same mistake the buildings started with. */}
       {full && scenery.marshals.map((m, i) => {
-        const t = u(2.6 * reach)
+        const hut: SceneryPart[] = [{ dx: 0, dy: 0, w: u(4.4), h: u(3.2) }]
+        const t = u(MARSHAL_H_M * EXTRUDE)
+        const o = toLocal(dir.x * t, dir.y * t, m.rot)
+        const sh = u(MARSHAL_H_M * reach)
+        const so = toLocal(dir.x * sh, dir.y * sh, m.rot)
+        const deg2 = (m.rot * 180) / Math.PI
         return (
-          <g key={`mp${i}`}>
-            {/* Extruded side face, then the lit hut on top of it. */}
-            <g transform={`translate(${m.x + dir.x * t} ${m.y + dir.y * t}) rotate(${(m.rot * 180) / Math.PI})`}>
-              <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(3.2)} rx={u(0.4)} fill={edgeFace('#3A4049', lighting)} />
-            </g>
-            <g transform={`translate(${m.x} ${m.y}) rotate(${(m.rot * 180) / Math.PI})`}>
-              <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(3.2)} rx={u(0.4)} fill="#3A4049" stroke="#20242B" strokeWidth={u(0.4)} />
-              <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(1.0)} fill="#E8952B" />
-            </g>
+          <g key={`mp${i}`} transform={`translate(${m.x} ${m.y}) rotate(${deg2})`}>
+            <path
+              d={sweptHull(hut, so.x, so.y)} fill={shFill} opacity={shOp}
+              transform={`translate(${o.x} ${o.y})`}
+            />
+            <path d={sweptHull(hut, o.x, o.y)} fill={shadeFace('#3A4049', lighting)} />
+            {/* Roof on top, with the orange marshal panel on its trackside edge. */}
+            <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(3.2)} rx={u(0.3)} fill="#3A4049" />
+            <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(1.0)} fill="#E8952B" />
           </g>
         )
       })}

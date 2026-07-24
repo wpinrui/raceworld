@@ -12,7 +12,7 @@ import sharp from 'sharp'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { TARMAC_WIDTH_M, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
-import { SceneryLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
+import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
 
 
@@ -67,6 +67,8 @@ for (const id of ids) {
         d: k.d, fill: 'none', stroke: '#C8352F', strokeWidth: u(1.3), strokeDasharray: `${u(3)} ${u(3)}`,
       })),
     ]),
+    renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, detail })),
+    renderToStaticMarkup(createElement(ScenerySolidsLayer, { scenery, u, lighting, detail })),
     renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, lighting, detail })),
   ].join('\n')
 

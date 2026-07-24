@@ -7,13 +7,13 @@
 
 import { seededRng } from '@/lib/sim/rng-utils'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type PitLane, type TrackTrace } from './track-path'
-import { makeOccupancy, type Obb } from './geom'
+import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'
 import { blobPath, buildingParts, pickArchetype, pointOnParts, type SceneryPart } from './scenery-shapes'
 import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
-  buildBarriers, buildFields, buildMarshalPosts, buildTyreWalls,
+  BARRIER_OFFSET_M, FENCE_OFFSET_M, buildBarriers, buildFields, buildMarshalPosts, buildTyreWalls,
   type SceneryBarrier, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
 } from './scenery-props'
 
@@ -212,8 +212,8 @@ export function buildScenery(
   // ── Barriers, fencing, tyre walls and marshal posts ──
   const pitSide = pitOutside ? 1 : -1
   const barriers = buildBarriers(frame, {
-    offsetM: 11.5,
-    fenceOffsetM: 15.5,
+    offsetM: BARRIER_OFFSET_M,
+    fenceOffsetM: FENCE_OFFSET_M,
     // No wall across either pit mouth on the side the lane actually lives.
     skip: (s, side) => side === pitSide && inPitZone(s),
   })
@@ -254,9 +254,13 @@ export function buildScenery(
   const structOcc = makeOccupancy(u(60))
   const treeOcc = makeOccupancy(u(20))
   const STRUCT_GAP = u(5) // clearance between neighbouring structures
-  const TREE_TRACK_CLEAR_M = 13 // canopy EDGE, not centre, from the centreline
-  const STAND_TRACK_CLEAR_M = 9
-  const BUILDING_TRACK_CLEAR_M = 18
+  // Clearances are measured from the DEBRIS FENCE, not the tarmac. Anything nearer than that is
+  // drawn on top of the barrier and fencing that are supposed to be protecting it. The extra margin
+  // on stands covers the deck's rake, which shears a couple of metres trackward when the light
+  // happens to point that way.
+  const TREE_TRACK_CLEAR_M = FENCE_OFFSET_M + 3 // canopy EDGE, not centre, from the centreline
+  const STAND_TRACK_CLEAR_M = FENCE_OFFSET_M + 3.5
+  const BUILDING_TRACK_CLEAR_M = FENCE_OFFSET_M + 8
   const MIN_PART_M = 8 // narrowest a building wing may be before it stops reading as architecture
   // Lakes and run-off join the registry before anything is sited, so they exclude like a structure.
   noBuild.forEach((o) => structOcc.addDisc(o.x, o.y, o.r))
@@ -294,12 +298,16 @@ export function buildScenery(
     const { p, nOut } = samples[i]
     const outside = rng() < 0.8
     const dir = outside ? nOut : { x: -nOut.x, y: -nOut.y }
-    const off = u(6) + u(10 + rng() * 9)
+    const w = u(45 + rng() * 50)
+    const h = u(12 + rng() * 5)
+    // Offer the stand at a distance derived from its own DEPTH and the clearance rule, so its near
+    // edge lands just behind the debris fence. Offering a fixed 16-25 m from the centreline while
+    // requiring the footprint to clear 19 m is unsatisfiable for a stand 12-17 m deep — every
+    // candidate is rejected and the circuit ends up with no grandstands at all.
+    const off = h / 2 + u(STAND_TRACK_CLEAR_M + 1.5 + rng() * 9)
     const cx = p.x + dir.x * off
     const cy = p.y + dir.y * off
     if (pitDist({ x: cx, y: cy }) < u(PIT_CLEAR_STAND_M)) continue
-    const w = u(45 + rng() * 50)
-    const h = u(12 + rng() * 5)
     // Align to the CHORD the stand actually spans, not the tangent at its midpoint. A 45-95 m stand
     // beside a corner took the tangent's angle and sat askew to the track it faces.
     const half = w / 2
@@ -308,10 +316,15 @@ export function buildScenery(
     const chord = Math.hypot(a1.x - a0.x, a1.y - a0.y) || 1
     const ct = { x: (a1.x - a0.x) / chord, y: (a1.y - a0.y) / chord }
     const rot = Math.atan2(ct.y, ct.x)
-    // A stand faces the section it was anchored to. Where the circuit folds back on itself, some
-    // OTHER section can end up closer, and the stand then reads as facing away from the nearest
-    // piece of track. Those spots are ambiguous whichever way it points, so skip them.
-    if (trackDist({ x: cx, y: cy }) < Math.hypot(cx - p.x, cy - p.y) - u(2)) continue
+    // A stand faces the section it was anchored to. Where the circuit folds back, some OTHER section
+    // can be the nearest one and the stand reads as facing away from the closest piece of track.
+    //
+    // The test has to be POSITIONAL, not a distance comparison: on the inside of a corner the curve
+    // wraps around and the true nearest distance is legitimately shorter than the offset, so no
+    // distance margin separates "inside a corner" from "a different straight is closer". Ask
+    // directly whether the nearest point on the centreline is the one this stand was placed against.
+    const near = closestPointOnPolyline({ x: cx, y: cy }, centreline)
+    if (Math.hypot(near.x - p.x, near.y - p.y) > u(18)) continue
     const obb: Obb = { x: cx, y: cy, w, h, rot }
     // A long stand beside a curving track can reach the ribbon with its ENDS, so clearance is
     // measured around the whole footprint rather than at three sampled points.

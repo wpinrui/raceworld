@@ -4,7 +4,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { SceneryLayer, TrackFurnitureLayer } from './SceneryLayer'
+import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from './SceneryLayer'
 import { MOODS } from '@/lib/ui/lighting'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import { shade } from '@/lib/color'
@@ -1464,6 +1464,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
     [scenery, layout.metresPerUnit, lighting, lodLow],
   )
+  const shadowNode = useMemo(
+    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, lodLow],
+  )
+  const solidsNode = useMemo(
+    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, lodLow],
+  )
   const furnitureNode = useMemo(
     () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
     [scenery, layout.metresPerUnit, lighting, lodLow],
@@ -1623,6 +1631,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 <path d={k.d} fill="none" stroke="#C8352F" strokeWidth={u(1.3)} strokeDasharray={`${u(3)} ${u(3)}`} />
               </g>
             ))}
+            {/* Scenery shadows fall across the tarmac, so they draw AFTER every piece of track
+                paint; the solids that cast them stand on top. Nothing overlaps the ribbon (the
+                generator guarantees it), so drawing solids here cannot hide the road. */}
+            {view === 'live' && shadowNode}
+            {view === 'live' && solidsNode}
             {/* Barriers, tyre walls and marshal posts: circuit furniture sits ON the tarmac's edge,
                 so it draws after the ribbon rather than with the scenery underneath it. */}
             {view === 'live' && furnitureNode}

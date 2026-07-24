@@ -6,6 +6,12 @@
 import { smoothOpenPath } from './track-path'
 import type { Vec } from './geom'
 
+/** Trackside cross-section, metres from the centreline. Everything placed beside the circuit
+ *  measures its clearance against these: a grandstand sited closer than the debris fence ends up
+ *  drawn straight through its own barrier. */
+export const BARRIER_OFFSET_M = 11.5
+export const FENCE_OFFSET_M = 15.5
+
 export interface SceneryBarrier {
   d: string
   /** 'wall' = concrete/armco at the track edge, 'fence' = debris fencing set back behind it. */
