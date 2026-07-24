@@ -13,6 +13,7 @@ import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from './RaceT
 import CommentaryFeed from './CommentaryFeed'
 import { LiveChampionship } from './LiveChampionship'
 import { PitWallCard } from './PitWallPanel'
+import { TyreGodModal } from './TyreGodModal'
 import { DriverTrackTip } from './DriverTrackTip'
 import GodModePanel from './GodModePanel'
 import { PostRacePanel } from './PostRacePanel'
@@ -97,6 +98,14 @@ export function RaceDayView({
   const [followId, setFollowId] = useState<string | null>(() =>
     driverMode ? playerDriverId : teamManagerMode ? drivers.find((d) => d.teamId === playerTeamId)?.id ?? null : null,
   )
+  // God mode: the tyre editor opened from a standings tyre cell.
+  const [tyreModalId, setTyreModalId] = useState<string | null>(null)
+  // Coarse 1Hz freshness tick for the memoised map (tooltip/pinned-card content).
+  const [tipTick, setTipTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTipTick((v) => v + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   const driverOf = useMemo(() => new Map(drivers.map((d) => [d.id, d])), [drivers])
   const teamOf = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams])
@@ -113,6 +122,12 @@ export function RaceDayView({
     (driverMode && ds.driverId === playerDriverId) ||
     (teamManagerMode && driverOf.get(ds.driverId)?.teamId === playerTeamId)
 
+  // Garage allocation order: constructor standings best-first (name-keyed for the map).
+  const teamOrder = useMemo(
+    () => baselineConstructors.map((c) => teamOf.get(c.teamId)?.name).filter((n): n is string => !!n),
+    [baselineConstructors, teamOf],
+  )
+
   const cars: TrackCarMeta[] = useMemo(
     () =>
       raceState.drivers.map((s) => {
@@ -121,6 +136,7 @@ export function RaceDayView({
         return {
           id: s.driverId,
           pos: s.position,
+          compound: s.currentTyre.compound,
           color: team?.color ?? '#888',
           name: driver?.name ?? s.driverId,
           team: team?.name,
@@ -193,6 +209,7 @@ export function RaceDayView({
                   columns={[...columns]}
                   selectedDriverId={effectiveFollow}
                   onSelectDriver={selectRow}
+                  onTyreClick={setTyreModalId}
                 />
               </div>
               <div className="flex flex-wrap gap-1.5 px-2 py-2 shrink-0 border-t border-[#232A38]">
@@ -221,6 +238,8 @@ export function RaceDayView({
           <RaceTrackMap
             layout={layout}
             cars={cars}
+            teamOrder={teamOrder}
+            tipTick={tipTick}
             sampleRef={sampleRef}
             followId={effectiveFollow}
             onFollow={setFollowId}
@@ -363,6 +382,20 @@ export function RaceDayView({
               : null}
         </div>
       )}
+      {(() => {
+        if (!tyreModalId) return null
+        const ds = raceState.drivers.find((d) => d.driverId === tyreModalId)
+        if (!ds || ds.retired) return null
+        return (
+          <TyreGodModal
+            driverId={tyreModalId}
+            driverName={driverOf.get(tyreModalId)?.name ?? tyreModalId}
+            compound={ds.currentTyre.compound}
+            condition={ds.currentTyre.condition}
+            onClose={() => setTyreModalId(null)}
+          />
+        )
+      })()}
     </>
   )
 }

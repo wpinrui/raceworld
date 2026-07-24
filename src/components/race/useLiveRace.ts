@@ -30,12 +30,16 @@ export function useLiveRace(): {
   const accRef = useRef(0)
   const lastFrameRef = useRef(0)
   const lastCommitRef = useRef(0)
+  const runningRef = useRef(false) // the loop is live (drives sub-step extrapolation in samples)
+  const frozenExtraRef = useRef(0) // the extrapolation held while paused (so pausing doesn't snap sprites back)
+  const multRef = useRef(1)
   const [lapProgress, setLapProgress] = useState(0)
   const sampleRef = useRef<(id: string) => TrackSample>(() => null)
 
   const phase = useRaceStore((s) => s.raceState?.phase)
   const paused = useRaceStore((s) => s.raceState?.paused ?? false)
   const speed = useRaceStore((s) => (s.raceState?.speed ?? 1) as SimSpeed)
+  multRef.current = SPEED_MULTS[speed]
 
   // Engine lifecycle: born when the race goes green, discarded when the session leaves racing/finished.
   useEffect(() => {
@@ -57,7 +61,19 @@ export function useLiveRace(): {
       engineRef.current = live
       liveBridge.current = live
       moistureStore.last = null
-      sampleRef.current = (id) => live.sample(id)
+      // Samples extrapolate by the race time accumulated since the last engine step (plus the wall
+      // time inside the current frame), so sprite motion is continuous, not step-quantised.
+      sampleRef.current = (id) => {
+        // Intra-frame term capped like the loop's wallDt: after a stall this must not extrapolate
+        // through the whole stall before the loop's own cap has a chance to absorb it. While paused
+        // the extrapolation FREEZES at its pause-moment value — zeroing it snapped every sprite
+        // backwards by the pending race time.
+        const intra = Math.min(150, performance.now() - lastFrameRef.current) / 1000
+        const extra = runningRef.current ? accRef.current + intra * multRef.current : frozenExtraRef.current
+        // Passing the multiplier engages the engine's pursuit filter (the no-teleport invariant);
+        // pass 0 while paused so the pursuit holds still with the world.
+        return live.sample(id, Math.max(0, Math.min(extra, LIVE_DT + multRef.current)), runningRef.current ? multRef.current : 0)
+      }
     }
     if (phase !== 'racing' && phase !== 'finished' && engineRef.current) {
       engineRef.current = null
@@ -70,14 +86,18 @@ export function useLiveRace(): {
 
   // The loop: step by wall time, commit the projection at a readable cadence.
   useEffect(() => {
-    if (phase !== 'racing' || paused || !engineRef.current) return
+    if (phase !== 'racing' || paused || !engineRef.current) { runningRef.current = false; return }
     let raf = 0
+    runningRef.current = true
     lastFrameRef.current = performance.now()
 
     const frame = (now: number) => {
       const live = engineRef.current
       if (!live) return
-      const wallDt = Math.min(2000, now - lastFrameRef.current) / 1000
+      // Hitch amnesty: a stalled frame (GC, React commit) may advance at most 150ms of wall time —
+      // otherwise the clock marches through the stall and the whole field lurches forward at once
+      // (frozen frame, then a visible teleport). A long stall becomes a blink of slow-mo instead.
+      const wallDt = Math.min(150, now - lastFrameRef.current) / 1000
       lastFrameRef.current = now
       accRef.current += wallDt * SPEED_MULTS[speed]
       let steps = 0
@@ -94,10 +114,17 @@ export function useLiveRace(): {
         setLapProgress(live.leaderLapFrac() * 100)
       }
       if (live.phase === 'racing') raf = requestAnimationFrame(frame)
-      else commit(live)
+      else { runningRef.current = false; commit(live) }
     }
     raf = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      // Freeze the current extrapolation before stopping (pause/speed change) — samples keep serving
+      // this value so nothing moves, forwards or backwards, while the loop is down.
+      const intra = Math.min(150, performance.now() - lastFrameRef.current) / 1000
+      frozenExtraRef.current = Math.max(0, Math.min(accRef.current + intra * multRef.current, LIVE_DT + multRef.current))
+      runningRef.current = false
+      cancelAnimationFrame(raf)
+    }
   }, [phase, paused, speed])
 
   return { sampleRef, lapProgress }

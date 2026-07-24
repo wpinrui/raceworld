@@ -26,6 +26,8 @@ interface RaceTableProps {
   wdcPtsOf?: Map<string, number>
   selectedDriverId?: string | null
   onSelectDriver?: (id: string) => void
+  /** God mode: open the tyre editor for a running car (clicking its tyre cell). */
+  onTyreClick?: (id: string) => void
   animate?: boolean
   columns?: RaceTableColumn[]
 }
@@ -38,7 +40,7 @@ function formatTotalTime(t: number): string {
   return h > 0 ? `${h}h ${m}min ${s}s` : `${m}min ${s}s`
 }
 
-export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, animate = true, columns }: RaceTableProps) {
+export default function RaceTable({ drivers, teams, states, gridPos, year, careers, wdcPosOf, wdcPtsOf, selectedDriverId, onSelectDriver, onTyreClick, animate = true, columns }: RaceTableProps) {
   const highlight = useTeamHighlight()
   const show = new Set(columns ?? ALL_RACE_TABLE_COLUMNS)
   const driverMap = new Map(drivers.map((d) => [d.id, d]))
@@ -202,7 +204,10 @@ export default function RaceTable({ drivers, teams, states, gridPos, year, caree
                 )}
                 {show.has('tyre') && (
                   <td className="py-1 px-2">
-                    <div className="flex items-center gap-1.5 justify-center">
+                    <div
+                      className={`flex items-center gap-1.5 justify-center ${onTyreClick && !ds.retired ? 'cursor-pointer hover:brightness-150' : ''}`}
+                      onClick={onTyreClick && !ds.retired ? (e) => { e.stopPropagation(); onTyreClick(ds.driverId) } : undefined}
+                    >
                       <TyreIndicator compound={ds.currentTyre.compound} size="sm" />
                       {!ds.retired && (
                         <span className={`text-xs ${condColor}`}>

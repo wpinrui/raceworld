@@ -79,11 +79,18 @@ export default function RacePage() {
   const wdcPosOf = useMemo(() => new Map(season.driverStandings.map((s, i) => [s.driverId, i + 1])), [season.driverStandings])
   const wdcPtsOf = useMemo(() => new Map(season.driverStandings.map((s) => [s.driverId, s.points])), [season.driverStandings])
 
+  // Weekend bootstrap. On a page REFRESH the in-memory session is gone — set the weekend up fresh
+  // (the automatic "restart weekend"). Must wait for hydrated season data: the old mount-once effect
+  // ran before the drivers arrived, loaded an empty grid, and left the screen stuck. In-session
+  // navigation still resumes: a live raceState is never touched.
   useEffect(() => {
+    if (!hydrated) return
     if (season.phase === 'idle') { router.replace('/setup'); return }
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
-    if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (gridDrivers.length === 0) return
+    if (!useRaceStore.getState().raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, season.phase, gridDrivers.length])
 
   useEffect(() => { if (phase === 'finished') endedRef.current = true }, [phase])
 

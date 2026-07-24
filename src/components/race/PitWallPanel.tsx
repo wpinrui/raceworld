@@ -28,25 +28,35 @@ const C = {
 
 const LEVEL_LABELS = ['BACK', 'EASE', 'NORM', 'PUSH', 'MAX'] as const
 
-// Where the player's car would slot back in if it pitted THIS lap: add the pit-lane loss to its race time
-// and read the field by race time (the same projection the AI uses to judge clear air). Returns the net
-// position and the nearest car — behind whom it rejoins, or (if it would keep the lead) ahead of whom.
+// Where the player's car would slot back in if it pitted THIS lap. Walk the cars behind, accumulating
+// the LIVE intervals — everyone within the pit loss gets past during the stop. (Comparing raw
+// totalTime across cars is meaningless in the live engine: each car's is stamped at its own last line
+// crossing, a different moment per car — it projected nonsense like a P18 rejoining P5.)
 function rejoinProjection(ds: DriverRaceState, raceState: RaceState, drivers: Driver[]) {
-  const rejoinTime = ds.totalTime + pitLaneLoss(raceState.year)
-  const others = raceState.drivers.filter((o) => o.driverId !== ds.driverId && !o.retired)
+  const loss = pitLaneLoss(raceState.year)
   const nameOf = (id: string) => drivers.find((d) => d.id === id)?.name ?? '—'
-  const ahead = others.filter((o) => o.totalTime <= rejoinTime)
-  const position = ahead.length + 1
-  if (ahead.length > 0) {
-    const carAhead = ahead.reduce((best, o) => (o.totalTime > best.totalTime ? o : best))
-    return { position, gap: rejoinTime - carAhead.totalTime, other: nameOf(carAhead.driverId), ahead: false }
+  const running = raceState.drivers.filter((o) => !o.retired).sort((a, b) => a.position - b.position)
+  const myIdx = running.findIndex((o) => o.driverId === ds.driverId)
+  if (myIdx === -1) return { position: ds.position, gap: 0, other: null, ahead: true }
+  let cum = 0
+  let passedBy = 0
+  let lastPasser: DriverRaceState | null = null
+  for (let i = myIdx + 1; i < running.length; i++) {
+    cum += running[i].gap
+    if (cum >= loss) {
+      return lastPasser
+        ? { position: ds.position + passedBy, gap: loss - (cum - running[i].gap), other: nameOf(lastPasser.driverId), ahead: false }
+        : { position: ds.position, gap: cum - loss, other: nameOf(running[i].driverId), ahead: true }
+    }
+    passedBy++
+    lastPasser = running[i]
   }
-  const behind = others.filter((o) => o.totalTime > rejoinTime)
-  if (behind.length > 0) {
-    const carBehind = behind.reduce((best, o) => (o.totalTime < best.totalTime ? o : best))
-    return { position, gap: carBehind.totalTime - rejoinTime, other: nameOf(carBehind.driverId), ahead: true }
+  return {
+    position: ds.position + passedBy,
+    gap: lastPasser ? loss - cum : 0,
+    other: lastPasser ? nameOf(lastPasser.driverId) : null,
+    ahead: false,
   }
-  return { position, gap: 0, other: null, ahead: true }
 }
 
 // The status block line: dot + text colour + an optional right-side hint.
@@ -67,6 +77,8 @@ function statusLine(cmd: PitCommand, ds: DriverRaceState, currentLap: number): {
 // Temperature readout: the window [0,1] maps onto the green band (26%..72%) of the gradient bar.
 function TempBar({ temp, critical }: { temp: number; critical: boolean }) {
   const pct = Math.min(97, Math.max(3, 26 + 46 * temp))
+  // The knob wears the zone's colour — a neutral knob made cold/hot unreadable at a glance.
+  const knob = temp < 0 ? C.blue : temp > 1 ? C.red : C.green
   return (
     <div className="flex flex-col gap-1 pt-0.5">
       <div
@@ -74,8 +86,8 @@ function TempBar({ temp, critical }: { temp: number; critical: boolean }) {
         style={{ background: `linear-gradient(90deg,${C.blue} 0 26%,${C.green} 26% 72%,${C.red} 72% 100%)` }}
       >
         <div
-          className="absolute top-1/2 w-[12px] h-[12px] rounded-full bg-[#FFFFFF] box-border"
-          style={{ left: `${pct}%`, transform: 'translate(-50%,-50%)', border: `2px solid ${C.surface}` }}
+          className="absolute top-1/2 w-[12px] h-[12px] rounded-full box-border"
+          style={{ left: `${pct}%`, transform: 'translate(-50%,-50%)', background: knob, border: `2px solid #FFFFFF` }}
         />
       </div>
       <div className="text-[9.5px] font-bold tracking-[1px]" style={{ color: critical ? C.red : C.muted }}>TEMP</div>
