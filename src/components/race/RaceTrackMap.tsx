@@ -21,8 +21,12 @@ import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, pitComplexOps, pitFloorOps,
 } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
-import { shade } from '@/lib/color'
 import type { TyreCompound } from '@/lib/sim/types'
+import { CarSprite } from './CarSprite'
+import {
+  CAR_LENGTH_M, CAR_SCALE, LEVEL, bodyTransform, carAttitude, carLight, shadowTransform, sheenTransform,
+} from '@/lib/ui/car-sprite'
+import { lapDynamics, sampleLap, type LapDynamics } from '@/lib/ui/lap-dynamics'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -116,10 +120,8 @@ const A_BRAKE_M = 41
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit.
 const PIT_WIDTH_M = 9.5 // lane + working apron: the boxes sit 1.6m off-centre and their markings and
                         // gantries reach ~3.8m out â€” a 7m ribbon put them on the grass
-const CAR_LENGTH_M = 5.63
-// Uniform sprite shrink (proportions untouched). Everything car-locked multiplies by this:
-// footprint, crew wheel anchors, tyre props, collision clearances.
-const CAR_SCALE = 0.85
+// CAR_LENGTH_M and CAR_SCALE now live with the sprite's own geometry in lib/ui/car-sprite.ts, which
+// needs them to size the light it casts; everything car-locked here still multiplies by them.
 
 const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
@@ -222,49 +224,20 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
   return `M ${pts.join(' L ')} Z`
 }
 
-// Cumulative normalised lap TIME at each equal-distance station of the RACING LINE; inverting it turns
-// a time fraction into a distance fraction. Classic three-step profile: corner limits from curvature,
-// then an acceleration-limited forward pass and a braking-limited backward pass (twice, for the wrap).
-function buildTimeProfile(path: SVGPathElement, metresPerUnit: number): Float64Array {
-  const vTop = V_TOP_M / metresPerUnit
-  const vFloor = V_FLOOR_M / metresPerUnit
-  const aLat = A_LAT_M / metresPerUnit
-  const aAccel = A_ACCEL_M / metresPerUnit
-  const aBrake = A_BRAKE_M / metresPerUnit
+// Sample the RACING LINE and hand it to the shared profile physics. What comes back is the lap time
+// curve that places the cars plus the cornering and braking loads that shape how they sit while it
+// does (lib/ui/lap-dynamics.ts).
+function buildLapDynamics(path: SVGPathElement, metresPerUnit: number): LapDynamics {
   const len = path.getTotalLength()
-  const ds = len / PROFILE_N
   const pts: { x: number; y: number }[] = []
   for (let i = 0; i < PROFILE_N; i++) pts.push(path.getPointAtLength((i / PROFILE_N) * len))
-
-  const v = new Float64Array(PROFILE_N)
-  for (let i = 0; i < PROFILE_N; i++) {
-    const a = pts[(i - 2 + PROFILE_N) % PROFILE_N]
-    const b = pts[i]
-    const c = pts[(i + 2) % PROFILE_N]
-    const in_ = Math.atan2(b.y - a.y, b.x - a.x)
-    const out = Math.atan2(c.y - b.y, c.x - b.x)
-    let dth = out - in_
-    if (dth > Math.PI) dth -= 2 * Math.PI
-    if (dth < -Math.PI) dth += 2 * Math.PI
-    const kappa = Math.abs(dth) / (4 * ds)
-    v[i] = Math.max(vFloor, Math.min(vTop, Math.sqrt(aLat / Math.max(kappa, 1e-9))))
-  }
-  for (let pass = 0; pass < 2; pass++) {
-    for (let i = 0; i < PROFILE_N; i++) {
-      const j = (i + 1) % PROFILE_N
-      v[j] = Math.min(v[j], Math.sqrt(v[i] * v[i] + 2 * aAccel * ds))
-    }
-    for (let i = PROFILE_N - 1; i >= 0; i--) {
-      const j = (i + 1) % PROFILE_N
-      v[i] = Math.min(v[i], Math.sqrt(v[j] * v[j] + 2 * aBrake * ds))
-    }
-  }
-
-  const cum = new Float64Array(PROFILE_N + 1)
-  for (let i = 0; i < PROFILE_N; i++) cum[i + 1] = cum[i] + ds / ((v[i] + v[(i + 1) % PROFILE_N]) / 2)
-  const total = cum[PROFILE_N]
-  for (let i = 0; i <= PROFILE_N; i++) cum[i] /= total
-  return cum
+  return lapDynamics(pts, len, {
+    vTop: V_TOP_M / metresPerUnit,
+    vFloor: V_FLOOR_M / metresPerUnit,
+    aLat: A_LAT_M / metresPerUnit,
+    aAccel: A_ACCEL_M / metresPerUnit,
+    aBrake: A_BRAKE_M / metresPerUnit,
+  })
 }
 
 // Invert the profile: time fraction -> distance fraction.
@@ -279,132 +252,6 @@ function timeToDistance(profile: Float64Array, f: number): number {
   const span = profile[hi] - profile[lo] || 1
   return (lo + (f - profile[lo]) / span) / PROFILE_N
 }
-
-// The user-authored top-down F1 sprite (designs/F1 car.dc.html): three livery roles over fixed
-// neutrals. PRIMARY = nose/chassis/sidepods/mid wing flaps, SECONDARY = wing planes/stripe/blades/
-// helmet, TERTIARY = floor/endplates/halo/beam wing/fin. Memoised: ~90 elements per car, and only the
-// livery/scale ever change.
-const SPRITE_VIEWBOX = '-16 0 272 520'
-const SPRITE_ASPECT = 272 / 520
-
-const CarSprite = memo(function CarSprite({ color, length, compound }: { color: string; length: number; compound?: TyreCompound }) {
-  const band = compound ? COMPOUND_COLORS[compound] : null
-  const p = color
-  const sec = shade(color, 0.62)
-  const t = '#969CA6'
-  return (
-    <svg width={length * SPRITE_ASPECT} height={length} viewBox={SPRITE_VIEWBOX} className="block" style={{ overflow: 'visible' }}>
-      {/* floor, visible through coke bottle */}
-      <path d="M60 190 L120 164 L180 190 L180 450 Q180 460 170 460 L70 460 Q60 460 60 450 Z" fill="#14171E" />
-      {/* front suspension: upper + lower wishbone + pushrod */}
-      <path d="M52 84 L106 104 L106 110 L52 92 Z" fill="#2E3138" />
-      <path d="M188 84 L134 104 L134 110 L188 92 Z" fill="#2E3138" />
-      <path d="M52 126 L106 126 L106 131 L52 132 Z" fill="#2E3138" />
-      <path d="M188 126 L134 126 L134 131 L188 132 Z" fill="#2E3138" />
-      <path d="M54 106 L104 118 L104 122 L54 110 Z" fill="#43474F" />
-      <path d="M186 106 L136 118 L136 122 L186 110 Z" fill="#43474F" />
-      {/* rear suspension: 3 elements */}
-      <path d="M56 374 L100 380 L100 385 L56 380 Z" fill="#2E3138" />
-      <path d="M184 374 L140 380 L140 385 L184 380 Z" fill="#2E3138" />
-      <path d="M56 397 L100 397 L100 404 L56 404 Z" fill="#43474F" />
-      <path d="M184 397 L140 397 L140 404 L184 404 Z" fill="#43474F" />
-      <path d="M56 424 L100 420 L100 425 L56 430 Z" fill="#2E3138" />
-      <path d="M184 424 L140 420 L140 425 L184 430 Z" fill="#2E3138" />
-      {/* front wing: swept elements, angular endplates */}
-      <rect x="62" y="44" width="3" height="10" fill={p} />
-      <rect x="88" y="44" width="3" height="10" fill={p} />
-      <rect x="149" y="44" width="3" height="10" fill={p} />
-      <rect x="175" y="44" width="3" height="10" fill={p} />
-      <path d="M30 42 Q120 30 210 42 L210 51 Q120 41 30 51 Z" fill={sec} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
-      <path d="M36 31 Q120 19 204 31 L204 40 Q120 29 36 40 Z" fill={p} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
-      <path d="M44 21 Q120 11 196 21 L196 29 Q120 19 44 29 Z" fill={sec} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
-      <path d="M56 13 Q120 5 184 13 L184 19 Q120 11 56 19 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="0.5" />
-      <path d="M28 12 L40 9 L32 52 L20 50 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      <path d="M212 12 L200 9 L208 52 L220 50 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      {/* nose */}
-      <path d="M120 8 C112 8 108 24 106 48 L102 110 Q100 142 95 166 L145 166 Q140 142 138 110 L134 48 C132 24 128 8 120 8 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
-      <path d="M120 12 C115 12 113 26 112 48 L109 118 L131 118 L128 48 C127 26 125 12 120 12 Z" fill={sec} />
-      <path d="M94 174 Q74 218 58 218 L58 213 Q77 213 90 172 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
-      <path d="M146 174 Q166 218 182 218 L182 213 Q163 213 150 172 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
-      {/* chassis + sidepods, coke bottle */}
-      <path d="M95 166 L145 166 L146 202 C154 204 161 205 168 206 C179 208 190 214 190 224 L188 290 C186 316 170 332 156 342 C150 350 148 356 148 366 L148 448 L92 448 L92 366 C92 356 90 350 84 342 C70 332 54 316 52 290 L50 224 C50 214 61 208 72 206 C79 205 86 204 94 202 Z" fill={p} stroke="rgba(0,0,0,0.28)" strokeWidth="1" />
-      {/* sidepod inlets */}
-      <path d="M56 218 L94 212 L92 228 L54 234 Z" fill="#0B0D10" />
-      <path d="M184 218 L146 212 L148 228 L186 234 Z" fill="#0B0D10" />
-      {/* sidepod edge blades */}
-      <path d="M52 224 C52 214 61 209 72 207 L94 203 L95 210 L74 214 C63 215 58 219 58 226 L60 288 C62 310 78 328 89 338 L84 344 C68 332 54 316 52 290 Z" fill={sec} />
-      <path d="M188 224 C188 214 179 209 168 207 L146 203 L145 210 L166 214 C177 215 182 219 182 226 L180 288 C178 310 162 328 151 338 L156 344 C172 332 186 316 188 290 Z" fill={sec} />
-      <path d="M62 246 L82 242 L82 245 L62 249 Z" fill="rgba(0,0,0,0.2)" />
-      <path d="M63 258 L83 254 L83 257 L63 261 Z" fill="rgba(0,0,0,0.2)" />
-      <path d="M64 270 L84 266 L84 269 L64 273 Z" fill="rgba(0,0,0,0.2)" />
-      <path d="M178 246 L158 242 L158 245 L178 249 Z" fill="rgba(0,0,0,0.2)" />
-      <path d="M177 258 L157 254 L157 257 L177 261 Z" fill="rgba(0,0,0,0.2)" />
-      <path d="M176 270 L156 266 L156 269 L176 273 Z" fill="rgba(0,0,0,0.2)" />
-      {/* engine cover spine + fin */}
-      <path d="M113 262 L127 262 L124 446 L116 446 Z" fill={sec} />
-      <rect x="117" y="352" width="6" height="94" fill={t} />
-      {/* mirrors */}
-      <rect x="90" y="202" width="11" height="6" rx="2" fill={t} />
-      <rect x="139" y="202" width="11" height="6" rx="2" fill={t} />
-      {/* cockpit + halo + helmet */}
-      <rect x="104" y="194" width="32" height="60" rx="14" fill="#0B0D10" />
-      <path d="M105 210 C105 190 135 190 135 210" fill="none" stroke={t} strokeWidth="5" strokeLinecap="round" />
-      <rect x="118" y="190" width="4" height="16" fill={t} />
-      <circle cx="120" cy="234" r="10" fill={sec} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      <rect x="113" y="228" width="14" height="3" rx="1.5" fill="#0B0D10" />
-      {/* tyres â€” tagged so the pit choreography can take each wheel OFF the car while its tyre
-          is being carried (#live-engine) */}
-      <g data-wheel="fl">
-        <rect x="6" y="64" width="48" height="88" rx="18" fill="#16181D" />
-        <rect x="16" y="82" width="28" height="52" rx="11" fill="#2E3138" />
-      </g>
-      <g data-wheel="fr">
-        <rect x="186" y="64" width="48" height="88" rx="18" fill="#16181D" />
-        <rect x="196" y="82" width="28" height="52" rx="11" fill="#2E3138" />
-      </g>
-      <g data-wheel="rl">
-        <rect x="4" y="350" width="52" height="96" rx="19" fill="#16181D" />
-        <rect x="15" y="370" width="30" height="56" rx="12" fill="#2E3138" />
-      </g>
-      <g data-wheel="rr">
-        <rect x="184" y="350" width="52" height="96" rx="19" fill="#16181D" />
-        <rect x="195" y="370" width="30" height="56" rx="12" fill="#2E3138" />
-      </g>
-      {/* Compound band: a thin line on each tyre's OUTER edge, spanning ~the rim diameter. */}
-      {band && (
-        <g>
-          <rect x="6" y="92" width="3" height="32" rx="1.5" fill={band} />
-          <rect x="231" y="92" width="3" height="32" rx="1.5" fill={band} />
-          <rect x="4" y="381" width="3" height="34" rx="1.5" fill={band} />
-          <rect x="233" y="381" width="3" height="34" rx="1.5" fill={band} />
-        </g>
-      )}
-      {/* diffuser */}
-      <path d="M84 448 L156 448 L164 468 L76 468 Z" fill="#0B0D10" />
-      <rect x="96" y="450" width="3" height="16" fill="#2E3138" />
-      <rect x="110" y="450" width="3" height="17" fill="#2E3138" />
-      <rect x="127" y="450" width="3" height="17" fill="#2E3138" />
-      <rect x="141" y="450" width="3" height="16" fill="#2E3138" />
-      {/* rear wing: pylon + beam wing attach it to the body */}
-      <rect x="66" y="476" width="3" height="12" fill={p} />
-      <rect x="92" y="478" width="3" height="12" fill={p} />
-      <rect x="145" y="478" width="3" height="12" fill={p} />
-      <rect x="171" y="476" width="3" height="12" fill={p} />
-      <rect x="116" y="412" width="8" height="36" fill="#2E3138" />
-      <path d="M44 446 Q120 436 196 446 L196 453 Q120 444 44 453 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      <path d="M44 453 Q120 445 196 453 L196 464 Q120 456 44 464 Z" fill={p} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
-      <path d="M42 466 Q120 458 198 466 L198 481 Q120 473 42 481 Z" fill={sec} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
-      <rect x="113" y="448" width="14" height="9" rx="2" fill="#0B0D10" />
-      <path d="M30 420 L42 415 L44 490 L32 487 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      <path d="M210 420 L198 415 L196 490 L208 487 Z" fill={t} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      {/* shading */}
-      <path d="M95 166 L94 202 C86 204 79 205 72 206 C61 208 50 214 50 224 L52 290 C54 316 70 332 84 342 C90 350 92 356 92 366 L92 448 L100 448 L100 366 C100 354 96 346 89 338 C76 327 62 311 60 288 L58 226 C58 218 63 214 72 212 L98 208 L104 166 Z" fill="rgba(255,255,255,0.16)" />
-      <path d="M145 166 L146 202 C154 204 161 205 168 206 C179 208 190 214 190 224 L188 290 C186 316 170 332 156 342 C150 350 148 356 148 366 L148 448 L140 448 L140 366 C140 354 144 346 151 338 C164 327 178 311 180 288 L182 226 C182 218 177 214 168 212 L142 208 L138 166 Z" fill="rgba(0,0,0,0.14)" />
-      <path d="M120 8 C112 8 108 24 106 48 L102 110 Q100 142 95 166 L102 166 Q106 142 108 110 L111 48 C112 30 114 16 118 10 Z" fill="rgba(255,255,255,0.16)" />
-    </svg>
-  )
-})
-
 
 interface Props {
   layout: TrackLayout
@@ -439,7 +286,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const lenRef = useRef(0)
   const pitLenRef = useRef(0)
   const pitDRef = useRef('') // the `d` the pit caches were built from â€” geometry, not identity
-  const profileRef = useRef<Float64Array | null>(null)
+  const dynRef = useRef<LapDynamics | null>(null)
   const pitWindowForRef = useRef<unknown>(null) // which engine instance the pit window was sent to
   const prevDrawRef = useRef(new Map<string, { x: number; y: number; kind: string; dist: number; lat: number }>()) // last drawn pose per car, for the path-switch blend
   const pathBlendRef = useRef(new Map<string, { dx: number; dy: number; start: number }>()) // path-switch offset decay
@@ -496,6 +343,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
   const viewAz = screenUpAzimuth(camRot)
   const ldir = useMemo(() => lightDir(lighting), [lighting])
+  // The cars read the SAME light. One stable object, so the memoised sprites do not re-render for it.
+  const carLit = useMemo(() => carLight(lighting), [lighting])
+  const shadowRefs = useRef(new Map<string, SVGGElement>())
+  const bodyRefs = useRef(new Map<string, SVGGElement>())
+  const sheenRefs = useRef(new Map<string, SVGGElement>())
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
@@ -926,7 +778,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     lenRef.current = 0
     pitLenRef.current = 0
     raceLenRef.current = 0
-    profileRef.current = null
+    dynRef.current = null
     slotDistsRef.current = []
     pitWindowForRef.current = null
   }, [layout])
@@ -968,7 +820,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         if (!raceLenRef.current) {
           raceLine.setAttribute('d', buildRacingLine(path, layout.metresPerUnit))
           raceLenRef.current = raceLine.getTotalLength()
-          profileRef.current = buildTimeProfile(raceLine, layout.metresPerUnit)
+          dynRef.current = buildLapDynamics(raceLine, layout.metresPerUnit)
         }
         if (pitPath && pitLenRef.current > 0 && slotDistsRef.current.length === 0 && pitSlots.length > 0) {
           // Project each pit box onto the lane path once: the arc position a stopping car parks at.
@@ -1005,7 +857,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         // whenever a fresh engine appears on the bridge (restart, next race).
         if (liveBridge.current && pitPath && pitLenRef.current > 0 && pitWindowForRef.current !== liveBridge.current) {
           pitWindowForRef.current = liveBridge.current
-          const p = profileRef.current!
+          const p = dynRef.current!.time
           const rl = raceLine
           const rlLen = raceLenRef.current
           const nearestTimeFrac = (target: DOMPoint, centreFrac: number) => {
@@ -1026,7 +878,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             nearestTimeFrac(pitPath.getPointAtLength(pitLenRef.current), PIT_EXIT_FRAC),
           )
         }
-        const prof = profileRef.current!
+        const dyn = dynRef.current!
         const lenTotal = lenRef.current
         const uu = (m: number) => m / layout.metresPerUnit
         const look = uu(8) // heading from ~8m of track ahead
@@ -1084,7 +936,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               lat: (sample.gridSlot % 2 === 1 ? 1 : -1) * uu(1.7) * (1 - covered),
             })
           } else {
-            const dist = timeToDistance(prof, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
+            const dist = timeToDistance(dyn.time, ((sample.prog % 1) + 1) % 1) * raceLenRef.current
             frames.push({ id: car.id, el, kind: 'race', dist, lat: 0, pitCalled: sample.pitCalled })
           }
         }
@@ -1262,7 +1114,29 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           prevDrawRef.current.set(f.id, { x, y, kind: f.kind, dist: f.dist, lat })
           f.el.style.transform = `translate(${(left / 100) * sw}px, ${(top / 100) * sh}px) translate(-50%, -50%)`
           const spr = sprRefs.current.get(f.id)
-          if (spr) spr.style.transform = viewRef.current === 'map' ? '' : `rotate(${heading + Math.PI / 2}rad)`
+          const spriteRot = heading + Math.PI / 2
+          if (spr) spr.style.transform = viewRef.current === 'map' ? '' : `rotate(${spriteRot}rad)`
+          // The sprite turns whole, so anything painted on it turns with it -- which is exactly what
+          // reads as flat. Three groups inside it are held against the WORLD instead (#sim-2d): the
+          // contact shadow keeps pointing away from the sun, the sheen keeps facing it, and the body
+          // leans and dips over both. Map view draws numbered dots, which have none of them.
+          if (viewRef.current !== 'map') {
+            shadowRefs.current.get(f.id)?.setAttribute('transform', shadowTransform(carLit, spriteRot))
+            sheenRefs.current.get(f.id)?.setAttribute('transform', sheenTransform(spriteRot))
+            const body = bodyRefs.current.get(f.id)
+            if (body) {
+              // Load comes from the LAP, not from how fast the sprite happens to be crossing the
+              // screen: a race at 4x speed corners no harder than the same race at 1x. Cars crawling
+              // the pit lane or sat on the grid sit level.
+              const att = f.kind === 'race'
+                ? carAttitude(
+                  sampleLap(dyn.lat, f.dist / raceLenRef.current),
+                  sampleLap(dyn.long, f.dist / raceLenRef.current),
+                )
+                : LEVEL
+              body.setAttribute('transform', bodyTransform(att))
+            }
+          }
         }
 
         // Pit crews (#live-engine): the stop choreographed to spec, on MEASURED geometry.
@@ -1510,7 +1384,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign, ldir, lighting, applyCam])
+  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign, ldir, lighting, carLit, applyCam])
 
   // S/F line: a chequered band (3 rows of 0.5m squares) spanning EXACTLY the tarmac width.
   const sf = useMemo(() => {
@@ -2175,10 +2049,30 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 {/* Tooltip + click on the sprite ONLY â€” its exact rendered footprint, no hover halo. */}
                 const sprite = (
                   <div
-                    ref={(el) => { if (el) sprRefs.current.set(car.id, el); else sprRefs.current.delete(car.id) }}
+                    ref={(el) => {
+                      if (!el) {
+                        sprRefs.current.delete(car.id)
+                        shadowRefs.current.delete(car.id)
+                        bodyRefs.current.delete(car.id)
+                        sheenRefs.current.delete(car.id)
+                        return
+                      }
+                      sprRefs.current.set(car.id, el)
+                      // The three world-locked groups, found once here rather than queried per frame.
+                      const put = (sel: string, into: Map<string, SVGGElement>) => {
+                        const g = el.querySelector<SVGGElement>(sel)
+                        if (g) into.set(car.id, g)
+                        else into.delete(car.id)
+                      }
+                      put('[data-car-shadow]', shadowRefs.current)
+                      put('[data-car-body]', bodyRefs.current)
+                      put('[data-car-sheen]', sheenRefs.current)
+                    }}
                     onClick={() => clickCar(car.id)}
                     className="cursor-pointer"
-                    style={{ filter: 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))' }}
+                    // Live sprites carry a real contact shadow (#sim-2d), which a filter that turns
+                    // with the car cannot be. The map view's numbered dot still wants one.
+                    style={view === 'map' ? { filter: 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))' } : undefined}
                   >
                     {view === 'map' ? (
                       <div
@@ -2193,7 +2087,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                         <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
                       </div>
                     ) : (
-                      <CarSprite color={car.color} length={carL} compound={car.compound} />
+                      <CarSprite id={car.id} color={car.color} length={carL} compound={car.compound} light={carLit} />
                     )}
                   </div>
                 )
