@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  treeShadowOp, treeShadowRatio, treeSolidOps,
+  structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -216,5 +216,37 @@ describe('buildingRoofGroups', () => {
 
   it('keeps only the flat roof at the cheap tier', () => {
     expect(buildingRoofGroups([b], false)[0].ops).toHaveLength(1)
+  })
+})
+
+describe('structureShadowGroups', () => {
+  const shadowOpts = { ...opts, heightM: () => 9 }
+  const rect = { x: 40, y: 30, w: 20, h: 14, rot: 0, fill: '#59616E' } as SceneryRect
+
+  it('starts the shadow at the BASE the camera drew, not at the footprint', () => {
+    // Anchored at the footprint instead, the shadow detaches and the solid reads as levitating.
+    const [g] = structureShadowGroups([rect], shadowOpts)
+    expect(Math.hypot(g.x - rect.x, g.y - rect.y)).toBeGreaterThan(0)
+  })
+
+  it('moves its origin with the CAMERA and its sweep with the SUN', () => {
+    const base = structureShadowGroups([rect], shadowOpts)[0]
+    const turned = structureShadowGroups([rect], { ...shadowOpts, view: opts.view + 1 })[0]
+    const relit = structureShadowGroups([rect], {
+      ...shadowOpts, lighting: { ...opts.lighting, azimuth: opts.lighting.azimuth + 1 },
+    })[0]
+    // Turning the camera slides where it starts but not the shape it sweeps.
+    expect(turned.x).not.toBeCloseTo(base.x, 6)
+    expect(turned.ops[0].d).toBe(base.ops[0].d)
+    // Moving the sun does the opposite.
+    expect(relit.x).toBeCloseTo(base.x, 9)
+    expect(relit.ops[0].d).not.toBe(base.ops[0].d)
+  })
+
+  it('casts longer from a taller solid', () => {
+    const short = structureShadowGroups([rect], { ...shadowOpts, heightM: () => 3 })[0]
+    const tall = structureShadowGroups([rect], { ...shadowOpts, heightM: () => 30 })[0]
+    expect(tall.ops[0].d.length).toBeGreaterThanOrEqual(short.ops[0].d.length)
+    expect(tall.ops[0].d).not.toBe(short.ops[0].d)
   })
 })

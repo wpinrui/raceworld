@@ -1,6 +1,7 @@
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
 import {
-  buildingRoofGroups, buildingWallGroups, partsOf, refName, standGroups, toLocal, treeShadowOp,
+  buildingRoofGroups, buildingWallGroups, refName, standGroups, structureShadowGroups,
+  toLocal, treeShadowOp,
   treeSolidOps,
 } from '@/lib/ui/scenery-draw'
 import {
@@ -163,12 +164,7 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
 }) {
   const full = detail === 'full'
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
-  // Two bearings, deliberately: `dir` is the sun and sweeps the shadow, `vdir` is the camera and says
-  // where the object's BASE was drawn. A shadow starts at the base and runs down-light, so it needs
-  // both, and merging them makes the sun swing round with the player.
-  const dir = lightDir(lighting)
-  const vdir = dirAt(view)
-  const reach = shadowReach(lighting)
+  const shadowOpts = { u, extrude: EXTRUDE, lighting, view, heightM: solidHeightM }
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
   if (hide?.has('shadows')) return null
@@ -178,17 +174,12 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
       {/* Cast shadow, swept along the ground FROM THE BASE so its near end tucks under the solid. */}
       {full && (
         <g fill={shFill} opacity={shOp}>
-          {structures.map((r, i) => {
-            const b = u(solidHeightM(r) * EXTRUDE)
-            const t = u(solidHeightM(r) * reach)
-            const o = toLocal(dir.x * t, dir.y * t, r.rot)
-            return (
-              <path
-                key={`sh${i}`} d={sweptHull(partsOf(r), o.x, o.y)}
-                transform={`translate(${r.x + vdir.x * b} ${r.y + vdir.y * b}) rotate(${deg(r.rot)})`}
-              />
-            )
-          })}
+          {structureShadowGroups(structures, shadowOpts).map((g, i) => (
+            <path
+              key={`sh${i}`} d={g.ops[0].d}
+              transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}
+            />
+          ))}
         </g>
       )}
 

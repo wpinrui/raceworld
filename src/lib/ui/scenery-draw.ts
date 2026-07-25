@@ -225,3 +225,31 @@ export function buildingRoofGroups(
     return { x: b.x, y: b.y, rot: b.rot, ops }
   })
 }
+
+export interface ShadowDrawOpts extends TreeDrawOpts {
+  /** How tall a given solid casts from. A stand's rear is what casts, not its low trackside front. */
+  heightM: (r: SceneryRect) => number
+}
+
+/** Cast shadows for the built structures.
+ *
+ *  Swept along the ground FROM THE BASE, so the near end tucks under the solid instead of leaving a
+ *  gap that reads as the building levitating. That base is where the CAMERA put it, while the sweep
+ *  runs along the SUN — the one place on the map that genuinely needs both bearings at once. */
+export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOpts): DrawGroup[] {
+  const vdir = dirAt(o.view)
+  const ldir = dirAt(o.lighting.azimuth)
+  const reach = shadowReach(o.lighting)
+  return structures.map((r) => {
+    const h = o.heightM(r)
+    const base = o.u(h * o.extrude)
+    const cast = o.u(h * reach)
+    const off = toLocal(ldir.x * cast, ldir.y * cast, r.rot)
+    return {
+      x: r.x + vdir.x * base,
+      y: r.y + vdir.y * base,
+      rot: r.rot,
+      ops: [{ d: sweptHull(partsOf(r), off.x, off.y) }],
+    }
+  })
+}
