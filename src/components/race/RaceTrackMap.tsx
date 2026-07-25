@@ -1625,9 +1625,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* The static world, baked to one image when that mode is on. Hidden by VISIBILITY rather
                 than display, because the race loop measures the track path with getTotalLength and
                 that has to keep working while the picture comes from the bitmap. */}
-            <g ref={staticRef} style={{ visibility: bitmap || canvasOn ? 'hidden' : undefined }}>
+            <g ref={staticRef} style={{ visibility: bitmap ? 'hidden' : undefined }}>
             <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
-            <g data-cost="scenery">{view === 'live' && sceneryNode}</g>
+            <g data-cost="scenery">{view === 'live' && !canvasOn && sceneryNode}</g>
             {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
