@@ -71,7 +71,8 @@ const FRAME_CAPS: number[] = [0, 30, 45]
  *  than something the compiler narrows away.
  *
  *  The readout keeps its backtick: it is worth having to hand at any time. */
-const DEBUG_KEYS: boolean = false
+// Enabled while the frame-rate work is live; flip back off when the perf investigation closes.
+const DEBUG_KEYS: boolean = true
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
