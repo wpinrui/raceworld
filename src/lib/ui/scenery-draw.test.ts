@@ -6,7 +6,7 @@ import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, isGroup, partsOf, refName, standGroups,
   toLocal, fenceOps, groundOps, marshalGroups, runShadowOp, sceneryScene, structureShadowGroups,
-  tyreWallOps, treeShadowOp, treeShadowRatio, treeSolidOps, type DrawOp,
+  treeShadowOp, treeShadowRatio, treeSolidOps, type DrawOp,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -363,41 +363,17 @@ describe('groundOps', () => {
   })
 })
 
-describe('tyreWallOps', () => {
-  const wall = {
-    d: 'M 0 0 L 30 0', pts: [{ x: 0, y: 0 }, { x: 30, y: 0 }],
-    bands: ['#D0342C', '#FFFFFF', '#1B1F26'], nOut: { x: 0, y: -1 },
-  } as never as Parameters<typeof tyreWallOps>[0]
-  const u = (m: number) => m / 3
-
-  it('lays each colour band out of phase, so the stack reads as repeated sections', () => {
-    const ops = tyreWallOps(wall, u, true)
-    expect(ops).toHaveLength(4)
-    const shifts = ops.slice(1).map((op) => op.dash!.shift)
-    expect(new Set(shifts).size, 'every band starts somewhere different').toBe(3)
-    for (const op of ops.slice(1)) expect(op.dash!.off).toBeGreaterThan(op.dash!.on)
-  })
-
-  it('keeps only the casing at the cheap tier', () => {
-    const ops = tyreWallOps(wall, u, false)
-    expect(ops).toHaveLength(1)
-    expect(ops[0].stroke).toBe('#1B1F26')
-    expect(ops[0].dash).toBeUndefined()
-  })
-})
-
 describe('sceneryScene', () => {
   const scenery = {
     bands: [], fields: [], terrain: [], runoffs: [], kerbs: [], marshals: [],
     stands: [{ x: 0, y: 0, w: 30, h: 12, rot: 0, fill: '#4A515C', facing: true }],
     buildings: [{ x: 50, y: 50, w: 20, h: 14, rot: 0, fill: '#59616E', storeys: 2 }],
     fences: [{ d: 'M 0 0 L 9 0', pts: [{ x: 0, y: 0 }, { x: 9, y: 0 }] }],
-    tyreWalls: [{ d: 'M 1 1 L 8 1', pts: [{ x: 1, y: 1 }, { x: 8, y: 1 }], bands: ['#D0342C'], nOut: { x: 0, y: -1 } }],
   } as never as Parameters<typeof sceneryScene>[0]
   const sceneOpts = {
     u: (m: number) => m / 3, lighting: MOODS.afternoon, view: 0.4, full: true, ground: true,
     extrude: 0.62, storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5, standRoofFrac: 0.3,
-    marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
+    marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
     solidHeightM: () => 9, trees: [tree(5, 5)],
   }
 
@@ -458,7 +434,7 @@ describe('sceneryScene', () => {
   })
 
   it('draws nothing at all for an empty world', () => {
-    const empty = { ...scenery, stands: [], buildings: [], fences: [], tyreWalls: [] } as never
+    const empty = { ...scenery, stands: [], buildings: [], fences: [] } as never
     expect(sceneryScene(empty, { ...sceneOpts, trees: [] })).toEqual([])
   })
 

@@ -11,7 +11,7 @@ import { TRACK_LAYOUTS } from '@/data/tracks'
 import { densifyTrace, TRACK_WIDTH_M } from './track-path'
 import { buildScenery, TREE_TARGET_BASE, type Scenery } from './track-scenery'
 import { biomeOf } from './biomes'
-import { TYRE_REF_OFFSET_M, FENCE_OFFSET_M } from './scenery-props'
+import { FENCE_OFFSET_M } from './scenery-props'
 import {
   distToPolyline, distPointToObb, obbOverlap, obbCorners, closestPointOnPolyline,
   type Vec, type Obb,
@@ -119,14 +119,6 @@ describe.each(ids)('%s', (id) => {
     }
   })
 
-  it('stacks the tyre walls in FRONT of the barrier they protect', () => {
-    for (const t of scenery.tyreWalls) {
-      const d = Math.min(...t.pts.map((p) => distToPolyline(p, centre))) * TRACK_LAYOUTS[id].metresPerUnit
-      expect(d).toBeLessThan(TYRE_REF_OFFSET_M)
-      expect(d).toBeGreaterThan(TRACK_HALF_M) // but never on the racing surface
-    }
-  })
-
   it('tints the ground softly by default, with no field quilt', () => {
     expect(scenery.bands.length).toBeGreaterThan(0)
     expect(scenery.bands.every((b) => b.soft)).toBe(true)
@@ -135,7 +127,6 @@ describe.each(ids)('%s', (id) => {
 
   it('rings the circuit with fencing and furniture', () => {
     expect(scenery.fences.length).toBeGreaterThan(0)
-    expect(scenery.tyreWalls.length).toBeGreaterThan(0)
     expect(scenery.marshals.length).toBeGreaterThan(3)
   })
 })

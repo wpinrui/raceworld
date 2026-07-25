@@ -4,7 +4,7 @@
 // disconnected blobs, a keep-out so wide it stripped the landscape bare).
 
 import { describe, it, expect } from 'vitest'
-import { buildFences, buildFields, buildMarshalPosts, buildTyreWalls, type TrackFrame } from './scenery-props'
+import { buildFences, buildFields, buildMarshalPosts, type TrackFrame } from './scenery-props'
 
 /** A straight 1000-unit run along +x, with the outward normal pointing at -y. 1 unit = 1 metre. */
 function straightFrame(total = 1000): TrackFrame {
@@ -45,18 +45,6 @@ describe('buildFences', () => {
     const out = buildFences(frame, { offsetM: 15, skip: (_s, side) => side === 1 })
     expect(out).toHaveLength(1)
     expect(Math.round(ysOf(out[0].d)[0])).toBe(15)
-  })
-})
-
-describe('buildTyreWalls', () => {
-  it('places one banded wall per corner, offset outward and spanning the corner', () => {
-    const out = buildTyreWalls(straightFrame(), [200, 700], { offsetM: 12, spanM: 60 })
-    expect(out).toHaveLength(2)
-    expect(out[0].bands.length).toBeGreaterThan(1)
-    // Outward normal is -y at offset 12.
-    expect(Math.round(ysOf(out[0].d)[0])).toBe(-12)
-    const xs = numsOf(out[0].d).filter((_, i) => i % 2 === 0)
-    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(50)
   })
 })
 

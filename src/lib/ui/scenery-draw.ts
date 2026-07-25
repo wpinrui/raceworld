@@ -20,7 +20,7 @@ import {
   type Lighting, dirAt, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
 } from './lighting'
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
-import type { SceneryFence, SceneryTyreWall } from './scenery-props'
+import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
@@ -420,26 +420,6 @@ export function groundOps(
   return ops
 }
 
-/** A stacked tyre wall: the dark casing, then its colour bands laid out of phase along it.
- *
- *  The bands are dashes rather than separate shapes on purpose — a tyre wall is the same section
- *  repeated round a curve, and one dashed run per colour says that in three paths. */
-export function tyreWallOps(wall: SceneryTyreWall, u: (m: number) => number, full: boolean): DrawOp[] {
-  const ops: DrawOp[] = [{ d: wall.d, stroke: '#1B1F26', width: u(3.4), cap: 'round' }]
-  if (full) {
-    wall.bands.forEach((colour, j) => {
-      ops.push({
-        d: wall.d,
-        stroke: colour,
-        width: u(2.6),
-        cap: 'butt',
-        dash: { on: u(2.4), off: u(4.8), shift: u(2.4 * j) },
-      })
-    })
-  }
-  return ops
-}
-
 export interface SceneOpts {
   u: (m: number) => number
   lighting: Lighting
@@ -456,7 +436,6 @@ export interface SceneOpts {
   marshalW: number
   marshalD: number
   fenceM: number
-  tyreM: number
   /** A stand casts from its rear, a building from its roofline. */
   solidHeightM: (r: SceneryRect) => number
   trees: SceneryTree[]
@@ -501,11 +480,7 @@ interface StaticParts {
   standGs: DrawGroup[]
   roofGs: DrawGroup[]
   runShadows: DrawOp[]
-  /** Tyre walls split around the fencing exactly as the SVG furniture layer does: walls further
-   *  from the viewer than the fence go under it, nearer ones over. */
-  farTyres: DrawOp[]
   fenceRuns: DrawOp[]
-  nearTyres: DrawOp[]
   marshalGs: DrawGroup[]
 }
 
@@ -541,12 +516,11 @@ const staticCache = new WeakMap<Scenery, StaticParts>()
 function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const key = JSON.stringify([
     o.view, o.full, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
-    o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.tyreM, o.u(1), o.lighting,
+    o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.u(1), o.lighting,
   ])
   const hit = staticCache.get(scenery)
   if (hit && hit.key === key) return hit
   const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
-  const dir = dirAt(o.view)
   // Padding covers what geometry adds beyond a footprint: the height lean and the cast shadow.
   // Generous on purpose — keeping a fraction more than the disc strictly needs is invisible, while
   // dropping a shadow whose caster is just off the disc's edge is not.
@@ -557,9 +531,6 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const runShadows: DrawOp[] = []
   const fenceRuns: DrawOp[] = []
   if (o.full) {
-    for (const t of scenery.tyreWalls) {
-      runShadows.push(stamp(runShadowOp(t.pts, o.tyreM, treeOpts), discOfPts(t.pts, runPad)))
-    }
     for (const f of scenery.fences) {
       runShadows.push(stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, discOfPts(f.pts, runPad)))
     }
@@ -568,11 +539,6 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
       for (const op of ops2) fenceRuns.push(stamp(op, disc))
     })
   }
-  // Tyre wall casings survive the cheap tier, like the SVG furniture layer's.
-  const tyres = scenery.tyreWalls.map((t) => {
-    const disc = discOfPts(t.pts, runPad)
-    return { t, ops: tyreWallOps(t, o.u, o.full).map((op) => stamp(op, disc)) }
-  })
   const parts: StaticParts = {
     key,
     ground: groundOps(scenery, o.u, { full: o.full, ground: o.ground }),
@@ -590,9 +556,7 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
     roofGs: buildingRoofGroups(scenery.buildings, o.full)
       .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
     runShadows,
-    farTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0).flatMap(({ ops }) => ops),
     fenceRuns,
-    nearTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0).flatMap(({ ops }) => ops),
     marshalGs: o.full
       ? marshalGroups(scenery.marshals, {
         ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
@@ -664,9 +628,7 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   // the scenery — a fence in front of a grove reads as a fence, not a hedge decoration.
   mark('furniture')
   if (o.full) items.push(...keep(s.runShadows))
-  items.push(...keep(s.farTyres))
   if (o.full) items.push(...keep(s.fenceRuns))
-  items.push(...keep(s.nearTyres))
   if (o.full) items.push(...keep(s.marshalGs))
   return items
 }

@@ -75,7 +75,7 @@ for (const id of ids) {
     ...scenery.bands.map((b) => b.d), ...scenery.fields.map((f) => f.d),
     ...scenery.terrain.map((t) => t.d), ...scenery.runoffs.map((r) => r.d),
     ...scenery.kerbs.map((k) => k.d), ...scenery.fences.map((b) => b.d),
-    ...scenery.tyreWalls.map((t) => t.d), ...scenery.trees.map((t) => t.d),
+    ...scenery.trees.map((t) => t.d),
   ]
   // A fence offset further than a corner's radius folds through the apex and crosses itself, which
   // is what Hockenheim's hairpin used to show. Every point must sit out at its own offset.

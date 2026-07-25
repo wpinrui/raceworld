@@ -9,7 +9,8 @@ import type { Vec } from './geom'
 
 /** Trackside cross-section, metres from the centreline. Everything placed beside the circuit
  *  measures its clearance against these: a grandstand sited closer than the debris fence ends up
- *  drawn straight through its own barrier. */
+ *  drawn straight through its own barrier. The inner reference is where the tyre barriers used to
+ *  stand; nothing draws there now, but it is still the line the run-off is measured from. */
 export const TYRE_REF_OFFSET_M = 11.5
 export const FENCE_OFFSET_M = 15.5
 
@@ -19,15 +20,6 @@ export interface SceneryFence {
    *  the ribbon swept between its top line and its base, and that has to be rebuilt whenever the
    *  light moves. */
   pts: Vec[]
-}
-export interface SceneryTyreWall {
-  d: string
-  pts: Vec[]
-  bands: string[]
-  /** Outward normal at this corner. The tyre wall sits INBOARD of the barrier, so whether it is
-   *  nearer or further than the barrier from the viewer depends on which way the circuit faces here
-   *  — and that flips around the lap. The renderer dots this with the light to order the two. */
-  nOut: Vec
 }
 export interface SceneryMarshal { x: number; y: number; rot: number }
 export interface SceneryField { d: string; fill: string; crop: boolean }
@@ -102,25 +94,6 @@ export function buildFences(
     flush()
   }
   return out
-}
-
-const TYRE_BANDS = ['#C8352F', '#E6E3DC', '#2E333B']
-
-/** Stacked tyre barriers on the outside of the sharpest corners: the most recognisable piece of
- *  circuit furniture there is, and it reads even at low zoom because of the colour banding. */
-export function buildTyreWalls(
-  frame: TrackFrame, corners: number[], { offsetM, spanM }: { offsetM: number; spanM: number },
-): SceneryTyreWall[] {
-  const { u } = frame
-  return corners.map((s) => {
-    const pts: Vec[] = []
-    for (let d = -spanM / 2; d <= spanM / 2; d += 6) {
-      const p = frame.at(s + u(d))
-      const nrm = frame.normalAt(s + u(d))
-      pts.push({ x: p.x + nrm.x * u(offsetM), y: p.y + nrm.y * u(offsetM) })
-    }
-    return { d: smoothOpenPath(pts), pts, bands: TYRE_BANDS, nOut: frame.normalAt(s) }
-  })
 }
 
 /** Marshal posts at intervals around the lap, always on the outside. */

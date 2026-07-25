@@ -15,8 +15,8 @@ import { blobPath, buildingParts, pickArchetype, type SceneryPart } from './scen
 import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
-  TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts, buildTyreWalls,
-  type SceneryFence, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
+  TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts,
+  type SceneryFence, type SceneryField, type SceneryMarshal,
 } from './scenery-props'
 
 export type { SceneryPart } from './scenery-shapes'
@@ -66,7 +66,6 @@ export interface Scenery {
   base: string
   fields: SceneryField[]
   fences: SceneryFence[]
-  tyreWalls: SceneryTyreWall[]
   marshals: SceneryMarshal[]
   terrain: SceneryBlob[]
   runoffs: SceneryBlob[]
@@ -295,9 +294,6 @@ export function buildScenery(
   // track coming back the other way. Monaco put a marshal post at 6.8 m and a tyre wall at 6.4 m,
   // i.e. on the racing surface. Drop anything the exact distance test rejects.
   const MARSHAL_HALF_DEPTH_M = 1.6
-  const tyreWalls = buildTyreWalls(frame, cornerIdx.map((i) => i * STEP), {
-    offsetM: TYRE_REF_OFFSET_M - 1.5, spanM: 46,
-  }).filter((t) => t.pts.every((p) => trackDist(p) > u(TRACK_HALF_M + 1.5)))
   const marshals = buildMarshalPosts(frame, { everyM: 240, offsetM: FENCE_OFFSET_M + 5 })
     .filter((m) => trackDist({ x: m.x, y: m.y }) > u(FENCE_OFFSET_M + MARSHAL_HALF_DEPTH_M + 0.5))
 
@@ -496,7 +492,7 @@ export function buildScenery(
   }
 
   return {
-    bands, base: bio.base, fields, fences, tyreWalls, marshals,
+    bands, base: bio.base, fields, fences, marshals,
     terrain, runoffs, kerbs, stands, buildings, trees,
   }
 }

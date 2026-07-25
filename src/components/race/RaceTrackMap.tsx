@@ -24,12 +24,15 @@ import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { CarSprite } from './CarSprite'
 import {
-  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, LEVEL, SPRITE, STRAIGHT, bodyTransform, carAttitude, carLight,
+  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, LEVEL, SPRITE, STRAIGHT, TRACK_M, bodyTransform, carAttitude, carLight,
   shadowTransform, sheenTransform, steerAngles, steerTransform,
 } from '@/lib/ui/car-sprite'
 import {
   PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics, type LapDynamics,
 } from '@/lib/ui/lap-dynamics'
+import { buildRacingLine, type ArcPath } from '@/lib/ui/racing-line'
+import { edgeOps, surfaceOps } from '@/lib/ui/track-surface'
+import type { Vec } from '@/lib/ui/geom'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -125,98 +128,11 @@ const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery
 const LOD_ZOOM = 3
 const ROT_STEP = Math.PI / 36 // 5Â° per shift+wheel notch
 
-// How much of the track's width the racing line may use, each side of the centreline: half the tarmac
-// minus half a car and a margin.
-const RACE_LINE_HALF_M = 4.0
-
-// Sample the centreline at n stations: points, right normals, and signed curvature (right turn > 0).
-function sampleCentre(center: SVGPathElement, len: number, n: number) {
-  const c: Array<{ x: number; y: number }> = []
-  for (let i = 0; i < n; i++) c.push(center.getPointAtLength((i / n) * len))
-  const ds = len / n
-  const r: Array<{ x: number; y: number }> = []
-  const kappa = new Float64Array(n)
-  for (let i = 0; i < n; i++) {
-    const a = c[(i - 1 + n) % n]
-    const b = c[(i + 1) % n]
-    const d = Math.hypot(b.x - a.x, b.y - a.y) || 1
-    r.push({ x: -(b.y - a.y) / d, y: (b.x - a.x) / d }) // right of travel
-    const hIn = Math.atan2(c[i].y - a.y, c[i].x - a.x)
-    const hOut = Math.atan2(b.y - c[i].y, b.x - c[i].x)
-    let dth = hOut - hIn
-    if (dth > Math.PI) dth -= 2 * Math.PI
-    if (dth < -Math.PI) dth += 2 * Math.PI
-    kappa[i] = dth / ds
-  }
-  return { c, r, kappa, ds }
-}
-
-// Minimise CURVATURE, not length: a midpoint-pull relaxation is curve-shortening flow, whose optimum
-// is the taut string, i.e. the SHORTEST way round, hugging the insides. The fastest line minimises
-// sum(kappa^2). In the lateral domain, path curvature ~ centreline kappa minus the lateral second
-// derivative; Gauss-Seidel on that quartic system's stationarity equations (update = ds^2/6 times the
-// discrete laplacian of kappa), clamped to the corridor, converges to the true minimum-curvature line:
-// out wide, apex, out wide. A resolution ladder gets the long-range shape cheaply at the coarse level;
-// a whisper of centring spring breaks the degeneracy on straights (any straight line has zero kappa).
-function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string {
-  const len = center.getTotalLength()
-  const targetN = Math.min(1200, Math.max(256, Math.round(len / (6 / metresPerUnit))))
-  const ladder: number[] = []
-  for (let n = targetN; n > 150; n = Math.ceil(n / 2)) ladder.push(n)
-  if (ladder.length === 0) ladder.push(targetN)
-  ladder.reverse() // coarse -> fine
-  const w = RACE_LINE_HALF_M / metresPerUnit
-
-  let a = new Float64Array(ladder[0])
-  let prevN = ladder[0]
-  for (let li = 0; li < ladder.length; li++) {
-    const n = ladder[li]
-    const { kappa: kc, ds } = sampleCentre(center, len, n)
-    if (li > 0) {
-      // Upsample the previous level's laterals (linear, wrapping).
-      const up = new Float64Array(n)
-      for (let i = 0; i < n; i++) {
-        const x = (i / n) * prevN
-        const j = Math.floor(x) % prevN
-        const f = x - Math.floor(x)
-        up[i] = a[j] * (1 - f) + a[(j + 1) % prevN] * f
-      }
-      a = up
-    }
-    prevN = n
-    const inv2 = 1 / (ds * ds)
-    const lap = (i: number) => (a[(i - 1 + n) % n] - 2 * a[i] + a[(i + 1) % n]) * inv2
-    // Path curvature: kc PLUS a'' â€” shifting toward the inside of a turn tightens it.
-    const k = new Float64Array(n)
-    for (let i = 0; i < n; i++) k[i] = kc[i] + lap(i)
-
-    const sweeps = li === 0 ? 4000 : 900
-    const OMEGA = 1.4
-    const SPRING = 0.0008
-    for (let pass = 0; pass < sweeps; pass++) {
-      const fwd = pass % 2 === 0
-      for (let s = 0; s < n; s++) {
-        const i = fwd ? s : n - 1 - s
-        const ip = (i - 1 + n) % n
-        const inx = (i + 1) % n
-        // Stationarity of sum(kappa^2) wrt a_i: a_i <- a_i - ds^2/6 * (discrete laplacian of kappa).
-        const step = -((k[ip] - 2 * k[i] + k[inx]) * ds * ds) / 6
-        const next = Math.max(-w, Math.min(w, (a[i] + OMEGA * step) / (1 + SPRING)))
-        if (next !== a[i]) {
-          a[i] = next
-          // kappa depends on laterals at i-1, i, i+1: refresh the three affected stations.
-          k[ip] = kc[ip] + lap(ip)
-          k[i] = kc[i] + lap(i)
-          k[inx] = kc[inx] + lap(inx)
-        }
-      }
-    }
-  }
-
-  const { c, r } = sampleCentre(center, len, prevN)
-  const pts = c.map((p, i) => `${(p.x + r[i].x * a[i]).toFixed(2)} ${(p.y + r[i].y * a[i]).toFixed(2)}`)
-  return `M ${pts.join(' L ')} Z`
-}
+/** A path element seen as pure arc-length geometry, which is all the racing-line solver wants of it. */
+const arcPath = (p: SVGPathElement): ArcPath => ({
+  length: p.getTotalLength(),
+  at: (s) => p.getPointAtLength(s),
+})
 
 // Sample the RACING LINE and hand it to the shared profile physics. What comes back is the lap time
 // curve that places the cars plus the cornering and braking loads that shape how they sit while it
@@ -275,6 +191,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const pitLenRef = useRef(0)
   const pitDRef = useRef('') // the `d` the pit caches were built from â€” geometry, not identity
   const dynRef = useRef<LapDynamics | null>(null)
+  // The solved line and its dynamics, handed to React once per circuit so the worn tarmac can be built
+  // as scene ops. Null until the first frame has a path element to measure.
+  // Tagged with the layout it was solved for, rather than cleared when the circuit changes: clearing it
+   // meant a setState in the reset effect, and a synchronous setState in an effect body is a cascading
+   // render. A stale solve is simply ignored until the loop replaces it.
+  const [lapLine, setLapLine] = useState<
+    { for: TrackLayout; pts: Vec[]; lateral: Float64Array; centre: Vec[]; dyn: LapDynamics } | null
+  >(null)
   const pitWindowForRef = useRef<unknown>(null) // which engine instance the pit window was sent to
   const prevDrawRef = useRef(new Map<string, { x: number; y: number; kind: string; dist: number; lat: number }>()) // last drawn pose per car, for the path-switch blend
   const pathBlendRef = useRef(new Map<string, { dx: number; dy: number; start: number }>()) // path-switch offset decay
@@ -807,9 +731,22 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         }
         if (!pitLenRef.current) pitLenRef.current = pitPath.getTotalLength()
         if (!raceLenRef.current) {
-          raceLine.setAttribute('d', buildRacingLine(path, layout.metresPerUnit))
+          const solved = buildRacingLine(arcPath(path), layout.metresPerUnit)
+          raceLine.setAttribute('d', solved.d)
           raceLenRef.current = raceLine.getTotalLength()
           dynRef.current = buildLapDynamics(raceLine, layout.metresPerUnit)
+          // Hand the solved line to React ONCE, so the track surface that is worn into it can be built
+          // as scene ops. It is the one piece of the world that cannot be known until a path element
+          // exists to measure, so it is also the one that arrives after the first frame.
+          // The edge follows the ROAD's own boundary, so it needs the centreline, sampled fine enough
+          // that a polyline does not cut the spline's corners visibly. ~3m stations.
+          const arc = arcPath(path)
+          const nCentre = Math.max(512, Math.min(4096, Math.round(arc.length * layout.metresPerUnit / 3)))
+          const centre = Array.from({ length: nCentre }, (_, i) => {
+            const p = arc.at((i / nCentre) * arc.length)
+            return { x: p.x, y: p.y }
+          })
+          setLapLine({ for: layout, pts: solved.pts, lateral: solved.lateral, centre, dyn: dynRef.current })
         }
         if (pitPath && pitLenRef.current > 0 && slotDistsRef.current.length === 0 && pitSlots.length > 0) {
           // Project each pit box onto the lane path once: the arc position a stopping car parks at.
@@ -1474,18 +1411,37 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     { d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`, fill: scenery.base }
   ), [vb, scenery.base])
   const trackDrawOps = useMemo((): DrawOp[] => {
-    const ops: DrawOp[] = [
+    const lap = lapLine?.for === layout ? lapLine : null
+    const ops: DrawOp[] = []
+    if (lap) {
+      ops.push(...edgeOps({
+        u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
+        tarmac: '#33383E', centre: lap.centre, ground: scenery.base, shadow: shadowFill(lighting),
+        ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
+        tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: lap.lateral, detail: lodLow ? 'low' : 'full',
+      }))
+    }
+    ops.push(
       { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
       { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(5.5), cap: 'round' },
-    ]
+    )
     if (pitZone) ops.push({ d: pitZone.work, fill: '#D8D8D2', stroke: '#D8D8D2', width: u(1.3) })
     ops.push(
       { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
       { d: layout.pit.fastD, stroke: '#33383E', width: u(4.2), cap: 'round' },
     )
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
+    // Worn into the tarmac, on top of the road and under the kerbs. Arrives one render after the rest of
+    // the world, because it cannot be solved until a path element exists to measure.
+    if (lap) {
+      ops.push(...surfaceOps({
+        u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
+        tarmac: '#33383E', centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
+        lateral: lap.lateral, detail: lodLow ? 'low' : 'full',
+      }))
+    }
     return ops
-  }, [layout, pitZone, u])
+  }, [layout, pitZone, u, lapLine, lodLow, scenery.base, lighting])
   const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
     ? {
       under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
@@ -1529,7 +1485,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
-      marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
+      marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
       // The same disc the SVG solids layer culled to: the canvas walks every op every frame, so a
       // circuit's whole tree population would be path setup for things nowhere near the shot.

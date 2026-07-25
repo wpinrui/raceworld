@@ -2,9 +2,9 @@ import type { Scenery, SceneryRect } from '@/lib/ui/track-scenery'
 import {
   buildingRoofGroups, buildingWallGroups, fenceOps, groundOps, marshalGroups, refName,
   runShadowOp,
-  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps, tyreWallOps,
+  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps,
 } from '@/lib/ui/scenery-draw'
-import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
+import { lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
 
 // Static scenery layer: generated once per circuit, transforms with the camera. The seat-stripe and
 // crowd-dot patterns live in userSpace so they align with each rotated stand's local axes.
@@ -35,10 +35,8 @@ const MARSHAL_H_M = 2.8
 /** Its hut's footprint, in metres. */
 const MARSHAL_W_M = 4.4
 const MARSHAL_D_M = 3.2
-/** Trackside wall heights: armco/concrete, then the debris fencing standing behind it. */
+/** Height of the debris fencing standing behind the barrier. */
 const FENCE_H_M = 4
-/** A stacked tyre barrier stands about as tall as the wall it fronts. */
-const TYRE_H_M = 1.5
 
 const deg = (r: number) => (r * 180) / Math.PI
 
@@ -286,7 +284,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
   detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
-  const dir = dirAt(view)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
   // Every piece of furniture casts from its BASE, like every other solid on the map.
@@ -297,24 +294,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
   // base), so "away" is -dir and the CAMERA sits at +dir. Nearer therefore means a LARGER projection
   // along dir, and nearer draws last.
   //
-  // A tyre wall is inboard of the fencing, so where the outward normal points toward the camera the
-  // fence is the nearer of the two and the tyres go under it; where it points away, the tyres are
-  // nearer and go on top.
-  const withIdx = scenery.tyreWalls.map((t, i) => ({ t, i }))
-  const nearTyres = withIdx.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0)
-  const farTyres = withIdx.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0)
-  const TyreWalls = (list: typeof withIdx) => list.map(({ t, i }) => (
-    <g key={`tw${i}`}>
-      {tyreWallOps(t, u, full).map((op, j) => (
-        <path
-          key={j} d={op.d} fill="none" stroke={op.stroke} strokeWidth={op.width}
-          strokeLinecap={op.cap}
-          strokeDasharray={op.dash ? `${op.dash.on} ${op.dash.off}` : undefined}
-          strokeDashoffset={op.dash?.shift}
-        />
-      ))}
-    </g>
-  ))
   if (hide?.has('furniture')) return null
   return (
     <g>
@@ -326,9 +305,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
               offset by the cast distance leaves a gap between the object and its own shadow, which
               reads as levitation — and implies something taller than the thing drawn. The fill covers
               the swept ground; the stroke dilates it to the object's real thickness. */}
-          {scenery.tyreWalls.map((t, i) => (
-            <path key={`ts${i}`} strokeWidth={u(3.4)} d={runShadowOp(t.pts, TYRE_H_M, furnOpts).d} />
-          ))}
           {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
               mesh, so what it casts is faint. */}
           {full && scenery.fences.map((b, i) => (
@@ -336,9 +312,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
           ))}
         </g>
       )}
-
-      {/* Tyre walls FURTHER from the viewer than the fencing go under it. */}
-      {TyreWalls(farTyres)}
 
       {/* Debris fencing is a solid on a curve. It needs the height face between its top line and its
           base, or it is a line plus a detached shadow and reads as floating above the ground. That
@@ -354,9 +327,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
           ))}
         </g>
       ))}
-
-      {/* Tyre walls NEARER than the fencing go over it. */}
-      {TyreWalls(nearTyres)}
 
       {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of
           themselves — the same mistake the buildings started with. The hut, its roof and the orange

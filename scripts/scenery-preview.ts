@@ -17,12 +17,15 @@ import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
 } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
-import { MOODS, type Mood } from '../src/lib/ui/lighting'
+import { MOODS, shadowFill, type Mood } from '../src/lib/ui/lighting'
 import { densifyTrace } from '../src/lib/ui/track-path'
 import { CarSprite } from '../src/components/race/CarSprite'
 import {
-  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, carAttitude, carLight, steerAngles,
+  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, TRACK_M, carAttitude, carLight, steerAngles,
 } from '../src/lib/ui/car-sprite'
+import { buildRacingLine, polylineArc } from '../src/lib/ui/racing-line'
+import { edgeOps, surfaceOps } from '../src/lib/ui/track-surface'
+import { refName, type DrawOp } from '../src/lib/ui/scenery-draw'
 import { PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
 import type { Lighting } from '../src/lib/ui/lighting'
 import type { TrackLayout } from '../src/data/tracks'
@@ -49,6 +52,33 @@ const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
 
 const LIVERIES = ['#E8442E', '#2F7BE8', '#F2C230', '#39B26A', '#B565E0', '#E8792E', '#39C4C4', '#E85BA0']
 
+const paintAttr = (v: string) => (refName(v) ? `url(#${refName(v)})` : v)
+
+/** Same mapping the SVG reference renderer applies. Duplicated from canvas-order-preview for now. */
+function opSvg(op: DrawOp): string {
+  const parts = [`d="${op.d}"`, `fill="${op.fill ? paintAttr(op.fill) : 'none'}"`]
+  if (op.stroke) parts.push(`stroke="${paintAttr(op.stroke)}"`, `stroke-width="${op.width ?? 1}"`)
+  if (op.cap) parts.push(`stroke-linecap="${op.cap}"`)
+  if (op.alpha != null) parts.push(`opacity="${op.alpha}"`)
+  if (op.dash) parts.push(`stroke-dasharray="${op.dash.on} ${op.dash.off}"`, `stroke-dashoffset="${op.dash.shift}"`)
+  if (op.evenOdd) parts.push('fill-rule="evenodd"')
+  parts.push('stroke-linejoin="round"')
+  return `<path ${parts.join(' ')} />`
+}
+
+/** The racing line solved off the circuit's own trace, plus the lap dynamics along it. Everything the
+ *  track surface and the cars need, without a browser. */
+function solveLap(layout: TrackLayout) {
+  const centreArc = polylineArc(densifyTrace(layout.trace, 6).map(([x, y]) => ({ x, y })))
+  const line = buildRacingLine(centreArc, layout.metresPerUnit)
+  const arc = polylineArc(line.pts)
+  const pts = Array.from({ length: PROFILE_N }, (_, i) => arc.at((i / PROFILE_N) * arc.length))
+  // Same ~3m centreline stations the map samples for the tarmac edge.
+  const n = Math.max(512, Math.min(4096, Math.round((centreArc.length * layout.metresPerUnit) / 3)))
+  const centre = Array.from({ length: n }, (_, i) => centreArc.at((i / n) * centreArc.length))
+  return { line, arc, centre, dyn: lapDynamics(pts, arc.length, trackPhysics(layout.metresPerUnit)) }
+}
+
 /** Resample a closed polyline to `n` points of equal arc length: what the profile physics assumes. */
 function equalArc(pts: { x: number; y: number }[], n: number) {
   const cum = [0]
@@ -72,12 +102,12 @@ function equalArc(pts: { x: number; y: number }[], n: number) {
   return { pts: out, len }
 }
 
-/** The cars, strung round the CENTRELINE (the solved racing line needs the browser's path API) and
- *  leaning exactly as much as the lap's own dynamics say they should at that point. */
+/** The cars, strung round the solved RACING LINE, leaning and steering exactly as much as the lap's own
+ *  dynamics say they should at that point. */
 function carsMarkup(layout: TrackLayout, lighting: Lighting, n: number): string[] {
-  const dense = densifyTrace(layout.trace, 6).map(([x, y]) => ({ x, y }))
-  const { pts, len } = equalArc(dense, PROFILE_N)
-  const dyn = lapDynamics(pts, len, trackPhysics(layout.metresPerUnit))
+  const lap = solveLap(layout)
+  const { pts, len } = equalArc(lap.line.pts, PROFILE_N)
+  const dyn = lap.dyn
   const light = carLight(lighting)
   const carLen = (CAR_LENGTH_M * CAR_SCALE) / layout.metresPerUnit
   const scale = carLen / SPRITE.len
@@ -142,12 +172,34 @@ for (const id of ids) {
       x: vb.x - 4000, y: vb.y - 4000, width: vb.w + 8000, height: vb.h + 8000, fill: scenery.base,
     })),
     renderToStaticMarkup(createElement(SceneryLayer, { scenery, u, lighting, detail })),
+    ...(() => {
+      const lap = solveLap(layout)
+      return edgeOps({
+        u, line: lap.line.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
+        tarmac: '#33383E', centre: lap.centre, ground: scenery.base, shadow: shadowFill(lighting),
+        ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
+        tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: lap.line.lateral,
+      }).map(opSvg)
+    })(),
     renderToStaticMarkup(createElement('path', {
       d: layout.d, fill: 'none', stroke: '#D8D8D2', strokeWidth: u(TRACK_WIDTH_M), strokeLinejoin: 'round',
     })),
     renderToStaticMarkup(createElement('path', {
       d: layout.d, fill: 'none', stroke: '#33383E', strokeWidth: u(TARMAC_WIDTH_M), strokeLinejoin: 'round',
     })),
+    // Worn into the tarmac, between the road and the kerbs, exactly where the map places it.
+    ...(() => {
+      const lap = solveLap(layout)
+      return surfaceOps({
+        u,
+        line: lap.line.pts,
+        curvature: lap.dyn.curvature,
+        long: lap.dyn.long,
+        trackM: TRACK_M,
+        tarmac: '#33383E', centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
+        lateral: lap.line.lateral,
+      }).map(opSvg)
+    })(),
     ...scenery.kerbs.flatMap((k) => [
       renderToStaticMarkup(createElement('path', {
         d: k.d, fill: 'none', stroke: '#E6E3DC', strokeWidth: u(1.3), strokeLinecap: 'round',
