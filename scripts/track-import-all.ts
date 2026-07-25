@@ -1,10 +1,15 @@
 // Batch-import every circuit covered by the bacinger/f1-circuits GeoJSON dataset (#sim-2d).
 // Streams per-circuit progress. Direction is the real-world race direction viewed north-up; the S/F
-// anchor is approximate pit-straight coordinates (the importer snaps to the nearest trace vertex, so
-// a couple hundred metres of slack is fine). Not in the dataset (need another source or hand-authoring):
-// fuji, valencia, korea, india, jerez.
+// anchor is pit-straight coordinates, which the importer snaps to the nearest trace vertex.
 //
-//   npx tsx scripts/track-import-all.ts
+// That slack is NOT unlimited, whatever this comment used to claim: progress 0 sets the S/F line, the
+// grid AND the centre of the pit lane, and an anchor a couple of hundred metres out snaps to whichever
+// stretch happens to be nearest — which at the Hungaroring was the final corner complex, so the lane
+// was drawn cutting across a hairpin. Anchor on the straight itself and check the result.
+//
+// Not in the dataset (need another source or hand-authoring): fuji, valencia, korea, india, jerez.
+//
+//   npx tsx scripts/track-import-all.ts [circuitId ...]   — no ids re-imports everything
 
 import { writeFileSync } from 'fs'
 import { trackFileContent } from './track-import'
@@ -25,7 +30,10 @@ const CIRCUITS: Entry[] = [
   { id: 'china', file: 'cn-2004', dir: 'cw', sf: [31.3389, 121.22] },
   { id: 'estoril', file: 'pt-1972', dir: 'cw', sf: [38.7506, -9.3942] },
   { id: 'hockenheim', file: 'de-1932', dir: 'cw', sf: [49.3278, 8.5661] },
-  { id: 'hungary', file: 'hu-1986', dir: 'cw', sf: [47.5789, 19.2486] },
+  // The old anchor sat 137m off the track and snapped to a vertex inside the final corner complex, so
+  // the S/F line — and with it the grid and the pit lane, which is centred on progress 0 — landed in a
+  // hairpin and the lane was drawn cutting across it. This is the main straight.
+  { id: 'hungary', file: 'hu-1986', dir: 'cw', sf: [47.5803, 19.2459] },
   { id: 'imola', file: 'it-1953', dir: 'ccw', sf: [44.3439, 11.7167] },
   { id: 'indianapolis', file: 'us-1909', dir: 'cw', sf: [39.792, -86.2389] },
   { id: 'italy', file: 'it-1922', dir: 'cw', sf: [45.6156, 9.2811] },
@@ -52,8 +60,14 @@ const CIRCUITS: Entry[] = [
 ]
 
 async function main() {
+  // Named circuits only, so re-anchoring one track does not rewrite the other thirty-five files.
+  const only = new Set(process.argv.slice(2).filter((a) => !a.startsWith('-')))
+  const wanted = only.size ? CIRCUITS.filter((c) => only.has(c.id)) : CIRCUITS
+  for (const id of only) {
+    if (!CIRCUITS.some((c) => c.id === id)) console.log(`SKIP ${id}: not in the circuit list`)
+  }
   let done = 0
-  for (const c of CIRCUITS) {
+  for (const c of wanted) {
     const url = `https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/${c.file}.geojson`
     const res = await fetch(url)
     if (!res.ok) {
@@ -63,9 +77,9 @@ async function main() {
     const geo = await res.json()
     writeFileSync(`src/data/tracks/${c.id}.ts`, trackFileContent(geo, c.id, { sf: c.sf, dir: c.dir }, `${c.file}.geojson`))
     done++
-    console.log(`[${done}/${CIRCUITS.length}] ${c.id} <- ${c.file} (${c.dir})`)
+    console.log(`[${done}/${wanted.length}] ${c.id} <- ${c.file} (${c.dir})`)
   }
-  console.log(`done: ${done}/${CIRCUITS.length} circuits imported`)
+  console.log(`done: ${done}/${wanted.length} circuits imported`)
 }
 
 main()
