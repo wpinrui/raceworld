@@ -6,40 +6,20 @@
 // already knows where the hardest braking of the lap is -- both were computed, used, and thrown away.
 // This turns them into ink.
 //
+// The ink itself -- opaque pre-blended colour, softness by nesting, layer-major order -- lives in
+// [surface-ink.ts](./surface-ink.ts) and is shared with the pit lane. What is here is what only a LAP
+// has: a racing line, apexes, braking zones and the marbles a corner throws off.
+//
 // Every stripe here is cut into ARCS, each carrying its own cull disc. A full-lap stroke as one op is an
 // op the canvas must set up and paint whenever any part of the lap is on screen, which at racing zoom is
 // the whole stripe for the sake of the tenth of it in shot.
 
-import type { Bounds, DrawOp } from './scenery-draw'
+import type { DrawOp } from './scenery-draw'
 import type { Vec } from './geom'
-import { hexToRgb, rgbToHex } from '@/lib/color'
-
-/** Blend `over` onto `base` by `t`, and paint the RESULT opaquely.
- *
- *  Every stripe here is laid down as an opaque pre-blended colour rather than a translucent one, because
- *  a full-lap stripe has to be cut into arcs to be cullable, and translucent arcs double-paint wherever
- *  their end caps meet. That is a visible dark disc at every join -- 32 of them round a lap, measured on
- *  a preview at racing zoom, and every one of them reads as a mark on the road. Opaque paint over the
- *  same colour is idempotent, so the joins vanish.
- *
- *  The cost is that the stripes now depend on knowing what is underneath, which is why the tarmac colour
- *  is an input rather than an assumption. */
-function blend(base: string, over: string, t: number): string {
-  const [r1, g1, b1] = hexToRgb(base)
-  const [r2, g2, b2] = hexToRgb(over)
-  const m = (a: number, b: number) => Math.round(a + (b - a) * t)
-  return rgbToHex(m(r1, r2), m(g1, g2), m(b1, b2))
-}
-
-/** Laid rubber is not black paint: it is the same tarmac with melted tyre polished into it, so it goes
- *  darker and a shade cooler than the road around it rather than becoming a new colour.
- *
- *  Near-black at a low alpha, NOT a mid grey at a high one. Tarmac is #33383E, so a mid-grey rubber can
- *  only ever be about 16 of 255 from the road however hard it is laid on, and the line disappears --
- *  measured, the first attempt darkened the tarmac by 5. The alpha is what should be doing the work. */
-const RUBBER = '#101216'
-/** Scrubbed rubber off a locked or near-locked wheel: harder, darker and much narrower than laid rubber. */
-const SKID = '#0C0E11'
+import {
+  APRON_LINES, MARBLE, RUBBER, SKID, SOFT_LAYERS, SOFT_SPREAD, blend, chunk, edgeLayer, grainWeight,
+  layerStrength, midFrac, softStroke, spacingOf, stripe, type Keep,
+} from './surface-ink'
 
 /** Arcs per lap for a full-lap stripe. Two jobs: a cull disc every ~45m on a Grand Prix circuit, so a
  *  corner in shot does not drag half the lap in with it, and fine enough steps that the strength can
@@ -110,67 +90,9 @@ export interface Surface {
   detail?: 'full' | 'low'
 }
 
-/** Nested strokes a stripe is built from, widest and faintest first.
- *
- *  Real rubber has no edge, it thins out, and a hard-edged stroke is the tell that it was drawn rather
- *  than laid. Blur is not available here (this renderer has no filters, by three regressions' worth of
- *  hard experience) and a gradient across a stroke that curves would need one gradient per arc, which is
- *  the per-frame gradient rebuild this branch has already paid for once. Nested opaque strokes are what
- *  is left, and they are what every soft shadow on this map is made of too.
- *
- *  Each layer is also LONGER than the one above it, so the same nesting softens the ends of a mark as
- *  well as its sides: one family of strokes, both edges soft. */
-const SOFT_LAYERS = 4
-
-/** Extra width per softening layer, in metres, added outside the core. */
-const SOFT_SPREAD = 0.75
-
-/** Strength of layer `k` of `layers`, as a fraction of the stripe's full strength. Layer 0 is the
- *  outermost and faintest; the last is the core. */
-const layerStrength = (k: number, layers: number) => (k + 1) / layers
-
-/** Hold a stripe ON the tarmac. `lateral` says how far the racing line itself sits from the centreline at
- *  each station, positive to the RIGHT; a positive offset moves LEFT along the station normal, so the
- *  stripe's own distance right of centre is `lateral - offset`. That is what has to stay inside the road.
- *
- *  Without this, anything hung off the racing line escapes at corner ENTRY, where the line is already at
- *  its 4m limit: the marbles sat 4m further out again, which is 2m past the edge of the asphalt. */
-function onTrack(want: number, halfWidth: number, keep?: Keep): (i: number) => number {
-  if (!keep) return () => want
-  const limit = Math.max(0, keep.halfU - halfWidth)
-  const { lateral } = keep
-  return (i) => {
-    const l = lateral[i % lateral.length]
-    if (l - want > limit) return l - limit
-    if (l - want < -limit) return l + limit
-    return want
-  }
-}
-
-/** What it takes to keep a stripe on the road: the line's own offsets, and the tarmac's half-width. */
-interface Keep {
-  lateral: Float64Array
-  halfU: number
-}
-
 const keepOf = (s: Surface): Keep | undefined => (s.lateral && s.tarmacHalfM
   ? { lateral: s.lateral, halfU: s.u(s.tarmacHalfM) }
   : undefined)
-
-/** One layer of one run: `k` counts inward, so higher is narrower, shorter and stronger. */
-function softStroke(
-  pts: readonly Vec[], idx: number[], offset: number, core: number, spread: number, colour: string,
-  cap: 'round' | 'butt', pad: number, k: number, taper: boolean, layers: number, keep?: Keep,
-): DrawOp | null {
-  const width = core + spread * (layers - 1 - k)
-  // Trim a fifth of the run per layer, so a mark steps up in strength toward its middle rather than
-  // starting on a hard edge. A run too short to trim is drawn full length: better an edge than nothing.
-  const trim = taper ? Math.min(Math.floor(idx.length * 0.2) * k, Math.floor((idx.length - 2) / 2)) : 0
-  const cut = trim > 0 ? idx.slice(trim, idx.length - trim) : idx
-  if (cut.length < 2) return null
-  const { d, clip } = stripe(pts, cut, onTrack(offset, width / 2, keep))
-  return { d, stroke: colour, width, cap, clip: { ...clip, r: clip.r + width / 2 + pad } }
-}
 
 /** Read a per-station array at a station of a DIFFERENT resolution. The racing line is solved at up to
  *  1200 stations and the profile at 256, so nothing may assume the two line up. */
@@ -180,48 +102,6 @@ function atFrac(arr: Float64Array, frac: number): number {
   const i = Math.floor(x)
   const f = x - i
   return arr[i % n] * (1 - f) + arr[(i + 1) % n] * f
-}
-
-/** Unit normal to the LEFT of travel at station i of a closed polyline. */
-function normalAt(pts: readonly Vec[], i: number): Vec {
-  const n = pts.length
-  const a = pts[(i - 1 + n) % n]
-  const b = pts[(i + 1) % n]
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const len = Math.hypot(dx, dy) || 1
-  return { x: dy / len, y: -dx / len }
-}
-
-/** A polyline through the given stations, plus the disc that contains it. `offsetAt` displaces each
- *  station along its own normal, which is how the tyre streaks are placed either side of the line and how
- *  every stripe is kept on the road. */
-function stripe(pts: readonly Vec[], idx: number[], offsetAt: (i: number) => number): { d: string; clip: Bounds } {
-  const n = pts.length
-  const out: Vec[] = idx.map((i) => {
-    const p = pts[i % n]
-    const offset = offsetAt(i % n)
-    if (offset === 0) return p
-    const nrm = normalAt(pts, i % n)
-    return { x: p.x + nrm.x * offset, y: p.y + nrm.y * offset }
-  })
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const p of out) {
-    if (p.x < minX) minX = p.x
-    if (p.x > maxX) maxX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.y > maxY) maxY = p.y
-  }
-  const cx = (minX + maxX) / 2
-  const cy = (minY + maxY) / 2
-  return {
-    d: `M ${out.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')}`,
-    // Half the diagonal contains every station; the caller pads it for the stroke's own width.
-    clip: { cx, cy, r: Math.hypot(maxX - minX, maxY - minY) / 2 },
-  }
 }
 
 /** Cut the whole lap into `count` arcs, each with the lap fraction at its middle so it can be painted at
@@ -267,18 +147,6 @@ function runs(n: number, keep: (frac: number) => boolean, pad: number): number[]
 
 const arcsAll = (n: number): number[] => Array.from({ length: n + 1 }, (_, i) => i % n)
 
-/** Mean spacing between a polyline's stations, in metres. */
-function spacingOf(pts: readonly Vec[], u: (m: number) => number): number {
-  let total = 0
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i]
-    const b = pts[(i + 1) % pts.length]
-    total += Math.hypot(b.x - a.x, b.y - a.y)
-  }
-  // `u` converts metres to units, so one unit is 1 / u(1) metres.
-  return (total / pts.length) / u(1)
-}
-
 /** The polished line the whole field drives: one wide soft pass round the lap, and a second narrower one
  *  through the corners, where a lap's worth of cars all put their tyres in the same place. */
 export function rubberOps(s: Surface): DrawOp[] {
@@ -307,7 +175,7 @@ export function rubberOps(s: Surface): DrawOp[] {
     // a free end. Round caps are therefore free of nubs here, and the run is not tapered.
     for (const { idx, frac } of lap) {
       const colour = blend(s.tarmac, RUBBER, rubberWeight(frac) * layerStrength(k, layers))
-      const op = softStroke(line, idx, 0, core, spread, colour, 'round', pad, k, false, layers, keep)
+      const op = softStroke(line, idx, k, layers, { core, spread, colour, pad, keep })
       if (op) ops.push(op)
     }
   }
@@ -316,21 +184,18 @@ export function rubberOps(s: Surface): DrawOp[] {
       // Laid over whatever the base stripe is doing HERE, so the apex core always reads as the same
       // amount darker than its surroundings rather than as the same absolute grey.
       const under = blend(s.tarmac, RUBBER, rubberWeight(midFrac(idx, line.length)))
-      const op = softStroke(
-        line, idx, 0, apexCore, spread * 0.6, blend(under, RUBBER, 0.4 * layerStrength(k, layers)),
-        'round', pad, k, true, layers, keep,
-      )
+      const op = softStroke(line, idx, k, layers, {
+        core: apexCore,
+        spread: spread * 0.6,
+        colour: blend(under, RUBBER, 0.4 * layerStrength(k, layers)),
+        pad,
+        taper: true,
+        keep,
+      })
       if (op) ops.push(op)
     }
   }
   return ops
-}
-
-/** Lap fraction at the middle of a run of stations, wrapping. */
-function midFrac(idx: number[], n: number): number {
-  const first = idx[0]
-  const span = idx.length
-  return (((first + span / 2) % n) + n) % n / n
 }
 
 /** Two dark streaks into every real braking zone, spaced at the front track, because a car brakes in a
@@ -350,7 +215,9 @@ export function skidOps(s: Surface): DrawOp[] {
       const laid = blend(s.tarmac, RUBBER, rubberWeight(midFrac(idx, line.length)))
       const colour = blend(laid, SKID, 0.62 * layerStrength(k, layers))
       for (const side of [-half, half]) {
-        const op = softStroke(line, idx, side, width, u(0.16), colour, 'butt', pad, k, true, layers, keepOf(s))
+        const op = softStroke(line, idx, k, layers, {
+          offset: side, core: width, spread: u(0.16), colour, cap: 'butt', pad, taper: true, keep: keepOf(s),
+        })
         if (op) ops.push(op)
       }
     }
@@ -364,10 +231,7 @@ export function skidOps(s: Surface): DrawOp[] {
  *  Seen from directly above they are not pellets. They are a paler, dirtier, edgeless strip of tarmac, and
  *  drawing them as dashes was simply the wrong shape: a dash pattern along a stroke lays regular bars
  *  ACROSS the band, which reads as road marking. So this is a soft low-contrast band whose strength
- *  wanders along the corner, which is what a swept-up drift of debris actually looks like.
- *
- *  Warmer and less blue than the tarmac, because dust is not rubber. */
-const MARBLE = '#6E6A62'
+ *  wanders along the corner, which is what a swept-up drift of debris actually looks like. */
 
 /** Curvature, against the lap's tightest corner, above which a corner throws marbles at all. Lower than
  *  the apex threshold: a corner does not have to be a hairpin to sweep its own rubber off the line. */
@@ -393,16 +257,6 @@ function marbleWeight(frac: number): number {
   const a = Math.sin(2 * Math.PI * 7 * frac + 0.7)
   const b = Math.sin(2 * Math.PI * 11.3 * frac + 2.1)
   return Math.max(0, 0.5 + 0.5 * (a * 0.6 + b * 0.4))
-}
-
-/** Split a run into shorter patches, adjacent patches sharing a station so there is no gap. */
-function chunk(idx: number[], size: number): number[][] {
-  const out: number[][] = []
-  for (let i = 0; i < idx.length - 1; i += size) {
-    const part = idx.slice(i, Math.min(i + size + 1, idx.length))
-    if (part.length > 1) out.push(part)
-  }
-  return out
 }
 
 export function marbleOps(s: Surface): DrawOp[] {
@@ -431,27 +285,23 @@ export function marbleOps(s: Surface): DrawOp[] {
     for (const p of patches) {
       const t = MARBLE_ALPHA * marbleWeight(p.frac) * layerStrength(k, layers)
       if (t < 0.005) continue
-      const op = softStroke(
-        line, p.idx, p.side * u(MARBLE_OFF_M), core, spread, blend(s.tarmac, MARBLE, t),
-        'round', pad, k, false, layers, keepOf(s),
-      )
+      const op = softStroke(line, p.idx, k, layers, {
+        offset: p.side * u(MARBLE_OFF_M),
+        core,
+        spread,
+        colour: blend(s.tarmac, MARBLE, t),
+        pad,
+        keep: keepOf(s),
+      })
       if (op) ops.push(op)
     }
   }
   return ops
 }
 
-/** How far the asphalt continues past the white line, as a MULTIPLE of the line's own width. A circuit
- *  does not stop being a road at the paint: there is always apron out there, and without it the white line
- *  reads as the edge of the world with grass immediately beyond. */
-const APRON_LINES = 2
-
-/** The drop from asphalt into the verge, plus the shadow the slab throws onto it.
- *
- *  A ribbon with no edge reads as a line drawn INTO the ground. A ribbon with a dark lip and a soft
- *  shadow beyond it reads as a slab laid ON the ground, and that one cue does more for the map's sense of
- *  depth than anything else at this scale. Drawn UNDER the road, as strokes wider than it, so the road
- *  itself covers all but the rim.
+/** The drop from asphalt into the verge, drawn UNDER the road as strokes wider than it, so the road
+ *  itself covers all but the rim. The shape of the fade is shared with the pit lane's own apron
+ *  (`edgeLayer`); what is here is the lap it runs round.
  *
  *  This is the one stripe that runs the whole lap and cannot be confined to corners, so it is the
  *  increment's frame-budget risk and the reason it is cut into the same arcs as everything else rather
@@ -467,17 +317,8 @@ export function edgeOps(s: Surface): DrawOp[] {
   const ops: DrawOp[] = []
   // Widest and faintest first, exactly as the stripes above, and layer-major for the same reason.
   for (let k = 0; k < layers; k++) {
-    const f = layerStrength(k, layers)
-    // Thin crisp lip at the asphalt, reaching out to a wide faint edge. The strength ramp is SQUARED, not
-    // linear: the shadow spans ~20 grey levels, so a linear ramp leaves the outermost layer 8 levels below
-    // open grass and the shadow acquires a hard outer boundary of its own -- measured. Squared puts the
-    // faintest layer within about a level of the grass, where it belongs.
-    const width = 2 * apronHalf + 2 * (u(0.18) + u(1.55) * (1 - f))
-    // The darkest the falloff ever gets IS the tarmac colour. It used to blend on toward the shadow tint
-    // as well, which put a one-pixel near-blue line between the asphalt and the grass -- the darkest thing
-    // in the shot, at the exact place the eye is looking for an edge, and jarring. The falloff is a fade
-    // from road to ground and nothing else.
-    const colour = blend(ground, s.tarmac, f * f)
+    const { reachM, colour } = edgeLayer(k, layers, ground, s.tarmac)
+    const width = 2 * (apronHalf + u(reachM))
     for (const { idx } of lap) {
       const { d, clip } = stripe(centre, idx, () => 0)
       ops.push({ d, stroke: colour, width, cap: 'round', clip: { ...clip, r: clip.r + width / 2 + pad } })
@@ -496,17 +337,13 @@ export function edgeOps(s: Surface): DrawOp[] {
 }
 
 /** Surface grain: the same patchy treatment as the marbles, spread over the WHOLE road rather than one
- *  band outside the corners. Tarmac is not one flat grey -- it is laid in strips, wears unevenly, and is
- *  patched, and a ribbon of constant colour is the single biggest tell that a circuit was drawn rather
- *  than paved. This is what breaks that up.
+ *  band outside the corners. Every patch is either a little paler and dustier or a little darker and more
+ *  rubbered-in, so the variance runs both ways rather than only lightening the road.
  *
- *  Deliberately at the edge of perception: about three grey levels either way. Every patch is either a
- *  little paler and dustier or a little darker and more rubbered-in, so the variance runs both ways
- *  rather than only lightening the road.
- *
- *  Bands run ALONG the road, because that is the direction tarmac is laid and worn in, and they do not
- *  overlap: opaque paint cannot blend, so touching bands would trade a soft join for a hard one. At three
- *  levels of contrast the boundaries read as streaking, which is what a resurfaced circuit looks like. */
+ *  Deliberately at the edge of perception: about three grey levels either way. Bands run ALONG the road,
+ *  because that is the direction tarmac is laid and worn in, and they do not overlap: opaque paint cannot
+ *  blend, so touching bands would trade a soft join for a hard one. At three levels of contrast the
+ *  boundaries read as streaking, which is what a resurfaced circuit looks like. */
 const GRAIN_BANDS = 3
 
 /** Peak grain strength, as a blend weight. */
@@ -515,17 +352,6 @@ const GRAIN_ALPHA = 0.075
 /** Metres of road per patch. Short enough to read as mottling from a car, long enough not to cost an op
  *  every few metres of a five-kilometre lap. */
 const GRAIN_PATCH_M = 45
-
-/** Signed grain at a lap fraction for a given band, in -1..1. Three incommensurate frequencies per band,
- *  offset per band so no two bands share a pattern, and stable for a given circuit. */
-function grainWeight(frac: number, band: number): number {
-  const p = band * 1.7
-  return (
-    Math.sin(2 * Math.PI * 5.3 * frac + p) * 0.45
-    + Math.sin(2 * Math.PI * 9.7 * frac + p * 2.3) * 0.33
-    + Math.sin(2 * Math.PI * 17.1 * frac + p * 0.6) * 0.22
-  )
-}
 
 export function grainOps(s: Surface): DrawOp[] {
   const { u, centre, tarmacHalfM } = s

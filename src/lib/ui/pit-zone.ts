@@ -20,6 +20,12 @@ export interface PitSlot { x: number; y: number; nx: number; ny: number; rot: nu
 export interface PitZone {
   /** The working-lane apron, tapered in and out at each end. */
   work: string
+  /** The same apron as its two edges, station for station: outer (garage side, tapering out and back
+   *  in) and inner (a constant 1 m track-side of the lane centreline). What is laid ON the apron --
+   *  its asphalt fringe, its grain -- is a band ACROSS a road that changes width, which a stroke of one
+   *  width cannot describe. */
+  workOuter: Array<{ x: number; y: number }>
+  workInner: Array<{ x: number; y: number }>
   /** The white-on-blue separator stripe down the box row. */
   sep: string
   limiterIn: string
@@ -193,31 +199,7 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
   // end vertices exact while the drawn curve is smoothing-pulled there (~L^2/8R), which
   // shifted the lines ~0.3m laterally on curved lanes. Projection is exact by construction:
   // centre ON the ribbon, endpoints symmetric +-1.95m along its true perpendicular.
-  const fastPts: Array<[number, number]> = (() => {
-    const tokens = layout.pit.fastD.match(/[MLQ]|-?\d+(\.\d+)?/g) ?? []
-    const out: Array<[number, number]> = []
-    let i = 0
-    let cur: [number, number] = [0, 0]
-    while (i < tokens.length) {
-      const t = tokens[i]
-      if (t === 'M' || t === 'L') {
-        cur = [Number(tokens[i + 1]), Number(tokens[i + 2])]
-        out.push(cur)
-        i += 3
-      } else if (t === 'Q') {
-        const c: [number, number] = [Number(tokens[i + 1]), Number(tokens[i + 2])]
-        const e: [number, number] = [Number(tokens[i + 3]), Number(tokens[i + 4])]
-        for (let q = 1; q <= 6; q++) {
-          const tt = q / 6
-          const ss = 1 - tt
-          out.push([ss * ss * cur[0] + 2 * ss * tt * c[0] + tt * tt * e[0], ss * ss * cur[1] + 2 * ss * tt * c[1] + tt * tt * e[1]])
-        }
-        cur = e
-        i += 5
-      } else i++
-    }
-    return out
-  })()
+  const fastPts = layout.pit.fastPts
   // Working-lane geometry, hoisted: the limiter's garage-side end must land on the work
   // lane's drawn outer edge wherever its taper has already widened the road at the limiter's
   // station (spanning only the fast lane leaves a gap there).
@@ -241,10 +223,10 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
     let bf = 0
     let bd = Infinity
     for (let i = 1; i < fastPts.length; i++) {
-      const ax = fastPts[i - 1][0]
-      const ay = fastPts[i - 1][1]
-      const dx = fastPts[i][0] - ax
-      const dy = fastPts[i][1] - ay
+      const ax = fastPts[i - 1].x
+      const ay = fastPts[i - 1].y
+      const dx = fastPts[i].x - ax
+      const dy = fastPts[i].y - ay
       const L2 = dx * dx + dy * dy || 1
       const f = Math.max(0, Math.min(1, ((c0.x - ax) * dx + (c0.y - ay) * dy) / L2))
       const px = ax + dx * f
@@ -256,13 +238,13 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
         bf = f
       }
     }
-    const ax = fastPts[bi - 1][0]
-    const ay = fastPts[bi - 1][1]
-    const cx = ax + (fastPts[bi][0] - ax) * bf
-    const cy = ay + (fastPts[bi][1] - ay) * bf
-    const dl = Math.hypot(fastPts[bi][0] - ax, fastPts[bi][1] - ay) || 1
-    const nx = -(fastPts[bi][1] - ay) / dl
-    const ny = (fastPts[bi][0] - ax) / dl
+    const ax = fastPts[bi - 1].x
+    const ay = fastPts[bi - 1].y
+    const cx = ax + (fastPts[bi].x - ax) * bf
+    const cy = ay + (fastPts[bi].y - ay) * bf
+    const dl = Math.hypot(fastPts[bi].x - ax, fastPts[bi].y - ay) || 1
+    const nx = -(fastPts[bi].y - ay) / dl
+    const ny = (fastPts[bi].x - ax) / dl
     const h = u1(2.1)
     const gp = ptAt(target, u1(1.6))
     const candA = { x: cx + nx * h, y: cy + ny * h }
@@ -308,17 +290,17 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
   const U: Array<{ s: number; lat: number }> = [{ s: a0, lat: GARAGE_FACE }, { s: a1, lat: GARAGE_FACE }, ...rear]
   const upperPts = U.map(({ s: vs, lat }) => ptAt(vs, u1(lat)))
   const buildingPts = V.map(({ s: vs, lat }) => ptAt(vs, u1(lat)))
+  // The apron as two edges rather than one ring, so what is laid on it can be banded across its
+  // width; the ring is then just the outer edge and the inner edge walked back.
+  const WORK_N = 36
+  const workAt = (i: number) => wt0 + ((wt1 - wt0) * i) / WORK_N
+  const workOuter = Array.from({ length: WORK_N + 1 }, (_, i) => ptAt(workAt(i), workOuterLat(workAt(i))))
+  const workInner = Array.from({ length: WORK_N + 1 }, (_, i) => ptAt(workAt(i), WLAT_IN))
   return {
-    work: (() => {
-      const N = 36
-      const ring: Array<{ x: number; y: number }> = []
-      for (let i = 0; i <= N; i++) {
-        const sA = wt0 + ((wt1 - wt0) * i) / N
-        ring.push(ptAt(sA, workOuterLat(sA)))
-      }
-      for (let i = N; i >= 0; i--) ring.push(ptAt(wt0 + ((wt1 - wt0) * i) / N, WLAT_IN))
-      return `M ${ring.map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`
-    })(),
+    work: `M ${[...workOuter, ...[...workInner].reverse()]
+      .map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`,
+    workOuter,
+    workInner,
     sep: line(-u1(1.3), a0, a1),
     limiterIn: limiter(0),
     limiterOut: limiter(arc),

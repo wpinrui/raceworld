@@ -2,7 +2,7 @@ import type { Scenery, SceneryRect, SceneryTree } from '@/lib/ui/track-scenery'
 import {
   buildingRoofGroups, buildingWallGroups, depthSorted, fenceOps, groundOps, marshalGroups, refName,
   runShadowOp,
-  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps,
+  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps, type DrawOp,
 } from '@/lib/ui/scenery-draw'
 import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
 
@@ -125,6 +125,29 @@ export function SceneryLayer({ scenery, u, lighting, hide, detail = 'full' }: {
         />
       ))}
 
+    </g>
+  )
+}
+
+/** A run of shared draw ops as SVG paths: the reference renderer's counterpart to the canvas walking
+ *  the same list. Anything described once and painted by both sides goes through here, so the two
+ *  cannot drift on how an op maps to paint. */
+export function OpPaths({ ops }: { ops: DrawOp[] }) {
+  return (
+    <g>
+      {ops.map((op, i) => (
+        <path
+          key={i}
+          d={op.d}
+          fill={op.fill ? paint(op.fill) : 'none'}
+          stroke={op.stroke ? paint(op.stroke) : undefined}
+          strokeWidth={op.width}
+          strokeLinecap={op.cap}
+          strokeLinejoin="round"
+          opacity={op.alpha}
+          fillRule={op.evenOdd ? 'evenodd' : undefined}
+        />
+      ))}
     </g>
   )
 }

@@ -33,6 +33,33 @@ export function smoothOpenPath(pts: Array<{ x: number; y: number }>): string {
   return `${d} L ${fmt(last.x)} ${fmt(last.y)}`
 }
 
+/** Sample the curve `smoothOpenPath` DRAWS, at `perSeg` points per quadratic. The open-path counterpart
+ * of `densifyTrace`, and needed for the same reason: anything measured off the control polyline misses
+ * the drawn ribbon by the smoothing pull, and geometry laid on the pit lane's surface has to hug the
+ * lane the player can see, not the one it was built from. */
+export function densifyOpen(pts: readonly Vec[], perSeg = 6): Vec[] {
+  const n = pts.length
+  if (n < 3) return pts.map((p) => ({ x: p.x, y: p.y }))
+  const mid = (i: number, j: number): Vec => ({ x: (pts[i].x + pts[j].x) / 2, y: (pts[i].y + pts[j].y) / 2 })
+  const out: Vec[] = [{ x: pts[0].x, y: pts[0].y }]
+  // The first quad runs from the start POINT rather than from a midpoint, exactly as the path does.
+  for (let i = 1; i <= n - 2; i++) {
+    const a = i === 1 ? pts[0] : mid(i - 1, i)
+    const c = pts[i]
+    const b = mid(i, i + 1)
+    for (let k = 1; k <= perSeg; k++) {
+      const t = k / perSeg
+      const s = 1 - t
+      out.push({
+        x: s * s * a.x + 2 * s * t * c.x + t * t * b.x,
+        y: s * s * a.y + 2 * s * t * c.y + t * t * b.y,
+      })
+    }
+  }
+  out.push({ x: pts[n - 1].x, y: pts[n - 1].y })
+  return out
+}
+
 /** Build the closed path and S/F pose from an imported trace, smoothing every vertex with quadratic
  * curves through segment midpoints (raw GPS polylines read jagged under zoom). The path still starts
  * exactly at trace[0] — the S/F line — which sits on the straight, so its two tiny line joins vanish. */
@@ -98,6 +125,10 @@ export interface PitLane {
    * `d` remains the routing path; the working lane is drawn by the renderer only along the box
    * zone, so the complex is narrow everywhere else. */
   fastD: string
+  /** The same ribbon as `fastD`, sampled along the curve it draws. Anything laid ON the lane -- its
+   * asphalt apron, its grain, the band worn down it -- is offset from these, and the limiter lines
+   * are projected onto them. A path string cannot be measured without a browser; this can. */
+  fastPts: Array<{ x: number; y: number }>
   /** The straight portion's stations (lane centre + inward normal + direction): the renderer
    * builds one pit box per team from these, spaced and interpolated to the grid's size. */
   slotStations: Array<{ x: number; y: number; nx: number; ny: number; rot: number }>
@@ -109,6 +140,15 @@ export interface PitLane {
  *  the test oracles measure "is this on the track?" against it. */
 export const TRACK_WIDTH_M = 13.3
 export const TARMAC_WIDTH_M = 12
+
+/** The same cross-section for the PIT LANE's through ribbon, which is drawn casing-then-asphalt exactly
+ *  as the track is, only narrower. Owned here for the same reason: the renderers, the previews and
+ *  anything laid on the lane's surface all measure against these. */
+export const LANE_WIDTH_M = 5.5
+export const LANE_TARMAC_M = 4.2
+/** Width of the white line either side of the lane's asphalt. The working apron carries the same line,
+ *  which is why the renderer strokes that ring at twice this. */
+export const LANE_LINE_M = (LANE_WIDTH_M - LANE_TARMAC_M) / 2
 
 export const PIT_ENTRY_FRAC = 0.93 // lap fraction where the lane leaves the racing line
 export const PIT_EXIT_FRAC = 0.07  // lap fraction (of the next lap) where it rejoins
@@ -256,13 +296,15 @@ export function buildPitLane(
     return { x: inSign * -dd.y, y: inSign * dd.x }
   }
   const laneOffset = (k: number, lat: number): Vec => add(pts[k], scale(laneNormalAt(k), lat))
-  const fastD = smoothOpenPath(Array.from({ length: STEPS + 1 }, (_, k) => laneOffset(k, -uu(2.8))))
+  const fast = Array.from({ length: STEPS + 1 }, (_, k) => laneOffset(k, -uu(2.8)))
+  const fastD = smoothOpenPath(fast)
+  const fastPts = densifyOpen(fast)
 
   const slotStations: PitLane['slotStations'] = straight.map((st) => ({
     x: st.ctr.x, y: st.ctr.y, nx: st.normal.x, ny: st.normal.y, rot: Math.atan2(st.dir.y, st.dir.x),
   }))
 
-  return { d, box: { x: box.x, y: box.y }, latSign: inSign, fastD, slotStations }
+  return { d, box: { x: box.x, y: box.y }, latSign: inSign, fastD, fastPts, slotStations }
 }
 
 const DEFAULT_RADIUS = 12

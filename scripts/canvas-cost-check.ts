@@ -13,7 +13,10 @@
 import { performance } from 'node:perf_hooks'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery, KERB_BLOCK_M, KERB_WIDTH_M } from '../src/lib/ui/track-scenery'
-import { TARMAC_WIDTH_M, TRACK_WIDTH_M } from '../src/lib/ui/track-path'
+import {
+  LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M,
+} from '../src/lib/ui/track-path'
+import { pitEdgeOps, pitSurfaceOps } from '../src/lib/ui/pit-surface'
 import { EXTRUDE } from '../src/components/race/SceneryLayer'
 import { pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
@@ -121,10 +124,19 @@ for (const id of ids) {
   }
   const trackOps: DrawOp[] = [
     { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
-    { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(5.5), cap: 'round' },
+    { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' },
     { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
-    { d: layout.pit.fastD, stroke: '#33383E', width: u(4.2), cap: 'round' },
+    { d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' },
   ]
+  const pitSurface = {
+    u,
+    fast: layout.pit.fastPts,
+    apron: pitZone ? { outer: pitZone.workOuter, inner: pitZone.workInner } : undefined,
+    boxes: pitSlots,
+    tarmac: '#33383E',
+    ground: scenery.base,
+    detail: 'full' as const,
+  }
   const kerbOpsFor = (d: Disc | null): DrawOp[] => kerbsFor(d).flatMap((k) => [
     { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' as const },
     {
@@ -134,10 +146,13 @@ for (const id of ids) {
   ])
   // Pit ops are memoised separately in RaceTrackMap and never rebuilt on a cull commit, so they are
   // built once here too — the rebuild timing below has to measure what a commit actually re-runs.
-  const pitUnder = pitZone ? pitFloorOps(pitZone, lighting, () => '#888888') : []
-  const pitOver = pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, () => '#888888') : []
-  // The pit complex is gated by the same disc, exactly as RaceTrackMap gates it.
-  const pitPts = pitZone ? [...pitZone.buildingPts, ...pitZone.garageFloors.flat()] : []
+  const pitUnder = [...pitEdgeOps(pitSurface), ...(pitZone ? pitFloorOps(pitZone, lighting, () => '#888888') : [])]
+  const pitOver = pitZone
+    ? [...pitSurfaceOps(pitSurface), ...pitComplexOps(pitZone, u, lighting, viewAz, () => '#888888')]
+    : []
+  // The pit complex is gated by the same disc, exactly as RaceTrackMap gates it — lane included, since
+  // the lane's apron runs well past the building.
+  const pitPts = pitZone ? [...pitZone.buildingPts, ...pitZone.garageFloors.flat(), ...layout.pit.fastPts] : []
   const pitDisc = pitPts.length > 0 ? (() => {
     const xs = pitPts.map((p) => p.x)
     const ys = pitPts.map((p) => p.y)
