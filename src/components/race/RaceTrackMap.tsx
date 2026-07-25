@@ -71,8 +71,10 @@ const FRAME_CAPS: number[] = [0, 30, 45]
  *  than something the compiler narrows away.
  *
  *  The readout keeps its backtick: it is worth having to hand at any time. */
-// Enabled while the frame-rate work is live; flip back off when the perf investigation closes.
-const DEBUG_KEYS: boolean = true
+// Off in normal play. Flip on to get the layer hotkeys and the 'n' lap benchmark back — the
+// readout keeps its backtick either way. The 2026-07 frame-rate campaign closed with the pit
+// straight's raster dips accepted as the known residual (see the bench reports in that PR).
+const DEBUG_KEYS: boolean = false
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
