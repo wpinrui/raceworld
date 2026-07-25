@@ -1609,7 +1609,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               </g>
             )}
             </g>
-            {bitmap && <image href={bitmap} x={vb.x} y={vb.y} width={vb.w} height={vb.h} />}
+            {bitmap?.map((t) => (
+              <image key={t.url} href={t.url} x={t.x} y={t.y} width={t.w} height={t.h} />
+            ))}
             <g data-cost="boxes" style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
             {pitSlots.map((s, i) => (
               <g key={`pl${i}`} transform={`translate(${s.x} ${s.y}) rotate(${(s.rot * 180) / Math.PI})`}>

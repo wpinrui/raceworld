@@ -1,6 +1,6 @@
 'use client'
 
-// #sim-2d — flatten the static world to one image.
+// #sim-2d — flatten the static world to images.
 //
 // The map's cost is not the number of shapes, it is that ALL of them are re-rasterised every frame.
 // The camera follows a car, so the world layer's transform changes each frame, which invalidates the
@@ -9,63 +9,101 @@
 // the full-lap track outline stroked thirteen metres wide.
 //
 // None of that touches the GPU: filling a path is software rasterisation, and the graphics card only
-// composites the finished surface. Baking the static half to a bitmap changes what moves under the
-// camera from thousands of paths to a single image, which is precisely the operation a GPU is good
-// at. Cars and pit crew stay live on top, so nothing interactive or animated is affected.
+// composites the finished surface. Baking the static half changes what moves under the camera from
+// thousands of paths to a handful of images, which is precisely what a GPU is good at. Cars and pit
+// crew stay live on top, so nothing interactive or animated is affected.
+//
+// It is TILED rather than one image because a single one cannot be both sharp and legal: a canvas has
+// a hard size limit, so one image spanning a whole circuit has to be scaled down to fit it, and
+// racing zoom then magnifies a surface with fewer pixels than the screen. Tiles keep the resolution
+// and let the browser skip the ones that are off screen.
 
 import { useEffect, useState, type RefObject } from 'react'
 
-/** Resolution of the baked world, in pixels per viewBox unit. High enough to stay sharp at racing
- *  zoom; past the cap the image is scaled down rather than allowed to exceed what a canvas can hold. */
+/** Resolution of the baked world, in pixels per viewBox unit.
+ *
+ *  This is the sharpness dial and it does not reach far enough to cover a whole circuit. Racing zoom
+ *  is 20x, which puts roughly 32 screen pixels on a viewBox unit, and a circuit baked at that is about
+ *  350 megapixels; the maximum zoom would be three gigapixels. So a full-circuit bake is sharp for the
+ *  zoomed-out views and soft once the camera comes in, and no tile size changes that. */
 const PX_PER_UNIT = 8
-const MAX_PX = 4096
+/** Largest tile edge. Well inside what browsers accept, so no tile is ever silently downscaled. */
+const MAX_TILE_PX = 2048
 
 export interface ViewBox { x: number; y: number; w: number; h: number }
+export interface Tile { url: string; x: number; y: number; w: number; h: number }
 
-/** Rasterise `ref`'s subtree once and return an object URL for it, or null while it is not wanted or
- *  not ready. Re-bakes whenever `key` changes — the caller passes whatever the picture depends on.
+/** Rasterise `ref`'s subtree into tiles covering `vb`, or null while it is not wanted or not ready.
+ *  Re-bakes whenever `key` changes — the caller passes whatever the picture depends on.
  *
  *  The source subtree must be self-contained: it is serialised on its own, so any gradient or pattern
  *  it paints with has to be inside it, not in a sibling `<defs>`. */
 export function useSceneryBitmap(
   ref: RefObject<SVGGElement | null>, vb: ViewBox, enabled: boolean, key: string,
-): string | null {
-  const [url, setUrl] = useState<string | null>(null)
+): Tile[] | null {
+  const [tiles, setTiles] = useState<Tile[] | null>(null)
   useEffect(() => {
     const g = ref.current
     if (!enabled || !g) return undefined
     let live = true
-    let made: string | null = null
-    const w = Math.min(MAX_PX, Math.round(vb.w * PX_PER_UNIT))
-    const h = Math.round((w * vb.h) / vb.w)
-    const doc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}"`
-      + ` width="${w}" height="${h}">${new XMLSerializer().serializeToString(g)}</svg>`
-    const img = new Image()
-    img.onload = () => {
-      if (!live) return
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      ctx.drawImage(img, 0, 0, w, h)
-      // toBlob rather than toDataURL: a four-megapixel data URL is megabytes of base64 to build and
-      // then parse again, and it all happens on the main thread.
-      canvas.toBlob((blob) => {
-        if (!live || !blob) return
-        made = URL.createObjectURL(blob)
-        setUrl(made)
-      })
-    }
-    // Serialised markup can hold any character; encodeURIComponent first or btoa throws on non-Latin1.
-    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(doc)))}`
-    // Clearing on the way out rather than on the way in: dropping the URL synchronously as the effect
-    // opens is a state write during render, and the picture would flash the live layer anyway.
+    const made: string[] = []
+    // Serialised once and reparsed per tile: the markup is identical, only the viewBox differs.
+    const inner = new XMLSerializer().serializeToString(g)
+    const cols = Math.max(1, Math.ceil((vb.w * PX_PER_UNIT) / MAX_TILE_PX))
+    const rows = Math.max(1, Math.ceil((vb.h * PX_PER_UNIT) / MAX_TILE_PX))
+    const tw = vb.w / cols
+    const th = vb.h / rows
+    const px = Math.round(tw * PX_PER_UNIT)
+    const py = Math.round(th * PX_PER_UNIT)
+
+    const bake = (col: number, row: number) => new Promise<Tile | null>((resolve) => {
+      const x = vb.x + col * tw
+      const y = vb.y + row * th
+      const doc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${tw} ${th}"`
+        + ` width="${px}" height="${py}">${inner}</svg>`
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = px
+        canvas.height = py
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(null); return }
+        ctx.drawImage(img, 0, 0, px, py)
+        // toBlob rather than toDataURL: a multi-megapixel data URL is megabytes of base64 to build
+        // and then parse again, all of it on the main thread.
+        canvas.toBlob((blob) => {
+          if (!blob) { resolve(null); return }
+          const url = URL.createObjectURL(blob)
+          made.push(url)
+          resolve({ url, x, y, w: tw, h: th })
+        })
+      }
+      img.onerror = () => resolve(null)
+      // Serialised markup can hold any character; encode first or btoa throws on anything non-Latin1.
+      img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(doc)))}`
+    })
+
+    // One at a time. Several multi-megapixel canvases alive at once is a lot of memory to hold for no
+    // gain, and the live layer is still on screen until the whole set is ready.
+    void (async () => {
+      const out: Tile[] = []
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const tile = await bake(col, row)
+          if (!live) return
+          if (tile) out.push(tile)
+        }
+      }
+      if (live) setTiles(out)
+    })()
+
+    // Cleared on the way out rather than the way in: dropping them as the effect opens is a state
+    // write during render, and the live layer would be shown for that frame anyway.
     return () => {
       live = false
-      if (made) URL.revokeObjectURL(made)
-      setUrl(null)
+      for (const url of made) URL.revokeObjectURL(url)
+      setTiles(null)
     }
   }, [ref, vb, enabled, key])
-  return url
+  return tiles
 }
