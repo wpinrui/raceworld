@@ -1590,7 +1590,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Red/white kerbs through the corners. */}
             {kerbsOn && visibleKerbs.map((k, i) => (
               <g key={`k${i}`}>
-                <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(KERB_WIDTH_M)} strokeLinecap="round" />
+                <path d={k.ribbon} fill="#E6E3DC" />
                 <path d={k.blocks} fill="#C8352F" />
               </g>
             ))}

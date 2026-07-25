@@ -16,7 +16,7 @@ import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
   TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts, buildTyreWalls,
-  kerbBlocks,
+  kerbBlocks, kerbRibbon,
   type SceneryFence, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
 } from './scenery-props'
 
@@ -53,8 +53,8 @@ export const KERB_WIDTH_M = 1.3
 export const KERB_BLOCK_M = 3
 
 export interface SceneryKerb {
-  d: string
-  /** The red blocks, pre-built as fillable geometry rather than left to a dashed stroke. */
+  /** Both halves pre-built as fillable geometry: a kerb does no stroking and carries no dash. */
+  ribbon: string
   blocks: string
   /** Bounding disc, so a kerb far from the camera can be skipped outright. */
   cx: number; cy: number; r: number
@@ -248,7 +248,7 @@ export function buildScenery(
         const cx = (Math.min(...xs) + Math.max(...xs)) / 2
         const cy = (Math.min(...ys) + Math.max(...ys)) / 2
         kerbs.push({
-          d: smoothOpenPath(pts),
+          ribbon: kerbRibbon(pts, KERB_WIDTH_M / 2 / metresPerUnit),
           blocks: kerbBlocks(pts, KERB_WIDTH_M / 2 / metresPerUnit, KERB_BLOCK_M / metresPerUnit),
           cx,
           cy,

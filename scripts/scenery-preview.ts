@@ -79,9 +79,7 @@ for (const id of ids) {
       d: layout.d, fill: 'none', stroke: '#33383E', strokeWidth: u(TARMAC_WIDTH_M), strokeLinejoin: 'round',
     })),
     ...scenery.kerbs.flatMap((k) => [
-      renderToStaticMarkup(createElement('path', {
-        d: k.d, fill: 'none', stroke: '#E6E3DC', strokeWidth: u(1.3), strokeLinecap: 'round',
-      })),
+      renderToStaticMarkup(createElement('path', { d: k.ribbon, fill: '#E6E3DC' })),
       renderToStaticMarkup(createElement('path', { d: k.blocks, fill: '#C8352F' })),
     ]),
     renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),

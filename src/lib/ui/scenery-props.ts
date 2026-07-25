@@ -3,6 +3,7 @@
 // details that say "motor racing" rather than "road through a park", and they are cheap — long
 // polylines and pattern-filled rects, next to nothing beside the ~1140 tree canopies.
 
+import { closestPointOnPolyline } from './geom'
 import { smoothOpenPath } from './track-path'
 import type { Vec } from './geom'
 
@@ -40,6 +41,22 @@ export interface TrackFrame {
   normalAt: (s: number) => Vec
   total: number
   u: (m: number) => number
+}
+
+/** The white base of a kerb, as one filled ribbon.
+ *
+ *  Stroking is not free on a curved path: the renderer flattens the curve, expands the outline and
+ *  caps it, on every repaint. A ribbon is the same picture as a polygon the rasteriser just fills. */
+export function kerbRibbon(pts: Vec[], half: number): string {
+  if (pts.length < 2) return ''
+  const n = pts.map((_, i) => {
+    const a = pts[Math.max(0, i - 1)]
+    const b = pts[Math.min(pts.length - 1, i + 1)]
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    return { x: (-(b.y - a.y) / l) * half, y: ((b.x - a.x) / l) * half }
+  })
+  const side = (k: number) => pts.map((p, i) => `${(p.x + n[i].x * k).toFixed(1)} ${(p.y + n[i].y * k).toFixed(1)}`)
+  return `M ${[...side(1), ...side(-1).reverse()].join(' L ')} Z`
 }
 
 /** The red blocks of a kerb, as filled quads baked along its centreline.
@@ -86,6 +103,18 @@ export function kerbBlocks(pts: Vec[], half: number, block: number): string {
 
 /** Continuous debris fencing down both edges of the whole lap.
  *  Broken at the pit mouths, where the lane leaves and rejoins and there is no run to make. */
+/** A fence point is FOLDED when the nearest centreline point is no longer the one it was offset from.
+ *  Measured as a fraction of the offset; an honest point at any curvature lands at essentially zero,
+ *  so this is nowhere near a borderline call. Distance to the centreline cannot stand in for it: at a
+ *  hairpin the folded point sits midway between the two straights and is still far from both, which
+ *  is why measuring distance left the crossing in place. */
+const FOLD_TOL = 0.5
+/** Samples dropped either side of a fold, at nine metres a sample. Stopping exactly at one leaves the
+ *  last surviving point already leaning into the corner, which still draws a crossing, so this errs
+ *  well clear: a fence that stops short of a hairpin reads as deliberate, one that crosses itself
+ *  never does. */
+const FOLD_PAD = 4
+
 export function buildFences(
   frame: TrackFrame,
   { offsetM, skip }: { offsetM: number; skip: (s: number, side: number) => boolean },
@@ -93,24 +122,42 @@ export function buildFences(
   const { total, u } = frame
   const out: SceneryFence[] = []
   const stepU = u(9)
+  // Offsetting a curve inward by more than the corner's own radius folds it THROUGH the apex and out
+  // the far side, where it crosses the fence coming the other way. The fence stops short of that
+  // rather than trying to cut the corner: a chord across a hairpin looks like a mistake too.
+  const centre: Vec[] = []
+  for (let s = 0; s <= total; s += stepU) centre.push(frame.at(s))
   for (const side of [1, -1]) {
-    {
-      const lat = offsetM
-      // Walk the lap, breaking the run wherever the barrier is suppressed, so each unbroken stretch
-      // becomes its own path instead of one path leaping across the gaps.
-      let run: Vec[] = []
-      const flush = () => {
-        if (run.length >= 3) out.push({ d: smoothOpenPath(run), pts: run })
-        run = []
+    const lat = offsetM
+    // Walk the lap once collecting candidates, then build runs from the survivors, so a fold can take
+    // its neighbours down with it. A suppressed stretch (the pit mouths) breaks the run without that
+    // padding, since nothing there is bent.
+    const cand: Array<Vec | null> = []
+    const folded: boolean[] = []
+    for (let s = 0; s <= total; s += stepU) {
+      if (skip(s, side)) {
+        cand.push(null)
+        folded.push(false)
+        continue
       }
-      for (let s = 0; s <= total; s += stepU) {
-        if (skip(s, side)) { flush(); continue }
-        const p = frame.at(s)
-        const nrm = frame.normalAt(s)
-        run.push({ x: p.x + nrm.x * u(lat) * side, y: p.y + nrm.y * u(lat) * side })
-      }
-      flush()
+      const c = frame.at(s)
+      const nrm = frame.normalAt(s)
+      const p = { x: c.x + nrm.x * u(lat) * side, y: c.y + nrm.y * u(lat) * side }
+      const q = closestPointOnPolyline(p, centre)
+      cand.push(p)
+      folded.push(Math.hypot(q.x - c.x, q.y - c.y) > u(lat) * FOLD_TOL)
     }
+    let run: Vec[] = []
+    const flush = () => {
+      if (run.length >= 3) out.push({ d: smoothOpenPath(run), pts: run })
+      run = []
+    }
+    for (let i = 0; i < cand.length; i++) {
+      const p = cand[i]
+      if (!p || folded.slice(Math.max(0, i - FOLD_PAD), i + FOLD_PAD + 1).some(Boolean)) flush()
+      else run.push(p)
+    }
+    flush()
   }
   return out
 }
