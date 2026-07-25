@@ -380,3 +380,64 @@ export function tyreWallOps(wall: SceneryTyreWall, u: (m: number) => number, ful
   }
   return ops
 }
+
+export interface SceneOpts {
+  u: (m: number) => number
+  lighting: Lighting
+  view: number
+  full: boolean
+  ground: boolean
+  extrude: number
+  storeyM: number
+  bayM: number
+  standFrontM: number
+  standRearM: number
+  standRoofFrac: number
+  marshalM: number
+  marshalW: number
+  marshalD: number
+  fenceM: number
+  tyreM: number
+  /** A stand casts from its rear, a building from its roofline. */
+  solidHeightM: (r: SceneryRect) => number
+  trees: SceneryTree[]
+}
+
+/** The whole static world in paint order, as one description.
+ *
+ *  This is what makes the canvas a small component rather than a second renderer: it walks this list.
+ *  The SVG layer builds the same pieces in the same order, so the two cannot drift apart. */
+export function sceneryScene(
+  scenery: Scenery, o: SceneOpts,
+): { ops: DrawOp[]; groups: DrawGroup[] } {
+  const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
+  const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
+  const ops: DrawOp[] = [...groundOps(scenery, o.u, { full: o.full, ground: o.ground })]
+  const groups: DrawGroup[] = []
+
+  if (o.full) {
+    // Shadows before every solid, so nothing casts over the thing standing on it.
+    groups.push(...structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM }))
+    const trees = treeShadowOp(o.trees, treeOpts)
+    if (trees) ops.push(trees)
+    for (const t of scenery.tyreWalls) ops.push(runShadowOp(t.pts, o.tyreM, treeOpts))
+    for (const f of scenery.fences) ops.push({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 })
+  }
+
+  if (o.full) {
+    groups.push(...buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM }))
+  }
+  groups.push(...standGroups(scenery.stands, {
+    ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
+  }, o.full))
+  groups.push(...buildingRoofGroups(scenery.buildings, o.full))
+  if (o.full) {
+    for (const ops2 of fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM })) ops.push(...ops2)
+    for (const t of scenery.tyreWalls) ops.push(...tyreWallOps(t, o.u, o.full))
+    groups.push(...marshalGroups(scenery.marshals, {
+      ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
+    }))
+    ops.push(...treeSolidOps(o.trees, treeOpts))
+  }
+  return { ops, groups }
+}

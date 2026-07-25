@@ -5,7 +5,8 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  fenceOps, groundOps, marshalGroups, runShadowOp, structureShadowGroups, tyreWallOps, treeShadowOp, treeShadowRatio, treeSolidOps,
+  fenceOps, groundOps, marshalGroups, runShadowOp, sceneryScene, structureShadowGroups,
+  tyreWallOps, treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -373,5 +374,44 @@ describe('tyreWallOps', () => {
     expect(ops).toHaveLength(1)
     expect(ops[0].stroke).toBe('#1B1F26')
     expect(ops[0].dash).toBeUndefined()
+  })
+})
+
+describe('sceneryScene', () => {
+  const scenery = {
+    bands: [], fields: [], terrain: [], runoffs: [], kerbs: [], marshals: [],
+    stands: [{ x: 0, y: 0, w: 30, h: 12, rot: 0, fill: '#4A515C', facing: true }],
+    buildings: [{ x: 50, y: 50, w: 20, h: 14, rot: 0, fill: '#59616E', storeys: 2 }],
+    fences: [{ d: 'M 0 0 L 9 0', pts: [{ x: 0, y: 0 }, { x: 9, y: 0 }] }],
+    tyreWalls: [{ d: 'M 1 1 L 8 1', pts: [{ x: 1, y: 1 }, { x: 8, y: 1 }], bands: ['#D0342C'], nOut: { x: 0, y: -1 } }],
+  } as never as Parameters<typeof sceneryScene>[0]
+  const sceneOpts = {
+    u: (m: number) => m / 3, lighting: MOODS.afternoon, view: 0.4, full: true, ground: true,
+    extrude: 0.62, storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5, standRoofFrac: 0.3,
+    marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
+    solidHeightM: () => 9, trees: [tree(5, 5)],
+  }
+
+  it('puts every shadow before the solids, so nothing casts over what stands on it', () => {
+    const { ops, groups } = sceneryScene(scenery, sceneOpts)
+    // Shadow groups carry no fill of their own; the layer supplies it. Solids always do.
+    const firstSolid = groups.findIndex((g) => g.ops[0].fill)
+    const lastShadow = groups.map((g) => !g.ops[0].fill).lastIndexOf(true)
+    expect(lastShadow).toBeLessThan(firstSolid)
+    expect(ops.length).toBeGreaterThan(0)
+  })
+
+  it('drops the expensive half at the cheap tier but keeps the stands and roofs', () => {
+    const full = sceneryScene(scenery, sceneOpts)
+    const low = sceneryScene(scenery, { ...sceneOpts, full: false })
+    expect(low.ops.length + low.groups.length).toBeLessThan(full.ops.length + full.groups.length)
+    expect(low.groups.length).toBeGreaterThan(0)
+  })
+
+  it('draws nothing at all for an empty world', () => {
+    const empty = { ...scenery, stands: [], buildings: [], fences: [], tyreWalls: [] } as never
+    const { ops, groups } = sceneryScene(empty, { ...sceneOpts, trees: [] })
+    expect(ops).toEqual([])
+    expect(groups).toEqual([])
   })
 })
