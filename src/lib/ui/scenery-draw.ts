@@ -584,12 +584,16 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   return parts
 }
 
+/** A section boundary in a composed scene: everything from `at` until the next mark belongs to
+ *  `name`. Used by the renderer's timing readout to attribute paint cost per section. */
+export interface SceneMark { name: string; at: number }
+
 /** The whole static world in paint order, as one description.
  *
  *  This is what makes the canvas a small component rather than a second renderer: it walks this
  *  list. The order is the SVG document's, layer for layer — ground, floors, road, pit complex,
  *  kerbs, shadows, solids, trees, then furniture — so the two renderers cannot drift apart. */
-export function sceneryScene(scenery: Scenery, o: SceneOpts): SceneItem[] {
+export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]): SceneItem[] {
   const s = staticParts(scenery, o)
   const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
   const cull = o.cull
@@ -598,28 +602,38 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts): SceneItem[] {
     : xs).map((p) => p.item)
 
   const items: SceneItem[] = []
+  const mark = (name: string) => { marks?.push({ name, at: items.length }) }
+  mark('ground')
   if (o.base) items.push(o.base)
   items.push(...s.ground)
   // Garage floors go under the lane's paint; the road then goes down before any shadow, which is the
   // whole reason shadows read as lying ON it. The pit complex and the kerbs are part of the ground
   // picture too: scenery shadows and solids paint over them.
+  mark('pit')
   if (o.pitUnder) items.push(...o.pitUnder)
+  mark('road')
   if (o.track) items.push(...o.track)
+  mark('pit')
   if (o.pitOver) items.push(...o.pitOver)
+  mark('kerbs')
   if (o.kerbs) items.push(...o.kerbs)
 
+  mark('shadows')
   if (o.full) {
     // Shadows before every solid, so nothing casts over the thing standing on it.
     items.push(...keep(s.shadowGroups))
     const trees = treeShadowOp(o.trees, treeOpts)
     if (trees) items.push(trees)
-    items.push(...keep(s.wallGroups))
   }
+  mark('solids')
+  if (o.full) items.push(...keep(s.wallGroups))
   items.push(...keep(s.standGs))
   items.push(...keep(s.roofGs))
+  mark('trees')
   if (o.full) items.push(...treeSolidOps(o.trees, treeOpts))
   // Furniture last, like the SVG's furniture layer: it lines the tarmac's edge, so it sits over
   // the scenery — a fence in front of a grove reads as a fence, not a hedge decoration.
+  mark('furniture')
   if (o.full) items.push(...keep(s.runShadows))
   for (const w of keep(s.farTyres)) items.push(...w)
   if (o.full) for (const f of keep(s.fenceRuns)) items.push(...f)

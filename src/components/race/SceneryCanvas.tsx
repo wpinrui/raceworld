@@ -13,7 +13,7 @@
 // path, and the geometry only changes when the bearing does.
 
 import { useEffect, useRef } from 'react'
-import type { DrawOp, SceneItem } from '@/lib/ui/scenery-draw'
+import type { DrawOp, SceneItem, SceneMark } from '@/lib/ui/scenery-draw'
 import { isGroup, refName } from '@/lib/ui/scenery-draw'
 
 export interface Camera { x: number; y: number; z: number; rot: number }
@@ -71,6 +71,9 @@ function applyOp(ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor):
 export function drawScene(
   ctx: CanvasRenderingContext2D, scene: Scene, cam: Camera, vb: ViewBox,
   size: { w: number; h: number }, dpr: number, ppu: number, paintFor: PaintFor,
+  /** When given, paint time is attributed per scene section into `out` (ms by section name) —
+   *  what the fps readout shows so a slow corner names its own cost. */
+  timing?: { marks: SceneMark[]; out: Record<string, number> },
 ): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, size.w * dpr, size.h * dpr)
@@ -82,7 +85,23 @@ export function drawScene(
   ctx.scale(cam.z * ppu * dpr, cam.z * ppu * dpr)
   ctx.translate(-(vb.x + vb.w / 2), -(vb.y + vb.h / 2))
   ctx.lineJoin = 'round'
-  for (const item of scene) {
+  let m = 0
+  let section = 'setup'
+  let tPrev = timing ? performance.now() : 0
+  const close = (next: string) => {
+    const now = performance.now()
+    timing!.out[section] = (timing!.out[section] ?? 0) + (now - tPrev)
+    tPrev = now
+    section = next
+  }
+  for (let i = 0; i < scene.length; i++) {
+    if (timing) {
+      while (m < timing.marks.length && timing.marks[m].at === i) {
+        close(timing.marks[m].name)
+        m++
+      }
+    }
+    const item = scene[i]
     if (isGroup(item)) {
       ctx.save()
       ctx.translate(item.x, item.y)
@@ -93,6 +112,7 @@ export function drawScene(
       applyOp(ctx, item, paintFor)
     }
   }
+  if (timing) close('setup')
   ctx.globalAlpha = 1
 }
 

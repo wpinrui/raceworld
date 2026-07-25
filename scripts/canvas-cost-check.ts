@@ -68,7 +68,11 @@ function median(xs: number[]): number {
   return s[Math.floor(s.length / 2)]
 }
 
-const ids = Object.keys(TRACK_LAYOUTS).sort()
+// With circuit ids as arguments, the run narrows to those circuits and adds a LAP SCAN: the cull
+// disc is parked at every station around the lap and the heaviest shots are reported, so a "this
+// corner dips" report can be matched to what that corner actually contains.
+const argIds = process.argv.slice(2).filter((a) => !a.startsWith('-'))
+const ids = argIds.length ? argIds : Object.keys(TRACK_LAYOUTS).sort()
 console.log(`Canvas per-frame cost at racing zoom (${RACE_Z}x, ${VIEW_W}x${VIEW_H}) over ${ids.length} layouts`)
 console.log('"whole" = the scene uncull\'d; "shot" = composed against the cull disc, which is what drawScene now walks.')
 console.log('"rebuild" = sceneryScene ms (median/worst of 30), whole vs culled — the culled figure is a cull commit\'s cost.\n')
@@ -102,8 +106,14 @@ for (const id of ids) {
     cy: layout.start.y,
     r: (Math.hypot(VIEW_W, VIEW_H) / 2 / RACE_Z / ppu) * CULL_MARGIN,
   }
-  const visibleKerbs = scenery.kerbs.filter((k) => Math.hypot(k.cx - disc.cx, k.cy - disc.cy) <= disc.r + k.r)
-  const culledTrees = scenery.trees.filter((t) => Math.hypot(t.x - disc.cx, t.y - disc.cy) <= disc.r + t.r)
+  type Disc = { cx: number; cy: number; r: number }
+  const kerbsFor = (d: Disc | null) => (d
+    ? scenery.kerbs.filter((k) => Math.hypot(k.cx - d.cx, k.cy - d.cy) <= d.r + k.r)
+    : scenery.kerbs)
+  const treesFor = (d: Disc | null) => (d
+    ? scenery.trees.filter((t) => Math.hypot(t.x - d.cx, t.y - d.cy) <= d.r + t.r)
+    : scenery.trees)
+  const culledTrees = treesFor(disc)
 
   const baseOp: DrawOp = {
     d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`,
@@ -115,7 +125,7 @@ for (const id of ids) {
     { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
     { d: layout.pit.fastD, stroke: '#33383E', width: u(4.2), cap: 'round' },
   ]
-  const kerbOps: DrawOp[] = visibleKerbs.flatMap((k) => [
+  const kerbOpsFor = (d: Disc | null): DrawOp[] => kerbsFor(d).flatMap((k) => [
     { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' as const },
     {
       d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt' as const,
@@ -135,7 +145,7 @@ for (const id of ids) {
     const cy = (Math.min(...ys) + Math.max(...ys)) / 2
     return { cx, cy, r: Math.max(...pitPts.map((p) => Math.hypot(p.x - cx, p.y - cy))) + u(80) }
   })() : null
-  const opts = (trees: typeof scenery.trees, cull: { cx: number; cy: number; r: number } | null) => {
+  const opts = (cull: Disc | null) => {
     const pitNear = !cull || !pitDisc
       || Math.hypot(pitDisc.cx - cull.cx, pitDisc.cy - cull.cy) <= cull.r + pitDisc.r
     return {
@@ -143,18 +153,18 @@ for (const id of ids) {
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
       solidHeightM: (r: { storeys?: number }) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
-      trees,
+      trees: treesFor(cull),
       cull,
       base: baseOp,
       track: trackOps,
-      kerbs: kerbOps,
+      kerbs: kerbOpsFor(cull),
       pitUnder: pitNear ? pitUnder : [],
       pitOver: pitNear ? pitOver : [],
     }
   }
 
-  const countOf = (trees: typeof scenery.trees, cull: { cx: number; cy: number; r: number } | null) => {
-    const ops = sceneryScene(scenery, opts(trees, cull)).flatMap((i) => ('ops' in i ? i.ops : [i]))
+  const countOf = (cull: Disc | null) => {
+    const ops = sceneryScene(scenery, opts(cull)).flatMap((i) => ('ops' in i ? i.ops : [i]))
     let pats = 0
     let grads = 0
     let cycles = 0
@@ -167,22 +177,22 @@ for (const id of ids) {
       }
       if (op.dash) cycles += pathLen(op.d) / (op.dash.on + op.dash.off)
     }
-    return { ops: ops.length, pats, grads, cycles }
+    return { ops: ops.length, pats, grads, cycles, trees: treesFor(cull).length }
   }
-  const whole = countOf(scenery.trees, null)
-  const shot = countOf(culledTrees, disc)
+  const whole = countOf(null)
+  const shot = countOf(disc)
 
-  const timeIt = (trees: typeof scenery.trees, cull: typeof disc | null) => {
+  const timeIt = (cull: Disc | null) => {
     const xs: number[] = []
     for (let i = 0; i < 30; i++) {
       const t0 = performance.now()
-      sceneryScene(scenery, opts(trees, cull))
+      sceneryScene(scenery, opts(cull))
       xs.push(performance.now() - t0)
     }
     return { med: median(xs), max: Math.max(...xs) }
   }
-  const full = timeIt(scenery.trees, null)
-  const culled = timeIt(culledTrees, disc)
+  const full = timeIt(null)
+  const culled = timeIt(disc)
 
   totals.pats += shot.pats
   totals.grads += shot.grads
@@ -194,6 +204,26 @@ for (const id of ids) {
     + `${full.med.toFixed(1).padStart(6)}/${full.max.toFixed(1).padStart(5)}  ${culled.med.toFixed(1).padStart(6)}/${culled.max.toFixed(1).padStart(5)}`
     + `   ${String(scenery.trees.length).padStart(5)}->${culledTrees.length}`,
   )
+
+  if (argIds.includes(id)) {
+    const stations = layout.trace
+    const stride = Math.max(1, Math.floor(stations.length / 250))
+    const shots: Array<{ frac: number; c: ReturnType<typeof countOf> }> = []
+    for (let i = 0; i < stations.length; i += stride) {
+      const [sx, sy] = stations[i]
+      shots.push({ frac: i / stations.length, c: countOf({ cx: sx, cy: sy, r: disc.r }) })
+    }
+    const worst = [...shots].sort((a, b) => b.c.ops - a.c.ops).slice(0, 5)
+    console.log(`\n  Heaviest shots around the ${id} lap (fraction of lap -> composition):`)
+    for (const w of worst) {
+      console.log(
+        `    ${(w.frac * 100).toFixed(0).padStart(3)}%  ops ${String(w.c.ops).padStart(4)}  `
+        + `trees ${String(w.c.trees).padStart(4)}  gradients ${String(w.c.grads).padStart(4)}  `
+        + `patterns ${String(w.c.pats).padStart(3)}  dash cycles ${String(Math.round(w.c.cycles)).padStart(4)}`,
+      )
+    }
+    console.log('')
+  }
 }
 
 console.log('-'.repeat(118))

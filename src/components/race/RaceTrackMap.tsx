@@ -15,7 +15,7 @@ import {
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
 import { SceneryCanvas, drawScene } from './SceneryCanvas'
-import { sceneryScene, type DrawOp } from '@/lib/ui/scenery-draw'
+import { sceneryScene, type DrawOp, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, pitComplexOps, pitFloorOps,
@@ -566,7 +566,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           }).join('  ')
           const offList = [...hiddenRef.current].join(',')
           const capTxt = frameCapRef.current > 0 ? `cap ${frameCapRef.current}` : 'uncapped'
-          el.textContent = `${fps} fps (${capTxt})  ${nodes} nodes  |  ${by}`
+          // Where the canvas's paint time goes, section by section, from the last drawn frame —
+          // so a slow corner names its own cost instead of being reasoned about. Main-thread
+          // command cost; the GPU raster that follows is not observable from here.
+          const stats = Object.entries(paintStatsRef.current)
+          const paintTotal = stats.reduce((s, [, v]) => s + v, 0)
+          const paint = paintTotal > 0
+            ? `  |  paint ${paintTotal.toFixed(1)}ms ` + stats
+              .sort((a, b) => b[1] - a[1]).slice(0, 4)
+              .map(([k, v]) => `${k} ${v.toFixed(1)}`).join(' ')
+            : ''
+          el.textContent = `${fps} fps (${capTxt})  ${nodes} nodes  |  ${by}${paint}`
             + `${offList ? `  |  off: ${offList}` : ''}`
         }
         frames = 0
@@ -1593,8 +1603,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }, [pitZone, u])
   const pitNear = !cull || !pitDisc
     || Math.hypot(pitDisc.cx - cull.cx, pitDisc.cy - cull.cy) <= cull.r + pitDisc.r
-  const scene = useMemo(() => (canvasOn && view === 'live'
-    ? sceneryScene(scenery, {
+  const scene = useMemo(() => {
+    if (!(canvasOn && view === 'live')) return null
+    const marks: SceneMark[] = []
+    const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
@@ -1608,13 +1620,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       kerbs: kerbDrawOps,
       pitUnder: pitNear ? pitDrawOps.under : [],
       pitOver: pitNear ? pitDrawOps.over : [],
-    })
-    : null), [
+    }, marks)
+    return { items, marks }
+  }, [
     canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, cull, baseDrawOp, trackDrawOps,
     kerbDrawOps, pitDrawOps, pitNear,
   ])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
+  // Last frame's paint time by scene section, for the fps readout. Only collected while the
+  // readout is up — the timing calls are cheap but not free.
+  const paintStatsRef = useRef<Record<string, number>>({})
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
   const paintCanvas = useCallback(() => {
     const canvas = canvasRef.current
@@ -1629,14 +1645,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       return
     }
     const dpr = window.devicePixelRatio || 1
+    const timing = hudRef.current ? { marks: sc.marks, out: {} } : undefined
     drawScene(
-      ctx, sc, camRef.current, vb,
+      ctx, sc.items, camRef.current, vb,
       { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
       (name, c, bbox) => canvasPaint(name, c, {
         lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
         pxPerUnit: camRef.current.z * (sw / vb.w) * dpr,
       }) ?? '#FF00FF',
+      timing,
     )
+    if (timing) paintStatsRef.current = timing.out
   }, [vb, lighting, u])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
 
