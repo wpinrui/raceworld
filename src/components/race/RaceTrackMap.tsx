@@ -1547,9 +1547,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // is what the pre-baked image could never be, and the reason it is being replaced.
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // The road, in the order the SVG lays it: white casing under grey asphalt, for track and lane alike.
+  // The ground plane, separate from the road: composed as part of `track` it painted OVER the
+  // relief bands and fields, which is why the canvas ground read as one flat green.
+  const baseDrawOp = useMemo((): DrawOp => (
+    { d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`, fill: scenery.base }
+  ), [vb, scenery.base])
   const trackDrawOps = useMemo((): DrawOp[] => {
     const ops: DrawOp[] = [
-      { d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`, fill: scenery.base },
       { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
       { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(5.5), cap: 'round' },
     ]
@@ -1560,7 +1564,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     )
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
     return ops
-  }, [vb, scenery.base, layout, pitZone, u])
+  }, [layout, pitZone, u])
   const kerbDrawOps = useMemo((): DrawOp[] => (hidden.has('kerbs') ? [] : visibleKerbs.flatMap((k) => [
     { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' as const },
     {
@@ -1574,6 +1578,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       over: pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]),
     }
     : { under: [], over: [] }), [pitZone, hidden, lighting, u, viewAz, slotOf])
+  // The pit complex is one of the heaviest things on the map and exists in exactly one place, so it
+  // is gated by the same disc the rest of the scenery culls to.
+  const pitDisc = useMemo(() => {
+    if (!pitZone) return null
+    const pts = [...pitZone.buildingPts, ...pitZone.garageFloors.flat()]
+    if (pts.length === 0) return null
+    const xs = pts.map((p) => p.x)
+    const ys = pts.map((p) => p.y)
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+    const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+    const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) + u(80)
+    return { cx, cy, r }
+  }, [pitZone, u])
+  const pitNear = !cull || !pitDisc
+    || Math.hypot(pitDisc.cx - cull.cx, pitDisc.cy - cull.cy) <= cull.r + pitDisc.r
   const scene = useMemo(() => (canvasOn && view === 'live'
     ? sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
@@ -1583,14 +1602,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       // The same disc the SVG solids layer culled to: the canvas walks every op every frame, so a
       // circuit's whole tree population would be path setup for things nowhere near the shot.
       trees: hidden.has('trees') ? [] : visibleTrees(scenery.trees, cull),
+      cull,
+      base: baseDrawOp,
       track: trackDrawOps,
       kerbs: kerbDrawOps,
-      pitUnder: pitDrawOps.under,
-      pitOver: pitDrawOps.over,
+      pitUnder: pitNear ? pitDrawOps.under : [],
+      pitOver: pitNear ? pitDrawOps.over : [],
     })
     : null), [
-    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, cull, trackDrawOps, kerbDrawOps,
-    pitDrawOps,
+    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, cull, baseDrawOp, trackDrawOps,
+    kerbDrawOps, pitDrawOps, pitNear,
   ])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
@@ -1613,6 +1634,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
       (name, c, bbox) => canvasPaint(name, c, {
         lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
+        pxPerUnit: camRef.current.z * (sw / vb.w) * dpr,
       }) ?? '#FF00FF',
     )
   }, [vb, lighting, u])
@@ -1826,8 +1848,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               </g>
             ))}
             </g>
-            {/* Red/white kerbs through the corners. */}
-            {!hidden.has('kerbs') && (bitmapOn ? scenery.kerbs : visibleKerbs).map((k, i) => (
+            {/* Red/white kerbs through the corners. Once the canvas owns the world these MUST come
+                off the document: a dashed stroke re-expands on every camera frame, which is the
+                measured, hotkey-confirmed cause of the original racing stutter — leaving them here
+                meant paying it twice, once per renderer. */}
+            {!canvasOn && !hidden.has('kerbs') && (bitmapOn ? scenery.kerbs : visibleKerbs).map((k, i) => (
               <g key={`k${i}`}>
                 <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(KERB_WIDTH_M)} strokeLinecap="round" />
                 <path
@@ -1838,12 +1863,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             ))}
             {/* Scenery shadows fall across the tarmac, so they draw AFTER every piece of track
                 paint; the solids that cast them stand on top. Nothing overlaps the ribbon (the
-                generator guarantees it), so drawing solids here cannot hide the road. */}
-            {view === 'live' && shadowNode}
-            {view === 'live' && solidsNode}
+                generator guarantees it), so drawing solids here cannot hide the road. The canvas
+                draws all three of these layers itself, in this same order — left in the document
+                they rendered the whole static world twice, one world stacked on the other. */}
+            {!canvasOn && view === 'live' && shadowNode}
+            {!canvasOn && view === 'live' && solidsNode}
             {/* Barriers, tyre walls and marshal posts: circuit furniture sits ON the tarmac's edge,
                 so it draws after the ribbon rather than with the scenery underneath it. */}
-            {view === 'live' && furnitureNode}
+            {!canvasOn && view === 'live' && furnitureNode}
             <g transform={`translate(${sf.x} ${sf.y}) rotate(${sf.deg})`}>
               {Array.from({ length: 72 }, (_, i) => {
                 const row = i % 3

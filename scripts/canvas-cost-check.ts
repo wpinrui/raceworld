@@ -70,9 +70,9 @@ function median(xs: number[]): number {
 
 const ids = Object.keys(TRACK_LAYOUTS).sort()
 console.log(`Canvas per-frame cost at racing zoom (${RACE_Z}x, ${VIEW_W}x${VIEW_H}) over ${ids.length} layouts`)
-console.log('"pat/frame" = DOM canvases + CanvasPatterns built per frame at HEAD; "grad/frame" = CanvasGradients.')
-console.log('"rebuild" = sceneryScene ms (median/worst of 30) with all trees (HEAD) vs disc-culled trees.\n')
-console.log('circuit             ops  pat/frame  grad/frame  dashOps  dashCycles  |  rebuild all      culled   trees all->cull')
+console.log('"whole" = the scene uncull\'d; "shot" = composed against the cull disc, which is what drawScene now walks.')
+console.log('"rebuild" = sceneryScene ms (median/worst of 30), whole vs culled — the culled figure is a cull commit\'s cost.\n')
+console.log('circuit            whole    shot    grads gradShot   cycles cycShot  |  rebuild whole    culled   trees all->cull')
 console.log('-'.repeat(118))
 
 const totals = { pats: 0, grads: 0, cycles: 0 }
@@ -105,8 +105,11 @@ for (const id of ids) {
   const visibleKerbs = scenery.kerbs.filter((k) => Math.hypot(k.cx - disc.cx, k.cy - disc.cy) <= disc.r + k.r)
   const culledTrees = scenery.trees.filter((t) => Math.hypot(t.x - disc.cx, t.y - disc.cy) <= disc.r + t.r)
 
+  const baseOp: DrawOp = {
+    d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`,
+    fill: scenery.base,
+  }
   const trackOps: DrawOp[] = [
-    { d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`, fill: scenery.base },
     { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
     { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(5.5), cap: 'round' },
     { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
@@ -123,55 +126,71 @@ for (const id of ids) {
   // built once here too — the rebuild timing below has to measure what a commit actually re-runs.
   const pitUnder = pitZone ? pitFloorOps(pitZone, lighting, () => '#888888') : []
   const pitOver = pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, () => '#888888') : []
-  const opts = (trees: typeof scenery.trees) => ({
-    u, lighting, view: viewAz, full: true, ground: true, extrude: EXTRUDE,
-    storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
-    marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
-    solidHeightM: (r: { storeys?: number }) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
-    trees,
-    track: trackOps,
-    kerbs: kerbOps,
-    pitUnder,
-    pitOver,
-  })
-
-  const items = sceneryScene(scenery, opts(scenery.trees))
-  const allOps = items.flatMap((i) => ('ops' in i ? i.ops : [i]))
-  let pats = 0
-  let grads = 0
-  let dashOps = 0
-  let cycles = 0
-  for (const op of allOps) {
-    for (const paint of [op.fill, op.stroke]) {
-      if (!paint?.startsWith('ref:')) continue
-      const name = paint.slice(4)
-      if (TILES.has(name)) pats++
-      if (GRADIENTS.has(name)) grads++
-    }
-    if (op.dash) {
-      dashOps++
-      cycles += pathLen(op.d) / (op.dash.on + op.dash.off)
+  // The pit complex is gated by the same disc, exactly as RaceTrackMap gates it.
+  const pitPts = pitZone ? [...pitZone.buildingPts, ...pitZone.garageFloors.flat()] : []
+  const pitDisc = pitPts.length > 0 ? (() => {
+    const xs = pitPts.map((p) => p.x)
+    const ys = pitPts.map((p) => p.y)
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+    const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+    return { cx, cy, r: Math.max(...pitPts.map((p) => Math.hypot(p.x - cx, p.y - cy))) + u(80) }
+  })() : null
+  const opts = (trees: typeof scenery.trees, cull: { cx: number; cy: number; r: number } | null) => {
+    const pitNear = !cull || !pitDisc
+      || Math.hypot(pitDisc.cx - cull.cx, pitDisc.cy - cull.cy) <= cull.r + pitDisc.r
+    return {
+      u, lighting, view: viewAz, full: true, ground: true, extrude: EXTRUDE,
+      storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
+      marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
+      solidHeightM: (r: { storeys?: number }) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
+      trees,
+      cull,
+      base: baseOp,
+      track: trackOps,
+      kerbs: kerbOps,
+      pitUnder: pitNear ? pitUnder : [],
+      pitOver: pitNear ? pitOver : [],
     }
   }
 
-  const timeIt = (trees: typeof scenery.trees) => {
+  const countOf = (trees: typeof scenery.trees, cull: { cx: number; cy: number; r: number } | null) => {
+    const ops = sceneryScene(scenery, opts(trees, cull)).flatMap((i) => ('ops' in i ? i.ops : [i]))
+    let pats = 0
+    let grads = 0
+    let cycles = 0
+    for (const op of ops) {
+      for (const paint of [op.fill, op.stroke]) {
+        if (!paint?.startsWith('ref:')) continue
+        const name = paint.slice(4)
+        if (TILES.has(name)) pats++
+        if (GRADIENTS.has(name)) grads++
+      }
+      if (op.dash) cycles += pathLen(op.d) / (op.dash.on + op.dash.off)
+    }
+    return { ops: ops.length, pats, grads, cycles }
+  }
+  const whole = countOf(scenery.trees, null)
+  const shot = countOf(culledTrees, disc)
+
+  const timeIt = (trees: typeof scenery.trees, cull: typeof disc | null) => {
     const xs: number[] = []
     for (let i = 0; i < 30; i++) {
       const t0 = performance.now()
-      sceneryScene(scenery, opts(trees))
+      sceneryScene(scenery, opts(trees, cull))
       xs.push(performance.now() - t0)
     }
     return { med: median(xs), max: Math.max(...xs) }
   }
-  const full = timeIt(scenery.trees)
-  const culled = timeIt(culledTrees)
+  const full = timeIt(scenery.trees, null)
+  const culled = timeIt(culledTrees, disc)
 
-  totals.pats += pats
-  totals.grads += grads
-  totals.cycles += cycles
+  totals.pats += shot.pats
+  totals.grads += shot.grads
+  totals.cycles += shot.cycles
   console.log(
-    `${id.padEnd(18)} ${String(allOps.length).padStart(5)} ${String(pats).padStart(9)} `
-    + `${String(grads).padStart(11)} ${String(dashOps).padStart(8)} ${String(Math.round(cycles)).padStart(11)}  |  `
+    `${id.padEnd(18)} ${String(whole.ops).padStart(5)} ${String(shot.ops).padStart(7)} `
+    + `${String(whole.grads).padStart(8)} ${String(shot.grads).padStart(8)} `
+    + `${String(Math.round(whole.cycles)).padStart(8)} ${String(Math.round(shot.cycles)).padStart(8)}  |  `
     + `${full.med.toFixed(1).padStart(6)}/${full.max.toFixed(1).padStart(5)}  ${culled.med.toFixed(1).padStart(6)}/${culled.max.toFixed(1).padStart(5)}`
     + `   ${String(scenery.trees.length).padStart(5)}->${culledTrees.length}`,
   )
@@ -179,7 +198,7 @@ for (const id of ids) {
 
 console.log('-'.repeat(118))
 console.log(
-  `TOTALS/frame at HEAD  patterns rebuilt ${totals.pats}  gradients allocated ${totals.grads}  `
+  `TOTALS/frame in shot  pattern lookups ${totals.pats}  gradient lookups ${totals.grads}  `
   + `dash cycles expanded ${Math.round(totals.cycles)}`,
 )
 // Cull commits over a zoom gesture: r scales with 1/z and commits every 30% change (CULL_SLACK),

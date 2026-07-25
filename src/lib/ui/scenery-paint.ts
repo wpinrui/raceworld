@@ -26,6 +26,10 @@ export interface PaintCtx {
   /** Bounds of the shape being painted. Gradients in SVG resolve against the path's own extent, so a
    *  canvas has to be told it; a tile pattern does not care and may be given anything. */
   bounds: { x: number; y: number; w: number; h: number }
+  /** Device pixels one viewBox unit currently covers (zoom times stage scale times dpr). Tiles are
+   *  rasterised to match: an SVG pattern is vector and stays crisp at any zoom, but a tile baked at
+   *  a fixed low resolution upscales at racing zoom until its crowd dots blur into nothing. */
+  pxPerUnit?: number
 }
 
 /** Paints are cached because `drawScene` asks for one per op per frame. Uncached, every tree canopy
@@ -55,16 +59,27 @@ export function canvasPaint(
     }
     return g
   }
-  const key = `${name}|${p.u(1)}`
+  // Tiles rebuild when the zoom crosses a power-of-two band, so they are always rasterised within
+  // 2x of the resolution they are shown at — a handful of rebuilds across the whole zoom range.
+  const px = tileRes(p)
+  const key = `${name}|${p.u(1)}|${px}`
   let pat = patternCache.get(key)
   if (!pat) {
-    const built = tilePaint(name, ctx, p)
+    const built = tilePaint(name, ctx, p, px)
     if (!built) return null
-    if (patternCache.size > 100) patternCache.clear()
+    if (patternCache.size > 200) patternCache.clear()
     patternCache.set(key, built)
     pat = built
   }
   return pat
+}
+
+/** Tile raster density in device pixels per viewBox unit: the next power of two above what is on
+ *  screen, clamped so far zoom-out never drops detail below legibility and extreme zoom-in cannot
+ *  ask for a megapixel tile. */
+function tileRes(p: PaintCtx): number {
+  const need = p.pxPerUnit ?? 8
+  return Math.min(256, Math.max(8, 2 ** Math.ceil(Math.log2(need))))
 }
 
 function buildGradient(
@@ -110,12 +125,13 @@ function buildGradient(
 
 /** The repeating fills: seats, crowd, roof decking, water and crop rows. Each is drawn once into an
  *  offscreen canvas at the same metre sizes the SVG pattern uses, then repeated. */
-function tilePaint(name: string, ctx: CanvasRenderingContext2D, p: PaintCtx): CanvasPattern | null {
+function tilePaint(
+  name: string, ctx: CanvasRenderingContext2D, p: PaintCtx, px: number,
+): CanvasPattern | null {
   const spec = TILES[name]
   if (!spec) return null
   // Tiles are built in DEVICE pixels so they stay crisp, then scaled back into viewBox units by the
   // pattern transform. A tile authored in viewBox units would be a couple of pixels across.
-  const px = 8
   const tile = document.createElement('canvas')
   tile.width = Math.max(1, Math.round(p.u(spec.w) * px))
   tile.height = Math.max(1, Math.round(p.u(spec.h) * px))
