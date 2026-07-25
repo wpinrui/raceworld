@@ -3,6 +3,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
+import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import {
   SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE,
@@ -1691,8 +1692,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Red/white kerbs through the corners. */}
             {!hidden.has('kerbs') && visibleKerbs.map((k, i) => (
               <g key={`k${i}`}>
-                <path d={k.ribbon} fill="#E6E3DC" />
-                <path d={k.blocks} fill="#C8352F" />
+                <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(KERB_WIDTH_M)} strokeLinecap="round" />
+                <path
+                  d={k.d} fill="none" stroke="#C8352F" strokeWidth={u(KERB_WIDTH_M)}
+                  strokeDasharray={`${u(KERB_BLOCK_M)} ${u(KERB_BLOCK_M)}`}
+                />
               </g>
             ))}
             {/* Scenery shadows fall across the tarmac, so they draw AFTER every piece of track

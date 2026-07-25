@@ -7,7 +7,7 @@
 
 import { seededRng } from '@/lib/sim/rng-utils'
 import {
-  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M, type PitLane, type TrackTrace,
+  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M, smoothOpenPath, type PitLane, type TrackTrace,
 } from './track-path'
 import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'
@@ -16,7 +16,6 @@ import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
   TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts, buildTyreWalls,
-  kerbBlocks, kerbRibbon,
   type SceneryFence, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
 } from './scenery-props'
 
@@ -53,9 +52,7 @@ export const KERB_WIDTH_M = 1.3
 export const KERB_BLOCK_M = 3
 
 export interface SceneryKerb {
-  /** Both halves pre-built as fillable geometry: a kerb does no stroking and carries no dash. */
-  ribbon: string
-  blocks: string
+  d: string
   /** Bounding disc, so a kerb far from the camera can be skipped outright. */
   cx: number; cy: number; r: number
 }
@@ -248,8 +245,7 @@ export function buildScenery(
         const cx = (Math.min(...xs) + Math.max(...xs)) / 2
         const cy = (Math.min(...ys) + Math.max(...ys)) / 2
         kerbs.push({
-          ribbon: kerbRibbon(pts, KERB_WIDTH_M / 2 / metresPerUnit),
-          blocks: kerbBlocks(pts, KERB_WIDTH_M / 2 / metresPerUnit, KERB_BLOCK_M / metresPerUnit),
+          d: smoothOpenPath(pts),
           cx,
           cy,
           r: Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))),
