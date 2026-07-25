@@ -413,6 +413,11 @@ export interface SceneOpts {
   /** A stand casts from its rear, a building from its roofline. */
   solidHeightM: (r: SceneryRect) => number
   trees: SceneryTree[]
+  /** The road itself, drawn between the ground and the shadows so scenery shadows fall ON tarmac.
+   *  Built by the caller because it comes off the layout rather than off the scenery. */
+  track?: DrawOp[]
+  /** Kerbs, over the road and under the cars. */
+  kerbs?: DrawOp[]
 }
 
 /** The whole static world in paint order, as one description.
@@ -426,6 +431,8 @@ export function sceneryScene(
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
   const ops: DrawOp[] = [...groundOps(scenery, o.u, { full: o.full, ground: o.ground })]
   const groups: DrawGroup[] = []
+  // The road goes down before any shadow, which is the whole reason shadows read as lying ON it.
+  if (o.track) ops.push(...o.track)
 
   if (o.full) {
     // Shadows before every solid, so nothing casts over the thing standing on it.
@@ -451,5 +458,6 @@ export function sceneryScene(
     }))
     ops.push(...treeSolidOps(o.trees, treeOpts))
   }
+  if (o.kerbs) ops.push(...o.kerbs)
   return { ops, groups }
 }

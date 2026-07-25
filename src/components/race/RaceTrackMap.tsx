@@ -15,7 +15,7 @@ import {
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
 import { SceneryCanvas, drawScene } from './SceneryCanvas'
-import { sceneryScene } from '@/lib/ui/scenery-draw'
+import { sceneryScene, type DrawOp } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
@@ -1533,10 +1533,41 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Only the scenery categories, narrowed for the layers that take them.
   const hide = useMemo(() => hidden as Hidden, [hidden])
 
+  // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
+  // corner at a time. Same disc the trees use.
+  const visibleKerbs = useMemo(
+    () => (cull
+      ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cull.cx, k.cy - cull.cy) <= cull.r + k.r)
+      : scenery.kerbs),
+    [scenery.kerbs, cull],
+  )
+
   // The static world as one description, drawn straight onto a canvas by the render loop. Vectors are
   // redrawn at the exact camera transform each frame, so it is as sharp at 60x zoom as at 1x — which
   // is what the pre-baked image could never be, and the reason it is being replaced.
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The road, in the order the SVG lays it: white casing under grey asphalt, for track and lane alike.
+  const trackDrawOps = useMemo((): DrawOp[] => {
+    const ops: DrawOp[] = [
+      { d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`, fill: scenery.base },
+      { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
+      { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(5.5), cap: 'round' },
+    ]
+    if (pitZone) ops.push({ d: pitZone.work, fill: '#D8D8D2', stroke: '#D8D8D2', width: u(1.3) })
+    ops.push(
+      { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
+      { d: layout.pit.fastD, stroke: '#33383E', width: u(4.2), cap: 'round' },
+    )
+    if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
+    return ops
+  }, [vb, scenery.base, layout, pitZone, u])
+  const kerbDrawOps = useMemo((): DrawOp[] => (hidden.has('kerbs') ? [] : visibleKerbs.flatMap((k) => [
+    { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' as const },
+    {
+      d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt' as const,
+      dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
+    },
+  ])), [visibleKerbs, hidden, u])
   const scene = useMemo(() => (canvasOn && view === 'live'
     ? sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
@@ -1544,8 +1575,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
       trees: hidden.has('trees') ? [] : scenery.trees,
+      track: trackDrawOps,
+      kerbs: kerbDrawOps,
     })
-    : null), [canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden])
+    : null), [canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps, kerbDrawOps])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
@@ -1571,14 +1604,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const bitmap = useSceneryBitmap(staticRef, vb, bitmapOn && view === 'live', bakeKey)
   const bakeCull = bitmapOn ? null : cull
 
-  // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
-  // corner at a time. Same disc the trees use.
-  const visibleKerbs = useMemo(
-    () => (cull
-      ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cull.cx, k.cy - cull.cy) <= cull.r + k.r)
-      : scenery.kerbs),
-    [scenery.kerbs, cull],
-  )
 
   // One fake sun for the whole map. A low afternoon light is the dry-race default; moods become
   // data here later (weather, night) rather than separate rendering paths.
@@ -1626,17 +1651,31 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 than display, because the race loop measures the track path with getTotalLength and
                 that has to keep working while the picture comes from the bitmap. */}
             <g ref={staticRef} style={{ visibility: bitmap ? 'hidden' : undefined }}>
-            <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
+            {(!canvasOn || view === 'map') && (
+              <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
+            )}
             <g data-cost="scenery">{view === 'live' && !canvasOn && sceneryNode}</g>
             {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
-            <path ref={pathRef} d={layout.d} fill="none" stroke="#D8D8D2" strokeWidth={u(TRACK_WIDTH_M)} strokeLinejoin="round" />
-            <path d={layout.pit.fastD} fill="none" stroke="#D8D8D2" strokeWidth={u(5.5)} strokeLinejoin="round" strokeLinecap="round" />
-            {pitZone && <path d={pitZone.work} fill="#D8D8D2" stroke="#D8D8D2" strokeWidth={u(1.3)} strokeLinejoin="round" />}
-            <path d={layout.d} fill="none" stroke="#33383E" strokeWidth={u(TARMAC_WIDTH_M)} strokeLinejoin="round" />
-            <path d={layout.pit.fastD} fill="none" stroke="#33383E" strokeWidth={u(4.2)} strokeLinejoin="round" strokeLinecap="round" />
-            {pitZone && <path d={pitZone.work} fill="#33383E" />}
+            {/* Kept in the document whatever draws it: the race loop measures this path with
+                getTotalLength, which needs it present. Invisible once the canvas has the road. */}
+            <path
+              ref={pathRef} d={layout.d} fill="none" stroke="#D8D8D2"
+              strokeWidth={u(TRACK_WIDTH_M)} strokeLinejoin="round"
+              visibility={canvasOn ? 'hidden' : undefined}
+            />
+            {!canvasOn && (
+  <path d={layout.pit.fastD} fill="none" stroke="#D8D8D2" strokeWidth={u(5.5)} strokeLinejoin="round" strokeLinecap="round" />
+            )}
+            {pitZone && !canvasOn && <path d={pitZone.work} fill="#D8D8D2" stroke="#D8D8D2" strokeWidth={u(1.3)} strokeLinejoin="round" />}
+            {!canvasOn && (
+  <path d={layout.d} fill="none" stroke="#33383E" strokeWidth={u(TARMAC_WIDTH_M)} strokeLinejoin="round" />
+            )}
+            {!canvasOn && (
+  <path d={layout.pit.fastD} fill="none" stroke="#33383E" strokeWidth={u(4.2)} strokeLinejoin="round" strokeLinecap="round" />
+            )}
+            {pitZone && !canvasOn && <path d={pitZone.work} fill="#33383E" />}
             {/* Pit lane: an asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's
