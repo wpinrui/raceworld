@@ -34,6 +34,8 @@ export interface DrawOp {
   width?: number
   alpha?: number
   cap?: 'round' | 'butt'
+  /** Relief bands are drawn as nested rings, so their holes need the even-odd rule. */
+  evenOdd?: boolean
 }
 
 /** True when a fill or stroke names a shared gradient or pattern rather than a plain colour. */
@@ -328,4 +330,31 @@ export function marshalGroups(
       ops: [{ d: sweptHull(hut, off.x, off.y), fill: shadeFace('#3A4049', o.lighting) }],
     }
   })
+}
+
+/** The ground the circuit sits on: relief bands, the field quilt, terrain patches and run-off aprons.
+ *
+ *  Big paths and few of them, so they stay affordable at full zoom-out — which is exactly where a
+ *  single flat green used to read as a runway extending forever. Ordered lowest first. */
+export function groundOps(
+  scenery: Pick<Scenery, 'bands' | 'fields' | 'terrain' | 'runoffs'>,
+  u: (m: number) => number,
+  { full, ground }: { full: boolean; ground: boolean },
+): DrawOp[] {
+  const ops: DrawOp[] = []
+  if (ground) {
+    for (const b of scenery.bands) ops.push({ d: b.d, fill: b.fill, alpha: b.soft ? 0.3 : 1, evenOdd: true })
+    for (const f of scenery.fields) {
+      ops.push({ d: f.d, fill: f.fill, alpha: 0.75 })
+      // Crop rows and hedgerows are per-field detail: zoomed out only the tint is legible.
+      if (full && f.crop) ops.push({ d: f.d, fill: `${REF}tm-crop` })
+      if (full) ops.push({ d: f.d, stroke: '#1F3318', width: u(2.2), alpha: 0.35 })
+    }
+  }
+  for (const b of scenery.terrain) {
+    ops.push({ d: b.d, fill: b.fill })
+    if (b.water) ops.push({ d: b.d, fill: `${REF}tm-water` })
+  }
+  for (const b of scenery.runoffs) ops.push({ d: b.d, fill: b.fill })
+  return ops
 }

@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  fenceOps, marshalGroups, runShadowOp, structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
+  fenceOps, groundOps, marshalGroups, runShadowOp, structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -311,5 +311,44 @@ describe('marshalGroups', () => {
     expect(g.x).toBe(70)
     expect(g.y).toBe(15)
     expect(g.rot).toBe(0.9)
+  })
+})
+
+describe('groundOps', () => {
+  const ground = {
+    bands: [{ d: 'M 0 0 L 1 0 L 1 1 Z', fill: '#3F602C', soft: true }],
+    fields: [{ d: 'M 2 2 L 3 2 L 3 3 Z', fill: '#4A6B31', crop: true }],
+    terrain: [{ d: 'M 4 4 L 5 4 L 5 5 Z', fill: '#2E4A6B', water: true }],
+    runoffs: [{ d: 'M 6 6 L 7 6 L 7 7 Z', fill: '#7A6A55' }],
+  } as never as Parameters<typeof groundOps>[0]
+  const u = (m: number) => m / 3
+
+  it('draws relief with the even-odd rule, since bands are nested rings', () => {
+    // Filled nonzero, a band's hole fills in and the terracing disappears.
+    const [band] = groundOps(ground, u, { full: true, ground: true })
+    expect(band.evenOdd).toBe(true)
+    expect(band.alpha).toBeCloseTo(0.3, 9)
+  })
+
+  it('sheds per-field detail at the cheap tier but keeps the tint', () => {
+    const full = groundOps(ground, u, { full: true, ground: true })
+    const low = groundOps(ground, u, { full: false, ground: true })
+    expect(low.length).toBeLessThan(full.length)
+    expect(low.some((op) => op.fill === '#4A6B31')).toBe(true)
+    expect(low.some((op) => refName(op.fill ?? '') === 'tm-crop')).toBe(false)
+  })
+
+  it('keeps terrain and run-off when the ground itself is switched off', () => {
+    // Those are placed features, not the surround; hiding the surround must not take them with it.
+    const ops = groundOps(ground, u, { full: true, ground: false })
+    expect(ops.some((op) => op.fill === '#2E4A6B')).toBe(true)
+    expect(ops.some((op) => op.fill === '#7A6A55')).toBe(true)
+    expect(ops.some((op) => op.fill === '#3F602C')).toBe(false)
+  })
+
+  it('gives water its ripple over its own fill', () => {
+    const ops = groundOps(ground, u, { full: true, ground: true })
+    const i = ops.findIndex((op) => op.fill === '#2E4A6B')
+    expect(refName(ops[i + 1].fill ?? '')).toBe('tm-water')
   })
 })

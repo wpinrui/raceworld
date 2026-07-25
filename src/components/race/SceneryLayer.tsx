@@ -1,6 +1,7 @@
 import type { Scenery, SceneryRect } from '@/lib/ui/track-scenery'
 import {
-  buildingRoofGroups, buildingWallGroups, fenceOps, marshalGroups, refName, runShadowOp,
+  buildingRoofGroups, buildingWallGroups, fenceOps, groundOps, marshalGroups, refName,
+  runShadowOp,
   standGroups, structureShadowGroups, treeShadowOp, treeSolidOps,
 } from '@/lib/ui/scenery-draw'
 import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
@@ -119,32 +120,12 @@ export function SceneryLayer({ scenery, u, lighting, hide, detail = 'full' }: {
         </pattern>
       </defs>
 
-      {/* Relief, lowest band up. Each band gets a dark copy offset down-right underneath it, so the
-          terrace steps catch the same top-left key light as every prop shadow. Big paths, few of
-          them — they stay affordable at full zoom-out, which is where the flat plane showed. */}
-      {!noGround && scenery.bands.map((b, i) => (
-        <path key={`hb${i}`} d={b.d} fillRule="evenodd" fill={b.fill} opacity={b.soft ? 0.30 : 1} />
+      {groundOps(scenery, u, { full, ground: !noGround }).map((op, i) => (
+        <path
+          key={`g${i}`} d={op.d} fill={op.fill ? paint(op.fill) : 'none'} stroke={op.stroke}
+          strokeWidth={op.width} opacity={op.alpha} fillRule={op.evenOdd ? 'evenodd' : undefined}
+        />
       ))}
-
-      {/* Field patchwork: the quilt of cultivated land a circuit sits in. A single flat green was
-          the main reason the surround read as a runway extending forever. */}
-      {!noGround && scenery.fields.map((f, i) => (
-        <g key={`fd${i}`}>
-          <path d={f.d} fill={f.fill} opacity={0.75} />
-          {/* Crop rows and hedgerows are per-field detail; zoomed out only the tint is legible, and
-              this layer draws at BOTH tiers, so the extras come off at low LOD. */}
-          {full && f.crop && <path d={f.d} fill="url(#tm-crop)" />}
-          {full && <path d={f.d} fill="none" stroke="#1F3318" strokeWidth={u(2.2)} opacity={0.35} />}
-        </g>
-      ))}
-
-      {scenery.terrain.map((b, i) => (
-        <g key={`t${i}`}>
-          <path d={b.d} fill={b.fill} />
-          {b.water && <path d={b.d} fill="url(#tm-water)" />}
-        </g>
-      ))}
-      {scenery.runoffs.map((b, i) => <path key={`r${i}`} d={b.d} fill={b.fill} />)}
 
     </g>
   )
