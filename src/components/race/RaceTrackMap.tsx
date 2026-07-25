@@ -75,7 +75,7 @@ const DEBUG_KEYS: boolean = false
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
-const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes'> = {
+const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'> = {
   q: 'trees',
   w: 'shadows',
   e: 'buildings',
@@ -85,6 +85,8 @@ const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes'> = {
   u: 'pit',
   i: 'ground',
   o: 'boxes',
+  // The car sprites are the last un-ported layer; hiding them attributes their raster cost live.
+  a: 'cars',
 }
 /** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
  *  closely than it tracks anything else, so scenery is shed to hold this line. */
@@ -508,7 +510,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const [hud, setHud] = useState(false)
   // One hotkey per category, so what is expensive can be MEASURED instead of reasoned about. Each key
   // skips rendering that category outright rather than hiding it, so the node count moves with it.
-  const [hidden, setHidden] = useState<ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes'>>(() => new Set())
+  const [hidden, setHidden] = useState<ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>>(() => new Set())
   const hiddenRef = useRef<ReadonlySet<string>>(hidden)
   const [budgetOn, setBudgetOn] = useState(false)
   const hudRef = useRef<HTMLDivElement>(null)
@@ -1938,7 +1940,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Invisible: the computed racing line the cars actually drive (sampled per frame). */}
             <path ref={raceLineRef} fill="none" stroke="none" />
           </svg>
-          <div data-cost="cars" className="contents">{cars.map((car) => (
+          <div data-cost="cars" className={hidden.has('cars') ? 'hidden' : 'contents'}>{cars.map((car) => (
             <div
               key={car.id}
               ref={(el) => {
