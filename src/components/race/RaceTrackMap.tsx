@@ -55,17 +55,18 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
-/** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it. */
+/** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
+ *  Along the top letter row rather than the digits, which the race speed controls already own. */
 const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes'> = {
-  1: 'trees',
-  2: 'shadows',
-  3: 'buildings',
-  4: 'stands',
-  5: 'furniture',
-  6: 'kerbs',
-  7: 'pit',
-  8: 'ground',
-  9: 'boxes',
+  q: 'trees',
+  w: 'shadows',
+  e: 'buildings',
+  r: 'stands',
+  t: 'furniture',
+  y: 'kerbs',
+  u: 'pit',
+  i: 'ground',
+  o: 'boxes',
 }
 /** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
  *  closely than it tracks anything else, so scenery is shed to hold this line. */
@@ -499,7 +500,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (e.metaKey || e.ctrlKey) return
       if (e.key === '`') setHud((v) => !v)
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
-      const piece = HOTKEYS[e.key]
+      const piece = HOTKEYS[e.key.toLowerCase()]
       if (!piece) return
       setHidden((prev) => {
         const next = new Set(prev)
