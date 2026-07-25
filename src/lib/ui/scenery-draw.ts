@@ -424,47 +424,109 @@ export interface SceneOpts {
   pitOver?: DrawOp[]
 }
 
+/** One entry in the paint order: a flat op, or a placed group of them. A single sequence rather than
+ *  separate op and group lists — the picture interleaves them (a stand paints after the tree shadows
+ *  but before the kerbs), and two lists painted one after the other cannot say that. Splitting them
+ *  is exactly the bug that had every solid drawn over the trees and kerbs in front of it. */
+export type SceneItem = DrawOp | DrawGroup
+
+/** True for a placed group; a flat op has no `ops` of its own. */
+export const isGroup = (item: SceneItem): item is DrawGroup => 'ops' in item
+
+/** The parts of a scene that do not depend on which trees or kerbs are in shot. Rebuilt only when
+ *  the camera bearing, light or detail tier changes — a cull step never touches them. */
+interface StaticParts {
+  key: string
+  ground: DrawOp[]
+  shadowGroups: DrawGroup[]
+  runShadows: DrawOp[]
+  wallGroups: DrawGroup[]
+  standGs: DrawGroup[]
+  roofGs: DrawGroup[]
+  furniture: DrawOp[]
+  marshalGs: DrawGroup[]
+}
+
+/** Everything here is heavy string-building (swept hulls, window grids) over the whole circuit, and
+ *  none of it changes when the cull disc moves. Without this cache a cull commit during a zoom paid
+ *  the full rebuild — tens of milliseconds, a dozen times per gesture.
+ *
+ *  Keyed on every scalar the geometry reads. `solidHeightM` is a function and stays out of the key:
+ *  callers pass a fixed formula, and a caller that varied it per call would have to invalidate by
+ *  passing a fresh `Scenery`. */
+const staticCache = new WeakMap<Scenery, StaticParts>()
+
+function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
+  const key = JSON.stringify([
+    o.view, o.full, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
+    o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.tyreM, o.u(1), o.lighting,
+  ])
+  const hit = staticCache.get(scenery)
+  if (hit && hit.key === key) return hit
+  const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
+  const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
+  const runShadows: DrawOp[] = []
+  const furniture: DrawOp[] = []
+  if (o.full) {
+    for (const t of scenery.tyreWalls) runShadows.push(runShadowOp(t.pts, o.tyreM, treeOpts))
+    for (const f of scenery.fences) runShadows.push({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 })
+    for (const ops2 of fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM })) furniture.push(...ops2)
+    for (const t of scenery.tyreWalls) furniture.push(...tyreWallOps(t, o.u, o.full))
+  }
+  const parts: StaticParts = {
+    key,
+    ground: groundOps(scenery, o.u, { full: o.full, ground: o.ground }),
+    shadowGroups: o.full
+      ? structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM })
+      : [],
+    runShadows,
+    wallGroups: o.full
+      ? buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM })
+      : [],
+    standGs: standGroups(scenery.stands, {
+      ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
+    }, o.full),
+    roofGs: buildingRoofGroups(scenery.buildings, o.full),
+    furniture,
+    marshalGs: o.full
+      ? marshalGroups(scenery.marshals, {
+        ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
+      })
+      : [],
+  }
+  staticCache.set(scenery, parts)
+  return parts
+}
+
 /** The whole static world in paint order, as one description.
  *
  *  This is what makes the canvas a small component rather than a second renderer: it walks this list.
  *  The SVG layer builds the same pieces in the same order, so the two cannot drift apart. */
-export function sceneryScene(
-  scenery: Scenery, o: SceneOpts,
-): { ops: DrawOp[]; groups: DrawGroup[] } {
+export function sceneryScene(scenery: Scenery, o: SceneOpts): SceneItem[] {
+  const s = staticParts(scenery, o)
   const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
-  const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
-  const ops: DrawOp[] = [...groundOps(scenery, o.u, { full: o.full, ground: o.ground })]
-  const groups: DrawGroup[] = []
+  const items: SceneItem[] = [...s.ground]
   // Garage floors go under the lane's paint; the road then goes down before any shadow, which is the
   // whole reason shadows read as lying ON it.
-  if (o.pitUnder) ops.push(...o.pitUnder)
-  if (o.track) ops.push(...o.track)
+  if (o.pitUnder) items.push(...o.pitUnder)
+  if (o.track) items.push(...o.track)
 
   if (o.full) {
     // Shadows before every solid, so nothing casts over the thing standing on it.
-    groups.push(...structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM }))
+    items.push(...s.shadowGroups)
     const trees = treeShadowOp(o.trees, treeOpts)
-    if (trees) ops.push(trees)
-    for (const t of scenery.tyreWalls) ops.push(runShadowOp(t.pts, o.tyreM, treeOpts))
-    for (const f of scenery.fences) ops.push({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 })
+    if (trees) items.push(trees)
+    items.push(...s.runShadows)
+    items.push(...s.wallGroups)
   }
-
+  items.push(...s.standGs)
+  items.push(...s.roofGs)
   if (o.full) {
-    groups.push(...buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM }))
+    items.push(...s.furniture)
+    items.push(...s.marshalGs)
+    items.push(...treeSolidOps(o.trees, treeOpts))
   }
-  groups.push(...standGroups(scenery.stands, {
-    ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
-  }, o.full))
-  groups.push(...buildingRoofGroups(scenery.buildings, o.full))
-  if (o.full) {
-    for (const ops2 of fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM })) ops.push(...ops2)
-    for (const t of scenery.tyreWalls) ops.push(...tyreWallOps(t, o.u, o.full))
-    groups.push(...marshalGroups(scenery.marshals, {
-      ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
-    }))
-    ops.push(...treeSolidOps(o.trees, treeOpts))
-  }
-  if (o.kerbs) ops.push(...o.kerbs)
-  if (o.pitOver) ops.push(...o.pitOver)
-  return { ops, groups }
+  if (o.kerbs) items.push(...o.kerbs)
+  if (o.pitOver) items.push(...o.pitOver)
+  return items
 }

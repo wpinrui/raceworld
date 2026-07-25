@@ -1,13 +1,13 @@
 // Probe: per-frame cost audit of the canvas scenery renderer at racing zoom.
 //
-// drawScene walks every op in the scene each camera frame. At HEAD, every op whose fill names a
-// tile pattern rebuilds a DOM <canvas> and a CanvasPattern on EVERY fill, and every gradient fill
-// allocates a fresh CanvasGradient — so the counts below are per-frame allocation counts, not
-// one-off setup costs. Dash cycles are what setLineDash makes the rasteriser expand per frame.
+// drawScene walks every op in the scene each camera frame. "pat/frame" and "grad/frame" count the
+// paint lookups that walk makes — each one was a fresh DOM <canvas>-plus-CanvasPattern or a fresh
+// CanvasGradient before scenery-paint.ts grew its caches, and with the caches they are what the
+// caches absorb. Dash cycles are what setLineDash makes the rasteriser expand per frame.
 // Canvas raster time itself needs a browser, so this counts work instead of timing paint.
 //
 // Also timed: the sceneryScene rebuild that runs on every cull commit (the zoom stutter), with the
-// full tree set (HEAD behaviour) versus the disc-culled set the SVG layers used.
+// full tree set versus the disc-culled set the renderer feeds it.
 // Run: npx tsx scripts/canvas-cost-check.ts
 
 import { performance } from 'node:perf_hooks'
@@ -79,11 +79,14 @@ const totals = { pats: 0, grads: 0, cycles: 0 }
 for (const id of ids) {
   const layout = TRACK_LAYOUTS[id]
   const u = (m: number) => m / layout.metresPerUnit
-  const vb = layout.viewBox
+  // The same padded viewBox RaceTrackMap derives — the authored one hugs the racing line.
+  const pad = TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8
+  const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
+  const vb = { x: vx - pad, y: vy - pad, w: vw + 2 * pad, h: vh + 2 * pad }
   const scenery = buildScenery(layout.trace, layout.pit, {
     circuitId: layout.circuitId,
     metresPerUnit: layout.metresPerUnit,
-    viewBox: vb,
+    viewBox: layout.viewBox,
     pitOutside: layout.pitOutside,
     biome: layout.biome,
   })
@@ -116,6 +119,10 @@ for (const id of ids) {
       dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
     },
   ])
+  // Pit ops are memoised separately in RaceTrackMap and never rebuilt on a cull commit, so they are
+  // built once here too — the rebuild timing below has to measure what a commit actually re-runs.
+  const pitUnder = pitZone ? pitFloorOps(pitZone, lighting, () => '#888888') : []
+  const pitOver = pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, () => '#888888') : []
   const opts = (trees: typeof scenery.trees) => ({
     u, lighting, view: viewAz, full: true, ground: true, extrude: EXTRUDE,
     storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
@@ -124,12 +131,12 @@ for (const id of ids) {
     trees,
     track: trackOps,
     kerbs: kerbOps,
-    pitUnder: pitZone ? pitFloorOps(pitZone, lighting, () => '#888888') : [],
-    pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, () => '#888888') : [],
+    pitUnder,
+    pitOver,
   })
 
-  const scene = sceneryScene(scenery, opts(scenery.trees))
-  const allOps = [...scene.ops, ...scene.groups.flatMap((g) => g.ops)]
+  const items = sceneryScene(scenery, opts(scenery.trees))
+  const allOps = items.flatMap((i) => ('ops' in i ? i.ops : [i]))
   let pats = 0
   let grads = 0
   let dashOps = 0

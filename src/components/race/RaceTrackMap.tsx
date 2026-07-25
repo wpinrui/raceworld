@@ -6,7 +6,7 @@ import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import {
-  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE,
+  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
   type Cull, type Hidden, type SceneryPiece,
 } from './SceneryLayer'
 import {
@@ -1580,14 +1580,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
-      trees: hidden.has('trees') ? [] : scenery.trees,
+      // The same disc the SVG solids layer culled to: the canvas walks every op every frame, so a
+      // circuit's whole tree population would be path setup for things nowhere near the shot.
+      trees: hidden.has('trees') ? [] : visibleTrees(scenery.trees, cull),
       track: trackDrawOps,
       kerbs: kerbDrawOps,
       pitUnder: pitDrawOps.under,
       pitOver: pitDrawOps.over,
     })
     : null), [
-    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps, kerbDrawOps,
+    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, cull, trackDrawOps, kerbDrawOps,
     pitDrawOps,
   ])
   const sceneRef = useRef(scene)
@@ -1597,11 +1599,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const canvas = canvasRef.current
     const sc = sceneRef.current
     const ctx = canvas?.getContext('2d')
-    if (!canvas || !sc || !ctx) return
+    if (!canvas || !ctx) return
+    const { w: sw } = stageDimsRef.current
+    if (!sc || sw === 0) {
+      // No scene (map view): leave nothing stale behind the minimap.
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      return
+    }
     const dpr = window.devicePixelRatio || 1
     drawScene(
       ctx, sc, camRef.current, vb,
-      { w: canvas.width / dpr, h: canvas.height / dpr }, dpr,
+      { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
       (name, c, bbox) => canvasPaint(name, c, {
         lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
       }) ?? '#FF00FF',
@@ -1650,8 +1659,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           className="absolute left-2 top-2 z-30 rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-[#FFFFFF]"
         />
       )}
+      {/* On the OUTER box, not the stage: the stage letterboxes to the viewBox's aspect, and a canvas
+          clipped to it stops painting at the stage edge — the world visibly ended there under zoom.
+          The SVG never had the problem because its overflow is visible. Stage centre and viewport
+          centre coincide, so the camera transform is the same either way. */}
+      {canvasOn && <SceneryCanvas canvasRef={canvasRef} className="absolute inset-0" />}
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
-        {canvasOn && <SceneryCanvas canvasRef={canvasRef} className="absolute inset-0" />}
         <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
               the edge of the world under follow + zoom. */}

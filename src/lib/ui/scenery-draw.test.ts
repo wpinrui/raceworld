@@ -4,9 +4,9 @@
 import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
-  REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  fenceOps, groundOps, marshalGroups, runShadowOp, sceneryScene, structureShadowGroups,
-  tyreWallOps, treeShadowOp, treeShadowRatio, treeSolidOps,
+  REF, buildingRoofGroups, buildingWallGroups, depthSorted, isGroup, partsOf, refName, standGroups,
+  toLocal, fenceOps, groundOps, marshalGroups, runShadowOp, sceneryScene, structureShadowGroups,
+  tyreWallOps, treeShadowOp, treeShadowRatio, treeSolidOps, type DrawOp,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -393,25 +393,49 @@ describe('sceneryScene', () => {
   }
 
   it('puts every shadow before the solids, so nothing casts over what stands on it', () => {
-    const { ops, groups } = sceneryScene(scenery, sceneOpts)
+    const items = sceneryScene(scenery, sceneOpts)
+    const groups = items.filter(isGroup)
     // Shadow groups carry no fill of their own; the layer supplies it. Solids always do.
     const firstSolid = groups.findIndex((g) => g.ops[0].fill)
     const lastShadow = groups.map((g) => !g.ops[0].fill).lastIndexOf(true)
     expect(lastShadow).toBeLessThan(firstSolid)
-    expect(ops.length).toBeGreaterThan(0)
+    expect(items.length).toBeGreaterThan(0)
+  })
+
+  it('keeps ONE interleaved paint order: trees over the solids, kerbs over everything', () => {
+    // Ops and groups painted as two separate passes is the bug that put every stand on top of the
+    // trees and kerbs in front of it — the order has to hold across the whole sequence.
+    const kerb: DrawOp = { d: 'M 0 0 L 1 0', stroke: '#C8352F' }
+    const items = sceneryScene(scenery, { ...sceneOpts, kerbs: [kerb] })
+    const lastGroup = items.map(isGroup).lastIndexOf(true)
+    const canopy = items.findIndex(
+      (i) => !isGroup(i) && (refName(i.fill ?? '') ?? '').startsWith('tm-tree'),
+    )
+    expect(canopy, 'a tree canopy paints after the last solid group').toBeGreaterThan(lastGroup)
+    expect(items[items.length - 1], 'kerbs stay on top').toBe(kerb)
   })
 
   it('drops the expensive half at the cheap tier but keeps the stands and roofs', () => {
     const full = sceneryScene(scenery, sceneOpts)
     const low = sceneryScene(scenery, { ...sceneOpts, full: false })
-    expect(low.ops.length + low.groups.length).toBeLessThan(full.ops.length + full.groups.length)
-    expect(low.groups.length).toBeGreaterThan(0)
+    expect(low.length).toBeLessThan(full.length)
+    expect(low.some(isGroup)).toBe(true)
   })
 
   it('draws nothing at all for an empty world', () => {
     const empty = { ...scenery, stands: [], buildings: [], fences: [], tyreWalls: [] } as never
-    const { ops, groups } = sceneryScene(empty, { ...sceneOpts, trees: [] })
-    expect(ops).toEqual([])
-    expect(groups).toEqual([])
+    expect(sceneryScene(empty, { ...sceneOpts, trees: [] })).toEqual([])
+  })
+
+  it('reuses the static parts across calls, so a tree cull rebuilds only the trees', () => {
+    // A cull commit changes nothing but the tree set; if the stands were rebuilt with it, every
+    // zoom gesture would pay the whole circuit's string-building a dozen times over.
+    const standOf = (items: ReturnType<typeof sceneryScene>) => items.filter(isGroup)
+      .find((g) => g.ops.some((op) => refName(op.fill ?? '') === 'tm-seats'))
+    const a = sceneryScene(scenery, sceneOpts)
+    const b = sceneryScene(scenery, { ...sceneOpts, trees: [tree(9, 9)] })
+    expect(standOf(b), 'identical inputs reuse the same groups').toBe(standOf(a))
+    const turned = sceneryScene(scenery, { ...sceneOpts, view: sceneOpts.view + 0.5 })
+    expect(standOf(turned), 'a new bearing rebuilds them').not.toBe(standOf(a))
   })
 })
