@@ -1707,16 +1707,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // ── Benchmark mode ──
   //
   // One keypress runs an ablation matrix over a live race: the same follow camera at racing zoom,
-  // one segment per configuration (each layer hidden in turn, the dynamic layers isolated, and the
-  // SVG renderer as the old baseline), a few seconds of frame timings each. The result prints as a
+  // one FULL LAP per configuration so every segment covers the identical corners — the segment
+  // boundary is the followed car crossing the line. Configurations: each layer hidden in turn, the
+  // dynamic layers isolated, and the SVG renderer as the old baseline. The result prints as a
   // table and downloads as JSON, so a perf report is a file rather than a screenshot relay.
   const [benchOn, setBenchOn] = useState(false)
   const benchStatusRef = useRef<HTMLDivElement>(null)
   const benchAbortRef = useRef(false)
   const runBench = useCallback(async () => {
     if (viewRef.current !== 'live' || cars.length === 0) return
-    const SETTLE_MS = 600
-    const RECORD_MS = 3500
     const SEGMENTS: Array<{ name: string; canvas: boolean; hide: string[] }> = [
       { name: 'baseline', canvas: true, hide: [] },
       { name: 'no-trees', canvas: true, hide: ['trees'] },
@@ -1734,19 +1733,41 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       { name: 'svg-mode', canvas: false, hide: [] },
     ]
     const sleep = (ms: number) => new Promise((r) => { setTimeout(r, ms) })
-    // rAF deltas for a stretch of wall time, alongside the canvas paint totals those frames logged.
-    const record = (ms: number) => new Promise<{ deltas: number[]; paintMs: number; paintN: number }>((resolve) => {
+    // The followed car's lap fraction, when it is actually lapping: in the pit lane (or on the
+    // grid) `prog` measures something else, so those frames cannot vote on a crossing.
+    const lapOf = () => {
+      const fid = followRef.current
+      const s = fid ? sampleRef.current(fid) : null
+      return s && !s.pit && s.gridSlot == null ? s.prog : null
+    }
+    // Frames until the followed car next crosses the line: rAF deltas, plus the canvas paint totals
+    // those frames logged. A lap that never completes (race over, car parked) times out rather than
+    // hanging the run.
+    const TIMEOUT_MS = 240000
+    const untilCrossing = (collect: boolean) => new Promise<{
+      deltas: number[]; paintMs: number; paintN: number; seconds: number; timedOut: boolean
+    }>((resolve) => {
       const deltas: number[] = []
       let paintMs = 0
       let paintN = 0
-      let last = performance.now()
-      const until = last + ms
+      const start = performance.now()
+      let last = start
+      let prev = lapOf()
       const loop = (now: number) => {
-        deltas.push(now - last)
+        if (collect) {
+          deltas.push(now - last)
+          const p = Object.values(paintStatsRef.current).reduce((s, v) => s + v, 0)
+          if (p > 0) { paintMs += p; paintN++ }
+        }
         last = now
-        const p = Object.values(paintStatsRef.current).reduce((s, v) => s + v, 0)
-        if (p > 0) { paintMs += p; paintN++ }
-        if (now >= until || benchAbortRef.current) { resolve({ deltas, paintMs, paintN }); return }
+        const prog = lapOf()
+        const crossed = prev != null && prog != null && prev > 0.7 && prog < 0.3
+        if (prog != null) prev = prog
+        const timedOut = now - start > TIMEOUT_MS
+        if (crossed || timedOut || benchAbortRef.current) {
+          resolve({ deltas, paintMs, paintN, seconds: (now - start) / 1000, timedOut })
+          return
+        }
         requestAnimationFrame(loop)
       }
       requestAnimationFrame(loop)
@@ -1770,20 +1791,26 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     onFollow(leader.id)
     camRef.current.z = 20
     applyCam()
-    const segments: Array<Record<string, number | string>> = []
+    const segments: Array<Record<string, number | string | boolean>> = []
     try {
+      status('waiting for the leader to cross the line…')
+      await untilCrossing(false)
       for (let i = 0; i < SEGMENTS.length; i++) {
         const seg = SEGMENTS[i]
         if (benchAbortRef.current) break
-        status(`bench ${i + 1}/${SEGMENTS.length}  ${seg.name}`)
+        status(`bench ${i + 1}/${SEGMENTS.length}  ${seg.name}  (one lap)`)
         setCanvasOn(seg.canvas)
         setHidden(new Set(seg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>)
         paintStatsRef.current = {}
-        await sleep(SETTLE_MS)
         const t0 = { ...tickStatsRef.current }
-        const r = await record(RECORD_MS)
+        const r = await untilCrossing(true)
         const t1 = tickStatsRef.current
-        const sorted = [...r.deltas].sort((a, b) => a - b)
+        // The first beat of a segment pays the configuration switch itself (a React render the
+        // benchmark caused, not the game) — those frames don't get to vote.
+        let skipped = 0
+        let skipMs = 0
+        while (skipped < r.deltas.length && skipMs < 300) skipMs += r.deltas[skipped++]
+        const sorted = r.deltas.slice(skipped).sort((a, b) => a - b)
         const mean = sorted.reduce((s, v) => s + v, 0) / Math.max(1, sorted.length)
         const worst = sorted.slice(-Math.max(1, Math.round(sorted.length * 0.01)))
         segments.push({
@@ -1795,7 +1822,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           longFrames: sorted.filter((d) => d > 25).length,
           paintMs: +(r.paintN > 0 ? r.paintMs / r.paintN : 0).toFixed(2),
           tickMs: +(t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0).toFixed(2),
+          lapSec: +r.seconds.toFixed(1),
+          ...(r.timedOut ? { timedOut: true } : {}),
         })
+        if (r.timedOut) break
       }
     } finally {
       setHidden(new Set(prev.hidden))
@@ -1825,7 +1855,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     status(benchAbortRef.current ? 'bench aborted' : 'bench done — report downloaded')
     await sleep(2500)
     setBenchOn(false)
-  }, [cars, layout.circuitId, onFollow, applyCam])
+  }, [cars, layout.circuitId, onFollow, applyCam, sampleRef])
   useEffect(() => {
     benchKeyRef.current = () => {
       if (benchRef.current) benchAbortRef.current = true
