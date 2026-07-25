@@ -525,9 +525,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         if (el) {
           const nodes = worldRef.current?.querySelectorAll('*').length ?? 0
           const fps = Math.round((frames * 1000) / (now - since))
+          // Where the nodes actually are, per tagged subtree, rather than a guess at the split.
+          const world = worldRef.current
+          const by = ['scenery', 'boxes', 'cars'].map((k) => {
+            const n = [...(world?.querySelectorAll(`[data-cost="${k}"]`) ?? [])]
+              .reduce((sum, g) => sum + 1 + g.querySelectorAll('*').length, 0)
+            return `${k} ${n}`
+          }).join('  ')
           const offList = [...hiddenRef.current].join(',')
-          el.textContent = `${fps} fps  ${nodes} nodes  ${maxTreesRef.current} trees`
-            + `${offList ? `  off: ${offList}` : ''}`
+          el.textContent = `${fps} fps  ${nodes} nodes  |  ${by}`
+            + `${offList ? `  |  off: ${offList}` : ''}`
         }
         frames = 0
         since = now
@@ -1523,7 +1530,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Grass ground plane, far beyond the canvas so the camera never sees the edge of the world.
                 The static map view drops the scenery for a clean dark minimap. */}
             <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
-            {view === 'live' && sceneryNode}
+            <g data-cost="scenery">{view === 'live' && sceneryNode}</g>
             {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
@@ -1549,7 +1556,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 <path d={pitZone.limiterOut} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
               </g>
             )}
-            <g style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
+            <g data-cost="boxes" style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
             {pitSlots.map((s, i) => (
               <g key={`pl${i}`} transform={`translate(${s.x} ${s.y}) rotate(${(s.rot * 180) / Math.PI})`}>
                 {/* Everything inside flips so the garage faces AWAY from the lane (measured per slot). */}
@@ -1703,7 +1710,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Invisible: the computed racing line the cars actually drive (sampled per frame). */}
             <path ref={raceLineRef} fill="none" stroke="none" />
           </svg>
-          {cars.map((car) => (
+          <div data-cost="cars" className="contents">{cars.map((car) => (
             <div
               key={car.id}
               ref={(el) => {
@@ -1782,7 +1789,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                   </div>
                 )}
             </div>
-          ))}
+          ))}</div>
         </div>
         {pinnedCard && view === 'live' && (
           <div ref={tipRef} className="absolute left-0 top-0 pointer-events-none" style={{ opacity: 0 }}>
