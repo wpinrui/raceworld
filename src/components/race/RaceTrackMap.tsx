@@ -5,7 +5,8 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import {
-  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, type Cull,
+  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE,
+  type Cull, type Hidden, type SceneryPiece,
 } from './SceneryLayer'
 import {
   MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowOpacity, shadowReach,
@@ -54,6 +55,18 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
+/** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it. */
+const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes'> = {
+  1: 'trees',
+  2: 'shadows',
+  3: 'buildings',
+  4: 'stands',
+  5: 'furniture',
+  6: 'kerbs',
+  7: 'pit',
+  8: 'ground',
+  9: 'boxes',
+}
 /** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
  *  closely than it tracks anything else, so scenery is shed to hold this line. */
 const NODE_BUDGET = 4000
@@ -474,15 +487,26 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // into a text node from its own rAF loop, so measuring the map costs the map nothing. Node count
   // comes with it because that is the number the frame rate actually tracks on this renderer.
   const [hud, setHud] = useState(false)
-  const [kerbsOn, setKerbsOn] = useState(true)
-  const kerbsOnRef = useRef(true)
+  // One hotkey per category, so what is expensive can be MEASURED instead of reasoned about. Each key
+  // skips rendering that category outright rather than hiding it, so the node count moves with it.
+  const [hidden, setHidden] = useState<ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes'>>(() => new Set())
+  const hiddenRef = useRef<ReadonlySet<string>>(hidden)
+  const [budgetOn, setBudgetOn] = useState(false)
   const hudRef = useRef<HTMLDivElement>(null)
-  useEffect(() => { kerbsOnRef.current = kerbsOn }, [kerbsOn])
+  useEffect(() => { hiddenRef.current = hidden }, [hidden])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return
       if (e.key === '`') setHud((v) => !v)
-      if (e.key === 'k' || e.key === 'K') setKerbsOn((v) => !v)
+      if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
+      const piece = HOTKEYS[e.key]
+      if (!piece) return
+      setHidden((prev) => {
+        const next = new Set(prev)
+        if (next.has(piece)) next.delete(piece)
+        else next.add(piece)
+        return next
+      })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -500,8 +524,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         if (el) {
           const nodes = worldRef.current?.querySelectorAll('*').length ?? 0
           const fps = Math.round((frames * 1000) / (now - since))
-          el.textContent = `${fps} fps  ${nodes}/${NODE_BUDGET} nodes  ${maxTreesRef.current} trees`
-            + `${kerbsOnRef.current ? '' : '  kerbs off'}`
+          const offList = [...hiddenRef.current].join(',')
+          el.textContent = `${fps} fps  ${nodes} nodes  ${maxTreesRef.current} trees`
+            + `${offList ? `  off: ${offList}` : ''}`
         }
         frames = 0
         since = now
@@ -1414,11 +1439,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // zoom and how much scenery happens to be in shot — so it is measured every half second and the
   // tree allowance is steered toward the budget rather than guessed at. An estimate would drift from
   // the renderer the moment the renderer changed.
-  const [maxTrees, setMaxTrees] = useState(NODE_BUDGET)
-  const maxTreesRef = useRef(NODE_BUDGET)
+  const [maxTrees, setMaxTrees] = useState(Infinity)
+  const maxTreesRef = useRef<number>(Infinity)
   const nodesRef = useRef(0)
   useEffect(() => {
     const id = setInterval(() => {
+      if (!budgetOn) {
+        if (maxTreesRef.current !== Infinity) {
+          maxTreesRef.current = Infinity
+          setMaxTrees(Infinity)
+        }
+        return
+      }
       const n = worldRef.current?.querySelectorAll('*').length ?? 0
       if (!n) return
       nodesRef.current = n
@@ -1434,7 +1466,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       setMaxTrees(clamped)
     }, 500)
     return () => clearInterval(id)
-  }, [scenery.trees.length])
+  }, [scenery.trees.length, budgetOn])
+
+  // Only the scenery categories, narrowed for the layers that take them.
+  const hide = useMemo(() => hidden as Hidden, [hidden])
 
   // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
   // corner at a time. Same disc the trees use.
@@ -1448,20 +1483,20 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // One fake sun for the whole map. A low afternoon light is the dry-race default; moods become
   // data here later (weather, night) rather than separate rendering paths.
   const sceneryNode = useMemo(
-    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, lodLow],
+    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} hide={hide} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, hide, lodLow],
   )
   const shadowNode = useMemo(
-    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, lodLow],
+    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, hide, lodLow],
   )
   const solidsNode = useMemo(
-    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, lodLow],
+    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, hide, lodLow],
   )
   const furnitureNode = useMemo(
-    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, lodLow],
+    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} hide={hide} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, hide, lodLow],
   )
 
   return (
@@ -1488,7 +1523,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 The static map view drops the scenery for a clean dark minimap. */}
             <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             {view === 'live' && sceneryNode}
-            {pitZone && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
+            {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
             <path ref={pathRef} d={layout.d} fill="none" stroke="#D8D8D2" strokeWidth={u(TRACK_WIDTH_M)} strokeLinejoin="round" />
@@ -1502,9 +1537,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's
                 track-side line, entry/exit guide lines reaching onto the track, the white–blue–white
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
-            {pitZone && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
-            {pitZone && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
-            {pitZone && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
+            {pitZone && !hidden.has('pit') && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
+            {pitZone && !hidden.has('pit') && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
+            {pitZone && !hidden.has('pit') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
             {pitZone && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
@@ -1513,6 +1548,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 <path d={pitZone.limiterOut} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
               </g>
             )}
+            <g style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
             {pitSlots.map((s, i) => (
               <g key={`pl${i}`} transform={`translate(${s.x} ${s.y}) rotate(${(s.rot * 180) / Math.PI})`}>
                 {/* Everything inside flips so the garage faces AWAY from the lane (measured per slot). */}
@@ -1617,8 +1653,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 </g>
               </g>
             ))}
+            </g>
             {/* Red/white kerbs through the corners. */}
-            {kerbsOn && visibleKerbs.map((k, i) => (
+            {!hidden.has('kerbs') && visibleKerbs.map((k, i) => (
               <g key={`k${i}`}>
                 <path d={k.ribbon} fill="#E6E3DC" />
                 <path d={k.blocks} fill="#C8352F" />

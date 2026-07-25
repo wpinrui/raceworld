@@ -60,11 +60,13 @@ function toLocal(x: number, y: number, rot: number): { x: number; y: number } {
   return { x: x * c - y * s, y: x * s + y * c }
 }
 
-export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; detail?: 'full' | 'low'
+export function SceneryLayer({ scenery, u, lighting, hide, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; hide?: Hidden
+  detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const dir = lightDir(lighting)
+  const noGround = hide?.has('ground') ?? false
   return (
     <g>
       <defs>
@@ -134,13 +136,13 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
       {/* Relief, lowest band up. Each band gets a dark copy offset down-right underneath it, so the
           terrace steps catch the same top-left key light as every prop shadow. Big paths, few of
           them — they stay affordable at full zoom-out, which is where the flat plane showed. */}
-      {scenery.bands.map((b, i) => (
+      {!noGround && scenery.bands.map((b, i) => (
         <path key={`hb${i}`} d={b.d} fillRule="evenodd" fill={b.fill} opacity={b.soft ? 0.30 : 1} />
       ))}
 
       {/* Field patchwork: the quilt of cultivated land a circuit sits in. A single flat green was
           the main reason the surround read as a runway extending forever. */}
-      {scenery.fields.map((f, i) => (
+      {!noGround && scenery.fields.map((f, i) => (
         <g key={`fd${i}`}>
           <path d={f.d} fill={f.fill} opacity={0.75} />
           {/* Crop rows and hedgerows are per-field detail; zoomed out only the tint is legible, and
@@ -166,9 +168,9 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
  *  tarmac painted straight over every shadow and they stopped dead at the grass verge. Drawing them
  *  here is safe because the generator guarantees no prop overlaps the track — see
  *  track-scenery.test.ts — so nothing casting a shadow can be occluded by the road it falls on. */
-export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees, detail = 'full' }: {
+export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees, hide, detail = 'full' }: {
   scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number
-  cull?: Cull | null; maxTrees?: number; detail?: 'full' | 'low'
+  cull?: Cull | null; maxTrees?: number; hide?: Hidden; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
@@ -180,6 +182,7 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
   const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
+  if (hide?.has('shadows')) return null
   return (
     <g>
 
@@ -215,7 +218,7 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
       {full && (
         <path
           fill={shFill} opacity={shOp * 0.55}
-          d={visibleTrees(scenery.trees, cull, maxTrees).map((t) => {
+          d={(hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees)).map((t) => {
             const trunk = u(t.h * EXTRUDE)
             const len = trunk * treeShadowRatio(reach)
             // Stretch the canopy about its own centre along the light, then plant it at the base of
@@ -245,6 +248,11 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
  *  everything, which is what the preview and the static map want. */
 export interface Cull { cx: number; cy: number; r: number }
 
+/** Categories the diagnostic hotkeys can switch off. Rendering is SKIPPED rather than hidden, so the
+ *  node count moves with the toggle and the experiment measures what it claims to. */
+export type SceneryPiece = 'trees' | 'shadows' | 'buildings' | 'stands' | 'furniture' | 'ground'
+export type Hidden = ReadonlySet<SceneryPiece>
+
 /** Trees inside the cull disc, capped at a budget. Their own radius is added to the test so one
  *  straddling the edge is not dropped while half of it is still on screen.
  *
@@ -266,16 +274,16 @@ export function visibleTrees<T extends { x: number; y: number; r: number }>(
 }
 
 /** The solids themselves: walls, roofs, stands and canopies, all above the shadows. */
-export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees, detail = 'full' }: {
+export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees, hide, detail = 'full' }: {
   scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number
-  cull?: Cull | null; maxTrees?: number; detail?: 'full' | 'low'
+  cull?: Cull | null; maxTrees?: number; hide?: Hidden; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const dir = dirAt(view)
   // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
-  const treesByDepth = visibleTrees(scenery.trees, cull, maxTrees)
+  const treesByDepth = (hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees))
     .map((t, i) => ({ ...t, i }))
     .sort((a, b) => (a.x * dir.x + a.y * dir.y) - (b.x * dir.x + b.y * dir.y))
   // Trees lean exactly as much as buildings do. Giving them their own, steeper lean put two
@@ -285,7 +293,7 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
     <g>
       {/* Walls: the swept band from roof outline to base outline, as one silhouette. The roof is
           painted over its near half below, leaving only the faces that actually face the camera. */}
-      {full && scenery.buildings.map((r, i) => {
+      {full && !hide?.has('buildings') && scenery.buildings.map((r, i) => {
         const t = u(heightM(r) * EXTRUDE)
         const o = toLocal(dir.x * t, dir.y * t, r.rot)
         const parts = partsOf(r)
@@ -309,7 +317,7 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
       {/* Grandstands rake: the trackside front barely lifts, the rear lifts a long way, so the deck
           climbs away from the circuit like real seating. Extruded uniformly they read as office
           blocks parked beside the track — they are a bank of seats, not a building. */}
-      {scenery.stands.map((s, i) => {
+      {!hide?.has('stands') && scenery.stands.map((s, i) => {
         const t = u(STAND_REAR_M * EXTRUDE)
         const o = toLocal(dir.x * t, dir.y * t, s.rot)
         const { hull, deck, roof } = rakedStand(
@@ -330,7 +338,7 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
         )
       })}
 
-      {scenery.buildings.map((b, i) => {
+      {!hide?.has('buildings') && scenery.buildings.map((b, i) => {
         const d = partsPath(partsOf(b))
         return (
           <g key={`b${i}`} transform={`translate(${b.x} ${b.y}) rotate(${deg(b.rot)})`}>
@@ -369,8 +377,9 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
  *  them with the rest of the scenery (which is painted before the ribbon) would bury them under it.
  *  All long polylines, so both LOD tiers can afford them — they are what makes the place read as a
  *  racing circuit rather than a road. */
-export function TrackFurnitureLayer({ scenery, u, lighting, view, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; detail?: 'full' | 'low'
+export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; hide?: Hidden
+  detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const dir = dirAt(view)
@@ -406,6 +415,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, detail = 'full
       ))}
     </g>
   ))
+  if (hide?.has('furniture')) return null
   return (
     <g>
       {/* Furniture obeys the same light as the buildings. Without this the fencing reads as a painted
