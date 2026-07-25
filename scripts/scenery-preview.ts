@@ -82,9 +82,7 @@ for (const id of ids) {
       renderToStaticMarkup(createElement('path', {
         d: k.d, fill: 'none', stroke: '#E6E3DC', strokeWidth: u(1.3), strokeLinecap: 'round',
       })),
-      renderToStaticMarkup(createElement('path', {
-        d: k.d, fill: 'none', stroke: '#C8352F', strokeWidth: u(1.3), strokeDasharray: `${u(3)} ${u(3)}`,
-      })),
+      renderToStaticMarkup(createElement('path', { d: k.blocks, fill: '#C8352F' })),
     ]),
     renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
     renderToStaticMarkup(createElement(ScenerySolidsLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),

@@ -1,10 +1,13 @@
 'use client'
 
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
+import { KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE } from './SceneryLayer'
+import {
+  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, type Cull,
+} from './SceneryLayer'
 import {
   MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowOpacity, shadowReach,
 } from '@/lib/ui/lighting'
@@ -52,6 +55,10 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
+/** How much wider than the viewport the tree-cull disc is drawn, and how far the camera may travel
+ *  inside it before the set is recomputed. Together they decide how often culling costs a re-render. */
+const CULL_MARGIN = 1.45
+const CULL_SLACK = 0.3
 /** Quiet period after the last rotation input before the scene is rebuilt on the new bearing. */
 const ROT_SETTLE_MS = 120
 const GANTRY_H_M = 2.2
@@ -455,6 +462,86 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const [lodLow, setLodLow] = useState(false)
   const lodLowRef = useRef(false)
 
+  const vb = useMemo(() => {
+    const m = TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8
+    const [x, y, w, h] = layout.viewBox.split(' ').map(Number)
+    return { x: x - m, y: y - m, w: w + 2 * m, h: h + 2 * m }
+  }, [layout.viewBox, layout.metresPerUnit])
+
+  // Frame-rate readout, toggled with the backtick. Deliberately not React state: it writes straight
+  // into a text node from its own rAF loop, so measuring the map costs the map nothing. Node count
+  // comes with it because that is the number the frame rate actually tracks on this renderer.
+  const [hud, setHud] = useState(false)
+  const [kerbsOn, setKerbsOn] = useState(true)
+  const kerbsOnRef = useRef(true)
+  const hudRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { kerbsOnRef.current = kerbsOn }, [kerbsOn])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) return
+      if (e.key === '`') setHud((v) => !v)
+      if (e.key === 'k' || e.key === 'K') setKerbsOn((v) => !v)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  useEffect(() => {
+    if (!hud) return
+    let raf = 0
+    let frames = 0
+    let since = performance.now()
+    const tick = () => {
+      frames++
+      const now = performance.now()
+      if (now - since >= 500) {
+        const el = hudRef.current
+        if (el) {
+          const nodes = worldRef.current?.querySelectorAll('*').length ?? 0
+          const fps = Math.round((frames * 1000) / (now - since))
+          el.textContent = `${fps} fps  ${nodes} nodes${kerbsOnRef.current ? '' : '  kerbs off'}`
+        }
+        frames = 0
+        since = now
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [hud])
+
+  // Trees only exist at FULL detail, which is racing zoom — exactly when the least of the circuit is
+  // on screen and the most of it is still in the DOM being repainted as the camera follows a car.
+  // So they are culled to a disc around what is visible.
+  //
+  // Committed through state with hysteresis, never per frame: the disc is deliberately larger than
+  // the viewport, and it only moves once the camera has left a good fraction of it. A tree therefore
+  // appears well outside the frame and the set changes a handful of times a lap, not sixty times a
+  // second.
+  const [cull, setCull] = useState<Cull | null>(null)
+  const cullRef = useRef<Cull | null>(null)
+  const updateCull = useCallback(() => {
+    const outer = outerRef.current
+    const { w: sw } = stageDimsRef.current
+    if (!outer || !sw) return
+    const cam = camRef.current
+    const ppu = sw / vb.w // px per viewBox unit before the camera transform
+    // Undo the world transform to find where the viewport centre lands in the drawn scene.
+    const cos = Math.cos(-cam.rot)
+    const sin = Math.sin(-cam.rot)
+    const qx = (-cam.x * cos - -cam.y * sin) / cam.z
+    const qy = (-cam.x * sin + -cam.y * cos) / cam.z
+    const next: Cull = {
+      cx: vb.x + vb.w / 2 + qx / ppu,
+      cy: vb.y + vb.h / 2 + qy / ppu,
+      r: (Math.hypot(outer.clientWidth, outer.clientHeight) / 2 / cam.z / ppu) * CULL_MARGIN,
+    }
+    const prev = cullRef.current
+    if (prev && Math.hypot(next.cx - prev.cx, next.cy - prev.cy) < prev.r * CULL_SLACK
+      && Math.abs(next.r - prev.r) < prev.r * CULL_SLACK) return
+    cullRef.current = next
+    setCull(next)
+  }, [vb])
+
   // Rebuilding the world on a new bearing means regenerating every path that carries height, which is
   // a full re-render of a few thousand nodes. Far too slow to do on each frame of a rotate, so the
   // camera turns on its own (the transform is imperative and cheap) and the SOLIDS catch up once the
@@ -466,19 +553,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }
   useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current) }, [])
 
-  const applyCam = () => {
+  const applyCam = useCallback(() => {
     const world = worldRef.current
     if (!world) return
     const { x, y, z, rot } = camRef.current
     world.style.transform = `translate(${x}px, ${y}px) rotate(${rot}rad) scale(${z})`
     world.style.setProperty('--cam-rot', `${rot}rad`)
     world.style.setProperty('--cam-zoom-inv', String(1 / z))
+    updateCull()
     const low = z < LOD_ZOOM && viewRef.current === 'live'
     if (low !== lodLowRef.current) {
       lodLowRef.current = low
       setLodLow(low)
     }
-  }
+  }, [updateCull])
+
 
   // Real-world metres -> viewBox units for this track.
   const u = (metres: number) => metres / layout.metresPerUnit
@@ -586,11 +675,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     return out
   }, [cars, slotOf])
 
-  const vb = useMemo(() => {
-    const m = TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8
-    const [x, y, w, h] = layout.viewBox.split(' ').map(Number)
-    return { x: x - m, y: y - m, w: w + 2 * m, h: h + 2 * m }
-  }, [layout.viewBox, layout.metresPerUnit])
 
   // Fit an inner stage of the track's exact aspect ratio inside whatever box we're given, so the marker
   // layer's percentage coordinates line up with the SVG at any viewport size.
@@ -644,7 +728,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     outer.addEventListener('wheel', onWheel, { passive: false })
     return () => outer.removeEventListener('wheel', onWheel)
-  }, [])
+  }, [applyCam])
 
   const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean; mode: 'pan' | 'rotate' } | null>(null)
   const suppressClickRef = useRef(false)
@@ -721,7 +805,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
     setCamRot(camRef.current.rot)
     applyCam()
-  }, [view, defaultRot])  
+  }, [view, defaultRot, applyCam])  
 
   // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
@@ -1291,7 +1375,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign, ldir, lighting])
+  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign, ldir, lighting, applyCam])
 
   // S/F line: a chequered band (3 rows of 0.5m squares) spanning EXACTLY the tarmac width.
   const sf = useMemo(() => {
@@ -1322,6 +1406,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }),
     [layout, sceneryDensity],
   )
+  // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
+  // corner at a time. Same disc the trees use.
+  const visibleKerbs = useMemo(
+    () => (cull
+      ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cull.cx, k.cy - cull.cy) <= cull.r + k.r)
+      : scenery.kerbs),
+    [scenery.kerbs, cull],
+  )
+
   // One fake sun for the whole map. A low afternoon light is the dry-race default; moods become
   // data here later (weather, night) rather than separate rendering paths.
   const sceneryNode = useMemo(
@@ -1329,12 +1422,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     [scenery, layout.metresPerUnit, lighting, lodLow],
   )
   const shadowNode = useMemo(
-    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, lodLow],
+    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, cull, lodLow],
   )
   const solidsNode = useMemo(
-    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, lodLow],
+    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, cull, lodLow],
   )
   const furnitureNode = useMemo(
     () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
@@ -1350,6 +1443,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
+      {hud && (
+        <div
+          ref={hudRef}
+          className="absolute left-2 top-2 z-30 rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-[#FFFFFF]"
+        />
+      )}
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
         <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
@@ -1489,10 +1588,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               </g>
             ))}
             {/* Red/white kerbs through the corners. */}
-            {scenery.kerbs.map((k, i) => (
+            {kerbsOn && visibleKerbs.map((k, i) => (
               <g key={`k${i}`}>
-                <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(1.3)} strokeLinecap="round" />
-                <path d={k.d} fill="none" stroke="#C8352F" strokeWidth={u(1.3)} strokeDasharray={`${u(3)} ${u(3)}`} />
+                <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(KERB_WIDTH_M)} strokeLinecap="round" />
+                <path d={k.blocks} fill="#C8352F" />
               </g>
             ))}
             {/* Scenery shadows fall across the tarmac, so they draw AFTER every piece of track

@@ -16,6 +16,7 @@ import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
   TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts, buildTyreWalls,
+  kerbBlocks,
   type SceneryFence, type SceneryField, type SceneryMarshal, type SceneryTyreWall,
 } from './scenery-props'
 
@@ -47,7 +48,17 @@ export interface SceneryTree {
    *  real footprint instead of re-deriving it from the path string. */
   x: number; y: number; r: number
 }
-export interface SceneryKerb { d: string }
+/** Painted width of a kerb and the pitch of its red blocks, in metres. */
+export const KERB_WIDTH_M = 1.3
+export const KERB_BLOCK_M = 3
+
+export interface SceneryKerb {
+  d: string
+  /** The red blocks, pre-built as fillable geometry rather than left to a dashed stroke. */
+  blocks: string
+  /** Bounding disc, so a kerb far from the camera can be skipped outright. */
+  cx: number; cy: number; r: number
+}
 
 export interface SceneryDensity { trees?: number; buildings?: number }
 
@@ -231,7 +242,19 @@ export function buildScenery(
           y: p.y + outSign * t.x * kerbOffset * side,
         })
       }
-      if (pts.length >= 2) kerbs.push({ d: smoothOpenPath(pts) })
+      if (pts.length >= 2) {
+        const xs = pts.map((p) => p.x)
+        const ys = pts.map((p) => p.y)
+        const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+        const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+        kerbs.push({
+          d: smoothOpenPath(pts),
+          blocks: kerbBlocks(pts, KERB_WIDTH_M / 2 / metresPerUnit, KERB_BLOCK_M / metresPerUnit),
+          cx,
+          cy,
+          r: Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))),
+        })
+      }
     }
   }
 

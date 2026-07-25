@@ -42,6 +42,48 @@ export interface TrackFrame {
   u: (m: number) => number
 }
 
+/** The red blocks of a kerb, as filled quads baked along its centreline.
+ *
+ *  These used to be a `strokeDasharray` on the kerb path, which is one attribute and looks free. It is
+ *  not: a dashed stroke is re-flattened, re-split and re-expanded on EVERY repaint, and the camera
+ *  transform repaints every frame. A lap's kerbs came to roughly two thousand dash segments recomputed
+ *  sixty times a second, which is why driving through a corner stuttered and driving down a straight
+ *  did not. Baked once, the rasteriser only has to fill polygons. */
+export function kerbBlocks(pts: Vec[], half: number, block: number): string {
+  if (pts.length < 2 || block <= 0) return ''
+  const cum = [0]
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y))
+  }
+  const total = cum[cum.length - 1]
+  const at = (s: number) => {
+    let k = 0
+    while (k < pts.length - 2 && cum[k + 1] < s) k++
+    const seg = cum[k + 1] - cum[k] || 1
+    const f = Math.max(0, Math.min(1, (s - cum[k]) / seg))
+    const dx = (pts[k + 1].x - pts[k].x) / seg
+    const dy = (pts[k + 1].y - pts[k].y) / seg
+    return {
+      x: pts[k].x + (pts[k + 1].x - pts[k].x) * f,
+      y: pts[k].y + (pts[k + 1].y - pts[k].y) * f,
+      nx: -dy * half,
+      ny: dx * half,
+    }
+  }
+  let d = ''
+  // Every other block interval is red; the white between them is the continuous stroke underneath.
+  for (let k = 0; k * block < total; k += 2) {
+    const a = at(k * block)
+    const b = at(Math.min(total, (k + 1) * block))
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue
+    d += `M ${(a.x + a.nx).toFixed(1)} ${(a.y + a.ny).toFixed(1)} `
+      + `L ${(b.x + b.nx).toFixed(1)} ${(b.y + b.ny).toFixed(1)} `
+      + `L ${(b.x - b.nx).toFixed(1)} ${(b.y - b.ny).toFixed(1)} `
+      + `L ${(a.x - a.nx).toFixed(1)} ${(a.y - a.ny).toFixed(1)} Z `
+  }
+  return d
+}
+
 /** Continuous debris fencing down both edges of the whole lap.
  *  Broken at the pit mouths, where the lane leaves and rejoins and there is no run to make. */
 export function buildFences(

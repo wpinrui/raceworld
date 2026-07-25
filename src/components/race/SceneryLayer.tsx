@@ -166,8 +166,9 @@ export function SceneryLayer({ scenery, u, lighting, detail = 'full' }: {
  *  tarmac painted straight over every shadow and they stopped dead at the grass verge. Drawing them
  *  here is safe because the generator guarantees no prop overlaps the track — see
  *  track-scenery.test.ts — so nothing casting a shadow can be occluded by the road it falls on. */
-export function SceneryShadowLayer({ scenery, u, lighting, view, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; detail?: 'full' | 'low'
+export function SceneryShadowLayer({ scenery, u, lighting, view, cull, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number
+  cull?: Cull | null; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
@@ -214,7 +215,7 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, detail = 'full'
       {full && (
         <path
           fill={shFill} opacity={shOp * 0.55}
-          d={scenery.trees.map((t) => {
+          d={visibleTrees(scenery.trees, cull).map((t) => {
             const trunk = u(t.h * EXTRUDE)
             const len = trunk * treeShadowRatio(reach)
             // Stretch the canopy about its own centre along the light, then plant it at the base of
@@ -240,16 +241,28 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, detail = 'full'
   )
 }
 
+/** A disc of the drawn scene worth rendering: centre and radius in viewBox units. Null renders
+ *  everything, which is what the preview and the static map want. */
+export interface Cull { cx: number; cy: number; r: number }
+
+/** Trees inside the cull disc. Their own radius is added so one straddling the edge is not dropped
+ *  while half of it is still on screen. */
+export function visibleTrees<T extends { x: number; y: number; r: number }>(trees: T[], cull?: Cull | null): T[] {
+  if (!cull) return trees
+  return trees.filter((t) => Math.hypot(t.x - cull.cx, t.y - cull.cy) <= cull.r + t.r)
+}
+
 /** The solids themselves: walls, roofs, stands and canopies, all above the shadows. */
-export function ScenerySolidsLayer({ scenery, u, lighting, view, detail = 'full' }: {
-  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number; detail?: 'full' | 'low'
+export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, detail = 'full' }: {
+  scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number
+  cull?: Cull | null; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
   const dir = dirAt(view)
   // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
-  const treesByDepth = scenery.trees
+  const treesByDepth = visibleTrees(scenery.trees, cull)
     .map((t, i) => ({ ...t, i }))
     .sort((a, b) => (a.x * dir.x + a.y * dir.y) - (b.x * dir.x + b.y * dir.y))
   // Trees lean exactly as much as buildings do. Giving them their own, steeper lean put two
