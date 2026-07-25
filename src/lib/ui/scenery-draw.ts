@@ -26,6 +26,9 @@ import type { Vec } from './geom'
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
  *  pattern the renderer supplies — the SVG layer resolves those to `url(#NAME)`, the canvas to a
  *  CanvasGradient. Keeping them symbolic is what stops paint leaking into the geometry. */
+/** A bounding disc in world units, conservative: everything the item draws lies inside it. */
+export interface Bounds { cx: number; cy: number; r: number }
+
 export interface DrawOp {
   d: string
   fill?: string
@@ -44,6 +47,12 @@ export interface DrawOp {
    *  canvas does: `Path2D` cannot report a bounding box, so anything gradient-filled has to carry the
    *  one it was built from or the ramp lands somewhere else entirely. Only set where it is needed. */
   bbox?: { x: number; y: number; w: number; h: number }
+  /** Where the op's ink actually lands, when its extent is knowable. The canvas skips ops whose
+   *  disc misses the viewport — the cull disc is deliberately wider than the screen, so most frames
+   *  most of the composed scene is pure rasteriser feed for pixels no one sees. Unset means "always
+   *  draw" (the ground, the road). Skipping is EXACT, never a level of detail: an op is either
+   *  entirely off screen or drawn whole. */
+  clip?: Bounds
 }
 
 /** True when a fill or stroke names a shared gradient or pattern rather than a plain colour. */
@@ -67,6 +76,8 @@ export interface DrawGroup {
   /** Radians. */
   rot: number
   ops: DrawOp[]
+  /** Same contract as an op's clip disc, covering the whole placed group. */
+  clip?: Bounds
 }
 
 export interface SolidDrawOpts extends TreeDrawOpts {
@@ -95,17 +106,21 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   const ops: DrawOp[] = []
   for (const t of depthSorted(trees, dir)) {
     const lift = o.u(t.h * o.extrude)
+    // Canopy at the tree's point, trunk running its lift toward the base: one disc holds both.
+    const clip = { cx: t.x, cy: t.y, r: t.r + lift + o.u(1) }
     ops.push({
       d: `M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * lift).toFixed(1)} ${(t.y + dir.y * lift).toFixed(1)}`,
       stroke: shadeFace('#6B5138', o.lighting),
       // Trunk width scales with the canopy it carries; a constant width made every tree a lollipop.
       width: Math.max(o.u(0.8), t.r * 0.34),
       cap: 'round',
+      clip,
     })
     ops.push({
       d: t.d,
       fill: `${REF}tm-tree${t.variant}`,
       bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
+      clip,
     })
   }
   return ops
@@ -118,6 +133,19 @@ export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp | nu
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const reach = shadowReach(o.lighting)
+  // The whole grove's disc, padded by the furthest any one shadow can stretch from its tree.
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+  let pad = 0
+  for (const t of trees) {
+    if (t.x < x0) x0 = t.x
+    if (t.y < y0) y0 = t.y
+    if (t.x > x1) x1 = t.x
+    if (t.y > y1) y1 = t.y
+    pad = Math.max(pad, 2 * t.r + 2 * o.u(t.h * o.extrude))
+  }
+  const clip = {
+    cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad,
+  }
   const d = trees.map((t) => {
     const lift = o.u(t.h * o.extrude)
     const len = lift * treeShadowRatio(reach)
@@ -136,7 +164,7 @@ export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp | nu
       return { x: cx + bx * ldir.x - ay * ldir.y, y: cy + bx * ldir.y + ay * ldir.x }
     })
   }).join(' ')
-  return { d, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) * 0.55 }
+  return { d, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) * 0.55, clip }
 }
 
 /** Furthest first, so the painter's order comes out right.
@@ -461,32 +489,31 @@ export type SceneItem = DrawOp | DrawGroup
 /** True for a placed group; a flat op has no `ops` of its own. */
 export const isGroup = (item: SceneItem): item is DrawGroup => 'ops' in item
 
-/** An item with its bounding disc, so composition can drop what the camera cannot see. */
-interface Placed<T> { item: T; cx: number; cy: number; r: number }
-
 /** The parts of a scene that do not depend on which trees or kerbs are in shot. Rebuilt only when
- *  the camera bearing, light or detail tier changes — a cull step only re-filters them. */
+ *  the camera bearing, light or detail tier changes — a cull step only re-filters them. Every item
+ *  carries its clip disc, which serves twice: composition drops what the CULL disc cannot hold,
+ *  and the canvas skips what the VIEWPORT cannot see on each frame. */
 interface StaticParts {
   key: string
   ground: DrawOp[]
-  shadowGroups: Placed<DrawGroup>[]
-  wallGroups: Placed<DrawGroup>[]
-  standGs: Placed<DrawGroup>[]
-  roofGs: Placed<DrawGroup>[]
-  runShadows: Placed<DrawOp>[]
+  shadowGroups: DrawGroup[]
+  wallGroups: DrawGroup[]
+  standGs: DrawGroup[]
+  roofGs: DrawGroup[]
+  runShadows: DrawOp[]
   /** Tyre walls split around the fencing exactly as the SVG furniture layer does: walls further
    *  from the viewer than the fence go under it, nearer ones over. */
-  farTyres: Placed<DrawOp[]>[]
-  fenceRuns: Placed<DrawOp[]>[]
-  nearTyres: Placed<DrawOp[]>[]
-  marshalGs: Placed<DrawGroup>[]
+  farTyres: DrawOp[]
+  fenceRuns: DrawOp[]
+  nearTyres: DrawOp[]
+  marshalGs: DrawGroup[]
 }
 
-const discOfRect = (r: { x: number; y: number; w: number; h: number }, pad: number) => ({
+const discOfRect = (r: { x: number; y: number; w: number; h: number }, pad: number): Bounds => ({
   cx: r.x, cy: r.y, r: Math.hypot(r.w, r.h) / 2 + pad,
 })
 
-const discOfPts = (pts: Vec[], pad: number) => {
+const discOfPts = (pts: Vec[], pad: number): Bounds => {
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
   for (const p of pts) {
     if (p.x < x0) x0 = p.x
@@ -495,6 +522,11 @@ const discOfPts = (pts: Vec[], pad: number) => {
     if (p.y > y1) y1 = p.y
   }
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad }
+}
+
+const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
+  item.clip = clip
+  return item
 }
 
 /** Everything here is heavy string-building (swept hulls, window grids) over the whole circuit, and
@@ -522,62 +554,59 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const runPad = o.u(25)
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
   const structDiscs = structures.map((r) => discOfRect(r, solidPad))
-  const runShadows: Placed<DrawOp>[] = []
-  const fenceRuns: Placed<DrawOp[]>[] = []
+  const runShadows: DrawOp[] = []
+  const fenceRuns: DrawOp[] = []
   if (o.full) {
     for (const t of scenery.tyreWalls) {
-      runShadows.push({ item: runShadowOp(t.pts, o.tyreM, treeOpts), ...discOfPts(t.pts, runPad) })
+      runShadows.push(stamp(runShadowOp(t.pts, o.tyreM, treeOpts), discOfPts(t.pts, runPad)))
     }
     for (const f of scenery.fences) {
-      runShadows.push({ item: { ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, ...discOfPts(f.pts, runPad) })
+      runShadows.push(stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, discOfPts(f.pts, runPad)))
     }
     fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM }).forEach((ops2, i) => {
-      fenceRuns.push({ item: ops2, ...discOfPts(scenery.fences[i].pts, runPad) })
+      const disc = discOfPts(scenery.fences[i].pts, runPad)
+      for (const op of ops2) fenceRuns.push(stamp(op, disc))
     })
   }
   // Tyre wall casings survive the cheap tier, like the SVG furniture layer's.
-  const tyres = scenery.tyreWalls.map((t) => ({
-    t, placed: { item: tyreWallOps(t, o.u, o.full), ...discOfPts(t.pts, runPad) },
-  }))
+  const tyres = scenery.tyreWalls.map((t) => {
+    const disc = discOfPts(t.pts, runPad)
+    return { t, ops: tyreWallOps(t, o.u, o.full).map((op) => stamp(op, disc)) }
+  })
   const parts: StaticParts = {
     key,
     ground: groundOps(scenery, o.u, { full: o.full, ground: o.ground }),
     shadowGroups: o.full
       ? structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM })
-        .map((g, i) => ({ item: g, ...structDiscs[i] }))
+        .map((g, i) => stamp(g, structDiscs[i]))
       : [],
     wallGroups: o.full
       ? buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM })
-        .map((g, i) => ({ item: g, ...discOfRect(scenery.buildings[i], solidPad) }))
+        .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad)))
       : [],
     standGs: standGroups(scenery.stands, {
       ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
-    }, o.full).map((g, i) => ({ item: g, ...discOfRect(scenery.stands[i], solidPad) })),
+    }, o.full).map((g, i) => stamp(g, discOfRect(scenery.stands[i], solidPad))),
     roofGs: buildingRoofGroups(scenery.buildings, o.full)
-      .map((g, i) => ({ item: g, ...discOfRect(scenery.buildings[i], solidPad) })),
+      .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
     runShadows,
-    farTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0).map(({ placed }) => placed),
+    farTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0).flatMap(({ ops }) => ops),
     fenceRuns,
-    nearTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0).map(({ placed }) => placed),
+    nearTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0).flatMap(({ ops }) => ops),
     marshalGs: o.full
       ? marshalGroups(scenery.marshals, {
         ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
-      }).map((g) => ({
+      }).map((g) => stamp<DrawGroup>({
         // The hut with its shadow as ONE group: the shadow op leads, painted with the shared
         // shadow ink, so the canvas draws what the SVG layer draws.
-        item: {
-          x: g.x,
-          y: g.y,
-          rot: g.rot,
-          ops: [
-            { ...g.shadow, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) },
-            ...g.ops,
-          ],
-        },
-        cx: g.x,
-        cy: g.y,
-        r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30),
-      }))
+        x: g.x,
+        y: g.y,
+        rot: g.rot,
+        ops: [
+          { ...g.shadow, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) },
+          ...g.ops,
+        ],
+      }, { cx: g.x, cy: g.y, r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30) }))
       : [],
   }
   staticCache.set(scenery, parts)
@@ -597,9 +626,9 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   const s = staticParts(scenery, o)
   const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
   const cull = o.cull
-  const keep = <T,>(xs: Placed<T>[]): T[] => (cull
-    ? xs.filter((p) => Math.hypot(p.cx - cull.cx, p.cy - cull.cy) <= cull.r + p.r)
-    : xs).map((p) => p.item)
+  const keep = <T extends SceneItem>(xs: T[]): T[] => (cull
+    ? xs.filter((i) => !i.clip || Math.hypot(i.clip.cx - cull.cx, i.clip.cy - cull.cy) <= cull.r + i.clip.r)
+    : xs)
 
   const items: SceneItem[] = []
   const mark = (name: string) => { marks?.push({ name, at: items.length }) }
@@ -635,9 +664,9 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   // the scenery — a fence in front of a grove reads as a fence, not a hedge decoration.
   mark('furniture')
   if (o.full) items.push(...keep(s.runShadows))
-  for (const w of keep(s.farTyres)) items.push(...w)
-  if (o.full) for (const f of keep(s.fenceRuns)) items.push(...f)
-  for (const w of keep(s.nearTyres)) items.push(...w)
+  items.push(...keep(s.farTyres))
+  if (o.full) items.push(...keep(s.fenceRuns))
+  items.push(...keep(s.nearTyres))
   if (o.full) items.push(...keep(s.marshalGs))
   return items
 }

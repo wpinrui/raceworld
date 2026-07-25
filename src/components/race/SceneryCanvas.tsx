@@ -119,6 +119,17 @@ export function drawScene(
   ctx.scale(cam.z * ppu * dpr, cam.z * ppu * dpr)
   ctx.translate(-(vb.x + vb.w / 2), -(vb.y + vb.h / 2))
   ctx.lineJoin = 'round'
+  // What the viewport can actually see, as a disc in world units: the scene is composed against
+  // the CULL disc (deliberately wider, moved with hysteresis), so on most frames much of it lies
+  // wholly off screen — feeding those ops to the rasteriser is work with no pixels. Skipping by
+  // each item's own conservative disc is exact: either entirely invisible, or drawn whole.
+  const k = cam.z * ppu
+  const cos = Math.cos(-cam.rot)
+  const sin = Math.sin(-cam.rot)
+  const viewX = vb.x + vb.w / 2 + (-cam.x * cos - -cam.y * sin) / k
+  const viewY = vb.y + vb.h / 2 + (-cam.x * sin + -cam.y * cos) / k
+  const viewR = (Math.hypot(size.w, size.h) / 2 / k) * 1.05
+  const offscreen = (c: NonNullable<SceneItem['clip']>) => Math.hypot(c.cx - viewX, c.cy - viewY) > viewR + c.r
   let m = 0
   let section = 'setup'
   let tPrev = timing ? performance.now() : 0
@@ -136,6 +147,7 @@ export function drawScene(
       }
     }
     const item = scene[i]
+    if (item.clip && offscreen(item.clip)) continue
     if (isGroup(item)) {
       ctx.save()
       ctx.translate(item.x, item.y)

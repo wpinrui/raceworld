@@ -76,8 +76,8 @@ const ids = argIds.length ? argIds : Object.keys(TRACK_LAYOUTS).sort()
 console.log(`Canvas per-frame cost at racing zoom (${RACE_Z}x, ${VIEW_W}x${VIEW_H}) over ${ids.length} layouts`)
 console.log('"whole" = the scene uncull\'d; "shot" = composed against the cull disc, which is what drawScene now walks.')
 console.log('"rebuild" = sceneryScene ms (median/worst of 30), whole vs culled — the culled figure is a cull commit\'s cost.\n')
-console.log('circuit            whole    shot    grads gradShot   cycles cycShot  |  rebuild whole    culled   trees all->cull')
-console.log('-'.repeat(118))
+console.log('circuit            whole    shot  drawn   grads  gDrawn  cycles  cDrawn  |  rebuild whole    culled   trees all->cull')
+console.log('-'.repeat(122))
 
 const totals = { pats: 0, grads: 0, cycles: 0 }
 for (const id of ids) {
@@ -163,8 +163,12 @@ for (const id of ids) {
     }
   }
 
-  const countOf = (cull: Disc | null) => {
-    const ops = sceneryScene(scenery, opts(cull)).flatMap((i) => ('ops' in i ? i.ops : [i]))
+  const countOf = (cull: Disc | null, view?: Disc) => {
+    const ops = sceneryScene(scenery, opts(cull))
+      // The draw-time viewport skip: items whose clip disc misses the view are never submitted.
+      .filter((i) => !view || !i.clip
+        || Math.hypot(i.clip.cx - view.cx, i.clip.cy - view.cy) <= view.r + i.clip.r)
+      .flatMap((i) => ('ops' in i ? i.ops : [i]))
     let pats = 0
     let grads = 0
     let cycles = 0
@@ -179,8 +183,12 @@ for (const id of ids) {
     }
     return { ops: ops.length, pats, grads, cycles, trees: treesFor(cull).length }
   }
+  const viewDisc = (at: Disc): Disc => ({
+    cx: at.cx, cy: at.cy, r: (Math.hypot(VIEW_W, VIEW_H) / 2 / RACE_Z / ppu) * 1.05,
+  })
   const whole = countOf(null)
   const shot = countOf(disc)
+  const drawn = countOf(disc, viewDisc(disc))
 
   const timeIt = (cull: Disc | null) => {
     const xs: number[] = []
@@ -198,9 +206,9 @@ for (const id of ids) {
   totals.grads += shot.grads
   totals.cycles += shot.cycles
   console.log(
-    `${id.padEnd(18)} ${String(whole.ops).padStart(5)} ${String(shot.ops).padStart(7)} `
-    + `${String(whole.grads).padStart(8)} ${String(shot.grads).padStart(8)} `
-    + `${String(Math.round(whole.cycles)).padStart(8)} ${String(Math.round(shot.cycles)).padStart(8)}  |  `
+    `${id.padEnd(18)} ${String(whole.ops).padStart(5)} ${String(shot.ops).padStart(7)} ${String(drawn.ops).padStart(6)} `
+    + `${String(whole.grads).padStart(7)} ${String(drawn.grads).padStart(7)} `
+    + `${String(Math.round(whole.cycles)).padStart(7)} ${String(Math.round(drawn.cycles)).padStart(7)}  |  `
     + `${full.med.toFixed(1).padStart(6)}/${full.max.toFixed(1).padStart(5)}  ${culled.med.toFixed(1).padStart(6)}/${culled.max.toFixed(1).padStart(5)}`
     + `   ${String(scenery.trees.length).padStart(5)}->${culledTrees.length}`,
   )
@@ -208,18 +216,19 @@ for (const id of ids) {
   if (argIds.includes(id)) {
     const stations = layout.trace
     const stride = Math.max(1, Math.floor(stations.length / 250))
-    const shots: Array<{ frac: number; c: ReturnType<typeof countOf> }> = []
+    const shots: Array<{ frac: number; c: ReturnType<typeof countOf>; v: ReturnType<typeof countOf> }> = []
     for (let i = 0; i < stations.length; i += stride) {
       const [sx, sy] = stations[i]
-      shots.push({ frac: i / stations.length, c: countOf({ cx: sx, cy: sy, r: disc.r }) })
+      const at = { cx: sx, cy: sy, r: disc.r }
+      shots.push({ frac: i / stations.length, c: countOf(at), v: countOf(at, viewDisc(at)) })
     }
-    const worst = [...shots].sort((a, b) => b.c.ops - a.c.ops).slice(0, 5)
-    console.log(`\n  Heaviest shots around the ${id} lap (fraction of lap -> composition):`)
+    const worst = [...shots].sort((a, b) => b.v.ops - a.v.ops).slice(0, 5)
+    console.log(`\n  Heaviest shots around the ${id} lap (fraction of lap -> composed vs drawn after viewport skip):`)
     for (const w of worst) {
       console.log(
-        `    ${(w.frac * 100).toFixed(0).padStart(3)}%  ops ${String(w.c.ops).padStart(4)}  `
-        + `trees ${String(w.c.trees).padStart(4)}  gradients ${String(w.c.grads).padStart(4)}  `
-        + `patterns ${String(w.c.pats).padStart(3)}  dash cycles ${String(Math.round(w.c.cycles)).padStart(4)}`,
+        `    ${(w.frac * 100).toFixed(0).padStart(3)}%  ops ${String(w.c.ops).padStart(4)} -> ${String(w.v.ops).padStart(4)} drawn  `
+        + `trees ${String(w.c.trees).padStart(4)}  gradients ${String(w.c.grads).padStart(4)} -> ${String(w.v.grads).padStart(4)}  `
+        + `dash cycles ${String(Math.round(w.c.cycles)).padStart(4)} -> ${String(Math.round(w.v.cycles)).padStart(4)}`,
       )
     }
     console.log('')

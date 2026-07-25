@@ -428,6 +428,19 @@ describe('sceneryScene', () => {
     expect(fenceTop, 'fencing paints over the trees, as trackside furniture').toBeGreaterThan(canopy)
   })
 
+  it('stamps solids, trees and furniture with clip discs; the ground and road stay unstamped', () => {
+    // The clip disc is what lets the canvas skip off-screen items exactly — an item without one is
+    // drawn every frame, which must remain true only for things that genuinely always show.
+    const track: DrawOp[] = [{ d: 'M 0 0 L 5 5', stroke: '#333333' }]
+    const items = sceneryScene(scenery, { ...sceneOpts, track })
+    expect(items.filter(isGroup).every((g) => g.clip), 'every group carries its disc').toBe(true)
+    const canopy = items.find(
+      (i) => !isGroup(i) && (refName(i.fill ?? '') ?? '').startsWith('tm-tree'),
+    ) as DrawOp
+    expect(canopy.clip, 'tree ops carry their disc').toBeTruthy()
+    expect(track[0].clip, 'the road is never skipped').toBeUndefined()
+  })
+
   it('drops what the cull disc cannot see but keeps the ground and the road', () => {
     const track: DrawOp[] = [{ d: 'M 0 0 L 5 5', stroke: '#333333' }]
     const far = sceneryScene(scenery, { ...sceneOpts, track, cull: { cx: 4000, cy: 4000, r: 10 } })

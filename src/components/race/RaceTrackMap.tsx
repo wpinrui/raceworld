@@ -1634,13 +1634,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const kerbs = hidden.has('kerbs') ? [] : (cullNow
       ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cullNow.cx, k.cy - cullNow.cy) <= cullNow.r + k.r)
       : scenery.kerbs
-    ).flatMap((k): DrawOp[] => [
-      { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' },
-      {
-        d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
-        dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
-      },
-    ])
+    ).flatMap((k): DrawOp[] => {
+      const clip = { cx: k.cx, cy: k.cy, r: k.r + u(KERB_WIDTH_M) }
+      return [
+        { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round', clip },
+        {
+          d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
+          dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 }, clip,
+        },
+      ]
+    })
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,

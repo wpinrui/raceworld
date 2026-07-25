@@ -15,7 +15,7 @@ import {
   tintFace,
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
-import type { DrawOp } from '@/lib/ui/scenery-draw'
+import type { Bounds, DrawOp } from '@/lib/ui/scenery-draw'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { EXTRUDE } from './SceneryLayer'
 
@@ -215,12 +215,25 @@ function shortName(name: string): string {
 }
 
 /** The garage floors, which go down BEFORE the lane's paint so its white edge line runs unbroken. */
+/** Conservative bounding disc of a point run, for the canvas's viewport skip. */
+function discOf(pts: Array<{ x: number; y: number }>, pad: number): Bounds {
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x
+    if (p.y < y0) y0 = p.y
+    if (p.x > x1) x1 = p.x
+    if (p.y > y1) y1 = p.y
+  }
+  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad }
+}
+
 export function pitFloorOps(
   zone: PitZone, lighting: Lighting, garageColor?: (i: number) => string | undefined,
 ): DrawOp[] {
   return zone.garageFloors.map((r, i) => ({
     d: ringPath(r),
     fill: shadeFace(garageColor?.(i) ?? '#2A2F38', lighting),
+    clip: discOf(r, 1),
   }))
 }
 
@@ -246,34 +259,43 @@ export function pitComplexOps(
   const plantTops = zone.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
   const shift = (d: string, k: number) => mapPathPoints(d, (x, y) => up({ x, y }, k))
 
+  // One disc for the whole-building pieces (its lane paint runs along the box row, so the garage
+  // floors are folded in), and one per garage for its mouth and lintel — driving down the pit
+  // straight at racing zoom, most garages are off screen even while the building is on it.
+  const complexClip = discOf(
+    [...zone.buildingPts, ...zone.upperPts, ...zone.garageFloors.flat()],
+    lift + cast + u(30),
+  )
+
   const ops: DrawOp[] = [
-    { d: sweptRing(zone.upperPts, ldir.x * cast, ldir.y * cast), fill: shadowFill(lighting), alpha: shadowOpacity(lighting) },
-    { d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall },
-    { d: obliqueRingFaces(lower, dir.x * mid, dir.y * mid), fill: ret },
+    { d: sweptRing(zone.upperPts, ldir.x * cast, ldir.y * cast), fill: shadowFill(lighting), alpha: shadowOpacity(lighting), clip: complexClip },
+    { d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall, clip: complexClip },
+    { d: obliqueRingFaces(lower, dir.x * mid, dir.y * mid), fill: ret, clip: complexClip },
   ]
   for (const [i, r] of zone.garageFloors.entries()) {
     const h = mid * 0.82
     const top = (p: { x: number; y: number }) => up(p, h)
     const lintel = (p: { x: number; y: number }) => up(p, h * 0.82)
-    ops.push({ d: quad(r[3], r[2], top(r[2]), top(r[3])), fill: '#161A21' })
-    ops.push({ d: quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3])), fill: garageColor?.(i) ?? '#9AA3B2' })
+    const clip = discOf(r, mid + u(2))
+    ops.push({ d: quad(r[3], r[2], top(r[2]), top(r[3])), fill: '#161A21', clip })
+    ops.push({ d: quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3])), fill: garageColor?.(i) ?? '#9AA3B2', clip })
   }
   ops.push(
-    { d: sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: wall },
-    { d: obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: ret },
-    { d: ringPath(upper), fill: litFace(PIT_WHITE, lighting) },
-    { d: shift(zone.roofSeams, lift), stroke: tintFace(PIT_WHITE, lighting, -0.16), width: u(0.18) },
-    { d: shift(zone.roofDeck, lift), fill: tintFace(PIT_WHITE, lighting, -0.22) },
+    { d: sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: wall, clip: complexClip },
+    { d: obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: ret, clip: complexClip },
+    { d: ringPath(upper), fill: litFace(PIT_WHITE, lighting), clip: complexClip },
+    { d: shift(zone.roofSeams, lift), stroke: tintFace(PIT_WHITE, lighting, -0.16), width: u(0.18), clip: complexClip },
+    { d: shift(zone.roofDeck, lift), fill: tintFace(PIT_WHITE, lighting, -0.22), clip: complexClip },
     {
       d: `M ${zone.roofRail.map((p) => { const q = onRoof(p); return `${q.x.toFixed(1)} ${q.y.toFixed(1)}` }).join(' L ')}`,
-      stroke: shadeFace(PIT_WHITE, lighting), width: u(0.35),
+      stroke: shadeFace(PIT_WHITE, lighting), width: u(0.35), clip: complexClip,
     },
-    { d: plantTops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.5) },
-    { d: plantTops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12) },
-    { d: zone.sep, stroke: '#F2F2F2', width: u(0.6), cap: 'round' },
-    { d: zone.sep, stroke: '#2E62C9', width: u(0.34), cap: 'round' },
-    { d: zone.limiterIn, stroke: '#F2F2F2', width: u(0.35), cap: 'butt' },
-    { d: zone.limiterOut, stroke: '#F2F2F2', width: u(0.35), cap: 'butt' },
+    { d: plantTops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.5), clip: complexClip },
+    { d: plantTops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12), clip: complexClip },
+    { d: zone.sep, stroke: '#F2F2F2', width: u(0.6), cap: 'round', clip: complexClip },
+    { d: zone.sep, stroke: '#2E62C9', width: u(0.34), cap: 'round', clip: complexClip },
+    { d: zone.limiterIn, stroke: '#F2F2F2', width: u(0.35), cap: 'butt', clip: complexClip },
+    { d: zone.limiterOut, stroke: '#F2F2F2', width: u(0.35), cap: 'butt', clip: complexClip },
   )
   return ops
 }
