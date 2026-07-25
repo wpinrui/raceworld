@@ -57,9 +57,10 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
-/** Frame-rate caps to cycle through; 0 is uncapped. A steady rate reads as smoother than a higher
- *  one that swings, so this is a real setting rather than only a diagnostic. */
-const FRAME_CAPS: number[] = [30, 45, 0]
+/** Frame-rate caps to cycle through, uncapped first. A steady rate reads as smoother than a higher
+ *  one that swings, so the cap stays available — but with the static world baked to an image there is
+ *  no longer a swing to steady, and capping a frame that already fits only throws frames away. */
+const FRAME_CAPS: number[] = [0, 30, 45]
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
@@ -501,7 +502,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const [budgetOn, setBudgetOn] = useState(false)
   const hudRef = useRef<HTMLDivElement>(null)
   // 0 means uncapped; cycled from the readout so the two can be compared directly.
-  const [bitmapOn, setBitmapOn] = useState(false)
+  // On by default: it is the fix, not an experiment. The hotkey stays so it can be compared.
+  const [bitmapOn, setBitmapOn] = useState(true)
   const staticRef = useRef<SVGGElement>(null)
   const [frameCap, setFrameCap] = useState(FRAME_CAPS[0])
   const frameCapRef = useRef(FRAME_CAPS[0])
