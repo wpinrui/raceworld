@@ -10,7 +10,7 @@
 |---|---|
 | **A** — one light, obeyed by everything | **Done.** `da38030`, `8870014`, `dbffd49`, `53d3079`, `bdbe467` |
 | **B** — cars in 3D | **Done.** `e035d57` + this commit. Preview: `npx tsx scripts/car-preview.ts` |
-| **C** — the track surface tells a story | Not started |
+| **C** — the track surface tells a story | **Done.** Circuit `f6f52fc`; pit lane `51b401a` |
 | **D** — the track has form | Not started |
 | **E** — moods | Not started (`MOODS` exists, nothing selects between them) |
 
@@ -209,6 +209,33 @@ own module rather than growing that file further.
 
 **Pause: preview, and a benchmark run before moving on.**
 
+### What shipped, and the half the plan forgot
+
+The circuit's half landed as [track-surface.ts](src/lib/ui/track-surface.ts) (`f6f52fc`), with one addition
+the plan did not call for: **surface grain**, a barely-perceptible mottling over the whole road, because a
+ribbon of constant colour turned out to be a bigger tell than any missing mark.
+
+**The plan wrote "the track surface" and meant only the circuit.** The pit lane is tarmac too, and it came
+out of the increment a flat grey slab with a hard cut into the grass, sitting next to a road that now had a
+worn line and an apron — most visible during a stop, which is the one time the camera parks. `51b401a`
+gives it the same treatment in its own vocabulary, since a pit lane has no racing line, no marbles and
+nothing that locks a wheel:
+
+- **The ink is now shared.** [surface-ink.ts](src/lib/ui/surface-ink.ts) holds what both surfaces are painted
+  with — opaque pre-blended colour, softness by nested strokes rather than blur, layer-major ordering, the
+  asphalt-into-verge fade — and [pit-surface.ts](src/lib/ui/pit-surface.ts) holds what only a pit lane has.
+  That also took `track-surface.ts` back under the 500-line cap.
+- **An apron and fade for the lane and the working apron**, drawn under the garage floors, which is what lets
+  the apron's fringe run toward the garages without any clamping: the floors and the building paint over it.
+- **A band worn down the fast lane**, ramped toward the exit — the only real traction event in a pit lane.
+- **Grime and a swing-out scuff per box**, the pit-lane answer to apex rubber and brake marks.
+- **Cost.** The lane's first cut put five whole-row fills and 54 box strokes into every pit-straight frame,
+  on the stretch this branch has already measured itself out of raster budget on. Rebuilt as cullable arcs,
+  with each box mark merged into one path per layer across the whole row: 93 ops and ~19k m² per shot at the
+  S/F line, against the circuit's own 66 ops and ~28k m² in the same shot. Same order, and in proportion.
+- **Parity proven, not assumed**: `canvas-order-preview` differs by exactly the same 102,026 pixels with the
+  new ops as without them.
+
 ---
 
 ## Increment D — the track has form
@@ -277,8 +304,10 @@ original design:
 | `src/lib/ui/lighting.test.ts` | **landed** — shadow vector/length/tint, mood invariants |
 | `src/lib/ui/scenery-draw.ts` | C, D: track-surface ops (rubber, skids, marbles, edge, camber, kerb faces) placed in `sceneryScene`'s order; E: a composite-mode field on `DrawOp` if the night pools stay |
 | `src/lib/ui/scenery-paint.ts` | E: honour the composite mode; any new `ref:` paint |
-| `src/components/race/SceneryLayer.tsx` | mirror the same ops so the reference renderer stays in parity |
-| **new** `src/lib/ui/track-surface.ts` | C, D live here, not in `RaceTrackMap.tsx` (see below) |
+| `src/components/race/SceneryLayer.tsx` | **landed** — `OpPaths` maps shared ops to `<path>`, so the reference renderer stays in parity |
+| **new** `src/lib/ui/track-surface.ts` | **landed** — C's circuit half |
+| **new** `src/lib/ui/surface-ink.ts` | **landed** — the ink both surfaces are painted with |
+| **new** `src/lib/ui/pit-surface.ts` | **landed** — C's pit-lane half |
 | `src/components/race/RaceTrackMap.tsx` | B: car shadow, `--car-rot`, roll/dive; E: mood selection replacing the hardcoded afternoon |
 | `src/lib/ui/track-scenery.ts` | expose corner/camber and the elevation profile for the renderer |
 | `src/lib/ui/biomes.ts` | default mood per biome |
