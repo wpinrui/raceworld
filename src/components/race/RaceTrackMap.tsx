@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Maximize } from 'lucide-react'
@@ -32,13 +32,13 @@ import { NationalityFlag } from '@/components/world/NationalityFlag'
 // entrant, plus a 2D camera. Rendering follows the qualifying TrackMap pattern: a private rAF reads
 // per-car samples from `sampleRef` and moves markers via direct DOM writes, so nothing re-renders per
 // frame. The whole scene (track + cars) lives on one "world" layer; the camera is a single CSS transform
-// on it — wheel zooms to the cursor, drag pans, Shift+wheel rotates, clicking a car follows it.
+// on it â€” wheel zooms to the cursor, drag pans, Shift+wheel rotates, clicking a car follows it.
 
 export interface TrackCarMeta {
   id: string
   /** Live race position (shown in the tooltip). */
   pos: number
-  /** Current tyre compound — drives the rim-edge colour band on the sprite's wheels. */
+  /** Current tyre compound â€” drives the rim-edge colour band on the sprite's wheels. */
   compound?: TyreCompound
   color: string
   name: string
@@ -54,14 +54,14 @@ export interface TrackCarMeta {
  * progress maps through a curvature-derived speed profile (more distance per time step on straights). */
 export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box' | 'out'; stopFrac?: number; pitCalled?: boolean; pitNewCompound?: TyreCompound; gridSlot?: number; launch?: number } | null
 
-// Speed-profile physics in REAL units (m/s, m/s²), converted per track via metresPerUnit: top speed,
+// Speed-profile physics in REAL units (m/s, m/sÂ²), converted per track via metresPerUnit: top speed,
 // the hairpin floor, lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and
 // traction/braking limits that smear speed changes over real distance.
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
 /** Frame-rate caps to cycle through, uncapped first. A steady rate reads as smoother than a higher
- *  one that swings, so the cap stays available — but with the static world baked to an image there is
+ *  one that swings, so the cap stays available â€” but with the static world baked to an image there is
  *  no longer a swing to steady, and capping a frame that already fits only throws frames away. */
 const FRAME_CAPS: number[] = [0, 30, 45]
 
@@ -76,7 +76,7 @@ const DEBUG_KEYS: boolean = true
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
-const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'> = {
+const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'> = {
   q: 'trees',
   w: 'shadows',
   e: 'buildings',
@@ -88,6 +88,9 @@ const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>
   o: 'boxes',
   // The car sprites are the last un-ported layer; hiding them attributes their raster cost live.
   a: 'cars',
+  // The garage signs alone: 'pit' hides the canvas complex AND these SVG name boards together,
+  // which left the benchmark unable to say which half was the pit straight's hitch.
+  g: 'signs',
 }
 /** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
  *  closely than it tracks anything else, so scenery is shed to hold this line. */
@@ -110,7 +113,7 @@ const A_BRAKE_M = 41
 
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit.
 const PIT_WIDTH_M = 9.5 // lane + working apron: the boxes sit 1.6m off-centre and their markings and
-                        // gantries reach ~3.8m out — a 7m ribbon put them on the grass
+                        // gantries reach ~3.8m out â€” a 7m ribbon put them on the grass
 const CAR_LENGTH_M = 5.63
 // Uniform sprite shrink (proportions untouched). Everything car-locked multiplies by this:
 // footprint, crew wheel anchors, tyre props, collision clearances.
@@ -120,9 +123,9 @@ const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
 const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery LOD + composited world layer
-// Below this zoom the scenery drops its heavy layers (trees, shadows, bevels) — unresolvable there anyway.
+// Below this zoom the scenery drops its heavy layers (trees, shadows, bevels) â€” unresolvable there anyway.
 const LOD_ZOOM = 3
-const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
+const ROT_STEP = Math.PI / 36 // 5Â° per shift+wheel notch
 
 // How much of the track's width the racing line may use, each side of the centreline: half the tarmac
 // minus half a car and a margin.
@@ -185,7 +188,7 @@ function buildRacingLine(center: SVGPathElement, metresPerUnit: number): string 
     prevN = n
     const inv2 = 1 / (ds * ds)
     const lap = (i: number) => (a[(i - 1 + n) % n] - 2 * a[i] + a[(i + 1) % n]) * inv2
-    // Path curvature: kc PLUS a'' — shifting toward the inside of a turn tightens it.
+    // Path curvature: kc PLUS a'' â€” shifting toward the inside of a turn tightens it.
     const k = new Float64Array(n)
     for (let i = 0; i < n; i++) k[i] = kc[i] + lap(i)
 
@@ -347,7 +350,7 @@ const CarSprite = memo(function CarSprite({ color, length, compound }: { color: 
       <rect x="118" y="190" width="4" height="16" fill={t} />
       <circle cx="120" cy="234" r="10" fill={sec} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
       <rect x="113" y="228" width="14" height="3" rx="1.5" fill="#0B0D10" />
-      {/* tyres — tagged so the pit choreography can take each wheel OFF the car while its tyre
+      {/* tyres â€” tagged so the pit choreography can take each wheel OFF the car while its tyre
           is being carried (#live-engine) */}
       <g data-wheel="fl">
         <rect x="6" y="64" width="48" height="88" rx="18" fill="#16181D" />
@@ -433,7 +436,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
   const pitLenRef = useRef(0)
-  const pitDRef = useRef('') // the `d` the pit caches were built from — geometry, not identity
+  const pitDRef = useRef('') // the `d` the pit caches were built from â€” geometry, not identity
   const profileRef = useRef<Float64Array | null>(null)
   const pitWindowForRef = useRef<unknown>(null) // which engine instance the pit window was sent to
   const prevDrawRef = useRef(new Map<string, { x: number; y: number; kind: string; dist: number; lat: number }>()) // last drawn pose per car, for the path-switch blend
@@ -452,7 +455,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     oldOut: boolean[]   // this corner's OLD tyre is being / has been carried off the car
     newIn: boolean[]    // this corner's NEW tyre is being / has been carried to the hub
     swapped: boolean    // movable tyres overlaid + the car sprite's own wheels hidden
-    restored: boolean   // car sprite wheels back + new-set props hidden (same frame — seamless)
+    restored: boolean   // car sprite wheels back + new-set props hidden (same frame â€” seamless)
     carId?: string
     retreatT0: number
     lastWall?: number
@@ -472,7 +475,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const stageDimsRef = useRef({ w: 0, h: 0 })
   const [stage, setStage] = useState({ w: 0, h: 0 })
 
-  // Camera: pan (px), zoom, rotation — applied as one transform on the world layer. While following,
+  // Camera: pan (px), zoom, rotation â€” applied as one transform on the world layer. While following,
   // the pan is owned by the follow logic; dragging breaks the lock and pans freely.
   const defaultRot = useMemo(() => pitCameraRotation(layout) ?? 0, [layout])
   const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot })
@@ -511,7 +514,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const [hud, setHud] = useState(false)
   // One hotkey per category, so what is expensive can be MEASURED instead of reasoned about. Each key
   // skips rendering that category outright rather than hiding it, so the node count moves with it.
-  const [hidden, setHidden] = useState<ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>>(() => new Set())
+  const [hidden, setHidden] = useState<ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>>(() => new Set())
   const hiddenRef = useRef<ReadonlySet<string>>(hidden)
   const [budgetOn, setBudgetOn] = useState(false)
   const hudRef = useRef<HTMLDivElement>(null)
@@ -572,7 +575,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           }).join('  ')
           const offList = [...hiddenRef.current].join(',')
           const capTxt = frameCapRef.current > 0 ? `cap ${frameCapRef.current}` : 'uncapped'
-          // Where the canvas's paint time goes, section by section, from the last drawn frame —
+          // Where the canvas's paint time goes, section by section, from the last drawn frame â€”
           // so a slow corner names its own cost instead of being reasoned about. Main-thread
           // command cost; the GPU raster that follows is not observable from here.
           const stats = Object.entries(paintStatsRef.current)
@@ -599,7 +602,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     return () => cancelAnimationFrame(raf)
   }, [hud])
 
-  // Trees only exist at FULL detail, which is racing zoom — exactly when the least of the circuit is
+  // Trees only exist at FULL detail, which is racing zoom â€” exactly when the least of the circuit is
   // on screen and the most of it is still in the DOM being repainted as the camera follows a car.
   // So they are culled to a disc around what is visible.
   //
@@ -641,8 +644,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Painting the canvas is defined further down, once the scene exists; `applyCam` reaches it through
   // this ref so the two can be declared in whichever order they need to be. The same goes for scene
   // composition: on a cull step the canvas recomposes IMPERATIVELY through this ref, because pushing
-  // the disc through React state re-rendered and reconciled the whole component — thousands of car
-  // and pit-box nodes — several times a lap, which is what the recurring fps dips were.
+  // the disc through React state re-rendered and reconciled the whole component â€” thousands of car
+  // and pit-box nodes â€” several times a lap, which is what the recurring fps dips were.
   const paintRef = useRef<() => void>(() => {})
   const composeSceneRef = useRef<(cull: Cull | null) => void>(() => {})
   const canvasOnRef = useRef(true)
@@ -756,7 +759,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
   const slotOf = useMemo(() => {
     // Garage order: previous standings best-first (P1 gets the first box), alphabetical fallback for
-    // anything unranked. NEVER derived from the live car list order — that reshuffles mid-race.
+    // anything unranked. NEVER derived from the live car list order â€” that reshuffles mid-race.
     const rank = (k: string) => {
       const i = teamOrder?.indexOf(k) ?? -1
       return i === -1 ? 1e9 : i
@@ -891,7 +894,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       suppressClickRef.current = false
       return
     }
-    // Clicking the followed car does nothing — the only way to unfollow is to pan away.
+    // Clicking the followed car does nothing â€” the only way to unfollow is to pan away.
     if (followRef.current !== id) onFollow(id)
   }
 
@@ -915,7 +918,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     applyCam()
   }, [view, defaultRot, applyCam])  
 
-  // Geometry caches reset ONLY when the circuit changes — resetting per render rebuilt the racing-line
+  // Geometry caches reset ONLY when the circuit changes â€” resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
   useEffect(() => {
     lenRef.current = 0
@@ -983,7 +986,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               const d = (q.x - slot.x) ** 2 + (q.y - slot.y) ** 2
               if (d < bestD) { bestD = d; bestS = a }
             }
-            // Which local side is the LANE on? The garage must face the other way — this depends on
+            // Which local side is the LANE on? The garage must face the other way â€” this depends on
             // the track's winding, so it is measured, not assumed. The slot's whole interior flips.
             const lane = pitPath.getPointAtLength(bestS)
             const yLocal = -Math.sin(slot.rot) * (lane.x - slot.x) + Math.cos(slot.rot) * (lane.y - slot.y)
@@ -995,7 +998,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         }
         // Tell the live engine where the DRAWN pit entry/exit sit in lap-TIME terms (#live-engine).
         // Found GEOMETRICALLY: the racing line's arc distances are redistributed relative to the
-        // centreline the lane hangs off, so "0.93 of the racing line" is a different physical point —
+        // centreline the lane hangs off, so "0.93 of the racing line" is a different physical point â€”
         // instead, locate where the racing line passes closest to the lane's actual endpoint. Re-sent
         // whenever a fresh engine appears on the bridge (restart, next race).
         if (liveBridge.current && pitPath && pitLenRef.current > 0 && pitWindowForRef.current !== liveBridge.current) {
@@ -1051,7 +1054,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 ? (fracIn / 0.5) * boxDist
                 : boxDist + ((fracIn - 0.5) / 0.5) * (pitLenRef.current - boxDist)
             // A serviced car has exactly ONE correct position: the box point. It is PINNED there by
-            // geometry, not converged on by dynamics — a half-second roll-in absorbs whatever
+            // geometry, not converged on by dynamics â€” a half-second roll-in absorbs whatever
             // residual the approach left, then the pin is exact for the whole stop.
             if (sample.pitPhase === 'box' && boxDist != null) {
               let anchor = pitAnchorRef.current.get(car.id)
@@ -1066,10 +1069,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             }
             frames.push({ id: car.id, el, kind: 'pit', dist, lat: 0, pitPhase: sample.pitPhase, stopFrac: sample.stopFrac, pitNewCompound: sample.pitNewCompound })
           } else if (sample.gridSlot != null) {
-            // On the grid — parked pre-race, and from lights out the whole field launches TOGETHER:
+            // On the grid â€” parked pre-race, and from lights out the whole field launches TOGETHER:
             // `launch` covers the run to the S/F line so the car crosses exactly when its official
-            // (grid-seeded) time begins. CUBED: a launch is an acceleration — barely moving off the
-            // box, arriving at the line near racing speed — not a constant crawl with a jump at the line.
+            // (grid-seeded) time begins. CUBED: a launch is an acceleration â€” barely moving off the
+            // box, arriving at the line near racing speed â€” not a constant crawl with a jump at the line.
             const launch = Math.min(1, sample.launch ?? 0)
             const covered = launch * launch * launch
             const back = uu(3 + (sample.gridSlot - 1) * 8) * (1 - covered)
@@ -1084,7 +1087,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           }
         }
 
-        // Pass 2: side-by-side separation, cluster-aware — pairwise nudges with fixed per-car sides
+        // Pass 2: side-by-side separation, cluster-aware â€” pairwise nudges with fixed per-car sides
         // stacked three-deep battles onto one line. Any chain of cars sharing ~8m of arc is a CLUSTER:
         // the front car holds the racing line, followers fan out to alternating distinct lanes
         // (nearest first), each blended in by how close it actually runs.
@@ -1140,7 +1143,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           const aheadPt = p.getPointAtLength(f.kind === 'pit' ? Math.min(total, f.dist + look) : (f.dist + look) % total)
           const target = Math.atan2(aheadPt.y - pt.y, aheadPt.x - pt.x)
           // Low-pass the heading so polyline vertices don't twitch the sprite. The delta must be
-          // modulo-wrapped, not single-corrected: a closed lap winds the stored heading by 2π each
+          // modulo-wrapped, not single-corrected: a closed lap winds the stored heading by 2Ï€ each
           // time around, and an under-corrected delta makes the sprite pirouette the long way.
           const prev = headingRef.current.get(f.id) ?? target
           const raw = target - prev
@@ -1148,8 +1151,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           const heading = prev + delta * 0.25
           headingRef.current.set(f.id, heading)
           // Pit lane discipline: transit runs the FAR side of the lane (the fast lane), clear of
-          // everyone's boxes; a stopping car swings diagonally up INTO its box — parking centred
-          // inside the rectangle — and diagonally back out to the lane. The offset funnels to the
+          // everyone's boxes; a stopping car swings diagonally up INTO its box â€” parking centred
+          // inside the rectangle â€” and diagonally back out to the lane. The offset funnels to the
           // centreline at both tapers where the lane meets track.
           if (f.kind === 'pit') {
             const slotIdx = slotOf.byCar.get(f.id)
@@ -1159,7 +1162,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               // flips with curvature through the tapers, which drove cars up the wrong side of
               // the lane (and, once the working lane was trimmed, onto the grass).
               const sideSign = layout.pit.latSign
-              let lat = -sideSign * uu(2.8) // centred in the marked fast lane (−4.3 line to −1.3 stripe)
+              let lat = -sideSign * uu(2.8) // centred in the marked fast lane (âˆ’4.3 line to âˆ’1.3 stripe)
               const boxDist = slotIdx != null ? slotDistsRef.current[slotIdx] : undefined
               // Only the arrival and the stop swing across to the boxes; a car on its way out
               // rejoins the fast lane and stays there (the working lane may not even exist past
@@ -1169,7 +1172,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 const prox = Math.max(0, 1 - Math.abs(f.dist - boxDist) / uu(12))
                 const e = prox * prox * (3 - 2 * prox)
                 lat += (sideSign * uu(1.6) - lat) * e
-                // Deep in the box zone the sprite aligns to the BOX, not the path lookahead — the
+                // Deep in the box zone the sprite aligns to the BOX, not the path lookahead â€” the
                 // parked car sits square in the rectangle.
                 if (prox > 0.4) {
                   const cur = headingRef.current.get(f.id)
@@ -1190,7 +1193,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
         // Pass 3b: sprites must NEVER overlap. On-track pairs within a car length of arc get their
         // DISPLAYED laterals pushed to at least a car width apart (written back so next frame's
-        // low-pass continues from the resolved values — the push is smooth, not a pop). Queued pit
+        // low-pass continues from the resolved values â€” the push is smooth, not a pop). Queued pit
         // sprites are arc-clamped behind the car ahead in the lane.
         const minArc = uu(6.5 * CAR_SCALE)
         const minLat = uu(2.6 * CAR_SCALE)
@@ -1228,10 +1231,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           const { f, pt, heading, lat } = d
           let x = pt.x - Math.sin(heading) * lat
           let y = pt.y + Math.cos(heading) * lat
-          // Path-switch OFFSET DECAY: changing path (race↔pit, grid→race) changes the base point the
-          // sprite hangs off — the racing line and the lane mouth are metres apart. The car keeps its
+          // Path-switch OFFSET DECAY: changing path (raceâ†”pit, gridâ†’race) changes the base point the
+          // sprite hangs off â€” the racing line and the lane mouth are metres apart. The car keeps its
           // new path's motion from the FIRST frame; only the positional discrepancy, captured at the
-          // switch, decays to zero. (The previous version lerped from a frozen snapshot — which pins
+          // switch, decays to zero. (The previous version lerped from a frozen snapshot â€” which pins
           // the sprite motionless at the start of every switch. Never again.)
           const prevDraw = prevDrawRef.current.get(f.id)
           if (prevDraw && prevDraw.kind !== f.kind) {
@@ -1465,7 +1468,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       }
 
       // Pinned card: orbit the followed car perpendicular to the LOCAL TRACK DIRECTION, just clear of
-      // the ribbon, preferring above — so it never sits on the tarmac. Low-passed so it glides.
+      // the ribbon, preferring above â€” so it never sits on the tarmac. Low-passed so it glides.
       const tip = tipRef.current
       if (tip) {
         const fid = followRef.current
@@ -1495,7 +1498,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         }
       }
       // The tick's own JS cost, for the readout: it splits "the script is slow" from "the browser
-      // is rasterising a heavy document" — the two look identical in an fps number alone.
+      // is rasterising a heavy document" â€” the two look identical in an fps number alone.
       const tickDt = performance.now() - tickT0
       const tstat = tickStatsRef.current
       tstat.sum += tickDt
@@ -1524,7 +1527,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // sprites, so nothing needs the floor.
   const carL = u(CAR_LENGTH_M * CAR_SCALE) * pxPerUnit
 
-  // Scenery is deterministic per circuit and static — build once per layout.
+  // Scenery is deterministic per circuit and static â€” build once per layout.
   const scenery = useMemo(
     () => buildScenery(layout.trace, layout.pit, {
       circuitId: layout.circuitId,
@@ -1538,7 +1541,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
   // A node BUDGET rather than a fixed tree count. The number that actually predicts frame rate on
   // this renderer is how many elements are in the document, and that varies with the circuit, the
-  // zoom and how much scenery happens to be in shot — so it is measured every half second and the
+  // zoom and how much scenery happens to be in shot â€” so it is measured every half second and the
   // tree allowance is steered toward the budget rather than guessed at. An estimate would drift from
   // the renderer the moment the renderer changed.
   const [maxTrees, setMaxTrees] = useState(Infinity)
@@ -1583,7 +1586,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
 
   // The static world as one description, drawn straight onto a canvas by the render loop. Vectors are
-  // redrawn at the exact camera transform each frame, so it is as sharp at 60x zoom as at 1x — which
+  // redrawn at the exact camera transform each frame, so it is as sharp at 60x zoom as at 1x â€” which
   // is what the pre-baked image could never be, and the reason it is being replaced.
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // The road, in the order the SVG lays it: white casing under grey asphalt, for track and lane alike.
@@ -1625,7 +1628,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     return { cx, cy, r }
   }, [pitZone, u])
   // One composer for both paths: React re-renders call it when the WORLD changes (track, light,
-  // detail tier, hidden set — all rare), and `updateCull` calls it through `composeSceneRef` when
+  // detail tier, hidden set â€” all rare), and `updateCull` calls it through `composeSceneRef` when
   // only the DISC moves, several times a lap, without a render.
   const composeScene = useCallback((cullNow: Cull | null) => {
     if (!(canvasOn && view === 'live')) return null
@@ -1670,7 +1673,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   useEffect(() => { sceneRef.current = scene }, [scene])
   // On a cull step, the old scene keeps painting while the new one's paths parse in the
   // background; the swap lands only when the Path2D cache is warm. Parsing them inside the next
-  // paint instead was a 2-3 vsync hitch on every disc move — the last dip the benchmark found.
+  // paint instead was a 2-3 vsync hitch on every disc move â€” the last dip the benchmark found.
   const warmTokenRef = useRef<{ cancel: () => void } | null>(null)
   useEffect(() => {
     composeSceneRef.current = (cullNow) => {
@@ -1686,7 +1689,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }, [composeScene])
   useEffect(() => { canvasOnRef.current = canvasOn }, [canvasOn])
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
-  // readout is up — the timing calls are cheap but not free.
+  // readout is up â€” the timing calls are cheap but not free.
   const paintStatsRef = useRef<Record<string, number>>({})
   // True while the benchmark drives the map; keeps paint timing on with the readout closed.
   const benchRef = useRef(false)
@@ -1720,10 +1723,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }, [vb, lighting, u])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
 
-  // ── Benchmark mode ──
+  // â”€â”€ Benchmark mode â”€â”€
   //
   // One keypress runs an ablation matrix over a live race: the same follow camera at racing zoom,
-  // one FULL LAP per configuration so every segment covers the identical corners — the segment
+  // one FULL LAP per configuration so every segment covers the identical corners â€” the segment
   // boundary is the followed car crossing the line. Configurations: each layer hidden in turn, the
   // dynamic layers isolated, and the SVG renderer as the old baseline. The result prints as a
   // table and downloads as JSON, so a perf report is a file rather than a screenshot relay.
@@ -1742,6 +1745,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       { name: 'no-ground', canvas: true, hide: ['ground'] },
       { name: 'no-kerbs', canvas: true, hide: ['kerbs'] },
       { name: 'no-pit', canvas: true, hide: ['pit'] },
+      // Splits the pit finding: the signs are SVG text boards, the complex is canvas fills.
+      { name: 'no-signs', canvas: true, hide: ['signs'] },
       { name: 'no-boxes', canvas: true, hide: ['boxes'] },
       { name: 'no-cars', canvas: true, hide: ['cars'] },
       { name: 'no-cars-boxes', canvas: true, hide: ['cars', 'boxes'] },
@@ -1794,7 +1799,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     benchAbortRef.current = false
     setBenchOn(true)
     const prev = {
-      hidden: hiddenRef.current as ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>,
+      hidden: hiddenRef.current as ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>,
       canvas: canvasOnRef.current,
       cap: frameCapRef.current,
       follow: followRef.current,
@@ -1809,20 +1814,20 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     applyCam()
     const segments: Array<Record<string, number | string | boolean>> = []
     try {
-      status('waiting for the leader to cross the line…')
+      status('waiting for the leader to cross the lineâ€¦')
       await untilCrossing(false)
       for (let i = 0; i < SEGMENTS.length; i++) {
         const seg = SEGMENTS[i]
         if (benchAbortRef.current) break
         status(`bench ${i + 1}/${SEGMENTS.length}  ${seg.name}  (one lap)`)
         setCanvasOn(seg.canvas)
-        setHidden(new Set(seg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>)
+        setHidden(new Set(seg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
         paintStatsRef.current = {}
         const t0 = { ...tickStatsRef.current }
         const r = await untilCrossing(true)
         const t1 = tickStatsRef.current
         // The first beat of a segment pays the configuration switch itself (a React render the
-        // benchmark caused, not the game) — those frames don't get to vote.
+        // benchmark caused, not the game) â€” those frames don't get to vote.
         let skipped = 0
         let skipMs = 0
         while (skipped < r.deltas.length && skipMs < 300) skipMs += r.deltas[skipped++]
@@ -1868,7 +1873,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     a.download = `bench-${layout.circuitId}-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(a.href)
-    status(benchAbortRef.current ? 'bench aborted' : 'bench done — report downloaded')
+    status(benchAbortRef.current ? 'bench aborted' : 'bench done â€” report downloaded')
     await sleep(2500)
     setBenchOn(false)
   }, [cars, layout.circuitId, onFollow, applyCam, sampleRef])
@@ -1927,7 +1932,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         />
       )}
       {/* On the OUTER box, not the stage: the stage letterboxes to the viewBox's aspect, and a canvas
-          clipped to it stops painting at the stage edge — the world visibly ended there under zoom.
+          clipped to it stops painting at the stage edge â€” the world visibly ended there under zoom.
           The SVG never had the problem because its overflow is visible. Stage centre and viewport
           centre coincide, so the camera transform is the same either way. */}
       {canvasOn && <SceneryCanvas canvasRef={canvasRef} className="absolute inset-0" />}
@@ -1970,11 +1975,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Pit lane: an asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's
-                track-side line, entry/exit guide lines reaching onto the track, the white–blue–white
+                track-side line, entry/exit guide lines reaching onto the track, the whiteâ€“blueâ€“white
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
-            {pitZone && !hidden.has('pit') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
+            {pitZone && !hidden.has('pit') && !hidden.has('signs') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
             {pitZone && !canvasOn && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
@@ -2022,12 +2027,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                     <rect key={bx} x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.6)} height={u(GANTRY_REACH_M)} rx={u(0.12)} />
                   ))}
                 </g>
-                {/* Overhead gantry: two booms from the garage out over the box — black, team accents. */}
+                {/* Overhead gantry: two booms from the garage out over the box â€” black, team accents. */}
                 <g ref={(el) => { if (el) gantryRefs.current.set(i, el); else gantryRefs.current.delete(i) }}>
                 {([1.5, -1.5] as const).map((bx) => (
                   <g key={bx}>
                     {/* A metal beam seen from above: its length is the only thing that reads at this
-                        scale, so it carries a highlight down one flank rather than a face — a face
+                        scale, so it carries a highlight down one flank rather than a face â€” a face
                         would need the light direction, which the box only learns once it knows which
                         way it is flipped. Height comes from the lift and the shadow, not from paint. */}
                     <rect x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.6)} height={u(GANTRY_REACH_M)} rx={u(0.12)} fill="#2E333C" />
@@ -2062,7 +2067,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                       {(['oldT', 'newT'] as const).map((tk) => {
                         // Pixel-matched to the car sprite's wheels (long axis = travel = local x).
                         // The sprite's REAR wheels are larger than the fronts: 96x52 vs 88x48
-                        // sprite-units at scale 5.63/520 — a single prop size shrank the rears
+                        // sprite-units at scale 5.63/520 â€” a single prop size shrank the rears
                         // visibly at the swap. Corners 0/2 are the front axle, 1/3 the rear.
                         const front = c === 0 || c === 2
                         const tw = (front ? 0.9528 : 1.0394) * CAR_SCALE
@@ -2095,7 +2100,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             </g>
             {/* Red/white kerbs through the corners. Once the canvas owns the world these MUST come
                 off the document: a dashed stroke re-expands on every camera frame, which is the
-                measured, hotkey-confirmed cause of the original racing stutter — leaving them here
+                measured, hotkey-confirmed cause of the original racing stutter â€” leaving them here
                 meant paying it twice, once per renderer. */}
             {!canvasOn && !hidden.has('kerbs') && (bitmapOn ? scenery.kerbs : visibleKerbs).map((k, i) => (
               <g key={`k${i}`}>
@@ -2109,7 +2114,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Scenery shadows fall across the tarmac, so they draw AFTER every piece of track
                 paint; the solids that cast them stand on top. Nothing overlaps the ribbon (the
                 generator guarantees it), so drawing solids here cannot hide the road. The canvas
-                draws all three of these layers itself, in this same order — left in the document
+                draws all three of these layers itself, in this same order â€” left in the document
                 they rendered the whole static world twice, one world stacked on the other. */}
             {!canvasOn && view === 'live' && shadowNode}
             {!canvasOn && view === 'live' && solidsNode}
@@ -2165,7 +2170,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               style={{ opacity: car.retired ? 0.35 : 1 }}
             >
               {(() => {
-                {/* Tooltip + click on the sprite ONLY — its exact rendered footprint, no hover halo. */}
+                {/* Tooltip + click on the sprite ONLY â€” its exact rendered footprint, no hover halo. */}
                 const sprite = (
                   <div
                     ref={(el) => { if (el) sprRefs.current.set(car.id, el); else sprRefs.current.delete(car.id) }}
@@ -2190,7 +2195,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                     )}
                   </div>
                 )
-                // The followed car's pinned card IS its tooltip — no double card on hover.
+                // The followed car's pinned card IS its tooltip â€” no double card on hover.
                 if (pinnedCard && view === 'live' && car.id === followId) return sprite
                 return (
                   <Tooltip
@@ -2258,7 +2263,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 // scenery SVG, 20 tooltip-wrapped sprites) on every commit stalled the main thread and the clock
 // then lurched the whole field forward at once. Function-prop identities are deliberately ignored
 // (fresh closures, equal behaviour); `tipTick` bumps ~1/s so tooltip content stays current; car
-// positions only matter to the render in map view (numbered dots) — live-view sprites are placed
+// positions only matter to the render in map view (numbered dots) â€” live-view sprites are placed
 // per-frame from sampleRef, not from props.
 function sameCars(a: TrackCarMeta[], b: TrackCarMeta[], comparePos: boolean): boolean {
   if (a === b) return true
