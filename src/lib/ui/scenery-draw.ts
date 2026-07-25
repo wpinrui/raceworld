@@ -296,3 +296,36 @@ export function runShadowOp(
     d: ribbon(pts.map((p) => ({ x: p.x + dir.x * base, y: p.y + dir.y * base })), ldir.x * cast, ldir.y * cast),
   }
 }
+
+export interface MarshalDrawOpts extends TreeDrawOpts {
+  /** Hut height in metres, and its footprint. */
+  hutM: number
+  hutW: number
+  hutH: number
+}
+
+/** A marshal post's shadow, walls and roof, in its own frame.
+ *
+ *  A real height face rather than a displaced copy of itself — the same mistake the buildings started
+ *  with. The shadow is a second sweep from the same footprint, offset to the hut's base. */
+export function marshalGroups(
+  marshals: Scenery['marshals'], o: MarshalDrawOpts,
+): Array<DrawGroup & { shadow: DrawOp; shadowAt: { x: number; y: number } }> {
+  const dir = dirAt(o.view)
+  const ldir = dirAt(o.lighting.azimuth)
+  const hut: Part[] = [{ dx: 0, dy: 0, w: o.u(o.hutW), h: o.u(o.hutH) }]
+  const lift = o.u(o.hutM * o.extrude)
+  const cast = o.u(o.hutM * shadowReach(o.lighting))
+  return marshals.map((m) => {
+    const off = toLocal(dir.x * lift, dir.y * lift, m.rot)
+    const sOff = toLocal(ldir.x * cast, ldir.y * cast, m.rot)
+    return {
+      x: m.x,
+      y: m.y,
+      rot: m.rot,
+      shadow: { d: sweptHull(hut, sOff.x, sOff.y) },
+      shadowAt: off,
+      ops: [{ d: sweptHull(hut, off.x, off.y), fill: shadeFace('#3A4049', o.lighting) }],
+    }
+  })
+}

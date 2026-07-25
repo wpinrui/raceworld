@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  fenceOps, runShadowOp, structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
+  fenceOps, marshalGroups, runShadowOp, structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -281,5 +281,35 @@ describe('runShadowOp', () => {
 
   it('lengthens with height', () => {
     expect(runShadowOp(pts, 12, opts).d).not.toBe(runShadowOp(pts, 2, opts).d)
+  })
+})
+
+describe('marshalGroups', () => {
+  const mOpts = { ...opts, hutM: 2.8, hutW: 4.4, hutH: 3.2 }
+  const post = [{ x: 70, y: 15, rot: 0.9 }]
+
+  it('gives the hut a real height face rather than a displaced copy of itself', () => {
+    // A copy is the mistake the buildings started with: it reads as the same shape drawn twice.
+    const [g] = marshalGroups(post as never, mOpts)
+    expect(g.ops[0].d).not.toBe(g.shadow.d)
+    expect(g.ops[0].fill).toBeTruthy()
+  })
+
+  it('offsets the shadow to the hut base, and sweeps it along the sun', () => {
+    const [g] = marshalGroups(post as never, mOpts)
+    expect(Math.hypot(g.shadowAt.x, g.shadowAt.y)).toBeGreaterThan(0)
+    const relit = marshalGroups(post as never, {
+      ...mOpts, lighting: { ...opts.lighting, azimuth: opts.lighting.azimuth + 1 },
+    })[0]
+    // Moving the sun changes the sweep but not where the hut stands.
+    expect(relit.shadow.d).not.toBe(g.shadow.d)
+    expect(relit.x).toBe(g.x)
+  })
+
+  it('carries the post placement on the group, not baked into the hut', () => {
+    const [g] = marshalGroups(post as never, mOpts)
+    expect(g.x).toBe(70)
+    expect(g.y).toBe(15)
+    expect(g.rot).toBe(0.9)
   })
 })

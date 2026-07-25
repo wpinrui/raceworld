@@ -1,17 +1,9 @@
-import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
+import type { Scenery, SceneryRect } from '@/lib/ui/track-scenery'
 import {
-  buildingRoofGroups, buildingWallGroups, fenceOps, refName, runShadowOp, standGroups,
-  structureShadowGroups,
-  toLocal, treeShadowOp,
-  treeSolidOps,
+  buildingRoofGroups, buildingWallGroups, fenceOps, marshalGroups, refName, runShadowOp,
+  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps,
 } from '@/lib/ui/scenery-draw'
-import {
-  sweptHull,
-} from '@/lib/ui/extrude'
-import {
-  dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach,
-  type Lighting,
-} from '@/lib/ui/lighting'
+import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
 
 // Static scenery layer: generated once per circuit, transforms with the camera. The seat-stripe and
 // crowd-dot patterns live in userSpace so they align with each rotated stand's local axes.
@@ -39,6 +31,9 @@ const STAND_REAR_M = 5.5
 const STAND_ROOF_FRAC = 0.3
 /** Marshal hut height. */
 const MARSHAL_H_M = 2.8
+/** Its hut's footprint, in metres. */
+const MARSHAL_W_M = 4.4
+const MARSHAL_D_M = 3.2
 /** Trackside wall heights: armco/concrete, then the debris fencing standing behind it. */
 const FENCE_H_M = 4
 /** A stacked tyre barrier stands about as tall as the wall it fronts. */
@@ -311,8 +306,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
 }) {
   const full = detail === 'full'
   const dir = dirAt(view)
-  const ldir = lightDir(lighting)
-  const reach = shadowReach(lighting)
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
   // Every piece of furniture casts from its BASE, like every other solid on the map.
@@ -385,26 +378,26 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
 
       {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of
           themselves — the same mistake the buildings started with. */}
-      {full && scenery.marshals.map((m, i) => {
-        const hut: SceneryPart[] = [{ dx: 0, dy: 0, w: u(4.4), h: u(3.2) }]
-        const t = u(MARSHAL_H_M * EXTRUDE)
-        const o = toLocal(dir.x * t, dir.y * t, m.rot)
-        const sh = u(MARSHAL_H_M * reach)
-        const so = toLocal(ldir.x * sh, ldir.y * sh, m.rot)
-        const deg2 = (m.rot * 180) / Math.PI
-        return (
-          <g key={`mp${i}`} transform={`translate(${m.x} ${m.y}) rotate(${deg2})`}>
-            <path
-              d={sweptHull(hut, so.x, so.y)} fill={shFill} opacity={shOp}
-              transform={`translate(${o.x} ${o.y})`}
-            />
-            <path d={sweptHull(hut, o.x, o.y)} fill={shadeFace('#3A4049', lighting)} />
-            {/* Roof on top, with the orange marshal panel on its trackside edge. */}
-            <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(3.2)} rx={u(0.3)} fill="#3A4049" />
-            <rect x={-u(2.2)} y={-u(1.6)} width={u(4.4)} height={u(1.0)} fill="#E8952B" />
-          </g>
-        )
-      })}
+      {full && marshalGroups(scenery.marshals, {
+        ...furnOpts, hutM: MARSHAL_H_M, hutW: MARSHAL_W_M, hutH: MARSHAL_D_M,
+      }).map((g, i) => (
+        <g key={`mp${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
+          <path
+            d={g.shadow.d} fill={shFill} opacity={shOp}
+            transform={`translate(${g.shadowAt.x} ${g.shadowAt.y})`}
+          />
+          {g.ops.map((op, j) => <path key={j} d={op.d} fill={op.fill} />)}
+          {/* Roof on top, with the orange marshal panel on its trackside edge. */}
+          <rect
+            x={-u(MARSHAL_W_M / 2)} y={-u(MARSHAL_D_M / 2)} width={u(MARSHAL_W_M)}
+            height={u(MARSHAL_D_M)} rx={u(0.3)} fill="#3A4049"
+          />
+          <rect
+            x={-u(MARSHAL_W_M / 2)} y={-u(MARSHAL_D_M / 2)} width={u(MARSHAL_W_M)}
+            height={u(1.0)} fill="#E8952B"
+          />
+        </g>
+      ))}
     </g>
   )
 }
