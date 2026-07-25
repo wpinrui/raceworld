@@ -28,11 +28,48 @@ export interface PaintCtx {
   bounds: { x: number; y: number; w: number; h: number }
 }
 
+/** Paints are cached because `drawScene` asks for one per op per frame. Uncached, every tree canopy
+ *  allocated a fresh radial gradient and every tiled fill rasterised a fresh DOM canvas into a fresh
+ *  pattern, sixty times a second — thousands of allocations a frame, measured by
+ *  scripts/canvas-cost-check.ts. A gradient is keyed on everything it is built from, so a cache hit
+ *  is pixel-identical to a rebuild. Cleared wholesale when oversized: the set turns over on a track
+ *  or light change and not at all in between. */
+const gradientCache = new Map<string, CanvasGradient>()
+const patternCache = new Map<string, CanvasPattern>()
+
 /** Build the paint an op named. Returns null for an unknown name so a caller can fail loudly rather
  *  than silently drawing the wrong colour. */
 export function canvasPaint(
   name: string, ctx: CanvasRenderingContext2D, p: PaintCtx,
 ): CanvasGradient | CanvasPattern | null {
+  const { x, y, w, h } = p.bounds
+  if (name.startsWith('tm-tree') || name === 'tm-bevel' || name === 'tm-rake' || name === 'tm-rake-flip') {
+    const key = `${name}|${p.lighting.azimuth}|${x},${y},${w},${h}`
+    let g = gradientCache.get(key)
+    if (!g) {
+      const built = buildGradient(name, ctx, p)
+      if (!built) return null
+      if (gradientCache.size > 30000) gradientCache.clear()
+      gradientCache.set(key, built)
+      g = built
+    }
+    return g
+  }
+  const key = `${name}|${p.u(1)}`
+  let pat = patternCache.get(key)
+  if (!pat) {
+    const built = tilePaint(name, ctx, p)
+    if (!built) return null
+    if (patternCache.size > 100) patternCache.clear()
+    patternCache.set(key, built)
+    pat = built
+  }
+  return pat
+}
+
+function buildGradient(
+  name: string, ctx: CanvasRenderingContext2D, p: PaintCtx,
+): CanvasGradient | null {
   const { x, y, w, h } = p.bounds
   if (name === 'tm-tree0' || name === 'tm-tree1') {
     const dir = dirAt(p.lighting.azimuth)
@@ -68,7 +105,7 @@ export function canvasPaint(
     g.addColorStop(1, 'rgba(0,0,0,0.22)')
     return g
   }
-  return tilePaint(name, ctx, p)
+  return null
 }
 
 /** The repeating fills: seats, crowd, roof decking, water and crop rows. Each is drawn once into an
@@ -88,7 +125,9 @@ function tilePaint(name: string, ctx: CanvasRenderingContext2D, p: PaintCtx): Ca
   spec.draw(tctx, p.u)
   const pattern = ctx.createPattern(tile, 'repeat')
   if (!pattern) return null
-  const m = new DOMMatrix()
+  // The rotation first, then the scale back into viewBox units — the same order SVG applies its
+  // patternTransform, so a rotated lattice (crop rows) lands at the same angle.
+  const m = new DOMMatrix().rotate(spec.rot ?? 0)
   pattern.setTransform(m.scale(p.u(spec.w) / tile.width, p.u(spec.h) / tile.height))
   return pattern
 }
@@ -97,6 +136,8 @@ interface TileSpec {
   /** Tile size in metres. */
   w: number
   h: number
+  /** Lattice rotation in degrees, mirroring the SVG pattern's patternTransform. */
+  rot?: number
   draw: (ctx: CanvasRenderingContext2D, u: (m: number) => number) => void
 }
 
@@ -145,6 +186,8 @@ const TILES: Record<string, TileSpec> = {
   'tm-crop': {
     w: 11,
     h: 11,
+    // The SVG pattern carries patternTransform="rotate(24)"; without it the rows run axis-aligned.
+    rot: 24,
     draw: (c, u) => {
       c.globalAlpha = 0.05
       c.fillStyle = '#FFFFFF'
