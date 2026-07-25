@@ -1,10 +1,10 @@
-import type { Scenery, SceneryRect } from '@/lib/ui/track-scenery'
+import type { Scenery, SceneryRect, SceneryTree } from '@/lib/ui/track-scenery'
 import {
-  buildingRoofGroups, buildingWallGroups, fenceOps, groundOps, marshalGroups, refName,
+  buildingRoofGroups, buildingWallGroups, depthSorted, fenceOps, groundOps, marshalGroups, refName,
   runShadowOp,
   standGroups, structureShadowGroups, treeShadowOp, treeSolidOps,
 } from '@/lib/ui/scenery-draw'
-import { lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
+import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
 
 // Static scenery layer: generated once per circuit, transforms with the camera. The seat-stripe and
 // crowd-dot patterns live in userSpace so they align with each rotated stand's local axes.
@@ -216,6 +216,31 @@ export function visibleTrees<T extends { x: number; y: number; r: number }>(
     .map((e) => e.t)
 }
 
+/** Walk trees and marshal posts together in one depth order, furthest first, handing each renderer the
+ *  runs it should draw between posts. Posts are solids standing among the trees, so they cannot simply be
+ *  drawn after them; this is the same interleave `sceneryScene` performs for the canvas. */
+function depthInterleaved(
+  trees: SceneryTree[], marshals: Scenery['marshals'], view: number,
+  drawTrees: (chunk: SceneryTree[], key: string) => React.ReactNode,
+  drawPosts: (posts: Scenery['marshals'], key: string) => React.ReactNode,
+): React.ReactNode[] {
+  const dir = dirAt(view)
+  const depth = (p: { x: number; y: number }) => p.x * dir.x + p.y * dir.y
+  const sorted = depthSorted(trees, dir)
+  const posts = depthSorted(marshals, dir)
+  const out: React.ReactNode[] = []
+  let ti = 0
+  posts.forEach((post, pi) => {
+    let j = ti
+    while (j < sorted.length && depth(sorted[j]) <= depth(post)) j++
+    if (j > ti) out.push(drawTrees(sorted.slice(ti, j), `t${pi}`))
+    ti = j
+    out.push(drawPosts([post], `p${pi}`))
+  })
+  if (ti < sorted.length) out.push(drawTrees(sorted.slice(ti), 'tz'))
+  return out
+}
+
 /** The solids themselves: walls, roofs, stands and canopies, all above the shadows. */
 export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees, hide, detail = 'full' }: {
   scenery: Scenery; u: (m: number) => number; lighting: Lighting; view: number
@@ -260,17 +285,28 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
         </g>
       ))}
 
-      {/* Canopies, DEPTH-SORTED so a nearer tree covers a further one. Drawn in array order they
-          overlapped arbitrarily, which is the one thing that breaks a grove's read. Each tree's
-          trunk goes with it rather than in a shared layer underneath, or a near trunk would be
-          buried by a far canopy. Trunk width scales with the canopy it carries — a constant width
-          made every tree a lollipop on a stick. */}
-      {full && treeSolidOps(treesByDepth, { u, extrude: EXTRUDE, lighting, view }).map((op, i) => (
-        <path
-          key={`v${i}`} d={op.d} fill={op.fill ? paint(op.fill) : 'none'}
-          stroke={op.stroke} strokeWidth={op.width} strokeLinecap={op.cap}
-        />
-      ))}
+      {/* Canopies and MARSHAL POSTS in ONE depth order, so a nearer tree covers a further one and a
+          hut standing behind a tree goes behind it. Drawn in array order the canopies overlapped
+          arbitrarily, which is the one thing that breaks a grove's read; drawn after every tree, a
+          2.8m hut painted over a 12m tree in front of it. Each tree's trunk goes with it rather than
+          in a shared layer underneath, or a near trunk would be buried by a far canopy. */}
+      {full && depthInterleaved(
+        treesByDepth, scenery.marshals, view,
+        (chunk, key) => treeSolidOps(chunk, { u, extrude: EXTRUDE, lighting, view }).map((op, i) => (
+          <path
+            key={`${key}v${i}`} d={op.d} fill={op.fill ? paint(op.fill) : 'none'}
+            stroke={op.stroke} strokeWidth={op.width} strokeLinecap={op.cap}
+          />
+        )),
+        (posts, key) => marshalGroups(posts, {
+          u, extrude: EXTRUDE, lighting, view, hutM: MARSHAL_H_M, hutW: MARSHAL_W_M, hutH: MARSHAL_D_M,
+        }).map((g, i) => (
+          <g key={`${key}mp${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
+            <path d={g.shadow.d} fill={shadowFill(lighting)} opacity={shadowOpacity(lighting)} />
+            {g.ops.map((op, j) => <path key={j} d={op.d} fill={op.fill} />)}
+          </g>
+        )),
+      )}
     </g>
   )
 }
@@ -328,17 +364,6 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
         </g>
       ))}
 
-      {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of
-          themselves — the same mistake the buildings started with. The hut, its roof and the orange
-          panel all come from the shared ops now, so the canvas draws the same hut this does. */}
-      {full && marshalGroups(scenery.marshals, {
-        ...furnOpts, hutM: MARSHAL_H_M, hutW: MARSHAL_W_M, hutH: MARSHAL_D_M,
-      }).map((g, i) => (
-        <g key={`mp${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
-          <path d={g.shadow.d} fill={shFill} opacity={shOp} />
-          {g.ops.map((op, j) => <path key={j} d={op.d} fill={op.fill} />)}
-        </g>
-      ))}
     </g>
   )
 }

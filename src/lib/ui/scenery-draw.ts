@@ -622,13 +622,30 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   if (o.full) items.push(...keep(s.wallGroups))
   items.push(...keep(s.standGs))
   items.push(...keep(s.roofGs))
+  // Trees and MARSHAL POSTS in one depth order. Posts stand out among the trees, so drawing every post
+  // after every tree let a 2.8m hut paint over a 12m tree standing in front of it, which is the exact
+  // thing depth sorting exists to prevent. Fences stay last and unsorted: they genuinely do line the
+  // tarmac's edge, so a fence in front of a grove should read as a fence, not a hedge decoration.
+  //
+  // The posts land in the 'trees' benchmark category as a result, which is where their cost now is.
   mark('trees')
-  if (o.full) items.push(...treeSolidOps(o.trees, treeOpts))
-  // Furniture last, like the SVG's furniture layer: it lines the tarmac's edge, so it sits over
-  // the scenery — a fence in front of a grove reads as a fence, not a hedge decoration.
+  if (o.full) {
+    const dir = dirAt(o.view)
+    const depth = (p: { x: number; y: number }) => p.x * dir.x + p.y * dir.y
+    const trees = depthSorted(o.trees, dir)
+    const posts = depthSorted(keep(s.marshalGs), dir)
+    let ti = 0
+    for (const post of posts) {
+      let j = ti
+      while (j < trees.length && depth(trees[j]) <= depth(post)) j++
+      if (j > ti) items.push(...treeSolidOps(trees.slice(ti, j), treeOpts))
+      ti = j
+      items.push(post)
+    }
+    if (ti < trees.length) items.push(...treeSolidOps(trees.slice(ti), treeOpts))
+  }
   mark('furniture')
   if (o.full) items.push(...keep(s.runShadows))
   if (o.full) items.push(...keep(s.fenceRuns))
-  if (o.full) items.push(...keep(s.marshalGs))
   return items
 }

@@ -7,7 +7,7 @@
 
 import { seededRng } from '@/lib/sim/rng-utils'
 import {
-  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M, smoothOpenPath, type PitLane, type TrackTrace,
+  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, smoothOpenPath, type PitLane, type TrackTrace,
 } from './track-path'
 import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'
@@ -15,7 +15,7 @@ import { blobPath, buildingParts, pickArchetype, type SceneryPart } from './scen
 import { biomeOf, type Biome } from './biomes'
 import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
 import {
-  TYRE_REF_OFFSET_M, FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts,
+  FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts,
   type SceneryFence, type SceneryField, type SceneryMarshal,
 } from './scenery-props'
 
@@ -131,7 +131,6 @@ export function buildScenery(
   } = makeSceneryFrame(rawTrace, pit, metresPerUnit)
   const S = samples.length
 
-  const TRACK_HALF_M = TRACK_WIDTH_M / 2
   const PIT_CLEAR_M = 55 // paddock side: garages, transporters, hospitality — nothing planted
   const PIT_CLEAR_STAND_M = 35
 
