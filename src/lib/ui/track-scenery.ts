@@ -7,7 +7,7 @@
 
 import { seededRng } from '@/lib/sim/rng-utils'
 import {
-  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M, smoothOpenPath, type PitLane, type TrackTrace,
+  PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M, type PitLane, type TrackTrace,
 } from './track-path'
 import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'

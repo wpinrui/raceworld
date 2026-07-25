@@ -43,6 +43,30 @@ describe('visibleTrees', () => {
     expect(visibleTrees(trees, cull).length).toBeLessThan(trees.length * 0.5)
   })
 
+  it('sheds the FURTHEST trees first when it is over budget', () => {
+    // Shedding must take the horizon off, not punch a hole in the grove being driven past.
+    const cull: Cull = { cx: trees[0].x, cy: trees[0].y, r: 400 }
+    const all = visibleTrees(trees, cull)
+    const capped = visibleTrees(trees, cull, 20)
+    expect(capped).toHaveLength(20)
+    const worstKept = Math.max(...capped.map((t) => Math.hypot(t.x - cull.cx, t.y - cull.cy)))
+    for (const t of all) {
+      if (capped.includes(t)) continue
+      expect(Math.hypot(t.x - cull.cx, t.y - cull.cy)).toBeGreaterThanOrEqual(worstKept)
+    }
+  })
+
+  it('leaves the set alone when it is inside budget', () => {
+    const cull: Cull = { cx: trees[0].x, cy: trees[0].y, r: 120 }
+    const near = visibleTrees(trees, cull)
+    expect(visibleTrees(trees, cull, near.length)).toEqual(near)
+    expect(visibleTrees(trees, cull, 1e6)).toEqual(near)
+  })
+
+  it('caps even without a disc, which is what the budget falls back to', () => {
+    expect(visibleTrees(trees, null, 7)).toHaveLength(7)
+  })
+
   it('keeps the lot when the disc covers the circuit', () => {
     const xs = trees.map((t) => t.x)
     const ys = trees.map((t) => t.y)

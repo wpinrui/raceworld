@@ -3,7 +3,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
-import { KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import {
   SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, type Cull,
@@ -55,6 +54,9 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
+/** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
+ *  closely than it tracks anything else, so scenery is shed to hold this line. */
+const NODE_BUDGET = 4000
 /** How much wider than the viewport the tree-cull disc is drawn, and how far the camera may travel
  *  inside it before the set is recomputed. Together they decide how often culling costs a re-render. */
 const CULL_MARGIN = 1.45
@@ -498,7 +500,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         if (el) {
           const nodes = worldRef.current?.querySelectorAll('*').length ?? 0
           const fps = Math.round((frames * 1000) / (now - since))
-          el.textContent = `${fps} fps  ${nodes} nodes${kerbsOnRef.current ? '' : '  kerbs off'}`
+          el.textContent = `${fps} fps  ${nodes}/${NODE_BUDGET} nodes  ${maxTreesRef.current} trees`
+            + `${kerbsOnRef.current ? '' : '  kerbs off'}`
         }
         frames = 0
         since = now
@@ -1406,6 +1409,33 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }),
     [layout, sceneryDensity],
   )
+  // A node BUDGET rather than a fixed tree count. The number that actually predicts frame rate on
+  // this renderer is how many elements are in the document, and that varies with the circuit, the
+  // zoom and how much scenery happens to be in shot — so it is measured every half second and the
+  // tree allowance is steered toward the budget rather than guessed at. An estimate would drift from
+  // the renderer the moment the renderer changed.
+  const [maxTrees, setMaxTrees] = useState(NODE_BUDGET)
+  const maxTreesRef = useRef(NODE_BUDGET)
+  const nodesRef = useRef(0)
+  useEffect(() => {
+    const id = setInterval(() => {
+      const n = worldRef.current?.querySelectorAll('*').length ?? 0
+      if (!n) return
+      nodesRef.current = n
+      const cap = maxTreesRef.current
+      // Two nodes a tree, so a node overshoot converts straight into a tree allowance. Damped by half
+      // so the loop settles instead of hunting, and only committed once it is worth a re-render.
+      const next = n > NODE_BUDGET
+        ? cap - Math.ceil((n - NODE_BUDGET) / 4)
+        : cap + Math.ceil((NODE_BUDGET - n) / 8)
+      const clamped = Math.max(0, Math.min(scenery.trees.length, next))
+      if (Math.abs(clamped - cap) < Math.max(12, cap * 0.06)) return
+      maxTreesRef.current = clamped
+      setMaxTrees(clamped)
+    }, 500)
+    return () => clearInterval(id)
+  }, [scenery.trees.length])
+
   // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
   // corner at a time. Same disc the trees use.
   const visibleKerbs = useMemo(
@@ -1422,12 +1452,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     [scenery, layout.metresPerUnit, lighting, lodLow],
   )
   const shadowNode = useMemo(
-    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, cull, lodLow],
+    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, lodLow],
   )
   const solidsNode = useMemo(
-    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, cull, lodLow],
+    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, lodLow],
   )
   const furnitureNode = useMemo(
     () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} detail={lodLow ? 'low' : 'full'} />,
