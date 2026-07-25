@@ -1,7 +1,7 @@
-import { Fragment } from 'react'
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
+import { refName, treeShadowOp, treeSolidOps } from '@/lib/ui/scenery-draw'
 import {
-  mapPathPoints, partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull, wallWindows,
+  partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull, wallWindows,
 } from '@/lib/ui/extrude'
 import {
   dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
@@ -38,10 +38,6 @@ const MARSHAL_H_M = 2.8
 const FENCE_H_M = 4
 /** A stacked tyre barrier stands about as tall as the wall it fronts. */
 const TYRE_H_M = 1.5
-/** Tree shadow length as a multiple of the TRUNK's own length, so the two can never disagree: the
- *  trunk says how tall the tree is, and the shadow has to say the same thing. Still responds to the
- *  sun's height, just bounded so it stays tied to the trunk. */
-const treeShadowRatio = (reachV: number) => Math.max(0.3, Math.min(0.8, reachV))
 
 const deg = (r: number) => (r * 180) / Math.PI
 
@@ -215,33 +211,21 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
 
           Lighter than the solids' shadows: a grove's overlap heavily, and at full strength they
           merge into one dark mass rather than dappled shade. */}
-      {full && (
-        <path
-          fill={shFill} opacity={shOp * 0.55}
-          d={(hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees)).map((t) => {
-            const trunk = u(t.h * EXTRUDE)
-            const len = trunk * treeShadowRatio(reach)
-            // Stretch the canopy about its own centre along the light, then plant it at the base of
-            // the trunk. Baked into the path data rather than applied as a transform: as one path
-            // this is a single element for a whole circuit's trees instead of eleven hundred, each
-            // of which the browser would otherwise resolve a matrix for every frame.
-            const sx = (2 * t.r + len) / (2 * t.r)
-            const cx = t.x + vdir.x * trunk + dir.x * (len / 2)
-            const cy = t.y + vdir.y * trunk + dir.y * (len / 2)
-            return mapPathPoints(t.d, (px, py) => {
-              const vx = px - t.x
-              const vy = py - t.y
-              // Into the light's frame, stretch along it, back out again.
-              const ax = vx * dir.x + vy * dir.y
-              const ay = -vx * dir.y + vy * dir.x
-              const bx = ax * sx
-              return { x: cx + bx * dir.x - ay * dir.y, y: cy + bx * dir.y + ay * dir.x }
-            })
-          }).join(' ')}
-        />
-      )}
+      {full && (() => {
+        const op = treeShadowOp(
+          hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees),
+          { u, extrude: EXTRUDE, lighting, view },
+        )
+        return op ? <path d={op.d} fill={op.fill} opacity={op.alpha} /> : null
+      })()}
     </g>
   )
+}
+
+/** A symbolic fill names a shared gradient or pattern; anything else is a plain colour. */
+const paint = (v: string): string => {
+  const ref = refName(v)
+  return ref ? `url(#${ref})` : v
 }
 
 /** A disc of the drawn scene worth rendering: centre and radius in viewBox units. Null renders
@@ -283,12 +267,9 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
   // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
-  const treesByDepth = (hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees))
-    .map((t, i) => ({ ...t, i }))
-    .sort((a, b) => (a.x * dir.x + a.y * dir.y) - (b.x * dir.x + b.y * dir.y))
+  const treesByDepth = hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees)
   // Trees lean exactly as much as buildings do. Giving them their own, steeper lean put two
   // different cameras in one scene; the height variation belongs in each tree's own scale.
-  const trunkOf = (t: { h: number }) => u(t.h * EXTRUDE)
   return (
     <g>
       {/* Walls: the swept band from roof outline to base outline, as one silhouette. The roof is
@@ -359,15 +340,11 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
           trunk goes with it rather than in a shared layer underneath, or a near trunk would be
           buried by a far canopy. Trunk width scales with the canopy it carries — a constant width
           made every tree a lollipop on a stick. */}
-      {full && treesByDepth.map((t) => (
-        <Fragment key={`v${t.i}`}>
-          <path
-            d={`M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * trunkOf(t)).toFixed(1)} ${(t.y + dir.y * trunkOf(t)).toFixed(1)}`}
-            fill="none" stroke={shadeFace('#6B5138', lighting)}
-            strokeWidth={Math.max(u(0.8), t.r * 0.34)} strokeLinecap="round"
-          />
-          <path d={t.d} fill={`url(#tm-tree${t.variant})`} />
-        </Fragment>
+      {full && treeSolidOps(treesByDepth, { u, extrude: EXTRUDE, lighting, view }).map((op, i) => (
+        <path
+          key={`v${i}`} d={op.d} fill={op.fill ? paint(op.fill) : 'none'}
+          stroke={op.stroke} strokeWidth={op.width} strokeLinecap={op.cap}
+        />
       ))}
     </g>
   )
