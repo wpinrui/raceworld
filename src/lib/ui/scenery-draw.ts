@@ -20,7 +20,7 @@ import {
   type Lighting, dirAt, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
 } from './lighting'
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
-import type { SceneryFence } from './scenery-props'
+import type { SceneryFence, SceneryTyreWall } from './scenery-props'
 import type { Vec } from './geom'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
@@ -36,6 +36,8 @@ export interface DrawOp {
   cap?: 'round' | 'butt'
   /** Relief bands are drawn as nested rings, so their holes need the even-odd rule. */
   evenOdd?: boolean
+  /** Dash length and gap, in viewBox units, with an offset for stacking bands out of phase. */
+  dash?: { on: number; off: number; shift: number }
 }
 
 /** True when a fill or stroke names a shared gradient or pattern rather than a plain colour. */
@@ -356,5 +358,25 @@ export function groundOps(
     if (b.water) ops.push({ d: b.d, fill: `${REF}tm-water` })
   }
   for (const b of scenery.runoffs) ops.push({ d: b.d, fill: b.fill })
+  return ops
+}
+
+/** A stacked tyre wall: the dark casing, then its colour bands laid out of phase along it.
+ *
+ *  The bands are dashes rather than separate shapes on purpose — a tyre wall is the same section
+ *  repeated round a curve, and one dashed run per colour says that in three paths. */
+export function tyreWallOps(wall: SceneryTyreWall, u: (m: number) => number, full: boolean): DrawOp[] {
+  const ops: DrawOp[] = [{ d: wall.d, stroke: '#1B1F26', width: u(3.4), cap: 'round' }]
+  if (full) {
+    wall.bands.forEach((colour, j) => {
+      ops.push({
+        d: wall.d,
+        stroke: colour,
+        width: u(2.6),
+        cap: 'butt',
+        dash: { on: u(2.4), off: u(4.8), shift: u(2.4 * j) },
+      })
+    })
+  }
   return ops
 }

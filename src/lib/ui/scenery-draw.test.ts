@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  fenceOps, groundOps, marshalGroups, runShadowOp, structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
+  fenceOps, groundOps, marshalGroups, runShadowOp, structureShadowGroups, tyreWallOps, treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -350,5 +350,28 @@ describe('groundOps', () => {
     const ops = groundOps(ground, u, { full: true, ground: true })
     const i = ops.findIndex((op) => op.fill === '#2E4A6B')
     expect(refName(ops[i + 1].fill ?? '')).toBe('tm-water')
+  })
+})
+
+describe('tyreWallOps', () => {
+  const wall = {
+    d: 'M 0 0 L 30 0', pts: [{ x: 0, y: 0 }, { x: 30, y: 0 }],
+    bands: ['#D0342C', '#FFFFFF', '#1B1F26'], nOut: { x: 0, y: -1 },
+  } as never as Parameters<typeof tyreWallOps>[0]
+  const u = (m: number) => m / 3
+
+  it('lays each colour band out of phase, so the stack reads as repeated sections', () => {
+    const ops = tyreWallOps(wall, u, true)
+    expect(ops).toHaveLength(4)
+    const shifts = ops.slice(1).map((op) => op.dash!.shift)
+    expect(new Set(shifts).size, 'every band starts somewhere different').toBe(3)
+    for (const op of ops.slice(1)) expect(op.dash!.off).toBeGreaterThan(op.dash!.on)
+  })
+
+  it('keeps only the casing at the cheap tier', () => {
+    const ops = tyreWallOps(wall, u, false)
+    expect(ops).toHaveLength(1)
+    expect(ops[0].stroke).toBe('#1B1F26')
+    expect(ops[0].dash).toBeUndefined()
   })
 })

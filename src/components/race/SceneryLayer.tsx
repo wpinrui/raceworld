@@ -2,7 +2,7 @@ import type { Scenery, SceneryRect } from '@/lib/ui/track-scenery'
 import {
   buildingRoofGroups, buildingWallGroups, fenceOps, groundOps, marshalGroups, refName,
   runShadowOp,
-  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps,
+  standGroups, structureShadowGroups, treeShadowOp, treeSolidOps, tyreWallOps,
 } from '@/lib/ui/scenery-draw'
 import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib/ui/lighting'
 
@@ -305,11 +305,12 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
   const farTyres = withIdx.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0)
   const TyreWalls = (list: typeof withIdx) => list.map(({ t, i }) => (
     <g key={`tw${i}`}>
-      <path d={t.d} fill="none" stroke="#1B1F26" strokeWidth={u(3.4)} strokeLinecap="round" />
-      {full && t.bands.map((c, j) => (
+      {tyreWallOps(t, u, full).map((op, j) => (
         <path
-          key={j} d={t.d} fill="none" stroke={c} strokeWidth={u(2.6)} strokeLinecap="butt"
-          strokeDasharray={`${u(2.4)} ${u(4.8)}`} strokeDashoffset={u(2.4 * j)}
+          key={j} d={op.d} fill="none" stroke={op.stroke} strokeWidth={op.width}
+          strokeLinecap={op.cap}
+          strokeDasharray={op.dash ? `${op.dash.on} ${op.dash.off}` : undefined}
+          strokeDashoffset={op.dash?.shift}
         />
       ))}
     </g>
