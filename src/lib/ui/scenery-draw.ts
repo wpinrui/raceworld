@@ -12,11 +12,13 @@
 //
 // Everything in this file is pure, which is also what lets the geometry be tested without a DOM.
 
-import { type Part, mapPathPoints, sideFacesX, sweptHull, wallWindows } from './extrude'
+import {
+  type Part, mapPathPoints, partsPath, rakedStand, sideFacesX, sweptHull, wallWindows,
+} from './extrude'
 import {
   type Lighting, dirAt, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
 } from './lighting'
-import type { SceneryRect, SceneryTree } from './track-scenery'
+import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
  *  pattern the renderer supplies — the SVG layer resolves those to `url(#NAME)`, the canvas to a
@@ -173,4 +175,53 @@ export function toLocal(x: number, y: number, rot: number): { x: number; y: numb
   const c = Math.cos(-rot)
   const s = Math.sin(-rot)
   return { x: x * c - y * s, y: x * s + y * c }
+}
+
+export interface StandDrawOpts extends TreeDrawOpts {
+  /** Trackside and rear heights of a seating bank, in metres. */
+  frontM: number
+  rearM: number
+  /** How much of the deck the rear canopy covers. */
+  roofFrac: number
+}
+
+/** A grandstand: the bank below the deck, the raked seating on top, and the canopy over the rear.
+ *
+ *  Raked rather than extruded uniformly, because a bank of seats climbs AWAY from the circuit. Given
+ *  one flat height they read as office blocks parked beside the track. */
+export function standGroups(
+  stands: Scenery['stands'], o: StandDrawOpts, full: boolean,
+): DrawGroup[] {
+  const dir = dirAt(o.view)
+  const t = o.u(o.rearM * o.extrude)
+  return stands.map((s) => {
+    const off = toLocal(dir.x * t, dir.y * t, s.rot)
+    const { hull, deck, roof } = rakedStand(s.w, s.h, s.facing, off, 1 - o.frontM / o.rearM, o.roofFrac)
+    const ops: DrawOp[] = [
+      { d: hull, fill: shadeFace(s.fill, o.lighting) },
+      { d: deck, fill: `${REF}tm-seats` },
+    ]
+    if (full) ops.push({ d: deck, fill: `${REF}tm-crowd` })
+    // Which way a stand faces has to be legible at a glance, so the rake darkens toward the front.
+    if (full) ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}` })
+    ops.push({ d: roof, fill: '#7B8494' })
+    if (full) ops.push({ d: deck, fill: `${REF}tm-bevel` })
+    return { x: s.x, y: s.y, rot: s.rot, ops }
+  })
+}
+
+/** Building roofs, painted over the near half of their own walls.
+ *
+ *  The bevel fills the union path directly rather than clipping a rect to it — an objectBoundingBox
+ *  gradient already resolves against the path's own extent, and doing it per PART gave every sub-rect
+ *  its own light-to-dark ramp, seaming at each internal edge. */
+export function buildingRoofGroups(
+  buildings: SceneryRect[], full: boolean,
+): DrawGroup[] {
+  return buildings.map((b) => {
+    const d = partsPath(partsOf(b))
+    const ops: DrawOp[] = [{ d, fill: b.fill }]
+    if (full) ops.push({ d, fill: `${REF}tm-roof` }, { d, fill: `${REF}tm-bevel` })
+    return { x: b.x, y: b.y, rot: b.rot, ops }
+  })
 }

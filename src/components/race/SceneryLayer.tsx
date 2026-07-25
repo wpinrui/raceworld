@@ -1,9 +1,10 @@
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
 import {
-  buildingWallGroups, partsOf, refName, toLocal, treeShadowOp, treeSolidOps,
+  buildingRoofGroups, buildingWallGroups, partsOf, refName, standGroups, toLocal, treeShadowOp,
+  treeSolidOps,
 } from '@/lib/ui/scenery-draw'
 import {
-  partsPath, posts, rakedStand, ribbon, sweptHull,
+  posts, ribbon, sweptHull,
 } from '@/lib/ui/extrude'
 import {
   dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach,
@@ -255,12 +256,15 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
   cull?: Cull | null; maxTrees?: number; hide?: Hidden; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
-  const dir = dirAt(view)
   // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
   const treesByDepth = hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees)
   const solidOpts = { u, extrude: EXTRUDE, lighting, view, storeyM: STOREY_M, bayM: WINDOW_BAY_M }
+  const standOpts = {
+    u, extrude: EXTRUDE, lighting, view,
+    frontM: STAND_FRONT_M, rearM: STAND_REAR_M, roofFrac: STAND_ROOF_FRAC,
+  }
   // Trees lean exactly as much as buildings do. Giving them their own, steeper lean put two
   // different cameras in one scene; the height variation belongs in each tree's own scale.
   return (
@@ -278,42 +282,17 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
       {/* Grandstands rake: the trackside front barely lifts, the rear lifts a long way, so the deck
           climbs away from the circuit like real seating. Extruded uniformly they read as office
           blocks parked beside the track — they are a bank of seats, not a building. */}
-      {!hide?.has('stands') && scenery.stands.map((s, i) => {
-        const t = u(STAND_REAR_M * EXTRUDE)
-        const o = toLocal(dir.x * t, dir.y * t, s.rot)
-        const { hull, deck, roof } = rakedStand(
-          s.w, s.h, s.facing, o, 1 - STAND_FRONT_M / STAND_REAR_M, STAND_ROOF_FRAC,
-        )
-        return (
-          <g key={`s${i}`} transform={`translate(${s.x} ${s.y}) rotate(${deg(s.rot)})`}>
-            {/* Structure below the deck: the exposed sides of the bank. */}
-            <path d={hull} fill={shadeFace(s.fill, lighting)} />
-            {/* The seating deck itself, patterned and raked. */}
-            <path d={deck} fill="url(#tm-seats)" />
-            {full && <path d={deck} fill="url(#tm-crowd)" />}
-            {full && <path d={deck} fill={s.facing ? 'url(#tm-rake)' : 'url(#tm-rake-flip)'} />}
-            {/* Roof over the rear rows only. */}
-            <path d={roof} fill="#7B8494" />
-            {full && <path d={deck} fill="url(#tm-bevel)" />}
-          </g>
-        )
-      })}
+      {!hide?.has('stands') && standGroups(scenery.stands, standOpts, full).map((g, i) => (
+        <g key={`s${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
+          {g.ops.map((op, j) => <path key={j} d={op.d} fill={paint(op.fill!)} />)}
+        </g>
+      ))}
 
-      {!hide?.has('buildings') && scenery.buildings.map((b, i) => {
-        const d = partsPath(partsOf(b))
-        return (
-          <g key={`b${i}`} transform={`translate(${b.x} ${b.y}) rotate(${deg(b.rot)})`}>
-            <path d={d} fill={b.fill} />
-            {/* One bevel over the whole silhouette. Filling the union path directly rather than
-                clipping a rect to it drops three nodes per building for the same picture: an
-                objectBoundingBox gradient already resolves against the path's own extent. Drawing it
-                per PART is what has to be avoided — that gave every sub-rect its own full
-                light-to-dark ramp, seaming at each internal edge. */}
-            {full && <path d={d} fill="url(#tm-roof)" />}
-            {full && <path d={d} fill="url(#tm-bevel)" />}
-          </g>
-        )
-      })}
+      {!hide?.has('buildings') && buildingRoofGroups(scenery.buildings, full).map((g, i) => (
+        <g key={`b${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
+          {g.ops.map((op, j) => <path key={j} d={op.d} fill={paint(op.fill!)} />)}
+        </g>
+      ))}
 
       {/* Canopies, DEPTH-SORTED so a nearer tree covers a further one. Drawn in array order they
           overlapped arbitrarily, which is the one thing that breaks a grove's read. Each tree's

@@ -4,8 +4,8 @@
 import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
-  REF, buildingWallGroups, depthSorted, partsOf, refName, toLocal, treeShadowOp, treeShadowRatio,
-  treeSolidOps,
+  REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
+  treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -174,5 +174,47 @@ describe('buildingWallGroups', () => {
 
   it('emits nothing for no buildings', () => {
     expect(buildingWallGroups([], solidOpts)).toEqual([])
+  })
+})
+
+describe('standGroups', () => {
+  const standOpts = { ...opts, frontM: 1, rearM: 5.5, roofFrac: 0.3 }
+  const stand = (facing: boolean) => ({ x: 10, y: 20, w: 40, h: 16, rot: 0.2, fill: '#4A515C', facing })
+
+  it('rakes AWAY from the circuit, so the two facings are mirror images', () => {
+    const [a] = standGroups([stand(true)] as never, standOpts, true)
+    const [b] = standGroups([stand(false)] as never, standOpts, true)
+    expect(a.ops[0].d).not.toBe(b.ops[0].d)
+    // The rake gradient flips with the facing; that is what makes which way it points legible.
+    expect(refName(a.ops[3].fill!)).toBe('tm-rake')
+    expect(refName(b.ops[3].fill!)).toBe('tm-rake-flip')
+  })
+
+  it('drops the crowd, rake and bevel at the cheap tier but keeps the structure', () => {
+    const [full] = standGroups([stand(true)] as never, standOpts, true)
+    const [low] = standGroups([stand(true)] as never, standOpts, false)
+    expect(low.ops.length).toBeLessThan(full.ops.length)
+    // Whatever comes off, the bank, its seating and its roof stay.
+    expect(low.ops.map((op) => op.fill)).toContain(full.ops[0].fill)
+    expect(low.ops.some((op) => refName(op.fill!) === 'tm-seats')).toBe(true)
+    expect(low.ops.some((op) => op.fill === '#7B8494')).toBe(true)
+  })
+})
+
+describe('buildingRoofGroups', () => {
+  const b = { x: 5, y: 6, w: 20, h: 12, rot: 0.3, fill: '#59616E' } as SceneryRect
+
+  it('paints the bevel over the WHOLE union, never per part', () => {
+    // Per part, every sub-rect got its own light-to-dark ramp and seamed at each internal edge.
+    const [g] = buildingRoofGroups([{ ...b, parts: [
+      { dx: -4, dy: 0, w: 10, h: 12 }, { dx: 5, dy: 0, w: 8, h: 6 },
+    ] } as SceneryRect], true)
+    expect(g.ops).toHaveLength(3)
+    expect(g.ops[0].d).toBe(g.ops[2].d)
+    expect(refName(g.ops[2].fill!)).toBe('tm-bevel')
+  })
+
+  it('keeps only the flat roof at the cheap tier', () => {
+    expect(buildingRoofGroups([b], false)[0].ops).toHaveLength(1)
   })
 })
