@@ -38,6 +38,12 @@ export interface DrawOp {
   evenOdd?: boolean
   /** Dash length and gap, in viewBox units, with an offset for stacking bands out of phase. */
   dash?: { on: number; off: number; shift: number }
+  /** Extent the paint resolves against, when the paint is a gradient.
+   *
+   *  SVG resolves an objectBoundingBox gradient against the path's own extent and needs no help. A
+   *  canvas does: `Path2D` cannot report a bounding box, so anything gradient-filled has to carry the
+   *  one it was built from or the ramp lands somewhere else entirely. Only set where it is needed. */
+  bbox?: { x: number; y: number; w: number; h: number }
 }
 
 /** True when a fill or stroke names a shared gradient or pattern rather than a plain colour. */
@@ -96,7 +102,11 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
       width: Math.max(o.u(0.8), t.r * 0.34),
       cap: 'round',
     })
-    ops.push({ d: t.d, fill: `${REF}tm-tree${t.variant}` })
+    ops.push({
+      d: t.d,
+      fill: `${REF}tm-tree${t.variant}`,
+      bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
+    })
   }
   return ops
 }
@@ -204,15 +214,16 @@ export function standGroups(
   return stands.map((s) => {
     const off = toLocal(dir.x * t, dir.y * t, s.rot)
     const { hull, deck, roof } = rakedStand(s.w, s.h, s.facing, off, 1 - o.frontM / o.rearM, o.roofFrac)
+    const box = { x: -s.w / 2, y: -s.h / 2, w: s.w, h: s.h }
     const ops: DrawOp[] = [
       { d: hull, fill: shadeFace(s.fill, o.lighting) },
-      { d: deck, fill: `${REF}tm-seats` },
+      { d: deck, fill: `${REF}tm-seats`, bbox: box },
     ]
-    if (full) ops.push({ d: deck, fill: `${REF}tm-crowd` })
+    if (full) ops.push({ d: deck, fill: `${REF}tm-crowd`, bbox: box })
     // Which way a stand faces has to be legible at a glance, so the rake darkens toward the front.
-    if (full) ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}` })
+    if (full) ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}`, bbox: box })
     ops.push({ d: roof, fill: '#7B8494' })
-    if (full) ops.push({ d: deck, fill: `${REF}tm-bevel` })
+    if (full) ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
     return { x: s.x, y: s.y, rot: s.rot, ops }
   })
 }
@@ -227,8 +238,9 @@ export function buildingRoofGroups(
 ): DrawGroup[] {
   return buildings.map((b) => {
     const d = partsPath(partsOf(b))
+    const box = { x: -b.w / 2, y: -b.h / 2, w: b.w, h: b.h }
     const ops: DrawOp[] = [{ d, fill: b.fill }]
-    if (full) ops.push({ d, fill: `${REF}tm-roof` }, { d, fill: `${REF}tm-bevel` })
+    if (full) ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
     return { x: b.x, y: b.y, rot: b.rot, ops }
   })
 }

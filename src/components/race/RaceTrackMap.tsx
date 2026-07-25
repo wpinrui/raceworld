@@ -14,6 +14,9 @@ import {
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
+import { SceneryCanvas, drawScene } from './SceneryCanvas'
+import { sceneryScene } from '@/lib/ui/scenery-draw'
+import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
 } from './PitBuilding'
@@ -511,7 +514,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const hudRef = useRef<HTMLDivElement>(null)
   // 0 means uncapped; cycled from the readout so the two can be compared directly.
   // On by default: it is the fix, not an experiment. The hotkey stays so it can be compared.
-  const [bitmapOn, setBitmapOn] = useState(true)
+  const [bitmapOn, setBitmapOn] = useState(false)
+  const [canvasOn, setCanvasOn] = useState(true)
   const staticRef = useRef<SVGGElement>(null)
   const [frameCap, setFrameCap] = useState(FRAME_CAPS[0])
   const frameCapRef = useRef(FRAME_CAPS[0])
@@ -524,6 +528,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (!DEBUG_KEYS) return
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
       if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
+      if (e.key === 'x' || e.key === 'X') setCanvasOn((v) => !v)
       if (e.key === 'c' || e.key === 'C') {
         setFrameCap((v) => FRAME_CAPS[(FRAME_CAPS.indexOf(v) + 1) % FRAME_CAPS.length])
       }
@@ -606,6 +611,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     setCull(next)
   }, [vb])
 
+  // Painting the canvas is defined further down, once the scene exists; `applyCam` reaches it through
+  // this ref so the two can be declared in whichever order they need to be.
+  const paintRef = useRef<() => void>(() => {})
+
   // Rebuilding the world on a new bearing means regenerating every path that carries height, which is
   // a full re-render of a few thousand nodes. Far too slow to do on each frame of a rotate, so the
   // camera turns on its own (the transform is imperative and cheap) and the SOLIDS catch up once the
@@ -625,6 +634,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     world.style.setProperty('--cam-rot', `${rot}rad`)
     world.style.setProperty('--cam-zoom-inv', String(1 / z))
     updateCull()
+    paintRef.current()
     const low = z < LOD_ZOOM && viewRef.current === 'live'
     if (low !== lodLowRef.current) {
       lodLowRef.current = low
@@ -634,7 +644,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
 
   // Real-world metres -> viewBox units for this track.
-  const u = (metres: number) => metres / layout.metresPerUnit
+  // Memoised: the scene and its paints are keyed on it, and a fresh closure every render would
+  // rebuild a whole circuit's geometry sixty times a second.
+  const u = useCallback((metres: number) => metres / layout.metresPerUnit, [layout.metresPerUnit])
 
   // Which side is the OUTSIDE of the circuit (from the loop's orientation): the pinned card lives
   // there permanently so it never crosses the track. Clockwise (y-down) = interior on the right of
@@ -1521,6 +1533,38 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Only the scenery categories, narrowed for the layers that take them.
   const hide = useMemo(() => hidden as Hidden, [hidden])
 
+  // The static world as one description, drawn straight onto a canvas by the render loop. Vectors are
+  // redrawn at the exact camera transform each frame, so it is as sharp at 60x zoom as at 1x — which
+  // is what the pre-baked image could never be, and the reason it is being replaced.
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const scene = useMemo(() => (canvasOn && view === 'live'
+    ? sceneryScene(scenery, {
+      u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
+      storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
+      marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, tyreM: 1.5,
+      solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
+      trees: hidden.has('trees') ? [] : scenery.trees,
+    })
+    : null), [canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden])
+  const sceneRef = useRef(scene)
+  useEffect(() => { sceneRef.current = scene }, [scene])
+  // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
+  const paintCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    const sc = sceneRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !sc || !ctx) return
+    const dpr = window.devicePixelRatio || 1
+    drawScene(
+      ctx, sc, camRef.current, vb,
+      { w: canvas.width / dpr, h: canvas.height / dpr }, dpr,
+      (name, c, bbox) => canvasPaint(name, c, {
+        lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
+      }) ?? '#FF00FF',
+    )
+  }, [vb, lighting, u])
+  useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
+
   // Baking covers the WHOLE circuit, so culling is switched off while it is on: a disc around the
   // camera would be baked into the image and then travel with it.
   const bakeKey = `${layout.circuitId}|${viewAz.toFixed(3)}|${lodLow}|${[...hidden].join(',')}`
@@ -1571,6 +1615,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         />
       )}
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
+        {canvasOn && <SceneryCanvas canvasRef={canvasRef} className="absolute inset-0" />}
         <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
               the edge of the world under follow + zoom. */}
@@ -1580,7 +1625,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* The static world, baked to one image when that mode is on. Hidden by VISIBILITY rather
                 than display, because the race loop measures the track path with getTotalLength and
                 that has to keep working while the picture comes from the bitmap. */}
-            <g ref={staticRef} style={{ visibility: bitmap ? 'hidden' : undefined }}>
+            <g ref={staticRef} style={{ visibility: bitmap || canvasOn ? 'hidden' : undefined }}>
             <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             <g data-cost="scenery">{view === 'live' && sceneryNode}</g>
             {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}

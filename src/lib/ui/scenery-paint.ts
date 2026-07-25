@@ -23,8 +23,8 @@ export interface PaintCtx {
   lighting: Lighting
   /** Metres to viewBox units. */
   u: (m: number) => number
-  /** Bounds of the shape being painted, in the space the canvas is currently transformed to. Gradients
-   *  in SVG resolve against the path's own extent, so a canvas has to be told it. */
+  /** Bounds of the shape being painted. Gradients in SVG resolve against the path's own extent, so a
+   *  canvas has to be told it; a tile pattern does not care and may be given anything. */
   bounds: { x: number; y: number; w: number; h: number }
 }
 

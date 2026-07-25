@@ -26,7 +26,9 @@ export interface Scene {
 }
 
 /** Paints named by ops, supplied by the caller because they belong to the look rather than the shape. */
-export type PaintFor = (name: string, ctx: CanvasRenderingContext2D) => string | CanvasGradient | CanvasPattern
+export type PaintFor = (
+  name: string, ctx: CanvasRenderingContext2D, bbox: DrawOp['bbox'],
+) => string | CanvasGradient | CanvasPattern
 
 const cache = new Map<string, Path2D>()
 
@@ -47,12 +49,12 @@ function applyOp(ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor):
   ctx.globalAlpha = op.alpha ?? 1
   if (op.fill) {
     const ref = refName(op.fill)
-    ctx.fillStyle = ref ? paintFor(ref, ctx) : op.fill
+    ctx.fillStyle = ref ? paintFor(ref, ctx, op.bbox) : op.fill
     ctx.fill(path, op.evenOdd ? 'evenodd' : 'nonzero')
   }
   if (op.stroke) {
     const ref = refName(op.stroke)
-    ctx.strokeStyle = ref ? paintFor(ref, ctx) : op.stroke
+    ctx.strokeStyle = ref ? paintFor(ref, ctx, op.bbox) : op.stroke
     ctx.lineWidth = op.width ?? 1
     ctx.lineCap = op.cap ?? 'butt'
     ctx.setLineDash(op.dash ? [op.dash.on, op.dash.off] : [])
