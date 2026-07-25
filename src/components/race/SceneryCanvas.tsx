@@ -49,137 +49,31 @@ function pathFor(d: string): Path2D {
   return p
 }
 
-/** The camera transform onto a target of `cw` x `ch` CSS pixels, exactly as the world div applies
- *  its own: translate(cam) rotate scale about the middle, then viewBox units. */
-function applyCamera(
-  ctx: CanvasRenderingContext2D, cam: Camera, vb: ViewBox,
-  cw: number, ch: number, dpr: number, ppu: number,
-): void {
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.translate((cw / 2) * dpr + cam.x * dpr, (ch / 2) * dpr + cam.y * dpr)
-  ctx.rotate(cam.rot)
-  ctx.scale(cam.z * ppu * dpr, cam.z * ppu * dpr)
-  ctx.translate(-(vb.x + vb.w / 2), -(vb.y + vb.h / 2))
-  ctx.lineJoin = 'round'
-}
-
-function drawItem(ctx: CanvasRenderingContext2D, item: SceneItem, paintFor: PaintFor): void {
-  if (isGroup(item)) {
-    ctx.save()
-    ctx.translate(item.x, item.y)
-    ctx.rotate(item.rot)
-    for (const op of item.ops) applyOp(ctx, op, paintFor)
-    ctx.restore()
-  } else {
-    applyOp(ctx, item, paintFor)
+/** Parse a scene's paths into the cache in small time-boxed slices, then report ready.
+ *
+ *  A cull step swaps in freshly-built path strings — new trees, the grove's shadow megapath, kerb
+ *  curves, on the pit straight the whole complex — and parsing them all inside the next paint was a
+ *  33-50ms frame, the one hitch the lap benchmark left standing. The disc is wider than the
+ *  viewport, so everything entering is still off screen: the renderer can keep painting the OLD
+ *  scene for the few frames this takes and swap when the cache is warm. */
+export function warmScene(scene: Scene, onReady: () => void): { cancel: () => void } {
+  let cancelled = false
+  const ds: string[] = []
+  for (const item of scene) {
+    if (isGroup(item)) for (const op of item.ops) ds.push(op.d)
+    else ds.push(item.d)
   }
-}
-
-/** The static world baked to a bitmap at the CURRENT camera, refreshed in the background.
- *
- *  The lap benchmark proved the remaining hitches were not script at all: every CPU timer sat flat
- *  while frames still blew the vsync budget wherever the scene was dense (worst at the pit complex,
- *  gone only with every static layer off). That is the GPU re-rasterising a few hundred vector ops
- *  — gradients, patterns, dashes — every frame. The picture between two cull steps is STATIC, so it
- *  is rasterised once here, spread over a few frames within a small time budget, and each frame
- *  just blits one image. Sub-pixel resampling while panning is exactly what the composited SVG
- *  world always did, so the racing look is unchanged; during an active zoom the blit scales (soft,
- *  briefly) and a fresh bake lands sharp at the new zoom as soon as the camera settles.
- *
- *  Unlike the abandoned whole-circuit bitmap, the buffer covers only the cull disc's viewport
- *  margin at live zoom — sharpness costs a viewport-and-a-half of pixels, not 350 megapixels.
- *
- *  Two buffers ping-pong: the front blits while the back bakes, so a bake never allocates. */
-export class SceneBaker {
-  /** How much wider than the viewport the bake extends, matching the cull disc's margin. */
-  static readonly MARGIN = 1.45
-  /** Milliseconds of bake work per frame — small enough to never cost a vsync itself. */
-  static readonly BUDGET_MS = 2.5
-
-  private buffers: [HTMLCanvasElement, HTMLCanvasElement] | null = null
-  private frontState: { canvas: HTMLCanvasElement; scene: Scene; cam: Camera; w: number; h: number; dpr: number; ppu: number } | null = null
-  private job: {
-    canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; scene: Scene; cam: Camera
-    w: number; h: number; dpr: number; ppu: number; paintFor: PaintFor; i: number
-  } | null = null
-
-  get front() { return this.frontState }
-  get baking() { return this.job !== null }
-
-  /** Begin baking `scene` as seen by `cam` (any in-flight bake is replaced). */
-  start(
-    scene: Scene, cam: Camera, vb: ViewBox, size: { w: number; h: number },
-    dpr: number, ppu: number, paintFor: PaintFor,
-  ): void {
-    const w = Math.round(size.w * SceneBaker.MARGIN)
-    const h = Math.round(size.h * SceneBaker.MARGIN)
-    if (!this.buffers) this.buffers = [document.createElement('canvas'), document.createElement('canvas')]
-    const canvas = this.buffers[this.frontState?.canvas === this.buffers[0] ? 1 : 0]
-    const pw = Math.round(w * dpr)
-    const ph = Math.round(h * dpr)
-    if (canvas.width !== pw) canvas.width = pw
-    if (canvas.height !== ph) canvas.height = ph
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.clearRect(0, 0, pw, ph)
-    applyCamera(ctx, cam, vb, w, h, dpr, ppu)
-    this.job = { canvas, ctx, scene, cam: { ...cam }, w, h, dpr, ppu, paintFor, i: 0 }
-  }
-
-  /** Bake for at most `budgetMs`; promotes the back buffer to front when the last op lands. */
-  step(budgetMs: number): void {
-    const job = this.job
-    if (!job) return
+  let i = 0
+  const step = () => {
+    if (cancelled) return
     const t0 = performance.now()
-    while (job.i < job.scene.length && performance.now() - t0 < budgetMs) {
-      drawItem(job.ctx, job.scene[job.i++], job.paintFor)
-    }
-    if (job.i >= job.scene.length) {
-      job.ctx.globalAlpha = 1
-      this.frontState = {
-        canvas: job.canvas, scene: job.scene, cam: job.cam,
-        w: job.w, h: job.h, dpr: job.dpr, ppu: job.ppu,
-      }
-      this.job = null
-    }
+    // A warm entry is a Map hit, so a mostly-cached scene completes in one slice.
+    while (i < ds.length && performance.now() - t0 < 3) pathFor(ds[i++])
+    if (i < ds.length) requestAnimationFrame(step)
+    else onReady()
   }
-
-  /** Blit the front bake under the current camera: the world transform, then the inverse of the
-   *  bake's own, so the image lands exactly where a live draw would put every op. */
-  blit(
-    ctx: CanvasRenderingContext2D, cam: Camera, vb: ViewBox,
-    size: { w: number; h: number }, dpr: number, ppu: number,
-  ): boolean {
-    const b = this.frontState
-    if (!b) return false
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.clearRect(0, 0, size.w * dpr, size.h * dpr)
-    applyCamera(ctx, cam, vb, size.w, size.h, dpr, ppu)
-    ctx.translate(vb.x + vb.w / 2, vb.y + vb.h / 2)
-    const s = 1 / (b.cam.z * b.ppu * b.dpr)
-    ctx.scale(s, s)
-    ctx.rotate(-b.cam.rot)
-    ctx.translate(-((b.w / 2) * b.dpr + b.cam.x * b.dpr), -((b.h / 2) * b.dpr + b.cam.y * b.dpr))
-    ctx.drawImage(b.canvas, 0, 0)
-    return true
-  }
-
-  /** Whether the front bake still serves `scene` under `cam`, or a fresh one should start. */
-  stale(scene: Scene, cam: Camera, size: { w: number; h: number }): boolean {
-    const b = this.frontState
-    if (!b) return true
-    return b.scene !== scene
-      || Math.abs(cam.z - b.cam.z) > b.cam.z * 0.001
-      || cam.rot !== b.cam.rot
-      // Camera translation is in screen px; past this drift the margin starts running out.
-      || Math.hypot(cam.x - b.cam.x, cam.y - b.cam.y) > Math.min(size.w, size.h) * 0.15
-  }
-
-  invalidate(): void {
-    this.frontState = null
-    this.job = null
-  }
+  requestAnimationFrame(step)
+  return { cancel: () => { cancelled = true } }
 }
 
 function applyOp(ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor): void {
@@ -217,9 +111,14 @@ export function drawScene(
 ): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, size.w * dpr, size.h * dpr)
-  // Viewport centre, then the camera, then viewBox units — the stage's own middle is also the
-  // viewport's, because the stage is centred in it.
-  applyCamera(ctx, cam, vb, size.w, size.h, dpr, ppu)
+  // Viewport centre, then the camera, then viewBox units. Mirrors the world div's own transform:
+  // translate(cam) rotate scale, about the middle of the stage — which is also the middle of the
+  // viewport, because the stage is centred in it.
+  ctx.translate((size.w / 2) * dpr + cam.x * dpr, (size.h / 2) * dpr + cam.y * dpr)
+  ctx.rotate(cam.rot)
+  ctx.scale(cam.z * ppu * dpr, cam.z * ppu * dpr)
+  ctx.translate(-(vb.x + vb.w / 2), -(vb.y + vb.h / 2))
+  ctx.lineJoin = 'round'
   let m = 0
   let section = 'setup'
   let tPrev = timing ? performance.now() : 0
@@ -236,7 +135,16 @@ export function drawScene(
         m++
       }
     }
-    drawItem(ctx, scene[i], paintFor)
+    const item = scene[i]
+    if (isGroup(item)) {
+      ctx.save()
+      ctx.translate(item.x, item.y)
+      ctx.rotate(item.rot)
+      for (const op of item.ops) applyOp(ctx, op, paintFor)
+      ctx.restore()
+    } else {
+      applyOp(ctx, item, paintFor)
+    }
   }
   if (timing) close('setup')
   ctx.globalAlpha = 1
