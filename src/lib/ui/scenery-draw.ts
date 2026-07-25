@@ -13,12 +13,15 @@
 // Everything in this file is pure, which is also what lets the geometry be tested without a DOM.
 
 import {
-  type Part, mapPathPoints, partsPath, rakedStand, sideFacesX, sweptHull, wallWindows,
+  type Part, mapPathPoints, partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull,
+  wallWindows,
 } from './extrude'
 import {
   type Lighting, dirAt, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
 } from './lighting'
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
+import type { SceneryFence } from './scenery-props'
+import type { Vec } from './geom'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
  *  pattern the renderer supplies — the SVG layer resolves those to `url(#NAME)`, the canvas to a
@@ -252,4 +255,44 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
       ops: [{ d: sweptHull(partsOf(r), off.x, off.y) }],
     }
   })
+}
+
+export interface FenceDrawOpts extends TreeDrawOpts {
+  /** Height of the debris fencing, in metres. */
+  fenceM: number
+}
+
+/** Debris fencing: a solid on a curve.
+ *
+ *  It needs the height face between its top line and its base, or it is a line plus a detached shadow
+ *  and reads as floating. That face is a cage rather than a wall, so it is drawn see-through with its
+ *  posts as verticals — one path for a whole circuit's worth. */
+export function fenceOps(fences: SceneryFence[], o: FenceDrawOpts): DrawOp[][] {
+  const dir = dirAt(o.view)
+  const lift = o.u(o.fenceM * o.extrude)
+  const ox = dir.x * lift
+  const oy = dir.y * lift
+  return fences.map((f) => [
+    // You can see the circuit through debris fencing, so the face is barely there.
+    { d: ribbon(f.pts, ox, oy), fill: '#AEB6C2', alpha: 0.13 },
+    { d: posts(f.pts, ox, oy, 2), stroke: '#79808C', width: o.u(0.35), alpha: 0.5 },
+    { d: f.d, stroke: '#79808C', width: o.u(0.4), alpha: 0.6 },
+  ])
+}
+
+/** The shadow a run of fencing or tyre wall throws.
+ *
+ *  SWEPT from the object's base, never a displaced copy of it: a copy offset by the cast distance
+ *  leaves a gap between the object and its own shadow, which reads as levitation and implies
+ *  something taller than the thing drawn. */
+export function runShadowOp(
+  pts: Vec[], heightM: number, o: TreeDrawOpts,
+): DrawOp {
+  const dir = dirAt(o.view)
+  const ldir = dirAt(o.lighting.azimuth)
+  const base = o.u(heightM * o.extrude)
+  const cast = o.u(heightM * shadowReach(o.lighting))
+  return {
+    d: ribbon(pts.map((p) => ({ x: p.x + dir.x * base, y: p.y + dir.y * base })), ldir.x * cast, ldir.y * cast),
+  }
 }

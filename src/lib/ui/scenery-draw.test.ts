@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, partsOf, refName, standGroups, toLocal,
-  structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
+  fenceOps, runShadowOp, structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { partsPath } from './extrude'
@@ -248,5 +248,38 @@ describe('structureShadowGroups', () => {
     const tall = structureShadowGroups([rect], { ...shadowOpts, heightM: () => 30 })[0]
     expect(tall.ops[0].d.length).toBeGreaterThanOrEqual(short.ops[0].d.length)
     expect(tall.ops[0].d).not.toBe(short.ops[0].d)
+  })
+})
+
+describe('fenceOps', () => {
+  const run = { d: 'M 0 0 L 10 0 L 20 5', pts: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 5 }] }
+
+  it('draws a cage, not a wall: a face you can see through, plus its posts', () => {
+    const [ops] = fenceOps([run], { ...opts, fenceM: 4 })
+    expect(ops).toHaveLength(3)
+    expect(ops[0].alpha!).toBeLessThan(0.2)
+    expect(ops[1].stroke, 'posts are stroked verticals').toBeTruthy()
+    expect(ops[2].d, 'top line is the run itself').toBe(run.d)
+  })
+
+  it('puts a whole circuit of posts in ONE path', () => {
+    const [ops] = fenceOps([run], { ...opts, fenceM: 4 })
+    expect((ops[1].d.match(/M /g) ?? []).length).toBeGreaterThan(1)
+  })
+})
+
+describe('runShadowOp', () => {
+  const pts = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 4 }]
+
+  it('sweeps from the base rather than offsetting a copy', () => {
+    // An offset copy leaves a gap between the object and its shadow, which reads as levitation.
+    const op = runShadowOp(pts, 4, opts)
+    expect(op.d.startsWith('M ')).toBe(true)
+    // A ribbon closes back on itself: twice the points of the run it was built from.
+    expect((op.d.match(/L /g) ?? []).length).toBe(pts.length * 2 - 1)
+  })
+
+  it('lengthens with height', () => {
+    expect(runShadowOp(pts, 12, opts).d).not.toBe(runShadowOp(pts, 2, opts).d)
   })
 })

@@ -1,11 +1,12 @@
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
 import {
-  buildingRoofGroups, buildingWallGroups, refName, standGroups, structureShadowGroups,
+  buildingRoofGroups, buildingWallGroups, fenceOps, refName, runShadowOp, standGroups,
+  structureShadowGroups,
   toLocal, treeShadowOp,
   treeSolidOps,
 } from '@/lib/ui/scenery-draw'
 import {
-  posts, ribbon, sweptHull,
+  sweptHull,
 } from '@/lib/ui/extrude'
 import {
   dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach,
@@ -315,10 +316,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
   const shFill = shadowFill(lighting)
   const shOp = shadowOpacity(lighting)
   // Every piece of furniture casts from its BASE, like every other solid on the map.
-  const tyreB = u(TYRE_H_M * EXTRUDE)
-  const tyreT = u(TYRE_H_M * reach)
-  const fenceB = u(FENCE_H_M * EXTRUDE)
-  const fenceT = u(FENCE_H_M * reach)
+  const furnOpts = { u, extrude: EXTRUDE, lighting, view }
 
   // Depth convention: raising a point pushes its image AWAY from the camera, exactly as a light
   // pushes a shadow away from itself. Tops are drawn displaced by -dir (a roof sits up-light of its
@@ -354,24 +352,12 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
               reads as levitation — and implies something taller than the thing drawn. The fill covers
               the swept ground; the stroke dilates it to the object's real thickness. */}
           {scenery.tyreWalls.map((t, i) => (
-            <path
-              key={`ts${i}`} strokeWidth={u(3.4)}
-              d={ribbon(
-                t.pts.map((p) => ({ x: p.x + dir.x * tyreB, y: p.y + dir.y * tyreB })),
-                ldir.x * tyreT, ldir.y * tyreT,
-              )}
-            />
+            <path key={`ts${i}`} strokeWidth={u(3.4)} d={runShadowOp(t.pts, TYRE_H_M, furnOpts).d} />
           ))}
           {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
               mesh, so what it casts is faint. */}
           {full && scenery.fences.map((b, i) => (
-            <path
-              key={`fs${i}`} opacity={0.35} stroke="none"
-              d={ribbon(
-                b.pts.map((p) => ({ x: p.x + dir.x * fenceB, y: p.y + dir.y * fenceB })),
-                ldir.x * fenceT, ldir.y * fenceT,
-              )}
-            />
+            <path key={`fs${i}`} opacity={0.35} stroke="none" d={runShadowOp(b.pts, FENCE_H_M, furnOpts).d} />
           ))}
         </g>
       )}
@@ -383,21 +369,16 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
           base, or it is a line plus a detached shadow and reads as floating above the ground. That
           face is a cage rather than a wall, so it is drawn see-through with its posts as verticals —
           one path for a whole circuit's worth. */}
-      {full && scenery.fences.map((b, i) => {
-        const ox = dir.x * fenceB
-        const oy = dir.y * fenceB
-        return (
-          <g key={`bf${i}`}>
-            {/* Mesh: you can see the circuit through debris fencing, so the face is barely there. */}
-            <path d={ribbon(b.pts, ox, oy)} fill="#AEB6C2" opacity={0.13} />
+      {full && fenceOps(scenery.fences, { ...furnOpts, fenceM: FENCE_H_M }).map((ops, i) => (
+        <g key={`bf${i}`}>
+          {ops.map((op, j) => (
             <path
-              d={posts(b.pts, ox, oy, 2)} fill="none" stroke="#79808C"
-              strokeWidth={u(0.35)} opacity={0.5}
+              key={j} d={op.d} fill={op.fill ?? 'none'} stroke={op.stroke}
+              strokeWidth={op.width} opacity={op.alpha}
             />
-            <path d={b.d} fill="none" stroke="#79808C" strokeWidth={u(0.4)} opacity={0.6} />
-          </g>
-        )
-      })}
+          ))}
+        </g>
+      ))}
 
       {/* Tyre walls NEARER than the fencing go over it. */}
       {TyreWalls(nearTyres)}
