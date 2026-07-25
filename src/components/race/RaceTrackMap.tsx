@@ -62,6 +62,14 @@ const PROFILE_N = 256
  *  no longer a swing to steady, and capping a frame that already fits only throws frames away. */
 const FRAME_CAPS: number[] = [0, 30, 45]
 
+/** The layer switches, the node budget, the frame cap and the baked-world switch are all still wired
+ *  and working; only their KEYBOARD shortcuts are off. They belong in settings, and this is the seam
+ *  they get driven from when that exists. Typed as boolean so the block below stays live code rather
+ *  than something the compiler narrows away.
+ *
+ *  The readout keeps its backtick: it is worth having to hand at any time. */
+const DEBUG_KEYS: boolean = false
+
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
 const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes'> = {
@@ -513,6 +521,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return
       if (e.key === '`') setHud((v) => !v)
+      if (!DEBUG_KEYS) return
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
       if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
       if (e.key === 'c' || e.key === 'C') {
