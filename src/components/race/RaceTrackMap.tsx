@@ -14,7 +14,7 @@ import {
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
-import { SceneryCanvas, drawScene } from './SceneryCanvas'
+import { SceneryCanvas, drawScene, warmScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
@@ -1665,8 +1665,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
+  // On a cull step, the old scene keeps painting while the new one's paths parse in the
+  // background; the swap lands only when the Path2D cache is warm. Parsing them inside the next
+  // paint instead was a 2-3 vsync hitch on every disc move — the last dip the benchmark found.
+  const warmTokenRef = useRef<{ cancel: () => void } | null>(null)
   useEffect(() => {
-    composeSceneRef.current = (cullNow) => { sceneRef.current = composeScene(cullNow) }
+    composeSceneRef.current = (cullNow) => {
+      const next = composeScene(cullNow)
+      warmTokenRef.current?.cancel()
+      if (!next) {
+        sceneRef.current = next
+        return
+      }
+      warmTokenRef.current = warmScene(next.items, () => { sceneRef.current = next })
+    }
+    return () => warmTokenRef.current?.cancel()
   }, [composeScene])
   useEffect(() => { canvasOnRef.current = canvasOn }, [canvasOn])
   // Last frame's paint time by scene section, for the fps readout. Only collected while the

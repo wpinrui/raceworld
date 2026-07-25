@@ -30,16 +30,50 @@ export type PaintFor = (
 
 const cache = new Map<string, Path2D>()
 
-/** Path2D for some path data, built once. Cleared wholesale rather than per entry: the set turns over
- *  completely when the view bearing changes and not at all in between. */
+/** Path2D for some path data, built once. Over the cap the OLDEST quarter goes, not the whole set:
+ *  a wholesale clear made the next frame re-parse every path on screen at once, which is exactly
+ *  the hitch this cache exists to prevent. */
 function pathFor(d: string): Path2D {
   let p = cache.get(d)
   if (!p) {
     p = new Path2D(d)
-    if (cache.size > 20000) cache.clear()
+    if (cache.size > 40000) {
+      let toDrop = cache.size / 4
+      for (const key of cache.keys()) {
+        if (toDrop-- <= 0) break
+        cache.delete(key)
+      }
+    }
     cache.set(d, p)
   }
   return p
+}
+
+/** Parse a scene's paths into the cache in small time-boxed slices, then report ready.
+ *
+ *  A cull step swaps in freshly-built path strings — new trees, the grove's shadow megapath, kerb
+ *  curves, on the pit straight the whole complex — and parsing them all inside the next paint was a
+ *  33-50ms frame, the one hitch the lap benchmark left standing. The disc is wider than the
+ *  viewport, so everything entering is still off screen: the renderer can keep painting the OLD
+ *  scene for the few frames this takes and swap when the cache is warm. */
+export function warmScene(scene: Scene, onReady: () => void): { cancel: () => void } {
+  let cancelled = false
+  const ds: string[] = []
+  for (const item of scene) {
+    if (isGroup(item)) for (const op of item.ops) ds.push(op.d)
+    else ds.push(item.d)
+  }
+  let i = 0
+  const step = () => {
+    if (cancelled) return
+    const t0 = performance.now()
+    // A warm entry is a Map hit, so a mostly-cached scene completes in one slice.
+    while (i < ds.length && performance.now() - t0 < 3) pathFor(ds[i++])
+    if (i < ds.length) requestAnimationFrame(step)
+    else onReady()
+  }
+  requestAnimationFrame(step)
+  return { cancel: () => { cancelled = true } }
 }
 
 function applyOp(ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor): void {
