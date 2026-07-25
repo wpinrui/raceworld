@@ -13,6 +13,7 @@ import {
   MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowOpacity, shadowReach,
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
+import { useSceneryBitmap } from './use-scenery-bitmap'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
 } from './PitBuilding'
@@ -500,6 +501,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const [budgetOn, setBudgetOn] = useState(false)
   const hudRef = useRef<HTMLDivElement>(null)
   // 0 means uncapped; cycled from the readout so the two can be compared directly.
+  const [bitmapOn, setBitmapOn] = useState(false)
+  const staticRef = useRef<SVGGElement>(null)
   const [frameCap, setFrameCap] = useState(FRAME_CAPS[0])
   const frameCapRef = useRef(FRAME_CAPS[0])
   useEffect(() => { hiddenRef.current = hidden }, [hidden])
@@ -509,6 +512,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (e.metaKey || e.ctrlKey) return
       if (e.key === '`') setHud((v) => !v)
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
+      if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
       if (e.key === 'c' || e.key === 'C') {
         setFrameCap((v) => FRAME_CAPS[(FRAME_CAPS.indexOf(v) + 1) % FRAME_CAPS.length])
       }
@@ -1506,6 +1510,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Only the scenery categories, narrowed for the layers that take them.
   const hide = useMemo(() => hidden as Hidden, [hidden])
 
+  // Baking covers the WHOLE circuit, so culling is switched off while it is on: a disc around the
+  // camera would be baked into the image and then travel with it.
+  const bakeKey = `${layout.circuitId}|${viewAz.toFixed(3)}|${lodLow}|${[...hidden].join(',')}`
+  const bitmap = useSceneryBitmap(staticRef, vb, bitmapOn && view === 'live', bakeKey)
+  const bakeCull = bitmapOn ? null : cull
+
   // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
   // corner at a time. Same disc the trees use.
   const visibleKerbs = useMemo(
@@ -1522,12 +1532,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     [scenery, layout.metresPerUnit, lighting, hide, lodLow],
   )
   const shadowNode = useMemo(
-    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, hide, lodLow],
+    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={bakeCull} maxTrees={bitmapOn ? undefined : maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, bakeCull, bitmapOn, maxTrees, hide, lodLow],
   )
   const solidsNode = useMemo(
-    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={cull} maxTrees={maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, cull, maxTrees, hide, lodLow],
+    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={bakeCull} maxTrees={bitmapOn ? undefined : maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
+    [scenery, layout.metresPerUnit, lighting, viewAz, bakeCull, bitmapOn, maxTrees, hide, lodLow],
   )
   const furnitureNode = useMemo(
     () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} hide={hide} detail={lodLow ? 'low' : 'full'} />,
@@ -1556,6 +1566,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
             {/* Grass ground plane, far beyond the canvas so the camera never sees the edge of the world.
                 The static map view drops the scenery for a clean dark minimap. */}
+            {/* The static world, baked to one image when that mode is on. Hidden by VISIBILITY rather
+                than display, because the race loop measures the track path with getTotalLength and
+                that has to keep working while the picture comes from the bitmap. */}
+            <g ref={staticRef} style={{ visibility: bitmap ? 'hidden' : undefined }}>
             <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             <g data-cost="scenery">{view === 'live' && sceneryNode}</g>
             {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
@@ -1583,6 +1597,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 <path d={pitZone.limiterOut} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
               </g>
             )}
+            </g>
+            {bitmap && <image href={bitmap} x={vb.x} y={vb.y} width={vb.w} height={vb.h} />}
             <g data-cost="boxes" style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
             {pitSlots.map((s, i) => (
               <g key={`pl${i}`} transform={`translate(${s.x} ${s.y}) rotate(${(s.rot * 180) / Math.PI})`}>
@@ -1690,7 +1706,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             ))}
             </g>
             {/* Red/white kerbs through the corners. */}
-            {!hidden.has('kerbs') && visibleKerbs.map((k, i) => (
+            {!hidden.has('kerbs') && (bitmapOn ? scenery.kerbs : visibleKerbs).map((k, i) => (
               <g key={`k${i}`}>
                 <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(KERB_WIDTH_M)} strokeLinecap="round" />
                 <path
