@@ -524,6 +524,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const frameCapRef = useRef(FRAME_CAPS[0])
   useEffect(() => { hiddenRef.current = hidden }, [hidden])
   useEffect(() => { frameCapRef.current = frameCap }, [frameCap])
+  // Benchmark entry, reached through a ref because the key listener binds once.
+  const benchKeyRef = useRef<() => void>(() => {})
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return
@@ -532,6 +534,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
       if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
       if (e.key === 'x' || e.key === 'X') setCanvasOn((v) => !v)
+      if (e.key === 'n' || e.key === 'N') benchKeyRef.current()
       if (e.key === 'c' || e.key === 'C') {
         setFrameCap((v) => FRAME_CAPS[(FRAME_CAPS.indexOf(v) + 1) % FRAME_CAPS.length])
       }
@@ -1669,6 +1672,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
   // readout is up — the timing calls are cheap but not free.
   const paintStatsRef = useRef<Record<string, number>>({})
+  // True while the benchmark drives the map; keeps paint timing on with the readout closed.
+  const benchRef = useRef(false)
   // The race tick's JS cost since the readout last sampled: average and worst frame.
   const tickStatsRef = useRef({ sum: 0, n: 0, max: 0 })
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
@@ -1685,7 +1690,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       return
     }
     const dpr = window.devicePixelRatio || 1
-    const timing = hudRef.current ? { marks: sc.marks, out: {} } : undefined
+    const timing = hudRef.current || benchRef.current ? { marks: sc.marks, out: {} } : undefined
     drawScene(
       ctx, sc.items, camRef.current, vb,
       { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
@@ -1698,6 +1703,135 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (timing) paintStatsRef.current = timing.out
   }, [vb, lighting, u])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
+
+  // ── Benchmark mode ──
+  //
+  // One keypress runs an ablation matrix over a live race: the same follow camera at racing zoom,
+  // one segment per configuration (each layer hidden in turn, the dynamic layers isolated, and the
+  // SVG renderer as the old baseline), a few seconds of frame timings each. The result prints as a
+  // table and downloads as JSON, so a perf report is a file rather than a screenshot relay.
+  const [benchOn, setBenchOn] = useState(false)
+  const benchStatusRef = useRef<HTMLDivElement>(null)
+  const benchAbortRef = useRef(false)
+  const runBench = useCallback(async () => {
+    if (viewRef.current !== 'live' || cars.length === 0) return
+    const SETTLE_MS = 600
+    const RECORD_MS = 3500
+    const SEGMENTS: Array<{ name: string; canvas: boolean; hide: string[] }> = [
+      { name: 'baseline', canvas: true, hide: [] },
+      { name: 'no-trees', canvas: true, hide: ['trees'] },
+      { name: 'no-shadows', canvas: true, hide: ['shadows'] },
+      { name: 'no-buildings', canvas: true, hide: ['buildings'] },
+      { name: 'no-stands', canvas: true, hide: ['stands'] },
+      { name: 'no-furniture', canvas: true, hide: ['furniture'] },
+      { name: 'no-ground', canvas: true, hide: ['ground'] },
+      { name: 'no-kerbs', canvas: true, hide: ['kerbs'] },
+      { name: 'no-pit', canvas: true, hide: ['pit'] },
+      { name: 'no-boxes', canvas: true, hide: ['boxes'] },
+      { name: 'no-cars', canvas: true, hide: ['cars'] },
+      { name: 'no-cars-boxes', canvas: true, hide: ['cars', 'boxes'] },
+      { name: 'dynamic-only', canvas: true, hide: ['trees', 'shadows', 'buildings', 'stands', 'furniture', 'ground', 'kerbs', 'pit'] },
+      { name: 'svg-mode', canvas: false, hide: [] },
+    ]
+    const sleep = (ms: number) => new Promise((r) => { setTimeout(r, ms) })
+    // rAF deltas for a stretch of wall time, alongside the canvas paint totals those frames logged.
+    const record = (ms: number) => new Promise<{ deltas: number[]; paintMs: number; paintN: number }>((resolve) => {
+      const deltas: number[] = []
+      let paintMs = 0
+      let paintN = 0
+      let last = performance.now()
+      const until = last + ms
+      const loop = (now: number) => {
+        deltas.push(now - last)
+        last = now
+        const p = Object.values(paintStatsRef.current).reduce((s, v) => s + v, 0)
+        if (p > 0) { paintMs += p; paintN++ }
+        if (now >= until || benchAbortRef.current) { resolve({ deltas, paintMs, paintN }); return }
+        requestAnimationFrame(loop)
+      }
+      requestAnimationFrame(loop)
+    })
+    const status = (t: string) => { if (benchStatusRef.current) benchStatusRef.current.textContent = t }
+
+    benchRef.current = true
+    benchAbortRef.current = false
+    setBenchOn(true)
+    const prev = {
+      hidden: hiddenRef.current as ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>,
+      canvas: canvasOnRef.current,
+      cap: frameCapRef.current,
+      follow: followRef.current,
+      z: camRef.current.z,
+    }
+    setHud(false) // the readout resets the tick stats every half second, which would corrupt the report
+    setFrameCap(0)
+    // The racing shot: leader followed at racing zoom, the case every number so far describes.
+    const leader = cars.find((c) => c.pos === 1) ?? cars[0]
+    onFollow(leader.id)
+    camRef.current.z = 20
+    applyCam()
+    const segments: Array<Record<string, number | string>> = []
+    try {
+      for (let i = 0; i < SEGMENTS.length; i++) {
+        const seg = SEGMENTS[i]
+        if (benchAbortRef.current) break
+        status(`bench ${i + 1}/${SEGMENTS.length}  ${seg.name}`)
+        setCanvasOn(seg.canvas)
+        setHidden(new Set(seg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars'>)
+        paintStatsRef.current = {}
+        await sleep(SETTLE_MS)
+        const t0 = { ...tickStatsRef.current }
+        const r = await record(RECORD_MS)
+        const t1 = tickStatsRef.current
+        const sorted = [...r.deltas].sort((a, b) => a - b)
+        const mean = sorted.reduce((s, v) => s + v, 0) / Math.max(1, sorted.length)
+        const worst = sorted.slice(-Math.max(1, Math.round(sorted.length * 0.01)))
+        segments.push({
+          name: seg.name,
+          fps: Math.round(1000 / mean),
+          low1: Math.round(1000 / (worst.reduce((s, v) => s + v, 0) / worst.length)),
+          p95ms: +(sorted[Math.floor(sorted.length * 0.95)] ?? 0).toFixed(1),
+          maxMs: +(sorted[sorted.length - 1] ?? 0).toFixed(1),
+          longFrames: sorted.filter((d) => d > 25).length,
+          paintMs: +(r.paintN > 0 ? r.paintMs / r.paintN : 0).toFixed(2),
+          tickMs: +(t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0).toFixed(2),
+        })
+      }
+    } finally {
+      setHidden(new Set(prev.hidden))
+      setCanvasOn(prev.canvas)
+      setFrameCap(prev.cap)
+      onFollow(prev.follow)
+      camRef.current.z = prev.z
+      applyCam()
+      benchRef.current = false
+    }
+    const report = {
+      circuit: layout.circuitId,
+      at: new Date().toISOString(),
+      dpr: window.devicePixelRatio || 1,
+      viewport: { w: outerRef.current?.clientWidth ?? 0, h: outerRef.current?.clientHeight ?? 0 },
+      aborted: benchAbortRef.current,
+      segments,
+    }
+    console.table(segments)
+    console.log('BENCH JSON', JSON.stringify(report))
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `bench-${layout.circuitId}-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    status(benchAbortRef.current ? 'bench aborted' : 'bench done — report downloaded')
+    await sleep(2500)
+    setBenchOn(false)
+  }, [cars, layout.circuitId, onFollow, applyCam])
+  useEffect(() => {
+    benchKeyRef.current = () => {
+      if (benchRef.current) benchAbortRef.current = true
+      else void runBench()
+    }
+  }, [runBench])
 
   // Baking covers the WHOLE circuit, so culling is switched off while it is on: a disc around the
   // camera would be baked into the image and then travel with it.
@@ -1738,6 +1872,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         <div
           ref={hudRef}
           className="absolute left-2 top-2 z-30 rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-[#FFFFFF]"
+        />
+      )}
+      {benchOn && (
+        <div
+          ref={benchStatusRef}
+          className="absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded bg-black/70 px-3 py-1 font-mono text-[12px] text-[#FFFFFF]"
         />
       )}
       {/* On the OUTER box, not the stage: the stage letterboxes to the viewBox's aspect, and a canvas
