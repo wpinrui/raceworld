@@ -359,25 +359,14 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
       {TyreWalls(nearTyres)}
 
       {/* Marshal posts are solids too, so they get real height faces rather than a displaced copy of
-          themselves — the same mistake the buildings started with. */}
+          themselves — the same mistake the buildings started with. The hut, its roof and the orange
+          panel all come from the shared ops now, so the canvas draws the same hut this does. */}
       {full && marshalGroups(scenery.marshals, {
         ...furnOpts, hutM: MARSHAL_H_M, hutW: MARSHAL_W_M, hutH: MARSHAL_D_M,
       }).map((g, i) => (
         <g key={`mp${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
-          <path
-            d={g.shadow.d} fill={shFill} opacity={shOp}
-            transform={`translate(${g.shadowAt.x} ${g.shadowAt.y})`}
-          />
+          <path d={g.shadow.d} fill={shFill} opacity={shOp} />
           {g.ops.map((op, j) => <path key={j} d={op.d} fill={op.fill} />)}
-          {/* Roof on top, with the orange marshal panel on its trackside edge. */}
-          <rect
-            x={-u(MARSHAL_W_M / 2)} y={-u(MARSHAL_D_M / 2)} width={u(MARSHAL_W_M)}
-            height={u(MARSHAL_D_M)} rx={u(0.3)} fill="#3A4049"
-          />
-          <rect
-            x={-u(MARSHAL_W_M / 2)} y={-u(MARSHAL_D_M / 2)} width={u(MARSHAL_W_M)}
-            height={u(1.0)} fill="#E8952B"
-          />
         </g>
       ))}
     </g>

@@ -320,28 +320,47 @@ export interface MarshalDrawOpts extends TreeDrawOpts {
   hutH: number
 }
 
-/** A marshal post's shadow, walls and roof, in its own frame.
+/** A rectangle with rounded corners as path data — what an SVG `<rect rx>` draws. */
+function roundedRectPath(x: number, y: number, w: number, h: number, r: number): string {
+  const rr = Math.min(r, w / 2, h / 2)
+  const f = (n: number) => n.toFixed(2)
+  return `M ${f(x + rr)} ${f(y)} h ${f(w - 2 * rr)} a ${f(rr)} ${f(rr)} 0 0 1 ${f(rr)} ${f(rr)} `
+    + `v ${f(h - 2 * rr)} a ${f(rr)} ${f(rr)} 0 0 1 ${f(-rr)} ${f(rr)} h ${f(-(w - 2 * rr))} `
+    + `a ${f(rr)} ${f(rr)} 0 0 1 ${f(-rr)} ${f(-rr)} v ${f(-(h - 2 * rr))} `
+    + `a ${f(rr)} ${f(rr)} 0 0 1 ${f(rr)} ${f(-rr)} Z`
+}
+
+/** A marshal post's shadow, walls, roof and orange panel, in its own frame.
  *
  *  A real height face rather than a displaced copy of itself — the same mistake the buildings started
- *  with. The shadow is a second sweep from the same footprint, offset to the hut's base. */
+ *  with. The shadow is a second sweep from the same footprint, anchored at the hut's drawn base (the
+ *  camera's lift is baked into its geometry, so a renderer just paints it where the group sits). The
+ *  roof and its trackside panel are ops here rather than markup in a layer, so BOTH renderers draw
+ *  the whole hut — inlined in the SVG they simply did not exist on the canvas. */
 export function marshalGroups(
   marshals: Scenery['marshals'], o: MarshalDrawOpts,
-): Array<DrawGroup & { shadow: DrawOp; shadowAt: { x: number; y: number } }> {
+): Array<DrawGroup & { shadow: DrawOp }> {
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
-  const hut: Part[] = [{ dx: 0, dy: 0, w: o.u(o.hutW), h: o.u(o.hutH) }]
+  const w = o.u(o.hutW)
+  const h = o.u(o.hutH)
+  const hut: Part[] = [{ dx: 0, dy: 0, w, h }]
   const lift = o.u(o.hutM * o.extrude)
   const cast = o.u(o.hutM * shadowReach(o.lighting))
   return marshals.map((m) => {
     const off = toLocal(dir.x * lift, dir.y * lift, m.rot)
     const sOff = toLocal(ldir.x * cast, ldir.y * cast, m.rot)
+    const shadowHut: Part[] = [{ dx: off.x, dy: off.y, w, h }]
     return {
       x: m.x,
       y: m.y,
       rot: m.rot,
-      shadow: { d: sweptHull(hut, sOff.x, sOff.y) },
-      shadowAt: off,
-      ops: [{ d: sweptHull(hut, off.x, off.y), fill: shadeFace('#3A4049', o.lighting) }],
+      shadow: { d: sweptHull(shadowHut, sOff.x, sOff.y) },
+      ops: [
+        { d: sweptHull(hut, off.x, off.y), fill: shadeFace('#3A4049', o.lighting) },
+        { d: roundedRectPath(-w / 2, -h / 2, w, h, o.u(0.3)), fill: '#3A4049' },
+        { d: `M ${(-w / 2).toFixed(2)} ${(-h / 2).toFixed(2)} h ${w.toFixed(2)} v ${o.u(1.0).toFixed(2)} h ${(-w).toFixed(2)} Z`, fill: '#E8952B' },
+      ],
     }
   })
 }
@@ -413,14 +432,23 @@ export interface SceneOpts {
   /** A stand casts from its rear, a building from its roofline. */
   solidHeightM: (r: SceneryRect) => number
   trees: SceneryTree[]
+  /** Drop everything outside this disc. The canvas walks every op every frame, so anything nowhere
+   *  near the shot is pure path setup; the disc is the trees' — bigger than the viewport, moved with
+   *  hysteresis — so nothing pops inside the frame. Each entry's own radius is respected, so a
+   *  building straddling the edge stays. */
+  cull?: { cx: number; cy: number; r: number } | null
+  /** The ground plane under everything, before even the relief bands. As part of `track` it painted
+   *  OVER the bands and fields, which is why the canvas ground looked flat. */
+  base?: DrawOp
   /** The road itself, drawn between the ground and the shadows so scenery shadows fall ON tarmac.
    *  Built by the caller because it comes off the layout rather than off the scenery. */
   track?: DrawOp[]
-  /** Kerbs, over the road and under the cars. */
+  /** Kerbs, over the road and UNDER the scenery shadows — a tree's shade falls on a kerb. */
   kerbs?: DrawOp[]
   /** Garage floors, under the lane's paint so its white edge line runs unbroken. */
   pitUnder?: DrawOp[]
-  /** The pit complex itself, over everything else the ground carries. */
+  /** The pit complex, after the road and before the kerbs and shadows, exactly where the SVG puts
+   *  its PitBuilding — so scenery shadows and solids paint over it, not under. */
   pitOver?: DrawOp[]
 }
 
@@ -433,18 +461,40 @@ export type SceneItem = DrawOp | DrawGroup
 /** True for a placed group; a flat op has no `ops` of its own. */
 export const isGroup = (item: SceneItem): item is DrawGroup => 'ops' in item
 
+/** An item with its bounding disc, so composition can drop what the camera cannot see. */
+interface Placed<T> { item: T; cx: number; cy: number; r: number }
+
 /** The parts of a scene that do not depend on which trees or kerbs are in shot. Rebuilt only when
- *  the camera bearing, light or detail tier changes — a cull step never touches them. */
+ *  the camera bearing, light or detail tier changes — a cull step only re-filters them. */
 interface StaticParts {
   key: string
   ground: DrawOp[]
-  shadowGroups: DrawGroup[]
-  runShadows: DrawOp[]
-  wallGroups: DrawGroup[]
-  standGs: DrawGroup[]
-  roofGs: DrawGroup[]
-  furniture: DrawOp[]
-  marshalGs: DrawGroup[]
+  shadowGroups: Placed<DrawGroup>[]
+  wallGroups: Placed<DrawGroup>[]
+  standGs: Placed<DrawGroup>[]
+  roofGs: Placed<DrawGroup>[]
+  runShadows: Placed<DrawOp>[]
+  /** Tyre walls split around the fencing exactly as the SVG furniture layer does: walls further
+   *  from the viewer than the fence go under it, nearer ones over. */
+  farTyres: Placed<DrawOp[]>[]
+  fenceRuns: Placed<DrawOp[]>[]
+  nearTyres: Placed<DrawOp[]>[]
+  marshalGs: Placed<DrawGroup>[]
+}
+
+const discOfRect = (r: { x: number; y: number; w: number; h: number }, pad: number) => ({
+  cx: r.x, cy: r.y, r: Math.hypot(r.w, r.h) / 2 + pad,
+})
+
+const discOfPts = (pts: Vec[], pad: number) => {
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x
+    if (p.y < y0) y0 = p.y
+    if (p.x > x1) x1 = p.x
+    if (p.y > y1) y1 = p.y
+  }
+  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad }
 }
 
 /** Everything here is heavy string-building (swept hulls, window grids) over the whole circuit, and
@@ -464,34 +514,70 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const hit = staticCache.get(scenery)
   if (hit && hit.key === key) return hit
   const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
+  const dir = dirAt(o.view)
+  // Padding covers what geometry adds beyond a footprint: the height lean and the cast shadow.
+  // Generous on purpose — keeping a fraction more than the disc strictly needs is invisible, while
+  // dropping a shadow whose caster is just off the disc's edge is not.
+  const solidPad = o.u(80)
+  const runPad = o.u(25)
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
-  const runShadows: DrawOp[] = []
-  const furniture: DrawOp[] = []
+  const structDiscs = structures.map((r) => discOfRect(r, solidPad))
+  const runShadows: Placed<DrawOp>[] = []
+  const fenceRuns: Placed<DrawOp[]>[] = []
   if (o.full) {
-    for (const t of scenery.tyreWalls) runShadows.push(runShadowOp(t.pts, o.tyreM, treeOpts))
-    for (const f of scenery.fences) runShadows.push({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 })
-    for (const ops2 of fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM })) furniture.push(...ops2)
-    for (const t of scenery.tyreWalls) furniture.push(...tyreWallOps(t, o.u, o.full))
+    for (const t of scenery.tyreWalls) {
+      runShadows.push({ item: runShadowOp(t.pts, o.tyreM, treeOpts), ...discOfPts(t.pts, runPad) })
+    }
+    for (const f of scenery.fences) {
+      runShadows.push({ item: { ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, ...discOfPts(f.pts, runPad) })
+    }
+    fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM }).forEach((ops2, i) => {
+      fenceRuns.push({ item: ops2, ...discOfPts(scenery.fences[i].pts, runPad) })
+    })
   }
+  // Tyre wall casings survive the cheap tier, like the SVG furniture layer's.
+  const tyres = scenery.tyreWalls.map((t) => ({
+    t, placed: { item: tyreWallOps(t, o.u, o.full), ...discOfPts(t.pts, runPad) },
+  }))
   const parts: StaticParts = {
     key,
     ground: groundOps(scenery, o.u, { full: o.full, ground: o.ground }),
     shadowGroups: o.full
       ? structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM })
+        .map((g, i) => ({ item: g, ...structDiscs[i] }))
       : [],
-    runShadows,
     wallGroups: o.full
       ? buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM })
+        .map((g, i) => ({ item: g, ...discOfRect(scenery.buildings[i], solidPad) }))
       : [],
     standGs: standGroups(scenery.stands, {
       ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
-    }, o.full),
-    roofGs: buildingRoofGroups(scenery.buildings, o.full),
-    furniture,
+    }, o.full).map((g, i) => ({ item: g, ...discOfRect(scenery.stands[i], solidPad) })),
+    roofGs: buildingRoofGroups(scenery.buildings, o.full)
+      .map((g, i) => ({ item: g, ...discOfRect(scenery.buildings[i], solidPad) })),
+    runShadows,
+    farTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y > 0).map(({ placed }) => placed),
+    fenceRuns,
+    nearTyres: tyres.filter(({ t }) => t.nOut.x * dir.x + t.nOut.y * dir.y <= 0).map(({ placed }) => placed),
     marshalGs: o.full
       ? marshalGroups(scenery.marshals, {
         ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
-      })
+      }).map((g) => ({
+        // The hut with its shadow as ONE group: the shadow op leads, painted with the shared
+        // shadow ink, so the canvas draws what the SVG layer draws.
+        item: {
+          x: g.x,
+          y: g.y,
+          rot: g.rot,
+          ops: [
+            { ...g.shadow, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) },
+            ...g.ops,
+          ],
+        },
+        cx: g.x,
+        cy: g.y,
+        r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30),
+      }))
       : [],
   }
   staticCache.set(scenery, parts)
@@ -500,33 +586,44 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
 
 /** The whole static world in paint order, as one description.
  *
- *  This is what makes the canvas a small component rather than a second renderer: it walks this list.
- *  The SVG layer builds the same pieces in the same order, so the two cannot drift apart. */
+ *  This is what makes the canvas a small component rather than a second renderer: it walks this
+ *  list. The order is the SVG document's, layer for layer — ground, floors, road, pit complex,
+ *  kerbs, shadows, solids, trees, then furniture — so the two renderers cannot drift apart. */
 export function sceneryScene(scenery: Scenery, o: SceneOpts): SceneItem[] {
   const s = staticParts(scenery, o)
   const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
-  const items: SceneItem[] = [...s.ground]
+  const cull = o.cull
+  const keep = <T,>(xs: Placed<T>[]): T[] => (cull
+    ? xs.filter((p) => Math.hypot(p.cx - cull.cx, p.cy - cull.cy) <= cull.r + p.r)
+    : xs).map((p) => p.item)
+
+  const items: SceneItem[] = []
+  if (o.base) items.push(o.base)
+  items.push(...s.ground)
   // Garage floors go under the lane's paint; the road then goes down before any shadow, which is the
-  // whole reason shadows read as lying ON it.
+  // whole reason shadows read as lying ON it. The pit complex and the kerbs are part of the ground
+  // picture too: scenery shadows and solids paint over them.
   if (o.pitUnder) items.push(...o.pitUnder)
   if (o.track) items.push(...o.track)
+  if (o.pitOver) items.push(...o.pitOver)
+  if (o.kerbs) items.push(...o.kerbs)
 
   if (o.full) {
     // Shadows before every solid, so nothing casts over the thing standing on it.
-    items.push(...s.shadowGroups)
+    items.push(...keep(s.shadowGroups))
     const trees = treeShadowOp(o.trees, treeOpts)
     if (trees) items.push(trees)
-    items.push(...s.runShadows)
-    items.push(...s.wallGroups)
+    items.push(...keep(s.wallGroups))
   }
-  items.push(...s.standGs)
-  items.push(...s.roofGs)
-  if (o.full) {
-    items.push(...s.furniture)
-    items.push(...s.marshalGs)
-    items.push(...treeSolidOps(o.trees, treeOpts))
-  }
-  if (o.kerbs) items.push(...o.kerbs)
-  if (o.pitOver) items.push(...o.pitOver)
+  items.push(...keep(s.standGs))
+  items.push(...keep(s.roofGs))
+  if (o.full) items.push(...treeSolidOps(o.trees, treeOpts))
+  // Furniture last, like the SVG's furniture layer: it lines the tarmac's edge, so it sits over
+  // the scenery — a fence in front of a grove reads as a fence, not a hedge decoration.
+  if (o.full) items.push(...keep(s.runShadows))
+  for (const w of keep(s.farTyres)) items.push(...w)
+  if (o.full) for (const f of keep(s.fenceRuns)) items.push(...f)
+  for (const w of keep(s.nearTyres)) items.push(...w)
+  if (o.full) items.push(...keep(s.marshalGs))
   return items
 }

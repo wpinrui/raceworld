@@ -296,15 +296,24 @@ describe('marshalGroups', () => {
     expect(g.ops[0].fill).toBeTruthy()
   })
 
-  it('offsets the shadow to the hut base, and sweeps it along the sun', () => {
+  it('anchors the shadow at the drawn base, and sweeps it along the sun', () => {
     const [g] = marshalGroups(post as never, mOpts)
-    expect(Math.hypot(g.shadowAt.x, g.shadowAt.y)).toBeGreaterThan(0)
     const relit = marshalGroups(post as never, {
       ...mOpts, lighting: { ...opts.lighting, azimuth: opts.lighting.azimuth + 1 },
     })[0]
     // Moving the sun changes the sweep but not where the hut stands.
     expect(relit.shadow.d).not.toBe(g.shadow.d)
     expect(relit.x).toBe(g.x)
+    // Turning the camera moves the drawn base the shadow is anchored to.
+    const turned = marshalGroups(post as never, { ...mOpts, view: opts.view + 1 })[0]
+    expect(turned.shadow.d).not.toBe(g.shadow.d)
+  })
+
+  it('carries its roof and orange panel as shared ops, so both renderers draw the whole hut', () => {
+    // They used to be markup in the SVG furniture layer, which is why canvas huts had no roofs.
+    const [g] = marshalGroups(post as never, mOpts)
+    expect(g.ops).toHaveLength(3)
+    expect(g.ops[2].fill).toBe('#E8952B')
   })
 
   it('carries the post placement on the group, not baked into the hut', () => {
@@ -402,17 +411,30 @@ describe('sceneryScene', () => {
     expect(items.length).toBeGreaterThan(0)
   })
 
-  it('keeps ONE interleaved paint order: trees over the solids, kerbs over everything', () => {
+  it('keeps the SVG document order: kerbs under the shadows, trees over stands, furniture last', () => {
     // Ops and groups painted as two separate passes is the bug that put every stand on top of the
-    // trees and kerbs in front of it — the order has to hold across the whole sequence.
+    // trees and kerbs in front of it — the order has to hold across the whole sequence, and it is
+    // the SVG's: ground, road, kerbs, shadows, solids, trees, then the trackside furniture.
     const kerb: DrawOp = { d: 'M 0 0 L 1 0', stroke: '#C8352F' }
     const items = sceneryScene(scenery, { ...sceneOpts, kerbs: [kerb] })
+    const kerbAt = items.indexOf(kerb)
+    expect(kerbAt, 'kerbs paint before every shadow and solid').toBeLessThan(items.findIndex(isGroup))
     const lastGroup = items.map(isGroup).lastIndexOf(true)
     const canopy = items.findIndex(
       (i) => !isGroup(i) && (refName(i.fill ?? '') ?? '').startsWith('tm-tree'),
     )
     expect(canopy, 'a tree canopy paints after the last solid group').toBeGreaterThan(lastGroup)
-    expect(items[items.length - 1], 'kerbs stay on top').toBe(kerb)
+    const fenceTop = items.findIndex((i) => !isGroup(i) && i.d === 'M 0 0 L 9 0')
+    expect(fenceTop, 'fencing paints over the trees, as trackside furniture').toBeGreaterThan(canopy)
+  })
+
+  it('drops what the cull disc cannot see but keeps the ground and the road', () => {
+    const track: DrawOp[] = [{ d: 'M 0 0 L 5 5', stroke: '#333333' }]
+    const far = sceneryScene(scenery, { ...sceneOpts, track, cull: { cx: 4000, cy: 4000, r: 10 } })
+    expect(far.some(isGroup), 'no solid survives a disc parked far away').toBe(false)
+    expect(far, 'the road is not cullable').toContain(track[0])
+    const near = sceneryScene(scenery, { ...sceneOpts, track, cull: { cx: 0, cy: 0, r: 200 } })
+    expect(near.some(isGroup), 'a disc over the circuit keeps its solids').toBe(true)
   })
 
   it('drops the expensive half at the cheap tier but keeps the stands and roofs', () => {
