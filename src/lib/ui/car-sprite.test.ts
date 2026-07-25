@@ -126,6 +126,32 @@ describe('sheenTransform', () => {
     expect(c.x).toBeCloseTo(SPRITE.cx, 6)
     expect(c.y).toBeCloseTo(SPRITE.cy, 6)
   })
+
+  it('slides the highlight toward the flank that lifts, and not at all on a level car', () => {
+    const level = applyTransform(sheenTransform(0, LEVEL), SPRITE.cx, SPRITE.cy)
+    expect(level.x).toBeCloseTo(SPRITE.cx, 6)
+    // A right-hander rolls the car onto its left, lifting the right flank into the light.
+    const right = applyTransform(sheenTransform(0, carAttitude(1, 0)), SPRITE.cx, SPRITE.cy)
+    expect(right.x).toBeGreaterThan(SPRITE.cx)
+    const left = applyTransform(sheenTransform(0, carAttitude(-1, 0)), SPRITE.cx, SPRITE.cy)
+    expect(left.x).toBeLessThan(SPRITE.cx)
+    // Braking and traction pitch the car; they do not move the highlight across it.
+    const braking = applyTransform(sheenTransform(0, carAttitude(0, -1)), SPRITE.cx, SPRITE.cy)
+    expect(braking.x).toBeCloseTo(SPRITE.cx, 6)
+    expect(braking.y).toBeCloseTo(SPRITE.cy, 6)
+  })
+
+  it('slides in the CAR frame, so the ramp keeps facing the sun whatever the heading', () => {
+    // The rotation the transform applies must not change when the car takes on roll.
+    const att = carAttitude(1, 0)
+    for (const rot of [0.6, 2.4]) {
+      const plain = applyTransform(sheenTransform(rot), SPRITE.cx + 100, SPRITE.cy)
+      const rolled = applyTransform(sheenTransform(rot, att), SPRITE.cx + 100, SPRITE.cy)
+      // Same rotation, pure offset between them.
+      expect(rolled.x - plain.x).toBeCloseTo(-att.roll * 1.6, 1)
+      expect(rolled.y - plain.y).toBeCloseTo(0, 1)
+    }
+  })
 })
 
 describe('carAttitude', () => {
@@ -151,10 +177,12 @@ describe('carAttitude', () => {
   })
 
   it('stays subtle enough to read as a car and not as a rubber toy', () => {
+    // Exaggerated, but the body may never move so far that it reads as a skid rather than a lean:
+    // measured against the car's own length, nothing shifts by more than a twentieth of it.
     for (const [lat, long] of [[1, 1], [-1, -1], [1, -1]]) {
       const a = carAttitude(lat, long)
-      expect(Math.abs(a.roll)).toBeLessThan(SPRITE.len * 0.03)
-      expect(Math.abs(a.pitch)).toBeLessThan(SPRITE.len * 0.03)
+      expect(Math.abs(a.roll)).toBeLessThan(SPRITE.len * 0.05)
+      expect(Math.abs(a.pitch)).toBeLessThan(SPRITE.len * 0.05)
       expect(a.squash).toBeGreaterThan(0.95)
     }
   })

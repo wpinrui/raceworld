@@ -18,6 +18,12 @@ import {
 } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
+import { densifyTrace } from '../src/lib/ui/track-path'
+import { CarSprite } from '../src/components/race/CarSprite'
+import { CAR_LENGTH_M, CAR_SCALE, SPRITE, carAttitude, carLight } from '../src/lib/ui/car-sprite'
+import { PROFILE_N, lapDynamics, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
+import type { Lighting } from '../src/lib/ui/lighting'
+import type { TrackLayout } from '../src/data/tracks'
 
 
 const OUT = 'scripts/.preview'
@@ -31,8 +37,65 @@ const mood = MOODS[moodArg] ?? MOODS.afternoon
 // racing zoom (glazing, kerb faces, tyre stacks) can actually be judged from a still.
 const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
 const [cxf, cyf] = (argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5').split(',').map(Number)
+// Cars round the lap, each at its real heading, so the contact shadow and the world-locked sheen can
+// be checked at every angle at once -- which is the only way to tell whether they are locked to the
+// world or just painted on the sprite.
+const carsArg = argv.find((a) => a === '--cars' || a.startsWith('--cars='))
+const carCount = carsArg ? Number(carsArg.split('=')[1] ?? 12) : 0
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
+
+const LIVERIES = ['#E8442E', '#2F7BE8', '#F2C230', '#39B26A', '#B565E0', '#E8792E', '#39C4C4', '#E85BA0']
+
+/** Resample a closed polyline to `n` points of equal arc length: what the profile physics assumes. */
+function equalArc(pts: { x: number; y: number }[], n: number) {
+  const cum = [0]
+  for (let i = 1; i <= pts.length; i++) {
+    const a = pts[i - 1]
+    const b = pts[i % pts.length]
+    cum.push(cum[i - 1] + Math.hypot(b.x - a.x, b.y - a.y))
+  }
+  const len = cum[pts.length]
+  const out: { x: number; y: number }[] = []
+  let j = 0
+  for (let i = 0; i < n; i++) {
+    const target = (i / n) * len
+    while (j < pts.length - 1 && cum[j + 1] < target) j++
+    const a = pts[j]
+    const b = pts[(j + 1) % pts.length]
+    const seg = cum[j + 1] - cum[j] || 1
+    const f = (target - cum[j]) / seg
+    out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f })
+  }
+  return { pts: out, len }
+}
+
+/** The cars, strung round the CENTRELINE (the solved racing line needs the browser's path API) and
+ *  leaning exactly as much as the lap's own dynamics say they should at that point. */
+function carsMarkup(layout: TrackLayout, lighting: Lighting, n: number): string[] {
+  const dense = densifyTrace(layout.trace, 6).map(([x, y]) => ({ x, y }))
+  const { pts, len } = equalArc(dense, PROFILE_N)
+  const dyn = lapDynamics(pts, len, trackPhysics(layout.metresPerUnit))
+  const light = carLight(lighting)
+  const carLen = (CAR_LENGTH_M * CAR_SCALE) / layout.metresPerUnit
+  const scale = carLen / SPRITE.len
+  return Array.from({ length: n }, (_, i) => {
+    const frac = i / n
+    const st = Math.round(frac * PROFILE_N) % PROFILE_N
+    const here = pts[st]
+    const ahead = pts[(st + 2) % PROFILE_N]
+    const spriteRot = Math.atan2(ahead.y - here.y, ahead.x - here.x) + Math.PI / 2
+    const attitude = carAttitude(sampleLap(dyn.lat, frac), sampleLap(dyn.long, frac))
+    const sprite = renderToStaticMarkup(createElement(CarSprite, {
+      id: `p${i}`, color: LIVERIES[i % LIVERIES.length], length: SPRITE.len, light, spriteRot, attitude,
+    }))
+    // The sprite is its own <svg>, and a nested one CLIPS to its viewBox, which would cut the contact
+    // shadow's tail off. So it goes in as a <g> instead, scaled from sprite units into track units.
+    const body = sprite.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')
+    return `<g transform="translate(${here.x} ${here.y}) rotate(${(spriteRot * 180) / Math.PI}) `
+      + `scale(${scale}) translate(${-SPRITE.cx} ${-SPRITE.cy})">${body}</g>`
+  })
+}
 
 mkdirSync(OUT, { recursive: true })
 
@@ -112,6 +175,8 @@ for (const id of ids) {
         })),
       ]
     })(),
+    // Last: the cars sit on top of the world, as they do in the map.
+    ...(carCount > 0 ? carsMarkup(layout, lighting, carCount) : []),
   ].join('\n')
 
   // Fixed output width whatever the zoom, so a hard crop is actually inspectable rather than

@@ -9,7 +9,7 @@
 | Increment | State |
 |---|---|
 | **A** — one light, obeyed by everything | **Done.** `da38030`, `8870014`, `dbffd49`, `53d3079`, `bdbe467` |
-| **B** — cars in 3D | Not started |
+| **B** — cars in 3D | **Done.** `e035d57` + this commit. Preview: `npx tsx scripts/car-preview.ts` |
 | **C** — the track surface tells a story | Not started |
 | **D** — the track has form | Not started |
 | **E** — moods | Not started (`MOODS` exists, nothing selects between them) |
@@ -141,6 +141,30 @@ direction so the cars agree with the world they sit in.
 changes every frame. The `cars` benchmark category already exists (`2bad1b7`) to attribute it.
 
 **Pause: preview with a handful of cars at different headings, to check the highlight tracks.**
+
+### What actually shipped, and where it left the plan
+
+- **SVG `transform` attributes, not the `--car-rot` CSS variable.** Measured: the preview rasteriser
+  (sharp/librsvg) never resolves `var()` and ignores `transform-origin` on a CSS `transform`, so a
+  CSS-variable highlight would have rendered at rotation zero in every still — i.e. the preview would
+  have lied about the one thing it exists to check. The rAF loop writes `[data-car-shadow]`,
+  `[data-car-body]` and `[data-car-sheen]` transform attributes instead, which is the same direct-DOM
+  idiom the loop already used for the sprite itself.
+- **Roll and dive come from the LAP, not from screen motion.** Differentiating sprite movement against
+  the wall clock reports four times the cornering load at 4x race speed. `buildTimeProfile` already
+  computed speed and curvature per station and discarded both, so it became
+  [lap-dynamics.ts](src/lib/ui/lap-dynamics.ts), which returns signed lateral and longitudinal
+  acceleration in arc space. Increment C's brake-zone skid marks want exactly this array.
+- **Wheels: contact patches, not a per-wheel offset.** Offsetting each wheel along the world light
+  inside a rotated sprite needs a counter-rotation per wheel for a sub-pixel cue. The four tyres are in
+  the shadow's footprint path instead, so each wheel sits on its own shadow.
+- **Body roll moves the highlight, not just the body.** Measured: 10 sprite units of body shift is 1.8%
+  of the car, invisible at racing zoom. The sheen now slides across the bodywork with roll, which is
+  the cue that actually reads; body travel went to 4% of the car's length alongside it.
+- **Cost: 104 elements per sprite, up from ~83**, and one CSS `filter` per car removed (the old
+  `drop-shadow` turned with the car, so it could never be a contact shadow). ~+420 document nodes at 20
+  cars, against `NODE_BUDGET` 4000. Not yet measured live: the in-app `cars` benchmark needs
+  `DEBUG_KEYS`.
 
 ---
 

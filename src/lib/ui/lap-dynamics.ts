@@ -10,6 +10,9 @@
 // the wall clock would report four times the cornering load and peg every car on full lean. Arc space
 // asks a different question -- how hard is this CORNER -- and gets the same answer at any race speed.
 
+/** Equal-distance stations the lap is cut into. Roughly one every 20m on a real circuit. */
+export const PROFILE_N = 256
+
 export interface LapPhysics {
   /** Straight-line top speed, track units per second. */
   vTop: number
@@ -35,6 +38,22 @@ export interface LapDynamics {
   /** Signed longitudinal acceleration as a fraction of the relevant limit: -1 is maximum braking,
    *  +1 maximum acceleration. */
   long: Float64Array
+}
+
+/** The profile's physics in REAL units (m/s, m/s^2). Every track is driven by these same limits,
+ *  converted into its own units, which is what makes one circuit's corners genuinely slower than
+ *  another's rather than every lap looking the same shape. */
+const PHYSICS_M: LapPhysics = { vTop: 87, vFloor: 10, aLat: 14, aAccel: 12.75, aBrake: 41 }
+
+/** Those limits in a given track's units. */
+export function trackPhysics(metresPerUnit: number): LapPhysics {
+  return {
+    vTop: PHYSICS_M.vTop / metresPerUnit,
+    vFloor: PHYSICS_M.vFloor / metresPerUnit,
+    aLat: PHYSICS_M.aLat / metresPerUnit,
+    aAccel: PHYSICS_M.aAccel / metresPerUnit,
+    aBrake: PHYSICS_M.aBrake / metresPerUnit,
+  }
 }
 
 const clamp1 = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v)

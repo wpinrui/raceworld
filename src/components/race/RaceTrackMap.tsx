@@ -26,7 +26,7 @@ import { CarSprite } from './CarSprite'
 import {
   CAR_LENGTH_M, CAR_SCALE, LEVEL, bodyTransform, carAttitude, carLight, shadowTransform, sheenTransform,
 } from '@/lib/ui/car-sprite'
-import { lapDynamics, sampleLap, type LapDynamics } from '@/lib/ui/lap-dynamics'
+import { PROFILE_N, lapDynamics, sampleLap, trackPhysics, type LapDynamics } from '@/lib/ui/lap-dynamics'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -58,10 +58,6 @@ export interface TrackCarMeta {
  * progress maps through a curvature-derived speed profile (more distance per time step on straights). */
 export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box' | 'out'; stopFrac?: number; pitCalled?: boolean; pitNewCompound?: TyreCompound; gridSlot?: number; launch?: number } | null
 
-// Speed-profile physics in REAL units (m/s, m/sÂ²), converted per track via metresPerUnit: top speed,
-// the hairpin floor, lateral grip (sets each corner's speed via v = sqrt(A_LAT / curvature)), and
-// traction/braking limits that smear speed changes over real distance.
-const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
 /** Frame-rate caps to cycle through, uncapped first. A steady rate reads as smoother than a higher
@@ -111,11 +107,6 @@ const GANTRY_H_M = 2.2
 /** Boom length: back to the building's front face, with a few centimetres of overlap so the join is
  *  visible rather than exact. Shared with its shadow, which has to stay exactly the same shape. */
 const GANTRY_REACH_M = 4.75
-const V_TOP_M = 87
-const V_FLOOR_M = 10
-const A_LAT_M = 14
-const A_ACCEL_M = 12.75
-const A_BRAKE_M = 41
 
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit.
 const PIT_WIDTH_M = 9.5 // lane + working apron: the boxes sit 1.6m off-centre and their markings and
@@ -231,13 +222,7 @@ function buildLapDynamics(path: SVGPathElement, metresPerUnit: number): LapDynam
   const len = path.getTotalLength()
   const pts: { x: number; y: number }[] = []
   for (let i = 0; i < PROFILE_N; i++) pts.push(path.getPointAtLength((i / PROFILE_N) * len))
-  return lapDynamics(pts, len, {
-    vTop: V_TOP_M / metresPerUnit,
-    vFloor: V_FLOOR_M / metresPerUnit,
-    aLat: A_LAT_M / metresPerUnit,
-    aAccel: A_ACCEL_M / metresPerUnit,
-    aBrake: A_BRAKE_M / metresPerUnit,
-  })
+  return lapDynamics(pts, len, trackPhysics(metresPerUnit))
 }
 
 // Invert the profile: time fraction -> distance fraction.
@@ -1122,20 +1107,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           // leans and dips over both. Map view draws numbered dots, which have none of them.
           if (viewRef.current !== 'map') {
             shadowRefs.current.get(f.id)?.setAttribute('transform', shadowTransform(carLit, spriteRot))
-            sheenRefs.current.get(f.id)?.setAttribute('transform', sheenTransform(spriteRot))
-            const body = bodyRefs.current.get(f.id)
-            if (body) {
-              // Load comes from the LAP, not from how fast the sprite happens to be crossing the
-              // screen: a race at 4x speed corners no harder than the same race at 1x. Cars crawling
-              // the pit lane or sat on the grid sit level.
-              const att = f.kind === 'race'
-                ? carAttitude(
-                  sampleLap(dyn.lat, f.dist / raceLenRef.current),
-                  sampleLap(dyn.long, f.dist / raceLenRef.current),
-                )
-                : LEVEL
-              body.setAttribute('transform', bodyTransform(att))
-            }
+            // Load comes from the LAP, not from how fast the sprite happens to be crossing the screen:
+            // a race played at 4x speed corners no harder than the same race at 1x. Cars crawling the
+            // pit lane or sat on the grid sit level.
+            const frac = f.dist / raceLenRef.current
+            const att = f.kind === 'race'
+              ? carAttitude(sampleLap(dyn.lat, frac), sampleLap(dyn.long, frac))
+              : LEVEL
+            bodyRefs.current.get(f.id)?.setAttribute('transform', bodyTransform(att))
+            sheenRefs.current.get(f.id)?.setAttribute('transform', sheenTransform(spriteRot, att))
           }
         }
 

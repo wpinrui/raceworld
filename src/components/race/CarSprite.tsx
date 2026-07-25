@@ -26,6 +26,9 @@ import {
 // never drift off the shape it is meant to be lying on.
 const NOSE_D = 'M120 8 C112 8 108 24 106 48 L102 110 Q100 142 95 166 L145 166 Q140 142 138 110 L134 48 C132 24 128 8 120 8 Z'
 const CHASSIS_D = 'M95 166 L145 166 L146 202 C154 204 161 205 168 206 C179 208 190 214 190 224 L188 290 C186 316 170 332 156 342 C150 350 148 356 148 366 L148 448 L92 448 L92 366 C92 356 90 350 84 342 C70 332 54 316 52 290 L50 224 C50 214 61 208 72 206 C79 205 86 204 94 202 Z'
+// The parts of the car that are nearly ON the tarmac: the same bodywork, plus the four tyres. One path
+// of subpaths rather than a shape each, because this layer redraws every frame for twenty cars.
+const FOOTPRINT_D = `${NOSE_D} ${CHASSIS_D} M6 64h48v88h-48Z M186 64h48v88h-48Z M4 350h52v96h-52Z M184 350h52v96h-52Z`
 
 export const CarSprite = memo(function CarSprite({ id, color, length, compound, light, spriteRot = 0, attitude = LEVEL }: {
   /** Only used to key this sprite's own gradients and clip; ids are document-wide. */
@@ -51,8 +54,8 @@ export const CarSprite = memo(function CarSprite({ id, color, length, compound, 
         {/* Soft edges out of stops rather than a blur: this layer is the only one that genuinely
             redraws every frame, and it carries 20 cars. */}
         <radialGradient id={shId}>
-          <stop offset="0" stopColor={light.shadow.fill} stopOpacity="1" />
-          <stop offset="0.55" stopColor={light.shadow.fill} stopOpacity="0.92" />
+          <stop offset="0" stopColor={light.shadow.fill} stopOpacity="0.55" />
+          <stop offset="0.5" stopColor={light.shadow.fill} stopOpacity="0.44" />
           <stop offset="1" stopColor={light.shadow.fill} stopOpacity="0" />
         </radialGradient>
         <linearGradient
@@ -65,20 +68,18 @@ export const CarSprite = memo(function CarSprite({ id, color, length, compound, 
           ))}
         </linearGradient>
         <clipPath id={clipId}>
-          <path d={NOSE_D} />
-          <path d={CHASSIS_D} />
+          <path d={`${NOSE_D} ${CHASSIS_D}`} />
         </clipPath>
       </defs>
       {/* Contact shadow. Inside the sprite's own svg (which does not clip), so it scales with the car
           and costs no extra positioning: the price is that it cannot fall across a NEIGHBOURING car,
           only its own. At this offset and opacity, in a side-by-side battle, that is not visible. */}
       <g data-car-shadow transform={shadowTransform(light, spriteRot)} opacity={light.shadow.opacity}>
-        <ellipse cx={SPRITE.cx} cy={SPRITE.cy} rx="100" ry="225" fill={`url(#${shId})`} />
-        {/* One per tyre: the wheels are the parts actually touching the tarmac, and their own patches
-            are what stops the car reading as a single slab hovering over the road. */}
-        {SPRITE.wheels.map(([wx, wy]) => (
-          <ellipse key={`${wx},${wy}`} cx={wx} cy={wy} rx="30" ry="54" fill={`url(#${shId})`} />
-        ))}
+        {/* Soft bloom for the body, which is held off the ground, then the crisp footprint of the parts
+            that very nearly touch it. Sharp under the tyres and soft further out is what a real contact
+            shadow does, and it is what stops the car reading as one slab hovering over the road. */}
+        <ellipse cx={SPRITE.cx} cy={SPRITE.cy} rx="110" ry="240" fill={`url(#${shId})`} />
+        <path d={FOOTPRINT_D} fill={light.shadow.fill} fillOpacity="0.7" />
       </g>
       <g data-car-body transform={bodyTransform(attitude)}>
       {/* floor, visible through coke bottle */}
@@ -192,7 +193,7 @@ export const CarSprite = memo(function CarSprite({ id, color, length, compound, 
           clipped to the bodywork, so wings and tyres keep their flat neutrals. Counter-rotated, so it
           slides round the body as the car corners instead of turning with it. */}
       <g clipPath={`url(#${clipId})`}>
-        <g data-car-sheen transform={sheenTransform(spriteRot)}>
+        <g data-car-sheen transform={sheenTransform(spriteRot, attitude)}>
           <rect x={SPRITE.cx - 280} y={SPRITE.cy - 280} width="560" height="560" fill={`url(#${sheenId})`} />
         </g>
       </g>

@@ -54,9 +54,12 @@ export interface CarLight {
   sheen: { x1: number; y1: number; x2: number; y2: number; stops: SheenStop[] }
 }
 
-/** How far the sheen's gradient runs either side of centre: the bodywork's own half-diagonal, so the
- *  ramp covers the car at any rotation without wasting range on empty space. */
-const SHEEN_SPAN = 150
+/** How far the sheen's gradient runs either side of centre. Sized to the body's HALF-WIDTH, not its
+ *  half-length: the light crosses a car's width far more often than its length, and a span wide enough
+ *  for the length puts only the ramp's flat middle on the bodywork -- measurably 18 of 255 across the
+ *  body, which is no cue at all. Sized this way, light running down the car's length saturates the ends
+ *  instead, which is what a long body under a low sun actually does. */
+const SHEEN_SPAN = 85
 
 /** Sunlight's own colour. Warm light leaves a cream highlight, a cool sky a blue-white one; the
  *  shaded flank gets the same desaturated blue-violet every shadow in the world is filled with,
@@ -89,10 +92,10 @@ export function carLight(l: Lighting): CarLight {
       stops: [
         { offset: 0, color: lit, opacity: 0.2 * flat },
         // The hot line along the shoulder, in from the edge where a rounded body actually catches it.
-        { offset: 0.17, color: lit, opacity: 0.44 * flat },
+        { offset: 0.17, color: lit, opacity: 0.4 * flat },
         { offset: 0.46, color: lit, opacity: 0 },
         { offset: 0.54, color: dark, opacity: 0 },
-        { offset: 1, color: dark, opacity: 0.46 * flat },
+        { offset: 1, color: dark, opacity: 0.44 * flat },
       ],
     },
   }
@@ -107,18 +110,27 @@ export function shadowTransform(light: CarLight, spriteRot: number): string {
   return `translate(${(x * c + y * s).toFixed(2)} ${(-x * s + y * c).toFixed(2)})`
 }
 
-/** Counter-rotation that holds the sheen still against the world while the sprite turns under it.
- *  About the sprite's centre, which is the same point the sprite itself is rotated about. */
-export function sheenTransform(spriteRot: number): string {
-  return `rotate(${((-spriteRot * 180) / Math.PI).toFixed(2)} ${SPRITE.cx} ${SPRITE.cy})`
+/** Counter-rotation that holds the sheen still against the world while the sprite turns under it,
+ *  about the sprite's centre -- the same point the sprite itself is rotated about.
+ *
+ *  Rolling slides the highlight across the body toward the flank that has lifted, which is the cue that
+ *  actually reads: three pixels of body movement is nothing, a highlight crossing the bodywork is
+ *  something. The slide is in the CAR's frame (before the counter-rotation), so it tracks the car's
+ *  flanks while the ramp itself keeps facing the sun. */
+export function sheenTransform(spriteRot: number, attitude: Attitude = LEVEL): string {
+  const slide = noNegZero(-attitude.roll * SHEEN_ROLL)
+  return `translate(${slide.toFixed(2)} 0) rotate(${((-spriteRot * 180) / Math.PI).toFixed(2)} ${SPRITE.cx} ${SPRITE.cy})`
 }
 
 /** Sprite units of body movement at the limit, and the fraction the car foreshortens by. Deliberately
  *  bigger than life: a real car's body moves a couple of centimetres, which is a third of a pixel at
- *  racing zoom, so the cue has to be exaggerated to exist at all. */
-const ROLL_UNITS = 10
-const PITCH_UNITS = 6
-const SQUASH = 0.018
+ *  racing zoom, so the cue has to be exaggerated to exist at all. Measured at 4% of the car's length,
+ *  which is a couple of pixels on a sprite at racing zoom and reads as lean rather than as a skid. */
+const ROLL_UNITS = 20
+const PITCH_UNITS = 14
+const SQUASH = 0.03
+/** Sheen slide per sprite unit of roll. */
+const SHEEN_ROLL = 1.6
 
 export interface Attitude {
   /** Lateral body shift in sprite units; positive is toward the car's right. */
