@@ -3,7 +3,12 @@
 
 import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
-import { REF, depthSorted, refName, treeShadowOp, treeShadowRatio, treeSolidOps } from './scenery-draw'
+import {
+  REF, buildingWallGroups, depthSorted, partsOf, refName, toLocal, treeShadowOp, treeShadowRatio,
+  treeSolidOps,
+} from './scenery-draw'
+import type { SceneryRect } from './track-scenery'
+import { partsPath } from './extrude'
 import type { SceneryTree } from './track-scenery'
 
 const tree = (x: number, y: number, r = 4): SceneryTree => ({
@@ -99,5 +104,75 @@ describe('depthSorted', () => {
     const src = [{ x: 5, y: 0 }, { x: -3, y: 0 }]
     depthSorted(src, { x: 1, y: 0 })
     expect(src[0].x).toBe(5)
+  })
+})
+
+describe('partsOf', () => {
+  it('falls back to the single box a footprint width and height describe', () => {
+    expect(partsOf({ w: 10, h: 6 })).toEqual([{ dx: 0, dy: 0, w: 10, h: 6 }])
+  })
+
+  it('prefers an articulated footprint when there is one', () => {
+    const parts = [{ dx: 1, dy: 2, w: 3, h: 4 }]
+    expect(partsOf({ w: 10, h: 6, parts })).toBe(parts)
+  })
+})
+
+describe('toLocal', () => {
+  it('is the inverse of the rotation a group applies', () => {
+    for (const rot of [0, 0.7, -2.2, Math.PI]) {
+      const v = toLocal(3, -5, rot)
+      // Rotating back by the same angle has to land on the original vector.
+      const c = Math.cos(rot)
+      const s = Math.sin(rot)
+      expect(v.x * c - v.y * s).toBeCloseTo(3, 9)
+      expect(v.x * s + v.y * c).toBeCloseTo(-5, 9)
+    }
+  })
+})
+
+describe('buildingWallGroups', () => {
+  const solidOpts = { ...opts, storeyM: 4.6, bayM: 5.4 }
+  const building = (over: Partial<SceneryRect> = {}): SceneryRect => ({
+    x: 100, y: 60, w: 30, h: 20, rot: 0.4, fill: '#59616E', storeys: 2, ...over,
+  } as SceneryRect)
+
+  it('places each building by its group rather than baking the rotation into every path', () => {
+    const [g] = buildingWallGroups([building()], solidOpts)
+    expect(g.x).toBe(100)
+    expect(g.y).toBe(60)
+    expect(g.rot).toBe(0.4)
+    // Geometry is built around the origin, so it must not carry the placement.
+    const xs = g.ops[0].d.match(/-?\d+(\.\d+)?/g)!.map(Number)
+    expect(Math.max(...xs.map(Math.abs))).toBeLessThan(60)
+  })
+
+  it('emits silhouette, side faces and glazing, in paint order', () => {
+    const [g] = buildingWallGroups([building()], solidOpts)
+    expect(g.ops).toHaveLength(3)
+    expect(g.ops[0].fill).toBeTruthy()
+    expect(g.ops[2].alpha).toBeCloseTo(0.42, 9)
+  })
+
+  it('leans a taller building further, since height is what the extrusion measures', () => {
+    // Compared as path data rather than as a bounding box: `partsPath` emits relative h/v commands,
+    // so pulling numbers out of the string gives widths, not coordinates.
+    const low = buildingWallGroups([building({ storeys: 1 })], solidOpts)[0]
+    const high = buildingWallGroups([building({ storeys: 5 })], solidOpts)[0]
+    expect(high.ops[0].d).not.toBe(low.ops[0].d)
+    // A taller solid shows more wall, so it needs more of it drawn.
+    expect(high.ops[0].d.length).toBeGreaterThan(low.ops[0].d.length - 1)
+    expect(high.ops[1].d).not.toBe(low.ops[1].d)
+  })
+
+  it('collapses to the flat footprint when nothing is extruded', () => {
+    // The sweep IS the height: with none, the silhouette is the roof outline and there are no faces.
+    const [g] = buildingWallGroups([building()], { ...solidOpts, extrude: 0 })
+    expect(g.ops[1].d).toBe('')
+    expect(g.ops[0].d).toBe(partsPath(partsOf(building())))
+  })
+
+  it('emits nothing for no buildings', () => {
+    expect(buildingWallGroups([], solidOpts)).toEqual([])
   })
 })

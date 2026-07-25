@@ -1,10 +1,12 @@
 import type { Scenery, SceneryPart, SceneryRect } from '@/lib/ui/track-scenery'
-import { refName, treeShadowOp, treeSolidOps } from '@/lib/ui/scenery-draw'
 import {
-  partsPath, posts, rakedStand, ribbon, sideFacesX, sweptHull, wallWindows,
+  buildingWallGroups, partsOf, refName, toLocal, treeShadowOp, treeSolidOps,
+} from '@/lib/ui/scenery-draw'
+import {
+  partsPath, posts, rakedStand, ribbon, sweptHull,
 } from '@/lib/ui/extrude'
 import {
-  dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach, tintFace,
+  dirAt, lightDir, shadeFace, shadowFill, shadowOpacity, shadowReach,
   type Lighting,
 } from '@/lib/ui/lighting'
 
@@ -41,20 +43,10 @@ const TYRE_H_M = 1.5
 
 const deg = (r: number) => (r * 180) / Math.PI
 
-const partsOf = (r: { w: number; h: number; parts?: SceneryPart[] }): SceneryPart[] =>
-  r.parts ?? [{ dx: 0, dy: 0, w: r.w, h: r.h }]
-
 const heightM = (r: { storeys?: number }) => (r.storeys ?? 1) * STOREY_M
 /** A stand's effective height for shadow purposes: the rear, which is what casts. */
 const isStand = (r: SceneryRect): r is Scenery['stands'][number] => 'facing' in r
 const solidHeightM = (r: SceneryRect) => (isStand(r) ? STAND_REAR_M : heightM(r))
-
-/** Rotate a world-space vector into a footprint's local frame. */
-function toLocal(x: number, y: number, rot: number): { x: number; y: number } {
-  const c = Math.cos(-rot)
-  const s = Math.sin(-rot)
-  return { x: x * c - y * s, y: x * s + y * c }
-}
 
 export function SceneryLayer({ scenery, u, lighting, hide, detail = 'full' }: {
   scenery: Scenery; u: (m: number) => number; lighting: Lighting; hide?: Hidden
@@ -268,32 +260,20 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
   const treesByDepth = hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees)
+  const solidOpts = { u, extrude: EXTRUDE, lighting, view, storeyM: STOREY_M, bayM: WINDOW_BAY_M }
   // Trees lean exactly as much as buildings do. Giving them their own, steeper lean put two
   // different cameras in one scene; the height variation belongs in each tree's own scale.
   return (
     <g>
       {/* Walls: the swept band from roof outline to base outline, as one silhouette. The roof is
           painted over its near half below, leaving only the faces that actually face the camera. */}
-      {full && !hide?.has('buildings') && scenery.buildings.map((r, i) => {
-        const t = u(heightM(r) * EXTRUDE)
-        const o = toLocal(dir.x * t, dir.y * t, r.rot)
-        const parts = partsOf(r)
-        const hull = sweptHull(parts, o.x, o.y)
-        return (
-          <g key={`wl${i}`} transform={`translate(${r.x} ${r.y}) rotate(${deg(r.rot)})`}>
-            {/* The whole solid's silhouette, outlined once. */}
-            <path d={hull} fill={shadeFace(r.fill, lighting)} />
-            {/* The left/right height faces, a shade apart from the top/bottom ones so the two
-                visible planes of the box are distinguishable. */}
-            <path d={sideFacesX(parts, o.x, o.y)} fill={tintFace(r.fill, lighting, -0.45)} />
-            {/* Glazing, gridded in each wall's own plane. */}
-            <path
-              d={wallWindows(parts, o.x, o.y, u(WINDOW_BAY_M), Math.max(1, Math.round(heightM(r) / STOREY_M)))}
-              fill="#0E1319" opacity={0.42}
-            />
-          </g>
-        )
-      })}
+      {full && !hide?.has('buildings') && buildingWallGroups(scenery.buildings, solidOpts).map((g, i) => (
+        <g key={`wl${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
+          {g.ops.map((op, j) => (
+            <path key={j} d={op.d} fill={op.fill ? paint(op.fill) : 'none'} opacity={op.alpha} />
+          ))}
+        </g>
+      ))}
 
       {/* Grandstands rake: the trackside front barely lifts, the rear lifts a long way, so the deck
           climbs away from the circuit like real seating. Extruded uniformly they read as office
