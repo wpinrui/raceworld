@@ -626,12 +626,23 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (prev && Math.hypot(next.cx - prev.cx, next.cy - prev.cy) < prev.r * CULL_SLACK
       && Math.abs(next.r - prev.r) < prev.r * CULL_SLACK) return
     cullRef.current = next
-    setCull(next)
+    if (canvasOnRef.current && viewRef.current === 'live') {
+      // The canvas is the only consumer of the disc in this mode: recompose off-React and let the
+      // paint that follows in applyCam draw it. A setState here re-rendered the whole component.
+      composeSceneRef.current(next)
+    } else {
+      setCull(next)
+    }
   }, [vb])
 
   // Painting the canvas is defined further down, once the scene exists; `applyCam` reaches it through
-  // this ref so the two can be declared in whichever order they need to be.
+  // this ref so the two can be declared in whichever order they need to be. The same goes for scene
+  // composition: on a cull step the canvas recomposes IMPERATIVELY through this ref, because pushing
+  // the disc through React state re-rendered and reconciled the whole component — thousands of car
+  // and pit-box nodes — several times a lap, which is what the recurring fps dips were.
   const paintRef = useRef<() => void>(() => {})
+  const composeSceneRef = useRef<(cull: Cull | null) => void>(() => {})
+  const canvasOnRef = useRef(true)
 
   // Rebuilding the world on a new bearing means regenerating every path that carries height, which is
   // a full re-render of a few thousand nodes. Far too slow to do on each frame of a rotate, so the
@@ -1591,13 +1602,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
     return ops
   }, [layout, pitZone, u])
-  const kerbDrawOps = useMemo((): DrawOp[] => (hidden.has('kerbs') ? [] : visibleKerbs.flatMap((k) => [
-    { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' as const },
-    {
-      d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt' as const,
-      dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
-    },
-  ])), [visibleKerbs, hidden, u])
   const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
     ? {
       under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
@@ -1617,10 +1621,23 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) + u(80)
     return { cx, cy, r }
   }, [pitZone, u])
-  const pitNear = !cull || !pitDisc
-    || Math.hypot(pitDisc.cx - cull.cx, pitDisc.cy - cull.cy) <= cull.r + pitDisc.r
-  const scene = useMemo(() => {
+  // One composer for both paths: React re-renders call it when the WORLD changes (track, light,
+  // detail tier, hidden set — all rare), and `updateCull` calls it through `composeSceneRef` when
+  // only the DISC moves, several times a lap, without a render.
+  const composeScene = useCallback((cullNow: Cull | null) => {
     if (!(canvasOn && view === 'live')) return null
+    const pitNear = !cullNow || !pitDisc
+      || Math.hypot(pitDisc.cx - cullNow.cx, pitDisc.cy - cullNow.cy) <= cullNow.r + pitDisc.r
+    const kerbs = hidden.has('kerbs') ? [] : (cullNow
+      ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cullNow.cx, k.cy - cullNow.cy) <= cullNow.r + k.r)
+      : scenery.kerbs
+    ).flatMap((k): DrawOp[] => [
+      { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' },
+      {
+        d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
+        dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
+      },
+    ])
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
@@ -1629,21 +1646,26 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
       // The same disc the SVG solids layer culled to: the canvas walks every op every frame, so a
       // circuit's whole tree population would be path setup for things nowhere near the shot.
-      trees: hidden.has('trees') ? [] : visibleTrees(scenery.trees, cull),
-      cull,
+      trees: hidden.has('trees') ? [] : visibleTrees(scenery.trees, cullNow),
+      cull: cullNow,
       base: baseDrawOp,
       track: trackDrawOps,
-      kerbs: kerbDrawOps,
+      kerbs,
       pitUnder: pitNear ? pitDrawOps.under : [],
       pitOver: pitNear ? pitDrawOps.over : [],
     }, marks)
     return { items, marks }
   }, [
-    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, cull, baseDrawOp, trackDrawOps,
-    kerbDrawOps, pitDrawOps, pitNear,
+    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, baseDrawOp, trackDrawOps,
+    pitDrawOps, pitDisc,
   ])
+  const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
+  useEffect(() => {
+    composeSceneRef.current = (cullNow) => { sceneRef.current = composeScene(cullNow) }
+  }, [composeScene])
+  useEffect(() => { canvasOnRef.current = canvasOn }, [canvasOn])
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
   // readout is up — the timing calls are cheap but not free.
   const paintStatsRef = useRef<Record<string, number>>({})
