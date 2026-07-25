@@ -418,6 +418,10 @@ export interface SceneOpts {
   track?: DrawOp[]
   /** Kerbs, over the road and under the cars. */
   kerbs?: DrawOp[]
+  /** Garage floors, under the lane's paint so its white edge line runs unbroken. */
+  pitUnder?: DrawOp[]
+  /** The pit complex itself, over everything else the ground carries. */
+  pitOver?: DrawOp[]
 }
 
 /** The whole static world in paint order, as one description.
@@ -431,7 +435,9 @@ export function sceneryScene(
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
   const ops: DrawOp[] = [...groundOps(scenery, o.u, { full: o.full, ground: o.ground })]
   const groups: DrawGroup[] = []
-  // The road goes down before any shadow, which is the whole reason shadows read as lying ON it.
+  // Garage floors go under the lane's paint; the road then goes down before any shadow, which is the
+  // whole reason shadows read as lying ON it.
+  if (o.pitUnder) ops.push(...o.pitUnder)
   if (o.track) ops.push(...o.track)
 
   if (o.full) {
@@ -459,5 +465,6 @@ export function sceneryScene(
     ops.push(...treeSolidOps(o.trees, treeOpts))
   }
   if (o.kerbs) ops.push(...o.kerbs)
+  if (o.pitOver) ops.push(...o.pitOver)
   return { ops, groups }
 }

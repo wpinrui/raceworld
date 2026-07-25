@@ -9,12 +9,13 @@
 //  2. The garages are recesses in the front face rather than doors painted on it, which makes the
 //     outline concave — hence a ring extrusion rather than the box extrusion the scenery uses.
 
-import { obliqueRingFaces, quad, ringPath, sweptRing } from '@/lib/ui/extrude'
+import { mapPathPoints, obliqueRingFaces, quad, ringPath, sweptRing } from '@/lib/ui/extrude'
 import {
   type Lighting, dirAt, lightDir, litFace, shadeFace, shadowFill, shadowOpacity, shadowReach,
   tintFace,
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
+import type { DrawOp } from '@/lib/ui/scenery-draw'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 import { EXTRUDE } from './SceneryLayer'
 
@@ -211,4 +212,68 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
 function shortName(name: string): string {
   const parts = name.trim().split(/\s+/)
   return parts.length < 2 ? name : `${parts[0][0]} ${parts.slice(1).join(' ')}`
+}
+
+/** The garage floors, which go down BEFORE the lane's paint so its white edge line runs unbroken. */
+export function pitFloorOps(
+  zone: PitZone, lighting: Lighting, garageColor?: (i: number) => string | undefined,
+): DrawOp[] {
+  return zone.garageFloors.map((r, i) => ({
+    d: ringPath(r),
+    fill: shadeFace(garageColor?.(i) ?? '#2A2F38', lighting),
+  }))
+}
+
+/** The complex itself, in paint order: shadow, ground floor, shutters, upper storey, roof and its
+ *  furniture, then the lane markings. Same geometry the components draw, described as data so the
+ *  canvas can take it. */
+export function pitComplexOps(
+  zone: PitZone, u: (m: number) => number, lighting: Lighting, view: number,
+  garageColor?: (i: number) => string | undefined,
+): DrawOp[] {
+  const ldir = lightDir(lighting)
+  const dir = dirAt(view)
+  const lift = u(PIT_BUILDING_H_M * EXTRUDE)
+  const mid = u(GARAGE_H_M * EXTRUDE)
+  const plantLift = u(PLANT_H_M * EXTRUDE)
+  const cast = u(PIT_BUILDING_H_M * shadowReach(lighting))
+  const up = (p: { x: number; y: number }, k: number) => ({ x: p.x - dir.x * k, y: p.y - dir.y * k })
+  const lower = zone.buildingPts.map((p) => up(p, mid))
+  const upper = zone.upperPts.map((p) => up(p, lift))
+  const wall = shadeFace(PIT_WHITE, lighting)
+  const ret = tintFace(PIT_WHITE, lighting, -0.45)
+  const onRoof = (p: { x: number; y: number }) => up(p, lift)
+  const plantTops = zone.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
+  const shift = (d: string, k: number) => mapPathPoints(d, (x, y) => up({ x, y }, k))
+
+  const ops: DrawOp[] = [
+    { d: sweptRing(zone.upperPts, ldir.x * cast, ldir.y * cast), fill: shadowFill(lighting), alpha: shadowOpacity(lighting) },
+    { d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall },
+    { d: obliqueRingFaces(lower, dir.x * mid, dir.y * mid), fill: ret },
+  ]
+  for (const [i, r] of zone.garageFloors.entries()) {
+    const h = mid * 0.82
+    const top = (p: { x: number; y: number }) => up(p, h)
+    const lintel = (p: { x: number; y: number }) => up(p, h * 0.82)
+    ops.push({ d: quad(r[3], r[2], top(r[2]), top(r[3])), fill: '#161A21' })
+    ops.push({ d: quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3])), fill: garageColor?.(i) ?? '#9AA3B2' })
+  }
+  ops.push(
+    { d: sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: wall },
+    { d: obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: ret },
+    { d: ringPath(upper), fill: litFace(PIT_WHITE, lighting) },
+    { d: shift(zone.roofSeams, lift), stroke: tintFace(PIT_WHITE, lighting, -0.16), width: u(0.18) },
+    { d: shift(zone.roofDeck, lift), fill: tintFace(PIT_WHITE, lighting, -0.22) },
+    {
+      d: `M ${zone.roofRail.map((p) => { const q = onRoof(p); return `${q.x.toFixed(1)} ${q.y.toFixed(1)}` }).join(' L ')}`,
+      stroke: shadeFace(PIT_WHITE, lighting), width: u(0.35),
+    },
+    { d: plantTops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.5) },
+    { d: plantTops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12) },
+    { d: zone.sep, stroke: '#F2F2F2', width: u(0.6), cap: 'round' },
+    { d: zone.sep, stroke: '#2E62C9', width: u(0.34), cap: 'round' },
+    { d: zone.limiterIn, stroke: '#F2F2F2', width: u(0.35), cap: 'butt' },
+    { d: zone.limiterOut, stroke: '#F2F2F2', width: u(0.35), cap: 'butt' },
+  )
+  return ops
 }

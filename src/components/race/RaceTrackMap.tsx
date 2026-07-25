@@ -18,7 +18,7 @@ import { SceneryCanvas, drawScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
-  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
+  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, pitComplexOps, pitFloorOps,
 } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import { shade } from '@/lib/color'
@@ -1568,6 +1568,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
     },
   ])), [visibleKerbs, hidden, u])
+  const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
+    ? {
+      under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
+      over: pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]),
+    }
+    : { under: [], over: [] }), [pitZone, hidden, lighting, u, viewAz, slotOf])
   const scene = useMemo(() => (canvasOn && view === 'live'
     ? sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
@@ -1577,8 +1583,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       trees: hidden.has('trees') ? [] : scenery.trees,
       track: trackDrawOps,
       kerbs: kerbDrawOps,
+      pitUnder: pitDrawOps.under,
+      pitOver: pitDrawOps.over,
     })
-    : null), [canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps, kerbDrawOps])
+    : null), [
+    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps, kerbDrawOps,
+    pitDrawOps,
+  ])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
@@ -1655,7 +1666,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             )}
             <g data-cost="scenery">{view === 'live' && !canvasOn && sceneryNode}</g>
-            {pitZone && !hidden.has('pit') && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
+            {pitZone && !hidden.has('pit') && !canvasOn && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
             {/* Kept in the document whatever draws it: the race loop measures this path with
@@ -1681,10 +1692,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's
                 track-side line, entry/exit guide lines reaching onto the track, the white–blue–white
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
-            {pitZone && !hidden.has('pit') && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
-            {pitZone && !hidden.has('pit') && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
+            {pitZone && !hidden.has('pit') && !canvasOn && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
+            {pitZone && !hidden.has('pit') && !canvasOn && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
             {pitZone && !hidden.has('pit') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
-            {pitZone && (
+            {pitZone && !canvasOn && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
                 <path d={pitZone.sep} fill="none" stroke="#2E62C9" strokeWidth={u(0.34)} strokeLinecap="round" />
