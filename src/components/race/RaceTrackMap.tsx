@@ -55,6 +55,10 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 const PROFILE_N = 256
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
  *  the lift off the box floor and the shadow they throw are short. */
+/** Frame-rate caps to cycle through; 0 is uncapped. A steady rate reads as smoother than a higher
+ *  one that swings, so this is a real setting rather than only a diagnostic. */
+const FRAME_CAPS: number[] = [30, 45, 0]
+
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
 const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes'> = {
@@ -494,12 +498,19 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const hiddenRef = useRef<ReadonlySet<string>>(hidden)
   const [budgetOn, setBudgetOn] = useState(false)
   const hudRef = useRef<HTMLDivElement>(null)
+  // 0 means uncapped; cycled from the readout so the two can be compared directly.
+  const [frameCap, setFrameCap] = useState(FRAME_CAPS[0])
+  const frameCapRef = useRef(FRAME_CAPS[0])
   useEffect(() => { hiddenRef.current = hidden }, [hidden])
+  useEffect(() => { frameCapRef.current = frameCap }, [frameCap])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return
       if (e.key === '`') setHud((v) => !v)
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
+      if (e.key === 'c' || e.key === 'C') {
+        setFrameCap((v) => FRAME_CAPS[(FRAME_CAPS.indexOf(v) + 1) % FRAME_CAPS.length])
+      }
       const piece = HOTKEYS[e.key.toLowerCase()]
       if (!piece) return
       setHidden((prev) => {
@@ -533,7 +544,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             return `${k} ${n}`
           }).join('  ')
           const offList = [...hiddenRef.current].join(',')
-          el.textContent = `${fps} fps  ${nodes} nodes  |  ${by}`
+          const capTxt = frameCapRef.current > 0 ? `cap ${frameCapRef.current}` : 'uncapped'
+          el.textContent = `${fps} fps (${capTxt})  ${nodes} nodes  |  ${by}`
             + `${offList ? `  |  off: ${offList}` : ''}`
         }
         frames = 0
@@ -857,7 +869,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
   useEffect(() => {
     let raf = 0
-    const tick = () => {
+    // Frame cap. It does not make a frame cheaper, it makes the RATE steady, and a steady 30 reads as
+    // smoother than a rate swinging between 40 and 60 as scenery comes in and out of shot. It only
+    // holds while a frame's work fits the budget; past that the cap is simply not the binding
+    // constraint. Half a frame of slack stops it beating against a 60Hz vsync into an uneven 20.
+    let due = 0
+    const tick = (now: number) => {
+      const cap = frameCapRef.current
+      if (cap > 0) {
+        if (now < due) {
+          raf = requestAnimationFrame(tick)
+          return
+        }
+        const step = 1000 / cap
+        due = now + step - Math.min(step / 2, now - due)
+      }
       const path = pathRef.current
       const pitPath = pitPathRef.current
       const raceLine = raceLineRef.current
