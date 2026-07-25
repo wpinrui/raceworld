@@ -576,7 +576,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               .sort((a, b) => b[1] - a[1]).slice(0, 4)
               .map(([k, v]) => `${k} ${v.toFixed(1)}`).join(' ')
             : ''
-          el.textContent = `${fps} fps (${capTxt})  ${nodes} nodes  |  ${by}${paint}`
+          const ts = tickStatsRef.current
+          const tickTxt = ts.n > 0 ? `  |  tick ${(ts.sum / ts.n).toFixed(1)}/${ts.max.toFixed(1)}ms` : ''
+          ts.sum = 0
+          ts.n = 0
+          ts.max = 0
+          el.textContent = `${fps} fps (${capTxt})  ${nodes} nodes  |  ${by}${paint}${tickTxt}`
             + `${offList ? `  |  off: ${offList}` : ''}`
         }
         frames = 0
@@ -922,6 +927,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         const step = 1000 / cap
         due = now + step - Math.min(step / 2, now - due)
       }
+      const tickT0 = performance.now()
       const path = pathRef.current
       const pitPath = pitPathRef.current
       const raceLine = raceLineRef.current
@@ -1471,6 +1477,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           tipPosRef.current = null
         }
       }
+      // The tick's own JS cost, for the readout: it splits "the script is slow" from "the browser
+      // is rasterising a heavy document" — the two look identical in an fps number alone.
+      const tickDt = performance.now() - tickT0
+      const tstat = tickStatsRef.current
+      tstat.sum += tickDt
+      tstat.n++
+      if (tickDt > tstat.max) tstat.max = tickDt
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -1631,6 +1644,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
   // readout is up — the timing calls are cheap but not free.
   const paintStatsRef = useRef<Record<string, number>>({})
+  // The race tick's JS cost since the readout last sampled: average and worst frame.
+  const tickStatsRef = useRef({ sum: 0, n: 0, max: 0 })
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
   const paintCanvas = useCallback(() => {
     const canvas = canvasRef.current
