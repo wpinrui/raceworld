@@ -5,7 +5,8 @@ import { COMPOUND_COLORS } from './TyreIndicator'
 import { shade } from '@/lib/color'
 import type { TyreCompound } from '@/lib/sim/types'
 import {
-  LEVEL, SPRITE, bodyTransform, shadowTransform, sheenTransform, type Attitude, type CarLight,
+  LEVEL, SPRITE, STRAIGHT, bodyTransform, shadowTransform, sheenTransform, steerTransform,
+  type Attitude, type CarLight, type Steer,
 } from '@/lib/ui/car-sprite'
 
 // The user-authored top-down F1 sprite (designs/F1 car.dc.html): three livery roles over fixed
@@ -30,7 +31,7 @@ const CHASSIS_D = 'M95 166 L145 166 L146 202 C154 204 161 205 168 206 C179 208 1
 // of subpaths rather than a shape each, because this layer redraws every frame for twenty cars.
 const FOOTPRINT_D = `${NOSE_D} ${CHASSIS_D} M6 64h48v88h-48Z M186 64h48v88h-48Z M4 350h52v96h-52Z M184 350h52v96h-52Z`
 
-export const CarSprite = memo(function CarSprite({ id, color, length, compound, light, spriteRot = 0, attitude = LEVEL }: {
+export const CarSprite = memo(function CarSprite({ id, color, length, compound, light, spriteRot = 0, attitude = LEVEL, steer = STRAIGHT }: {
   /** Only used to key this sprite's own gradients and clip; ids are document-wide. */
   id: string
   color: string
@@ -39,12 +40,19 @@ export const CarSprite = memo(function CarSprite({ id, color, length, compound, 
   light: CarLight
   spriteRot?: number
   attitude?: Attitude
+  steer?: Steer
 }) {
   const band = compound ? COMPOUND_COLORS[compound] : null
   const p = color
   const sec = shade(color, 0.62)
   const t = '#969CA6'
   const key = id.replace(/[^A-Za-z0-9_-]/g, '') || 'car'
+  // Suspension is the only structure drawn over BARE TARMAC rather than over the car, so it cannot use
+  // the sprite's mid structural greys: #2E3138 against #33383E tarmac is 6 of 255 apart and the arms
+  // simply vanished. Carbon, so the contrast comes from going DARKER than the road, not lighter -- legs
+  // at the sprite's darkest neutral, rod a shade up so the two still read apart.
+  const arm = '#0B0D10'
+  const rod = '#1C2028'
   const shId = `car-sh-${key}`
   const sheenId = `car-sheen-${key}`
   const clipId = `car-body-${key}`
@@ -84,20 +92,23 @@ export const CarSprite = memo(function CarSprite({ id, color, length, compound, 
       <g data-car-body transform={bodyTransform(attitude)}>
       {/* floor, visible through coke bottle */}
       <path d="M60 190 L120 164 L180 190 L180 450 Q180 460 170 460 L70 460 Q60 460 60 450 Z" fill="#14171E" />
-      {/* front suspension: upper + lower wishbone + pushrod */}
-      <path d="M52 84 L106 104 L106 110 L52 92 Z" fill="#2E3138" />
-      <path d="M188 84 L134 104 L134 110 L188 92 Z" fill="#2E3138" />
-      <path d="M52 126 L106 126 L106 131 L52 132 Z" fill="#2E3138" />
-      <path d="M188 126 L134 126 L134 131 L188 132 Z" fill="#2E3138" />
-      <path d="M54 106 L104 118 L104 122 L54 110 Z" fill="#43474F" />
-      <path d="M186 106 L136 118 L136 122 L186 110 Z" fill="#43474F" />
-      {/* rear suspension: 3 elements */}
-      <path d="M56 374 L100 380 L100 385 L56 380 Z" fill="#2E3138" />
-      <path d="M184 374 L140 380 L140 385 L184 380 Z" fill="#2E3138" />
-      <path d="M56 397 L100 397 L100 404 L56 404 Z" fill="#43474F" />
-      <path d="M184 397 L140 397 L140 404 L184 404 Z" fill="#43474F" />
-      <path d="M56 424 L100 420 L100 425 L56 430 Z" fill="#2E3138" />
-      <path d="M184 424 L140 420 L140 425 L184 430 Z" fill="#2E3138" />
+      {/* Front suspension: a wishbone is an A-ARM. Its two legs are mounted WIDE APART on the chassis
+          and meet at a point on the upright, so from above each side is a V with the sharp end AT THE
+          WHEEL. Drawn the other way round it reads as the arms hanging off a single chassis pivot,
+          which is not a thing a car has. Middle bar is the track rod. */}
+      <path d="M54 99 L108 70 L108 80 L54 109 Z" fill={arm} />
+      <path d="M186 99 L132 70 L132 80 L186 109 Z" fill={arm} />
+      <path d="M54 103 L106 103 L106 113 L54 113 Z" fill={rod} />
+      <path d="M186 103 L134 103 L134 113 L186 113 Z" fill={rod} />
+      <path d="M54 107 L104 132 L104 142 L54 117 Z" fill={arm} />
+      <path d="M186 107 L136 132 L136 142 L186 117 Z" fill={arm} />
+      {/* Rear suspension: same A-arm geometry, apex outboard at the hub, plus the driveshaft. */}
+      <path d="M56 389 L98 360 L98 370 L56 399 Z" fill={arm} />
+      <path d="M184 389 L142 360 L142 370 L184 399 Z" fill={arm} />
+      <path d="M56 393 L98 393 L98 403 L56 403 Z" fill={rod} />
+      <path d="M184 393 L142 393 L142 403 L184 403 Z" fill={rod} />
+      <path d="M56 397 L98 424 L98 434 L56 407 Z" fill={arm} />
+      <path d="M184 397 L142 424 L142 434 L184 407 Z" fill={arm} />
       {/* front wing: swept elements, angular endplates */}
       <rect x="62" y="44" width="3" height="10" fill={p} />
       <rect x="88" y="44" width="3" height="10" fill={p} />
@@ -140,33 +151,30 @@ export const CarSprite = memo(function CarSprite({ id, color, length, compound, 
       <rect x="118" y="190" width="4" height="16" fill={t} />
       <circle cx="120" cy="234" r="10" fill={sec} stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
       <rect x="113" y="228" width="14" height="3" rx="1.5" fill="#0B0D10" />
-      {/* tyres: tagged so the pit choreography can take each wheel OFF the car while its tyre
-          is being carried (#live-engine) */}
-      <g data-wheel="fl">
+      {/* Tyres: tagged so the pit choreography can take each wheel OFF the car while its tyre is being
+          carried (#live-engine). The FRONT pair also pivots about its own axle for steering, written per
+          frame; the compound band rides inside each group so it turns with the tyre it belongs to
+          instead of sliding off it. */}
+      <g data-wheel="fl" transform={steerTransform(steer.left, SPRITE.wheels[0])}>
         <rect x="6" y="64" width="48" height="88" rx="18" fill="#16181D" />
         <rect x="16" y="82" width="28" height="52" rx="11" fill="#2E3138" />
+        {band && <rect x="6" y="92" width="3" height="32" rx="1.5" fill={band} />}
       </g>
-      <g data-wheel="fr">
+      <g data-wheel="fr" transform={steerTransform(steer.right, SPRITE.wheels[1])}>
         <rect x="186" y="64" width="48" height="88" rx="18" fill="#16181D" />
         <rect x="196" y="82" width="28" height="52" rx="11" fill="#2E3138" />
+        {band && <rect x="231" y="92" width="3" height="32" rx="1.5" fill={band} />}
       </g>
       <g data-wheel="rl">
         <rect x="4" y="350" width="52" height="96" rx="19" fill="#16181D" />
         <rect x="15" y="370" width="30" height="56" rx="12" fill="#2E3138" />
+        {band && <rect x="4" y="381" width="3" height="34" rx="1.5" fill={band} />}
       </g>
       <g data-wheel="rr">
         <rect x="184" y="350" width="52" height="96" rx="19" fill="#16181D" />
         <rect x="195" y="370" width="30" height="56" rx="12" fill="#2E3138" />
+        {band && <rect x="233" y="381" width="3" height="34" rx="1.5" fill={band} />}
       </g>
-      {/* Compound band: a thin line on each tyre's OUTER edge, spanning ~the rim diameter. */}
-      {band && (
-        <g>
-          <rect x="6" y="92" width="3" height="32" rx="1.5" fill={band} />
-          <rect x="231" y="92" width="3" height="32" rx="1.5" fill={band} />
-          <rect x="4" y="381" width="3" height="34" rx="1.5" fill={band} />
-          <rect x="233" y="381" width="3" height="34" rx="1.5" fill={band} />
-        </g>
-      )}
       {/* diffuser */}
       <path d="M84 448 L156 448 L164 468 L76 468 Z" fill="#0B0D10" />
       <rect x="96" y="450" width="3" height="16" fill="#2E3138" />

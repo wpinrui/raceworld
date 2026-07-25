@@ -166,6 +166,24 @@ changes every frame. The `cars` benchmark category already exists (`2bad1b7`) to
   cars, against `NODE_BUDGET` 4000. Not yet measured live: the in-app `cars` benchmark needs
   `DEBUG_KEYS`.
 
+### Sprite corrections that followed (same branch)
+
+- **Suspension was drawn inside out.** A wishbone is an A-arm: two mounts spread wide on the chassis,
+  meeting at a point on the upright, so from above each side is a V with the sharp end AT THE WHEEL. It
+  was drawn apex-inboard on both axles. Redrawn, thicker, and in carbon dark (`#0B0D10`) because the old
+  `#2E3138` sat 6 of 255 from `#33383E` tarmac and the arms were invisible against the road.
+- **The front wheels steer.** Ackermann from the path's own geometry: `atan(L / R)` per wheel with the
+  inner on the tighter radius, off a new geometric `curvature` output. Wheelbase and track are measured
+  off the artwork, so it is the DRAWN car whose corner has to be possible.
+- **Plus the understeer term**, which is what made it read. Kinematic lock alone is only true at walking
+  pace and vanishes in exactly the fast corners that load the car hardest. Real lock is
+  `atan(L / R) + K * lateral g`; at `K = 2.4` deg/g a hairpin runs 20 degrees and a 400m sweep 5, where
+  geometry alone gave 13 and 0.4. Bolder than a real car's 1 to 1.5, on the same grounds as the roll.
+- Compound bands moved inside their wheel groups so they turn with the tyre. They are also the clearest
+  read on steering angle, since a rounded pill hides its own rotation.
+- Pit-lane and grid cars keep their wheels straight: the crew's tyre props pixel-match the wheels in the
+  box, and a steered wheel would break that match on the one car being watched closely.
+
 ---
 
 ## Increment C — the track surface tells a story

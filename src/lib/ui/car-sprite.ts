@@ -36,6 +36,14 @@ export const SPRITE = {
 /** Sprite units per metre of real car. */
 export const UNITS_PER_M = SPRITE.len / (CAR_LENGTH_M * CAR_SCALE)
 
+/** Wheelbase and front track in metres, measured off the artwork rather than assumed, because it is the
+ *  DRAWN car whose wheels have to point somewhere the drawn corner is possible. */
+export const WHEELBASE_M = (SPRITE.wheels[2][1] - SPRITE.wheels[0][1]) / UNITS_PER_M
+export const TRACK_M = (SPRITE.wheels[1][0] - SPRITE.wheels[0][0]) / UNITS_PER_M
+/** How far ahead of the sprite's pivot the front axle sits, in metres: the front wheels are turning for
+ *  the corner they are about to enter, not the one under the car's middle. */
+export const FRONT_LEAD_M = (SPRITE.cy - SPRITE.wheels[0][1]) / UNITS_PER_M
+
 /** The height the light actually sees: the engine cover, not the airbox tip. What matters is that the
  *  car throws a SHORT shadow -- it is the lowest thing on the circuit, and a contact shadow that
  *  reaches as far as a grandstand's would float the car off the ground instead of planting it. */
@@ -157,6 +165,63 @@ export function carAttitude(lat: number, long: number): Attitude {
     pitch: noNegZero(long * PITCH_UNITS),
     squash: 1 - Math.abs(long) * SQUASH,
   }
+}
+
+/** Steering lock. Nothing may exceed it however tight the corner, because a front wheel turned further
+ *  than this reads as a crash rather than as a car. */
+const STEER_MAX_DEG = 28
+
+export interface Steer {
+  /** Degrees to turn each front wheel about its own axle, positive turning to the car's right. */
+  left: number
+  right: number
+}
+
+export const STRAIGHT: Steer = { left: 0, right: 0 }
+
+/** Understeer gradient: extra degrees of lock per g of cornering load. A tyre only makes grip by running
+ *  at a SLIP ANGLE, so the wheel points further into the corner than the direction it is travelling, and
+ *  the front pair slips more than the rear on any car set up to be safe. So the driver dials in lock
+ *  beyond the bare geometry, in proportion to how hard the corner is loading the car.
+ *
+ *  Without this term the steering is the kinematic angle alone, which is only true at walking pace: it
+ *  vanishes in exactly the fast corners that load the car hardest, so a car through a 150m sweep at
+ *  200kph looked like it was going straight. Real cars sit nearer 1 to 1.5; this is deliberately bolder,
+ *  for the same reason the roll is, but only just: past about 2.5 the field starts to look like it is
+ *  drifting rather than cornering. */
+const UNDERSTEER_DEG_PER_G = 2.4
+
+/** Where the front wheels have to point for the corner the car is in.
+ *
+ *  Geometry first: holding a radius R on a wheelbase L needs the front wheels at atan(L / R) into the
+ *  turn, and the INNER wheel needs MORE than the outer because it is following a tighter circle round the
+ *  same centre. That difference is Ackermann, and from directly above it is the give-away that a car is
+ *  steering rather than sliding. Then the slip angle the tyres need on top, which is the term that makes
+ *  a loaded car visibly wind on lock.
+ *
+ *  `curvature` is signed, per METRE, positive turning to the car's right. `lateralG` is the cornering
+ *  load; only its magnitude is used, since the corner's direction is the curvature's to say. */
+export function steerAngles(curvature: number, lateralG = 0): Steer {
+  if (!Number.isFinite(curvature) || curvature === 0) return STRAIGHT
+  const half = TRACK_M / 2
+  const r = 1 / Math.abs(curvature)
+  // A radius tighter than the car's own half-track would put the turn centre inside the wheelbase; the
+  // clamp keeps the inner wheel's angle finite so a bad sample cannot spin a wheel right round.
+  const inner = Math.atan(WHEELBASE_M / Math.max(half + 0.05, r - half))
+  const outer = Math.atan(WHEELBASE_M / (r + half))
+  // Both front tyres run a slip angle, so the whole axle gains it; Ackermann stays on the geometry.
+  const slip = Number.isFinite(lateralG) ? UNDERSTEER_DEG_PER_G * Math.abs(lateralG) : 0
+  const sign = curvature > 0 ? 1 : -1
+  const deg = (rad: number) => sign * Math.min(STEER_MAX_DEG, (rad * 180) / Math.PI + slip)
+  // Turning right, the right-hand wheel is the inner one.
+  return sign > 0
+    ? { left: deg(outer), right: deg(inner) }
+    : { left: deg(inner), right: deg(outer) }
+}
+
+/** One steered wheel, turned about its own axle so the tyre pivots in place. */
+export function steerTransform(deg: number, pivot: readonly [number, number]): string {
+  return `rotate(${noNegZero(deg).toFixed(2)} ${pivot[0]} ${pivot[1]})`
 }
 
 /** Scale about the sprite's centre, not its origin, or the car would swim up the screen under load. */

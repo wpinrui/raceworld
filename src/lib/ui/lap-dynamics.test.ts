@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lapDynamics, sampleLap, type LapPhysics } from './lap-dynamics'
+import { lapDynamics, lateralG, sampleLap, type LapPhysics } from './lap-dynamics'
 
 const PHYS: LapPhysics = { vTop: 90, vFloor: 10, aLat: 14, aAccel: 12.75, aBrake: 41 }
 
@@ -58,6 +58,22 @@ describe('lapDynamics', () => {
     }
   })
 
+  it('reports the geometric curvature exactly, and signs it by which way the track bends', () => {
+    const r = 150
+    const n = 256
+    const right = lapDynamics(circle(r, n), 2 * Math.PI * r, PHYS)
+    const left = lapDynamics(circle(r, n, -1), 2 * Math.PI * r, PHYS)
+    // Exactly 1/r, unlike the half-value the speed profile corners on above. Steering geometry has to
+    // be the real number: a wheel angle is either possible for the radius or it is not.
+    for (let i = 0; i < n; i++) {
+      expect(right.curvature[i]).toBeCloseTo(1 / r, 12)
+      expect(left.curvature[i]).toBeCloseTo(-1 / r, 12)
+    }
+    // And it is exactly twice what the profile used, which is the discrepancy the comment describes.
+    // If either ever changes independently, this is the test that says so.
+    expect(right.speed[0] ** 2 * right.curvature[0]).toBeCloseTo(2 * PHYS.aLat, 6)
+  })
+
   it('reports a fraction of the limit on a corner taken below it', () => {
     // Wide enough that top speed binds first, so the car is nowhere near the grip limit.
     const r = 6000
@@ -103,6 +119,31 @@ describe('lapDynamics', () => {
     }
     expect(Math.min(...lat)).toBeLessThan(0)
     expect(Math.max(...lat)).toBeGreaterThan(0)
+  })
+})
+
+describe('lateralG', () => {
+  it('is v squared over the radius, in real g', () => {
+    const r = 90
+    const n = 256
+    // metresPerUnit 1, so the track's own units ARE metres and the answer is checkable by hand.
+    const dyn = lapDynamics(circle(r, n), 2 * Math.PI * r, PHYS)
+    const v = dyn.speed[0]
+    expect(lateralG(dyn, 0, 1)).toBeCloseTo((v * v) / r / 9.81, 8)
+    // A car at the cornering limit pulls the same load whatever the radius: that is what the limit is.
+    const tight = lapDynamics(circle(20, n), 2 * Math.PI * 20, PHYS)
+    expect(lateralG(tight, 0, 1)).toBeCloseTo(lateralG(dyn, 0, 1), 6)
+  })
+
+  it('signs the load like the corner, and reads near zero on a straight', () => {
+    const n = 256
+    const r = 120
+    expect(lateralG(lapDynamics(circle(r, n), 2 * Math.PI * r, PHYS), 0, 1)).toBeGreaterThan(0)
+    expect(lateralG(lapDynamics(circle(r, n, -1), 2 * Math.PI * r, PHYS), 0, 1)).toBeLessThan(0)
+    // A circle so wide the car is speed-limited rather than grip-limited barely loads it at all.
+    const straight = 40000
+    expect(Math.abs(lateralG(lapDynamics(circle(straight, n), 2 * Math.PI * straight, PHYS), 0, 1)))
+      .toBeLessThan(0.05)
   })
 })
 

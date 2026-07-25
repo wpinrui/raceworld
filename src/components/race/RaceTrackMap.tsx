@@ -24,9 +24,12 @@ import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { CarSprite } from './CarSprite'
 import {
-  CAR_LENGTH_M, CAR_SCALE, LEVEL, bodyTransform, carAttitude, carLight, shadowTransform, sheenTransform,
+  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, LEVEL, SPRITE, STRAIGHT, bodyTransform, carAttitude, carLight,
+  shadowTransform, sheenTransform, steerAngles, steerTransform,
 } from '@/lib/ui/car-sprite'
-import { PROFILE_N, lapDynamics, sampleLap, trackPhysics, type LapDynamics } from '@/lib/ui/lap-dynamics'
+import {
+  PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics, type LapDynamics,
+} from '@/lib/ui/lap-dynamics'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -333,6 +336,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const shadowRefs = useRef(new Map<string, SVGGElement>())
   const bodyRefs = useRef(new Map<string, SVGGElement>())
   const sheenRefs = useRef(new Map<string, SVGGElement>())
+  const steerRefs = useRef(new Map<string, [SVGGElement, SVGGElement]>()) // front wheels, left then right
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
@@ -1116,6 +1120,24 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               : LEVEL
             bodyRefs.current.get(f.id)?.setAttribute('transform', bodyTransform(att))
             sheenRefs.current.get(f.id)?.setAttribute('transform', sheenTransform(spriteRot, att))
+            // Front wheels point where the corner AHEAD of them needs them to: sampled a front-axle's
+            // lead up the road, and converted to real metres, because the steering angle a radius
+            // demands depends on the car's actual wheelbase. Pit-lane and grid cars keep their wheels
+            // straight -- the crew's tyre props pixel-match the wheels in the box, and a steered wheel
+            // would break that match on the one car anyone is looking closely at.
+            const fronts = steerRefs.current.get(f.id)
+            if (fronts) {
+              const steer = f.kind === 'race'
+                ? steerAngles(
+                  sampleLap(dyn.curvature, frac + uu(FRONT_LEAD_M) / raceLenRef.current)
+                    / layout.metresPerUnit,
+                  // Load is read at the CAR, not at the front axle: it is the whole car's corner.
+                  lateralG(dyn, frac, layout.metresPerUnit),
+                )
+                : STRAIGHT
+              fronts[0].setAttribute('transform', steerTransform(steer.left, SPRITE.wheels[0]))
+              fronts[1].setAttribute('transform', steerTransform(steer.right, SPRITE.wheels[1]))
+            }
           }
         }
 
@@ -2035,10 +2057,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                         shadowRefs.current.delete(car.id)
                         bodyRefs.current.delete(car.id)
                         sheenRefs.current.delete(car.id)
+                        steerRefs.current.delete(car.id)
                         return
                       }
                       sprRefs.current.set(car.id, el)
-                      // The three world-locked groups, found once here rather than queried per frame.
+                      // The groups the loop drives, found once here rather than queried per frame.
                       const put = (sel: string, into: Map<string, SVGGElement>) => {
                         const g = el.querySelector<SVGGElement>(sel)
                         if (g) into.set(car.id, g)
@@ -2047,6 +2070,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                       put('[data-car-shadow]', shadowRefs.current)
                       put('[data-car-body]', bodyRefs.current)
                       put('[data-car-sheen]', sheenRefs.current)
+                      const fl = el.querySelector<SVGGElement>('[data-wheel="fl"]')
+                      const fr = el.querySelector<SVGGElement>('[data-wheel="fr"]')
+                      if (fl && fr) steerRefs.current.set(car.id, [fl, fr])
+                      else steerRefs.current.delete(car.id)
                     }}
                     onClick={() => clickCar(car.id)}
                     className="cursor-pointer"

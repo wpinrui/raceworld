@@ -20,8 +20,10 @@ import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-z
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
 import { densifyTrace } from '../src/lib/ui/track-path'
 import { CarSprite } from '../src/components/race/CarSprite'
-import { CAR_LENGTH_M, CAR_SCALE, SPRITE, carAttitude, carLight } from '../src/lib/ui/car-sprite'
-import { PROFILE_N, lapDynamics, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
+import {
+  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, carAttitude, carLight, steerAngles,
+} from '../src/lib/ui/car-sprite'
+import { PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
 import type { Lighting } from '../src/lib/ui/lighting'
 import type { TrackLayout } from '../src/data/tracks'
 
@@ -86,8 +88,13 @@ function carsMarkup(layout: TrackLayout, lighting: Lighting, n: number): string[
     const ahead = pts[(st + 2) % PROFILE_N]
     const spriteRot = Math.atan2(ahead.y - here.y, ahead.x - here.x) + Math.PI / 2
     const attitude = carAttitude(sampleLap(dyn.lat, frac), sampleLap(dyn.long, frac))
+    // Wheels turned for the corner a front axle's lead up the road, as the live map does it.
+    const steer = steerAngles(
+      sampleLap(dyn.curvature, frac + FRONT_LEAD_M / layout.metresPerUnit / len) / layout.metresPerUnit,
+      lateralG(dyn, frac, layout.metresPerUnit),
+    )
     const sprite = renderToStaticMarkup(createElement(CarSprite, {
-      id: `p${i}`, color: LIVERIES[i % LIVERIES.length], length: SPRITE.len, light, spriteRot, attitude,
+      id: `p${i}`, color: LIVERIES[i % LIVERIES.length], length: SPRITE.len, light, spriteRot, attitude, steer,
     }))
     // The sprite is its own <svg>, and a nested one CLIPS to its viewBox, which would cut the contact
     // shadow's tail off. So it goes in as a <g> instead, scaled from sprite units into track units.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BODY_H_M, LEVEL, SPRITE, UNITS_PER_M, bodyTransform, carAttitude, carLight, shadowTransform,
-  sheenTransform,
+  BODY_H_M, LEVEL, SPRITE, STRAIGHT, TRACK_M, UNITS_PER_M, WHEELBASE_M, bodyTransform, carAttitude,
+  carLight, shadowTransform, sheenTransform, steerAngles, steerTransform,
 } from './car-sprite'
 import { MOODS, dirAt, shadowReach } from './lighting'
 import { hexToRgb } from '@/lib/color'
@@ -185,6 +185,103 @@ describe('carAttitude', () => {
       expect(Math.abs(a.pitch)).toBeLessThan(SPRITE.len * 0.05)
       expect(a.squash).toBeGreaterThan(0.95)
     }
+  })
+})
+
+describe('steerAngles', () => {
+  it('points the wheels straight ahead on a straight', () => {
+    expect(steerAngles(0)).toEqual(STRAIGHT)
+    expect(steerAngles(NaN)).toEqual(STRAIGHT)
+  })
+
+  it('turns the wheels the way the corner goes', () => {
+    const right = steerAngles(1 / 30)
+    expect(right.left).toBeGreaterThan(0)
+    expect(right.right).toBeGreaterThan(0)
+    const left = steerAngles(-1 / 30)
+    expect(left.left).toBeLessThan(0)
+    expect(left.right).toBeLessThan(0)
+    // Mirror image of each other, corner for corner.
+    expect(left.left).toBeCloseTo(-right.right, 10)
+    expect(left.right).toBeCloseTo(-right.left, 10)
+  })
+
+  it('gives the INNER wheel more lock than the outer, which is Ackermann', () => {
+    const right = steerAngles(1 / 20)
+    expect(Math.abs(right.right)).toBeGreaterThan(Math.abs(right.left))
+    const left = steerAngles(-1 / 20)
+    expect(Math.abs(left.left)).toBeGreaterThan(Math.abs(left.right))
+  })
+
+  it('is the angle the radius actually demands of this wheelbase', () => {
+    const r = 40
+    const { left, right } = steerAngles(1 / r)
+    const deg = (rad: number) => (rad * 180) / Math.PI
+    expect(right).toBeCloseTo(deg(Math.atan(WHEELBASE_M / (r - TRACK_M / 2))), 10)
+    expect(left).toBeCloseTo(deg(Math.atan(WHEELBASE_M / (r + TRACK_M / 2))), 10)
+  })
+
+  it('asks for more lock the tighter the corner', () => {
+    const locks = [400, 120, 50, 25, 12].map((r) => steerAngles(1 / r).right)
+    for (let i = 1; i < locks.length; i++) expect(locks[i]).toBeGreaterThan(locks[i - 1])
+    // A fast sweep is nearly straight, a hairpin is obvious. Both are what a real car does.
+    expect(locks[0]).toBeLessThan(1)
+    expect(locks[locks.length - 1]).toBeGreaterThan(8)
+  })
+
+  it('winds on extra lock with the cornering load, because tyres need a slip angle', () => {
+    const r = 1 / 60
+    const unloaded = steerAngles(r)
+    const loaded = steerAngles(r, 2.5)
+    expect(loaded.right).toBeGreaterThan(unloaded.right)
+    expect(loaded.left).toBeGreaterThan(unloaded.left)
+    // Proportional to the load: twice the g, twice the extra.
+    const half = steerAngles(r, 1.25)
+    expect(loaded.right - unloaded.right).toBeCloseTo(2 * (half.right - unloaded.right), 10)
+  })
+
+  it('gives the slip angle to the whole axle, leaving Ackermann to the geometry', () => {
+    const r = 1 / 40
+    const gap = (s: { left: number; right: number }) => s.right - s.left
+    // Both wheels gain the same slip angle, so the difference BETWEEN them is untouched by load.
+    expect(gap(steerAngles(r, 3))).toBeCloseTo(gap(steerAngles(r)), 10)
+  })
+
+  it('takes the corner direction from the curvature, never from the load', () => {
+    // A left-hander under load still steers left, whichever sign the load arrives with.
+    for (const g of [2.5, -2.5]) {
+      const s = steerAngles(-1 / 40, g)
+      expect(s.left).toBeLessThan(0)
+      expect(s.right).toBeLessThan(0)
+    }
+    expect(steerAngles(-1 / 40, 2.5)).toEqual(steerAngles(-1 / 40, -2.5))
+  })
+
+  it('ignores a load it cannot use', () => {
+    expect(steerAngles(1 / 40, NaN)).toEqual(steerAngles(1 / 40, 0))
+  })
+
+  it('never exceeds full lock, whatever nonsense the curvature or the load is', () => {
+    for (const c of [1, 10, 1e6, -1e6]) {
+      const s = steerAngles(c, 40)
+      expect(Math.abs(s.left)).toBeLessThanOrEqual(28)
+      expect(Math.abs(s.right)).toBeLessThanOrEqual(28)
+      expect(Number.isFinite(s.left)).toBe(true)
+      expect(Number.isFinite(s.right)).toBe(true)
+    }
+  })
+})
+
+describe('steerTransform', () => {
+  it('pivots the wheel about its own axle, so the tyre turns in place', () => {
+    const axle = SPRITE.wheels[1]
+    const at = applyTransform(steerTransform(15, axle), axle[0], axle[1])
+    expect(at.x).toBeCloseTo(axle[0], 6)
+    expect(at.y).toBeCloseTo(axle[1], 6)
+    // The front of the tyre swings toward the car's right for a positive (right-hand) angle.
+    const front = applyTransform(steerTransform(15, axle), axle[0], axle[1] - 40)
+    expect(front.x).toBeGreaterThan(axle[0])
+    expect(front.y).toBeGreaterThan(axle[1] - 40)
   })
 })
 

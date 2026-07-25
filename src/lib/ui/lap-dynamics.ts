@@ -38,6 +38,10 @@ export interface LapDynamics {
   /** Signed longitudinal acceleration as a fraction of the relevant limit: -1 is maximum braking,
    *  +1 maximum acceleration. */
   long: Float64Array
+  /** Signed path curvature in 1/track-unit, positive where the track bends to the car's right. This is
+   *  the GEOMETRIC truth about the corner, for anything that has to be physically possible rather than
+   *  merely tuned -- steering angle, above all. See the note where it is computed. */
+  curvature: Float64Array
 }
 
 /** The profile's physics in REAL units (m/s, m/s^2). Every track is driven by these same limits,
@@ -70,6 +74,14 @@ export function sampleLap(arr: Float64Array, frac: number): number {
   return arr[i % n] * (1 - f) + arr[(i + 1) % n] * f
 }
 
+/** Lateral load in g at a lap fraction: v^2 * curvature, converted into real units. This is what the
+ *  front tyres actually have to generate, and therefore how much slip angle has to be dialled in on top
+ *  of the bare steering geometry. Signed like the corner. */
+export function lateralG(d: LapDynamics, frac: number, metresPerUnit: number): number {
+  const v = sampleLap(d.speed, frac)
+  return (v * v * sampleLap(d.curvature, frac) * metresPerUnit) / 9.81
+}
+
 /** `pts` are equally spaced round a CLOSED path of total length `len`, in track units. */
 export function lapDynamics(pts: readonly { x: number; y: number }[], len: number, p: LapPhysics): LapDynamics {
   const n = pts.length
@@ -78,7 +90,14 @@ export function lapDynamics(pts: readonly { x: number; y: number }[], len: numbe
   // Signed curvature: positive where the track turns clockwise on screen, i.e. to the car's right.
   // The old profile took its magnitude immediately, which is why the renderer could never tell a
   // left-hander from a right one.
+  //
+  // TWO curvatures, and they differ by exactly two. `dth` is the turn between the chord tangents at
+  // stations i-1 and i+1, which are 2*ds of arc apart, so the real curvature is dth / (2*ds). The
+  // profile has always divided by 4*ds, i.e. cornered on half the truth, and every corner speed on this
+  // branch was tuned by eye around that. So `kappa` keeps the shipped arithmetic untouched, and the
+  // geometric value is exported alongside it for the things that have to be physically possible.
   const kappa = new Float64Array(n)
+  const curvature = new Float64Array(n)
   for (let i = 0; i < n; i++) {
     const a = pts[(i - 2 + n) % n]
     const b = pts[i]
@@ -89,6 +108,7 @@ export function lapDynamics(pts: readonly { x: number; y: number }[], len: numbe
     if (dth > Math.PI) dth -= 2 * Math.PI
     if (dth < -Math.PI) dth += 2 * Math.PI
     kappa[i] = dth / (4 * ds)
+    curvature[i] = dth / (2 * ds)
     v[i] = Math.max(p.vFloor, Math.min(p.vTop, Math.sqrt(p.aLat / Math.max(Math.abs(kappa[i]), 1e-9))))
   }
   // Twice round, so the passes agree across the lap seam rather than leaving a step in it.
@@ -116,5 +136,5 @@ export function lapDynamics(pts: readonly { x: number; y: number }[], len: numbe
     const a = v[i] * ((v[(i + 1) % n] - v[(i - 1 + n) % n]) / (2 * ds))
     long[i] = clamp1(a / (a < 0 ? p.aBrake : p.aAccel))
   }
-  return { time, speed: v, lat, long }
+  return { time, speed: v, lat, long, curvature }
 }
