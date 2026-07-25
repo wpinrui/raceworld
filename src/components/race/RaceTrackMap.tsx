@@ -14,7 +14,7 @@ import {
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
-import { SceneryCanvas, drawScene, warmScene } from './SceneryCanvas'
+import { SceneBaker, SceneryCanvas, drawScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
@@ -1665,21 +1665,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
   const sceneRef = useRef(scene)
   useEffect(() => { sceneRef.current = scene }, [scene])
-  // On a cull step, the old scene keeps painting while the new one's paths parse in the
-  // background; the swap lands only when the Path2D cache is warm. Parsing them inside the next
-  // paint instead was a 2-3 vsync hitch on every disc move — the last dip the benchmark found.
-  const warmTokenRef = useRef<{ cancel: () => void } | null>(null)
   useEffect(() => {
-    composeSceneRef.current = (cullNow) => {
-      const next = composeScene(cullNow)
-      warmTokenRef.current?.cancel()
-      if (!next) {
-        sceneRef.current = next
-        return
-      }
-      warmTokenRef.current = warmScene(next.items, () => { sceneRef.current = next })
-    }
-    return () => warmTokenRef.current?.cancel()
+    composeSceneRef.current = (cullNow) => { sceneRef.current = composeScene(cullNow) }
   }, [composeScene])
   useEffect(() => { canvasOnRef.current = canvasOn }, [canvasOn])
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
@@ -1690,6 +1677,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // The race tick's JS cost since the readout last sampled: average and worst frame.
   const tickStatsRef = useRef({ sum: 0, n: 0, max: 0 })
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
+  // The static world comes off the front bake — one image blit per frame — while the back buffer
+  // re-bakes within a small budget whenever the scene or the camera outgrows the current one.
+  const bakerRef = useRef<SceneBaker | null>(null)
   const paintCanvas = useCallback(() => {
     const canvas = canvasRef.current
     const sc = sceneRef.current
@@ -1700,20 +1690,35 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       // No scene (map view): leave nothing stale behind the minimap.
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
+      bakerRef.current?.invalidate()
       return
     }
     const dpr = window.devicePixelRatio || 1
-    const timing = hudRef.current || benchRef.current ? { marks: sc.marks, out: {} } : undefined
-    drawScene(
-      ctx, sc.items, camRef.current, vb,
-      { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
-      (name, c, bbox) => canvasPaint(name, c, {
-        lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
-        pxPerUnit: camRef.current.z * (sw / vb.w) * dpr,
-      }) ?? '#FF00FF',
-      timing,
-    )
-    if (timing) paintStatsRef.current = timing.out
+    const ppu = sw / vb.w
+    const size = { w: canvas.width / dpr, h: canvas.height / dpr }
+    const cam = camRef.current
+    const paintFor = (name: string, c: CanvasRenderingContext2D, bbox?: { x: number; y: number; w: number; h: number }) => canvasPaint(name, c, {
+      lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
+      pxPerUnit: cam.z * ppu * dpr,
+    }) ?? '#FF00FF'
+    const baker = bakerRef.current ?? (bakerRef.current = new SceneBaker())
+    const wantTiming = Boolean(hudRef.current) || benchRef.current
+    const t0 = wantTiming ? performance.now() : 0
+    const blitted = baker.blit(ctx, cam, vb, size, dpr, ppu)
+    if (!blitted) {
+      // No bake yet (first frames, or a fresh invalidation): draw live so nothing flashes.
+      const timing = wantTiming ? { marks: sc.marks, out: {} } : undefined
+      drawScene(ctx, sc.items, cam, vb, size, dpr, ppu, paintFor, timing)
+      if (timing) paintStatsRef.current = timing.out
+    }
+    const t1 = wantTiming ? performance.now() : 0
+    if (!baker.baking && baker.stale(sc.items, cam, size)) {
+      baker.start(sc.items, cam, vb, size, dpr, ppu, paintFor)
+    }
+    baker.step(SceneBaker.BUDGET_MS)
+    if (wantTiming && blitted) {
+      paintStatsRef.current = { blit: t1 - t0, bake: performance.now() - t1 }
+    }
   }, [vb, lighting, u])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
 
