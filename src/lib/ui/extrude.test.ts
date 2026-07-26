@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { buildingParts } from './scenery-shapes'
 import {
   partsPath, quad, ringArea, ringPath, sweptRing, sweptHull, sideFacesX, rakedStand, ribbon,
-  posts, mapPathPoints, obliqueRingFaces, wallWindows,
+  posts, linePath, mapPathPoints, obliqueRingFaces, wallWindows,
   type Part, type Vec,
 } from './extrude'
 
@@ -350,6 +350,40 @@ describe('obliqueRingFaces', () => {
 
   it('emits nothing without a sweep', () => {
     expect(obliqueRingFaces(sq, 0, 0)).toBe('')
+  })
+
+  it('leaves out a marked edge, whichever way the ring happens to be wound', () => {
+    // A ring cut out of a longer one carries edges that are cuts rather than walls, and the caller is
+    // the only thing that knows which. The mark is read off the ring AS GIVEN: this function reverses
+    // its input when the winding needs it, and a mark read off the reversed ring would land on a
+    // different edge, shading a wall and skipping the cut.
+    for (const ring of [sq, [...sq].reverse()]) {
+      const all = parseAll(obliqueRingFaces(ring, 1, 9))
+      expect(all).toHaveLength(1)
+      // Which edge of the GIVEN ring that face came from: the one whose two ends it starts on.
+      const face = all[0]
+      const edge = ring.findIndex((p, i) => {
+        const q = ring[(i + 1) % ring.length]
+        return face.some((f) => f.x === p.x && f.y === p.y) && face.some((f) => f.x === q.x && f.y === q.y)
+      })
+      expect(edge).toBeGreaterThanOrEqual(0)
+      const skip = ring.map((_, i) => i === edge)
+      expect(obliqueRingFaces(ring, 1, 9, undefined, skip)).toBe('')
+      // And marking any OTHER edge changes nothing, since none of them was drawn.
+      expect(obliqueRingFaces(ring, 1, 9, undefined, ring.map((_, i) => i !== edge)))
+        .toBe(obliqueRingFaces(ring, 1, 9))
+    }
+  })
+})
+
+describe('linePath', () => {
+  it('writes an open run, with no close', () => {
+    expect(linePath([P(0, 0), P(1, 2), P(3, 4)])).toBe('M 0.00 0.00 L 1.00 2.00 L 3.00 4.00 ')
+  })
+
+  it('emits nothing for a run with no length to it', () => {
+    expect(linePath([])).toBe('')
+    expect(linePath([P(1, 1)])).toBe('')
   })
 })
 

@@ -15,6 +15,7 @@ import {
   MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowReach,
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
+import { linePath } from '@/lib/ui/extrude'
 import { useSceneryBitmap } from './use-scenery-bitmap'
 import { SceneryCanvas, contextFor, drawScene, warmScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp, type SceneItem, type SceneMark } from '@/lib/ui/scenery-draw'
@@ -2186,8 +2187,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
                 <path d={pitZone.sep} fill="none" stroke="#2E62C9" strokeWidth={u(0.34)} strokeLinecap="round" />
-                <path d={pitZone.limiterIn} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
-                <path d={pitZone.limiterOut} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
+                <path d={linePath(pitZone.limiterIn)} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
+                <path d={linePath(pitZone.limiterOut)} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
               </g>
             )}
             </g>

@@ -64,6 +64,49 @@ interface Box { x0: number; y0: number; x1: number; y1: number }
 const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0))
   * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
 
+/** How much of the viewport one op REACHES ACROSS, and the same weighted by how many edges reach.
+ *
+ *  The fill column bills a shape for the pixels it is estimated to end up writing. That is the right
+ *  measure for a frame short of fill rate, and the wrong one for the frame this map actually drops:
+ *  canvas paint time measures 0.14ms while frames go in whole vsync intervals, which is the compositor
+ *  missing its deadline rather than JavaScript running long.
+ *
+ *  So this counts SETUP instead. A GPU fills a non-convex path by working over every edge across the
+ *  area the path reaches, and it pays for that whether or not the covered pixels survive: a path
+ *  several viewports long is billed a whole viewport here however little of it is finally seen, and
+ *  its edge count multiplies that. Cutting such a path into pieces shows up as the pieces off screen
+ *  costing nothing, which the fill column cannot show — its own estimate changes bias with the shape.
+ *
+ *  A RANKING, not a rasteriser, and one to read with its limits in mind: it over-bills a big
+ *  many-vertexed fill that turns out to be cheap in practice (the ground's terrain patches rank above
+ *  everything and ablate to nothing on the lap benchmark). Only fills are weighted by edge count. A
+ *  stroke's work is local to each segment rather than spread over the whole path, so weighting a
+ *  circuit-long fence run by its vertex count ranked it first on a frame that hiding it does not
+ *  change.
+ *
+ *  Per SUBPATH, not per path: a swept hull is a ring, its offset copy and a quad per wall, and each of
+ *  those is set up on its own. */
+function opExtent(op: DrawOp, box: Box, at: (p: Pt) => Pt): { ext: number; fan: number } {
+  let ext = 0
+  let fan = 0
+  const grow = op.stroke ? (op.width ?? 1) / 2 : 0
+  for (const raw of subpaths(op.d)) {
+    let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+    for (const p of raw) {
+      const [x, y] = at(p)
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+    if (x0 > x1) continue
+    const seen = overlap({ x0: x0 - grow, y0: y0 - grow, x1: x1 + grow, y1: y1 + grow }, box)
+    ext += seen
+    if (op.fill) fan += seen * raw.length
+  }
+  return { ext, fan }
+}
+
 /** Area of one op inside the viewport, in square viewBox units. */
 function opArea(op: DrawOp, box: Box, at: (p: Pt) => Pt): number {
   let area = 0
@@ -211,6 +254,13 @@ for (const id of ids) {
       const mpx = (opArea(op, box, at) * pxPerUnit2) / 1e6
       by[section] = (by[section] ?? 0) + mpx
       total += mpx
+      const reach = opExtent(op, box, at)
+      const ext = (reach.ext * pxPerUnit2) / 1e6
+      extBy[section] = (extBy[section] ?? 0) + ext
+      extent += ext
+      const fn = (reach.fan * pxPerUnit2) / 1e6
+      fanBy[section] = (fanBy[section] ?? 0) + fn
+      fan += fn
       ops++
       opsBy[section] = (opsBy[section] ?? 0) + 1
       // A gradient or a tiled pattern is a different rasteriser path from a solid: per pixel it is
@@ -224,8 +274,12 @@ for (const id of ids) {
     }
     let ops = 0
     let fancy = 0
+    let extent = 0
+    let fan = 0
     const byPaint: Record<string, number> = {}
     const opsBy: Record<string, number> = {}
+    const extBy: Record<string, number> = {}
+    const fanBy: Record<string, number> = {}
     for (let i = 0; i < items.length; i++) {
       while (m < marks.length && marks[m].at === i) section = marks[m++].name
       const item: SceneItem = items[i]
@@ -240,7 +294,7 @@ for (const id of ids) {
         add(item, (p) => p)
       }
     }
-    return { total, by, ops, fancy, byPaint, opsBy }
+    return { total, by, ops, fancy, byPaint, opsBy, extent, extBy, fan, fanBy }
   }
 
   const stations = centre.filter((_, i) => i % Math.max(1, Math.floor(centre.length / 120)) === 0)
@@ -261,6 +315,16 @@ for (const id of ids) {
     const ob = Object.entries(s.opsBy).sort((a, b) => b[1] - a[1])
       .map(([n, v]) => `${n} ${v}`).join('  ')
     console.log(`${' '.repeat(15)}draw calls: ${ob}`)
+    const ex = Object.entries(s.extBy).filter(([, v]) => v > 0.05)
+      .sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([n, v]) => `${n} ${v.toFixed(1)}`).join('  ')
+    console.log(`${' '.repeat(15)}path extent: ${s.extent.toFixed(1)} Mpx `
+      + `(${(s.extent / VIEWPORT_MPX).toFixed(1)}x vp)  |  ${ex}`)
+    const fn = Object.entries(s.fanBy).filter(([, v]) => v > 1)
+      .sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([n, v]) => `${n} ${v.toFixed(0)}`).join('  ')
+    console.log(`${' '.repeat(15)}stencil fan: ${s.fan.toFixed(0)} Mpx-edges `
+      + `(${(s.fan / VIEWPORT_MPX).toFixed(0)}x vp)  |  ${fn}`)
   }
   console.log(`\n${id} — fill submitted per frame at ${zoom.toFixed(1)}x `
     + `(${pxPerM.toFixed(1)}px/m, scenery ${full ? 'full' : 'low'}, ink ${inkFull ? 'full' : 'flat'}), `

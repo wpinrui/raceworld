@@ -9,7 +9,7 @@
 //  2. The garages are recesses in the front face rather than doors painted on it, which makes the
 //     outline concave — hence a ring extrusion rather than the box extrusion the scenery uses.
 
-import { mapPathPoints, obliqueRingFaces, quad, ringPath, sweptRing } from '@/lib/ui/extrude'
+import { linePath, mapPathPoints, obliqueRingFaces, quad, ringPath, sweptRing, type Vec } from '@/lib/ui/extrude'
 import {
   type Lighting, dirAt, lightDir, litFace, shadeFace, shadowFill, shadowOpacity, shadowReach,
   tintFace,
@@ -28,7 +28,7 @@ const GARAGE_H_M = 3.2
 /** Rooftop plant boxes stand this proud of the roof. */
 const PLANT_H_M = 2.2
 /** Concrete-and-glass white, not another dark infield shed. */
-const PIT_WHITE = '#E4E2DC'
+export const PIT_WHITE = '#E4E2DC'
 
 /** The shadow the complex throws across the lane and the track. Drawn as its own layer so it lands on
  *  tarmac already painted, exactly as the scenery shadows do. */
@@ -121,7 +121,7 @@ export function PitBuilding({ zone, u, lighting, view, garageColor }: {
       {/* Viewing terrace along the front of the roof, and its railing. */}
       <path d={zone.roofDeck} transform={onRoof} fill={tintFace(PIT_WHITE, lighting, -0.22)} />
       <path
-        d={`M ${zone.roofRail.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')}`}
+        d={linePath(zone.roofRail)}
         transform={onRoof} fill="none" stroke={shadeFace(PIT_WHITE, lighting)} strokeWidth={u(0.35)}
       />
       {/* Rooftop plant, extruded off the roof so the roof itself has relief rather than markings. */}
@@ -254,7 +254,18 @@ export function pitFloorOps(
 
 /** The complex itself, in paint order: shadow, ground floor, shutters, upper storey, roof and its
  *  furniture, then the lane markings. Same geometry the components draw, described as data so the
- *  canvas can take it. */
+ *  canvas can take it.
+ *
+ *  Every piece is submitted STRETCH BY STRETCH along the lane rather than whole. The complex is a
+ *  couple of hundred metres long and a racing shot holds about forty of them, so a whole-complex fill
+ *  is a path whose every edge reaches far outside the viewport and whose disc can never cull it:
+ *  measured on a lap benchmark, hiding the complex was the only ablation that moved the frame rate at
+ *  all (60 fps and 2 long frames against 57 and 13). It is the same cut, for the same reason, that
+ *  `roadArcs` makes in the circuit.
+ *
+ *  LAYER-MAJOR across the stretches, exactly as the whole-complex version painted: every ground floor
+ *  before any upper storey, every wall before any roof. Stretch-major would let one stretch's roof
+ *  land under its neighbour's wall, which is a different picture from the one this replaces. */
 export function pitComplexOps(
   zone: PitZone, u: (m: number) => number, lighting: Lighting, view: number,
   garageColor?: (i: number) => string | undefined,
@@ -265,52 +276,96 @@ export function pitComplexOps(
   const mid = u(GARAGE_H_M * EXTRUDE)
   const plantLift = u(PLANT_H_M * EXTRUDE)
   const cast = u(PIT_BUILDING_H_M * shadowReach(lighting))
-  const up = (p: { x: number; y: number }, k: number) => ({ x: p.x - dir.x * k, y: p.y - dir.y * k })
-  const lower = zone.buildingPts.map((p) => up(p, mid))
-  const upper = zone.upperPts.map((p) => up(p, lift))
+  const up = (p: Vec, k: number) => ({ x: p.x - dir.x * k, y: p.y - dir.y * k })
+  const by = (pts: Vec[], ox: number, oy: number) => pts.map((p) => ({ x: p.x + ox, y: p.y + oy }))
   const wall = shadeFace(PIT_WHITE, lighting)
   const ret = tintFace(PIT_WHITE, lighting, -0.45)
-  const onRoof = (p: { x: number; y: number }) => up(p, lift)
-  const plantTops = zone.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
-  const shift = (d: string, k: number) => mapPathPoints(d, (x, y) => up({ x, y }, k))
+  const pad = u(0.6)
+  /** A disc round a shape and where the sweep carries it. */
+  const reach = (pts: Vec[], ox: number, oy: number) => discOf([...pts, ...by(pts, ox, oy)], pad)
 
-  // One disc for the whole-building pieces (its lane paint runs along the box row, so the garage
-  // floors are folded in), and one per garage for its mouth and lintel — driving down the pit
-  // straight at racing zoom, most garages are off screen even while the building is on it.
-  const complexClip = discOf(
-    [...zone.buildingPts, ...zone.upperPts, ...zone.garageFloors.flat()],
-    lift + cast + u(30),
-  )
-
-  const ops: DrawOp[] = [
-    { d: sweptRing(zone.upperPts, ldir.x * cast, ldir.y * cast), fill: shadowFill(lighting), alpha: shadowOpacity(lighting), clip: complexClip },
-    { d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall, clip: complexClip },
-    { d: obliqueRingFaces(lower, dir.x * mid, dir.y * mid), fill: ret, clip: complexClip },
-  ]
+  const ops: DrawOp[] = []
+  // The shadow the complex throws across the lane, cast from the UPPER outline: it is the outer
+  // envelope, since the storey above overhangs the recesses bitten out of the one below.
+  for (const s of zone.spans) {
+    ops.push({
+      d: sweptRing(s.upperPts, ldir.x * cast, ldir.y * cast),
+      fill: shadowFill(lighting), alpha: shadowOpacity(lighting),
+      clip: reach(s.upperPts, ldir.x * cast, ldir.y * cast),
+    })
+  }
+  for (const s of zone.spans) {
+    const lower = s.lowerPts.map((p) => up(p, mid))
+    ops.push({ d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall, clip: reach(lower, dir.x * mid, dir.y * mid) })
+  }
+  // The returns take a second tone, and a CUT is not a return: shading the edge where one stretch ends
+  // would paint a darker band straight down the middle of a wall that carries on into the next.
+  for (const s of zone.spans) {
+    const lower = s.lowerPts.map((p) => up(p, mid))
+    const d = obliqueRingFaces(lower, dir.x * mid, dir.y * mid, undefined, s.lowerSeam)
+    if (d) ops.push({ d, fill: ret, clip: reach(lower, dir.x * mid, dir.y * mid) })
+  }
+  // The garage door, on the back wall of its bay and in that wall's plane. One disc per garage:
+  // driving down the pit straight at racing zoom, most bays are off screen while the building is on it.
   for (const [i, r] of zone.garageFloors.entries()) {
     const h = mid * 0.82
-    const top = (p: { x: number; y: number }) => up(p, h)
-    const lintel = (p: { x: number; y: number }) => up(p, h * 0.82)
+    const top = (p: Vec) => up(p, h)
+    const lintel = (p: Vec) => up(p, h * 0.82)
     const clip = discOf(r, mid + u(2))
     ops.push({ d: quad(r[3], r[2], top(r[2]), top(r[3])), fill: '#161A21', clip })
     ops.push({ d: quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3])), fill: garageColor?.(i) ?? '#9AA3B2', clip })
   }
-  ops.push(
-    { d: sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: wall, clip: complexClip },
-    { d: obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid)), fill: ret, clip: complexClip },
-    { d: ringPath(upper), fill: litFace(PIT_WHITE, lighting), clip: complexClip },
-    { d: shift(zone.roofSeams, lift), stroke: tintFace(PIT_WHITE, lighting, -0.16), width: u(0.18), clip: complexClip },
-    { d: shift(zone.roofDeck, lift), fill: tintFace(PIT_WHITE, lighting, -0.22), clip: complexClip },
-    {
-      d: `M ${zone.roofRail.map((p) => { const q = onRoof(p); return `${q.x.toFixed(1)} ${q.y.toFixed(1)}` }).join(' L ')}`,
-      stroke: shadeFace(PIT_WHITE, lighting), width: u(0.35), clip: complexClip,
-    },
-    { d: plantTops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.5), clip: complexClip },
-    { d: plantTops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12), clip: complexClip },
-    { d: zone.sep, stroke: '#F2F2F2', width: u(0.6), cap: 'round', clip: complexClip },
-    { d: zone.sep, stroke: '#2E62C9', width: u(0.34), cap: 'round', clip: complexClip },
-    { d: zone.limiterIn, stroke: '#F2F2F2', width: u(0.35), cap: 'butt', clip: complexClip },
-    { d: zone.limiterOut, stroke: '#F2F2F2', width: u(0.35), cap: 'butt', clip: complexClip },
-  )
+  const rise = lift - mid
+  for (const s of zone.spans) {
+    const upper = s.upperPts.map((p) => up(p, lift))
+    ops.push({ d: sweptRing(upper, dir.x * rise, dir.y * rise), fill: wall, clip: reach(upper, dir.x * rise, dir.y * rise) })
+  }
+  for (const s of zone.spans) {
+    const upper = s.upperPts.map((p) => up(p, lift))
+    const d = obliqueRingFaces(upper, dir.x * rise, dir.y * rise, undefined, s.upperSeam)
+    if (d) ops.push({ d, fill: ret, clip: reach(upper, dir.x * rise, dir.y * rise) })
+  }
+  for (const s of zone.spans) {
+    const upper = s.upperPts.map((p) => up(p, lift))
+    ops.push({ d: ringPath(upper), fill: litFace(PIT_WHITE, lighting), clip: discOf(upper, pad) })
+  }
+  // White siding laid breadth-wise, then the viewing terrace along the front of the roof and its rail.
+  for (const s of zone.spans) {
+    if (!s.seams) continue
+    ops.push({
+      d: mapPathPoints(s.seams, (x, y) => up({ x, y }, lift)),
+      stroke: tintFace(PIT_WHITE, lighting, -0.16), width: u(0.18),
+      clip: discOf(s.upperPts.map((p) => up(p, lift)), pad),
+    })
+  }
+  for (const s of zone.spans) {
+    const deck = s.deck.map((p) => up(p, lift))
+    ops.push({ d: ringPath(deck), fill: tintFace(PIT_WHITE, lighting, -0.22), clip: discOf(deck, pad) })
+  }
+  for (const s of zone.spans) {
+    const rail = s.rail.map((p) => up(p, lift))
+    ops.push({
+      d: linePath(rail), stroke: shadeFace(PIT_WHITE, lighting), width: u(0.35),
+      clip: discOf(rail, u(0.35)),
+    })
+  }
+  // Rooftop plant, extruded off the roof so the roof itself has relief rather than markings.
+  for (const s of zone.spans) {
+    if (s.plant.length === 0) continue
+    const tops = s.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
+    const clip = reach(tops.flat(), dir.x * plantLift, dir.y * plantLift)
+    ops.push({ d: tops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.5), clip })
+    ops.push({ d: tops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12), clip })
+  }
+  // The lane's own paint, on the ground: the separator stripe down the box row and the two limiter
+  // lines that bound it.
+  for (const [colour, widthM] of [['#F2F2F2', 0.6], ['#2E62C9', 0.34]] as const) {
+    for (const s of zone.spans) {
+      ops.push({ d: linePath(s.sep), stroke: colour, width: u(widthM), cap: 'round', clip: discOf(s.sep, u(widthM)) })
+    }
+  }
+  for (const l of [zone.limiterIn, zone.limiterOut]) {
+    ops.push({ d: linePath(l), stroke: '#F2F2F2', width: u(0.35), cap: 'butt', clip: discOf(l, u(0.35)) })
+  }
   return ops
 }

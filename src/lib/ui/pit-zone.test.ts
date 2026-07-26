@@ -20,6 +20,18 @@ const area = (r: Array<{ x: number; y: number }>) => {
   return a / 2
 }
 
+/** Crossing-number point-in-polygon, for comparing the whole complex against its stretches. */
+const inside = (p: { x: number; y: number }, r: Array<{ x: number; y: number }>) => {
+  let hit = false
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const a = r[i]
+    const b = r[j]
+    if ((a.y > p.y) !== (b.y > p.y)
+      && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) hit = !hit
+  }
+  return hit
+}
+
 describe('buildPitZone', () => {
   it('builds a zone for every layout, at any team count', () => {
     for (const id of IDS) {
@@ -55,6 +67,85 @@ describe('buildPitZone', () => {
       const pts = [...zone.buildingPts, ...zone.upperPts, ...zone.roofRail, ...zone.plant.flat(), ...zone.garageFloors.flat()]
       for (const p of pts) {
         expect(Number.isFinite(p.x) && Number.isFinite(p.y), id).toBe(true)
+      }
+    }
+  })
+
+  it('covers exactly the same ground in stretches as it does whole', () => {
+    // The canvas draws the stretches and the SVG layer draws the whole ring. If those two regions ever
+    // differ the map draws a different building depending on which renderer is up, which is the one
+    // thing the shared geometry exists to prevent. Sampled rather than reasoned: point-in-polygon over
+    // a grid across the complex, whole against the union of the stretches.
+    for (const id of IDS) {
+      const layout = TRACK_LAYOUTS[id]
+      const zone = buildPitZone(layout, buildPitSlots(layout, 11))!
+      for (const [name, whole, spans] of [
+        ['ground floor', zone.buildingPts, zone.spans.map((s) => s.lowerPts)],
+        ['upper storey', zone.upperPts, zone.spans.map((s) => s.upperPts)],
+      ] as const) {
+        const xs = whole.map((p) => p.x)
+        const ys = whole.map((p) => p.y)
+        const x0 = Math.min(...xs)
+        const x1 = Math.max(...xs)
+        const y0 = Math.min(...ys)
+        const y1 = Math.max(...ys)
+        let missed = 0
+        let extra = 0
+        for (let i = 0; i <= 120; i++) {
+          for (let j = 0; j <= 120; j++) {
+            const p = { x: x0 + ((x1 - x0) * i) / 120, y: y0 + ((y1 - y0) * j) / 120 }
+            const inWhole = inside(p, whole)
+            const inAny = spans.some((r) => inside(p, r))
+            if (inWhole && !inAny) missed++
+            if (!inWhole && inAny) extra++
+          }
+        }
+        // Zero, not a tolerance: the stretches are cut from the same outline, so a single disagreeing
+        // sample means a vertex went somewhere the whole ring does not have one.
+        expect(missed, `${id} ${name}: ${missed} samples the stretches do not cover`).toBe(0)
+        expect(extra, `${id} ${name}: ${extra} samples the stretches cover and the whole does not`).toBe(0)
+      }
+    }
+  })
+
+  it('marks a stretch\'s cut edges as cuts and its end walls as walls', () => {
+    // A cut is not a wall: shaded as one it paints a second tone straight down the middle of a wall
+    // that carries on into the next stretch.
+    for (const id of IDS) {
+      const zone = buildPitZone(TRACK_LAYOUTS[id], buildPitSlots(TRACK_LAYOUTS[id], 11))!
+      expect(zone.spans.length).toBeGreaterThan(1)
+      for (const [i, s] of zone.spans.entries()) {
+        expect(s.lowerSeam, `${id} stretch ${i}`).toHaveLength(s.lowerPts.length)
+        expect(s.upperSeam, `${id} stretch ${i}`).toHaveLength(s.upperPts.length)
+        // Every interior stretch has exactly two cuts; the two on the ends have one each, since the
+        // complex's own end wall is a wall.
+        const want = i === 0 || i === zone.spans.length - 1 ? 1 : 2
+        expect(s.lowerSeam.filter(Boolean), `${id} stretch ${i} ground floor`).toHaveLength(want)
+        expect(s.upperSeam.filter(Boolean), `${id} stretch ${i} upper storey`).toHaveLength(want)
+      }
+      expect(zone.spans[0].lowerSeam.filter(Boolean).length
+        + zone.spans[zone.spans.length - 1].lowerSeam.filter(Boolean).length).toBe(2)
+    }
+  })
+
+  it('keeps every stretch a real ring, at any team count', () => {
+    for (const id of IDS) {
+      for (const teams of [2, 6, 11, 16]) {
+        const layout = TRACK_LAYOUTS[id]
+        const zone = buildPitZone(layout, buildPitSlots(layout, teams))!
+        expect(zone.spans, `${id} @ ${teams}`).toHaveLength(teams)
+        for (const [i, s] of zone.spans.entries()) {
+          const pts = [...s.lowerPts, ...s.upperPts, ...s.deck, ...s.rail, ...s.sep, ...s.plant.flat()]
+          for (const p of pts) {
+            expect(Number.isFinite(p.x) && Number.isFinite(p.y), `${id} @ ${teams} stretch ${i}`).toBe(true)
+          }
+          expect(Math.abs(area(s.lowerPts)), `${id} @ ${teams}: flat stretch ${i}`).toBeGreaterThan(0)
+          expect(Math.abs(area(s.upperPts)), `${id} @ ${teams}: flat stretch ${i} above`).toBeGreaterThan(0)
+        }
+        // Each seam and each plant unit belongs to exactly one stretch, so nothing is drawn twice and
+        // nothing is dropped.
+        expect(zone.spans.reduce((n, s) => n + s.plant.length, 0)).toBe(zone.plant.length)
+        expect(zone.spans.map((s) => s.seams).join('')).toBe(zone.roofSeams)
       }
     }
   })

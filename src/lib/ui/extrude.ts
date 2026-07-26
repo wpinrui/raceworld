@@ -80,6 +80,14 @@ export function ringPath(pts: Vec[]): string {
   return `M ${r.map((p) => `${f2(p.x)} ${f2(p.y)}`).join(' L ')} Z `
 }
 
+/** An OPEN run of points as path data. The rail along the pit roof, the stripe down the box row and
+ *  the limiter lines are all polylines rather than rings, and each of them used to write this line
+ *  out again at its call site. */
+export function linePath(pts: Vec[]): string {
+  if (pts.length < 2) return ''
+  return `M ${pts.map((p) => `${f2(p.x)} ${f2(p.y)}`).join(' L ')} `
+}
+
 /** The swept hull of a CLOSED RING under a translation: the top ring, the base ring, and a quad for
  *  every edge whose outward normal faces the sweep.
  *
@@ -109,14 +117,27 @@ export function sweptRing(pts: Vec[], ox: number, oy: number): string {
  *  equivalent of `sideFacesX`, and it exists for the same reason — two adjoining planes at different
  *  angles to the sky is what reads as a box. Overlay it on `sweptRing` in a second tone.
  *
- *  `cut` is the cosine of the angle at which a face stops counting as front-on. */
-export function obliqueRingFaces(pts: Vec[], ox: number, oy: number, cut = Math.SQRT1_2): string {
+ *  `cut` is the cosine of the angle at which a face stops counting as front-on.
+ *
+ *  `skip` marks edges of the GIVEN ring (edge i runs from `pts[i]`) that must not take a face at all.
+ *  A ring cut out of a longer one carries two edges that are not walls: they are where the cut fell,
+ *  and the neighbouring piece stands against them. Shading those paints a second tone straight down
+ *  the middle of a continuous wall. The ring is reversed here when its winding needs it, so the mark
+ *  is mapped through that rather than read off the reversed ring. */
+export function obliqueRingFaces(
+  pts: Vec[], ox: number, oy: number, cut = Math.SQRT1_2, skip?: readonly boolean[],
+): string {
   if (pts.length < 3) return ''
   const ol = Math.hypot(ox, oy)
   if (ol < 1e-6) return ''
-  const r = ringArea(pts) <= 0 ? pts : [...pts].reverse()
+  const flip = ringArea(pts) > 0
+  const r = flip ? [...pts].reverse() : pts
+  const n = r.length
   let d = ''
-  for (let i = 0; i < r.length; i++) {
+  for (let i = 0; i < n; i++) {
+    // Reversing maps `r[i]` to `pts[n-1-i]`, so edge i of the reversed ring is edge n-2-i of the
+    // original, walked backwards.
+    if (skip?.[flip ? (((n - 2 - i) % n) + n) % n : i]) continue
     const p = r[i]
     const q = r[(i + 1) % r.length]
     const el = Math.hypot(q.x - p.x, q.y - p.y)
