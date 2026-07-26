@@ -1531,21 +1531,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     //
     // Before the racing line is solved there is no polyline, so the first frame still strokes the
     // spline whole. It is one frame, and the alternative is a frame with no road on it.
-    if (lap) {
-      ops.push(...roadArcs(lap.centre, [
-        { colour: '#D8D8D2', width: u(TRACK_WIDTH_M) },
-        { colour: '#33383E', width: u(TARMAC_WIDTH_M) },
-      ]))
-    } else {
-      ops.push(
-        { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
-        { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
-      )
-    }
-    // The pit lane stays whole: it is a few hundred metres rather than five kilometres, and it has no
-    // sampled polyline of its own to cut along.
+    // LAYER-MAJOR across the circuit AND the pit lane: every white casing goes down before any dark
+    // tarmac. Interleaved per road instead, the lane's casing lands on top of the track it has already
+    // merged into, and its round cap leaves a white outline curving across the tarmac with a blob on the
+    // end of it. The lane stays whole where the circuit is arc-cut: it is a few hundred metres rather
+    // than five kilometres, and it has no sampled polyline of its own to cut along.
+    const casing = { colour: '#D8D8D2', width: u(TRACK_WIDTH_M) }
+    const tarmac = { colour: '#33383E', width: u(TARMAC_WIDTH_M) }
+    ops.push(...(lap
+      ? roadArcs(lap.centre, [casing])
+      : [{ d: layout.d, stroke: casing.colour, width: casing.width }]))
     ops.push({ d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' })
     if (pitZone) ops.push({ d: pitZone.work, fill: '#D8D8D2', stroke: '#D8D8D2', width: u(2 * LANE_LINE_M) })
+    ops.push(...(lap
+      ? roadArcs(lap.centre, [tarmac])
+      : [{ d: layout.d, stroke: tarmac.colour, width: tarmac.width }]))
     ops.push({ d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' })
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
     // Worn into the tarmac, on top of the road and under the kerbs. Arrives one render after the rest of
