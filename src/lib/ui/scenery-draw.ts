@@ -124,6 +124,21 @@ const metresIn = (o: { u: (m: number) => number }) => (units: number) => units /
 /** The light, as a cache key. Four scalars is the whole of it. */
 const lightKey = (l: Lighting) => `${l.azimuth},${l.elevation},${l.warmth},${l.ambient}`
 
+/** How far past its own footprint a built solid's ink can reach, in metres: the height lean the camera
+ *  gives it plus the shadow it throws. Generous on purpose — keeping a fraction more than the disc
+ *  strictly needs is invisible, while dropping a shadow whose caster is just off the edge is not. */
+const SOLID_PAD_M = 80
+
+/** The disc a footprint occupies, padded for what its geometry adds beyond it.
+ *
+ *  Stamped by the PRODUCER, inside the memo, so what comes out is complete and nothing downstream ever
+ *  writes to a cached object. It used to be stamped by `staticParts` afterwards, which was sound only
+ *  because every caller happened to compute the identical disc — an invariant nothing stated and nothing
+ *  checked, on objects two renderers share. */
+const discOfFootprint = (
+  r: { x: number; y: number; w: number; h: number }, u: (m: number) => number,
+): Bounds => ({ cx: r.x, cy: r.y, r: Math.hypot(r.w, r.h) / 2 + u(SOLID_PAD_M) })
+
 /** How many builds one object may hold. Four rungs times the handful of bearings a session visits;
  *  the cap only matters because a rotate gesture commits a new bearing each time it settles. */
 const MEMO_PER_OBJECT = 16
@@ -355,6 +370,7 @@ export function buildingWallGroups(
         rot: r.rot,
         ops: ops(rung),
         flat: rung !== 'near',
+        clip: discOfFootprint(r, o.u),
       }
     })
   })
@@ -394,7 +410,8 @@ export function standGroups(stands: Scenery['stands'], o: StandDrawOpts): DrawGr
   return stands.map((s) => {
     const rung = rungFor(detailSizeM(s, m), o.pxPerM ?? Infinity, o.quality)
     return standMemo(s, `${base}|${rung}`, () => {
-      if (rung === 'gone') return { x: s.x, y: s.y, rot: s.rot, ops: [] }
+      const clip = discOfFootprint(s, o.u)
+      if (rung === 'gone') return { x: s.x, y: s.y, rot: s.rot, ops: [], clip }
       const off = toLocal(dir.x * t, dir.y * t, s.rot)
       const { hull, deck, roof } = rakedStand(s.w, s.h, s.facing, off, 1 - o.frontM / o.rearM, o.roofFrac)
       const box = { x: -s.w / 2, y: -s.h / 2, w: s.w, h: s.h }
@@ -410,7 +427,7 @@ export function standGroups(stands: Scenery['stands'], o: StandDrawOpts): DrawGr
       }
       ops.push({ d: roof, fill: '#7B8494' })
       if (rung === 'near') ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
-      return { x: s.x, y: s.y, rot: s.rot, ops, flat: rung !== 'near' }
+      return { x: s.x, y: s.y, rot: s.rot, ops, flat: rung !== 'near', clip }
     })
   })
 }
@@ -433,14 +450,15 @@ export function buildingRoofGroups(
       // The roof plate stays to the last rung above nothing: it is the building's top surface, and
       // without it the solid loses its own colour and reads as a shadow. The decking and the bevel
       // across it are detail ON that plate, and go first.
-      if (rung === 'gone') return { x: b.x, y: b.y, rot: b.rot, ops: [] }
+      const clip = discOfFootprint(b, o.u)
+      if (rung === 'gone') return { x: b.x, y: b.y, rot: b.rot, ops: [], clip }
       const d = partsPath(partsOf(b))
       const box = { x: -b.w / 2, y: -b.h / 2, w: b.w, h: b.h }
       const ops: DrawOp[] = [{ d, fill: b.fill }]
       if (rung === 'near') {
         ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
       }
-      return { x: b.x, y: b.y, rot: b.rot, ops, flat: rung !== 'near' }
+      return { x: b.x, y: b.y, rot: b.rot, ops, flat: rung !== 'near', clip }
     })
   })
 }
@@ -473,7 +491,8 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
     // `heightM` is a function and cannot go in a key, so what it RETURNS does. Cheap to call, and it
     // keeps two callers who disagree about how tall a thing is from sharing its shadow.
     return structShadowMemo(r, `${key}|${rung}|${h}`, () => {
-      if (rung === 'gone') return { x: r.x, y: r.y, rot: r.rot, ops: [] }
+      const clip = discOfFootprint(r, o.u)
+      if (rung === 'gone') return { x: r.x, y: r.y, rot: r.rot, ops: [], clip }
       const lift = o.u(h * o.extrude)
       const cast = o.u(h * reach)
       const off = toLocal(ldir.x * cast, ldir.y * cast, r.rot)
@@ -481,6 +500,9 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
         x: r.x + vdir.x * lift,
         y: r.y + vdir.y * lift,
         rot: r.rot,
+        // Centred on the FOOTPRINT, not on the lifted base: the pad covers the lean either way, and a
+        // disc that moved with the bearing would be a second thing to keep in step.
+        clip,
         // Batchable once it is no longer the top rung, like every other solid: one draw for a whole
         // industrial estate's worth of shade instead of one each.
         flat: rung !== 'near',
@@ -770,9 +792,6 @@ interface StaticParts {
   marshalGs: DrawGroup[]
 }
 
-const discOfRect = (r: { x: number; y: number; w: number; h: number }, pad: number): Bounds => ({
-  cx: r.x, cy: r.y, r: Math.hypot(r.w, r.h) / 2 + pad,
-})
 
 const discOfPts = (pts: Vec[], pad: number): Bounds => {
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
@@ -868,13 +887,8 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const treeOpts = {
     u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view, pxPerM: o.pxPerM, quality: o.quality,
   }
-  // Padding covers what geometry adds beyond a footprint: the height lean and the cast shadow.
-  // Generous on purpose — keeping a fraction more than the disc strictly needs is invisible, while
-  // dropping a shadow whose caster is just off the disc's edge is not.
-  const solidPad = o.u(80)
   const runPad = o.u(25)
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
-  const structDiscs = structures.map((r) => discOfRect(r, solidPad))
   const runShadows: DrawOp[] = []
   const fenceRuns: DrawOp[] = []
   // A fence is judged on its HEIGHT, not the length of its run: what makes it read as debris fencing
@@ -901,23 +915,20 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
     key,
     ground: groundOps(scenery, o.u, { ground: o.ground, pxPerM: o.pxPerM, quality: o.quality }),
     // Every one of these now asks the ladder per OBJECT rather than reading one global boolean, so a
-    // shed retires while the grandstand beside it is still fully drawn. A group whose rung came back
-    // 'gone' arrives here with no ops; it is stamped by index first so the discs stay aligned, then
+    // shed retires while the grandstand beside it is still fully drawn, and each hands back a group that
+    // already carries its own disc. A group whose rung came back 'gone' arrives here with no ops and is
     // dropped.
     shadowGroups: keepDrawn(
-      structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM })
-        .map((g, i) => stamp(g, structDiscs[i])),
+      structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM }),
     ),
     wallGroups: keepDrawn(
-      buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM })
-        .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
+      buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM }),
     ),
     standGs: keepDrawn(standGroups(scenery.stands, {
       ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
-    }).map((g, i) => stamp(g, discOfRect(scenery.stands[i], solidPad)))),
+    })),
     roofGs: keepDrawn(
-      buildingRoofGroups(scenery.buildings, { u: o.u, pxPerM: o.pxPerM, quality: o.quality })
-        .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
+      buildingRoofGroups(scenery.buildings, { u: o.u, pxPerM: o.pxPerM, quality: o.quality }),
     ),
     runShadows,
     fenceRuns,
@@ -950,8 +961,8 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
  *  group is its own submission however little it paints. Baking costs one rotation per point, once per
  *  cull step, and buys the chance to merge. */
 /** Keyed on the group ITSELF, which is exact: a group is immutable once built, and the producers now
- *  hand back the same object for the same (solid, bearing, rung), so this is the same answer or a
- *  different group. It matters because baking is a rotation per point over every flat solid in shot and
+ *  hand back the same object for the same (solid, bearing, rung) with its disc already on it, so this is
+ *  the same answer or a different group. It matters because baking is a rotation per point over every flat solid in shot and
  *  it runs on every compose — every cull step, several times a lap, as well as every zoom notch. */
 const bakedMemo = new WeakMap<DrawGroup, DrawOp[]>()
 
