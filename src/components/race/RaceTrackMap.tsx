@@ -90,7 +90,7 @@ const FRAME_CAPS: number[] = [0, 30, 45]
 // costs about a millisecond of command time there, and it is draw CALLS rather than pixels), and they
 // are bare unmodified letters across the top row, so any stray typing silently hides half the world
 // and the only clue is the `off:` list in the readout. Flip to true for the next ablation.
-const DEBUG_KEYS: boolean = false
+const DEBUG_KEYS: boolean = true
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
