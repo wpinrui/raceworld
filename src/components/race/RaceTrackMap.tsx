@@ -36,6 +36,7 @@ import {
 } from '@/lib/ui/lap-dynamics'
 import { buildRacingLine, type ArcPath } from '@/lib/ui/racing-line'
 import { edgeOps, roadArcs, surfaceOps } from '@/lib/ui/track-surface'
+import { gridBoxOps, startLineOps } from '@/lib/ui/road-marks'
 import type { Vec } from '@/lib/ui/geom'
 import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M,
@@ -1546,13 +1547,20 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // for the length of the race.
   }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, ldir, lighting, carLit, applyCam])
 
-  // S/F line: a chequered band (3 rows of 0.5m squares) spanning EXACTLY the tarmac width.
-  const sf = useMemo(() => {
+  // Road paint that belongs to the START rather than to the circuit: the chequered band and the grid
+  // boxes. Three fills between them, so as ops they are three draw calls; as elements they were a
+  // hundred and sixteen rects being re-rasterised inside the camera's own transform every frame.
+  const roadMarkOps = useMemo(() => {
     const { x, y, angle } = layout.start
     // Nudged forward of the path start so the band clears the pole box's crossbar.
     const lead = 1.5 / layout.metresPerUnit
-    return { x: x + Math.cos(angle) * lead, y: y + Math.sin(angle) * lead, deg: (angle * 180) / Math.PI }
-  }, [layout.start, layout.metresPerUnit])
+    const at = { x: x + Math.cos(angle) * lead, y: y + Math.sin(angle) * lead, angle }
+    return [
+      ...startLineOps(at, u),
+      // Only before the race is under way, exactly as the grid marks always were.
+      ...(view === 'live' ? gridBoxOps(gridMarks, u) : []),
+    ]
+  }, [layout.start, layout.metresPerUnit, u, view, gridMarks])
 
   // Cars render at their true footprint: px per viewBox unit at zoom 1, times the real car length
   // (the sprite's width follows its own aspect ratio).
@@ -1664,6 +1672,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       : [{ d: layout.d, stroke: tarmac.colour, width: tarmac.width }]))
     ops.push({ d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' })
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
+    // The start's own paint, on top of the tarmac and under the kerbs — the same place in the stack the
+    // SVG layer draws it.
+    ops.push(...roadMarkOps)
     // Worn into the tarmac, on top of the road and under the kerbs. Arrives one render after the rest of
     // the world, because it cannot be solved until a path element exists to measure.
     if (lap && SURFACE_INK) {
@@ -1674,7 +1685,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       }))
     }
     return ops
-  }, [layout, pitZone, u, lapLine, inkFlat, scenery.base, lighting])
+  }, [layout, pitZone, u, lapLine, inkFlat, scenery.base, lighting, roadMarkOps])
   const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
     ? {
       under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
@@ -2190,35 +2201,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             {/* Barriers, tyre walls and marshal posts: circuit furniture sits ON the tarmac's edge,
                 so it draws after the ribbon rather than with the scenery underneath it. */}
             {!canvasOn && view === 'live' && furnitureNode}
-            <g transform={`translate(${sf.x} ${sf.y}) rotate(${sf.deg})`}>
-              {Array.from({ length: 72 }, (_, i) => {
-                const row = i % 3
-                const col = Math.floor(i / 3)
-                if ((row + col) % 2 === 1) return null
-                return (
-                  <rect
-                    key={`sf${i}`}
-                    x={-u(0.75) + row * u(0.5)}
-                    y={-u(6) + col * u(0.5)}
-                    width={u(0.5)}
-                    height={u(0.5)}
-                    fill="#F2F2F2"
-                  />
-                )
-              })}
-            </g>
-            {view === 'live' && gridMarks.map((g, i) => (
-              <g key={`gm${i}`} transform={`translate(${g.x} ${g.y}) rotate(${g.deg})`}>
-                {/* Inverted U: crossbar where the front wing sits, legs nearly the car's length. */}
-                {/* Anchored to the PARKED CAR (centre at the slot origin, CAR_SCALE applied):
-                    crossbar just clear of the wing tip, yellow tick exactly at the front axle. */}
-                <rect x={u(2.49)} y={-u(1.7)} width={u(0.25)} height={u(3.4)} fill="#F2F2F2" />
-                <rect x={u(0.35)} y={-u(1.7)} width={u(2.39)} height={u(0.25)} fill="#F2F2F2" />
-                <rect x={u(0.35)} y={u(1.45)} width={u(2.39)} height={u(0.25)} fill="#F2F2F2" />
-                {/* Yellow tyre guide: TRANSVERSE at front-axle height, reaching out past the
-                    right leg so the driver can sight it beside the nose. */}
-                <rect x={u(1.31)} y={u(1.2)} width={u(0.18)} height={u(1.6)} fill="#E8C33A" />
-              </g>
+            {/* The start/finish chequer and the grid boxes. As paths off the shared description, so
+                the canvas and this layer cannot disagree about them; drawn here only when the canvas
+                is not the one drawing them. */}
+            {(!canvasOn || view === 'map') && roadMarkOps.map((op, i) => (
+              <path key={`rm${i}`} d={op.d} fill={op.fill} />
             ))}
             {/* Invisible: the computed racing line the cars actually drive (sampled per frame). */}
             <path ref={raceLineRef} fill="none" stroke="none" />
