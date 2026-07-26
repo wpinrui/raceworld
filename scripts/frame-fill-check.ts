@@ -208,6 +208,7 @@ for (const id of ids) {
       by[section] = (by[section] ?? 0) + mpx
       total += mpx
       ops++
+      opsBy[section] = (opsBy[section] ?? 0) + 1
       // A gradient or a tiled pattern is a different rasteriser path from a solid: per pixel it is
       // several times the cost, and tree canopies are gradient-filled one per tree.
       for (const paint of [op.fill, op.stroke]) {
@@ -220,6 +221,7 @@ for (const id of ids) {
     let ops = 0
     let fancy = 0
     const byPaint: Record<string, number> = {}
+    const opsBy: Record<string, number> = {}
     for (let i = 0; i < items.length; i++) {
       while (m < marks.length && marks[m].at === i) section = marks[m++].name
       const item: SceneItem = items[i]
@@ -234,7 +236,7 @@ for (const id of ids) {
         add(item, (p) => p)
       }
     }
-    return { total, by, ops, fancy, byPaint }
+    return { total, by, ops, fancy, byPaint, opsBy }
   }
 
   const stations = centre.filter((_, i) => i % Math.max(1, Math.floor(centre.length / 120)) === 0)
@@ -252,6 +254,9 @@ for (const id of ids) {
     const fx = Object.entries(s.byPaint).sort((a, b) => b[1] - a[1])
       .map(([n, v]) => `${n} ${v}`).join('  ')
     if (fx) console.log(`${' '.repeat(15)}gradient/pattern fills: ${fx}`)
+    const ob = Object.entries(s.opsBy).sort((a, b) => b[1] - a[1])
+      .map(([n, v]) => `${n} ${v}`).join('  ')
+    console.log(`${' '.repeat(15)}draw calls: ${ob}`)
   }
   console.log(`\n${id} — fill submitted per frame at ${zoom.toFixed(1)}x `
     + `(${((ppu * zoom) / layout.metresPerUnit).toFixed(1)}px/m, detail ${full ? 'full' : 'low'}), `
