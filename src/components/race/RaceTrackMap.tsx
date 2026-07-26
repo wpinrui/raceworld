@@ -18,7 +18,7 @@ import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '
 import { useSceneryBitmap } from './use-scenery-bitmap'
 import { SceneryCanvas, contextFor, drawScene, warmScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp, type SceneItem, type SceneMark } from '@/lib/ui/scenery-draw'
-import { canvasPaint } from '@/lib/ui/scenery-paint'
+import { canvasPaint, type PaintCtx } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M,
   pitComplexOps, pitFloorOps,
@@ -789,6 +789,67 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     dragRef.current = null
     // A rotate gesture ends here, which is when the scene is rebuilt on the new bearing.
     if (drag?.moved && drag.mode === 'rotate') settleRot()
+  }
+
+  // One ref callback per car, built once and then handed back unchanged.
+  //
+  // React re-attaches a callback ref whenever its identity differs, and an inline arrow function's
+  // always does — so an inline ref runs on every commit of this component whether or not the element
+  // moved. For the sprite that meant five `querySelector` calls over ninety nodes, twenty times, once a
+  // second, to find groups the loop was already holding. Held in a ref map keyed by car id: everything
+  // these close over is a ref object or a stable ref map, so a cached callback can never go stale.
+  const markerCbs = useRef(new Map<string, (el: HTMLDivElement | null) => void>())
+  const markerRef = (id: string) => {
+    const hit = markerCbs.current.get(id)
+    if (hit) return hit
+    const cb = (el: HTMLDivElement | null) => {
+      if (!el) { elRefs.current.delete(id); return }
+      elRefs.current.set(id, el)
+      const p = posRef.current.get(id) // keep the last spot across re-renders (commit, not render)
+      const { w, h } = stageDimsRef.current
+      el.style.transform = p && w
+        ? `translate(${(p.left / 100) * w}px, ${(p.top / 100) * h}px) translate(-50%, -50%)`
+        : 'translate(-50%, -50%)'
+    }
+    markerCbs.current.set(id, cb)
+    return cb
+  }
+  // Keyed on the VIEW as well as the car, and that is load-bearing rather than tidy. Switching between
+  // the sprite and the map view's numbered dot replaces this div's descendants while keeping the div, so
+  // the groups found below are detached and the loop would go on writing transforms to nodes that are no
+  // longer in the document. A different key means a different callback identity, which is what makes
+  // React detach and re-resolve.
+  const spriteCbs = useRef(new Map<string, (el: HTMLDivElement | null) => void>())
+  const spriteRef = (id: string, mode: string) => {
+    const key = `${id}|${mode}`
+    const hit = spriteCbs.current.get(key)
+    if (hit) return hit
+    const cb = (el: HTMLDivElement | null) => {
+      if (!el) {
+        sprRefs.current.delete(id)
+        shadowRefs.current.delete(id)
+        bodyRefs.current.delete(id)
+        sheenRefs.current.delete(id)
+        steerRefs.current.delete(id)
+        return
+      }
+      sprRefs.current.set(id, el)
+      // The groups the loop drives, found once here rather than queried per frame.
+      const put = (sel: string, into: Map<string, SVGGElement>) => {
+        const g = el.querySelector<SVGGElement>(sel)
+        if (g) into.set(id, g)
+        else into.delete(id)
+      }
+      put('[data-car-shadow]', shadowRefs.current)
+      put('[data-car-body]', bodyRefs.current)
+      put('[data-car-sheen]', sheenRefs.current)
+      const fl = el.querySelector<SVGGElement>('[data-wheel="fl"]')
+      const fr = el.querySelector<SVGGElement>('[data-wheel="fr"]')
+      if (fl && fr) steerRefs.current.set(id, [fl, fr])
+      else steerRefs.current.delete(id)
+    }
+    spriteCbs.current.set(key, cb)
+    return cb
   }
 
   const clickCar = (id: string) => {
@@ -1706,6 +1767,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const benchRef = useRef(false)
   // The race tick's JS cost since the readout last sampled: average and worst frame.
   const tickStatsRef = useRef({ sum: 0, n: 0, max: 0 })
+  // The paint lookup's argument, allocated ONCE and mutated per op. `canvasPaint` reads it and keeps
+  // nothing, and `drawScene` asks for a paint per gradient- or pattern-filled op — every canopy at the
+  // near rung, every stand deck, every roof — so a fresh object and a fresh fallback bounds per lookup
+  // was a few hundred throwaway objects a frame.
+  const paintCtxRef = useRef<PaintCtx>({
+    lighting, u, bounds: { x: 0, y: 0, w: 0, h: 0 }, pxPerUnit: 1,
+  })
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
   const paintCanvas = useCallback(() => {
     const canvas = canvasRef.current
@@ -1724,13 +1792,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     const dpr = window.devicePixelRatio || 1
     const timing = hudRef.current || benchRef.current ? { marks: sc.marks, out: {} } : undefined
+    const pc = paintCtxRef.current
+    pc.lighting = lighting
+    pc.u = u
+    pc.pxPerUnit = camRef.current.z * (sw / vb.w) * dpr
     drawScene(
       ctx, sc.items, camRef.current, vb,
       { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
-      (name, c, bbox) => canvasPaint(name, c, {
-        lighting, u, bounds: bbox ?? { x: vb.x, y: vb.y, w: vb.w, h: vb.h },
-        pxPerUnit: camRef.current.z * (sw / vb.w) * dpr,
-      }) ?? '#FF00FF',
+      (name, c, bbox) => {
+        // An op with no bbox resolves its paint against the whole viewBox; only a gradient carries one.
+        pc.bounds = bbox ?? vb
+        return canvasPaint(name, c, pc) ?? '#FF00FF'
+      },
       timing,
       scenery.base,
     )
@@ -2119,15 +2192,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           <div data-cost="cars" className={hidden.has('cars') ? 'hidden' : 'contents'}>{cars.map((car) => (
             <div
               key={car.id}
-              ref={(el) => {
-                if (!el) { elRefs.current.delete(car.id); return }
-                elRefs.current.set(car.id, el)
-                const p = posRef.current.get(car.id) // keep the last spot across re-renders (commit, not render)
-                const { w, h } = stageDimsRef.current
-                el.style.transform = p && w
-                  ? `translate(${(p.left / 100) * w}px, ${(p.top / 100) * h}px) translate(-50%, -50%)`
-                  : 'translate(-50%, -50%)'
-              }}
+              ref={markerRef(car.id)}
               className="absolute left-0 top-0"
               style={{ opacity: car.retired ? 0.35 : 1 }}
             >
@@ -2135,30 +2200,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 {/* Tooltip + click on the sprite ONLY â€” its exact rendered footprint, no hover halo. */}
                 const sprite = (
                   <div
-                    ref={(el) => {
-                      if (!el) {
-                        sprRefs.current.delete(car.id)
-                        shadowRefs.current.delete(car.id)
-                        bodyRefs.current.delete(car.id)
-                        sheenRefs.current.delete(car.id)
-                        steerRefs.current.delete(car.id)
-                        return
-                      }
-                      sprRefs.current.set(car.id, el)
-                      // The groups the loop drives, found once here rather than queried per frame.
-                      const put = (sel: string, into: Map<string, SVGGElement>) => {
-                        const g = el.querySelector<SVGGElement>(sel)
-                        if (g) into.set(car.id, g)
-                        else into.delete(car.id)
-                      }
-                      put('[data-car-shadow]', shadowRefs.current)
-                      put('[data-car-body]', bodyRefs.current)
-                      put('[data-car-sheen]', sheenRefs.current)
-                      const fl = el.querySelector<SVGGElement>('[data-wheel="fl"]')
-                      const fr = el.querySelector<SVGGElement>('[data-wheel="fr"]')
-                      if (fl && fr) steerRefs.current.set(car.id, [fl, fr])
-                      else steerRefs.current.delete(car.id)
-                    }}
+                    ref={spriteRef(car.id, view)}
                     onClick={() => clickCar(car.id)}
                     className="cursor-pointer"
                     // Live sprites carry a real contact shadow (#sim-2d), which a filter that turns
