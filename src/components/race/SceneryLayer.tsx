@@ -18,8 +18,14 @@ import { dirAt, lightDir, shadowFill, shadowOpacity, type Lighting } from '@/lib
 const STOREY_M = 4.6
 /** Structural bay: how wide one window-and-pier module is on a wall. */
 const WINDOW_BAY_M = 5.4
-/** Wall depth as a fraction of height — how much of the side face the oblique view reveals. */
-export const EXTRUDE = 0.62
+/** Wall depth as a fraction of height — how much of the side face the oblique view reveals, and so
+ *  how far from straight down the camera is pretending to be.
+ *
+ *  This is the whole of the map's perspective, in one number. At 0.62 the view sat well off vertical
+ *  and every solid leaned a long way up the screen, which reads as a diorama shot from a corner of the
+ *  room. Lower is closer to overhead: the same objects, less of their sides, less lean. Kept above zero
+ *  because a true plan view has no depth cue at all and the map goes back to being a diagram. */
+export const EXTRUDE = 0.4
 /** A grandstand's front (trackside) and rear heights in metres. Real seating banks rake up away
  *  from the circuit; extruding one uniformly made them read as tall slabs beside the track.
  *
@@ -170,13 +176,12 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
 
           Lighter than the solids' shadows: a grove's overlap heavily, and at full strength they
           merge into one dark mass rather than dappled shade. */}
-      {full && (() => {
-        const op = treeShadowOp(
-          hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees),
-          { u, extrude: EXTRUDE, lighting, view },
-        )
-        return op ? <path d={op.d} fill={op.fill} opacity={op.alpha} /> : null
-      })()}
+      {full && treeShadowOp(
+        hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees),
+        { u, extrude: EXTRUDE, lighting, view },
+      ).map((op, i) => (
+        <path key={`ts${i}`} d={op.d} fill={op.fill} opacity={op.alpha} />
+      ))}
     </g>
   )
 }
@@ -302,7 +307,9 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
           u, extrude: EXTRUDE, lighting, view, hutM: MARSHAL_H_M, hutW: MARSHAL_W_M, hutH: MARSHAL_D_M,
         }).map((g, i) => (
           <g key={`${key}mp${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
-            <path d={g.shadow.d} fill={shadowFill(lighting)} opacity={shadowOpacity(lighting)} />
+            {g.shadow.map((op, k) => (
+              <path key={`ms${k}`} d={op.d} fill={op.fill} opacity={op.alpha} />
+            ))}
             {g.ops.map((op, j) => <path key={j} d={op.d} fill={op.fill} />)}
           </g>
         )),
@@ -343,8 +350,10 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
               the swept ground; the stroke dilates it to the object's real thickness. */}
           {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
               mesh, so what it casts is faint. */}
-          {full && scenery.fences.map((b, i) => (
-            <path key={`fs${i}`} opacity={0.35} stroke="none" d={runShadowOp(b.pts, FENCE_H_M, furnOpts).d} />
+          {full && scenery.fences.flatMap((b, i) => (
+            runShadowOp(b.pts, FENCE_H_M, furnOpts).map((op, k) => (
+              <path key={`fs${i}-${k}`} opacity={op.alpha} fill={op.fill} stroke="none" d={op.d} />
+            ))
           ))}
         </g>
       )}
