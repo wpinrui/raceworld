@@ -106,14 +106,20 @@ function atFrac(arr: Float64Array, frac: number): number {
 
 /** Cut the whole lap into `count` arcs, each with the lap fraction at its middle so it can be painted at
  *  the strength belonging to that part of the lap. Adjacent arcs SHARE a station so the joins have no
- *  gap: a one-pixel break in a stripe this dark is more visible than the stripe. */
-function arcs(pts: readonly Vec[], count: number): Array<{ idx: number[]; frac: number }> {
+ *  gap: a one-pixel break in a stripe this dark is more visible than the stripe.
+ *
+ *  `open` for a run that does not close: the pit lane starts on the circuit and ends on it again rather
+ *  than looping, and wrapping its last arc back to its first draws a stroke straight across the map. */
+function arcs(
+  pts: readonly Vec[], count: number, open = false,
+): Array<{ idx: number[]; frac: number }> {
   const n = pts.length
   const per = Math.max(2, Math.ceil(n / count))
   const out: Array<{ idx: number[]; frac: number }> = []
-  for (let start = 0; start < n; start += per) {
+  const last = open ? n - 1 : n
+  for (let start = 0; start < last; start += per) {
     const idx: number[] = []
-    for (let i = start; i <= Math.min(start + per, n); i++) idx.push(i % n)
+    for (let i = start; i <= Math.min(start + per, last); i++) idx.push(open ? i : i % n)
     if (idx.length > 1) out.push({ idx, frac: ((start + per / 2) % n) / n })
   }
   return out
@@ -312,12 +318,20 @@ export function marbleOps(s: Surface): DrawOp[] {
  *  it. Layer-major, so every arc of the casing is down before any of the tarmac: per-arc it would leave
  *  a casing-coloured notch at each join.
  *
- *  Adjacent arcs share a station, so there is no gap between them to show through. */
+ *  Adjacent arcs share a station, so there is no gap between them to show through. A round cap at an
+ *  interior join lands under the next arc's, in the same ink, so only the two ends of an open run keep
+ *  a cap you can see.
+ *
+ *  `count` and `open` are for a road that is not the circuit: the pit lane is a few hundred metres
+ *  rather than five kilometres, and it does not loop. It was the last road left submitted whole, on
+ *  every frame of every lap, with no disc to drop it by when the shot is on the far side of the
+ *  circuit. */
 export function roadArcs(
   centre: readonly Vec[],
   layers: ReadonlyArray<{ colour: string; width: number; cap?: 'round' | 'butt' }>,
+  opts: { count?: number; open?: boolean } = {},
 ): DrawOp[] {
-  const lap = arcs(centre, ARCS)
+  const lap = arcs(centre, opts.count ?? ARCS, opts.open)
   const ops: DrawOp[] = []
   for (const layer of layers) {
     for (const { idx } of lap) {

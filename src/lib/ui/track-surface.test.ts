@@ -193,6 +193,33 @@ describe('roadArcs', () => {
     expect(ends[0].first).toEqual(ends[ends.length - 1].last)
   })
 
+  it('leaves an open run open, so the pit lane does not stroke itself across the map', () => {
+    // The pit lane joins the circuit at both ends rather than looping. Cut as a closed lap, its last
+    // arc wraps back to its first and draws a lane-width stroke straight across whatever lies between.
+    const line: Vec[] = Array.from({ length: 40 }, (_, i) => ({ x: i * 3, y: 0 }))
+    const open = roadArcs(line, [layers[0]], { count: 8, open: true })
+    const pts = (op: (typeof open)[number]) => op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
+    for (const op of open) {
+      const n = pts(op)
+      // Every station of the run climbs in x. A wrap puts the last point back at the first's.
+      for (let i = 2; i + 1 < n.length; i += 2) expect(n[i]).toBeGreaterThan(n[i - 2])
+    }
+    const first = pts(open[0])
+    const last = pts(open[open.length - 1])
+    expect(first[0]).toBe(0)
+    expect(last[last.length - 2]).toBe(line[line.length - 1].x)
+    // Still contiguous: adjacent arcs share a station, as they do on the lap.
+    for (let i = 1; i < open.length; i++) {
+      const prev = pts(open[i - 1])
+      const cur = pts(open[i])
+      expect([cur[0], cur[1]]).toEqual([prev[prev.length - 2], prev[prev.length - 1]])
+    }
+  })
+
+  it('takes an arc count, so a few hundred metres of lane is not cut like five kilometres of lap', () => {
+    expect(roadArcs(circle(60), [layers[0]], { count: 8 })).toHaveLength(8)
+  })
+
   it('pads each disc by the pen it is stroked with, so a wide road is not culled early', () => {
     for (const op of ops) {
       const n = op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)

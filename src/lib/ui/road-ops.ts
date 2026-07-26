@@ -19,6 +19,10 @@ import type { LapDynamics } from './lap-dynamics'
 /** Half-width of the racing line the surface ink is hung off, in metres. */
 const TRACK_M = 1.6
 
+/** Metres of road per cullable arc. What the circuit's own 128 arcs work out to on a Grand Prix lap,
+ *  so the pit lane beside it is cut at the same grain rather than at a count of its own. */
+const ARC_M = 40
+
 const CASING = '#D8D8D2'
 const TARMAC = '#33383E'
 
@@ -42,6 +46,11 @@ export interface RoadOpts {
 
 export function roadOps(o: RoadOpts): DrawOp[] {
   const { layout, u, pitZone, lap } = o
+  const fast = layout.pit.fastPts
+  let laneM = 0
+  for (let i = 1; i < fast.length; i++) laneM += Math.hypot(fast[i].x - fast[i - 1].x, fast[i].y - fast[i - 1].y)
+  laneM *= layout.metresPerUnit
+  const laneArcs = Math.max(2, Math.round(laneM / ARC_M))
   const detail = o.inkFull ? 'full' : 'low'
   const ink = lap && {
     u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
@@ -73,8 +82,12 @@ export function roadOps(o: RoadOpts): DrawOp[] {
     ops.push(...(lap
       ? roadArcs(lap.centre, [{ colour, width: u(trackW) }])
       : [{ d: layout.d, stroke: colour, width: u(trackW) }]))
-    // The lane stays whole: it is a few hundred metres rather than five kilometres.
-    ops.push({ d: layout.pit.fastD, stroke: colour, width: u(laneW), cap: 'round' })
+    // The pit lane the same way, along the polyline `fastPts` samples off the curve `fastD` draws. It
+    // was the last road submitted whole, and it carried no disc at all: two several-hundred-metre
+    // strokes whose outlines were generated on every frame of every lap, including the four fifths of
+    // one spent nowhere near the pit straight. Open, because the lane joins the circuit at both ends
+    // rather than looping, and at one arc per forty metres like the circuit it runs beside.
+    ops.push(...roadArcs(layout.pit.fastPts, [{ colour, width: u(laneW) }], { count: laneArcs, open: true }))
     if (!pitZone) continue
     // The apron in stretches, like the complex standing over it. One closed fill down the whole box row
     // was the largest single piece of path setup a racing shot of the pit straight submitted once the
