@@ -34,7 +34,7 @@ import {
   PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics, type LapDynamics,
 } from '@/lib/ui/lap-dynamics'
 import { buildRacingLine, type ArcPath } from '@/lib/ui/racing-line'
-import { edgeOps, surfaceOps } from '@/lib/ui/track-surface'
+import { edgeOps, roadArcs, surfaceOps } from '@/lib/ui/track-surface'
 import type { Vec } from '@/lib/ui/geom'
 import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M,
@@ -1511,15 +1511,29 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: lap.lateral, detail: inkFlat ? 'low' : 'full',
       }))
     }
-    ops.push(
-      { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
-      { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' },
-    )
+    // The circuit itself, cut into cullable arcs the moment there is a centreline to cut it along.
+    // A whole-circuit stroke costs its outline generation at every zoom, and that generation scales
+    // with the pen's width and the path's length, so zooming IN makes it worse rather than better:
+    // measured at 60x, the canvas lost to the SVG renderer it replaced on exactly these four ops.
+    //
+    // Before the racing line is solved there is no polyline, so the first frame still strokes the
+    // spline whole. It is one frame, and the alternative is a frame with no road on it.
+    if (lap) {
+      ops.push(...roadArcs(lap.centre, [
+        { colour: '#D8D8D2', width: u(TRACK_WIDTH_M) },
+        { colour: '#33383E', width: u(TARMAC_WIDTH_M) },
+      ]))
+    } else {
+      ops.push(
+        { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
+        { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
+      )
+    }
+    // The pit lane stays whole: it is a few hundred metres rather than five kilometres, and it has no
+    // sampled polyline of its own to cut along.
+    ops.push({ d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' })
     if (pitZone) ops.push({ d: pitZone.work, fill: '#D8D8D2', stroke: '#D8D8D2', width: u(2 * LANE_LINE_M) })
-    ops.push(
-      { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
-      { d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' },
-    )
+    ops.push({ d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' })
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
     // Worn into the tarmac, on top of the road and under the kerbs. Arrives one render after the rest of
     // the world, because it cannot be solved until a path element exists to measure.

@@ -299,6 +299,41 @@ export function marbleOps(s: Surface): DrawOp[] {
   return ops
 }
 
+/** The road itself, stroked in cullable ARCS rather than as one path around the whole circuit.
+ *
+ *  A stroke's outline has to be generated before it can be clipped, and that generation scales with the
+ *  pen's width and the path's length — neither of which shrinks when you zoom IN. So a single
+ *  whole-circuit stroke costs the same at 60x as at 1x, except at 60x the pen is 470 pixels across and
+ *  all but forty metres of the result is thrown away. Measured: at that zoom the canvas renderer lost to
+ *  the SVG one it replaced, which keeps a display list and reuses its raster between frames.
+ *
+ *  Cut into arcs, only the one or two arcs actually in shot are ever submitted. This is the same trick
+ *  and the same arc count the ink worn INTO the road has always used; the road underneath it never got
+ *  it. Layer-major, so every arc of the casing is down before any of the tarmac: per-arc it would leave
+ *  a casing-coloured notch at each join.
+ *
+ *  Adjacent arcs share a station, so there is no gap between them to show through. */
+export function roadArcs(
+  centre: readonly Vec[],
+  layers: ReadonlyArray<{ colour: string; width: number; cap?: 'round' | 'butt' }>,
+): DrawOp[] {
+  const lap = arcs(centre, ARCS)
+  const ops: DrawOp[] = []
+  for (const layer of layers) {
+    for (const { idx } of lap) {
+      const { d, clip } = stripe(centre, idx, () => 0)
+      ops.push({
+        d,
+        stroke: layer.colour,
+        width: layer.width,
+        cap: layer.cap ?? 'round',
+        clip: { ...clip, r: clip.r + layer.width / 2 },
+      })
+    }
+  }
+  return ops
+}
+
 /** How far a rim bleeds INWARD past the band it has to cover, in metres. Each rim abuts the next one in,
  *  and the innermost abuts the road -- which is stroked from the SPLINE while these hang off a polyline
  *  sampled at ~3m, so the two disagree by a few centimetres through corners. A rim cut exactly to its own

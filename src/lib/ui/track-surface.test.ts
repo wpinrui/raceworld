@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APRON_LINES, SOFT_LAYERS, curveLimits, edgeLayer, noFold } from './surface-ink'
-import { edgeOps } from './track-surface'
+import { edgeOps, roadArcs } from './track-surface'
 import type { Vec } from './geom'
 
 /** A circle is the one centreline whose every offset is known in closed form: a point `o` to the LEFT of
@@ -159,5 +159,50 @@ describe('edgeOps', () => {
 
   it('draws nothing without the centreline it measures off', () => {
     expect(edgeOps({ ...surface(centre), centre: undefined })).toEqual([])
+  })
+})
+
+describe('roadArcs', () => {
+  const centre = circle(60)
+  const layers = [{ colour: '#D8D8D2', width: 4 }, { colour: '#33383E', width: 3.4 }]
+  const ops = roadArcs(centre, layers)
+
+  it('cuts the road into cullable pieces instead of one whole-circuit stroke', () => {
+    // The point: a stroke's outline is generated before it can be clipped, and that cost does not
+    // shrink as you zoom in. Every op has to carry a disc or nothing can be skipped.
+    expect(ops.length).toBe(128 * layers.length)
+    for (const op of ops) expect(op.clip).toBeTruthy()
+  })
+
+  it('lays every arc of a layer before any of the next, or the joins notch', () => {
+    const firstOfSecond = ops.findIndex((op) => op.stroke === layers[1].colour)
+    const lastOfFirst = ops.reduce((k, op, i) => (op.stroke === layers[0].colour ? i : k), -1)
+    expect(firstOfSecond).toBeGreaterThan(lastOfFirst)
+  })
+
+  it('covers the whole lap, with adjacent arcs sharing a station so no gap shows', () => {
+    const casing = ops.filter((op) => op.stroke === layers[0].colour)
+    const ends = casing.map((op) => {
+      const n = op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
+      return { first: [n[0], n[1]], last: [n[n.length - 2], n[n.length - 1]] }
+    })
+    for (let i = 1; i < ends.length; i++) {
+      expect(ends[i].first).toEqual(ends[i - 1].last)
+    }
+    // And it closes the loop.
+    expect(ends[0].first).toEqual(ends[ends.length - 1].last)
+  })
+
+  it('pads each disc by the pen it is stroked with, so a wide road is not culled early', () => {
+    for (const op of ops) {
+      const n = op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
+      let far = 0
+      for (let i = 0; i + 1 < n.length; i += 2) {
+        far = Math.max(far, Math.hypot(n[i] - op.clip!.cx, n[i + 1] - op.clip!.cy))
+      }
+      // Allow a rounding step: the disc is measured off the unrounded points, the path is written to
+      // two decimals, so a written point can land a hundredth outside the disc it came from.
+      expect(op.clip!.r).toBeGreaterThanOrEqual(far + (op.width ?? 0) / 2 - 0.01)
+    }
   })
 })
