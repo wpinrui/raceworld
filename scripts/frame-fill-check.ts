@@ -37,6 +37,10 @@ const VIEWPORT_MPX = (VIEW_W * DPR * VIEW_H * DPR) / 1e6
 
 const ids = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 if (ids.length === 0) ids.push('hungary', 'hockenheim', 'monaco')
+/** Screen pixels per metre of track, which is what the fps readout reports and the only measure of
+ *  "how far out am I" that means the same thing on two different circuits. Given, it replaces the
+ *  racing-zoom default: a shot framing the whole pit building sits near 3.5. */
+const pxm = Number(process.argv.slice(2).find((a) => a.startsWith('--pxm='))?.split('=')[1] ?? 0)
 
 type Pt = [number, number]
 
@@ -109,8 +113,12 @@ for (const id of ids) {
   const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
   const vb = { x: vx - pad, y: vy - pad, w: vw + 2 * pad, h: vh + 2 * pad }
   const ppu = Math.min(VIEW_W / vb.w, VIEW_H / vb.h)
-  const k = RACE_Z * ppu // viewBox units to device-independent pixels
+  const zoom = pxm > 0 ? (pxm * layout.metresPerUnit) / ppu : RACE_Z
+  const k = zoom * ppu // viewBox units to device-independent pixels
   const pxPerUnit2 = (k * DPR) ** 2
+  // Below LOD_ZOOM the heavy layers drop out; above it the scene is composed at FULL detail against a
+  // disc whose radius goes as 1/zoom, so zooming out widens what is drawn faster than it shrinks it.
+  const full = zoom >= 3
 
   const scenery = buildScenery(layout.trace, layout.pit, {
     circuitId: layout.circuitId,
@@ -131,7 +139,8 @@ for (const id of ids) {
     u, line: solved.pts, curvature: dyn.curvature, long: dyn.long, trackM: TRACK_M,
     tarmac: '#33383E', centre, ground: scenery.base, shadow: shadowFill(lighting),
     ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
-    tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: solved.lateral, detail: 'full' as const,
+    tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: solved.lateral,
+    detail: (zoom >= 3 ? 'full' : 'low') as 'full' | 'low',
   }
 
   const track: DrawOp[] = [
@@ -160,12 +169,12 @@ for (const id of ids) {
   const halfH = VIEW_H / 2 / k
 
   /** The scene as composed against the cull disc at a station, and the megapixels each section paints. */
-  function shotAt(cx: number, cy: number): { total: number; by: Record<string, number> } {
-    const cull = { cx, cy, r: (Math.hypot(VIEW_W, VIEW_H) / 2 / RACE_Z / ppu) * CULL_MARGIN }
+  function shotAt(cx: number, cy: number) {
+    const cull = { cx, cy, r: (Math.hypot(VIEW_W, VIEW_H) / 2 / zoom / ppu) * CULL_MARGIN }
     const pitNear = !pitDisc || Math.hypot(pitDisc.cx - cx, pitDisc.cy - cy) <= cull.r + pitDisc.r
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
-      u, lighting, view: viewAz, full: true, ground: true, extrude: EXTRUDE,
+      u, lighting, view: viewAz, full, ground: true, extrude: EXTRUDE,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r: { storeys?: number }) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
@@ -198,7 +207,19 @@ for (const id of ids) {
       const mpx = (opArea(op, box, at) * pxPerUnit2) / 1e6
       by[section] = (by[section] ?? 0) + mpx
       total += mpx
+      ops++
+      // A gradient or a tiled pattern is a different rasteriser path from a solid: per pixel it is
+      // several times the cost, and tree canopies are gradient-filled one per tree.
+      for (const paint of [op.fill, op.stroke]) {
+        if (!paint?.startsWith('ref:')) continue
+        fancy++
+        const nm = paint.slice(4)
+        byPaint[nm] = (byPaint[nm] ?? 0) + 1
+      }
     }
+    let ops = 0
+    let fancy = 0
+    const byPaint: Record<string, number> = {}
     for (let i = 0; i < items.length; i++) {
       while (m < marks.length && marks[m].at === i) section = marks[m++].name
       const item: SceneItem = items[i]
@@ -213,7 +234,7 @@ for (const id of ids) {
         add(item, (p) => p)
       }
     }
-    return { total, by }
+    return { total, by, ops, fancy, byPaint }
   }
 
   const stations = centre.filter((_, i) => i % Math.max(1, Math.floor(centre.length / 120)) === 0)
@@ -221,14 +242,20 @@ for (const id of ids) {
   const sorted = [...shots].sort((a, b) => a.total - b.total)
   const pitShot = pitDisc ? shotAt(pitDisc.cx, pitDisc.cy) : null
 
-  const line = (label: string, s: { total: number; by: Record<string, number> }) => {
+  const line = (label: string, s: ReturnType<typeof shotAt>) => {
     const parts = Object.entries(s.by).filter(([, v]) => v > 0.05)
       .sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([n, v]) => `${n} ${v.toFixed(1)}`).join('  ')
     console.log(`  ${label.padEnd(12)} ${s.total.toFixed(1).padStart(6)} Mpx `
-      + `(${(s.total / VIEWPORT_MPX).toFixed(1).padStart(4)}x the viewport)  ${parts}`)
+      + `(${(s.total / VIEWPORT_MPX).toFixed(1).padStart(4)}x vp)  ${String(s.ops).padStart(5)} ops `
+      + `${String(s.fancy).padStart(4)} gradient/pattern  |  ${parts}`)
+    const fx = Object.entries(s.byPaint).sort((a, b) => b[1] - a[1])
+      .map(([n, v]) => `${n} ${v}`).join('  ')
+    if (fx) console.log(`${' '.repeat(15)}gradient/pattern fills: ${fx}`)
   }
-  console.log(`\n${id} — fill submitted per frame at ${RACE_Z}x, viewport ${VIEWPORT_MPX.toFixed(2)} Mpx (dpr ${DPR})`)
+  console.log(`\n${id} — fill submitted per frame at ${zoom.toFixed(1)}x `
+    + `(${((ppu * zoom) / layout.metresPerUnit).toFixed(1)}px/m, detail ${full ? 'full' : 'low'}), `
+    + `viewport ${VIEWPORT_MPX.toFixed(2)} Mpx (dpr ${DPR})`)
   line('median lap', sorted[Math.floor(sorted.length / 2)])
   line('worst lap', sorted[sorted.length - 1])
   if (pitShot) line('on the pit', pitShot)

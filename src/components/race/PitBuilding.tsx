@@ -137,6 +137,10 @@ export function PitBuilding({ zone, u, lighting, view, garageColor }: {
 
 /** Height of the signage band on the fascia above each garage opening. */
 export const SIGN_H_M = 1.5
+/** Pixel size the flag is laid out at before being scaled into wall units. Sub-pixel layout boxes
+ *  collapse, so it cannot simply be built at its final size — which on a garage board is a fraction
+ *  of a unit. */
+const FLAG_PX = 40
 
 /** How tall the signage band has to be ON SCREEN, in CSS pixels, before its flags and names are drawn.
  *  Below it the board stays — it is part of the building — and what is written on it goes.
@@ -193,24 +197,26 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers, lettered = tr
               const gap = size * 0.34
               const x = len * (0.25 + k * 0.5) - (flagW + gap + textW) / 2
               // The same artwork the rest of the app shows, addressed as a URL rather than mounted as
-              // a component. A foreignObject holds real HTML, which means CSS layout and its own raster
-              // on every frame the camera moves, and ten boards put twenty of them on screen at once —
-              // the one shot that did was measured in the twenties. `flagSvgUrl` exists for exactly
-              // this and had no caller. Given width and height an <image> scales a viewBox-only SVG
-              // fine; it is only sizeless when left to the artwork's own intrinsic dimensions.
+              // a component. A foreignObject holds real HTML, which means CSS layout and its own
+              // raster on every frame the camera moves; `flagSvgUrl` exists to avoid exactly that and
+              // had no caller until now.
+              //
+              // Still built at FLAG_PX and scaled down, which is not about foreignObject at all: a
+              // garage board is a fraction of a unit tall, and an external image asked to occupy a
+              // sub-pixel box rasterises to nothing — the flags vanish at every zoom, because the
+              // collapse happens at layout, before the camera's transform ever scales it up.
               const flag = flagSvgUrl(d.nationality)
               return (
                 <g key={d.name}>
-                  {flag ? (
-                    <image
-                      href={flag} x={x} y={band * 0.24} width={flagW} height={flagW * 0.75}
-                      preserveAspectRatio="xMidYMid slice"
-                    />
-                  ) : (
-                    // Not an ISO alpha-2 code. A neutral plate rather than a wrong country, and it
-                    // keeps the board's spacing identical either way.
-                    <rect x={x} y={band * 0.24} width={flagW} height={flagW * 0.75} fill="#6B7280" />
-                  )}
+                  <g transform={`translate(${x} ${band * 0.24}) scale(${flagW / FLAG_PX})`}>
+                    {flag ? (
+                      <image href={flag} width={FLAG_PX} height={FLAG_PX * 0.75} />
+                    ) : (
+                      // Not an ISO alpha-2 code. A neutral plate rather than a wrong country, and the
+                      // board's spacing is identical either way.
+                      <rect width={FLAG_PX} height={FLAG_PX * 0.75} fill="#6B7280" />
+                    )}
+                  </g>
                   <text x={x + flagW + gap} y={band * 0.76} fontSize={size} fontWeight={600} fill="#14181F">
                     {label}
                   </text>
