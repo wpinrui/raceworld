@@ -22,7 +22,7 @@ import {
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
-import { atLeast, lodBucket, mergeByPaint, rungFor, type Rung } from './lod'
+import { atLeast, mergeByPaint, rungFor, type Rung } from './lod'
 import { TREE_FLAT } from './scenery-paint'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
@@ -117,6 +117,47 @@ export interface TreeDrawOpts {
  *  real-world size, so the ladder means the same thing on a circuit drawn at any metres-per-unit. */
 const metresIn = (o: { u: (m: number) => number }) => (units: number) => units / o.u(1)
 
+/** The light, as a cache key. Four scalars is the whole of it. */
+const lightKey = (l: Lighting) => `${l.azimuth},${l.elevation},${l.warmth},${l.ambient}`
+
+/** How many builds one object may hold. Four rungs times the handful of bearings a session visits;
+ *  the cap only matters because a rotate gesture commits a new bearing each time it settles. */
+const MEMO_PER_OBJECT = 16
+
+/** A per-object geometry memo.
+ *
+ *  Everything the producers below build is heavy string work: swept hulls, window grids, raked decks,
+ *  ribbons of posts. And every one of them is a function of exactly three things — the object, the
+ *  bearing and light it is drawn under, and the RUNG its own size resolves to at the current camera
+ *  scale. A rung has four values, so an object only ever has a handful of distinct builds however far
+ *  the camera travels.
+ *
+ *  Cached PER OBJECT rather than per circuit, and that distinction is the whole point. A zoom notch
+ *  moves the rung of a few objects and leaves hundreds untouched, but a whole-circuit cache key changes
+ *  the moment any one of them moves, so every notch rebuilt the lot: measured at 8ms on a Grand Prix
+ *  circuit and 28ms on Monaco, and a wheel crosses a rung boundary about every second notch. Per
+ *  object, a notch costs the few objects that actually changed.
+ *
+ *  A WeakMap, so a circuit's scenery going out of scope takes its geometry with it. */
+function objectMemo<T extends object, R>(): (item: T, key: string, build: () => R) => R {
+  const cache = new WeakMap<T, Map<string, R>>()
+  return (item, key, build) => {
+    let by = cache.get(item)
+    if (!by) {
+      by = new Map()
+      cache.set(item, by)
+    }
+    const hit = by.get(key)
+    if (hit !== undefined) return hit
+    const made = build()
+    // Oldest out, never a wholesale clear: the entries in hand are the rungs either side of where the
+    // camera is, and dropping those is exactly what a zoom gesture would then re-pay for.
+    if (by.size >= MEMO_PER_OBJECT) by.delete(by.keys().next().value!)
+    by.set(key, made)
+    return made
+  }
+}
+
 /** The size a built solid's DETAIL is judged by: its shorter footprint dimension.
  *
  *  Not its longest. A grandstand is 60m by 14m, and everything that makes it a grandstand rather than a
@@ -144,8 +185,11 @@ const shadowSizeM = (r: SceneryRect, m: (units: number) => number) => m(Math.max
  *  Merging then reorders flat canopies of DIFFERENT variants against each other, which is a pixel or
  *  two of overlap on a shape this small; within a variant the paint is opaque and identical, so order
  *  cannot matter at all. */
+const treeSolidMemo = objectMemo<SceneryTree, DrawOp[]>()
+
 export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   const dir = dirAt(o.view)
+  const base = `${o.view}|${o.extrude}|${o.u(1)}|${lightKey(o.lighting)}`
   // Split by rung, because only the flat ones may merge. Batching the NEAR rung would pool every
   // trunk into one draw and let a far canopy bury a near trunk, which is the very thing keeping each
   // trunk beside its own canopy exists to prevent.
@@ -161,30 +205,42 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   for (const t of depthSorted(trees, dir)) {
     const rung = rungFor(metres(2 * t.r), o.pxPerM ?? Infinity, o.quality)
     if (rung === 'gone') continue
-    const lift = o.u(t.h * o.extrude)
-    // Canopy at the tree's point, trunk running its lift toward the base: one disc holds both.
-    const clip = { cx: t.x, cy: t.y, r: t.r + lift + o.u(1) }
-    // The trunk is a stroke a third of the canopy wide. At the far rung that is well under a pixel and
-    // it is only ever seen where it pokes out from under the canopy, so it goes.
-    if (atLeast(rung, 'mid')) {
-      (rung === 'near' ? near : flatTrunks).push({
-        d: `M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * lift).toFixed(1)} ${(t.y + dir.y * lift).toFixed(1)}`,
-        stroke: shadeFace('#6B5138', o.lighting),
-        // Trunk width scales with the canopy it carries; a constant width made every tree a lollipop.
-        width: Math.max(o.u(0.8), t.r * 0.34),
-        cap: 'round',
-        clip,
-      })
-    }
-    (rung === 'near' ? near : flatCanopies).push(rung === 'near'
-      ? {
-        d: t.d,
-        fill: `${REF}tm-tree${t.variant}`,
-        bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
-        clip,
+    // Trunk then canopy, built once per tree per rung. A cull step re-asks for every tree in the new
+    // disc, and most of them were in the old one too.
+    const ops = treeSolidMemo(t, `${base}|${rung}`, () => {
+      const lift = o.u(t.h * o.extrude)
+      // Canopy at the tree's point, trunk running its lift toward the base: one disc holds both.
+      const clip = { cx: t.x, cy: t.y, r: t.r + lift + o.u(1) }
+      const out: DrawOp[] = []
+      // The trunk is a stroke a third of the canopy wide. At the far rung that is well under a pixel
+      // and it is only ever seen where it pokes out from under the canopy, so it goes.
+      if (atLeast(rung, 'mid')) {
+        out.push({
+          d: `M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * lift).toFixed(1)} ${(t.y + dir.y * lift).toFixed(1)}`,
+          stroke: shadeFace('#6B5138', o.lighting),
+          // Trunk width scales with the canopy it carries; a constant width made every tree a lollipop.
+          width: Math.max(o.u(0.8), t.r * 0.34),
+          cap: 'round',
+          clip,
+        })
       }
-      // No bbox: that is what tells mergeByPaint this one may batch.
-      : { d: t.d, fill: TREE_FLAT[t.variant] ?? TREE_FLAT[0], clip })
+      out.push(rung === 'near'
+        ? {
+          d: t.d,
+          fill: `${REF}tm-tree${t.variant}`,
+          bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
+          clip,
+        }
+        // No bbox: that is what tells mergeByPaint this one may batch.
+        : { d: t.d, fill: TREE_FLAT[t.variant] ?? TREE_FLAT[0], clip })
+      return out
+    })
+    // The trunk (when there is one) leads; the canopy is always last.
+    if (rung === 'near') near.push(...ops)
+    else {
+      if (ops.length > 1) flatTrunks.push(ops[0])
+      flatCanopies.push(ops[ops.length - 1])
+    }
   }
   // Flat first: a tree only lands on the near rung by being the bigger one, so the detailed trees
   // painting last is the depth order that survives the split more often than the other way round.
@@ -193,11 +249,14 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
 
 /** Every tree's shadow as ONE op. They share a fill and never overlap meaningfully, so a single path
  *  of many subpaths costs one draw call instead of a thousand. */
+const treeShadowMemo = objectMemo<SceneryTree, string>()
+
 export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp | null {
   if (trees.length === 0) return null
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const reach = shadowReach(o.lighting)
+  const base = `${o.view}|${o.extrude}|${o.u(1)}|${lightKey(o.lighting)}`
   // The whole grove's disc, padded by the furthest any one shadow can stretch from its tree.
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
   let pad = 0
@@ -211,7 +270,10 @@ export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp | nu
   const clip = {
     cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad,
   }
-  const d = trees.map((t) => {
+  // Per-tree subpaths are memoised; only the join is per call. The grove's shadow is ONE op, so it is
+  // rebuilt on every cull step whatever changed, and re-projecting a canopy the disc already held is
+  // the bulk of that.
+  const d = trees.map((t) => treeShadowMemo(t, base, () => {
     const lift = o.u(t.h * o.extrude)
     const len = lift * treeShadowRatio(reach)
     // Stretch the canopy about its own centre along the light, then plant it at the base of the
@@ -228,7 +290,7 @@ export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp | nu
       const bx = ax * sx
       return { x: cx + bx * ldir.x - ay * ldir.y, y: cy + bx * ldir.y + ay * ldir.x }
     })
-  }).join(' ')
+  })).join(' ')
   return { d, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) * 0.55, clip }
 }
 
@@ -246,46 +308,51 @@ export function depthSorted<T extends { x: number; y: number }>(
  *
  *  The roof is painted over the near half of the hull afterwards, which is what leaves only the faces
  *  actually turned toward the camera visible. */
+const wallMemo = objectMemo<SceneryRect, DrawGroup>()
+
 export function buildingWallGroups(
   buildings: SceneryRect[], o: SolidDrawOpts,
 ): DrawGroup[] {
   const dir = dirAt(o.view)
   const m = metresIn(o)
+  const base = `${o.view}|${o.extrude}|${o.storeyM}|${o.bayM}|${o.u(1)}|${lightKey(o.lighting)}`
   return buildings.map((r) => {
-    const storeys = r.storeys ?? 1
-    const h = storeys * o.storeyM
-    const t = o.u(h * o.extrude)
-    const off = toLocal(dir.x * t, dir.y * t, r.rot)
-    const parts = partsOf(r)
     const rung = rungFor(detailSizeM(r, m), o.pxPerM ?? Infinity, o.quality)
-    // The silhouette is the building. The two visible planes and then the window grid are what tell
-    // you it is a building rather than a block, and they go in that order as it shrinks: a bay is
-    // 5.4m, so the grid is the first thing that stops being a grid and starts being noise.
-    const ops = (rung: Rung): DrawOp[] => {
-      if (rung === 'gone') return []
-      const out: DrawOp[] = [
-        // The whole solid's silhouette, in one piece.
-        { d: sweptHull(parts, off.x, off.y), fill: shadeFace(r.fill, o.lighting) },
-      ]
-      if (!atLeast(rung, 'mid')) return out
-      // The left/right faces a shade apart, so the two visible planes of the box are distinct.
-      out.push({ d: sideFacesX(parts, off.x, off.y), fill: tintFace(r.fill, o.lighting, -0.45) })
-      if (rung === 'near') {
-        out.push({
-          d: wallWindows(parts, off.x, off.y, o.u(o.bayM), Math.max(1, Math.round(h / o.storeyM))),
-          fill: '#0E1319',
-          alpha: 0.42,
-        })
+    return wallMemo(r, `${base}|${rung}`, () => {
+      const storeys = r.storeys ?? 1
+      const h = storeys * o.storeyM
+      const t = o.u(h * o.extrude)
+      const off = toLocal(dir.x * t, dir.y * t, r.rot)
+      const parts = partsOf(r)
+      // The silhouette is the building. The two visible planes and then the window grid are what tell
+      // you it is a building rather than a block, and they go in that order as it shrinks: a bay is
+      // 5.4m, so the grid is the first thing that stops being a grid and starts being noise.
+      const ops = (at: Rung): DrawOp[] => {
+        if (at === 'gone') return []
+        const out: DrawOp[] = [
+          // The whole solid's silhouette, in one piece.
+          { d: sweptHull(parts, off.x, off.y), fill: shadeFace(r.fill, o.lighting) },
+        ]
+        if (!atLeast(at, 'mid')) return out
+        // The left/right faces a shade apart, so the two visible planes of the box are distinct.
+        out.push({ d: sideFacesX(parts, off.x, off.y), fill: tintFace(r.fill, o.lighting, -0.45) })
+        if (at === 'near') {
+          out.push({
+            d: wallWindows(parts, off.x, off.y, o.u(o.bayM), Math.max(1, Math.round(h / o.storeyM))),
+            fill: '#0E1319',
+            alpha: 0.42,
+          })
+        }
+        return out
       }
-      return out
-    }
-    return {
-      x: r.x,
-      y: r.y,
-      rot: r.rot,
-      ops: ops(rung),
-      flat: rung !== 'near',
-    }
+      return {
+        x: r.x,
+        y: r.y,
+        rot: r.rot,
+        ops: ops(rung),
+        flat: rung !== 'near',
+      }
+    })
   })
 }
 
@@ -313,29 +380,34 @@ export interface StandDrawOpts extends TreeDrawOpts {
  *
  *  Raked rather than extruded uniformly, because a bank of seats climbs AWAY from the circuit. Given
  *  one flat height they read as office blocks parked beside the track. */
+const standMemo = objectMemo<Scenery['stands'][number], DrawGroup>()
+
 export function standGroups(stands: Scenery['stands'], o: StandDrawOpts): DrawGroup[] {
   const dir = dirAt(o.view)
   const t = o.u(o.rearM * o.extrude)
   const m = metresIn(o)
+  const base = `${o.view}|${o.extrude}|${o.frontM}|${o.rearM}|${o.roofFrac}|${o.u(1)}|${lightKey(o.lighting)}`
   return stands.map((s) => {
-    const off = toLocal(dir.x * t, dir.y * t, s.rot)
-    const { hull, deck, roof } = rakedStand(s.w, s.h, s.facing, off, 1 - o.frontM / o.rearM, o.roofFrac)
-    const box = { x: -s.w / 2, y: -s.h / 2, w: s.w, h: s.h }
     const rung = rungFor(detailSizeM(s, m), o.pxPerM ?? Infinity, o.quality)
-    if (rung === 'gone') return { x: s.x, y: s.y, rot: s.rot, ops: [] }
-    // The bank and its canopy are the stand. Everything between them is texture on the deck, and the
-    // deck is what shrinks: seat rows are 1.5m and crowd dots 3.2m, so all four of those patterns are
-    // sub-pixel long before the stand itself stops being a recognisable shape.
-    const ops: DrawOp[] = [{ d: hull, fill: shadeFace(s.fill, o.lighting) }]
-    if (atLeast(rung, 'mid')) ops.push({ d: deck, fill: `${REF}tm-seats`, bbox: box })
-    if (rung === 'near') {
-      ops.push({ d: deck, fill: `${REF}tm-crowd`, bbox: box })
-      // Which way a stand faces has to be legible at a glance, so the rake darkens toward the front.
-      ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}`, bbox: box })
-    }
-    ops.push({ d: roof, fill: '#7B8494' })
-    if (rung === 'near') ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
-    return { x: s.x, y: s.y, rot: s.rot, ops, flat: rung !== 'near' }
+    return standMemo(s, `${base}|${rung}`, () => {
+      if (rung === 'gone') return { x: s.x, y: s.y, rot: s.rot, ops: [] }
+      const off = toLocal(dir.x * t, dir.y * t, s.rot)
+      const { hull, deck, roof } = rakedStand(s.w, s.h, s.facing, off, 1 - o.frontM / o.rearM, o.roofFrac)
+      const box = { x: -s.w / 2, y: -s.h / 2, w: s.w, h: s.h }
+      // The bank and its canopy are the stand. Everything between them is texture on the deck, and the
+      // deck is what shrinks: seat rows are 1.5m and crowd dots 3.2m, so all four of those patterns are
+      // sub-pixel long before the stand itself stops being a recognisable shape.
+      const ops: DrawOp[] = [{ d: hull, fill: shadeFace(s.fill, o.lighting) }]
+      if (atLeast(rung, 'mid')) ops.push({ d: deck, fill: `${REF}tm-seats`, bbox: box })
+      if (rung === 'near') {
+        ops.push({ d: deck, fill: `${REF}tm-crowd`, bbox: box })
+        // Which way a stand faces has to be legible at a glance, so the rake darkens toward the front.
+        ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}`, bbox: box })
+      }
+      ops.push({ d: roof, fill: '#7B8494' })
+      if (rung === 'near') ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
+      return { x: s.x, y: s.y, rot: s.rot, ops, flat: rung !== 'near' }
+    })
   })
 }
 
@@ -344,23 +416,28 @@ export function standGroups(stands: Scenery['stands'], o: StandDrawOpts): DrawGr
  *  The bevel fills the union path directly rather than clipping a rect to it — an objectBoundingBox
  *  gradient already resolves against the path's own extent, and doing it per PART gave every sub-rect
  *  its own light-to-dark ramp, seaming at each internal edge. */
+const roofMemo = objectMemo<SceneryRect, DrawGroup>()
+
 export function buildingRoofGroups(
   buildings: SceneryRect[], o: { u: (m: number) => number; pxPerM?: number; quality?: number },
 ): DrawGroup[] {
   const m = metresIn(o)
+  const base = String(o.u(1))
   return buildings.map((b) => {
-    const d = partsPath(partsOf(b))
-    const box = { x: -b.w / 2, y: -b.h / 2, w: b.w, h: b.h }
     const rung = rungFor(detailSizeM(b, m), o.pxPerM ?? Infinity, o.quality)
-    // The roof plate stays to the last rung above nothing: it is the building's top surface, and without
-    // it the solid loses its own colour and reads as a shadow. The decking and the bevel across it are
-    // detail ON that plate, and go first.
-    if (rung === 'gone') return { x: b.x, y: b.y, rot: b.rot, ops: [] }
-    const ops: DrawOp[] = [{ d, fill: b.fill }]
-    if (rung === 'near') {
-      ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
-    }
-    return { x: b.x, y: b.y, rot: b.rot, ops, flat: rung !== 'near' }
+    return roofMemo(b, `${base}|${rung}`, () => {
+      // The roof plate stays to the last rung above nothing: it is the building's top surface, and
+      // without it the solid loses its own colour and reads as a shadow. The decking and the bevel
+      // across it are detail ON that plate, and go first.
+      if (rung === 'gone') return { x: b.x, y: b.y, rot: b.rot, ops: [] }
+      const d = partsPath(partsOf(b))
+      const box = { x: -b.w / 2, y: -b.h / 2, w: b.w, h: b.h }
+      const ops: DrawOp[] = [{ d, fill: b.fill }]
+      if (rung === 'near') {
+        ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
+      }
+      return { x: b.x, y: b.y, rot: b.rot, ops, flat: rung !== 'near' }
+    })
   })
 }
 
@@ -374,39 +451,46 @@ export interface ShadowDrawOpts extends TreeDrawOpts {
  *  Swept along the ground FROM THE BASE, so the near end tucks under the solid instead of leaving a
  *  gap that reads as the building levitating. That base is where the CAMERA put it, while the sweep
  *  runs along the SUN — the one place on the map that genuinely needs both bearings at once. */
+const structShadowMemo = objectMemo<SceneryRect, DrawGroup>()
+
 export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOpts): DrawGroup[] {
   const vdir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const reach = shadowReach(o.lighting)
   const m = metresIn(o)
+  const key = `${o.view}|${o.extrude}|${o.u(1)}|${lightKey(o.lighting)}`
   return structures.map((r) => {
     // A shadow is judged on the LONGEST footprint dimension, not the shortest: it stays a legible
     // shape for as long as its caster does, however thin. It is one draw call, so there is nothing to
     // simplify — it is either drawn or it is not. An empty group rather than a missing one, so the
     // caller's per-structure clip discs stay index-aligned.
     const rung = rungFor(shadowSizeM(r, m), o.pxPerM ?? Infinity, o.quality)
-    if (rung === 'gone') return { x: r.x, y: r.y, rot: r.rot, ops: [] }
     const h = o.heightM(r)
-    const base = o.u(h * o.extrude)
-    const cast = o.u(h * reach)
-    const off = toLocal(ldir.x * cast, ldir.y * cast, r.rot)
-    return {
-      x: r.x + vdir.x * base,
-      y: r.y + vdir.y * base,
-      rot: r.rot,
-      // Batchable once it is no longer the top rung, like every other solid: one draw for a whole
-      // industrial estate's worth of shade instead of one each.
-      flat: rung !== 'near',
-      // Painted HERE, not by the caller. An SVG <g fill> passes its paint down to the paths inside it
-      // and a canvas has no such thing: an op with neither fill nor stroke is silently drawn as
-      // nothing, which is exactly how every building and grandstand lost its shadow on the canvas
-      // while keeping it in SVG. Every shadow in this file now carries its own ink.
-      ops: [{
-        d: sweptHull(partsOf(r), off.x, off.y),
-        fill: shadowFill(o.lighting),
-        alpha: shadowOpacity(o.lighting),
-      }],
-    }
+    // `heightM` is a function and cannot go in a key, so what it RETURNS does. Cheap to call, and it
+    // keeps two callers who disagree about how tall a thing is from sharing its shadow.
+    return structShadowMemo(r, `${key}|${rung}|${h}`, () => {
+      if (rung === 'gone') return { x: r.x, y: r.y, rot: r.rot, ops: [] }
+      const lift = o.u(h * o.extrude)
+      const cast = o.u(h * reach)
+      const off = toLocal(ldir.x * cast, ldir.y * cast, r.rot)
+      return {
+        x: r.x + vdir.x * lift,
+        y: r.y + vdir.y * lift,
+        rot: r.rot,
+        // Batchable once it is no longer the top rung, like every other solid: one draw for a whole
+        // industrial estate's worth of shade instead of one each.
+        flat: rung !== 'near',
+        // Painted HERE, not by the caller. An SVG <g fill> passes its paint down to the paths inside
+        // it and a canvas has no such thing: an op with neither fill nor stroke is silently drawn as
+        // nothing, which is exactly how every building and grandstand lost its shadow on the canvas
+        // while keeping it in SVG. Every shadow in this file now carries its own ink.
+        ops: [{
+          d: sweptHull(partsOf(r), off.x, off.y),
+          fill: shadowFill(o.lighting),
+          alpha: shadowOpacity(o.lighting),
+        }],
+      }
+    })
   })
 }
 
@@ -420,17 +504,22 @@ export interface FenceDrawOpts extends TreeDrawOpts {
  *  It needs the height face between its top line and its base, or it is a line plus a detached shadow
  *  and reads as floating. That face is a cage rather than a wall, so it is drawn see-through with its
  *  posts as verticals — one path for a whole circuit's worth. */
+const fenceMemo = objectMemo<SceneryFence, DrawOp[]>()
+
 export function fenceOps(fences: SceneryFence[], o: FenceDrawOpts): DrawOp[][] {
   const dir = dirAt(o.view)
   const lift = o.u(o.fenceM * o.extrude)
   const ox = dir.x * lift
   const oy = dir.y * lift
-  return fences.map((f) => [
+  // No rung of its own: the fencing is gated wholesale by its height, so its geometry only ever
+  // changes with the bearing. A run of posts round a whole circuit is not cheap to write out.
+  const key = `${o.view}|${o.extrude}|${o.fenceM}|${o.u(1)}`
+  return fences.map((f) => fenceMemo(f, key, () => [
     // You can see the circuit through debris fencing, so the face is barely there.
     { d: ribbon(f.pts, ox, oy), fill: '#AEB6C2', alpha: 0.13 },
     { d: posts(f.pts, ox, oy, 2), stroke: '#79808C', width: o.u(0.35), alpha: 0.5 },
     { d: f.d, stroke: '#79808C', width: o.u(0.4), alpha: 0.6 },
-  ])
+  ]))
 }
 
 /** The shadow a run of fencing or tyre wall throws.
@@ -476,6 +565,8 @@ function roundedRectPath(x: number, y: number, w: number, h: number, r: number):
  *  camera's lift is baked into its geometry, so a renderer just paints it where the group sits). The
  *  roof and its trackside panel are ops here rather than markup in a layer, so BOTH renderers draw
  *  the whole hut — inlined in the SVG they simply did not exist on the canvas. */
+const marshalMemo = objectMemo<Scenery['marshals'][number], DrawGroup & { shadow: DrawOp }>()
+
 export function marshalGroups(
   marshals: Scenery['marshals'], o: MarshalDrawOpts,
 ): Array<DrawGroup & { shadow: DrawOp }> {
@@ -486,7 +577,10 @@ export function marshalGroups(
   const hut: Part[] = [{ dx: 0, dy: 0, w, h }]
   const lift = o.u(o.hutM * o.extrude)
   const cast = o.u(o.hutM * shadowReach(o.lighting))
-  return marshals.map((m) => {
+  // Like the fencing, gated wholesale rather than per rung, so the bearing and the light are the whole
+  // of what its geometry depends on.
+  const key = `${o.view}|${o.extrude}|${o.hutM}|${o.hutW}|${o.hutH}|${o.u(1)}|${lightKey(o.lighting)}`
+  return marshals.map((m) => marshalMemo(m, key, () => {
     const off = toLocal(dir.x * lift, dir.y * lift, m.rot)
     const sOff = toLocal(ldir.x * cast, ldir.y * cast, m.rot)
     const shadowHut: Part[] = [{ dx: off.x, dy: off.y, w, h }]
@@ -505,7 +599,7 @@ export function marshalGroups(
         { d: `M ${(-w / 2).toFixed(2)} ${(-h / 2).toFixed(2)} h ${w.toFixed(2)} v ${o.u(1.0).toFixed(2)} h ${(-w).toFixed(2)} Z`, fill: '#E8952B' },
       ],
     }
-  })
+  }))
 }
 
 /** The ground the circuit sits on: relief bands, the field quilt, terrain patches and run-off aprons.
@@ -643,18 +737,66 @@ const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
  *  producer's output stays index-aligned with the array it came from. */
 const keepDrawn = (gs: DrawGroup[]): DrawGroup[] => gs.filter((g) => g.ops.length > 0)
 
-const staticCache = new WeakMap<Scenery, StaticParts>()
+/** How many rung assignments to keep built per circuit.
+ *
+ *  One was not enough, and the reason is the shape of a zoom gesture rather than anything subtle. The
+ *  camera crosses a rung boundary every couple of wheel notches, and a player zooms OUT to see where
+ *  the field is and straight back IN to watch the car. With a single entry every one of those
+ *  crossings is a full-circuit rebuild in both directions; with a few, the way back is free. Small
+ *  because the entries hold a circuit's worth of path strings, and because the useful ones are always
+ *  the neighbours of where the camera is now. */
+const STATIC_CACHE_N = 4
+
+/** Every rung the static geometry is built from, as one short string.
+ *
+ *  This replaces the zoom bucket in the cache key, and it is a strictly better question to ask. The
+ *  geometry does not depend on the camera scale — it depends on the RUNG each object's size resolves
+ *  to at that scale, and a rung has four values. So most bucket crossings move nobody's rung at all,
+ *  and the ones that move a shed's do not move a grandstand's. Keyed on the bucket, each of those was
+ *  a rebuild of the whole circuit; keyed on this, they are cache hits. */
+function rungSignature(scenery: Scenery, o: SceneOpts): string {
+  const px = o.pxPerM ?? Infinity
+  const m = metresIn(o)
+  const c = (sizeM: number) => rungFor(sizeM, px, o.quality)[0]
+  // The gates that are not per-object: the two ground textures, the fencing and the marshal huts.
+  let sig = c(CROP_ROW_M) + c(HEDGEROW_M) + c(o.fenceM) + c(o.marshalW)
+  // Per structure, both questions asked of it: what its own detail is judged by, and what its shadow
+  // is. They differ (short side against long), so both belong in the key.
+  for (const r of scenery.stands) sig += c(detailSizeM(r, m)) + c(shadowSizeM(r, m))
+  for (const r of scenery.buildings) sig += c(detailSizeM(r, m)) + c(shadowSizeM(r, m))
+  return sig
+}
+
+const fenceRunMemo = objectMemo<SceneryFence, { shadow: DrawOp; runs: DrawOp[] }>()
+
+/** A hut and its own shadow folded into one group. Keyed on what `marshalGroups` handed back, which is
+ *  already memoised, so the fold is done once rather than allocating a group per post per compose. */
+const hutCache = new WeakMap<object, DrawGroup>()
+const hutMemo = (from: object, build: () => DrawGroup): DrawGroup => {
+  const hit = hutCache.get(from)
+  if (hit) return hit
+  const made = build()
+  hutCache.set(from, made)
+  return made
+}
+
+const staticCache = new WeakMap<Scenery, StaticParts[]>()
 
 function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const key = JSON.stringify([
     o.view, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
     o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.u(1), o.lighting,
-    // Quantised, never raw: the rungs only change at discrete scales, and keying on a live
-    // pixels-per-metre would rebuild a circuit's whole string geometry on every zoom notch.
-    o.pxPerM == null ? null : lodBucket(o.pxPerM), o.quality,
+    // The rungs themselves, never the scale they came from: see `rungSignature`.
+    rungSignature(scenery, o),
   ])
-  const hit = staticCache.get(scenery)
-  if (hit && hit.key === key) return hit
+  const held = staticCache.get(scenery) ?? []
+  const at = held.findIndex((p) => p.key === key)
+  if (at >= 0) {
+    // Most-recent first, so the entry a jittering zoom keeps returning to is never the one evicted.
+    const [hit] = held.splice(at, 1)
+    held.unshift(hit)
+    return hit
+  }
   const treeOpts = {
     u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view, pxPerM: o.pxPerM, quality: o.quality,
   }
@@ -672,13 +814,20 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const px = o.pxPerM ?? Infinity
   const fenceRung = rungFor(o.fenceM, px, o.quality)
   if (atLeast(fenceRung, 'mid')) {
+    // Stamped inside the memo, so what comes back out already carries its disc and nothing here has to
+    // reach into a shared object and write to it.
+    const key = `${o.view}|${o.extrude}|${o.fenceM}|${o.u(1)}|${lightKey(o.lighting)}|${runPad}`
     for (const f of scenery.fences) {
-      runShadows.push(stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, discOfPts(f.pts, runPad)))
+      const built = fenceRunMemo(f, key, () => {
+        const disc = discOfPts(f.pts, runPad)
+        return {
+          shadow: stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, disc),
+          runs: fenceOps([f], { ...treeOpts, fenceM: o.fenceM })[0].map((op) => stamp({ ...op }, disc)),
+        }
+      })
+      runShadows.push(built.shadow)
+      fenceRuns.push(...built.runs)
     }
-    fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM }).forEach((ops2, i) => {
-      const disc = discOfPts(scenery.fences[i].pts, runPad)
-      for (const op of ops2) fenceRuns.push(stamp(op, disc))
-    })
   }
   const parts: StaticParts = {
     key,
@@ -708,7 +857,7 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
     marshalGs: atLeast(rungFor(o.marshalW, px, o.quality), 'far')
       ? marshalGroups(scenery.marshals, {
         ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
-      }).map((g) => stamp<DrawGroup>({
+      }).map((g) => hutMemo(g, () => stamp<DrawGroup>({
         // The hut with its shadow as ONE group: the shadow op leads, painted with the shared
         // shadow ink, so the canvas draws what the SVG layer draws.
         x: g.x,
@@ -716,10 +865,12 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
         rot: g.rot,
         // The hut's shadow leads, carrying its own ink like every other shadow here.
         ops: [g.shadow, ...g.ops],
-      }, { cx: g.x, cy: g.y, r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30) }))
+      }, { cx: g.x, cy: g.y, r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30) })))
       : [],
   }
-  staticCache.set(scenery, parts)
+  held.unshift(parts)
+  held.length = Math.min(held.length, STATIC_CACHE_N)
+  staticCache.set(scenery, held)
   return parts
 }
 
@@ -730,14 +881,24 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
  *  sharing a draw call: a canvas applies the placement with save/translate/rotate/restore, so each
  *  group is its own submission however little it paints. Baking costs one rotation per point, once per
  *  cull step, and buys the chance to merge. */
+/** Keyed on the group ITSELF, which is exact: a group is immutable once built, and the producers now
+ *  hand back the same object for the same (solid, bearing, rung), so this is the same answer or a
+ *  different group. It matters because baking is a rotation per point over every flat solid in shot and
+ *  it runs on every compose — every cull step, several times a lap, as well as every zoom notch. */
+const bakedMemo = new WeakMap<DrawGroup, DrawOp[]>()
+
 function bakedOps(g: DrawGroup): DrawOp[] {
+  const hit = bakedMemo.get(g)
+  if (hit) return hit
   const cos = Math.cos(g.rot)
   const sin = Math.sin(g.rot)
-  return g.ops.map((op) => ({
+  const out = g.ops.map((op) => ({
     ...op,
     d: mapPathPoints(op.d, (x, y) => ({ x: g.x + x * cos - y * sin, y: g.y + x * sin + y * cos })),
     clip: g.clip,
   }))
+  bakedMemo.set(g, out)
+  return out
 }
 
 /** Batch every placed group that is flat enough to batch, and leave the rest as groups.
