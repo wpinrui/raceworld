@@ -149,6 +149,19 @@ const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery
 /** Graphics quality presets, as the multipliers the shared ladder in lib/ui/lod.ts is scaled by. These
  *  are the STARTING values for the three user settings; the tuning panel under the fps readout moves
  *  them live so the frame-rate-to-fidelity trade can be judged by eye rather than by rebuild. */
+/** Whether the tarmac carries what has been driven into it: the racing line, the marbles a corner
+ *  throws off, the brake marks into every real braking zone, and the road's own grain.
+ *
+ *  OFF. It is the most expensive thing on the map per unit of picture. Every mark is cut into 128 arcs
+ *  and softened by four nested strokes, so a racing shot pulls in a few hundred draw calls and a wide
+ *  one most of a thousand — and this renderer is draw-call bound. The tarmac's EDGE is a separate thing
+ *  and stays: it is what makes the road read as a slab laid on the ground rather than a line drawn into
+ *  it, and as rims it costs about a tenth of what it used to.
+ *
+ *  Everything behind this flag still works and is still tested; nothing is deleted. Turn it back on when
+ *  there is frame budget to spend on it. */
+const SURFACE_INK = false
+
 const QUALITY_PRESETS: Array<{ key: Quality; label: string }> = [
   { key: 'low', label: 'Low' },
   { key: 'medium', label: 'Medium' },
@@ -1537,7 +1550,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
     // Worn into the tarmac, on top of the road and under the kerbs. Arrives one render after the rest of
     // the world, because it cannot be solved until a path element exists to measure.
-    if (lap) {
+    if (lap && SURFACE_INK) {
       ops.push(...surfaceOps({
         u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
         tarmac: '#33383E', centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
