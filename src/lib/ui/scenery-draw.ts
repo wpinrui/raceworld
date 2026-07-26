@@ -752,7 +752,7 @@ function bakedOps(g: DrawGroup): DrawOp[] {
 /** Paths `mapPathPoints` can rewrite: absolute M/L/Q/T/Z and numbers, nothing else. A path carrying a
  *  relative or shorthand command (`h`, `v`, `c`) cannot be baked, so its group stays a group rather than
  *  the bake throwing. Cheaper to ask than to try and catch, and it fails toward the correct picture. */
-const BAKEABLE = /^[MLQTZz\d\s,.+-]*$/
+const BAKEABLE = /^[MLQTZzHhVv\d\s,.+-]*$/
 
 function batchFlat(groups: DrawGroup[]): SceneItem[] {
   const flat: DrawOp[] = []

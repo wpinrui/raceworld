@@ -233,9 +233,31 @@ describe('mapPathPoints', () => {
     expect(out).toContain('-5.00 -5.00')
   })
 
-  it('refuses a command it cannot safely transform', () => {
-    // Relative/shorthand commands would silently corrupt geometry if treated as absolute pairs.
-    expect(() => mapPathPoints('M 0 0 h 10 Z', (x, y) => ({ x, y }))).toThrow(/unsupported/)
+  it('resolves a shorthand into an absolute line, since the transform is not axis-aligned', () => {
+    // A horizontal run stops being horizontal once mapped through a rotation, so `h` cannot survive as
+    // `h`. Leaving it unsupported meant any group carrying one could never be batched.
+    expect(mapPathPoints('M 0 0 h 10 Z', (x, y) => ({ x, y }))).toBe('M 0.00 0.00 L 10.00 0.00 Z')
+    expect(mapPathPoints('M 0 0 v 4 Z', (x, y) => ({ x, y }))).toBe('M 0.00 0.00 L 0.00 4.00 Z')
+    // Relative accumulates from the cursor; absolute does not.
+    expect(mapPathPoints('M 1 1 h 2 h 3', (x, y) => ({ x, y }))).toBe('M 1.00 1.00 L 3.00 1.00 L 6.00 1.00')
+    expect(mapPathPoints('M 1 1 H 2 H 3', (x, y) => ({ x, y }))).toBe('M 1.00 1.00 L 2.00 1.00 L 3.00 1.00')
+  })
+
+  it('accepts a shorthand written without a space, which hand-authored paths do', () => {
+    expect(mapPathPoints('M0 0h10v5Z', (x, y) => ({ x, y }))).toBe('M 0.00 0.00 L 10.00 0.00 L 10.00 5.00 Z')
+  })
+
+  it('returns the cursor to the subpath start on Z, so a following run measures from there', () => {
+    expect(mapPathPoints('M 5 5 h 3 Z h 2', (x, y) => ({ x, y }))).toBe('M 5.00 5.00 L 8.00 5.00 Z L 7.00 5.00')
+  })
+
+  it('carries the shorthand through the transform like any other point', () => {
+    // Offset by ten: the resolved endpoint has to move with everything else.
+    expect(mapPathPoints('M 0 0 h 10', (x, y) => ({ x: x + 10, y: y + 10 }))).toBe('M 10.00 10.00 L 20.00 10.00')
+  })
+
+  it('still refuses a command it genuinely cannot transform', () => {
+    expect(() => mapPathPoints('M 0 0 c 1 1 2 2 3 3', (x, y) => ({ x, y }))).toThrow(/unsupported/)
   })
 })
 

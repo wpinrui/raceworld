@@ -324,23 +324,70 @@ export function posts(pts: Vec[], ox: number, oy: number, every: number): string
  *  path. A thousand trees each carrying their own transform attribute is a thousand matrices for the
  *  browser to resolve every frame; as subpaths of a single path they cost one. */
 export function mapPathPoints(d: string, fn: (x: number, y: number) => Vec): string {
-  const parts = d.trim().split(/\s+/)
+  // Tokenised rather than split on whitespace: the emitters here write `h 10` but a hand-authored path
+  // is free to write `h10`, and a mapper that only understood the first was a landmine for any caller
+  // handing it geometry it did not build itself.
+  const toks = d.match(/[MLQTZzHhVv]|-?\d*\.?\d+(?:e-?\d+)?/g) ?? []
   const out: string[] = []
-  for (let i = 0; i < parts.length;) {
-    const tok = parts[i]
-    if (tok === 'Z' || tok === 'z') { out.push('Z'); i += 1; continue }
-    if (tok === 'M' || tok === 'L' || tok === 'Q') {
-      const pairs = tok === 'Q' ? 2 : 1
-      out.push(tok)
+  // The cursor is tracked in SOURCE space, because that is where a relative command means something.
+  // Without it, `h`/`v` could not be resolved at all — which is why they used to throw, and why every
+  // group carrying one fell back to being drawn on its own instead of batching.
+  let cx = 0
+  let cy = 0
+  let sx = 0
+  let sy = 0
+  const emit = (cmd: string, x: number, y: number) => {
+    const p = fn(x, y)
+    out.push(cmd, f2(p.x), f2(p.y))
+    cx = x
+    cy = y
+  }
+  for (let i = 0; i < toks.length;) {
+    const tok = toks[i]
+    if (tok === 'Z' || tok === 'z') {
+      out.push('Z')
+      cx = sx
+      cy = sy
       i += 1
-      for (let k = 0; k < pairs; k++) {
-        const p = fn(Number(parts[i]), Number(parts[i + 1]))
-        out.push(f2(p.x), f2(p.y))
-        i += 2
-      }
       continue
     }
-    // Anything else (relative or shorthand commands) is not something the blob emitters produce.
+    if (tok === 'M' || tok === 'L' || tok === 'Q' || tok === 'T') {
+      const pairs = tok === 'Q' ? 2 : 1
+      i += 1
+      // Q carries a control point and an endpoint; only the endpoint moves the cursor.
+      const ctrl: string[] = []
+      for (let k = 0; k < pairs; k++) {
+        const x = Number(toks[i])
+        const y = Number(toks[i + 1])
+        i += 2
+        if (k < pairs - 1) {
+          const p = fn(x, y)
+          ctrl.push(f2(p.x), f2(p.y))
+        } else {
+          out.push(tok, ...ctrl)
+          const p = fn(x, y)
+          out.push(f2(p.x), f2(p.y))
+          cx = x
+          cy = y
+        }
+      }
+      if (tok === 'M') { sx = cx; sy = cy }
+      continue
+    }
+    // The shorthands, resolved to an absolute line. A horizontal run in the source is NOT horizontal
+    // once mapped through an arbitrary transform, so it cannot stay an `h`.
+    if (tok === 'H' || tok === 'h') {
+      const x = tok === 'H' ? Number(toks[i + 1]) : cx + Number(toks[i + 1])
+      emit('L', x, cy)
+      i += 2
+      continue
+    }
+    if (tok === 'V' || tok === 'v') {
+      const y = tok === 'V' ? Number(toks[i + 1]) : cy + Number(toks[i + 1])
+      emit('L', cx, y)
+      i += 2
+      continue
+    }
     throw new Error(`mapPathPoints: unsupported command "${tok}"`)
   }
   return out.join(' ')
