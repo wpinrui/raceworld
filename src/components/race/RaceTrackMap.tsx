@@ -12,7 +12,7 @@ import {
   type Cull, type Hidden, type SceneryPiece,
 } from './SceneryLayer'
 import {
-  MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowOpacity, shadowReach,
+  MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowReach,
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
@@ -26,6 +26,7 @@ import {
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { CarSprite } from './CarSprite'
+import { GANTRY_H_M, PitBoxes, type PitBoxRefs } from './PitBoxes'
 import {
   CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, LEVEL, SPRITE, STRAIGHT, TRACK_M, bodyTransform, carAttitude, carLight,
   shadowTransform, sheenTransform, steerAngles, steerTransform,
@@ -70,8 +71,6 @@ export interface TrackCarMeta {
  * progress maps through a curvature-derived speed profile (more distance per time step on straights). */
 export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box' | 'out'; stopFrac?: number; pitCalled?: boolean; pitNewCompound?: TyreCompound; gridSlot?: number; launch?: number } | null
 
-/** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more, so both
- *  the lift off the box floor and the shadow they throw are short. */
 /** Frame-rate caps to cycle through, uncapped first. A steady rate reads as smoother than a higher
  *  one that swings, so the cap stays available â€” but with the static world baked to an image there is
  *  no longer a swing to steady, and capping a frame that already fits only throws frames away. */
@@ -119,10 +118,6 @@ const CULL_MARGIN = 1.45
 const CULL_SLACK = 0.3
 /** Quiet period after the last rotation input before the scene is rebuilt on the new bearing. */
 const ROT_SETTLE_MS = 120
-const GANTRY_H_M = 2.2
-/** Boom length: back to the building's front face, with a few centimetres of overlap so the join is
- *  visible rather than exact. Shared with its shadow, which has to stay exactly the same shape. */
-const GANTRY_REACH_M = 4.75
 
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit. The lane's own
 // cross-section lives with the track's in track-path.ts, since the surface laid on it measures against
@@ -259,6 +254,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
   const gantryShRefs = useRef(new Map<number, SVGGElement>()) // gantry shadow, offset against that flip
   const gantryRefs = useRef(new Map<number, SVGGElement>()) // gantry booms, lifted off the box floor
+  // The five of them as one object, built once. `PitBoxes` is memoised on its props, so a fresh bundle
+  // per render would defeat the memo and put its thousand elements back in every commit.
+  const pitBoxRefs = useRef<PitBoxRefs>({
+    inner: slotInnerRefs, gantry: gantryRefs, gantryShadow: gantryShRefs,
+    crew: crewRefs, parts: crewPartsRef,
+  }).current
   const slotFlipRef = useRef<number[]>([]) // which way each box was mirrored, measured in the layout pass
   const crewAnimRef = useRef(new Map<number, {
     mode: 'hidden' | 'active' | 'retreat'
@@ -1463,7 +1464,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // the whole loop down and rebuilt it every time the array got a fresh identity, which the 1Hz
     // tooltip tick does on its own. The loop's own state lives in refs, so it wants to run undisturbed
     // for the length of the race.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, ldir, lighting, carLit, applyCam])
 
   // S/F line: a chequered band (3 rows of 0.5m squares) spanning EXACTLY the tarmac width.
@@ -2058,110 +2058,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               <image key={t.url} href={t.url} x={t.x} y={t.y} width={t.w} height={t.h} />
             ))}
             <g data-cost="boxes" style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
-            {pitSlots.map((s, i) => (
-              <g key={`pl${i}`} transform={`translate(${s.x} ${s.y}) rotate(${(s.rot * 180) / Math.PI})`}>
-                {/* Everything inside flips so the garage faces AWAY from the lane (measured per slot). */}
-                <g ref={(el) => { if (el) slotInnerRefs.current.set(i, el); else slotInnerRefs.current.delete(i) }}>
-                {/* Work pad + PIT MARKINGS (broadcast style): paired bars above and below the car
-                    with end/centre ticks and an exit arrow. Geometry anchor unchanged. */}
-                <rect x={-u(3.2)} y={-u(1.9)} width={u(6.9)} height={u(3.8)} rx={u(0.3)} fill="#3C434F" opacity={0.45} />
-                {([1, -1] as const).map((sy) => (
-                  <g key={sy}>
-                    <rect x={-u(3)} y={u(sy * 1.62) - u(0.07)} width={u(6)} height={u(0.14)} fill="#E8C33A" opacity={0.95} />
-                    {[-3, 0, 3].map((tx) => (
-                      <rect key={tx} x={u(tx) - u(0.07)} y={sy > 0 ? u(1.62) : -u(1.62) - u(0.55)} width={u(0.14)} height={u(0.55)} fill="#E8C33A" opacity={0.95} />
-                    ))}
-                  </g>
-                ))}
-                {/* Entry and exit arrows, long tails, both along the direction of travel. */}
-                {([-4.7, 3.2] as const).map((ax) => (
-                  <path
-                    key={ax}
-                    d={`M ${u(ax)} 0 L ${u(ax + 1.5)} 0 M ${u(ax + 1.15)} ${-u(0.35)} L ${u(ax + 1.55)} 0 L ${u(ax + 1.15)} ${u(0.35)}`}
-                    fill="none" stroke="#E8C33A" strokeWidth={u(0.14)} strokeLinecap="round"
-                  />
-                ))}
-                {/* The booms sit four metres up over the box, so they throw the one shadow a pit stop
-                    is actually watched under. Placed by the layout pass, which is the only thing that
-                    knows which way this slot is flipped. */}
-                <g
-                  ref={(el) => { if (el) gantryShRefs.current.set(i, el); else gantryShRefs.current.delete(i) }}
-                  fill={shadowFill(lighting)} opacity={shadowOpacity(lighting)}
-                >
-                  {([1.5, -1.5] as const).map((bx) => (
-                    <rect key={bx} x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.6)} height={u(GANTRY_REACH_M)} rx={u(0.12)} />
-                  ))}
-                </g>
-                {/* Overhead gantry: two booms from the garage out over the box â€” black, team accents. */}
-                <g ref={(el) => { if (el) gantryRefs.current.set(i, el); else gantryRefs.current.delete(i) }}>
-                {([1.5, -1.5] as const).map((bx) => (
-                  <g key={bx}>
-                    {/* A metal beam seen from above: its length is the only thing that reads at this
-                        scale, so it carries a highlight down one flank rather than a face â€” a face
-                        would need the light direction, which the box only learns once it knows which
-                        way it is flipped. Height comes from the lift and the shadow, not from paint. */}
-                    <rect x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.6)} height={u(GANTRY_REACH_M)} rx={u(0.12)} fill="#2E333C" />
-                    <rect x={u(bx) - u(0.3)} y={-u(1.5)} width={u(0.2)} height={u(GANTRY_REACH_M)} rx={u(0.08)} fill="#4C5460" />
-                  </g>
-                ))}
-                </g>
-                {/* Crew: static parts registered by role; the rAF choreography drives every
-                    transform (deploy from the garage, jacks on stop, tyre swaps, retreat). */}
-                <g
-                  ref={(el) => { if (el) crewRefs.current.set(i, el); else crewRefs.current.delete(i) }}
-                  style={{ visibility: 'hidden' }}
-                >
-                  {(['jack0', 'jack1'] as const).map((role, ji) => (
-                    <g key={role} ref={(el) => { if (el) crewPartsRef.current.set(`${i}:${role}`, el); else crewPartsRef.current.delete(`${i}:${role}`) }}>
-                      <rect x={0} y={-u(0.1)} width={u(0.85) * (ji === 0 ? 1 : -1)} height={u(0.2)} rx={u(0.08)} fill="#8B929E" />
-                      <circle r={u(0.38)} fill={slotOf.colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.09)} />
-                    </g>
-                  ))}
-                  {[0, 1, 2, 3].map((c) => (
-                    <g key={`corner${c}`}>
-                      <g ref={(el) => { if (el) crewPartsRef.current.set(`${i}:gun${c}`, el); else crewPartsRef.current.delete(`${i}:gun${c}`) }}>
-                        <rect x={-u(0.09)} y={-u(0.5)} width={u(0.18)} height={u(0.34)} rx={u(0.05)} fill="#5E6673" />
-                        <circle r={u(0.36)} fill={slotOf.colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.09)} />
-                      </g>
-                      <g ref={(el) => { if (el) crewPartsRef.current.set(`${i}:handA${c}`, el); else crewPartsRef.current.delete(`${i}:handA${c}`) }}>
-                        <circle r={u(0.34)} fill={slotOf.colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.08)} />
-                      </g>
-                      <g ref={(el) => { if (el) crewPartsRef.current.set(`${i}:handB${c}`, el); else crewPartsRef.current.delete(`${i}:handB${c}`) }}>
-                        <circle r={u(0.34)} fill={slotOf.colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.08)} />
-                      </g>
-                      {(['oldT', 'newT'] as const).map((tk) => {
-                        // Pixel-matched to the car sprite's wheels (long axis = travel = local x).
-                        // The sprite's REAR wheels are larger than the fronts: 96x52 vs 88x48
-                        // sprite-units at scale 5.63/520 â€” a single prop size shrank the rears
-                        // visibly at the swap. Corners 0/2 are the front axle, 1/3 the rear.
-                        const front = c === 0 || c === 2
-                        const tw = (front ? 0.9528 : 1.0394) * CAR_SCALE
-                        const th = (front ? 0.5197 : 0.563) * CAR_SCALE
-                        const rw = (front ? 0.563 : 0.6063) * CAR_SCALE
-                        const rh = (front ? 0.3032 : 0.3248) * CAR_SCALE
-                        const outer = c <= 1 ? 1 : -1 // garage corners face out +y, lane corners -y
-                        return (
-                          <g key={tk} ref={(el) => { if (el) crewPartsRef.current.set(`${i}:${tk}${c}`, el); else crewPartsRef.current.delete(`${i}:${tk}${c}`) }} style={{ visibility: 'hidden' }}>
-                            <rect x={-u(tw / 2)} y={-u(th / 2)} width={u(tw)} height={u(th)} rx={u((front ? 0.195 : 0.206) * CAR_SCALE)} fill="#16181D" />
-                            <rect x={-u(rw / 2)} y={-u(rh / 2)} width={u(rw)} height={u(rh)} rx={u(0.12)} fill="#2E3138" />
-                            <rect
-                              ref={(el) => { if (el) crewPartsRef.current.set(`${i}:${tk}line${c}`, el as unknown as SVGGElement); else crewPartsRef.current.delete(`${i}:${tk}line${c}`) }}
-                              x={-u(rw * 0.3)} y={outer > 0 ? u(th / 2) - u(0.065) : -u(th / 2)} width={u(rw * 0.6)} height={u(0.065)} rx={u(0.03)} fill="#FFD700"
-                            />
-                          </g>
-                        )
-                      })}
-                    </g>
-                  ))}
-                  <g ref={(el) => { if (el) crewPartsRef.current.set(`${i}:lolli`, el); else crewPartsRef.current.delete(`${i}:lolli`) }}>
-                    <rect x={-u(0.055)} y={-u(1.05)} width={u(0.11)} height={u(1.05)} fill="#8B929E" />
-                    <circle cy={-u(1.2)} r={u(0.27)} fill="#E8C33A" />
-                    <circle r={u(0.38)} fill={slotOf.colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.09)} />
-                  </g>
-                </g>
-                </g>
-              </g>
-            ))}
+            <PitBoxes slots={pitSlots} u={u} colors={slotOf.colors} lighting={lighting} refs={pitBoxRefs} />
             </g>
             {/* Red/white kerbs through the corners. Once the canvas owns the world these MUST come
                 off the document: a dashed stroke re-expands on every camera frame, which is the
