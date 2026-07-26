@@ -77,8 +77,14 @@ export function lodBucket(pxPerM: number): number {
 }
 
 /** Everything a paint is identified by. Two ops with the same signature draw identically, so they can
- *  be one path with two subpaths and cost one draw call instead of two. */
-function paintKey(op: DrawOp): string {
+ *  be one path with two subpaths and cost one draw call instead of two.
+ *
+ *  An op carrying a `bbox` is given a key of its own and never merges with anything: a bbox is there
+ *  because the paint is a gradient resolving against that shape's own extent, so merging two would
+ *  stretch one ramp across both. This is what confines merging to the flat rungs without any caller
+ *  having to remember to. */
+function paintKey(op: DrawOp, i: number): string {
+  if (op.bbox) return `bbox${i}`
   return [
     op.fill ?? '', op.stroke ?? '', op.width ?? '', op.cap ?? '', op.alpha ?? '',
     op.evenOdd ? 'eo' : '', op.dash ? `${op.dash.on},${op.dash.off},${op.dash.shift}` : '',
@@ -115,8 +121,9 @@ function unionOf(discs: readonly Bounds[]): Bounds {
 export function mergeByPaint(ops: readonly DrawOp[]): DrawOp[] {
   const order: string[] = []
   const groups = new Map<string, DrawOp[]>()
-  for (const op of ops) {
-    const key = paintKey(op)
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i]
+    const key = paintKey(op, i)
     const got = groups.get(key)
     if (got) got.push(op)
     else {
@@ -129,10 +136,6 @@ export function mergeByPaint(ops: readonly DrawOp[]): DrawOp[] {
     if (run.length === 1) return run[0]
     const clips = run.map((o) => o.clip).filter((c): c is Bounds => !!c)
     const merged: DrawOp = { ...run[0], d: run.map((o) => o.d).join(' ') }
-    // A gradient resolves against the path's own extent, so a merged bbox would restretch it across
-    // the whole run. Nothing reaching here should carry one; dropping it fails visibly rather than
-    // silently painting the wrong ramp.
-    delete merged.bbox
     if (clips.length === run.length) merged.clip = unionOf(clips)
     else delete merged.clip
     return merged

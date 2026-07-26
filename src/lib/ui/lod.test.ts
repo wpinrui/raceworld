@@ -120,10 +120,13 @@ describe('mergeByPaint', () => {
     expect(out[0].clip).toBeUndefined()
   })
 
-  it('drops a gradient bbox rather than restretching it across the run', () => {
+  it('never merges gradient ops, which each resolve against their own extent', () => {
+    // The guard that confines merging to the flat rungs without any caller having to remember to.
     const a: DrawOp = { d: 'M 0 0', fill: 'ref:tm-tree0', bbox: { x: 0, y: 0, w: 2, h: 2 } }
     const b: DrawOp = { d: 'M 9 9', fill: 'ref:tm-tree0', bbox: { x: 9, y: 9, w: 2, h: 2 } }
-    expect(mergeByPaint([a, b])[0].bbox).toBeUndefined()
+    const out = mergeByPaint([a, b])
+    expect(out).toHaveLength(2)
+    expect(out[0].bbox).toEqual({ x: 0, y: 0, w: 2, h: 2 })
   })
 
   it('leaves a lone op exactly as it was', () => {
