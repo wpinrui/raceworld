@@ -1562,11 +1562,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   ])
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
   const sceneRef = useRef(scene)
-  useEffect(() => { sceneRef.current = scene }, [scene])
   // On a cull step, the old scene keeps painting while the new one's paths parse in the
   // background; the swap lands only when the Path2D cache is warm. Parsing them inside the next
   // paint instead was a 2-3 vsync hitch on every disc move â€” the last dip the benchmark found.
   const warmTokenRef = useRef<{ cancel: () => void } | null>(null)
+  useEffect(() => {
+    // A render-driven recompose SUPERSEDES any cull-step warm still in flight. Without this, a zoom
+    // notch that both crosses a detail tier and commits a cull step starts a warm holding the scene as
+    // it was BEFORE the tier changed, and that warm lands a few frames later and puts it back. The
+    // picture then stays a tier behind until some later cull step happens to recompose it, which needs
+    // a 30% change in the disc's radius â€” about two more notches, and a different number of them
+    // zooming in than out, because the radius goes as 1/zoom. That is the several-notch band where the
+    // trees were missing on the way in and lingering on the way out.
+    warmTokenRef.current?.cancel()
+    sceneRef.current = scene
+  }, [scene])
   useEffect(() => {
     composeSceneRef.current = (cullNow) => {
       const next = composeScene(cullNow)
@@ -1575,7 +1585,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         sceneRef.current = next
         return
       }
-      warmTokenRef.current = warmScene(next.items, () => { sceneRef.current = next })
+      warmTokenRef.current = warmScene(next.items, () => {
+        sceneRef.current = next
+        paintRef.current()
+      })
     }
     return () => warmTokenRef.current?.cancel()
   }, [composeScene])
@@ -1615,6 +1628,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (timing) paintStatsRef.current = timing.out
   }, [vb, lighting, u, scenery.base])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
+  // The canvas paints when the CAMERA moves, so a scene that changes without one — a detail tier
+  // crossing, a layer toggled, the lap's ink arriving — used to sit unpainted until the next nudge.
+  // Declared after the ref above so it always calls the current painter, never the previous render's.
+  useEffect(() => { paintRef.current() }, [scene, paintCanvas])
 
   // â”€â”€ Benchmark mode â”€â”€
   //
