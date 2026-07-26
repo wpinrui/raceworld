@@ -80,6 +80,11 @@ export interface DrawGroup {
   ops: DrawOp[]
   /** Same contract as an op's clip disc, covering the whole placed group. */
   clip?: Bounds
+  /** Set once the object is below its top rung, meaning its placement may be BAKED into its paths so
+   *  it can share a draw call with its neighbours. Only the producer knows this: a wall carries no
+   *  gradient at any rung, so "has no gradient" is not the same question and batching on it would
+   *  flatten fully-detailed buildings and reorder their faces against each other. */
+  flat?: boolean
 }
 
 export interface SolidDrawOpts extends TreeDrawOpts {
@@ -252,6 +257,7 @@ export function buildingWallGroups(
     const t = o.u(h * o.extrude)
     const off = toLocal(dir.x * t, dir.y * t, r.rot)
     const parts = partsOf(r)
+    const rung = rungFor(detailSizeM(r, m), o.pxPerM ?? Infinity, o.quality)
     // The silhouette is the building. The two visible planes and then the window grid are what tell
     // you it is a building rather than a block, and they go in that order as it shrinks: a bay is
     // 5.4m, so the grid is the first thing that stops being a grid and starts being noise.
@@ -277,7 +283,8 @@ export function buildingWallGroups(
       x: r.x,
       y: r.y,
       rot: r.rot,
-      ops: ops(rungFor(detailSizeM(r, m), o.pxPerM ?? Infinity, o.quality)),
+      ops: ops(rung),
+      flat: rung !== 'near',
     }
   })
 }
@@ -328,7 +335,7 @@ export function standGroups(stands: Scenery['stands'], o: StandDrawOpts): DrawGr
     }
     ops.push({ d: roof, fill: '#7B8494' })
     if (rung === 'near') ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
-    return { x: s.x, y: s.y, rot: s.rot, ops }
+    return { x: s.x, y: s.y, rot: s.rot, ops, flat: rung !== 'near' }
   })
 }
 
@@ -353,7 +360,7 @@ export function buildingRoofGroups(
     if (rung === 'near') {
       ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
     }
-    return { x: b.x, y: b.y, rot: b.rot, ops }
+    return { x: b.x, y: b.y, rot: b.rot, ops, flat: rung !== 'near' }
   })
 }
 
@@ -377,9 +384,8 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
     // shape for as long as its caster does, however thin. It is one draw call, so there is nothing to
     // simplify — it is either drawn or it is not. An empty group rather than a missing one, so the
     // caller's per-structure clip discs stay index-aligned.
-    if (rungFor(shadowSizeM(r, m), o.pxPerM ?? Infinity, o.quality) === 'gone') {
-      return { x: r.x, y: r.y, rot: r.rot, ops: [] }
-    }
+    const rung = rungFor(shadowSizeM(r, m), o.pxPerM ?? Infinity, o.quality)
+    if (rung === 'gone') return { x: r.x, y: r.y, rot: r.rot, ops: [] }
     const h = o.heightM(r)
     const base = o.u(h * o.extrude)
     const cast = o.u(h * reach)
@@ -388,6 +394,9 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
       x: r.x + vdir.x * base,
       y: r.y + vdir.y * base,
       rot: r.rot,
+      // Batchable once it is no longer the top rung, like every other solid: one draw for a whole
+      // industrial estate's worth of shade instead of one each.
+      flat: rung !== 'near',
       // Painted HERE, not by the caller. An SVG <g fill> passes its paint down to the paths inside it
       // and a canvas has no such thing: an op with neither fill nor stroke is silently drawn as
       // nothing, which is exactly how every building and grandstand lost its shadow on the canvas
@@ -714,6 +723,49 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   return parts
 }
 
+/** A placed group's ops in WORLD space, its translate-and-rotate baked into every path.
+ *
+ *  A group exists so a building's geometry can be built once around its own origin and placed by a
+ *  transform, which is right while it is drawn on its own. It is also what stops two buildings ever
+ *  sharing a draw call: a canvas applies the placement with save/translate/rotate/restore, so each
+ *  group is its own submission however little it paints. Baking costs one rotation per point, once per
+ *  cull step, and buys the chance to merge. */
+function bakedOps(g: DrawGroup): DrawOp[] {
+  const cos = Math.cos(g.rot)
+  const sin = Math.sin(g.rot)
+  return g.ops.map((op) => ({
+    ...op,
+    d: mapPathPoints(op.d, (x, y) => ({ x: g.x + x * cos - y * sin, y: g.y + x * sin + y * cos })),
+    clip: g.clip,
+  }))
+}
+
+/** Batch every placed group that is flat enough to batch, and leave the rest as groups.
+ *
+ *  "Flat enough" is exactly "carries no gradient": an op with a bbox resolves its ramp against its own
+ *  extent and cannot share a path, which is the same rule that confines tree batching to the flat rungs.
+ *  So this needs no rung of its own — it reads the consequence of the rung each object already picked.
+ *
+ *  Merging reorders ops of DIFFERENT paints against each other, so where two solids overlap, one's face
+ *  can land over the other's silhouette. At the rungs this applies to they are flat shapes a few pixels
+ *  across, and built scenery is laid out without overlapping in the first place. */
+/** Paths `mapPathPoints` can rewrite: absolute M/L/Q/T/Z and numbers, nothing else. A path carrying a
+ *  relative or shorthand command (`h`, `v`, `c`) cannot be baked, so its group stays a group rather than
+ *  the bake throwing. Cheaper to ask than to try and catch, and it fails toward the correct picture. */
+const BAKEABLE = /^[MLQTZz\d\s,.+-]*$/
+
+function batchFlat(groups: DrawGroup[]): SceneItem[] {
+  const flat: DrawOp[] = []
+  const kept: DrawGroup[] = []
+  for (const g of groups) {
+    if (g.ops.length === 0) continue
+    if (!g.flat || g.ops.some((op) => op.bbox || !BAKEABLE.test(op.d))) kept.push(g)
+    else flat.push(...bakedOps(g))
+  }
+  // Batched first, detailed last: an object only keeps its gradients by being the bigger one.
+  return [...mergeByPaint(flat), ...kept]
+}
+
 /** A section boundary in a composed scene: everything from `at` until the next mark belongs to
  *  `name`. Used by the renderer's timing readout to attribute paint cost per section. */
 export interface SceneMark { name: string; at: number }
@@ -752,13 +804,13 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   mark('shadows')
   // Shadows before every solid, so nothing casts over the thing standing on it. No gate: each shadow
   // already asked the ladder for itself, and a whole grove's is ONE op however many trees are in it.
-  items.push(...keep(s.shadowGroups))
+  items.push(...batchFlat(keep(s.shadowGroups)))
   const treeShade = treeShadowOp(o.trees, treeOpts)
   if (treeShade) items.push(treeShade)
   mark('solids')
-  items.push(...keep(s.wallGroups))
-  items.push(...keep(s.standGs))
-  items.push(...keep(s.roofGs))
+  items.push(...batchFlat(keep(s.wallGroups)))
+  items.push(...batchFlat(keep(s.standGs)))
+  items.push(...batchFlat(keep(s.roofGs)))
   // Trees and MARSHAL POSTS in one depth order. Posts stand out among the trees, so drawing every post
   // after every tree let a 2.8m hut paint over a 12m tree standing in front of it, which is the exact
   // thing depth sorting exists to prevent. Fences stay last and unsorted: they genuinely do line the

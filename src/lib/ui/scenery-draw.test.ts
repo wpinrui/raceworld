@@ -423,7 +423,16 @@ describe('sceneryScene', () => {
     const full = sceneryScene(scenery, sceneOpts)
     const low = sceneryScene(scenery, { ...sceneOpts, pxPerM: 0.4 })
     expect(low.length).toBeLessThan(full.length)
-    expect(low.some(isGroup)).toBe(true)
+    // And nothing has VANISHED, which is the whole difference from the boolean this replaced: below the
+    // top rung a solid is batched into a shared draw, so it stops being a group without stopping being
+    // drawn. Its own colour is still in the scene.
+    const flatOps = low.flatMap((i) => (isGroup(i) ? i.ops : [i]))
+    expect(flatOps.length).toBeGreaterThan(0)
+    // Fewer ITEMS but the same number of sub-shapes: a batched draw carries them as subpaths.
+    const subpaths = (xs: DrawOp[]) => xs.reduce((n, op) => n + (op.d.match(/M /g) ?? []).length, 0)
+    const fullOps = full.flatMap((i) => (isGroup(i) ? i.ops : [i]))
+    expect(subpaths(flatOps)).toBeGreaterThan(0)
+    expect(subpaths(flatOps)).toBeLessThanOrEqual(subpaths(fullOps))
   })
 
   it('draws nothing at all for an empty world', () => {
