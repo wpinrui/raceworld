@@ -1980,7 +1980,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           p95ms: +(sorted[Math.floor(sorted.length * 0.95)] ?? 0).toFixed(1),
           maxMs: +(sorted[sorted.length - 1] ?? 0).toFixed(1),
           longFrames: sorted.filter((d) => d > 25).length,
+          // Per PAINTED frame, not per frame. The camera guard means a still camera does not repaint at
+          // all, so a segment where the followed car sat in its pit box has fewer paints than frames —
+          // `paintFrac` is what makes the two readings comparable, and what stops this column being
+          // read against reports from before the guard existed.
           paintMs: +(r.paintN > 0 ? r.paintMs / r.paintN : 0).toFixed(2),
+          paintFrac: +(r.deltas.length > 0 ? r.paintN / r.deltas.length : 0).toFixed(2),
           tickMs: +(t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0).toFixed(2),
           lapSec: +r.seconds.toFixed(1),
           ...(r.timedOut ? { timedOut: true } : {}),
