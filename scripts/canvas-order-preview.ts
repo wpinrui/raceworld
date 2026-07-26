@@ -20,7 +20,7 @@ import {
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, pitComplexOps, pitFloorOps,
 } from '../src/components/race/PitBuilding'
-import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
+import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '../src/lib/ui/pit-zone'
 import { MOODS, screenUpAzimuth } from '../src/lib/ui/lighting'
 import {
   isGroup, refName, sceneryScene, type DrawOp, type SceneItem,
@@ -30,6 +30,10 @@ const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
 const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
 const [cxf, cyf] = (argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5').split(',').map(Number)
+/** Camera rotation, in the same turns the map's own control uses. The default 0 renders the world in
+ *  its authored orientation, which is NOT the shot the player opens on: the camera is standardised to
+ *  `pitCameraRotation`, and which face of a solid is visible follows that. `--rot=pit` takes it. */
+const rotArg = argv.find((a) => a.startsWith('--rot='))?.split('=')[1] ?? '0'
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain']
 
@@ -61,7 +65,7 @@ async function main() {
     }
     const az = pitViewAzimuth(layout)
     const lighting = az === null ? MOODS.afternoon : { ...MOODS.afternoon, azimuth: az }
-    const view = screenUpAzimuth(0)
+    const view = screenUpAzimuth(rotArg === 'pit' ? (pitCameraRotation(layout) ?? 0) : Number(rotArg))
     const mpu = layout.metresPerUnit
     const u = (m: number) => m / mpu
     const scenery = buildScenery(layout.trace, layout.pit, {

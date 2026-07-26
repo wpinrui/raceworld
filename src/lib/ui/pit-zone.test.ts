@@ -20,6 +20,21 @@ const area = (r: Array<{ x: number; y: number }>) => {
   return a / 2
 }
 
+/** Distance from a point to the nearest edge of a ring, for the points a crossing test calls a
+ *  boundary case. */
+const edgeDist = (p: { x: number; y: number }, r: Array<{ x: number; y: number }>) => {
+  let best = Infinity
+  for (let i = 0; i < r.length; i++) {
+    const a = r[i]
+    const b = r[(i + 1) % r.length]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)))
+    best = Math.min(best, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)))
+  }
+  return best
+}
+
 /** Crossing-number point-in-polygon, for comparing the whole complex against its stretches. */
 const inside = (p: { x: number; y: number }, r: Array<{ x: number; y: number }>) => {
   let hit = false
@@ -146,6 +161,25 @@ describe('buildPitZone', () => {
         // nothing is dropped.
         expect(zone.spans.reduce((n, s) => n + s.plant.length, 0)).toBe(zone.plant.length)
         expect(zone.spans.map((s) => s.seams).join('')).toBe(zone.roofSeams)
+      }
+    }
+  })
+
+  it('keeps the roof under the storey that carries it, however hard the lane curves', () => {
+    // The upper storey used to be two front vertices and a handful of rear ones, so on a curving pit
+    // lane its front face was a CHORD across the whole complex while the terrace, the rail and the
+    // plant standing on it all followed the curve. At Monaco that put 33 of the roof's 53 furniture
+    // points off the building, with the garage floors showing through the gap. The stretches gave the
+    // storey a vertex at every cut, which is what closed it.
+    for (const id of IDS) {
+      const layout = TRACK_LAYOUTS[id]
+      const zone = buildPitZone(layout, buildPitSlots(layout, 11))!
+      // A point ON the ring's edge counts: the rail runs to the complex's own ends, so its last
+      // station lands exactly on the boundary and a crossing test may call that either way.
+      for (const p of [...zone.roofRail, ...zone.plant.flat()]) {
+        if (inside(p, zone.upperPts)) continue
+        expect(edgeDist(p, zone.upperPts) * layout.metresPerUnit,
+          `${id}: roof furniture stands off the building`).toBeLessThan(0.05)
       }
     }
   })
