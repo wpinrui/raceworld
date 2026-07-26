@@ -18,7 +18,8 @@ import { SceneryCanvas, drawScene, warmScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
-  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, pitComplexOps, pitFloorOps,
+  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M, SIGN_LEGIBLE_PX,
+  pitComplexOps, pitFloorOps,
 } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
@@ -271,6 +272,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Scenery LOD: below LOD_ZOOM the heavy layers drop out (state flips only on threshold crossings).
   const [lodLow, setLodLow] = useState(false)
   const lodLowRef = useRef(false)
+  // Garage signage carries the only real TEXT on the map, and text is the one thing on it that does not
+  // degrade gracefully — it stops being legible long before it stops being expensive. Gated on the
+  // band's own height in screen pixels rather than on a zoom number, because a circuit's metres per
+  // unit decides how big the building draws.
+  const [signsLettered, setSignsLettered] = useState(true)
+  const signsLetteredRef = useRef(true)
 
   const vb = useMemo(() => {
     const m = TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8
@@ -445,7 +452,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       lodLowRef.current = low
       setLodLow(low)
     }
-  }, [updateCull])
+    // How tall a garage's signage band draws, right now, in CSS pixels.
+    const bandPx = (SIGN_H_M * EXTRUDE / layout.metresPerUnit) * (stageDimsRef.current.w / vb.w) * z
+    const lettered = bandPx >= SIGN_LEGIBLE_PX && viewRef.current === 'live'
+    if (lettered !== signsLetteredRef.current) {
+      signsLetteredRef.current = lettered
+      setSignsLettered(lettered)
+    }
+  }, [updateCull, layout.metresPerUnit, vb.w])
 
 
   // Real-world metres -> viewBox units for this track.
@@ -1814,7 +1828,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
-            {pitZone && !hidden.has('pit') && !hidden.has('signs') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} />}
+            {pitZone && !hidden.has('pit') && !hidden.has('signs') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} lettered={signsLettered} />}
             {pitZone && !canvasOn && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />

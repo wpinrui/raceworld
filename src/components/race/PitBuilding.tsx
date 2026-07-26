@@ -16,7 +16,7 @@ import {
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
 import type { Bounds, DrawOp } from '@/lib/ui/scenery-draw'
-import { NationalityFlag } from '@/components/world/NationalityFlag'
+import { flagSvgUrl } from '@/components/world/NationalityFlag'
 import { EXTRUDE } from './SceneryLayer'
 
 /** Roofline of the complex. Tall enough to throw a shadow across the lane, low enough that the wall
@@ -136,19 +136,29 @@ export function PitBuilding({ zone, u, lighting, view, garageColor }: {
 
 
 /** Height of the signage band on the fascia above each garage opening. */
-const SIGN_H_M = 1.5
-/** Pixel size the flag is laid out at inside its foreignObject before being scaled into wall units.
- *  Sub-pixel layout boxes collapse, so it cannot simply be built at its final size. */
-const FLAG_PX = 40
+export const SIGN_H_M = 1.5
+
+/** How tall the signage band has to be ON SCREEN, in CSS pixels, before its flags and names are drawn.
+ *  Below it the board stays — it is part of the building — and what is written on it goes.
+ *
+ *  Deliberately set at NOISE, not at legibility. Measured across the layouts, the band runs 2.9 to 7.8
+ *  pixels with the whole complex fitted in frame, and 5.9 to 17.3 at racing zoom, so the two overlap
+ *  and no threshold separates them: on the widest circuits a garage name is already under four pixels
+ *  while you are racing. A legibility threshold is about 13 here, and it would take the names off some
+ *  circuits at racing zoom — a look decision, not a frame-rate one, so it is not made here. Five is the
+ *  height below which the name is under three pixels and there is nothing to argue about. */
+export const SIGN_LEGIBLE_PX = 5
 
 /** Driver name boards across each garage fascia, laid IN the plane of that wall.
  *
  *  A label drawn upright on a map is a map label; a real garage's signage sits on the building, so it
  *  takes the same basis the windows take — along the wall, and up it. The one concession to
  *  readability is that the run direction flips when it would otherwise write right-to-left. */
-export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
+export function PitGarageSigns({ zone, u, lighting, view, drivers, lettered = true }: {
   zone: PitZone; u: (m: number) => number; lighting: Lighting; view: number
   drivers: (i: number) => Array<{ name: string; nationality?: string }>
+  /** False once the band is too small on screen to read: boards only, no flags and no names. */
+  lettered?: boolean
 }) {
   const dir = dirAt(view)
   const mid = u(GARAGE_H_M * EXTRUDE)
@@ -174,7 +184,7 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
         return (
           <g key={`sg${i}`} transform={m}>
             <rect x={0} y={0} width={len} height={band} fill={shadeFace(PIT_WHITE, lighting)} />
-            {crew.slice(0, 2).map((d, k) => {
+            {lettered && crew.slice(0, 2).map((d, k) => {
               // Centred on the midpoint of its own half of the board, flag and name measured together,
               // so a long surname stays balanced against a short one on the other side.
               const label = shortName(d.name)
@@ -182,19 +192,25 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
               const textW = label.length * size * 0.52
               const gap = size * 0.34
               const x = len * (0.25 + k * 0.5) - (flagW + gap + textW) / 2
+              // The same artwork the rest of the app shows, addressed as a URL rather than mounted as
+              // a component. A foreignObject holds real HTML, which means CSS layout and its own raster
+              // on every frame the camera moves, and ten boards put twenty of them on screen at once —
+              // the one shot that did was measured in the twenties. `flagSvgUrl` exists for exactly
+              // this and had no caller. Given width and height an <image> scales a viewBox-only SVG
+              // fine; it is only sizeless when left to the artwork's own intrinsic dimensions.
+              const flag = flagSvgUrl(d.nationality)
               return (
                 <g key={d.name}>
-                  {/* The flag goes through the app's own component rather than an SVG <image>: the
-                      flag artwork carries a viewBox and no intrinsic size, and an <image> pointed at
-                      it renders at nothing. A foreignObject lays out in CSS pixels, so it is built at
-                      a workable pixel size and scaled down into the wall's units. */}
-                  <g transform={`translate(${x} ${band * 0.24}) scale(${flagW / FLAG_PX})`}>
-                    <foreignObject width={FLAG_PX} height={FLAG_PX * 0.75}>
-                      <div style={{ lineHeight: 0 }}>
-                        <NationalityFlag code={d.nationality} size={`${FLAG_PX}px`} />
-                      </div>
-                    </foreignObject>
-                  </g>
+                  {flag ? (
+                    <image
+                      href={flag} x={x} y={band * 0.24} width={flagW} height={flagW * 0.75}
+                      preserveAspectRatio="xMidYMid slice"
+                    />
+                  ) : (
+                    // Not an ISO alpha-2 code. A neutral plate rather than a wrong country, and it
+                    // keeps the board's spacing identical either way.
+                    <rect x={x} y={band * 0.24} width={flagW} height={flagW * 0.75} fill="#6B7280" />
+                  )}
                   <text x={x + flagW + gap} y={band * 0.76} fontSize={size} fontWeight={600} fill="#14181F">
                     {label}
                   </text>
