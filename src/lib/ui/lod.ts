@@ -76,6 +76,17 @@ export function lodBucket(pxPerM: number): number {
   return Math.round(Math.log2(Math.max(1e-3, pxPerM)) * 2)
 }
 
+/** The camera scale a bucket stands for, and the ONLY scale a rung may be decided from.
+ *
+ *  Quantising when to recompose is not enough on its own: feed the ladder the live scale at the moment
+ *  a bucket happened to change and the rung depends on where the zoom steps landed, which differs
+ *  going in from going out. Objects then appear at one scale and disappear at another, which is the
+ *  hysteresis this ladder is not supposed to have. Deciding from the bucket's own representative scale
+ *  makes a rung a pure function of the bucket, so it flips at the same place in both directions. */
+export function lodScale(pxPerM: number): number {
+  return 2 ** (lodBucket(pxPerM) / 2)
+}
+
 /** Everything a paint is identified by. Two ops with the same signature draw identically, so they can
  *  be one path with two subpaths and cost one draw call instead of two.
  *

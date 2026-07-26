@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QUALITY, atLeast, lodBucket, mergeByPaint, rungFor } from './lod'
+import { QUALITY, atLeast, lodBucket, lodScale, mergeByPaint, rungFor } from './lod'
 import type { DrawOp } from './scenery-draw'
 
 describe('rungFor', () => {
@@ -136,5 +136,40 @@ describe('mergeByPaint', () => {
 
   it('has nothing to say about an empty scene', () => {
     expect(mergeByPaint([])).toEqual([])
+  })
+})
+
+describe('lodScale', () => {
+  it('collapses every scale in a bucket to one, which is what removes the hysteresis', () => {
+    // The bug this exists for: decide a rung from the LIVE scale at the moment a bucket happens to
+    // change, and the answer depends on where the zoom notches landed on the way there — different
+    // going in from going out. Two scales in one bucket must be indistinguishable to the ladder.
+    // Bucket b spans [2^((b-0.5)/2), 2^((b+0.5)/2)): pairs picked to sit inside one, not astride it.
+    for (const [a, b] of [[2.5, 3.3], [1.2, 1.6], [10, 13]] as const) {
+      expect(lodBucket(a)).toBe(lodBucket(b))
+      expect(lodScale(a)).toBe(lodScale(b))
+      expect(rungFor(12, lodScale(a))).toBe(rungFor(12, lodScale(b)))
+    }
+  })
+
+  it('walks a rung at a time and never back, however the zoom got there', () => {
+    const order = ['gone', 'far', 'mid', 'near']
+    const rungs: string[] = []
+    for (let p = 0.3; p < 40; p *= 1.18) rungs.push(rungFor(12, lodScale(p)))
+    for (let i = 1; i < rungs.length; i++) {
+      expect(order.indexOf(rungs[i])).toBeGreaterThanOrEqual(order.indexOf(rungs[i - 1]))
+    }
+    // And the same walk taken backwards visits the same rungs at the same scales.
+    for (let p = 0.3; p < 40; p *= 1.18) {
+      expect(rungFor(12, lodScale(p))).toBe(rungs.shift())
+    }
+  })
+
+  it('stands for the bucket it came from, within half an octave', () => {
+    for (const p of [0.7, 1.5, 3.5, 14, 38]) {
+      expect(lodScale(p)).toBeGreaterThan(p / 1.42)
+      expect(lodScale(p)).toBeLessThan(p * 1.42)
+      expect(lodBucket(lodScale(p))).toBe(lodBucket(p))
+    }
   })
 })

@@ -5,7 +5,7 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { lodBucket } from '@/lib/ui/lod'
+import { lodBucket, lodScale } from '@/lib/ui/lod'
 import {
   SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
   type Cull, type Hidden, type SceneryPiece,
@@ -85,10 +85,11 @@ const FRAME_CAPS: number[] = [0, 30, 45]
 // Off in normal play. Flip on to get the layer hotkeys and the 'n' lap benchmark back — the
 // readout keeps its backtick either way. The 2026-07 frame-rate campaign closed with the pit
 // straight's raster dips accepted as the known residual (see the bench reports in that PR).
-// Layer hotkeys and the lap benchmark. Parked when the frame-rate campaign closed and back on for the
-// wide-zoom one: the readout can say what a frame costs on the canvas, and it says about a millisecond
-// there, which leaves the SVG world div — and only hiding a layer says which part of it.
-const DEBUG_KEYS: boolean = true
+// Layer hotkeys and the lap benchmark. Parked again: they answered the wide-zoom question (the canvas
+// costs about a millisecond of command time there, and it is draw CALLS rather than pixels), and they
+// are bare unmodified letters across the top row, so any stray typing silently hides half the world
+// and the only clue is the `off:` list in the readout. Flip to true for the next ablation.
+const DEBUG_KEYS: boolean = false
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
@@ -502,10 +503,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       inkFlatRef.current = flat
       setInkFlat(flat)
     }
+    // The bucket's OWN scale, never the live one: a rung has to be a pure function of the bucket, or
+    // it flips at a different place zooming in than zooming out.
     const bucket = viewRef.current === 'live' ? lodBucket(pxPerM) : Number.POSITIVE_INFINITY
     if (bucket !== sceneBucketRef.current) {
       sceneBucketRef.current = bucket
-      setScenePxPerM(viewRef.current === 'live' ? pxPerM : Infinity)
+      setScenePxPerM(viewRef.current === 'live' ? lodScale(pxPerM) : Infinity)
     }
     // How tall a garage's signage band draws, right now, in CSS pixels.
     const bandPx = SIGN_H_M * EXTRUDE * pxPerM

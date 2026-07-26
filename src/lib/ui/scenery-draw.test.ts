@@ -487,6 +487,19 @@ describe('treeSolidOps across the detail ladder', () => {
     expect(at(0.02)).toEqual([])
   })
 
+  it('lays every trunk down before any canopy, so no bark paints over leaves', () => {
+    // Trunk width scales with canopy size, so a grove of mixed sizes makes several trunk paints. If
+    // those are ordered by first appearance against the canopies, half the bark lands on top.
+    const mixed = grove.map((t, i) => ({ ...t, r: t.r * (1 + (i % 4) * 0.4) }))
+    // 0.55 keeps every one of them on a flat rung; a near tree would draw its own trunk last, and
+    // legitimately so.
+    const ops = treeSolidOps(mixed, { ...opts, pxPerM: 0.55 })
+    const lastTrunk = ops.reduce((k, o, i) => (o.stroke ? i : k), -1)
+    const firstCanopy = ops.findIndex((o) => o.fill)
+    expect(lastTrunk).toBeGreaterThanOrEqual(0)
+    expect(firstCanopy).toBeGreaterThan(lastTrunk)
+  })
+
   it('keeps a merged batch cullable, with a disc reaching every tree in it', () => {
     for (const op of at(1.2)) {
       expect(op.clip).toBeTruthy()
@@ -500,5 +513,50 @@ describe('treeSolidOps across the detail ladder', () => {
     // Batching the near rung would pool the trunks and let a far canopy bury a near one.
     const ops = at(20)
     for (let i = 0; i < ops.length; i += 2) expect(ops[i + 1].bbox).toBeTruthy()
+  })
+})
+
+describe('every op carries its own ink', () => {
+  // The canvas has no equivalent of an SVG <g fill> handing paint down to the paths inside it, so an
+  // op with neither fill nor stroke draws NOTHING there while looking correct in SVG. That is how
+  // building and grandstand cast shadows went missing on the canvas: the producer left them unpainted
+  // and only some consumers remembered to compensate. This walks a whole composed scene, so a new op
+  // that forgets fails here rather than by quietly not existing on screen.
+  const rect = (x: number, y: number): SceneryRect => (
+    { x, y, w: 30, h: 14, rot: 0.3, fill: '#8A7F72', storeys: 2 }
+  )
+  const shadowOpts = {
+    ...opts, heightM: () => 9.2, storeyM: 4.6, bayM: 5.4, hutM: 2.8, hutW: 4.4, hutH: 3.2, fenceM: 4,
+  }
+
+  it('paints every cast shadow, whoever produced it', () => {
+    const painted = (op: DrawOp) => !!(op.fill || op.stroke)
+    for (const g of structureShadowGroups([rect(0, 0), rect(90, 40)], shadowOpts)) {
+      expect(g.ops.every(painted), 'structure cast shadow').toBe(true)
+    }
+    expect(painted(runShadowOp([{ x: 0, y: 0 }, { x: 50, y: 8 }], 4, opts)), 'fence run shadow').toBe(true)
+    for (const g of marshalGroups([{ x: 0, y: 0, rot: 0 }], shadowOpts)) {
+      expect(painted(g.shadow), 'marshal hut shadow').toBe(true)
+    }
+    expect(painted(treeShadowOp([tree(0, 0)], opts)!), 'tree shadow').toBe(true)
+  })
+
+  it('leaves nothing unpainted anywhere in a composed scene', () => {
+    const scenery = {
+      base: '#3E5A34', bands: [], fields: [], terrain: [], runoffs: [], kerbs: [],
+      stands: [rect(60, 0)], buildings: [rect(0, 0)], trees: [tree(30, 30), tree(-40, 20)],
+      fences: [{ pts: [{ x: 0, y: 60 }, { x: 80, y: 60 }] }], marshals: [{ x: 20, y: -30, rot: 0 }],
+      tyreWalls: [],
+    } as unknown as Parameters<typeof sceneryScene>[0]
+    const items = sceneryScene(scenery, {
+      u: opts.u, lighting: opts.lighting, view: opts.view, full: true, ground: true,
+      extrude: opts.extrude, storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5,
+      standRoofFrac: 0.3, marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
+      solidHeightM: () => 9.2, trees: scenery.trees, cull: null,
+    })
+    expect(items.length).toBeGreaterThan(0)
+    const flat = items.flatMap((i) => (isGroup(i) ? i.ops : [i]))
+    const blind = flat.filter((op) => !op.fill && !op.stroke)
+    expect(blind.map((op) => op.d.slice(0, 40))).toEqual([])
   })
 })

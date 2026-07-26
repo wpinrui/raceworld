@@ -129,7 +129,12 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   // trunk into one draw and let a far canopy bury a near trunk, which is the very thing keeping each
   // trunk beside its own canopy exists to prevent.
   const near: DrawOp[] = []
-  const flat: DrawOp[] = []
+  // Trunks and canopies are kept apart at the flat rungs, and it matters. A trunk's width scales with
+  // the canopy it carries, so trunks of different sizes are different paints, and merging by paint
+  // orders groups by first appearance: trunk-width-A, canopy, trunk-width-B, canopy... which paints
+  // half the bark ON TOP of the leaves. Every trunk goes down before any canopy instead.
+  const flatTrunks: DrawOp[] = []
+  const flatCanopies: DrawOp[] = []
   // Canopy diameter in metres. Scene geometry is in viewBox units and `u` converts the other way.
   const metres = (units: number) => units / o.u(1)
   for (const t of depthSorted(trees, dir)) {
@@ -140,9 +145,8 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
     const clip = { cx: t.x, cy: t.y, r: t.r + lift + o.u(1) }
     // The trunk is a stroke a third of the canopy wide. At the far rung that is well under a pixel and
     // it is only ever seen where it pokes out from under the canopy, so it goes.
-    const ops = rung === 'near' ? near : flat
     if (atLeast(rung, 'mid')) {
-      ops.push({
+      (rung === 'near' ? near : flatTrunks).push({
         d: `M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * lift).toFixed(1)} ${(t.y + dir.y * lift).toFixed(1)}`,
         stroke: shadeFace('#6B5138', o.lighting),
         // Trunk width scales with the canopy it carries; a constant width made every tree a lollipop.
@@ -151,7 +155,7 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
         clip,
       })
     }
-    ops.push(rung === 'near'
+    (rung === 'near' ? near : flatCanopies).push(rung === 'near'
       ? {
         d: t.d,
         fill: `${REF}tm-tree${t.variant}`,
@@ -163,7 +167,7 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   }
   // Flat first: a tree only lands on the near rung by being the bigger one, so the detailed trees
   // painting last is the depth order that survives the split more often than the other way round.
-  return [...mergeByPaint(flat), ...near]
+  return [...mergeByPaint(flatTrunks), ...mergeByPaint(flatCanopies), ...near]
 }
 
 /** Every tree's shadow as ONE op. They share a fill and never overlap meaningfully, so a single path
@@ -336,7 +340,15 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
       x: r.x + vdir.x * base,
       y: r.y + vdir.y * base,
       rot: r.rot,
-      ops: [{ d: sweptHull(partsOf(r), off.x, off.y) }],
+      // Painted HERE, not by the caller. An SVG <g fill> passes its paint down to the paths inside it
+      // and a canvas has no such thing: an op with neither fill nor stroke is silently drawn as
+      // nothing, which is exactly how every building and grandstand lost its shadow on the canvas
+      // while keeping it in SVG. Every shadow in this file now carries its own ink.
+      ops: [{
+        d: sweptHull(partsOf(r), off.x, off.y),
+        fill: shadowFill(o.lighting),
+        alpha: shadowOpacity(o.lighting),
+      }],
     }
   })
 }
@@ -378,6 +390,8 @@ export function runShadowOp(
   const cast = o.u(heightM * shadowReach(o.lighting))
   return {
     d: ribbon(pts.map((p) => ({ x: p.x + dir.x * base, y: p.y + dir.y * base })), ldir.x * cast, ldir.y * cast),
+    fill: shadowFill(o.lighting),
+    alpha: shadowOpacity(o.lighting),
   }
 }
 
@@ -423,7 +437,11 @@ export function marshalGroups(
       x: m.x,
       y: m.y,
       rot: m.rot,
-      shadow: { d: sweptHull(shadowHut, sOff.x, sOff.y) },
+      shadow: {
+        d: sweptHull(shadowHut, sOff.x, sOff.y),
+        fill: shadowFill(o.lighting),
+        alpha: shadowOpacity(o.lighting),
+      },
       ops: [
         { d: sweptHull(hut, off.x, off.y), fill: shadeFace('#3A4049', o.lighting) },
         { d: roundedRectPath(-w / 2, -h / 2, w, h, o.u(0.3)), fill: '#3A4049' },
@@ -617,10 +635,8 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
         x: g.x,
         y: g.y,
         rot: g.rot,
-        ops: [
-          { ...g.shadow, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) },
-          ...g.ops,
-        ],
+        // The hut's shadow leads, carrying its own ink like every other shadow here.
+        ops: [g.shadow, ...g.ops],
       }, { cx: g.x, cy: g.y, r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30) }))
       : [],
   }
