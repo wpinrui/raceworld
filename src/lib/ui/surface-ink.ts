@@ -162,6 +162,49 @@ export function normalAt(pts: readonly Vec[], i: number, closed = true): Vec {
   return { x: dy / len, y: -dx / len }
 }
 
+/** Signed distance from each station to its own centre of curvature, along that station's LEFT normal:
+ *  positive through a left-hand corner, negative through a right-hand one, Infinity on a straight.
+ *
+ *  What it is for: offsetting a polyline further than this folds it back through itself, and anything
+ *  stroked along the result turns inside out at the apex. Nothing worn INTO the road offsets far enough
+ *  to care -- the widest is a grain band at 4m -- but the tarmac's own rim sits nearly 8m off the
+ *  centreline, which is more than the inside of a hairpin has. Measured over the 37 layouts: 30 of them
+ *  carry at least one station tighter than that, Monaco 42 of them. */
+export function curveLimits(pts: readonly Vec[], closed = true): Float64Array {
+  const n = pts.length
+  const at = (j: number) => (closed ? pts[(j + n) % n] : pts[Math.max(0, Math.min(n - 1, j))])
+  const out = new Float64Array(n)
+  for (let i = 0; i < n; i++) {
+    const a = at(i - 1)
+    const b = at(i)
+    const c = at(i + 1)
+    // Twice the signed area of abc. Negative turning LEFT, which is the side normalAt points to.
+    const cross = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+    if (cross === 0) {
+      out[i] = Infinity
+      continue
+    }
+    const r = (Math.hypot(b.x - a.x, b.y - a.y) * Math.hypot(c.x - b.x, c.y - b.y)
+      * Math.hypot(a.x - c.x, a.y - c.y)) / (2 * Math.abs(cross))
+    out[i] = cross < 0 ? r : -r
+  }
+  return out
+}
+
+/** Hold an offset short of folding the polyline it hangs off, at `safe` of the local radius. On the
+ *  OUTSIDE of a corner the offset and the centre of curvature are on opposite sides, there is nothing to
+ *  fold, and the offset passes through untouched. Inside, the run is pinched toward the corner's centre
+ *  instead of turning inside out -- which is what the wide stroke this replaced did there anyway. */
+export function noFold(want: number, limits: Float64Array, safe: number): (i: number) => number {
+  const sign = Math.sign(want)
+  return (i) => {
+    const lim = limits[i % limits.length]
+    if (want === 0 || !Number.isFinite(lim) || sign !== Math.sign(lim)) return want
+    const cap = Math.abs(lim) * safe
+    return Math.abs(want) <= cap ? want : sign * cap
+  }
+}
+
 /** A polyline running parallel to another, `offset` units to its LEFT. */
 export function offsetPolyline(pts: readonly Vec[], offset: number, closed = true): Vec[] {
   return pts.map((p, i) => {

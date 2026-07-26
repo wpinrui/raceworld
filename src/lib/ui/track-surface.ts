@@ -17,8 +17,8 @@
 import type { DrawOp } from './scenery-draw'
 import type { Vec } from './geom'
 import {
-  APRON_LINES, MARBLE, RUBBER, SKID, SOFT_LAYERS, SOFT_SPREAD, blend, chunk, edgeLayer, grainWeight,
-  layerStrength, midFrac, softStroke, spacingOf, stripe, type Keep,
+  APRON_LINES, MARBLE, RUBBER, SKID, SOFT_LAYERS, SOFT_SPREAD, blend, chunk, curveLimits, edgeLayer,
+  grainWeight, layerStrength, midFrac, noFold, softStroke, spacingOf, stripe, unionOf, type Keep,
 } from './surface-ink'
 
 /** Arcs per lap for a full-lap stripe. Two jobs: a cull disc every ~45m on a Grand Prix circuit, so a
@@ -299,13 +299,29 @@ export function marbleOps(s: Surface): DrawOp[] {
   return ops
 }
 
-/** The drop from asphalt into the verge, drawn UNDER the road as strokes wider than it, so the road
- *  itself covers all but the rim. The shape of the fade is shared with the pit lane's own apron
- *  (`edgeLayer`); what is here is the lap it runs round.
+/** How far a rim bleeds INWARD past the band it has to cover, in metres. Each rim abuts the next one in,
+ *  and the innermost abuts the road -- which is stroked from the SPLINE while these hang off a polyline
+ *  sampled at ~3m, so the two disagree by a few centimetres through corners. A rim cut exactly to its own
+ *  band would show ground through that seam, and a one-pixel gap here is more visible than the rim. Opaque
+ *  paint over the same colour costs nothing, so consecutive rims overlap instead. */
+const RIM_BLEED_M = 0.6
+
+/** How much of a corner's own radius a rim may use before `noFold` pinches it inward. */
+const RIM_SAFE = 0.8
+
+/** The drop from asphalt into the verge, drawn UNDER the road, so the road itself covers all but the rim.
+ *  The shape of the fade is shared with the pit lane's own apron (`edgeLayer`); what is here is the lap it
+ *  runs round.
  *
- *  This is the one stripe that runs the whole lap and cannot be confined to corners, so it is the
- *  increment's frame-budget risk and the reason it is cut into the same arcs as everything else rather
- *  than being four full-lap strokes. */
+ *  Drawn as RIMS, two per band, not as strokes spanning the whole road. Each layer is only ever SEEN
+ *  between its own reach and the next one in: everything inside that is painted over, first by the
+ *  narrower layers above it and finally by the road. Spanning strokes put 85.6m of width down per metre of
+ *  road for the 5.3m of it that survives -- measured at racing zoom, 4 to 8 megapixels a frame against a
+ *  3.2Mpx viewport, which was more fill than everything else worn into the tarmac put together. Rims paint
+ *  the same pixels for about a seventh of that.
+ *
+ *  Both sides of a band go in ONE op as two subpaths: same colour, same width, and a stroke can carry any
+ *  number of subpaths, so the saving does not come back as a doubled op count. */
 export function edgeOps(s: Surface): DrawOp[] {
   const { u, centre, ground, shadow, ribbonHalfM, lineWidthM } = s
   if (!centre || centre.length < 3 || !ground || !shadow || !ribbonHalfM || !lineWidthM) return []
@@ -313,26 +329,40 @@ export function edgeOps(s: Surface): DrawOp[] {
   // The asphalt's true outer edge: past the white line by twice the line's own width.
   const apronHalf = u(ribbonHalfM + APRON_LINES * lineWidthM)
   const pad = u(0.5)
+  const bleed = u(RIM_BLEED_M)
   const lap = arcs(centre, ARCS)
+  const limits = curveLimits(centre)
   const ops: DrawOp[] = []
-  // Widest and faintest first, exactly as the stripes above, and layer-major for the same reason.
-  for (let k = 0; k < layers; k++) {
-    const { reachM, colour } = edgeLayer(k, layers, ground, s.tarmac)
-    const width = 2 * (apronHalf + u(reachM))
+  const rim = (inner: number, outer: number, colour: string) => {
+    const width = outer - inner
+    if (width <= 0) return
+    const off = (inner + outer) / 2
     for (const { idx } of lap) {
-      const { d, clip } = stripe(centre, idx, () => 0)
-      ops.push({ d, stroke: colour, width, cap: 'round', clip: { ...clip, r: clip.r + width / 2 + pad } })
+      const left = stripe(centre, idx, noFold(off, limits, RIM_SAFE))
+      const right = stripe(centre, idx, noFold(-off, limits, RIM_SAFE))
+      const clip = unionOf([left.clip, right.clip])
+      ops.push({
+        d: `${left.d} ${right.d}`,
+        stroke: colour,
+        width,
+        cap: 'round',
+        clip: { ...clip, r: clip.r + width / 2 + pad },
+      })
     }
   }
-  // The apron itself, over the falloff and under the white line, so what the falloff falls away FROM is
-  // asphalt rather than paint.
-  for (const { idx } of lap) {
-    const { d, clip } = stripe(centre, idx, () => 0)
-    ops.push({
-      d, stroke: s.tarmac, width: 2 * apronHalf, cap: 'round',
-      clip: { ...clip, r: clip.r + apronHalf + pad },
-    })
+  // Widest and faintest first, exactly as the stripes above, and layer-major for the same reason. The
+  // innermost layer's band closes on the apron, which is why the reach list runs one past the layers.
+  const reach = Array.from(
+    { length: layers + 1 },
+    (_, k) => (k < layers ? u(edgeLayer(k, layers, ground, s.tarmac).reachM) : 0),
+  )
+  for (let k = 0; k < layers; k++) {
+    const { colour } = edgeLayer(k, layers, ground, s.tarmac)
+    rim(apronHalf + reach[k + 1] - bleed, apronHalf + reach[k], colour)
   }
+  // The apron itself, over the falloff and under the white line, so what the falloff falls away FROM is
+  // asphalt rather than paint. Its inner edge meets the road's own casing.
+  rim(u(ribbonHalfM) - bleed, apronHalf, s.tarmac)
   return ops
 }
 
