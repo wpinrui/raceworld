@@ -611,6 +611,41 @@ export function marshalGroups(
 const CROP_ROW_M = 3.4
 const HEDGEROW_M = 2.2
 
+/** A conservative disc round a path, measured from the path itself.
+ *
+ *  The ground was the last layer with no discs on it, and it is the only one whose ops the canvas could
+ *  therefore never skip: a lake or a field parcel three hundred metres off the shot was submitted whole
+ *  on every frame, at racing zoom, with all of it outside the canvas. Measured at 12-23% of all the path
+ *  data in a racing shot. It is the same argument that cut the road into arcs; the ground under the road
+ *  never got it, because unlike a building or a tree these shapes carry no centre and radius of their
+ *  own — only a path string.
+ *
+ *  So it is read off the string, through the same walker that bakes groups, which is what makes it safe:
+ *  it resolves relative commands rather than mistaking their operands for coordinates. Control points
+ *  count toward the extent, which can only make the disc bigger than it needs to be. Cached on the shape
+ *  object, since a shape's path is fixed for the life of the circuit. */
+const pathDiscCache = new WeakMap<object, Bounds>()
+
+function discOfPath(shape: { d: string }, pad: number): Bounds {
+  const hit = pathDiscCache.get(shape)
+  if (hit) return { ...hit, r: hit.r + pad }
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+  mapPathPoints(shape.d, (x, y) => {
+    if (x < x0) x0 = x
+    if (y < y0) y0 = y
+    if (x > x1) x1 = x
+    if (y > y1) y1 = y
+    return { x, y }
+  })
+  const disc: Bounds = Number.isFinite(x0)
+    ? { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 }
+    // A path with no coordinates in it draws nothing, but a disc of NaN would be skipped or kept at
+    // random, so it gets one that always passes.
+    : { cx: 0, cy: 0, r: Number.POSITIVE_INFINITY }
+  pathDiscCache.set(shape, disc)
+  return { ...disc, r: disc.r + pad }
+}
+
 export function groundOps(
   scenery: Pick<Scenery, 'bands' | 'fields' | 'terrain' | 'runoffs'>,
   u: (m: number) => number,
@@ -621,19 +656,29 @@ export function groundOps(
   const hedges = atLeast(rungFor(HEDGEROW_M, px, quality), 'mid')
   const ops: DrawOp[] = []
   if (ground) {
-    for (const b of scenery.bands) ops.push({ d: b.d, fill: b.fill, alpha: b.soft ? 0.3 : 1, evenOdd: true })
+    for (const b of scenery.bands) {
+      ops.push({ d: b.d, fill: b.fill, alpha: b.soft ? 0.3 : 1, evenOdd: true, clip: discOfPath(b, 0) })
+    }
     for (const f of scenery.fields) {
-      ops.push({ d: f.d, fill: f.fill, alpha: 0.75 })
+      const clip = discOfPath(f, 0)
+      ops.push({ d: f.d, fill: f.fill, alpha: 0.75, clip })
       // Crop rows and hedgerows are per-field detail: zoomed out only the tint is legible.
-      if (crop && f.crop) ops.push({ d: f.d, fill: `${REF}tm-crop` })
-      if (hedges) ops.push({ d: f.d, stroke: '#1F3318', width: u(HEDGEROW_M), alpha: 0.35 })
+      if (crop && f.crop) ops.push({ d: f.d, fill: `${REF}tm-crop`, clip })
+      // The hedgerow is a stroke, so its ink reaches half a pen outside the parcel it edges.
+      if (hedges) {
+        ops.push({
+          d: f.d, stroke: '#1F3318', width: u(HEDGEROW_M), alpha: 0.35,
+          clip: discOfPath(f, u(HEDGEROW_M) / 2),
+        })
+      }
     }
   }
   for (const b of scenery.terrain) {
-    ops.push({ d: b.d, fill: b.fill })
-    if (b.water) ops.push({ d: b.d, fill: `${REF}tm-water` })
+    const clip = discOfPath(b, 0)
+    ops.push({ d: b.d, fill: b.fill, clip })
+    if (b.water) ops.push({ d: b.d, fill: `${REF}tm-water`, clip })
   }
-  for (const b of scenery.runoffs) ops.push({ d: b.d, fill: b.fill })
+  for (const b of scenery.runoffs) ops.push({ d: b.d, fill: b.fill, clip: discOfPath(b, 0) })
   return ops
 }
 
