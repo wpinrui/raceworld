@@ -31,6 +31,9 @@ const SPAN_LAP_M = 0.4
 /** Even samples per stretch for the pieces that follow the lane's curve: the terrace, its rail and the
  *  box-row stripe. Three per bay is finer than the fixed 20 the whole complex used to get. */
 const SPAN_SAMPLES = 3
+/** The apron gets more: it runs past the box row at both ends and its edge is a taper rather than a
+ *  constant offset, so it needs the stations to describe a curve the others do not have. */
+const WORK_SAMPLES = 4
 
 /** One stretch of the complex along the lane, and everything standing on it.
  *
@@ -65,6 +68,8 @@ export interface PitSlot { x: number; y: number; nx: number; ny: number; rot: nu
 export interface PitZone {
   /** The working-lane apron, tapered in and out at each end. */
   work: string
+  /** The same apron, cut into the stretches a canvas submits it in. */
+  workSpans: Vec[][]
   /** The white-on-blue separator stripe down the box row. */
   sep: string
   limiterIn: Vec[]
@@ -415,18 +420,28 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
       plant: plantUnits.filter((p) => p.s >= from && (p.s < to || i === spanCount - 1)).map((p) => p.pts),
     }
   })
+  // The working-lane apron, cut into the same stretches for the same reason: it is a 270 m ribbon
+  // submitted as one closed fill of seventy-odd vertices, which on a racing shot of the pit straight
+  // was the largest single piece of path setup left once the complex above it had been cut.
+  //
+  // Its own station list, because it runs wider than the box row and its taper has corners of its own
+  // that a stretch may not round off.
+  const wcut = (i: number) => (i === spanCount ? wt1 : wt0 + (i * (wt1 - wt0)) / spanCount)
+  const workStations = [...new Set([
+    ...Array.from({ length: spanCount * WORK_SAMPLES + 1 },
+      (_, j) => wt0 + ((wt1 - wt0) * j) / (spanCount * WORK_SAMPLES)),
+    ...Array.from({ length: spanCount - 1 }, (_, i) => [wcut(i + 1) - lap, wcut(i + 1) + lap]).flat(),
+    w0, w1,
+  ])].filter((s) => s >= wt0 && s <= wt1).sort((p, q) => p - q)
+  const workRing = (lo: number, hi: number) => {
+    const run = workStations.filter((s) => s >= lo - 1e-9 && s <= hi + 1e-9)
+    return [...run.map((s) => ptAt(s, workOuterLat(s))), ...[...run].reverse().map((s) => ptAt(s, WLAT_IN))]
+  }
   return {
     spans,
-    work: (() => {
-      const N = 36
-      const ring: Array<{ x: number; y: number }> = []
-      for (let i = 0; i <= N; i++) {
-        const sA = wt0 + ((wt1 - wt0) * i) / N
-        ring.push(ptAt(sA, workOuterLat(sA)))
-      }
-      for (let i = N; i >= 0; i--) ring.push(ptAt(wt0 + ((wt1 - wt0) * i) / N, WLAT_IN))
-      return `M ${ring.map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`
-    })(),
+    workSpans: Array.from({ length: spanCount },
+      (_, i) => workRing(Math.max(wt0, wcut(i) - lap), Math.min(wt1, wcut(i + 1) + lap))),
+    work: `${linePath(workRing(wt0, wt1))}Z`,
     sep: linePath(runAt(SEP_LAT, a0, a1)),
     limiterIn: limiter(0),
     limiterOut: limiter(arc),

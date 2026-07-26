@@ -15,12 +15,10 @@
 
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery, KERB_BLOCK_M, KERB_WIDTH_M } from '../src/lib/ui/track-scenery'
-import {
-  LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M, densifyTrace,
-} from '../src/lib/ui/track-path'
+import { TRACK_WIDTH_M, densifyTrace } from '../src/lib/ui/track-path'
 import { buildRacingLine, polylineArc } from '../src/lib/ui/racing-line'
 import { lapDynamics, trackPhysics } from '../src/lib/ui/lap-dynamics'
-import { edgeOps, surfaceOps } from '../src/lib/ui/track-surface'
+import { roadOps } from '../src/lib/ui/road-ops'
 import { EXTRUDE } from '../src/components/race/SceneryLayer'
 import { pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
@@ -32,7 +30,6 @@ const VIEW_H = 900
 const RACE_Z = 20
 const CULL_MARGIN = 1.45
 const DPR = Number(process.env.DPR ?? 1.5)
-const TRACK_M = 1.6
 const VIEWPORT_MPX = (VIEW_W * DPR * VIEW_H * DPR) / 1e6
 
 const ids = process.argv.slice(2).filter((a) => !a.startsWith('-'))
@@ -41,6 +38,10 @@ if (ids.length === 0) ids.push('hungary', 'hockenheim', 'monaco')
  *  "how far out am I" that means the same thing on two different circuits. Given, it replaces the
  *  racing-zoom default: a shot framing the whole pit building sits near 3.5. */
 const pxm = Number(process.argv.slice(2).find((a) => a.startsWith('--pxm='))?.split('=')[1] ?? 0)
+/** The racing line, brake marks and marbles worn into the tarmac. OFF, like the renderer's own flag:
+ *  a probe that draws what the map does not is measuring a frame nobody sees. `--ink` puts it back for
+ *  the day there is budget to turn it on again. */
+const surfaceInk = process.argv.includes('--ink')
 
 type Pt = [number, number]
 
@@ -182,24 +183,19 @@ for (const id of ids) {
   const arc = polylineArc(centre)
   const solved = buildRacingLine(arc, layout.metresPerUnit)
   const dyn = lapDynamics(solved.pts, arc.length, trackPhysics(layout.metresPerUnit))
-  const ink = {
-    u, line: solved.pts, curvature: dyn.curvature, long: dyn.long, trackM: TRACK_M,
-    tarmac: '#33383E', centre, ground: scenery.base, shadow: shadowFill(lighting),
-    ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
-    tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: solved.lateral,
-    detail: (inkFull ? 'full' : 'low') as 'full' | 'low',
-  }
-
-  const track: DrawOp[] = [
-    ...edgeOps(ink),
-    { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
-    { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' },
-    ...(pitZone ? [{ d: pitZone.work, fill: '#D8D8D2', stroke: '#D8D8D2', width: u(2 * LANE_LINE_M) }] : []),
-    { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
-    { d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' },
-    ...(pitZone ? [{ d: pitZone.work, fill: '#33383E' }] : []),
-    ...surfaceOps(ink),
-  ]
+  // Through the renderer's OWN builder, never a copy of it: a probe that submits a different road
+  // measures a different road, which is exactly how cutting the apron into stretches moved nothing
+  // here while moving everything in the map.
+  const track = roadOps({
+    layout,
+    u,
+    pitZone,
+    lap: { pts: solved.pts, lateral: solved.lateral, centre, dyn },
+    ground: scenery.base,
+    shadow: shadowFill(lighting),
+    inkFull,
+    surfaceInk,
+  })
   const pitUnder = pitZone ? pitFloorOps(pitZone, lighting, () => '#888888') : []
   const pitOver = pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, () => '#888888') : []
   const pitPts = pitZone ? [...pitZone.buildingPts, ...pitZone.garageFloors.flat()] : []

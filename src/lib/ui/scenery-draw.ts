@@ -792,7 +792,12 @@ interface StaticParts {
   marshalGs: DrawGroup[]
 }
 
-const discOfPts = (pts: Vec[], pad: number): Bounds => {
+/** The disc containing a point set: centred on its extent, radius half the diagonal, plus whatever the
+ *  caller's stroke or sweep reaches beyond the geometry.
+ *
+ *  Exported because everything that submits a path has to describe where it is, and three modules had
+ *  each written this out again. It is the one thing `drawScene` reads per item per frame. */
+export const discOfPts = (pts: readonly Vec[], pad = 0): Bounds => {
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
   for (const p of pts) {
     if (p.x < x0) x0 = p.x

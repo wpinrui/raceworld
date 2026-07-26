@@ -15,7 +15,7 @@ import {
   tintFace,
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
-import type { Bounds, DrawOp } from '@/lib/ui/scenery-draw'
+import { discOfPts as discOf, type DrawOp } from '@/lib/ui/scenery-draw'
 import { flagSvgUrl } from '@/components/world/NationalityFlag'
 import { EXTRUDE } from './SceneryLayer'
 
@@ -230,18 +230,6 @@ function shortName(name: string): string {
 }
 
 /** The garage floors, which go down BEFORE the lane's paint so its white edge line runs unbroken. */
-/** Conservative bounding disc of a point run, for the canvas's viewport skip. */
-function discOf(pts: Array<{ x: number; y: number }>, pad: number): Bounds {
-  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
-  for (const p of pts) {
-    if (p.x < x0) x0 = p.x
-    if (p.y < y0) y0 = p.y
-    if (p.x > x1) x1 = p.x
-    if (p.y > y1) y1 = p.y
-  }
-  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad }
-}
-
 export function pitFloorOps(
   zone: PitZone, lighting: Lighting, garageColor?: (i: number) => string | undefined,
 ): DrawOp[] {

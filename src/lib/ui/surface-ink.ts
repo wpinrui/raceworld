@@ -14,7 +14,7 @@
 //    neighbour's wide pale layer scrubs out the core beside it and every join shows a light notch.
 //    Callers own that loop, because only they know what "every mark" means.
 
-import type { Bounds, DrawOp } from './scenery-draw'
+import { discOfPts, type Bounds, type DrawOp } from './scenery-draw'
 import type { Vec } from './geom'
 import { hexToRgb, rgbToHex } from '@/lib/color'
 
@@ -227,36 +227,16 @@ export function stripe(
     const nrm = normalAt(pts, i % n)
     return { x: p.x + nrm.x * offset, y: p.y + nrm.y * offset }
   })
-  return { d: `M ${polyPoints(out)}`, clip: discOf(out) }
+  return { d: `M ${polyPoints(out)}`, clip: discOfPts(out) }
 }
 
 /** A closed polygon through the given points, plus the disc that contains it. Bands ACROSS a road are
  *  built this way rather than as strokes: a stroke has one width, and a road that tapers does not. */
 export function patch(pts: readonly Vec[]): { d: string; clip: Bounds } {
-  return { d: `M ${polyPoints(pts)} Z`, clip: discOf(pts) }
+  return { d: `M ${polyPoints(pts)} Z`, clip: discOfPts(pts) }
 }
 
 const polyPoints = (pts: readonly Vec[]) => pts.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')
-
-/** The disc containing a point set: centred on the extent's middle, radius half its diagonal. Callers
- *  pad it for whatever their stroke adds beyond the geometry. */
-function discOf(pts: readonly Vec[]): Bounds {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const p of pts) {
-    if (p.x < minX) minX = p.x
-    if (p.x > maxX) maxX = p.x
-    if (p.y < minY) minY = p.y
-    if (p.y > maxY) maxY = p.y
-  }
-  return {
-    cx: (minX + maxX) / 2,
-    cy: (minY + maxY) / 2,
-    r: Math.hypot(maxX - minX, maxY - minY) / 2,
-  }
-}
 
 /** Split a run of stations into shorter patches, adjacent patches SHARING a station so there is no
  *  gap: a one-pixel break in a stripe this dark is more visible than the stripe. */

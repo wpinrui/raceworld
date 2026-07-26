@@ -25,6 +25,7 @@ import { MOODS, screenUpAzimuth } from '../src/lib/ui/lighting'
 import {
   isGroup, refName, sceneryScene, type DrawOp, type SceneItem,
 } from '../src/lib/ui/scenery-draw'
+import { roadOps } from '../src/lib/ui/road-ops'
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
@@ -142,14 +143,13 @@ async function main() {
       trees: scenery.trees,
       // No ground op: the renderer FILLS the canvas with scenery.base rather than clearing it, so on
       // this side the ground is the page under the ops. Side A paints its own rect for the same reason.
-      track: [
-        { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
-        { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' },
-        ...(zone ? [{ d: zone.work, fill: '#D8D8D2', stroke: '#D8D8D2', width: u(2 * LANE_LINE_M) }] : []),
-        { d: layout.d, stroke: '#33383E', width: u(TARMAC_WIDTH_M) },
-        { d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' as const },
-        ...(zone ? [{ d: zone.work, fill: '#33383E' }] : []),
-      ],
+      // Through the renderer's own builder. The SVG side above stays hand-written on purpose: it is a
+      // transcription of RaceTrackMap's document, and the whole point of this probe is to hold the two
+      // descriptions of the road against each other rather than derive both from one.
+      track: roadOps({
+        layout, u, pitZone: zone, lap: null, ground: scenery.base, shadow: '#000000',
+        inkFull: true, surfaceInk: false,
+      }),
       kerbs: scenery.kerbs.flatMap((k) => [
         { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' as const },
         {
