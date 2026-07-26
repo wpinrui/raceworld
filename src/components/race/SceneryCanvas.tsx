@@ -76,23 +76,88 @@ export function warmScene(scene: Scene, onReady: () => void): { cancel: () => vo
   return { cancel: () => { cancelled = true } }
 }
 
-function applyOp(ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor): void {
+/** The context state `applyOp` has already set, mirrored on the JS side.
+ *
+ *  Every one of these setters costs something real per call: a colour string has to be parsed,
+ *  `setLineDash` takes a fresh array, and the scene is walked op by op sixty times a second. The
+ *  scene is also ORDERED BY PAINT wherever it can be (`mergeByPaint`), so consecutive ops share
+ *  their ink far more often than not and most of those writes are the same value twice.
+ *
+ *  `undefined` means "unknown, write it": what a group's save/restore leaves behind, since a restore
+ *  reverts the real context underneath the mirror. */
+interface PaintState {
+  fill?: string | CanvasGradient | CanvasPattern
+  stroke?: string | CanvasGradient | CanvasPattern
+  width?: number
+  cap?: CanvasLineCap
+  alpha?: number
+  dashed?: boolean
+  shift?: number
+}
+
+const NO_DASH: number[] = []
+
+/** Forget the mirror. Called around save/restore, which moves the real state without going through
+ *  `applyOp`, so anything remembered about it is no longer true. */
+function forget(s: PaintState): void {
+  s.fill = undefined
+  s.stroke = undefined
+  s.width = undefined
+  s.cap = undefined
+  s.alpha = undefined
+  s.dashed = undefined
+  s.shift = undefined
+}
+
+function applyOp(
+  ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor, s: PaintState,
+): void {
   const path = pathFor(op.d)
-  ctx.globalAlpha = op.alpha ?? 1
+  const alpha = op.alpha ?? 1
+  if (s.alpha !== alpha) {
+    ctx.globalAlpha = alpha
+    s.alpha = alpha
+  }
   if (op.fill) {
     const ref = refName(op.fill)
-    ctx.fillStyle = ref ? paintFor(ref, ctx, op.bbox) : op.fill
+    const paint = ref ? paintFor(ref, ctx, op.bbox) : op.fill
+    if (s.fill !== paint) {
+      ctx.fillStyle = paint
+      s.fill = paint
+    }
     ctx.fill(path, op.evenOdd ? 'evenodd' : 'nonzero')
   }
   if (op.stroke) {
     const ref = refName(op.stroke)
-    ctx.strokeStyle = ref ? paintFor(ref, ctx, op.bbox) : op.stroke
-    ctx.lineWidth = op.width ?? 1
-    ctx.lineCap = op.cap ?? 'butt'
-    ctx.setLineDash(op.dash ? [op.dash.on, op.dash.off] : [])
-    ctx.lineDashOffset = op.dash?.shift ?? 0
+    const paint = ref ? paintFor(ref, ctx, op.bbox) : op.stroke
+    if (s.stroke !== paint) {
+      ctx.strokeStyle = paint
+      s.stroke = paint
+    }
+    const width = op.width ?? 1
+    if (s.width !== width) {
+      ctx.lineWidth = width
+      s.width = width
+    }
+    const cap = op.cap ?? 'butt'
+    if (s.cap !== cap) {
+      ctx.lineCap = cap
+      s.cap = cap
+    }
+    // A dash is rare (the kerbs, and nothing else), so the common path is to leave the empty pattern
+    // in place rather than hand the rasteriser a fresh array per op to expand.
+    if (op.dash) {
+      ctx.setLineDash([op.dash.on, op.dash.off])
+      s.dashed = true
+      if (s.shift !== op.dash.shift) {
+        ctx.lineDashOffset = op.dash.shift
+        s.shift = op.dash.shift
+      }
+    } else if (s.dashed !== false) {
+      ctx.setLineDash(NO_DASH)
+      s.dashed = false
+    }
     ctx.stroke(path)
-    ctx.setLineDash([])
   }
 }
 
@@ -140,7 +205,15 @@ export function drawScene(
   const viewX = vb.x + vb.w / 2 + (-cam.x * cos - -cam.y * sin) / k
   const viewY = vb.y + vb.h / 2 + (-cam.x * sin + -cam.y * cos) / k
   const viewR = (Math.hypot(size.w, size.h) / 2 / k) * 1.05
-  const offscreen = (c: NonNullable<SceneItem['clip']>) => Math.hypot(c.cx - viewX, c.cy - viewY) > viewR + c.r
+  // Compared SQUARED: this runs once per scene item per frame, and Math.hypot carries an
+  // overflow-safe scaling path that a distance test against a known-finite radius does not need.
+  const offscreen = (c: NonNullable<SceneItem['clip']>) => {
+    const dx = c.cx - viewX
+    const dy = c.cy - viewY
+    const reach = viewR + c.r
+    return dx * dx + dy * dy > reach * reach
+  }
+  const state: PaintState = {}
   let m = 0
   let section = 'setup'
   let tPrev = timing ? performance.now() : 0
@@ -163,23 +236,53 @@ export function drawScene(
       ctx.save()
       ctx.translate(item.x, item.y)
       ctx.rotate(item.rot)
-      for (const op of item.ops) applyOp(ctx, op, paintFor)
+      for (const op of item.ops) applyOp(ctx, op, paintFor, state)
       ctx.restore()
+      // The restore reverted the ink underneath the mirror, so nothing about it is known any more.
+      forget(state)
     } else {
-      applyOp(ctx, item, paintFor)
+      applyOp(ctx, item, paintFor, state)
     }
   }
   if (timing) close('setup')
   ctx.globalAlpha = 1
 }
 
+/** The one 2D context for a canvas, created OPAQUE and kept.
+ *
+ *  Opaque because the surface is completely covered every frame — `drawScene` fills it with the
+ *  ground colour rather than clearing it — so an alpha channel buys nothing and costs the compositor
+ *  a blend of the whole viewport on every frame. It is only correct while the canvas is mounted
+ *  exclusively for the live view; the map view must not mount it, or its letterbox would come out
+ *  black instead of showing the page through.
+ *
+ *  Kept because context options are fixed at creation: a second `getContext` with different options
+ *  silently returns the first context, so asking per frame both wastes the lookup and hides the
+ *  mistake. */
+const ctxCache = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D>()
+
+export function contextFor(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  const hit = ctxCache.get(canvas)
+  if (hit) return hit
+  const made = canvas.getContext('2d', { alpha: false })
+  if (!made) return null
+  ctxCache.set(canvas, made)
+  return made
+}
+
 /** A canvas sized to its container at device resolution. The caller drives it from the render loop
  *  through the ref it hands back, so a camera move never goes near React. */
-export function SceneryCanvas({ canvasRef, className }: {
+export function SceneryCanvas({ canvasRef, className, onResize }: {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
   className?: string
+  /** Called after the backing store has been resized. Setting `canvas.width` CLEARS the surface, so
+   *  without this the world stays blank until something else happens to repaint it — which, with a
+   *  free camera, is nothing. */
+  onResize?: () => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
+  const resizeRef = useRef(onResize)
+  useEffect(() => { resizeRef.current = onResize }, [onResize])
   useEffect(() => {
     const box = boxRef.current
     const canvas = canvasRef.current
@@ -187,10 +290,17 @@ export function SceneryCanvas({ canvasRef, className }: {
     const fit = () => {
       const dpr = window.devicePixelRatio || 1
       const { width, height } = box.getBoundingClientRect()
-      canvas.width = Math.round(width * dpr)
-      canvas.height = Math.round(height * dpr)
+      const w = Math.round(width * dpr)
+      const h = Math.round(height * dpr)
+      // Guarded: assigning the same width still clears the surface, and a ResizeObserver fires for
+      // plenty of changes that do not move these two numbers.
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w
+        canvas.height = h
+      }
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
+      resizeRef.current?.()
     }
     fit()
     const ro = new ResizeObserver(fit)
