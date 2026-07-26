@@ -16,8 +16,8 @@ import {
 } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { useSceneryBitmap } from './use-scenery-bitmap'
-import { SceneryCanvas, drawScene, warmScene } from './SceneryCanvas'
-import { sceneryScene, type DrawOp, type SceneMark } from '@/lib/ui/scenery-draw'
+import { SceneryCanvas, contextFor, drawScene, warmScene } from './SceneryCanvas'
+import { sceneryScene, type DrawOp, type SceneItem, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M,
@@ -509,10 +509,24 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }
   useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current) }, [])
 
-  const applyCam = useCallback(() => {
+  // The camera the world layer and the canvas were last brought up to date for, plus the stage size
+  // that reading was taken at. A follow camera calls `applyCam` every single frame whether or not the
+  // car it is locked to has moved, and it very often has not: a serviced car is PINNED to its box for
+  // the whole stop, and the whole field sits still on the grid before lights out. Repainting the
+  // static world sixty times a second to produce the identical picture is the one cost on this
+  // renderer with no upside at all, and it lands during the pit stop, which is the busiest thing on
+  // the map. NaN so the first call can never match.
+  const paintedRef = useRef({ x: NaN, y: NaN, z: NaN, rot: NaN, w: NaN, h: NaN })
+
+  const applyCam = useCallback((force = false) => {
     const world = worldRef.current
     if (!world) return
     const { x, y, z, rot } = camRef.current
+    const { w: stageW, h: stageH } = stageDimsRef.current
+    const was = paintedRef.current
+    if (!force && was.x === x && was.y === y && was.z === z && was.rot === rot
+      && was.w === stageW && was.h === stageH) return
+    paintedRef.current = { x, y, z, rot, w: stageW, h: stageH }
     world.style.transform = `translate(${x}px, ${y}px) rotate(${rot}rad) scale(${z})`
     world.style.setProperty('--cam-rot', `${rot}rad`)
     world.style.setProperty('--cam-zoom-inv', String(1 / z))
@@ -629,6 +643,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     })
   }, [pitSlots, layout.metresPerUnit, viewAz, ldir, lighting])
 
+  // What the garage allocation and the garage signage are ACTUALLY functions of, as strings.
+  //
+  // `cars` gets a fresh array identity on every commit of this component, and the 1Hz tooltip tick
+  // alone guarantees one every second. Memoising on it made `slotOf` churn, which made `pitDrawOps`
+  // rebuild the entire pit complex's geometry, which changed `composeScene`'s identity, which made the
+  // `scene` useMemo recompose the whole static world and throw away half a megabyte of path strings.
+  // Once a second, so that a tooltip could be current. None of it depends on anything that moves.
+  const garageSig = cars.map((c) => `${c.id} ${c.team ?? ''} ${c.color}`).join('')
+  const signSig = cars.map((c) => `${c.id} ${c.name} ${c.nationality ?? ''}`).join('')
+  const carsRef = useRef(cars)
+  carsRef.current = cars
+
   const slotOf = useMemo(() => {
     // Garage order: previous standings best-first (P1 gets the first box), alphabetical fallback for
     // anything unranked. NEVER derived from the live car list order â€” that reshuffles mid-race.
@@ -636,27 +662,30 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       const i = teamOrder?.indexOf(k) ?? -1
       return i === -1 ? 1e9 : i
     }
-    const keys = [...new Set(cars.map((c) => c.team ?? c.id))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    const cs = carsRef.current
+    const keys = [...new Set(cs.map((c) => c.team ?? c.id))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     const map = new Map<string, number>()
     const colors: string[] = []
-    for (const c of cars) {
+    for (const c of cs) {
       const idx = keys.indexOf(c.team ?? c.id)
       map.set(c.id, idx)
       if (colors[idx] === undefined) colors[idx] = c.color
     }
     return { byCar: map, colors }
-  }, [cars, teamOrder])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [garageSig, teamOrder])
 
   // Who is signed above each garage: the two cars the box order put in that bay.
   const garageCars = useMemo(() => {
     const out: TrackCarMeta[][] = []
-    for (const c of cars) {
+    for (const c of carsRef.current) {
       const gi = slotOf.byCar.get(c.id)
       if (gi === undefined) continue
       ;(out[gi] ??= []).push(c)
     }
     return out
-  }, [cars, slotOf])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signSig, slotOf])
 
 
   // Fit an inner stage of the track's exact aspect ratio inside whatever box we're given, so the marker
@@ -787,8 +816,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       ? { x: 0, y: 0, z: 1, rot: 0 }
       : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
     setCamRot(camRef.current.rot)
-    applyCam()
-  }, [view, defaultRot, applyCam])  
+    // Forced: switching views changes what is drawn even when the restored camera happens to match
+    // the one already applied.
+    applyCam(true)
+  }, [view, defaultRot, applyCam])
 
   // Geometry caches reset ONLY when the circuit changes â€” resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
@@ -918,7 +949,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         // form the staggered starting grid (8m pitch, alternating sides) on the centreline.
         interface Frame { id: string; el: HTMLDivElement; kind: 'race' | 'pit' | 'grid'; dist: number; lat: number; pitPhase?: 'in' | 'box' | 'out'; stopFrac?: number; pitCalled?: boolean; pitNewCompound?: TyreCompound }
         const frames: Frame[] = []
-        for (const car of cars) {
+        for (const car of carsRef.current) {
           const el = elRefs.current.get(car.id)
           if (!el) continue
           const sample = sampleRef.current(car.id)
@@ -1284,7 +1315,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               setCarWheels(anim.carId, false)
               // Latch compound colours: the outgoing set is what the car wears NOW (the engine fits
               // the new set only at the end of the stop), the incoming set is the pit call's target.
-              const meta = cars.find((cm) => cm.id === anim!.carId)
+              const meta = carsRef.current.find((cm) => cm.id === anim!.carId)
               const oldBand = meta?.compound ? COMPOUND_COLORS[meta.compound] : '#FFD700'
               const newBand = info?.newCompound ? COMPOUND_COLORS[info.newCompound] : oldBand
               for (let c = 0; c < 4; c++) {
@@ -1428,7 +1459,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [slotOf, pitSlots, cars, layout, vb, sampleRef, outSign, ldir, lighting, carLit, applyCam])
+    // `cars` is read through `carsRef`, deliberately and not for convenience: as a dependency it tore
+    // the whole loop down and rebuilt it every time the array got a fresh identity, which the 1Hz
+    // tooltip tick does on its own. The loop's own state lives in refs, so it wants to run undisturbed
+    // for the length of the race.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, ldir, lighting, carLit, applyCam])
 
   // S/F line: a chequered band (3 rows of 0.5m squares) spanning EXACTLY the tarmac width.
   const sf = useMemo(() => {
@@ -1622,38 +1658,46 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     canvasOn, view, scenery, u, lighting, viewAz, hidden, trackDrawOps,
     pitDrawOps, pitDisc, scenePxPerM, quality,
   ])
-  const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
-  const sceneRef = useRef(scene)
-  // On a cull step, the old scene keeps painting while the new one's paths parse in the
-  // background; the swap lands only when the Path2D cache is warm. Parsing them inside the next
-  // paint instead was a 2-3 vsync hitch on every disc move â€” the last dip the benchmark found.
+  const sceneRef = useRef<{ items: SceneItem[]; marks: SceneMark[] } | null>(null)
+  // On a swap, the old scene keeps painting while the new one's paths parse in the background; the
+  // swap lands only when the Path2D cache is warm. Parsing them inside the next paint instead was a
+  // 2-3 vsync hitch on every disc move â€” the last dip the benchmark found.
   const warmTokenRef = useRef<{ cancel: () => void } | null>(null)
-  useEffect(() => {
-    // A render-driven recompose SUPERSEDES any cull-step warm still in flight. Without this, a zoom
-    // notch that both crosses a detail tier and commits a cull step starts a warm holding the scene as
-    // it was BEFORE the tier changed, and that warm lands a few frames later and puts it back. The
-    // picture then stays a tier behind until some later cull step happens to recompose it, which needs
-    // a 30% change in the disc's radius â€” about two more notches, and a different number of them
-    // zooming in than out, because the radius goes as 1/zoom. That is the several-notch band where the
-    // trees were missing on the way in and lingering on the way out.
+  // ONE owner of the swap, for both paths. It used to be two, and only the cull path warmed: a
+  // render-driven recompose assigned straight to `sceneRef`, so a detail-tier crossing (which is what
+  // rebuilds the geometry, so it is exactly the case where the paths are genuinely new) parsed its
+  // whole scene inside the very next paint. Measured at 26-226KB of fresh path data per crossing,
+  // about one crossing per two wheel notches. That is the hitch this warm exists to prevent, taken on
+  // the one path that skipped it.
+  const swapScene = useCallback((next: { items: SceneItem[]; marks: SceneMark[] } | null) => {
+    // Whatever else is in flight, this supersedes it. Without that, a zoom notch that both crosses a
+    // detail tier and commits a cull step lands a warm holding the scene as it was BEFORE the tier
+    // changed, and the picture stays a tier behind until some later cull step happens to recompose
+    // it â€” which needs a 30% change in the disc's radius, about two more notches, and a different
+    // number of them zooming in than out because the radius goes as 1/zoom. That was the band where
+    // the trees were missing on the way in and lingering on the way out.
     warmTokenRef.current?.cancel()
-    sceneRef.current = scene
-  }, [scene])
-  useEffect(() => {
-    composeSceneRef.current = (cullNow) => {
-      const next = composeScene(cullNow)
-      warmTokenRef.current?.cancel()
-      if (!next) {
-        sceneRef.current = next
-        return
-      }
-      warmTokenRef.current = warmScene(next.items, () => {
-        sceneRef.current = next
-        paintRef.current()
-      })
+    if (!next || !sceneRef.current) {
+      // Nothing to keep painting in the meantime, so there is nothing to be gained by waiting.
+      sceneRef.current = next
+      paintRef.current()
+      return
     }
+    warmTokenRef.current = warmScene(next.items, () => {
+      sceneRef.current = next
+      paintRef.current()
+    })
+  }, [])
+  useEffect(() => {
+    composeSceneRef.current = (cullNow) => swapScene(composeScene(cullNow))
     return () => warmTokenRef.current?.cancel()
-  }, [composeScene])
+  }, [composeScene, swapScene])
+  // The world changed: a new circuit, a new bearing, a detail tier crossed, a layer toggled, the lap's
+  // ink arriving. Composed HERE rather than in a `useMemo` during render, because composing is where
+  // the geometry gets rebuilt and that is 8ms on a Grand Prix circuit and 28ms on Monaco â€” work that
+  // has no business inside a commit. Declared after the effect above so the ref it calls is already
+  // pointing at the current composer.
+  useEffect(() => { composeSceneRef.current(cullRef.current) }, [composeScene])
   useEffect(() => { canvasOnRef.current = canvasOn }, [canvasOn])
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
   // readout is up â€” the timing calls are cheap but not free.
@@ -1666,13 +1710,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const paintCanvas = useCallback(() => {
     const canvas = canvasRef.current
     const sc = sceneRef.current
-    const ctx = canvas?.getContext('2d')
+    const ctx = canvas && contextFor(canvas)
     if (!canvas || !ctx) return
     const { w: sw } = stageDimsRef.current
     if (!sc || sw === 0) {
-      // No scene (map view): leave nothing stale behind the minimap.
+      // Nothing composed yet (the stage has not been measured). The surface is opaque, so it is
+      // FILLED with the ground rather than cleared — a clear on an opaque canvas is black, and the
+      // one frame before the first real paint would flash it.
       ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = scenery.base
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
       return
     }
     const dpr = window.devicePixelRatio || 1
@@ -1690,10 +1737,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (timing) paintStatsRef.current = timing.out
   }, [vb, lighting, u, scenery.base])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
-  // The canvas paints when the CAMERA moves, so a scene that changes without one — a detail tier
-  // crossing, a layer toggled, the lap's ink arriving — used to sit unpainted until the next nudge.
-  // Declared after the ref above so it always calls the current painter, never the previous render's.
-  useEffect(() => { paintRef.current() }, [scene, paintCanvas])
+  // The canvas paints when the CAMERA moves, so anything that changes the picture WITHOUT one has to
+  // ask. A newly composed scene asks through `swapScene`; what is left is the painter being rebuilt
+  // and the STAGE being measured or resized. The stage belongs here rather than with the camera
+  // because it is half of pixels-per-metre, and because resizing it clears the canvas's backing
+  // store — with a free camera nothing else would ever repaint it. Declared after the ref above so it
+  // always calls the current painter, never the previous render's.
+  useEffect(() => { applyCam(true) }, [applyCam, paintCanvas, stage.w, stage.h])
 
   // â”€â”€ Benchmark mode â”€â”€
   //
@@ -1904,7 +1954,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               <button
                 key={key}
                 type="button"
-                onClick={() => { setQualityKey(key); requestAnimationFrame(() => applyCam()) }}
+                onClick={() => { setQualityKey(key); requestAnimationFrame(() => applyCam(true)) }}
                 className={`flex-1 rounded px-1 py-0.5 ${key === qualityKey ? 'bg-[#2E62C9]' : 'bg-white/15'}`}
               >
                 {label}
@@ -1922,7 +1972,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                   setQualityKey(key)
                   // The gates live in applyCam, which React does not drive; nudge it so the change
                   // shows on this frame rather than on the next camera move.
-                  requestAnimationFrame(() => applyCam())
+                  requestAnimationFrame(() => applyCam(true))
                 }}
                 className="min-w-0 flex-1 accent-[#2E62C9]"
               />
@@ -1941,7 +1991,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           clipped to it stops painting at the stage edge â€” the world visibly ended there under zoom.
           The SVG never had the problem because its overflow is visible. Stage centre and viewport
           centre coincide, so the camera transform is the same either way. */}
-      {canvasOn && <SceneryCanvas canvasRef={canvasRef} className="absolute inset-0" />}
+      {canvasOn && view === 'live' && (
+        <SceneryCanvas
+          canvasRef={canvasRef}
+          className="absolute inset-0"
+          // A resize clears the backing store, and nothing else would repaint it: the paint effect
+          // watches the scene, and the camera has not moved. With a free camera (collapse the
+          // standings panel without following a car) the world simply stayed blank.
+          onResize={() => applyCam(true)}
+        />
+      )}
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
         <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
           {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
