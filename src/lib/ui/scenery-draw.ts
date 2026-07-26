@@ -172,8 +172,8 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
 
 /** Every tree's shadow as ONE op. They share a fill and never overlap meaningfully, so a single path
  *  of many subpaths costs one draw call instead of a thousand. */
-export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
-  if (trees.length === 0) return []
+export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp | null {
+  if (trees.length === 0) return null
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const reach = shadowReach(o.lighting)
@@ -190,10 +190,7 @@ export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   const clip = {
     cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad,
   }
-  // One band's worth of the whole grove: every tree's shadow, each grown about ITS OWN middle rather
-  // than the grove's, or the outer bands would fling the far trees' shadows outward instead of
-  // softening them.
-  const bandPath = (grow: number) => trees.map((t) => {
+  const d = trees.map((t) => {
     const lift = o.u(t.h * o.extrude)
     const len = lift * treeShadowRatio(reach)
     // Stretch the canopy about its own centre along the light, then plant it at the base of the
@@ -208,87 +205,10 @@ export function treeShadowOp(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
       const ax = vx * ldir.x + vy * ldir.y
       const ay = -vx * ldir.y + vy * ldir.x
       const bx = ax * sx
-      const x = cx + bx * ldir.x - ay * ldir.y
-      const y = cy + bx * ldir.y + ay * ldir.x
-      return grow === 1 ? { x, y } : { x: cx + (x - cx) * grow, y: cy + (y - cy) * grow }
+      return { x: cx + bx * ldir.x - ay * ldir.y, y: cy + bx * ldir.y + ay * ldir.x }
     })
   }).join(' ')
-
-  // A tree shadow is DIMMER than a solid's: a canopy is not opaque. The softening rides on top of
-  // whatever that works out to, so the two stay in step if the light changes.
-  const target = shadowOpacity(o.lighting) * 0.55
-  const fill = shadowFill(o.lighting)
-  // Softened once for the WHOLE grove, so the entire circuit's tree shade costs three draw calls
-  // rather than one — the cheapest softening on the map by a wide margin. The rung comes from the
-  // biggest canopy in the set, since one op cannot be two rungs at once.
-  const biggest = trees.reduce((m, t) => Math.max(m, 2 * t.r), 0) / o.u(1)
-  if (!atLeast(rungFor(biggest, o.pxPerM ?? Infinity, o.quality), 'near')) {
-    return [{ d: bandPath(1), fill, alpha: target, clip }]
-  }
-  return Array.from({ length: SHADOW_BANDS }, (_, j) => {
-    const out = (SHADOW_SOFT * (SHADOW_BANDS - 1 - j)) / (SHADOW_BANDS - 1)
-    return {
-      d: bandPath(1 + out),
-      fill,
-      alpha: bandAlpha(j, SHADOW_BANDS, target),
-      clip,
-    }
-  })
-}
-
-/** Penumbra width, as a fraction of the shadow's own radius. Small on purpose: a shadow here is a
- *  depth cue, and a wide soft edge on a 20m building reads as fog rather than as sunlight. */
-const SHADOW_SOFT = 0.16
-
-/** Bands a softened edge is built from. Three is where the steps stop being countable at the sizes
- *  these are seen at; a fourth costs another draw call per shadow for nothing. */
-const SHADOW_BANDS = 3
-
-/** Alpha for band `j`, so that painting the bands widest-first composites to exactly `target` in the
- *  core and steps evenly out to nothing at the rim.
- *
- *  Each band is a whole filled shape laid over the last, so what a pixel ends up with is the product
- *  of the transparencies above it. Solving that backwards is the only way the middle of a softened
- *  shadow stays the same darkness as the hard one it replaced. */
-function bandAlpha(j: number, bands: number, target: number): number {
-  const before = (target * j) / bands
-  const after = (target * (j + 1)) / bands
-  return 1 - (1 - after) / (1 - before)
-}
-
-/** A cast shadow, softened if it is big enough on screen to be worth it.
- *
- *  Softness by NESTING, not by blur: this renderer has no filters and three performance regressions
- *  say so. Each band is one fill of the same shape grown about its own middle, so no two bands overlap
- *  partially and nothing double-darkens at a seam — the trap a fill-plus-wide-stroke version falls
- *  into, which lays a visibly darker rim just inside every edge.
- *
- *  The caller supplies a BUILDER rather than a path, and grows its own geometry. Scaling the path
- *  string instead meant parsing it, and the emitters here speak `h` and `v` as well as `M`/`L`, so
- *  that route threw on the first building it met.
- *
- *  Gated on the LADDER, which is what makes it affordable. A softened shadow costs three draw calls
- *  instead of one and the frame is draw-call bound; but a shadow only earns the extra two while it is
- *  big enough to see an edge on, and at that size there are few of them in shot. Zoomed out, where a
- *  circuit's every shadow is on screen at once, they are a few pixels across and go back to one flat
- *  op each. */
-export function shadowBands(
-  o: TreeDrawOpts, sizeM: number, target: number, build: (grow: number) => string,
-): DrawOp[] {
-  const fill = shadowFill(o.lighting)
-  if (!atLeast(rungFor(sizeM, o.pxPerM ?? Infinity, o.quality), 'near')) {
-    return [{ d: build(1), fill, alpha: target }]
-  }
-  return Array.from({ length: SHADOW_BANDS }, (_, j) => ({
-    d: build(1 + (SHADOW_SOFT * (SHADOW_BANDS - 1 - j)) / (SHADOW_BANDS - 1)),
-    fill,
-    alpha: bandAlpha(j, SHADOW_BANDS, target),
-  }))
-}
-
-/** Parts grown about the local origin, which is how a solid's shadow widens for its penumbra. */
-function grownParts(parts: Part[], g: number): Part[] {
-  return parts.map((p) => ({ ...p, w: p.w * g, h: p.h * g, dx: p.dx * g, dy: p.dy * g }))
+  return { d, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) * 0.55, clip }
 }
 
 /** Furthest first, so the painter's order comes out right.
@@ -416,7 +336,6 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
     const base = o.u(h * o.extrude)
     const cast = o.u(h * reach)
     const off = toLocal(ldir.x * cast, ldir.y * cast, r.rot)
-    const parts = partsOf(r)
     return {
       x: r.x + vdir.x * base,
       y: r.y + vdir.y * base,
@@ -425,9 +344,11 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
       // and a canvas has no such thing: an op with neither fill nor stroke is silently drawn as
       // nothing, which is exactly how every building and grandstand lost its shadow on the canvas
       // while keeping it in SVG. Every shadow in this file now carries its own ink.
-      ops: shadowBands(o, Math.max(r.w, r.h) / o.u(1), shadowOpacity(o.lighting), (g) => (
-        sweptHull(grownParts(parts, g), off.x * g, off.y * g)
-      )),
+      ops: [{
+        d: sweptHull(partsOf(r), off.x, off.y),
+        fill: shadowFill(o.lighting),
+        alpha: shadowOpacity(o.lighting),
+      }],
     }
   })
 }
@@ -462,17 +383,16 @@ export function fenceOps(fences: SceneryFence[], o: FenceDrawOpts): DrawOp[][] {
  *  something taller than the thing drawn. */
 export function runShadowOp(
   pts: Vec[], heightM: number, o: TreeDrawOpts,
-): DrawOp[] {
+): DrawOp {
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const base = o.u(heightM * o.extrude)
   const cast = o.u(heightM * shadowReach(o.lighting))
-  // Not softened: a fence's shadow is a thin faint ribbon, and a ribbon has no middle to grow about.
-  return [{
+  return {
     d: ribbon(pts.map((p) => ({ x: p.x + dir.x * base, y: p.y + dir.y * base })), ldir.x * cast, ldir.y * cast),
     fill: shadowFill(o.lighting),
-    alpha: 0.35,
-  }]
+    alpha: shadowOpacity(o.lighting),
+  }
 }
 
 export interface MarshalDrawOpts extends TreeDrawOpts {
@@ -501,7 +421,7 @@ function roundedRectPath(x: number, y: number, w: number, h: number, r: number):
  *  the whole hut — inlined in the SVG they simply did not exist on the canvas. */
 export function marshalGroups(
   marshals: Scenery['marshals'], o: MarshalDrawOpts,
-): Array<DrawGroup & { shadow: DrawOp[] }> {
+): Array<DrawGroup & { shadow: DrawOp }> {
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const w = o.u(o.hutW)
@@ -517,9 +437,11 @@ export function marshalGroups(
       x: m.x,
       y: m.y,
       rot: m.rot,
-      shadow: shadowBands(o, o.hutM, shadowOpacity(o.lighting), (g) => (
-        sweptHull(grownParts(shadowHut, g), sOff.x * g, sOff.y * g)
-      )),
+      shadow: {
+        d: sweptHull(shadowHut, sOff.x, sOff.y),
+        fill: shadowFill(o.lighting),
+        alpha: shadowOpacity(o.lighting),
+      },
       ops: [
         { d: sweptHull(hut, off.x, off.y), fill: shadeFace('#3A4049', o.lighting) },
         { d: roundedRectPath(-w / 2, -h / 2, w, h, o.u(0.3)), fill: '#3A4049' },
@@ -679,9 +601,7 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const fenceRuns: DrawOp[] = []
   if (o.full) {
     for (const f of scenery.fences) {
-      for (const op of runShadowOp(f.pts, o.fenceM, treeOpts)) {
-        runShadows.push(stamp(op, discOfPts(f.pts, runPad)))
-      }
+      runShadows.push(stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, discOfPts(f.pts, runPad)))
     }
     fenceOps(scenery.fences, { ...treeOpts, fenceM: o.fenceM }).forEach((ops2, i) => {
       const disc = discOfPts(scenery.fences[i].pts, runPad)
@@ -716,7 +636,7 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
         y: g.y,
         rot: g.rot,
         // The hut's shadow leads, carrying its own ink like every other shadow here.
-        ops: [...g.shadow, ...g.ops],
+        ops: [g.shadow, ...g.ops],
       }, { cx: g.x, cy: g.y, r: o.u(Math.hypot(o.marshalW, o.marshalD)) + o.u(30) }))
       : [],
   }
@@ -763,7 +683,8 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   if (o.full) {
     // Shadows before every solid, so nothing casts over the thing standing on it.
     items.push(...keep(s.shadowGroups))
-    items.push(...treeShadowOp(o.trees, treeOpts))
+    const trees = treeShadowOp(o.trees, treeOpts)
+    if (trees) items.push(trees)
   }
   mark('solids')
   if (o.full) items.push(...keep(s.wallGroups))
