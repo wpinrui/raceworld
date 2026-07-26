@@ -5,6 +5,11 @@
 > reasoning, the concrete failure, and the exact banned strings live in `memory.md`. Read it before
 > writing UI copy, news copy, or touching the review/merge flow.
 
+# Flags
+-iter means rapidly iterate, ping when there is something new to try/test. The user wants to make inputs into the project.
+-afk means the user will be away, and the agent is expected to do work until task completion, including making autonomous decisions, and make incremental commits so that the user can check out a specific commit later
+-rm means review the PR and then merge. -r means review without merge. -m simply means merge, but if the previous review is stale or does not exist then review first.
+
 ## Stack
 - Next.js 16 (App Router) · TypeScript (strict) · Tailwind CSS v4 · better-sqlite3 · Zustand · Anthropic SDK · Lucide React · Radix UI · Recharts.
 - Package manager: **npm**. Tests: **Vitest** (`npm run test`). Lint: **ESLint** (`npm run lint`). Typecheck: `npx tsc --noEmit`.
