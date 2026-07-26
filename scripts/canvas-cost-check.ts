@@ -117,10 +117,7 @@ for (const id of ids) {
     : scenery.trees)
   const culledTrees = treesFor(disc)
 
-  const baseOp: DrawOp = {
-    d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`,
-    fill: scenery.base,
-  }
+  // No ground op: the renderer fills the canvas with the ground colour rather than clearing it.
   const trackOps: DrawOp[] = [
     { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
     { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' },
@@ -157,7 +154,6 @@ for (const id of ids) {
       solidHeightM: (r: { storeys?: number }) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
       trees: treesFor(cull),
       cull,
-      base: baseOp,
       track: trackOps,
       kerbs: kerbOpsFor(cull),
       pitUnder: pitNear ? pitUnder : [],

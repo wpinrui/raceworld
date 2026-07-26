@@ -1408,11 +1408,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // is what the pre-baked image could never be, and the reason it is being replaced.
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // The road, in the order the SVG lays it: white casing under grey asphalt, for track and lane alike.
-  // The ground plane, separate from the road: composed as part of `track` it painted OVER the
-  // relief bands and fields, which is why the canvas ground read as one flat green.
-  const baseDrawOp = useMemo((): DrawOp => (
-    { d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`, fill: scenery.base }
-  ), [vb, scenery.base])
+  // The ground plane is NOT an op. It used to be a world-sized rect at the bottom of the scene, which
+  // meant every frame wrote the whole surface twice — once clearing it, once covering the clear. It is
+  // the colour `drawScene` fills the canvas with instead of clearing, so the frame writes it once.
   const trackDrawOps = useMemo((): DrawOp[] => {
     const lap = lapLine?.for === layout ? lapLine : null
     const ops: DrawOp[] = []
@@ -1494,7 +1492,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       // circuit's whole tree population would be path setup for things nowhere near the shot.
       trees: hidden.has('trees') ? [] : visibleTrees(scenery.trees, cullNow),
       cull: cullNow,
-      base: baseDrawOp,
       track: trackDrawOps,
       kerbs,
       pitUnder: pitNear ? pitDrawOps.under : [],
@@ -1502,7 +1499,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }, marks)
     return { items, marks }
   }, [
-    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, baseDrawOp, trackDrawOps,
+    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps,
     pitDrawOps, pitDisc,
   ])
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
@@ -1555,9 +1552,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         pxPerUnit: camRef.current.z * (sw / vb.w) * dpr,
       }) ?? '#FF00FF',
       timing,
+      scenery.base,
     )
     if (timing) paintStatsRef.current = timing.out
-  }, [vb, lighting, u])
+  }, [vb, lighting, u, scenery.base])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
 
   // â”€â”€ Benchmark mode â”€â”€

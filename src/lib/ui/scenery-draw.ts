@@ -444,9 +444,10 @@ export interface SceneOpts {
    *  hysteresis — so nothing pops inside the frame. Each entry's own radius is respected, so a
    *  building straddling the edge stays. */
   cull?: { cx: number; cy: number; r: number } | null
-  /** The ground plane under everything, before even the relief bands. As part of `track` it painted
-   *  OVER the bands and fields, which is why the canvas ground looked flat. */
-  base?: DrawOp
+  /** The ground plane under everything is NOT here. It was a world-sized rect at the bottom of the
+   *  scene, and a scene that opens by covering the whole surface has just made the clear before it
+   *  pointless — two full-surface writes a frame for one visible one. The renderer fills the canvas
+   *  with the ground colour instead of clearing it; see `drawScene`. */
   /** The road itself, drawn between the ground and the shadows so scenery shadows fall ON tarmac.
    *  Built by the caller because it comes off the layout rather than off the scenery. */
   track?: DrawOp[]
@@ -597,7 +598,6 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   const items: SceneItem[] = []
   const mark = (name: string) => { marks?.push({ name, at: items.length }) }
   mark('ground')
-  if (o.base) items.push(o.base)
   items.push(...s.ground)
   // Garage floors go under the lane's paint; the road then goes down before any shadow, which is the
   // whole reason shadows read as lying ON it. The pit complex and the kerbs are part of the ground

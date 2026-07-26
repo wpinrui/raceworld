@@ -108,9 +108,20 @@ export function drawScene(
   /** When given, paint time is attributed per scene section into `out` (ms by section name) —
    *  what the fps readout shows so a slow corner names its own cost. */
   timing?: { marks: SceneMark[]; out: Record<string, number> },
+  /** The ground's own colour. Given, the surface is FILLED with it rather than cleared and then
+   *  covered by a world-sized ground op — one full-surface write a frame instead of two, which at
+   *  racing zoom is about a quarter of everything the frame paints. It also means the camera can
+   *  never pan off the end of the world, because there is no end of it to reach. Withheld in map
+   *  view, where the canvas has to leave nothing behind the minimap. */
+  clearTo?: string,
 ): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.clearRect(0, 0, size.w * dpr, size.h * dpr)
+  if (clearTo) {
+    ctx.fillStyle = clearTo
+    ctx.fillRect(0, 0, size.w * dpr, size.h * dpr)
+  } else {
+    ctx.clearRect(0, 0, size.w * dpr, size.h * dpr)
+  }
   // Viewport centre, then the camera, then viewBox units. Mirrors the world div's own transform:
   // translate(cam) rotate scale, about the middle of the stage — which is also the middle of the
   // viewport, because the stage is centred in it.

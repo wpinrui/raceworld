@@ -136,10 +136,8 @@ async function main() {
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
       trees: scenery.trees,
-      base: {
-        d: `M ${vb.x - 4000} ${vb.y - 4000} h ${vb.w + 8000} v ${vb.h + 8000} h ${-(vb.w + 8000)} Z`,
-        fill: scenery.base,
-      },
+      // No ground op: the renderer FILLS the canvas with scenery.base rather than clearing it, so on
+      // this side the ground is the page under the ops. Side A paints its own rect for the same reason.
       track: [
         { d: layout.d, stroke: '#D8D8D2', width: u(TRACK_WIDTH_M) },
         { d: layout.pit.fastD, stroke: '#D8D8D2', width: u(LANE_WIDTH_M), cap: 'round' },
@@ -158,7 +156,10 @@ async function main() {
       pitUnder: zone ? pitFloorOps(zone, lighting) : [],
       pitOver: zone ? pitComplexOps(zone, u, lighting, view) : [],
     })
-    const canvasBody = defs + items.map(itemSvg).join('\n')
+    const ground = renderToStaticMarkup(createElement('rect', {
+      x: vb.x - 4000, y: vb.y - 4000, width: vb.w + 8000, height: vb.h + 8000, fill: scenery.base,
+    }))
+    const canvasBody = defs + ground + items.map(itemSvg).join('\n')
 
     const outW = Math.round(Math.max(vb.w * 2, 1400))
     const outH = Math.round((outW * vb.h) / vb.w)
