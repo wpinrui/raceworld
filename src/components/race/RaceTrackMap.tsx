@@ -1556,7 +1556,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     })
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
-      u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
+      u, lighting, view: viewAz, ground: !hidden.has('ground'), extrude: EXTRUDE,
       // The detail ladder's input. Bucketed by the scene cache, so this changes the picture at
       // discrete scales rather than continuously as the camera zooms.
       pxPerM: scenePxPerM,
@@ -1574,7 +1574,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }, marks)
     return { items, marks }
   }, [
-    canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps,
+    canvasOn, view, scenery, u, lighting, viewAz, hidden, trackDrawOps,
     pitDrawOps, pitDisc, scenePxPerM,
   ])
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])

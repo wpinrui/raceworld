@@ -178,7 +178,7 @@ for (const id of ids) {
     const pitNear = !pitDisc || Math.hypot(pitDisc.cx - cx, pitDisc.cy - cy) <= cull.r + pitDisc.r
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
-      u, lighting, view: viewAz, full, ground: true, extrude: EXTRUDE, pxPerM,
+      u, lighting, view: viewAz, ground: true, extrude: EXTRUDE, pxPerM,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r: { storeys?: number }) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),

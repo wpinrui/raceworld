@@ -124,7 +124,7 @@ export function SceneryLayer({ scenery, u, lighting, hide, detail = 'full' }: {
         </pattern>
       </defs>
 
-      {groundOps(scenery, u, { full, ground: !noGround }).map((op, i) => (
+      {groundOps(scenery, u, { ground: !noGround, pxPerM: full ? undefined : 1 }).map((op, i) => (
         <path
           key={`g${i}`} d={op.d} fill={op.fill ? paint(op.fill) : 'none'} stroke={op.stroke}
           strokeWidth={op.width} opacity={op.alpha} fillRule={op.evenOdd ? 'evenodd' : undefined}
@@ -176,12 +176,16 @@ export function SceneryShadowLayer({ scenery, u, lighting, view, cull, maxTrees,
 
           Lighter than the solids' shadows: a grove's overlap heavily, and at full strength they
           merge into one dark mass rather than dappled shade. */}
-      {full && treeShadowOp(
-        hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees),
-        { u, extrude: EXTRUDE, lighting, view },
-      ).map((op, i) => (
-        <path key={`ts${i}`} d={op.d} fill={op.fill} opacity={op.alpha} />
-      ))}
+      {full && (() => {
+        // ONE op for the whole grove, or null when there are no trees — never a list. Mapped as if it
+        // were an array this threw on every render it was reached with, which is why nothing here can
+        // be trusted to be exercised until the types agree.
+        const op = treeShadowOp(
+          hide?.has('trees') ? [] : visibleTrees(scenery.trees, cull, maxTrees),
+          { u, extrude: EXTRUDE, lighting, view },
+        )
+        return op && <path d={op.d} fill={op.fill} opacity={op.alpha} />
+      })()}
     </g>
   )
 }
@@ -252,6 +256,11 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
   cull?: Cull | null; maxTrees?: number; hide?: Hidden; detail?: 'full' | 'low'
 }) {
   const full = detail === 'full'
+  // The detail ladder is the CANVAS's, and this layer draws the static map view and the fallback. So
+  // its own two-tier `detail` prop is mapped onto the ladder rather than a second mechanism being kept
+  // alive beside it: 1px/m puts a 14m-deep solid at the mid rung, which is the same set of pieces
+  // `full: false` used to drop.
+  const svgPxPerM = full ? undefined : 1
   // Camera sits at +dir (raising a point pushes its image AWAY from the eye, so tops drawn at -dir
   // put the eye at +dir). A larger projection along dir is therefore NEARER: sort furthest-first and
   // the painter's order comes out right.
@@ -278,13 +287,13 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
       {/* Grandstands rake: the trackside front barely lifts, the rear lifts a long way, so the deck
           climbs away from the circuit like real seating. Extruded uniformly they read as office
           blocks parked beside the track — they are a bank of seats, not a building. */}
-      {!hide?.has('stands') && standGroups(scenery.stands, standOpts, full).map((g, i) => (
+      {!hide?.has('stands') && standGroups(scenery.stands, { ...standOpts, pxPerM: svgPxPerM }).map((g, i) => (
         <g key={`s${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
           {g.ops.map((op, j) => <path key={j} d={op.d} fill={paint(op.fill!)} />)}
         </g>
       ))}
 
-      {!hide?.has('buildings') && buildingRoofGroups(scenery.buildings, full).map((g, i) => (
+      {!hide?.has('buildings') && buildingRoofGroups(scenery.buildings, { u, pxPerM: svgPxPerM }).map((g, i) => (
         <g key={`b${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
           {g.ops.map((op, j) => <path key={j} d={op.d} fill={paint(op.fill!)} />)}
         </g>
@@ -307,9 +316,7 @@ export function ScenerySolidsLayer({ scenery, u, lighting, view, cull, maxTrees,
           u, extrude: EXTRUDE, lighting, view, hutM: MARSHAL_H_M, hutW: MARSHAL_W_M, hutH: MARSHAL_D_M,
         }).map((g, i) => (
           <g key={`${key}mp${i}`} transform={`translate(${g.x} ${g.y}) rotate(${deg(g.rot)})`}>
-            {g.shadow.map((op, k) => (
-              <path key={`ms${k}`} d={op.d} fill={op.fill} opacity={op.alpha} />
-            ))}
+            <path d={g.shadow.d} fill={g.shadow.fill} opacity={g.shadow.alpha} />
             {g.ops.map((op, j) => <path key={j} d={op.d} fill={op.fill} />)}
           </g>
         )),
@@ -350,11 +357,10 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
               the swept ground; the stroke dilates it to the object's real thickness. */}
           {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
               mesh, so what it casts is faint. */}
-          {full && scenery.fences.flatMap((b, i) => (
-            runShadowOp(b.pts, FENCE_H_M, furnOpts).map((op, k) => (
-              <path key={`fs${i}-${k}`} opacity={op.alpha} fill={op.fill} stroke="none" d={op.d} />
-            ))
-          ))}
+          {full && scenery.fences.map((b, i) => {
+            const op = runShadowOp(b.pts, FENCE_H_M, furnOpts)
+            return <path key={`fs${i}`} opacity={op.alpha} fill={op.fill} stroke="none" d={op.d} />
+          })}
         </g>
       )}
 

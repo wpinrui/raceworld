@@ -131,7 +131,7 @@ async function main() {
     } as Scenery
     const defs = renderToStaticMarkup(createElement(SceneryLayer, { scenery: emptyScenery, u, lighting, detail: 'full' }))
     const items = sceneryScene(scenery, {
-      u, lighting, view, full: true, ground: true, extrude: EXTRUDE,
+      u, lighting, view, ground: true, extrude: EXTRUDE,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),

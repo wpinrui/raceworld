@@ -22,7 +22,7 @@ import {
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
-import { atLeast, lodBucket, mergeByPaint, rungFor } from './lod'
+import { atLeast, lodBucket, mergeByPaint, rungFor, type Rung } from './lod'
 import { TREE_FLAT } from './scenery-paint'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
@@ -107,6 +107,22 @@ export interface TreeDrawOpts {
   /** Graphics quality, as a multiplier on the rung thresholds. See lib/ui/lod.ts. */
   quality?: number
 }
+
+/** An object's size in METRES, from geometry that is in viewBox units. Every rung is decided from a
+ *  real-world size, so the ladder means the same thing on a circuit drawn at any metres-per-unit. */
+const metresIn = (o: { u: (m: number) => number }) => (units: number) => units / o.u(1)
+
+/** The size a built solid's DETAIL is judged by: its shorter footprint dimension.
+ *
+ *  Not its longest. A grandstand is 60m by 14m, and everything that makes it a grandstand rather than a
+ *  slab — the seat rows, the crowd, the rake, the window bays — runs ACROSS the short way. Judged on the
+ *  60m the textures would survive to a zoom where they are a few pixels wide and cost their patterns for
+ *  nothing; judged on the 14m they retire when they stop being readable. */
+const detailSizeM = (r: SceneryRect, m: (units: number) => number) => m(Math.min(r.w, r.h))
+
+/** The size a solid's SHADOW is judged by: its longest footprint dimension, because a shadow stays
+ *  legible as a shape for as long as the thing casting it does, however thin it is. */
+const shadowSizeM = (r: SceneryRect, m: (units: number) => number) => m(Math.max(r.w, r.h))
 
 /** Trunk and canopy for a set of trees, already depth-sorted so a nearer tree covers a further one.
  *
@@ -229,27 +245,39 @@ export function buildingWallGroups(
   buildings: SceneryRect[], o: SolidDrawOpts,
 ): DrawGroup[] {
   const dir = dirAt(o.view)
+  const m = metresIn(o)
   return buildings.map((r) => {
     const storeys = r.storeys ?? 1
     const h = storeys * o.storeyM
     const t = o.u(h * o.extrude)
     const off = toLocal(dir.x * t, dir.y * t, r.rot)
     const parts = partsOf(r)
+    // The silhouette is the building. The two visible planes and then the window grid are what tell
+    // you it is a building rather than a block, and they go in that order as it shrinks: a bay is
+    // 5.4m, so the grid is the first thing that stops being a grid and starts being noise.
+    const ops = (rung: Rung): DrawOp[] => {
+      if (rung === 'gone') return []
+      const out: DrawOp[] = [
+        // The whole solid's silhouette, in one piece.
+        { d: sweptHull(parts, off.x, off.y), fill: shadeFace(r.fill, o.lighting) },
+      ]
+      if (!atLeast(rung, 'mid')) return out
+      // The left/right faces a shade apart, so the two visible planes of the box are distinct.
+      out.push({ d: sideFacesX(parts, off.x, off.y), fill: tintFace(r.fill, o.lighting, -0.45) })
+      if (rung === 'near') {
+        out.push({
+          d: wallWindows(parts, off.x, off.y, o.u(o.bayM), Math.max(1, Math.round(h / o.storeyM))),
+          fill: '#0E1319',
+          alpha: 0.42,
+        })
+      }
+      return out
+    }
     return {
       x: r.x,
       y: r.y,
       rot: r.rot,
-      ops: [
-        // The whole solid's silhouette, in one piece.
-        { d: sweptHull(parts, off.x, off.y), fill: shadeFace(r.fill, o.lighting) },
-        // The left/right faces a shade apart, so the two visible planes of the box are distinct.
-        { d: sideFacesX(parts, off.x, off.y), fill: tintFace(r.fill, o.lighting, -0.45) },
-        {
-          d: wallWindows(parts, off.x, off.y, o.u(o.bayM), Math.max(1, Math.round(h / o.storeyM))),
-          fill: '#0E1319',
-          alpha: 0.42,
-        },
-      ],
+      ops: ops(rungFor(detailSizeM(r, m), o.pxPerM ?? Infinity, o.quality)),
     }
   })
 }
@@ -278,24 +306,28 @@ export interface StandDrawOpts extends TreeDrawOpts {
  *
  *  Raked rather than extruded uniformly, because a bank of seats climbs AWAY from the circuit. Given
  *  one flat height they read as office blocks parked beside the track. */
-export function standGroups(
-  stands: Scenery['stands'], o: StandDrawOpts, full: boolean,
-): DrawGroup[] {
+export function standGroups(stands: Scenery['stands'], o: StandDrawOpts): DrawGroup[] {
   const dir = dirAt(o.view)
   const t = o.u(o.rearM * o.extrude)
+  const m = metresIn(o)
   return stands.map((s) => {
     const off = toLocal(dir.x * t, dir.y * t, s.rot)
     const { hull, deck, roof } = rakedStand(s.w, s.h, s.facing, off, 1 - o.frontM / o.rearM, o.roofFrac)
     const box = { x: -s.w / 2, y: -s.h / 2, w: s.w, h: s.h }
-    const ops: DrawOp[] = [
-      { d: hull, fill: shadeFace(s.fill, o.lighting) },
-      { d: deck, fill: `${REF}tm-seats`, bbox: box },
-    ]
-    if (full) ops.push({ d: deck, fill: `${REF}tm-crowd`, bbox: box })
-    // Which way a stand faces has to be legible at a glance, so the rake darkens toward the front.
-    if (full) ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}`, bbox: box })
+    const rung = rungFor(detailSizeM(s, m), o.pxPerM ?? Infinity, o.quality)
+    if (rung === 'gone') return { x: s.x, y: s.y, rot: s.rot, ops: [] }
+    // The bank and its canopy are the stand. Everything between them is texture on the deck, and the
+    // deck is what shrinks: seat rows are 1.5m and crowd dots 3.2m, so all four of those patterns are
+    // sub-pixel long before the stand itself stops being a recognisable shape.
+    const ops: DrawOp[] = [{ d: hull, fill: shadeFace(s.fill, o.lighting) }]
+    if (atLeast(rung, 'mid')) ops.push({ d: deck, fill: `${REF}tm-seats`, bbox: box })
+    if (rung === 'near') {
+      ops.push({ d: deck, fill: `${REF}tm-crowd`, bbox: box })
+      // Which way a stand faces has to be legible at a glance, so the rake darkens toward the front.
+      ops.push({ d: deck, fill: `${REF}${s.facing ? 'tm-rake' : 'tm-rake-flip'}`, bbox: box })
+    }
     ops.push({ d: roof, fill: '#7B8494' })
-    if (full) ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
+    if (rung === 'near') ops.push({ d: deck, fill: `${REF}tm-bevel`, bbox: box })
     return { x: s.x, y: s.y, rot: s.rot, ops }
   })
 }
@@ -306,13 +338,21 @@ export function standGroups(
  *  gradient already resolves against the path's own extent, and doing it per PART gave every sub-rect
  *  its own light-to-dark ramp, seaming at each internal edge. */
 export function buildingRoofGroups(
-  buildings: SceneryRect[], full: boolean,
+  buildings: SceneryRect[], o: { u: (m: number) => number; pxPerM?: number; quality?: number },
 ): DrawGroup[] {
+  const m = metresIn(o)
   return buildings.map((b) => {
     const d = partsPath(partsOf(b))
     const box = { x: -b.w / 2, y: -b.h / 2, w: b.w, h: b.h }
+    const rung = rungFor(detailSizeM(b, m), o.pxPerM ?? Infinity, o.quality)
+    // The roof plate stays to the last rung above nothing: it is the building's top surface, and without
+    // it the solid loses its own colour and reads as a shadow. The decking and the bevel across it are
+    // detail ON that plate, and go first.
+    if (rung === 'gone') return { x: b.x, y: b.y, rot: b.rot, ops: [] }
     const ops: DrawOp[] = [{ d, fill: b.fill }]
-    if (full) ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
+    if (rung === 'near') {
+      ops.push({ d, fill: `${REF}tm-roof`, bbox: box }, { d, fill: `${REF}tm-bevel`, bbox: box })
+    }
     return { x: b.x, y: b.y, rot: b.rot, ops }
   })
 }
@@ -331,7 +371,15 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
   const vdir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const reach = shadowReach(o.lighting)
+  const m = metresIn(o)
   return structures.map((r) => {
+    // A shadow is judged on the LONGEST footprint dimension, not the shortest: it stays a legible
+    // shape for as long as its caster does, however thin. It is one draw call, so there is nothing to
+    // simplify — it is either drawn or it is not. An empty group rather than a missing one, so the
+    // caller's per-structure clip discs stay index-aligned.
+    if (rungFor(shadowSizeM(r, m), o.pxPerM ?? Infinity, o.quality) === 'gone') {
+      return { x: r.x, y: r.y, rot: r.rot, ops: [] }
+    }
     const h = o.heightM(r)
     const base = o.u(h * o.extrude)
     const cast = o.u(h * reach)
@@ -455,19 +503,27 @@ export function marshalGroups(
  *
  *  Big paths and few of them, so they stay affordable at full zoom-out — which is exactly where a
  *  single flat green used to read as a runway extending forever. Ordered lowest first. */
+/** Row spacing of the crop lattice and the width of a hedgerow, in metres: what those two ground
+ *  textures are judged by, since a texture is only worth drawing while its own features are separable. */
+const CROP_ROW_M = 3.4
+const HEDGEROW_M = 2.2
+
 export function groundOps(
   scenery: Pick<Scenery, 'bands' | 'fields' | 'terrain' | 'runoffs'>,
   u: (m: number) => number,
-  { full, ground }: { full: boolean; ground: boolean },
+  { ground, pxPerM, quality }: { ground: boolean; pxPerM?: number; quality?: number },
 ): DrawOp[] {
+  const px = pxPerM ?? Infinity
+  const crop = atLeast(rungFor(CROP_ROW_M, px, quality), 'mid')
+  const hedges = atLeast(rungFor(HEDGEROW_M, px, quality), 'mid')
   const ops: DrawOp[] = []
   if (ground) {
     for (const b of scenery.bands) ops.push({ d: b.d, fill: b.fill, alpha: b.soft ? 0.3 : 1, evenOdd: true })
     for (const f of scenery.fields) {
       ops.push({ d: f.d, fill: f.fill, alpha: 0.75 })
       // Crop rows and hedgerows are per-field detail: zoomed out only the tint is legible.
-      if (full && f.crop) ops.push({ d: f.d, fill: `${REF}tm-crop` })
-      if (full) ops.push({ d: f.d, stroke: '#1F3318', width: u(2.2), alpha: 0.35 })
+      if (crop && f.crop) ops.push({ d: f.d, fill: `${REF}tm-crop` })
+      if (hedges) ops.push({ d: f.d, stroke: '#1F3318', width: u(HEDGEROW_M), alpha: 0.35 })
     }
   }
   for (const b of scenery.terrain) {
@@ -482,7 +538,6 @@ export interface SceneOpts {
   u: (m: number) => number
   lighting: Lighting
   view: number
-  full: boolean
   /** Screen pixels per metre of world. Feeds the per-object detail ladder in lib/ui/lod.ts; absent
    *  means full detail everywhere, which is what the SVG layer and the previews want. */
   pxPerM?: number
@@ -575,11 +630,15 @@ const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
  *  Keyed on every scalar the geometry reads. `solidHeightM` is a function and stays out of the key:
  *  callers pass a fixed formula, and a caller that varied it per call would have to invalidate by
  *  passing a fresh `Scenery`. */
+/** Drop the groups the ladder emptied. They are stamped with their clip disc BEFORE this runs, so a
+ *  producer's output stays index-aligned with the array it came from. */
+const keepDrawn = (gs: DrawGroup[]): DrawGroup[] => gs.filter((g) => g.ops.length > 0)
+
 const staticCache = new WeakMap<Scenery, StaticParts>()
 
 function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const key = JSON.stringify([
-    o.view, o.full, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
+    o.view, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
     o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.u(1), o.lighting,
     // Quantised, never raw: the rungs only change at discrete scales, and keying on a live
     // pixels-per-metre would rebuild a circuit's whole string geometry on every zoom notch.
@@ -599,7 +658,11 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const structDiscs = structures.map((r) => discOfRect(r, solidPad))
   const runShadows: DrawOp[] = []
   const fenceRuns: DrawOp[] = []
-  if (o.full) {
+  // A fence is judged on its HEIGHT, not the length of its run: what makes it read as debris fencing
+  // rather than a hedge is the mesh face standing up off the ground, and that is what shrinks.
+  const px = o.pxPerM ?? Infinity
+  const fenceRung = rungFor(o.fenceM, px, o.quality)
+  if (atLeast(fenceRung, 'mid')) {
     for (const f of scenery.fences) {
       runShadows.push(stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, discOfPts(f.pts, runPad)))
     }
@@ -610,23 +673,30 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   }
   const parts: StaticParts = {
     key,
-    ground: groundOps(scenery, o.u, { full: o.full, ground: o.ground }),
-    shadowGroups: o.full
-      ? structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM })
-        .map((g, i) => stamp(g, structDiscs[i]))
-      : [],
-    wallGroups: o.full
-      ? buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM })
-        .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad)))
-      : [],
-    standGs: standGroups(scenery.stands, {
+    ground: groundOps(scenery, o.u, { ground: o.ground, pxPerM: o.pxPerM, quality: o.quality }),
+    // Every one of these now asks the ladder per OBJECT rather than reading one global boolean, so a
+    // shed retires while the grandstand beside it is still fully drawn. A group whose rung came back
+    // 'gone' arrives here with no ops; it is stamped by index first so the discs stay aligned, then
+    // dropped.
+    shadowGroups: keepDrawn(
+      structureShadowGroups(structures, { ...treeOpts, heightM: o.solidHeightM })
+        .map((g, i) => stamp(g, structDiscs[i])),
+    ),
+    wallGroups: keepDrawn(
+      buildingWallGroups(scenery.buildings, { ...treeOpts, storeyM: o.storeyM, bayM: o.bayM })
+        .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
+    ),
+    standGs: keepDrawn(standGroups(scenery.stands, {
       ...treeOpts, frontM: o.standFrontM, rearM: o.standRearM, roofFrac: o.standRoofFrac,
-    }, o.full).map((g, i) => stamp(g, discOfRect(scenery.stands[i], solidPad))),
-    roofGs: buildingRoofGroups(scenery.buildings, o.full)
-      .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
+    }).map((g, i) => stamp(g, discOfRect(scenery.stands[i], solidPad)))),
+    roofGs: keepDrawn(
+      buildingRoofGroups(scenery.buildings, { u: o.u, pxPerM: o.pxPerM, quality: o.quality })
+        .map((g, i) => stamp(g, discOfRect(scenery.buildings[i], solidPad))),
+    ),
     runShadows,
     fenceRuns,
-    marshalGs: o.full
+    // A 2.8m hut is the smallest built thing on the map, so it reaches the bottom of the ladder first.
+    marshalGs: atLeast(rungFor(o.marshalW, px, o.quality), 'far')
       ? marshalGroups(scenery.marshals, {
         ...treeOpts, hutM: o.marshalM, hutW: o.marshalW, hutH: o.marshalD,
       }).map((g) => stamp<DrawGroup>({
@@ -680,14 +750,13 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   if (o.kerbs) items.push(...o.kerbs)
 
   mark('shadows')
-  if (o.full) {
-    // Shadows before every solid, so nothing casts over the thing standing on it.
-    items.push(...keep(s.shadowGroups))
-    const trees = treeShadowOp(o.trees, treeOpts)
-    if (trees) items.push(trees)
-  }
+  // Shadows before every solid, so nothing casts over the thing standing on it. No gate: each shadow
+  // already asked the ladder for itself, and a whole grove's is ONE op however many trees are in it.
+  items.push(...keep(s.shadowGroups))
+  const treeShade = treeShadowOp(o.trees, treeOpts)
+  if (treeShade) items.push(treeShade)
   mark('solids')
-  if (o.full) items.push(...keep(s.wallGroups))
+  items.push(...keep(s.wallGroups))
   items.push(...keep(s.standGs))
   items.push(...keep(s.roofGs))
   // Trees and MARSHAL POSTS in one depth order. Posts stand out among the trees, so drawing every post
@@ -716,7 +785,7 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
     if (ti < trees.length) items.push(...treeSolidOps(trees.slice(ti), treeOpts))
   }
   mark('furniture')
-  if (o.full) items.push(...keep(s.runShadows))
-  if (o.full) items.push(...keep(s.fenceRuns))
+  items.push(...keep(s.runShadows))
+  items.push(...keep(s.fenceRuns))
   return items
 }

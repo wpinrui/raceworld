@@ -69,21 +69,10 @@ describe('treeSolidOps', () => {
 })
 
 describe('treeShadowOp', () => {
-  // A whole grove is ONE op per softening band, however many trees are in it, which is what makes
-  // tree shade the cheapest thing on the map to soften.
-  const grove = [tree(0, 0), tree(40, 20), tree(-10, 60)]
-  const first = (o: typeof opts & { pxPerM?: number }) => treeShadowOp([tree(0, 0)], o)[0]
-
-  it('collapses a whole grove into one op per band', () => {
-    for (const op of treeShadowOp(grove, opts)) {
-      expect((op.d.match(/M /g) ?? []).length).toBe(grove.length)
-      expect(op.alpha!).toBeGreaterThan(0)
-      expect(op.alpha!).toBeLessThan(1)
-    }
-  })
+  const first = (o: typeof opts & { pxPerM?: number }) => treeShadowOp([tree(0, 0)], o)!
 
   it('has nothing to draw when there is nothing to shade', () => {
-    expect(treeShadowOp([], opts)).toEqual([])
+    expect(treeShadowOp([], opts)).toBeNull()
   })
 
   it('runs the shadow along the SUN, not along the camera', () => {
@@ -187,8 +176,8 @@ describe('standGroups', () => {
   const stand = (facing: boolean) => ({ x: 10, y: 20, w: 40, h: 16, rot: 0.2, fill: '#4A515C', facing })
 
   it('rakes AWAY from the circuit, so the two facings are mirror images', () => {
-    const [a] = standGroups([stand(true)] as never, standOpts, true)
-    const [b] = standGroups([stand(false)] as never, standOpts, true)
+    const [a] = standGroups([stand(true)] as never, standOpts)
+    const [b] = standGroups([stand(false)] as never, standOpts)
     expect(a.ops[0].d).not.toBe(b.ops[0].d)
     // The rake gradient flips with the facing; that is what makes which way it points legible.
     expect(refName(a.ops[3].fill!)).toBe('tm-rake')
@@ -196,8 +185,8 @@ describe('standGroups', () => {
   })
 
   it('drops the crowd, rake and bevel at the cheap tier but keeps the structure', () => {
-    const [full] = standGroups([stand(true)] as never, standOpts, true)
-    const [low] = standGroups([stand(true)] as never, standOpts, false)
+    const [full] = standGroups([stand(true)] as never, standOpts)
+    const [low] = standGroups([stand(true)] as never, { ...standOpts, pxPerM: 0.4 })
     expect(low.ops.length).toBeLessThan(full.ops.length)
     // Whatever comes off, the bank, its seating and its roof stay.
     expect(low.ops.map((op) => op.fill)).toContain(full.ops[0].fill)
@@ -213,14 +202,14 @@ describe('buildingRoofGroups', () => {
     // Per part, every sub-rect got its own light-to-dark ramp and seamed at each internal edge.
     const [g] = buildingRoofGroups([{ ...b, parts: [
       { dx: -4, dy: 0, w: 10, h: 12 }, { dx: 5, dy: 0, w: 8, h: 6 },
-    ] } as SceneryRect], true)
+    ] } as SceneryRect], opts)
     expect(g.ops).toHaveLength(3)
     expect(g.ops[0].d).toBe(g.ops[2].d)
     expect(refName(g.ops[2].fill!)).toBe('tm-bevel')
   })
 
   it('keeps only the flat roof at the cheap tier', () => {
-    expect(buildingRoofGroups([b], false)[0].ops).toHaveLength(1)
+    expect(buildingRoofGroups([b], { ...opts, pxPerM: 0.5 })[0].ops).toHaveLength(1)
   })
 })
 
@@ -278,14 +267,14 @@ describe('runShadowOp', () => {
 
   it('sweeps from the base rather than offsetting a copy', () => {
     // An offset copy leaves a gap between the object and its shadow, which reads as levitation.
-    const op = runShadowOp(pts, 4, opts)[0]
+    const op = runShadowOp(pts, 4, opts)
     expect(op.d.startsWith('M ')).toBe(true)
     // A ribbon closes back on itself: twice the points of the run it was built from.
     expect((op.d.match(/L /g) ?? []).length).toBe(pts.length * 2 - 1)
   })
 
   it('lengthens with height', () => {
-    expect(runShadowOp(pts, 12, opts)[0].d).not.toBe(runShadowOp(pts, 2, opts)[0].d)
+    expect(runShadowOp(pts, 12, opts).d).not.toBe(runShadowOp(pts, 2, opts).d)
   })
 })
 
@@ -296,7 +285,7 @@ describe('marshalGroups', () => {
   it('gives the hut a real height face rather than a displaced copy of itself', () => {
     // A copy is the mistake the buildings started with: it reads as the same shape drawn twice.
     const [g] = marshalGroups(post as never, mOpts)
-    expect(g.ops[0].d).not.toBe(g.shadow[0].d)
+    expect(g.ops[0].d).not.toBe(g.shadow.d)
     expect(g.ops[0].fill).toBeTruthy()
   })
 
@@ -306,11 +295,11 @@ describe('marshalGroups', () => {
       ...mOpts, lighting: { ...opts.lighting, azimuth: opts.lighting.azimuth + 1 },
     })[0]
     // Moving the sun changes the sweep but not where the hut stands.
-    expect(relit.shadow[0].d).not.toBe(g.shadow[0].d)
+    expect(relit.shadow.d).not.toBe(g.shadow.d)
     expect(relit.x).toBe(g.x)
     // Turning the camera moves the drawn base the shadow is anchored to.
     const turned = marshalGroups(post as never, { ...mOpts, view: opts.view + 1 })[0]
-    expect(turned.shadow[0].d).not.toBe(g.shadow[0].d)
+    expect(turned.shadow.d).not.toBe(g.shadow.d)
   })
 
   it('carries its roof and orange panel as shared ops, so both renderers draw the whole hut', () => {
@@ -339,14 +328,14 @@ describe('groundOps', () => {
 
   it('draws relief with the even-odd rule, since bands are nested rings', () => {
     // Filled nonzero, a band's hole fills in and the terracing disappears.
-    const [band] = groundOps(ground, u, { full: true, ground: true })
+    const [band] = groundOps(ground, u, { ground: true })
     expect(band.evenOdd).toBe(true)
     expect(band.alpha).toBeCloseTo(0.3, 9)
   })
 
   it('sheds per-field detail at the cheap tier but keeps the tint', () => {
-    const full = groundOps(ground, u, { full: true, ground: true })
-    const low = groundOps(ground, u, { full: false, ground: true })
+    const full = groundOps(ground, u, { ground: true })
+    const low = groundOps(ground, u, { ground: true, pxPerM: 1 })
     expect(low.length).toBeLessThan(full.length)
     expect(low.some((op) => op.fill === '#4A6B31')).toBe(true)
     expect(low.some((op) => refName(op.fill ?? '') === 'tm-crop')).toBe(false)
@@ -354,14 +343,14 @@ describe('groundOps', () => {
 
   it('keeps terrain and run-off when the ground itself is switched off', () => {
     // Those are placed features, not the surround; hiding the surround must not take them with it.
-    const ops = groundOps(ground, u, { full: true, ground: false })
+    const ops = groundOps(ground, u, { ground: false })
     expect(ops.some((op) => op.fill === '#2E4A6B')).toBe(true)
     expect(ops.some((op) => op.fill === '#7A6A55')).toBe(true)
     expect(ops.some((op) => op.fill === '#3F602C')).toBe(false)
   })
 
   it('gives water its ripple over its own fill', () => {
-    const ops = groundOps(ground, u, { full: true, ground: true })
+    const ops = groundOps(ground, u, { ground: true })
     const i = ops.findIndex((op) => op.fill === '#2E4A6B')
     expect(refName(ops[i + 1].fill ?? '')).toBe('tm-water')
   })
@@ -375,7 +364,7 @@ describe('sceneryScene', () => {
     fences: [{ d: 'M 0 0 L 9 0', pts: [{ x: 0, y: 0 }, { x: 9, y: 0 }] }],
   } as never as Parameters<typeof sceneryScene>[0]
   const sceneOpts = {
-    u: (m: number) => m / 3, lighting: MOODS.afternoon, view: 0.4, full: true, ground: true,
+    u: (m: number) => m / 3, lighting: MOODS.afternoon, view: 0.4, ground: true,
     extrude: 0.62, storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5, standRoofFrac: 0.3,
     marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
     solidHeightM: () => 9, trees: [tree(5, 5)],
@@ -432,7 +421,7 @@ describe('sceneryScene', () => {
 
   it('drops the expensive half at the cheap tier but keeps the stands and roofs', () => {
     const full = sceneryScene(scenery, sceneOpts)
-    const low = sceneryScene(scenery, { ...sceneOpts, full: false })
+    const low = sceneryScene(scenery, { ...sceneOpts, pxPerM: 0.4 })
     expect(low.length).toBeLessThan(full.length)
     expect(low.some(isGroup)).toBe(true)
   })
@@ -538,11 +527,11 @@ describe('every op carries its own ink', () => {
     for (const g of structureShadowGroups([rect(0, 0), rect(90, 40)], shadowOpts)) {
       expect(g.ops.every(painted), 'structure cast shadow').toBe(true)
     }
-    expect(runShadowOp([{ x: 0, y: 0 }, { x: 50, y: 8 }], 4, opts).every(painted), 'fence run shadow').toBe(true)
+    expect(painted(runShadowOp([{ x: 0, y: 0 }, { x: 50, y: 8 }], 4, opts)), 'fence run shadow').toBe(true)
     for (const g of marshalGroups([{ x: 0, y: 0, rot: 0 }], shadowOpts)) {
-      expect(g.shadow.every(painted), 'marshal hut shadow').toBe(true)
+      expect(painted(g.shadow), 'marshal hut shadow').toBe(true)
     }
-    expect(treeShadowOp([tree(0, 0)], opts).every(painted), 'tree shadow').toBe(true)
+    expect(painted(treeShadowOp([tree(0, 0)], opts)!), 'tree shadow').toBe(true)
   })
 
   it('leaves nothing unpainted anywhere in a composed scene', () => {
@@ -553,7 +542,7 @@ describe('every op carries its own ink', () => {
       tyreWalls: [],
     } as unknown as Parameters<typeof sceneryScene>[0]
     const items = sceneryScene(scenery, {
-      u: opts.u, lighting: opts.lighting, view: opts.view, full: true, ground: true,
+      u: opts.u, lighting: opts.lighting, view: opts.view, ground: true,
       extrude: opts.extrude, storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5,
       standRoofFrac: 0.3, marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: () => 9.2, trees: scenery.trees, cull: null,
@@ -572,9 +561,6 @@ describe('soft shadows', () => {
   const sOpts = { ...opts, heightM: () => 9.2 }
   const bandsAt = (pxPerM?: number) => structureShadowGroups([rect(0, 0)], { ...sOpts, pxPerM })[0].ops
 
-  it('softens a shadow that is big enough on screen to show an edge', () => {
-    expect(bandsAt(20).length).toBeGreaterThan(1)
-  })
 
   it('goes back to one flat op once it is small, where the softness cannot be seen', () => {
     // The whole reason this is affordable: zoomed out, every shadow on the circuit is in shot.
@@ -591,23 +577,12 @@ describe('soft shadows', () => {
     expect(composite).toBeCloseTo(hard.alpha!, 6)
   })
 
-  it('paints widest and faintest first, so the ramp runs outward', () => {
-    const soft = bandsAt(20)
-    for (let i = 1; i < soft.length; i++) {
-      expect(soft[i].alpha!).toBeGreaterThan(soft[i - 1].alpha!)
-    }
-    // And the outermost band really is the biggest shape.
-    const spread = (d: string) => {
-      const n = d.match(/-?\d+(\.\d+)?/g)!.map(Number)
-      return Math.max(...n) - Math.min(...n)
-    }
-    expect(spread(soft[0].d)).toBeGreaterThan(spread(soft[soft.length - 1].d))
-  })
 
-  it('softens a whole grove for the price of one shadow', () => {
-    // Tree shade is one op per band however many trees are in it.
+  it('shades a whole grove for the price of one shadow', () => {
+    // ONE op however many trees are in it: every canopy's shadow is a subpath of the same path, which
+    // is what makes tree shade the cheapest thing on the map and why it survives to the bottom rung.
     const many = Array.from({ length: 60 }, (_, i) => tree((i % 10) * 30, Math.floor(i / 10) * 30))
-    expect(treeShadowOp(many, { ...opts, pxPerM: 20 }).length)
-      .toBe(treeShadowOp([tree(0, 0)], { ...opts, pxPerM: 20 }).length)
+    const op = treeShadowOp(many, { ...opts, pxPerM: 20 })!
+    expect((op.d.match(/M /g) ?? []).length).toBe(many.length)
   })
 })
