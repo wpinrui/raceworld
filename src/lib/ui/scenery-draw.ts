@@ -484,8 +484,8 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
   return structures.map((r) => {
     // A shadow is judged on the LONGEST footprint dimension, not the shortest: it stays a legible
     // shape for as long as its caster does, however thin. It is one draw call, so there is nothing to
-    // simplify — it is either drawn or it is not. An empty group rather than a missing one, so the
-    // caller's per-structure clip discs stay index-aligned.
+    // simplify — it is either drawn or it is not. An empty group rather than a missing one, because a
+    // `map` has to return something; it carries its disc like any other and the caller drops it.
     const rung = rungFor(shadowSizeM(r, m), o.pxPerM ?? Infinity, o.quality)
     const h = o.heightM(r)
     // `heightM` is a function and cannot go in a key, so what it RETURNS does. Cheap to call, and it
@@ -791,7 +791,6 @@ interface StaticParts {
   fenceRuns: DrawOp[]
   marshalGs: DrawGroup[]
 }
-
 
 const discOfPts = (pts: Vec[], pad: number): Bounds => {
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
