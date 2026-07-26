@@ -782,15 +782,18 @@ const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
  *  producer's output stays index-aligned with the array it came from. */
 const keepDrawn = (gs: DrawGroup[]): DrawGroup[] => gs.filter((g) => g.ops.length > 0)
 
-/** How many rung assignments to keep built per circuit.
+/** How many rung assignments to keep assembled per circuit.
  *
  *  One was not enough, and the reason is the shape of a zoom gesture rather than anything subtle. The
- *  camera crosses a rung boundary every couple of wheel notches, and a player zooms OUT to see where
- *  the field is and straight back IN to watch the car. With a single entry every one of those
- *  crossings is a full-circuit rebuild in both directions; with a few, the way back is free. Small
- *  because the entries hold a circuit's worth of path strings, and because the useful ones are always
- *  the neighbours of where the camera is now. */
-const STATIC_CACHE_N = 4
+ *  camera crosses a rung boundary every couple of wheel notches, and a player zooms OUT to see where the
+ *  field is and straight back IN to watch the car. With a single entry every one of those crossings is a
+ *  rebuild in both directions; deep enough to hold the whole ladder, the way back is free. Measured over
+ *  a full 20x -> 0.6x -> 20x -> 60x -> 20x sweep of Monza, this is the difference between 81ms and 60ms
+ *  of blocking work (`npm run zoom:check`).
+ *
+ *  Affordable at this depth only because the geometry itself is memoised per object below: an entry here
+ *  is arrays of references to groups the other caches own, not a circuit's worth of path strings. */
+const STATIC_CACHE_N = 12
 
 /** Every rung the static geometry is built from, as one short string.
  *

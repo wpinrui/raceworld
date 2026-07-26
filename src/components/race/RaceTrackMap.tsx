@@ -83,13 +83,16 @@ const FRAME_CAPS: number[] = [0, 30, 45]
  *  than something the compiler narrows away.
  *
  *  The readout keeps its backtick: it is worth having to hand at any time. */
-// Off in normal play. Flip on to get the layer hotkeys and the 'n' lap benchmark back — the
-// readout keeps its backtick either way. The 2026-07 frame-rate campaign closed with the pit
-// straight's raster dips accepted as the known residual (see the bench reports in that PR).
-// Layer hotkeys and the lap benchmark. Parked again: they answered the wide-zoom question (the canvas
-// costs about a millisecond of command time there, and it is draw CALLS rather than pixels), and they
-// are bare unmodified letters across the top row, so any stray typing silently hides half the world
-// and the only clue is the `off:` list in the readout. Flip to true for the next ablation.
+// ON. The layer hotkeys and the 'n' lap benchmark; the readout keeps its backtick either way.
+//
+// Three successive comments here claimed this was parked while the value said otherwise, so: it is live,
+// and it is live because ablating a layer is still the only way to attribute a raster cost that only a
+// browser can see. What has been settled without it is the COMMAND cost, which `npm run zoom:check`
+// measures headlessly; the pit straight's raster dips remain the known residual.
+//
+// The cost of leaving it on is that these are bare unmodified letters across the top row, so stray
+// typing silently hides half the world and the only clue is the `off:` list in the readout. They belong
+// behind a settings screen, which is the seam this flag marks.
 const DEBUG_KEYS: boolean = true
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
