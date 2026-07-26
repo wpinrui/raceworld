@@ -5,7 +5,7 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { QUALITY, atLeast, lodBucket, lodScale, rungFor } from '@/lib/ui/lod'
+import { QUALITY, atLeast, lodBucket, lodScale, rungFor, type Quality } from '@/lib/ui/lod'
 import { SOFT_LAYERS, SOFT_SPREAD } from '@/lib/ui/surface-ink'
 import {
   SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
@@ -146,9 +146,14 @@ const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery
 // changed the frame rate not at all, and ablation put a draw call at about 19 microseconds — so those
 // calls are most of a 33ms frame.
 
-/** Graphics quality: the ONE number the whole map's detail hangs off. Every gate below is the shared
- *  ladder in lib/ui/lod.ts, so a settings dial sets this and touches nothing else. */
-const GRAPHICS_QUALITY: number = QUALITY.medium
+/** Graphics quality presets, as the multipliers the shared ladder in lib/ui/lod.ts is scaled by. These
+ *  are the STARTING values for the three user settings; the tuning panel under the fps readout moves
+ *  them live so the frame-rate-to-fidelity trade can be judged by eye rather than by rebuild. */
+const QUALITY_PRESETS: Array<{ key: Quality; label: string }> = [
+  { key: 'low', label: 'Low' },
+  { key: 'medium', label: 'Medium' },
+  { key: 'high', label: 'High' },
+]
 
 /** What each remaining gate measures itself by, in metres, so it can go through the same ladder as
  *  every solid rather than carrying a zoom threshold of its own.
@@ -309,6 +314,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // far more than the ladder saves.
   const [scenePxPerM, setScenePxPerM] = useState(Infinity)
   const sceneBucketRef = useRef(Number.NaN)
+  // Which preset is live, and what each preset is currently worth. Held here rather than in a settings
+  // store because the point is to TUNE them: the sliders write these, the ladder reads them, and the
+  // fps readout above shows what it cost. Whatever survives tuning becomes the shipped defaults.
+  const [qualityKey, setQualityKey] = useState<Quality>('medium')
+  const [qualityOf, setQualityOf] = useState<Record<Quality, number>>({ ...QUALITY })
+  const quality = qualityOf[qualityKey]
+  // applyCam runs outside React, so the gates it computes read the live value through a ref.
+  const qualityRef = useRef(quality)
+  useEffect(() => { qualityRef.current = quality }, [quality])
   // Garage signage carries the only real TEXT on the map, and text is the one thing on it that does not
   // degrade gracefully — it stops being legible long before it stops being expensive. Gated on the
   // band's own height in screen pixels rather than on a zoom number, because a circuit's metres per
@@ -495,7 +509,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // thing on every circuit, and what both detail gates below are expressed in.
     const pxPerM = (stageDimsRef.current.w / vb.w) * z / layout.metresPerUnit
     const live = viewRef.current === 'live'
-    const rung = (sizeM: number) => (live ? rungFor(sizeM, pxPerM, GRAPHICS_QUALITY) : 'near')
+    const rung = (sizeM: number) => (live ? rungFor(sizeM, pxPerM, qualityRef.current) : 'near')
     // The SVG layers' own two-tier prop, driven off the ladder like everything else: a 12m tree is the
     // smallest thing they draw, so it decides when they stop drawing the heavy half.
     const low = !atLeast(rung(12), 'far')
@@ -1563,7 +1577,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       // The detail ladder's input. Bucketed by the scene cache, so this changes the picture at
       // discrete scales rather than continuously as the camera zooms.
       pxPerM: scenePxPerM,
-      quality: GRAPHICS_QUALITY,
+      quality,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
@@ -1579,7 +1593,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     return { items, marks }
   }, [
     canvasOn, view, scenery, u, lighting, viewAz, hidden, trackDrawOps,
-    pitDrawOps, pitDisc, scenePxPerM,
+    pitDrawOps, pitDisc, scenePxPerM, quality,
   ])
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
   const sceneRef = useRef(scene)
@@ -1855,6 +1869,40 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           ref={hudRef}
           className="absolute left-2 top-2 z-30 rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-[#FFFFFF]"
         />
+      )}
+      {hud && (
+        <div className="absolute left-2 top-9 z-30 w-56 rounded bg-black/70 px-2 py-2 font-mono text-[11px] text-[#FFFFFF]">
+          <div className="flex gap-1">
+            {QUALITY_PRESETS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { setQualityKey(key); requestAnimationFrame(() => applyCam()) }}
+                className={`flex-1 rounded px-1 py-0.5 ${key === qualityKey ? 'bg-[#2E62C9]' : 'bg-white/15'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {QUALITY_PRESETS.map(({ key, label }) => (
+            <label key={key} className="mt-1.5 flex items-center gap-1.5">
+              <span className="w-12 shrink-0">{label}</span>
+              <input
+                type="range" min={0.2} max={4} step={0.05} value={qualityOf[key]}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setQualityOf((prev) => ({ ...prev, [key]: v }))
+                  setQualityKey(key)
+                  // The gates live in applyCam, which React does not drive; nudge it so the change
+                  // shows on this frame rather than on the next camera move.
+                  requestAnimationFrame(() => applyCam())
+                }}
+                className="min-w-0 flex-1 accent-[#2E62C9]"
+              />
+              <span className="w-8 shrink-0 text-right">{qualityOf[key].toFixed(2)}</span>
+            </label>
+          ))}
+        </div>
       )}
       {benchOn && (
         <div
