@@ -415,6 +415,16 @@ describe('sceneryScene', () => {
     }
   })
 
+  it('paints the overlay last, over every solid and every shadow', () => {
+    // The start's chequer and the grid boxes. They live at the END of the scene because that is where
+    // the SVG layer draws them — after its furniture — and the two renderers are not allowed to
+    // disagree about whether a grandstand's shadow falls across the start line. Put in with the road
+    // instead, they land under the kerbs and under everything the scenery casts.
+    const overlay: DrawOp[] = [{ d: 'M 1 1 L 2 2', fill: '#F2F2F2' }]
+    const items = sceneryScene(scenery, { ...sceneOpts, overlay })
+    expect(items[items.length - 1]).toBe(overlay[0])
+  })
+
   it('drops what the cull disc cannot see but keeps the ground and the road', () => {
     const track: DrawOp[] = [{ d: 'M 0 0 L 5 5', stroke: '#333333' }]
     const far = sceneryScene(scenery, { ...sceneOpts, track, cull: { cx: 4000, cy: 4000, r: 10 } })
