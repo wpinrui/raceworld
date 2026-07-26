@@ -173,6 +173,25 @@ const INK_SOFTENING_M = SOFT_LAYERS * SOFT_SPREAD
 const SIGN_BAND_M = SIGN_H_M * EXTRUDE
 const ROT_STEP = Math.PI / 36 // 5Â° per shift+wheel notch
 
+/** Show or hide an element, writing only when it is actually changing.
+ *
+ *  The render loop settles the visibility of every car and every pit crew on every frame, and on the
+ *  overwhelming majority of them the answer is the same as last frame's — twenty cars on track and ten
+ *  garages standing idle is thirty style-attribute writes a frame to say nothing. A write goes through
+ *  CSSOM parsing whether or not the value moved, so the cheapest place to notice is here. Remembered on
+ *  the element, so nothing has to be pruned when a car retires or a circuit changes.
+ *
+ *  `visibility` rather than `display` throughout, and deliberately: the race loop measures the track
+ *  path with `getTotalLength`, which needs the geometry laid out. */
+const VIS = Symbol('vis')
+type Hideable = (SVGElement | HTMLElement) & { [VIS]?: boolean }
+
+function setVis(el: Hideable, shown: boolean): void {
+  if (el[VIS] === shown) return
+  el[VIS] = shown
+  el.style.visibility = shown ? '' : 'hidden'
+}
+
 /** A path element seen as pure arc-length geometry, which is all the racing-line solver wants of it. */
 const arcPath = (p: SVGPathElement): ArcPath => ({
   length: p.getTotalLength(),
@@ -1016,10 +1035,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           if (!el) continue
           const sample = sampleRef.current(car.id)
           if (sample === null) {
-            el.style.visibility = 'hidden'
+            setVis(el, false)
             continue
           }
-          el.style.visibility = ''
+          setVis(el, true)
           if (sample.pit) {
             // The lane's 0..1 progress parks at THIS team's box: 0..0.5 crawls to the box, 0.5 holds
             // in it, 0.5..1 crawls from the box to the exit.
@@ -1114,7 +1133,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         interface Draw { f: Frame; pt: DOMPoint; heading: number; lat: number; total: number }
         const draws: Draw[] = []
         for (const f of frames) {
-          if (!Number.isFinite(f.dist)) { f.el.style.visibility = 'hidden'; continue } // never crash the geometry API
+          if (!Number.isFinite(f.dist)) { setVis(f.el, false); continue } // never crash the geometry API
           const p = f.kind === 'pit' ? pitPath : f.kind === 'race' ? raceLine : path
           const total = f.kind === 'pit' ? pitLenRef.current : f.kind === 'race' ? raceLenRef.current : lenTotal
           const pt = p.getPointAtLength(f.dist)
@@ -1314,14 +1333,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const wantCrew = calledSlots.has(idx) ||
               (info != null && boxDist != null && info.dist < boxDist + uu(12))
             let anim = crewAnimRef.current.get(idx)
-            if (!anim && !wantCrew) { root.style.visibility = 'hidden'; return }
+            if (!anim && !wantCrew) { setVis(root, false); return }
             if (!anim) {
               anim = { mode: 'hidden', pos: {}, oldOut: [false, false, false, false], newIn: [false, false, false, false], swapped: false, restored: false, retreatT0: 0 }
               crewAnimRef.current.set(idx, anim)
             }
-            if (wantCrew && anim.mode !== 'active') { anim.mode = 'active'; root.style.visibility = '' }
+            if (wantCrew && anim.mode !== 'active') { anim.mode = 'active'; setVis(root, true) }
             else if (!wantCrew && anim.mode === 'active') { anim.mode = 'retreat'; anim.retreatT0 = wallT }
-            if (anim.mode === 'hidden') { root.style.visibility = 'hidden'; return }
+            if (anim.mode === 'hidden') { setVis(root, false); return }
             if (anim.mode === 'retreat' && wallT - anim.retreatT0 > 3000) {
               // Teardown: everything vanishes TOGETHER; the departed car always has its wheels.
               setCarWheels(anim.carId, true)
@@ -1332,7 +1351,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               anim.swapped = false
               anim.restored = false
               anim.carId = undefined
-              root.style.visibility = 'hidden'
+              setVis(root, false)
               return
             }
 
@@ -1428,7 +1447,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 : retreating ? intoGarage(anim.pos[`oldT${c}`] ?? drop) : drop
               const [ox, oy] = move(`oldT${c}`, oldTarget[0], oldTarget[1], 2.6)
               if (oldEl) {
-                oldEl.style.visibility = anim.swapped ? '' : 'hidden'
+                setVis(oldEl, anim.swapped)
                 oldEl.setAttribute('transform', `translate(${uu(ox)} ${uu(oy)})`)
               }
               // New tyre: pre-staged from deploy, carried by B to the hub, gone the frame the car is whole.
@@ -1436,7 +1455,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               const newTarget: [number, number] = anim.newIn[c] && !anim.restored ? [wx, wy] : stage
               const [nx2, ny2] = move(`newT${c}`, newTarget[0], newTarget[1], 2.6)
               if (newEl) {
-                newEl.style.visibility = anim.mode === 'active' && !anim.restored ? '' : 'hidden'
+                setVis(newEl, anim.mode === 'active' && !anim.restored)
                 newEl.setAttribute('transform', `translate(${uu(nx2)} ${uu(ny2)})`)
               }
 
@@ -2004,6 +2023,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} hide={hide} detail={lodLow ? 'low' : 'full'} />,
     [scenery, layout.metresPerUnit, lighting, viewAz, hide, lodLow],
   )
+  // The garage name boards are the only real TEXT on the map and the only remote artwork on it (the
+  // flags), and they stay in the document even when the canvas owns the world, because neither degrades
+  // through a `DrawOp`. Memoised for the same reason the pit boxes are: nothing about who is signed
+  // above a garage changes during a race, and the map commits at least once a second regardless.
+  const signsNode = useMemo(
+    () => (pitZone
+      ? (
+        <PitGarageSigns
+          zone={pitZone} u={u} lighting={lighting} view={viewAz}
+          drivers={(gi) => garageCars[gi] ?? []} lettered={signsLettered}
+        />
+      )
+      : null),
+    [pitZone, u, lighting, viewAz, garageCars, signsLettered],
+  )
 
   return (
     <div
@@ -2117,7 +2151,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
-            {pitZone && !hidden.has('pit') && !hidden.has('signs') && <PitGarageSigns zone={pitZone} u={u} lighting={lighting} view={viewAz} drivers={(gi) => garageCars[gi] ?? []} lettered={signsLettered} />}
+            {!hidden.has('pit') && !hidden.has('signs') && signsNode}
             {pitZone && !canvasOn && (
               <g>
                 <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
