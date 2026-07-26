@@ -116,9 +116,13 @@ for (const id of ids) {
   const zoom = pxm > 0 ? (pxm * layout.metresPerUnit) / ppu : RACE_Z
   const k = zoom * ppu // viewBox units to device-independent pixels
   const pxPerUnit2 = (k * DPR) ** 2
-  // Below LOD_ZOOM the heavy layers drop out; above it the scene is composed at FULL detail against a
-  // disc whose radius goes as 1/zoom, so zooming out widens what is drawn faster than it shrinks it.
-  const full = zoom >= 3
+  // Below LOD_PX_PER_M the heavy layers drop out; above it the scene is composed at FULL detail
+  // against a disc whose radius goes as 1/zoom, so zooming out widens what is drawn faster than it
+  // shrinks it — which is how a wide shot ends up submitting more draw calls than a racing one.
+  const pxPerM = (ppu * zoom) / layout.metresPerUnit
+  // The two tiers the renderer keeps: scenery drops out far later than the ink stops being softened.
+  const full = pxPerM >= 2
+  const inkFull = pxPerM >= 5
 
   const scenery = buildScenery(layout.trace, layout.pit, {
     circuitId: layout.circuitId,
@@ -140,7 +144,7 @@ for (const id of ids) {
     tarmac: '#33383E', centre, ground: scenery.base, shadow: shadowFill(lighting),
     ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
     tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: solved.lateral,
-    detail: (zoom >= 3 ? 'full' : 'low') as 'full' | 'low',
+    detail: (inkFull ? 'full' : 'low') as 'full' | 'low',
   }
 
   const track: DrawOp[] = [
@@ -259,7 +263,7 @@ for (const id of ids) {
     console.log(`${' '.repeat(15)}draw calls: ${ob}`)
   }
   console.log(`\n${id} — fill submitted per frame at ${zoom.toFixed(1)}x `
-    + `(${((ppu * zoom) / layout.metresPerUnit).toFixed(1)}px/m, detail ${full ? 'full' : 'low'}), `
+    + `(${pxPerM.toFixed(1)}px/m, scenery ${full ? 'full' : 'low'}, ink ${inkFull ? 'full' : 'flat'}), `
     + `viewport ${VIEWPORT_MPX.toFixed(2)} Mpx (dpr ${DPR})`)
   line('median lap', sorted[Math.floor(sorted.length / 2)])
   line('worst lap', sorted[sorted.length - 1])

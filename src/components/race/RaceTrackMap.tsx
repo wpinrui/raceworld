@@ -131,8 +131,30 @@ const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
 const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery LOD + composited world layer
-// Below this zoom the scenery drops its heavy layers (trees, shadows, bevels) â€” unresolvable there anyway.
-const LOD_ZOOM = 3
+// Detail tiers, in SCREEN PIXELS PER METRE of track.
+//
+// In pixels per metre and not in zoom, because zoom is not a shared unit: a circuit's own metres per
+// unit and viewBox decide how big it draws, and 5x frames Monza very differently from Monaco. The one
+// gate here used to be 3 ZOOM, which works out anywhere between 1.2 and 2.2 px/m across the 37 layouts.
+//
+// There are two of them because the map is DRAW-CALL bound, not pixel bound, and the two halves of the
+// picture reach the point of diminishing returns at very different sizes. Measured on a shot framing the
+// whole pit building (3.5px/m): 993 draw calls against 100-230 at racing zoom, hiding 70% of the pixels
+// changed the frame rate not at all, and ablation put a draw call at about 19 microseconds — so those
+// calls are most of a 33ms frame.
+
+/** Below this the tarmac's ink stops being softened: every mark collapses from four nested strokes to
+ *  one, and the grain goes. Worth 364 draw calls to 102 on its own, and it costs nothing to look at,
+ *  because at this size the four layers span one to three pixels between them and the eye is being
+ *  shown a soft edge it cannot resolve. Five sits above the widest racing shot on every layout (the
+ *  lowest is 6.3px/m), so nothing changes where the game is actually played. */
+const INK_LOD_PX_PER_M = 5
+
+/** Below this the scenery drops its heavy layers outright — trees, marshal posts, every cast shadow,
+ *  wall relief. A far bigger saving and a far bigger loss: a tree canopy is still about 19 pixels across
+ *  at 3.5px/m, so this deliberately stays out at roughly the old gate's reach rather than buying frames
+ *  with every tree on the circuit. Trees want batching, not deleting. */
+const SCENERY_LOD_PX_PER_M = 2
 const ROT_STEP = Math.PI / 36 // 5Â° per shift+wheel notch
 
 /** A path element seen as pure arc-length geometry, which is all the racing-line solver wants of it. */
@@ -272,9 +294,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
 
-  // Scenery LOD: below LOD_ZOOM the heavy layers drop out (state flips only on threshold crossings).
+  // Scenery LOD: below SCENERY_LOD_PX_PER_M the heavy layers drop out (state flips only on threshold
+  // crossings). The tarmac's ink has its own, earlier tier: it stops being worth softening long before
+  // the scenery stops being worth drawing.
   const [lodLow, setLodLow] = useState(false)
   const lodLowRef = useRef(false)
+  const [inkFlat, setInkFlat] = useState(false)
+  const inkFlatRef = useRef(false)
   // Garage signage carries the only real TEXT on the map, and text is the one thing on it that does not
   // degrade gracefully — it stops being legible long before it stops being expensive. Gated on the
   // band's own height in screen pixels rather than on a zoom number, because a circuit's metres per
@@ -457,13 +483,21 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     world.style.setProperty('--cam-zoom-inv', String(1 / z))
     updateCull()
     paintRef.current()
-    const low = z < LOD_ZOOM && viewRef.current === 'live'
+    // Screen pixels per metre of track: the one measure of "how far out am I" that means the same
+    // thing on every circuit, and what both detail gates below are expressed in.
+    const pxPerM = (stageDimsRef.current.w / vb.w) * z / layout.metresPerUnit
+    const low = pxPerM < SCENERY_LOD_PX_PER_M && viewRef.current === 'live'
     if (low !== lodLowRef.current) {
       lodLowRef.current = low
       setLodLow(low)
     }
+    const flat = pxPerM < INK_LOD_PX_PER_M && viewRef.current === 'live'
+    if (flat !== inkFlatRef.current) {
+      inkFlatRef.current = flat
+      setInkFlat(flat)
+    }
     // How tall a garage's signage band draws, right now, in CSS pixels.
-    const bandPx = (SIGN_H_M * EXTRUDE / layout.metresPerUnit) * (stageDimsRef.current.w / vb.w) * z
+    const bandPx = SIGN_H_M * EXTRUDE * pxPerM
     const lettered = bandPx >= SIGN_LEGIBLE_PX && viewRef.current === 'live'
     if (lettered !== signsLetteredRef.current) {
       signsLetteredRef.current = lettered
@@ -1443,7 +1477,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
         tarmac: '#33383E', centre: lap.centre, ground: scenery.base, shadow: shadowFill(lighting),
         ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
-        tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: lap.lateral, detail: lodLow ? 'low' : 'full',
+        tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: lap.lateral, detail: inkFlat ? 'low' : 'full',
       }))
     }
     ops.push(
@@ -1462,11 +1496,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       ops.push(...surfaceOps({
         u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
         tarmac: '#33383E', centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
-        lateral: lap.lateral, detail: lodLow ? 'low' : 'full',
+        lateral: lap.lateral, detail: inkFlat ? 'low' : 'full',
       }))
     }
     return ops
-  }, [layout, pitZone, u, lapLine, lodLow, scenery.base, lighting])
+  }, [layout, pitZone, u, lapLine, inkFlat, scenery.base, lighting])
   const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
     ? {
       under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
