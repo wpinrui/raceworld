@@ -11,6 +11,7 @@
 // heading) and baked into world space here, so a renderer only has to fill them.
 
 import type { Bounds, DrawOp } from './scenery-draw'
+import { unionOf } from './lod'
 
 /** Coordinates are written to two decimals, so a corner can land up to half of the last place outside
  *  where the arithmetic put it, on each axis. A cull disc is only allowed to be wrong in one direction,
@@ -89,17 +90,8 @@ export function gridBoxOps(
     discs.push(discOf(o, u(2.74), u(2.8)))
   }
   // The grid runs a hundred and sixty metres back from the line, so the union is a long way across —
-  // but it is two calls for the whole field, and it only exists before lights out.
-  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
-  for (const c of discs) {
-    if (c.cx - c.r < x0) x0 = c.cx - c.r
-    if (c.cy - c.r < y0) y0 = c.cy - c.r
-    if (c.cx + c.r > x1) x1 = c.cx + c.r
-    if (c.cy + c.r > y1) y1 = c.cy + c.r
-  }
-  const clip: Bounds = {
-    cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2,
-  }
+  // but it is two calls for the whole field.
+  const clip = unionOf(discs)
   return [
     { d: white.join(' '), fill: '#F2F2F2', clip },
     { d: yellow.join(' '), fill: '#E8C33A', clip },

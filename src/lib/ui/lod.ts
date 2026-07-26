@@ -103,7 +103,7 @@ function paintKey(op: DrawOp, i: number): string {
 }
 
 /** The disc containing every disc given. Conservative, which is the only thing a cull disc may be. */
-function unionOf(discs: readonly Bounds[]): Bounds {
+export function unionOf(discs: readonly Bounds[]): Bounds {
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
   for (const b of discs) {
     if (b.cx - b.r < x0) x0 = b.cx - b.r

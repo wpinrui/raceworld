@@ -51,9 +51,13 @@ export interface DrawOp {
   bbox?: { x: number; y: number; w: number; h: number }
   /** Where the op's ink actually lands, when its extent is knowable. The canvas skips ops whose
    *  disc misses the viewport — the cull disc is deliberately wider than the screen, so most frames
-   *  most of the composed scene is pure rasteriser feed for pixels no one sees. Unset means "always
-   *  draw" (the ground, the road). Skipping is EXACT, never a level of detail: an op is either
-   *  entirely off screen or drawn whole. */
+   *  most of the composed scene is pure rasteriser feed for pixels no one sees. Skipping is EXACT,
+   *  never a level of detail: an op is either entirely off screen or drawn whole.
+   *
+   *  Unset means "always draw". The ROAD is the last thing left that means it: it is stroked from the
+   *  layout's own spline until the racing line has been solved, and a spline carries no extent anything
+   *  here can read. The ground carried discs from the moment they could be measured off its paths
+   *  (`discOfPath`), because a lake behind the paddock is off screen most of a lap. */
   clip?: Bounds
 }
 
@@ -630,13 +634,20 @@ function discOfPath(shape: { d: string }, pad: number): Bounds {
   const hit = pathDiscCache.get(shape)
   if (hit) return { ...hit, r: hit.r + pad }
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
-  mapPathPoints(shape.d, (x, y) => {
-    if (x < x0) x0 = x
-    if (y < y0) y0 = y
-    if (x > x1) x1 = x
-    if (y > y1) y1 = y
-    return { x, y }
-  })
+  try {
+    mapPathPoints(shape.d, (x, y) => {
+      if (x < x0) x0 = x
+      if (y < y0) y0 = y
+      if (x > x1) x1 = x
+      if (y > y1) y1 = y
+      return { x, y }
+    })
+  } catch {
+    // The walker throws on a command it does not know. Every ground emitter writes M/L/Q/Z today, but a
+    // future biome reaching for a cubic must not take the race view down from inside a compose: it falls
+    // through to the disc that always passes, which costs a draw call and draws the right picture.
+    x0 = Infinity
+  }
   const disc: Bounds = Number.isFinite(x0)
     ? { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 }
     // A path with no coordinates in it draws nothing, but a disc of NaN would be skipped or kept at
@@ -724,6 +735,14 @@ export interface SceneOpts {
   /** The pit complex, after the road and before the kerbs and shadows, exactly where the SVG puts
    *  its PitBuilding — so scenery shadows and solids paint over it, not under. */
   pitOver?: DrawOp[]
+  /** Road paint that goes on LAST, over every solid and every shadow: the start/finish chequer and the
+   *  grid boxes.
+   *
+   *  Last because that is where the SVG layer has always drawn them, after its furniture, and nothing
+   *  about this change is meant to alter the picture. Putting them in with the road instead would let a
+   *  grandstand's cast shadow fall across the start line on the canvas and not in SVG, which is the two
+   *  renderers disagreeing — the one thing this whole file exists to prevent. */
+  overlay?: DrawOp[]
 }
 
 /** One entry in the paint order: a flat op, or a placed group of them. A single sequence rather than
@@ -775,9 +794,10 @@ const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
  *  none of it changes when the cull disc moves. Without this cache a cull commit during a zoom paid
  *  the full rebuild — tens of milliseconds, a dozen times per gesture.
  *
- *  Keyed on every scalar the geometry reads. `solidHeightM` is a function and stays out of the key:
- *  callers pass a fixed formula, and a caller that varied it per call would have to invalidate by
- *  passing a fresh `Scenery`. */
+ *  Keyed on every scalar the geometry reads, with the detail ladder entering as `rungSignature` rather
+ *  than as a zoom. `solidHeightM` is a function and cannot go in the key, but what it RETURNS is in the
+ *  per-object key each shadow is built under, so a caller that varied it would not be served a stale
+ *  shadow — only a stale assembly of the same ones. */
 /** Drop the groups the ladder emptied. They are stamped with their clip disc BEFORE this runs, so a
  *  producer's output stays index-aligned with the array it came from. */
 const keepDrawn = (gs: DrawGroup[]): DrawGroup[] => gs.filter((g) => g.ops.length > 0)
@@ -1048,5 +1068,8 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   mark('furniture')
   items.push(...keep(s.runShadows))
   items.push(...keep(s.fenceRuns))
+  // The start's own paint, over everything, as the SVG layer has always drawn it.
+  mark('road')
+  if (o.overlay) items.push(...o.overlay)
   return items
 }

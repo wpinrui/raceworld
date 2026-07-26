@@ -397,9 +397,11 @@ describe('sceneryScene', () => {
     expect(fenceTop, 'fencing paints over the trees, as trackside furniture').toBeGreaterThan(canopy)
   })
 
-  it('stamps solids, trees and furniture with clip discs; the ground and road stay unstamped', () => {
+  it('stamps solids, trees, furniture and the ground with clip discs; only the road stays unstamped', () => {
     // The clip disc is what lets the canvas skip off-screen items exactly — an item without one is
-    // drawn every frame, which must remain true only for things that genuinely always show.
+    // drawn every frame, which must remain true only for things that genuinely always show. The road is
+    // the last of those: until the racing line is solved it is the layout's raw spline, whose extent
+    // nothing here can measure.
     const track: DrawOp[] = [{ d: 'M 0 0 L 5 5', stroke: '#333333' }]
     const items = sceneryScene(scenery, { ...sceneOpts, track })
     expect(items.filter(isGroup).every((g) => g.clip), 'every group carries its disc').toBe(true)
@@ -408,6 +410,9 @@ describe('sceneryScene', () => {
     ) as DrawOp
     expect(canopy.clip, 'tree ops carry their disc').toBeTruthy()
     expect(track[0].clip, 'the road is never skipped').toBeUndefined()
+    for (const op of groundOps(scenery, opts.u, { ground: true })) {
+      expect(op.clip, 'every ground shape carries its disc').toBeTruthy()
+    }
   })
 
   it('drops what the cull disc cannot see but keeps the ground and the road', () => {
@@ -593,5 +598,81 @@ describe('soft shadows', () => {
     const many = Array.from({ length: 60 }, (_, i) => tree((i % 10) * 30, Math.floor(i / 10) * 30))
     const op = treeShadowOp(many, { ...opts, pxPerM: 20 })!
     expect((op.d.match(/M /g) ?? []).length).toBe(many.length)
+  })
+})
+
+describe('the geometry caches', () => {
+  // Everything the producers build is a function of (the object, the bearing and light, the rung its
+  // own size resolves to). These pin that: a key that forgets a field serves stale geometry, which is a
+  // silently wrong picture rather than a crash, and nothing downstream can catch it.
+  //
+  // `opts.u` is metres/3, so a 40x18-unit footprint is 120m by 54m. Judged on its short side that is
+  // 54m, which reaches 'near' at 34/54 = 0.63 px/m and drops to 'mid' below it.
+  const rect = (x: number, y: number): SceneryRect =>
+    ({ x, y, w: 40, h: 18, rot: 0.3, fill: '#59616E', storeys: 2 })
+  const solid = { ...opts, storeyM: 4.6, bayM: 5.4 }
+
+  it('hands back the SAME group for two camera scales that leave the rung alone', () => {
+    const b = rect(0, 0)
+    const at = (pxPerM: number) => buildingWallGroups([b], { ...solid, pxPerM })[0]
+    // Different halves of the zoom range and different lodBuckets, but both comfortably 'near'.
+    expect(at(4)).toBe(at(20))
+  })
+
+  it('rebuilds a solid when its rung moves, and drops its detail with it', () => {
+    const b = rect(0, 0)
+    const at = (pxPerM: number) => buildingWallGroups([b], { ...solid, pxPerM })[0]
+    expect(at(1)).not.toBe(at(0.4))
+    // near draws silhouette, side faces and the window grid; mid drops the grid.
+    expect(at(1).ops.length).toBeGreaterThan(at(0.4).ops.length)
+  })
+
+  it('rebuilds a solid when the bearing or the light moves', () => {
+    const b = rect(0, 0)
+    const base = buildingWallGroups([b], { ...solid, pxPerM: 4 })[0]
+    expect(buildingWallGroups([b], { ...solid, pxPerM: 4, view: opts.view + 1 })[0]).not.toBe(base)
+    expect(buildingWallGroups([b], {
+      ...solid, pxPerM: 4, lighting: { ...MOODS.afternoon, azimuth: 1.1 },
+    })[0]).not.toBe(base)
+  })
+
+  it('rebuilds a roof when metres-per-unit changes, which is its whole key besides the rung', () => {
+    // The thinnest key in the file: a roof reads nothing off the light or the bearing, so `u` and the
+    // rung are all that stand between two circuits' worth of geometry.
+    const b = rect(0, 0)
+    const base = buildingRoofGroups([b], { u: opts.u, pxPerM: 4 })[0]
+    expect(buildingRoofGroups([b], { u: opts.u, pxPerM: 4 })[0]).toBe(base)
+    expect(buildingRoofGroups([b], { u: (m: number) => m / 9, pxPerM: 4 })[0]).not.toBe(base)
+  })
+
+  it('gives a shadow its own entry per height, since `heightM` cannot go in a key', () => {
+    const r = rect(0, 0)
+    const at = (h: number) => structureShadowGroups([r], { ...opts, pxPerM: 4, heightM: () => h })[0]
+    expect(at(9)).toBe(at(9))
+    expect(at(9)).not.toBe(at(30))
+    expect(at(9).ops[0].d).not.toBe(at(30).ops[0].d)
+  })
+
+  it('reuses the whole assembled scene across zooms that move nobody rung', () => {
+    // The point of keying the scene cache on the rungs rather than on the zoom: most notches move
+    // nothing, and a key that travels with the camera scale could not say so.
+    const scene = {
+      base: '#3E5A34', bands: [], fields: [], terrain: [], runoffs: [], kerbs: [], marshals: [],
+      stands: [], trees: [], fences: [], buildings: [rect(0, 0)],
+    } as unknown as Parameters<typeof sceneryScene>[0]
+    const sceneAt = (pxPerM: number) => sceneryScene(scene, {
+      u: opts.u, lighting: MOODS.afternoon, view: 0.4, ground: true, extrude: 0.62,
+      storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5, standRoofFrac: 0.3,
+      marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
+      solidHeightM: () => 9, trees: [], pxPerM,
+    })
+    // Two lodBuckets apart, same rung for everything in the scene: every item comes back identical.
+    const a = sceneAt(4)
+    const b = sceneAt(20)
+    expect(b.length).toBe(a.length)
+    expect(a.every((item, i) => item === b[i]), 'every item is the very same object').toBe(true)
+    // Below 0.63 px/m the building's short side leaves 'near', and it has to be rebuilt.
+    const far = sceneAt(0.4)
+    expect(far.some((item, i) => item !== a[i]) || far.length !== a.length).toBe(true)
   })
 })

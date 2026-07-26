@@ -674,8 +674,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // rebuild the entire pit complex's geometry, which changed `composeScene`'s identity, which made the
   // `scene` useMemo recompose the whole static world and throw away half a megabyte of path strings.
   // Once a second, so that a tooltip could be current. None of it depends on anything that moves.
-  const garageSig = cars.map((c) => `${c.id} ${c.team ?? ''} ${c.color}`).join('')
-  const signSig = cars.map((c) => `${c.id} ${c.name} ${c.nationality ?? ''}`).join('')
+  //
+  // Separated by characters that cannot occur in an id, a team or driver name, a nationality or a
+  // colour, so no two different car lists can spell the same signature. Written as ESCAPES and never as
+  // raw bytes: as bytes they make the whole file binary to git, which switches line-ending
+  // normalisation off and churns every line of it on the next write from a Windows editor.
+  const garageSig = cars.map((c) => `${c.id}\u0000${c.team ?? ''}\u0000${c.color}`).join('\u0001')
+  const signSig = cars.map((c) => `${c.id}\u0000${c.name}\u0000${c.nationality ?? ''}`).join('\u0001')
+  // Written during render, deliberately. The loop this feeds is not React's: it reads whatever the last
+  // committed render left here, and a concurrent render that gets thrown away would publish a `cars`
+  // that differs from the committed one only in identity — every field the loop reads off it is the
+  // same value either way.
   const carsRef = useRef(cars)
   carsRef.current = cars
 
@@ -1553,6 +1562,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Road paint that belongs to the START rather than to the circuit: the chequered band and the grid
   // boxes. Three fills between them, so as ops they are three draw calls; as elements they were a
   // hundred and sixteen rects being re-rasterised inside the camera's own transform every frame.
+  //
+  // Handed to the scene as its `overlay`, which paints after the furniture — the same place in the stack
+  // the SVG layer draws them, so the two renderers still agree about whether a grandstand's shadow falls
+  // across the start line. (It does not.)
   const roadMarkOps = useMemo(() => {
     const { x, y, angle } = layout.start
     // Nudged forward of the path start so the band clears the pole box's crossbar.
@@ -1560,7 +1573,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const at = { x: x + Math.cos(angle) * lead, y: y + Math.sin(angle) * lead, angle }
     return [
       ...startLineOps(at, u),
-      // Only before the race is under way, exactly as the grid marks always were.
+      // The grid boxes belong to the live view, exactly as the grid marks always did.
       ...(view === 'live' ? gridBoxOps(gridMarks, u) : []),
     ]
   }, [layout.start, layout.metresPerUnit, u, view, gridMarks])
@@ -1675,9 +1688,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       : [{ d: layout.d, stroke: tarmac.colour, width: tarmac.width }]))
     ops.push({ d: layout.pit.fastD, stroke: '#33383E', width: u(LANE_TARMAC_M), cap: 'round' })
     if (pitZone) ops.push({ d: pitZone.work, fill: '#33383E' })
-    // The start's own paint, on top of the tarmac and under the kerbs — the same place in the stack the
-    // SVG layer draws it.
-    ops.push(...roadMarkOps)
     // Worn into the tarmac, on top of the road and under the kerbs. Arrives one render after the rest of
     // the world, because it cannot be solved until a path element exists to measure.
     if (lap && SURFACE_INK) {
@@ -1688,7 +1698,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       }))
     }
     return ops
-  }, [layout, pitZone, u, lapLine, inkFlat, scenery.base, lighting, roadMarkOps])
+  }, [layout, pitZone, u, lapLine, inkFlat, scenery.base, lighting])
   const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
     ? {
       under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
@@ -1746,11 +1756,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       kerbs,
       pitUnder: pitNear ? pitDrawOps.under : [],
       pitOver: pitNear ? pitDrawOps.over : [],
+      overlay: roadMarkOps,
     }, marks)
     return { items, marks }
   }, [
     canvasOn, view, scenery, u, lighting, viewAz, hidden, trackDrawOps,
-    pitDrawOps, pitDisc, scenePxPerM, quality,
+    pitDrawOps, pitDisc, scenePxPerM, quality, roadMarkOps,
   ])
   const sceneRef = useRef<{ items: SceneItem[]; marks: SceneMark[] } | null>(null)
   // On a swap, the old scene keeps painting while the new one's paths parse in the background; the
@@ -1837,8 +1848,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         pc.bounds = bbox ?? vb
         return canvasPaint(name, c, pc) ?? '#FF00FF'
       },
-      timing,
       scenery.base,
+      timing,
     )
     if (timing) paintStatsRef.current = timing.out
   }, [vb, lighting, u, scenery.base])
