@@ -804,6 +804,8 @@ const discOfPts = (pts: Vec[], pad: number): Bounds => {
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 + pad }
 }
 
+/** Write a disc onto an item. Only ever given a FRESH object: a memoised group already carries its own,
+ *  and writing to one would reach into geometry two renderers share. */
 const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
   item.clip = clip
   return item
@@ -817,8 +819,8 @@ const stamp = <T extends { clip?: Bounds }>(item: T, clip: Bounds): T => {
  *  than as a zoom. `solidHeightM` is a function and cannot go in the key, but what it RETURNS is in the
  *  per-object key each shadow is built under, so a caller that varied it would not be served a stale
  *  shadow — only a stale assembly of the same ones. */
-/** Drop the groups the ladder emptied. They are stamped with their clip disc BEFORE this runs, so a
- *  producer's output stays index-aligned with the array it came from. */
+/** Drop the groups the ladder emptied. Every producer stamps its own disc, so unlike the version that
+ *  stamped by index afterwards, this no longer has to run last to keep anything aligned. */
 const keepDrawn = (gs: DrawGroup[]): DrawGroup[] => gs.filter((g) => g.ops.length > 0)
 
 /** How many rung assignments to keep assembled per circuit.
@@ -960,10 +962,13 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
  *  sharing a draw call: a canvas applies the placement with save/translate/rotate/restore, so each
  *  group is its own submission however little it paints. Baking costs one rotation per point, once per
  *  cull step, and buys the chance to merge. */
-/** Keyed on the group ITSELF, which is exact: a group is immutable once built, and the producers now
- *  hand back the same object for the same (solid, bearing, rung) with its disc already on it, so this is
- *  the same answer or a different group. It matters because baking is a rotation per point over every flat solid in shot and
- *  it runs on every compose — every cull step, several times a lap, as well as every zoom notch. */
+/** Keyed on the group ITSELF, which is exact only because of an invariant worth stating: a group is
+ *  never written to after it is built. Its producer stamps its own disc inside the memo and hands back
+ *  the same object for the same (solid, bearing, rung); nothing downstream touches it. `stamp` survives
+ *  for the two places that still need it, and both give it a fresh copy rather than a cached group.
+ *
+ *  It matters because baking is a rotation per point over every flat solid in shot, and it runs on every
+ *  compose — every cull step, several times a lap, as well as every zoom notch. */
 const bakedMemo = new WeakMap<DrawGroup, DrawOp[]>()
 
 function bakedOps(g: DrawGroup): DrawOp[] {

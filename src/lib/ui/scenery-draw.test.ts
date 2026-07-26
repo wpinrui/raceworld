@@ -666,8 +666,13 @@ describe('the geometry caches', () => {
   it('reuses the whole assembled scene across zooms that move nobody rung', () => {
     // The point of keying the scene cache on the rungs rather than on the zoom: most notches move
     // nothing, and a key that travels with the camera scale could not say so.
+    // The terrain patch is not decoration. `groundOps` is the only thing in `staticParts` that
+    // allocates fresh objects on a miss, so with nothing in the ground a rebuilt assembly comes back
+    // element-identical and the assertion below cannot tell a hit from a miss at all — it would pass
+    // just as happily with the rung signature reverted to a raw zoom bucket.
     const scene = {
-      base: '#3E5A34', bands: [], fields: [], terrain: [], runoffs: [], kerbs: [], marshals: [],
+      base: '#3E5A34', bands: [], fields: [], runoffs: [], kerbs: [], marshals: [],
+      terrain: [{ d: 'M 0 0 L 40 0 L 40 40 Z', fill: '#2F4A28' }],
       stands: [], trees: [], fences: [], buildings: [rect(0, 0)],
     } as unknown as Parameters<typeof sceneryScene>[0]
     const sceneAt = (pxPerM: number) => sceneryScene(scene, {
@@ -676,9 +681,11 @@ describe('the geometry caches', () => {
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: () => 9, trees: [], pxPerM,
     })
-    // Two lodBuckets apart, same rung for everything in the scene: every item comes back identical.
-    const a = sceneAt(4)
-    const b = sceneAt(20)
+    // A bucket apart (lodBucket 8 and 9) and every rung in the signature 'near' at both — including the
+    // crop rows, the hedgerows, the fencing and the marshal huts, which are the small things that decide
+    // the signature long before a building does. Every item comes back as the very same object.
+    const a = sceneAt(16)
+    const b = sceneAt(24)
     expect(b.length).toBe(a.length)
     expect(a.every((item, i) => item === b[i]), 'every item is the very same object').toBe(true)
     // Below 0.63 px/m the building's short side leaves 'near', and it has to be rebuilt.
