@@ -14,9 +14,8 @@ import { buildScenery, KERB_BLOCK_M, KERB_WIDTH_M, type Scenery } from '../src/l
 import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M,
 } from '../src/lib/ui/track-path'
-import { pitEdgeOps, pitSurfaceOps } from '../src/lib/ui/pit-surface'
 import {
-  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, OpPaths,
+  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE,
 } from '../src/components/race/SceneryLayer'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, pitComplexOps, pitFloorOps,
@@ -72,20 +71,7 @@ async function main() {
       pitOutside: layout.pitOutside,
       biome: layout.biome,
     })
-    const slots = buildPitSlots(layout, 10)
-    const zone = buildPitZone(layout, slots)
-    // The lane's surface, described once and handed to both sides, exactly as the map does it.
-    const pitSurface = {
-      u,
-      fast: layout.pit.fastPts,
-      apron: zone ? { outer: zone.workOuter, inner: zone.workInner } : undefined,
-      boxes: slots,
-      tarmac: '#33383E',
-      ground: scenery.base,
-      detail: 'full' as const,
-    }
-    const laneEdge = pitEdgeOps(pitSurface)
-    const laneWear = pitSurfaceOps(pitSurface)
+    const zone = buildPitZone(layout, buildPitSlots(layout, 10))
 
     const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
     const m = TRACK_WIDTH_M / mpu / 2 + 8
@@ -112,7 +98,6 @@ async function main() {
         x: vb.x - 4000, y: vb.y - 4000, width: vb.w + 8000, height: vb.h + 8000, fill: scenery.base,
       })),
       renderToStaticMarkup(createElement(SceneryLayer, { scenery, u, lighting, detail: 'full' })),
-      renderToStaticMarkup(createElement(OpPaths, { ops: laneEdge })),
       ...(zone ? [renderToStaticMarkup(createElement(PitGarageFloors, { zone, lighting }))] : []),
       renderToStaticMarkup(createElement('path', {
         d: layout.d, fill: 'none', stroke: '#D8D8D2', strokeWidth: u(TRACK_WIDTH_M), strokeLinejoin: 'round',
@@ -129,7 +114,6 @@ async function main() {
       })),
       ...(zone ? [
         renderToStaticMarkup(createElement('path', { d: zone.work, fill: '#33383E' })),
-        renderToStaticMarkup(createElement(OpPaths, { ops: laneWear })),
         renderToStaticMarkup(createElement(PitBuildingShadow, { zone, u, lighting })),
         renderToStaticMarkup(createElement(PitBuilding, { zone, u, lighting, view })),
       ] : []),
@@ -171,8 +155,8 @@ async function main() {
           dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
         },
       ]),
-      pitUnder: [...laneEdge, ...(zone ? pitFloorOps(zone, lighting) : [])],
-      pitOver: zone ? [...laneWear, ...pitComplexOps(zone, u, lighting, view)] : [],
+      pitUnder: zone ? pitFloorOps(zone, lighting) : [],
+      pitOver: zone ? pitComplexOps(zone, u, lighting, view) : [],
     })
     const canvasBody = defs + items.map(itemSvg).join('\n')
 

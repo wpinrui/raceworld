@@ -14,7 +14,6 @@ import { buildScenery } from '../src/lib/ui/track-scenery'
 import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M,
 } from '../src/lib/ui/track-path'
-import { pitEdgeOps, pitSurfaceOps } from '../src/lib/ui/pit-surface'
 import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
@@ -82,26 +81,11 @@ function solveLap(layout: TrackLayout) {
   return { line, arc, centre, dyn: lapDynamics(pts, arc.length, trackPhysics(layout.metresPerUnit)) }
 }
 
-/** The pit lane as the map lays it: apron and fade first (under the garage floors, which is what lets
- *  the working apron's fringe run toward the garages), then the floors, then casing-then-asphalt for the
- *  lane and its working apron, then the grain, the worn band and the boxes' grime on top. */
-function pitRoadMarkup(
-  layout: TrackLayout, lighting: Lighting, ground: string, u: (m: number) => number,
-  detail: 'full' | 'low',
-): string[] {
-  const slots = buildPitSlots(layout, 10)
-  const zone = buildPitZone(layout, slots)
-  const surface = {
-    u,
-    fast: layout.pit.fastPts,
-    apron: zone ? { outer: zone.workOuter, inner: zone.workInner } : undefined,
-    boxes: slots,
-    tarmac: '#33383E',
-    ground,
-    detail,
-  }
+/** The pit lane as the map lays it: garage floors under the lane's paint, then casing-then-asphalt for
+ *  the lane and its working apron. */
+function pitRoadMarkup(layout: TrackLayout, lighting: Lighting, u: (m: number) => number): string[] {
+  const zone = buildPitZone(layout, buildPitSlots(layout, 10))
   return [
-    ...pitEdgeOps(surface).map(opSvg),
     ...(zone ? [renderToStaticMarkup(createElement(PitGarageFloors, { zone, lighting }))] : []),
     renderToStaticMarkup(createElement('path', {
       d: layout.pit.fastD, fill: 'none', stroke: '#D8D8D2', strokeWidth: u(LANE_WIDTH_M),
@@ -115,7 +99,6 @@ function pitRoadMarkup(
       strokeLinejoin: 'round', strokeLinecap: 'round',
     })),
     ...(zone ? [renderToStaticMarkup(createElement('path', { d: zone.work, fill: '#33383E' }))] : []),
-    ...pitSurfaceOps(surface).map(opSvg),
   ]
 }
 
@@ -227,9 +210,8 @@ for (const id of ids) {
     renderToStaticMarkup(createElement('path', {
       d: layout.d, fill: 'none', stroke: '#33383E', strokeWidth: u(TARMAC_WIDTH_M), strokeLinejoin: 'round',
     })),
-    // The pit lane's road, in the map's own order: its apron and the fade beyond it under the garage
-    // floors, then casing and asphalt for lane and working apron alike, then what is worn into them.
-    ...pitRoadMarkup(layout, lighting, scenery.base, u, detail),
+    // The pit lane's road, in the map's own order.
+    ...pitRoadMarkup(layout, lighting, u),
     // Worn into the tarmac, between the road and the kerbs, exactly where the map places it.
     ...(() => {
       const lap = solveLap(layout)

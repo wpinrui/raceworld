@@ -6,8 +6,8 @@ import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import {
-  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, OpPaths,
-  visibleTrees, type Cull, type Hidden, type SceneryPiece,
+  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
+  type Cull, type Hidden, type SceneryPiece,
 } from './SceneryLayer'
 import {
   MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowOpacity, shadowReach,
@@ -37,7 +37,6 @@ import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M,
   TRACK_WIDTH_M,
 } from '@/lib/ui/track-path'
-import { pitEdgeOps, pitSurfaceOps } from '@/lib/ui/pit-surface'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
@@ -1446,33 +1445,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     return ops
   }, [layout, pitZone, u, lapLine, lodLow, scenery.base, lighting])
-  // What the lane is worn into. The apron and the fade beyond it go UNDER the garage floors, which is
-  // what lets the working apron's fringe run toward the garages without clamping; the grain, the worn
-  // band and the boxes' grime go over the lane's asphalt and under the building.
-  const pitSurface = useMemo(() => ({
-    u,
-    fast: layout.pit.fastPts,
-    apron: pitZone ? { outer: pitZone.workOuter, inner: pitZone.workInner } : undefined,
-    boxes: pitSlots,
-    tarmac: '#33383E',
-    ground: scenery.base,
-    detail: lodLow ? ('low' as const) : ('full' as const),
-  }), [u, layout, pitZone, pitSlots, scenery.base, lodLow])
-  const laneEdge = useMemo(() => (hidden.has('pit') ? [] : pitEdgeOps(pitSurface)), [pitSurface, hidden])
-  const laneWear = useMemo(() => (hidden.has('pit') ? [] : pitSurfaceOps(pitSurface)), [pitSurface, hidden])
   const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
     ? {
-      under: [...laneEdge, ...pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi])],
-      over: [...laneWear, ...pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi])],
+      under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
+      over: pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]),
     }
-    : { under: [], over: [] }), [pitZone, hidden, lighting, u, viewAz, slotOf, laneEdge, laneWear])
+    : { under: [], over: [] }), [pitZone, hidden, lighting, u, viewAz, slotOf])
   // The pit complex is one of the heaviest things on the map and exists in exactly one place, so it
-  // is gated by the same disc the rest of the scenery culls to. The LANE is in the disc as well as the
-  // building: its apron runs the length of both tapers, so a disc drawn round the building alone would
-  // drop the far end of the lane's asphalt while the camera was sitting on it.
+  // is gated by the same disc the rest of the scenery culls to.
   const pitDisc = useMemo(() => {
     if (!pitZone) return null
-    const pts = [...pitZone.buildingPts, ...pitZone.garageFloors.flat(), ...layout.pit.fastPts]
+    const pts = [...pitZone.buildingPts, ...pitZone.garageFloors.flat()]
     if (pts.length === 0) return null
     const xs = pts.map((p) => p.x)
     const ys = pts.map((p) => p.y)
@@ -1480,7 +1463,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const cy = (Math.min(...ys) + Math.max(...ys)) / 2
     const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) + u(80)
     return { cx, cy, r }
-  }, [pitZone, u, layout])
+  }, [pitZone, u])
   // One composer for both paths: React re-renders call it when the WORLD changes (track, light,
   // detail tier, hidden set â€” all rare), and `updateCull` calls it through `composeSceneRef` when
   // only the DISC moves, several times a lap, without a render.
@@ -1805,8 +1788,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
             )}
             <g data-cost="scenery">{view === 'live' && !canvasOn && sceneryNode}</g>
-            {/* The lane's asphalt apron and its fade into the verge, under the garage floors. */}
-            {!canvasOn && <OpPaths ops={laneEdge} />}
             {pitZone && !hidden.has('pit') && !canvasOn && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
             {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
                 lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
@@ -1828,8 +1809,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   <path d={layout.pit.fastD} fill="none" stroke="#33383E" strokeWidth={u(LANE_TARMAC_M)} strokeLinejoin="round" strokeLinecap="round" />
             )}
             {pitZone && !canvasOn && <path d={pitZone.work} fill="#33383E" />}
-            {/* Grain, the band worn down the fast lane, and the grime each box has been stopped in. */}
-            {!canvasOn && <OpPaths ops={laneWear} />}
             {/* Pit lane: an asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
             {/* Pit building first (under everything on the apron side), then paint: the fast lane's

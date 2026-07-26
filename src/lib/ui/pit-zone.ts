@@ -20,12 +20,6 @@ export interface PitSlot { x: number; y: number; nx: number; ny: number; rot: nu
 export interface PitZone {
   /** The working-lane apron, tapered in and out at each end. */
   work: string
-  /** The same apron as its two edges, station for station: outer (garage side, tapering out and back
-   *  in) and inner (a constant 1 m track-side of the lane centreline). What is laid ON the apron --
-   *  its asphalt fringe, its grain -- is a band ACROSS a road that changes width, which a stroke of one
-   *  width cannot describe. */
-  workOuter: Array<{ x: number; y: number }>
-  workInner: Array<{ x: number; y: number }>
   /** The white-on-blue separator stripe down the box row. */
   sep: string
   limiterIn: string
@@ -290,17 +284,17 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
   const U: Array<{ s: number; lat: number }> = [{ s: a0, lat: GARAGE_FACE }, { s: a1, lat: GARAGE_FACE }, ...rear]
   const upperPts = U.map(({ s: vs, lat }) => ptAt(vs, u1(lat)))
   const buildingPts = V.map(({ s: vs, lat }) => ptAt(vs, u1(lat)))
-  // The apron as two edges rather than one ring, so what is laid on it can be banded across its
-  // width; the ring is then just the outer edge and the inner edge walked back.
-  const WORK_N = 36
-  const workAt = (i: number) => wt0 + ((wt1 - wt0) * i) / WORK_N
-  const workOuter = Array.from({ length: WORK_N + 1 }, (_, i) => ptAt(workAt(i), workOuterLat(workAt(i))))
-  const workInner = Array.from({ length: WORK_N + 1 }, (_, i) => ptAt(workAt(i), WLAT_IN))
   return {
-    work: `M ${[...workOuter, ...[...workInner].reverse()]
-      .map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`,
-    workOuter,
-    workInner,
+    work: (() => {
+      const N = 36
+      const ring: Array<{ x: number; y: number }> = []
+      for (let i = 0; i <= N; i++) {
+        const sA = wt0 + ((wt1 - wt0) * i) / N
+        ring.push(ptAt(sA, workOuterLat(sA)))
+      }
+      for (let i = N; i >= 0; i--) ring.push(ptAt(wt0 + ((wt1 - wt0) * i) / N, WLAT_IN))
+      return `M ${ring.map((q) => `${q.x.toFixed(2)} ${q.y.toFixed(2)}`).join(' L ')} Z`
+    })(),
     sep: line(-u1(1.3), a0, a1),
     limiterIn: limiter(0),
     limiterOut: limiter(arc),
