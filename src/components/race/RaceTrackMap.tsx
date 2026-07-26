@@ -84,7 +84,10 @@ const FRAME_CAPS: number[] = [0, 30, 45]
 // Off in normal play. Flip on to get the layer hotkeys and the 'n' lap benchmark back — the
 // readout keeps its backtick either way. The 2026-07 frame-rate campaign closed with the pit
 // straight's raster dips accepted as the known residual (see the bench reports in that PR).
-const DEBUG_KEYS: boolean = false
+// Layer hotkeys and the lap benchmark. Parked when the frame-rate campaign closed and back on for the
+// wide-zoom one: the readout can say what a frame costs on the canvas, and it says about a millisecond
+// there, which leaves the SVG world div — and only hiding a layer says which part of it.
+const DEBUG_KEYS: boolean = true
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
  *  Along the top letter row rather than the digits, which the race speed controls already own. */
