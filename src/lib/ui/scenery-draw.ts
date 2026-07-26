@@ -22,6 +22,8 @@ import {
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
+import { atLeast, lodBucket, mergeByPaint, rungFor } from './lod'
+import { TREE_FLAT } from './scenery-paint'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
  *  pattern the renderer supplies — the SVG layer resolves those to `url(#NAME)`, the canvas to a
@@ -95,35 +97,73 @@ export interface TreeDrawOpts {
   lighting: Lighting
   /** Bearing the camera looks along; solids lean against it. */
   view: number
+  /** Screen pixels per metre of world, which is what every detail rung is decided from.
+   *
+   *  Optional, and absent means INFINITELY near: every rung resolves to `near` and the picture is the
+   *  fully detailed one. That is the right default because the ladder belongs to the canvas — the SVG
+   *  layer draws the static map view and the fallback, neither of which is frame-rate bound — and
+   *  because a caller that forgets it gets the correct picture rather than a silently degraded one. */
+  pxPerM?: number
+  /** Graphics quality, as a multiplier on the rung thresholds. See lib/ui/lod.ts. */
+  quality?: number
 }
 
 /** Trunk and canopy for a set of trees, already depth-sorted so a nearer tree covers a further one.
  *
  *  Each tree's trunk goes with its own canopy rather than into a shared layer underneath: drawn as one
- *  batch, a near trunk ends up buried by a far canopy. */
+ *  batch, a near trunk ends up buried by a far canopy. That holds at the NEAR rung, which is the only
+ *  one that draws a tree at a time.
+ *
+ *  Below it every tree of a variant shares one flat green, so the whole grove merges into a couple of
+ *  draws (`mergeByPaint`). Trees keep their place, size and silhouette and lose the sphere shading —
+ *  which is the trade that lets them exist at all out here. Before the ladder they were simply deleted
+ *  at this zoom, because at one draw call each a simpler tree saved nothing.
+ *
+ *  A tree picks its own rung from its own canopy, so a sapling flattens while an oak beside it has not.
+ *  Merging then reorders flat canopies of DIFFERENT variants against each other, which is a pixel or
+ *  two of overlap on a shape this small; within a variant the paint is opaque and identical, so order
+ *  cannot matter at all. */
 export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   const dir = dirAt(o.view)
-  const ops: DrawOp[] = []
+  // Split by rung, because only the flat ones may merge. Batching the NEAR rung would pool every
+  // trunk into one draw and let a far canopy bury a near trunk, which is the very thing keeping each
+  // trunk beside its own canopy exists to prevent.
+  const near: DrawOp[] = []
+  const flat: DrawOp[] = []
+  // Canopy diameter in metres. Scene geometry is in viewBox units and `u` converts the other way.
+  const metres = (units: number) => units / o.u(1)
   for (const t of depthSorted(trees, dir)) {
+    const rung = rungFor(metres(2 * t.r), o.pxPerM ?? Infinity, o.quality)
+    if (rung === 'gone') continue
     const lift = o.u(t.h * o.extrude)
     // Canopy at the tree's point, trunk running its lift toward the base: one disc holds both.
     const clip = { cx: t.x, cy: t.y, r: t.r + lift + o.u(1) }
-    ops.push({
-      d: `M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * lift).toFixed(1)} ${(t.y + dir.y * lift).toFixed(1)}`,
-      stroke: shadeFace('#6B5138', o.lighting),
-      // Trunk width scales with the canopy it carries; a constant width made every tree a lollipop.
-      width: Math.max(o.u(0.8), t.r * 0.34),
-      cap: 'round',
-      clip,
-    })
-    ops.push({
-      d: t.d,
-      fill: `${REF}tm-tree${t.variant}`,
-      bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
-      clip,
-    })
+    // The trunk is a stroke a third of the canopy wide. At the far rung that is well under a pixel and
+    // it is only ever seen where it pokes out from under the canopy, so it goes.
+    const ops = rung === 'near' ? near : flat
+    if (atLeast(rung, 'mid')) {
+      ops.push({
+        d: `M ${t.x.toFixed(1)} ${t.y.toFixed(1)} L ${(t.x + dir.x * lift).toFixed(1)} ${(t.y + dir.y * lift).toFixed(1)}`,
+        stroke: shadeFace('#6B5138', o.lighting),
+        // Trunk width scales with the canopy it carries; a constant width made every tree a lollipop.
+        width: Math.max(o.u(0.8), t.r * 0.34),
+        cap: 'round',
+        clip,
+      })
+    }
+    ops.push(rung === 'near'
+      ? {
+        d: t.d,
+        fill: `${REF}tm-tree${t.variant}`,
+        bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
+        clip,
+      }
+      // No bbox: that is what tells mergeByPaint this one may batch.
+      : { d: t.d, fill: TREE_FLAT[t.variant] ?? TREE_FLAT[0], clip })
   }
-  return ops
+  // Flat first: a tree only lands on the near rung by being the bigger one, so the detailed trees
+  // painting last is the depth order that survives the split more often than the other way round.
+  return [...mergeByPaint(flat), ...near]
 }
 
 /** Every tree's shadow as ONE op. They share a fill and never overlap meaningfully, so a single path
@@ -425,6 +465,11 @@ export interface SceneOpts {
   lighting: Lighting
   view: number
   full: boolean
+  /** Screen pixels per metre of world. Feeds the per-object detail ladder in lib/ui/lod.ts; absent
+   *  means full detail everywhere, which is what the SVG layer and the previews want. */
+  pxPerM?: number
+  /** Graphics quality, as a multiplier on the ladder's thresholds. */
+  quality?: number
   ground: boolean
   extrude: number
   storeyM: number
@@ -518,10 +563,15 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const key = JSON.stringify([
     o.view, o.full, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
     o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.u(1), o.lighting,
+    // Quantised, never raw: the rungs only change at discrete scales, and keying on a live
+    // pixels-per-metre would rebuild a circuit's whole string geometry on every zoom notch.
+    o.pxPerM == null ? null : lodBucket(o.pxPerM), o.quality,
   ])
   const hit = staticCache.get(scenery)
   if (hit && hit.key === key) return hit
-  const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
+  const treeOpts = {
+    u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view, pxPerM: o.pxPerM, quality: o.quality,
+  }
   // Padding covers what geometry adds beyond a footprint: the height lean and the cast shadow.
   // Generous on purpose — keeping a fraction more than the disc strictly needs is invisible, while
   // dropping a shadow whose caster is just off the disc's edge is not.
@@ -589,7 +639,9 @@ export interface SceneMark { name: string; at: number }
  *  kerbs, shadows, solids, trees, then furniture — so the two renderers cannot drift apart. */
 export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]): SceneItem[] {
   const s = staticParts(scenery, o)
-  const treeOpts = { u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view }
+  const treeOpts = {
+    u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view, pxPerM: o.pxPerM, quality: o.quality,
+  }
   const cull = o.cull
   const keep = <T extends SceneItem>(xs: T[]): T[] => (cull
     ? xs.filter((i) => !i.clip || Math.hypot(i.clip.cx - cull.cx, i.clip.cy - cull.cy) <= cull.r + i.clip.r)
@@ -629,7 +681,10 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   //
   // The posts land in the 'trees' benchmark category as a result, which is where their cost now is.
   mark('trees')
-  if (o.full) {
+  // NOT gated on `full` any more. Trees carry their own rung now, per tree, from their own canopy —
+  // which is the whole point: this block used to be all-or-nothing, so the only way it ever got
+  // cheaper was for every tree on the circuit to vanish at once.
+  {
     const dir = dirAt(o.view)
     const depth = (p: { x: number; y: number }) => p.x * dir.x + p.y * dir.y
     const trees = depthSorted(o.trees, dir)

@@ -450,3 +450,55 @@ describe('sceneryScene', () => {
     expect(standOf(turned), 'a new bearing rebuilds them').not.toBe(standOf(a))
   })
 })
+
+describe('treeSolidOps across the detail ladder', () => {
+  // 12m canopies: near at racing zoom, flat when the whole pit building is in frame, gone at a
+  // full-track fit. `opts` carries no pxPerM, which means full detail — the SVG layer's case.
+  const grove = Array.from({ length: 40 }, (_, i) => tree((i % 8) * 40, Math.floor(i / 8) * 40))
+  const at = (pxPerM: number) => treeSolidOps(grove, { ...opts, pxPerM })
+
+  it('draws every tree individually while they are big on screen', () => {
+    const ops = at(20)
+    expect(ops).toHaveLength(grove.length * 2)
+    expect(refName(ops[1].fill!)).toBe('tm-tree0')
+  })
+
+  it('collapses a whole grove to a couple of draws once they are small', () => {
+    const ops = at(1.2)
+    // A trunk batch and a canopy batch, not eighty draw calls.
+    expect(ops.length).toBeLessThanOrEqual(4)
+    expect(ops.length).toBeGreaterThan(0)
+    // Every tree is still THERE: each canopy path appears in the merged subpaths.
+    const d = ops.map((o) => o.d).join(' ')
+    for (const t of grove) expect(d).toContain(t.d)
+  })
+
+  it('drops the gradient when it batches, because that is what lets them share a paint', () => {
+    for (const op of at(1.2)) {
+      expect(op.bbox).toBeUndefined()
+      expect(refName(op.fill ?? '')).toBeNull()
+    }
+  })
+
+  it('sheds the trunks before the canopies, then the trees entirely', () => {
+    const far = at(0.35)
+    expect(far.every((o) => !o.stroke)).toBe(true)
+    expect(far.length).toBeGreaterThan(0)
+    expect(at(0.02)).toEqual([])
+  })
+
+  it('keeps a merged batch cullable, with a disc reaching every tree in it', () => {
+    for (const op of at(1.2)) {
+      expect(op.clip).toBeTruthy()
+      for (const t of grove) {
+        expect(Math.hypot(t.x - op.clip!.cx, t.y - op.clip!.cy)).toBeLessThanOrEqual(op.clip!.r + 1e-6)
+      }
+    }
+  })
+
+  it('never merges anything while the trees are drawn in detail', () => {
+    // Batching the near rung would pool the trunks and let a far canopy bury a near one.
+    const ops = at(20)
+    for (let i = 0; i < ops.length; i += 2) expect(ops[i + 1].bbox).toBeTruthy()
+  })
+})

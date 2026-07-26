@@ -5,6 +5,7 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
+import { lodBucket } from '@/lib/ui/lod'
 import {
   SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
   type Cull, type Hidden, type SceneryPiece,
@@ -301,6 +302,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const lodLowRef = useRef(false)
   const [inkFlat, setInkFlat] = useState(false)
   const inkFlatRef = useRef(false)
+  // What the per-object detail ladder reads. Committed in half-octave buckets rather than live: a
+  // rung only changes at discrete scales, and recomposing the scene on every zoom notch would cost
+  // far more than the ladder saves.
+  const [scenePxPerM, setScenePxPerM] = useState(Infinity)
+  const sceneBucketRef = useRef(Number.NaN)
   // Garage signage carries the only real TEXT on the map, and text is the one thing on it that does not
   // degrade gracefully — it stops being legible long before it stops being expensive. Gated on the
   // band's own height in screen pixels rather than on a zoom number, because a circuit's metres per
@@ -495,6 +501,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (flat !== inkFlatRef.current) {
       inkFlatRef.current = flat
       setInkFlat(flat)
+    }
+    const bucket = viewRef.current === 'live' ? lodBucket(pxPerM) : Number.POSITIVE_INFINITY
+    if (bucket !== sceneBucketRef.current) {
+      sceneBucketRef.current = bucket
+      setScenePxPerM(viewRef.current === 'live' ? pxPerM : Infinity)
     }
     // How tall a garage's signage band draws, right now, in CSS pixels.
     const bandPx = SIGN_H_M * EXTRUDE * pxPerM
@@ -1543,6 +1554,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, full: !lodLow, ground: !hidden.has('ground'), extrude: EXTRUDE,
+      // The detail ladder's input. Bucketed by the scene cache, so this changes the picture at
+      // discrete scales rather than continuously as the camera zooms.
+      pxPerM: scenePxPerM,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
@@ -1558,7 +1572,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     return { items, marks }
   }, [
     canvasOn, view, scenery, u, lighting, viewAz, lodLow, hidden, trackDrawOps,
-    pitDrawOps, pitDisc,
+    pitDrawOps, pitDisc, scenePxPerM,
   ])
   const scene = useMemo(() => composeScene(cullRef.current), [composeScene])
   const sceneRef = useRef(scene)

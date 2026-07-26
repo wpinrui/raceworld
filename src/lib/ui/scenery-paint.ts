@@ -14,6 +14,14 @@ const TREE_STOPS: Array<[string, string, string]> = [
   ['#A8B368', '#6B7A35', '#3D4A1E'],
 ]
 
+/** The one colour a canopy is painted below the near rung, per variant.
+ *
+ *  The middle stop, which sits at 45% of the radius: on a disc that is very close to the ramp's
+ *  area-weighted mean, so a flat canopy reads at the same brightness as the shaded one it replaces
+ *  rather than as a lighter or darker tree. Exported because dropping the gradient is what lets a
+ *  hundred canopies share a paint and become one draw call. */
+export const TREE_FLAT: string[] = TREE_STOPS.map((stops) => stops[1])
+
 /** Seating rake: pale at the back under the roof, darkening toward the trackside front, so which way
  *  a stand faces is legible at a glance rather than implied by a thin roof band. */
 const RAKE_TOP = 'rgba(255,255,255,0.18)'
