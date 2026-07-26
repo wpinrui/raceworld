@@ -1808,6 +1808,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
   // readout is up â€” the timing calls are cheap but not free.
   const paintStatsRef = useRef<Record<string, number>>({})
+  /** Paints since the map mounted, and the section time they logged. Only the painter can count these,
+   *  so it does, and the benchmark reads deltas off it rather than inferring them. */
+  const paintTallyRef = useRef({ n: 0, ms: 0 })
   // True while the benchmark drives the map; keeps paint timing on with the readout closed.
   const benchRef = useRef(false)
   // The race tick's JS cost since the readout last sampled: average and worst frame.
@@ -1836,7 +1839,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       return
     }
     const dpr = window.devicePixelRatio || 1
-    const timing = hudRef.current || benchRef.current ? { marks: sc.marks, out: {} } : undefined
+    const timing = hudRef.current || benchRef.current
+      ? { marks: sc.marks, out: {} as Record<string, number> }
+      : undefined
     const pc = paintCtxRef.current
     pc.lighting = lighting
     pc.u = u
@@ -1852,7 +1857,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       scenery.base,
       timing,
     )
-    if (timing) paintStatsRef.current = timing.out
+    if (timing) {
+      paintStatsRef.current = timing.out
+      // Tallied HERE, by the only thing that knows a paint happened. The benchmark used to decide it
+      // from the section timers, counting a frame as painted when they summed above zero — which reads
+      // a frame whose paint rounded to 0.0 as no paint at all, and reads the frame AFTER a skipped one
+      // as a second paint, because the section times are a ref left standing from last time. Both
+      // errors land on the same segments: the cheap ones and the still-camera ones.
+      const tally = paintTallyRef.current
+      tally.n++
+      for (const v of Object.values(timing.out)) tally.ms += v
+    }
   }, [vb, lighting, u, scenery.base])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
   // The canvas paints when the CAMERA moves, so anything that changes the picture WITHOUT one has to
@@ -1901,32 +1916,32 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       const s = fid ? sampleRef.current(fid) : null
       return s && !s.pit && s.gridSlot == null ? s.prog : null
     }
-    // Frames until the followed car next crosses the line: rAF deltas, plus the canvas paint totals
-    // those frames logged. A lap that never completes (race over, car parked) times out rather than
-    // hanging the run.
+    // Frames until the followed car next crosses the line: rAF deltas, plus the canvas paints those
+    // frames actually made, read as a delta off the painter's own tally. A lap that never completes
+    // (race over, car parked) times out rather than hanging the run.
     const TIMEOUT_MS = 240000
     const untilCrossing = (collect: boolean) => new Promise<{
       deltas: number[]; paintMs: number; paintN: number; seconds: number; timedOut: boolean
     }>((resolve) => {
       const deltas: number[] = []
-      let paintMs = 0
-      let paintN = 0
+      const tally = paintTallyRef.current
+      const fromN = tally.n
+      const fromMs = tally.ms
       const start = performance.now()
       let last = start
       let prev = lapOf()
       const loop = (now: number) => {
-        if (collect) {
-          deltas.push(now - last)
-          const p = Object.values(paintStatsRef.current).reduce((s, v) => s + v, 0)
-          if (p > 0) { paintMs += p; paintN++ }
-        }
+        if (collect) deltas.push(now - last)
         last = now
         const prog = lapOf()
         const crossed = prev != null && prog != null && prev > 0.7 && prog < 0.3
         if (prog != null) prev = prog
         const timedOut = now - start > TIMEOUT_MS
         if (crossed || timedOut || benchAbortRef.current) {
-          resolve({ deltas, paintMs, paintN, seconds: (now - start) / 1000, timedOut })
+          resolve({
+            deltas, paintMs: tally.ms - fromMs, paintN: tally.n - fromN,
+            seconds: (now - start) / 1000, timedOut,
+          })
           return
         }
         requestAnimationFrame(loop)
@@ -1962,7 +1977,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         status(`bench ${i + 1}/${SEGMENTS.length}  ${seg.name}  (one lap)`)
         setCanvasOn(seg.canvas)
         setHidden(new Set(seg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
-        paintStatsRef.current = {}
         const t0 = { ...tickStatsRef.current }
         const r = await untilCrossing(true)
         const t1 = tickStatsRef.current
@@ -1982,9 +1996,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           maxMs: +(sorted[sorted.length - 1] ?? 0).toFixed(1),
           longFrames: sorted.filter((d) => d > 25).length,
           // Per PAINTED frame, not per frame. The camera guard means a still camera does not repaint at
-          // all, so a segment where the followed car sat in its pit box has fewer paints than frames —
+          // all, so a segment where the followed car sat in its pit box has fewer paints than frames.
           // `paintFrac` is what makes the two readings comparable, and what stops this column being
-          // read against reports from before the guard existed.
+          // read against reports from before the guard existed. Counted by the painter, so a paint too
+          // cheap for the section timers to register is still a paint.
           paintMs: +(r.paintN > 0 ? r.paintMs / r.paintN : 0).toFixed(2),
           paintFrac: +(r.deltas.length > 0 ? r.paintN / r.deltas.length : 0).toFixed(2),
           tickMs: +(t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0).toFixed(2),
