@@ -352,6 +352,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           }).join('  ')
           const offList = [...hiddenRef.current].join(',')
           const capTxt = frameCapRef.current > 0 ? `cap ${frameCapRef.current}` : 'uncapped'
+          // The camera, so a report of where the frame rate went can name the shot it went in. Zoom
+          // alone does not describe one: the same zoom frames a different amount of circuit on every
+          // layout, so the readout carries what that zoom WORKS OUT to here — how many screen pixels
+          // a metre of track covers.
+          const z = camRef.current.z
+          const pxPerM = (stageDimsRef.current.w / vb.w) * z / layout.metresPerUnit
+          const cam = `${z.toFixed(1)}x  ${pxPerM.toFixed(1)}px/m`
           // Where the canvas's paint time goes, section by section, from the last drawn frame â€”
           // so a slow corner names its own cost instead of being reasoned about. Main-thread
           // command cost; the GPU raster that follows is not observable from here.
@@ -367,7 +374,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           ts.sum = 0
           ts.n = 0
           ts.max = 0
-          el.textContent = `${fps} fps (${capTxt})  ${nodes} nodes  |  ${by}${paint}${tickTxt}`
+          el.textContent = `${fps} fps (${capTxt})  ${cam}  |  ${nodes} nodes  ${by}${paint}${tickTxt}`
             + `${offList ? `  |  off: ${offList}` : ''}`
         }
         frames = 0
@@ -377,7 +384,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [hud])
+  }, [hud, vb.w, layout.metresPerUnit])
 
   // Trees only exist at FULL detail, which is racing zoom â€” exactly when the least of the circuit is
   // on screen and the most of it is still in the DOM being repainted as the camera follows a car.
