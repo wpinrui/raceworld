@@ -5,7 +5,8 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { lodBucket, lodScale } from '@/lib/ui/lod'
+import { QUALITY, atLeast, lodBucket, lodScale, rungFor } from '@/lib/ui/lod'
+import { SOFT_LAYERS, SOFT_SPREAD } from '@/lib/ui/surface-ink'
 import {
   SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
   type Cull, type Hidden, type SceneryPiece,
@@ -19,7 +20,7 @@ import { SceneryCanvas, drawScene, warmScene } from './SceneryCanvas'
 import { sceneryScene, type DrawOp, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint } from '@/lib/ui/scenery-paint'
 import {
-  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M, SIGN_LEGIBLE_PX,
+  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M,
   pitComplexOps, pitFloorOps,
 } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
@@ -145,18 +146,18 @@ const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery
 // changed the frame rate not at all, and ablation put a draw call at about 19 microseconds — so those
 // calls are most of a 33ms frame.
 
-/** Below this the tarmac's ink stops being softened: every mark collapses from four nested strokes to
- *  one, and the grain goes. Worth 364 draw calls to 102 on its own, and it costs nothing to look at,
- *  because at this size the four layers span one to three pixels between them and the eye is being
- *  shown a soft edge it cannot resolve. Five sits above the widest racing shot on every layout (the
- *  lowest is 6.3px/m), so nothing changes where the game is actually played. */
-const INK_LOD_PX_PER_M = 5
+/** Graphics quality: the ONE number the whole map's detail hangs off. Every gate below is the shared
+ *  ladder in lib/ui/lod.ts, so a settings dial sets this and touches nothing else. */
+const GRAPHICS_QUALITY: number = QUALITY.medium
 
-/** Below this the scenery drops its heavy layers outright — trees, marshal posts, every cast shadow,
- *  wall relief. A far bigger saving and a far bigger loss: a tree canopy is still about 19 pixels across
- *  at 3.5px/m, so this deliberately stays out at roughly the old gate's reach rather than buying frames
- *  with every tree on the circuit. Trees want batching, not deleting. */
-const SCENERY_LOD_PX_PER_M = 2
+/** What each remaining gate measures itself by, in metres, so it can go through the same ladder as
+ *  every solid rather than carrying a zoom threshold of its own.
+ *
+ *  The ink's is the width of its whole softening band: four nested strokes a SOFT_SPREAD apart, and once
+ *  that band is unresolvable the four are indistinguishable from one. The signage band is the height of
+ *  the board the names sit on. */
+const INK_SOFTENING_M = SOFT_LAYERS * SOFT_SPREAD
+const SIGN_BAND_M = SIGN_H_M * EXTRUDE
 const ROT_STEP = Math.PI / 36 // 5Â° per shift+wheel notch
 
 /** A path element seen as pure arc-length geometry, which is all the racing-line solver wants of it. */
@@ -296,7 +297,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
 
-  // Scenery LOD: below SCENERY_LOD_PX_PER_M the heavy layers drop out (state flips only on threshold
+  // Scenery LOD for the SVG layers, off the shared ladder (state flips only on threshold
   // crossings). The tarmac's ink has its own, earlier tier: it stops being worth softening long before
   // the scenery stops being worth drawing.
   const [lodLow, setLodLow] = useState(false)
@@ -493,26 +494,28 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // Screen pixels per metre of track: the one measure of "how far out am I" that means the same
     // thing on every circuit, and what both detail gates below are expressed in.
     const pxPerM = (stageDimsRef.current.w / vb.w) * z / layout.metresPerUnit
-    const low = pxPerM < SCENERY_LOD_PX_PER_M && viewRef.current === 'live'
+    const live = viewRef.current === 'live'
+    const rung = (sizeM: number) => (live ? rungFor(sizeM, pxPerM, GRAPHICS_QUALITY) : 'near')
+    // The SVG layers' own two-tier prop, driven off the ladder like everything else: a 12m tree is the
+    // smallest thing they draw, so it decides when they stop drawing the heavy half.
+    const low = !atLeast(rung(12), 'far')
     if (low !== lodLowRef.current) {
       lodLowRef.current = low
       setLodLow(low)
     }
-    const flat = pxPerM < INK_LOD_PX_PER_M && viewRef.current === 'live'
+    const flat = !atLeast(rung(INK_SOFTENING_M), 'mid')
     if (flat !== inkFlatRef.current) {
       inkFlatRef.current = flat
       setInkFlat(flat)
     }
     // The bucket's OWN scale, never the live one: a rung has to be a pure function of the bucket, or
     // it flips at a different place zooming in than zooming out.
-    const bucket = viewRef.current === 'live' ? lodBucket(pxPerM) : Number.POSITIVE_INFINITY
+    const bucket = live ? lodBucket(pxPerM) : Number.POSITIVE_INFINITY
     if (bucket !== sceneBucketRef.current) {
       sceneBucketRef.current = bucket
-      setScenePxPerM(viewRef.current === 'live' ? lodScale(pxPerM) : Infinity)
+      setScenePxPerM(live ? lodScale(pxPerM) : Infinity)
     }
-    // How tall a garage's signage band draws, right now, in CSS pixels.
-    const bandPx = SIGN_H_M * EXTRUDE * pxPerM
-    const lettered = bandPx >= SIGN_LEGIBLE_PX && viewRef.current === 'live'
+    const lettered = atLeast(rung(SIGN_BAND_M), 'far')
     if (lettered !== signsLetteredRef.current) {
       signsLetteredRef.current = lettered
       setSignsLettered(lettered)
@@ -1560,6 +1563,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       // The detail ladder's input. Bucketed by the scene cache, so this changes the picture at
       // discrete scales rather than continuously as the camera zooms.
       pxPerM: scenePxPerM,
+      quality: GRAPHICS_QUALITY,
       storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
       marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
       solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),

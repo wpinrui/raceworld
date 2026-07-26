@@ -142,16 +142,9 @@ export const SIGN_H_M = 1.5
  *  of a unit. */
 const FLAG_PX = 40
 
-/** How tall the signage band has to be ON SCREEN, in CSS pixels, before its flags and names are drawn.
- *  Below it the board stays — it is part of the building — and what is written on it goes.
- *
- *  Deliberately set at NOISE, not at legibility. Measured across the layouts, the band runs 2.9 to 7.8
- *  pixels with the whole complex fitted in frame, and 5.9 to 17.3 at racing zoom, so the two overlap
- *  and no threshold separates them: on the widest circuits a garage name is already under four pixels
- *  while you are racing. A legibility threshold is about 13 here, and it would take the names off some
- *  circuits at racing zoom — a look decision, not a frame-rate one, so it is not made here. Five is the
- *  height below which the name is under three pixels and there is nothing to argue about. */
-export const SIGN_LEGIBLE_PX = 5
+/** Lettering is gated by the CALLER, off the shared detail ladder in lib/ui/lod.ts, measured against
+ *  the signage band's own height. It used to carry a pixel threshold of its own here, which is exactly
+ *  the per-feature hand-tuning the ladder exists to replace. */
 
 /** Driver name boards across each garage fascia, laid IN the plane of that wall.
  *
