@@ -39,12 +39,7 @@ const BODY: Station[] = [
 ]
 const BODY_BOTTOM = 0.06
 
-/** The cockpit surround ahead of the tub, and the airbox-to-tail engine cover behind it. The gap
- *  between them IS the cockpit opening; the rear loft's front cap is the headrest bulkhead. */
-const SPINE_FRONT: Station[] = [
-  { z: 188, half: 17, top: 0.56 },
-  { z: 206, half: 16, top: 0.60 },
-]
+/** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead. */
 const SPINE_REAR: Station[] = [
   { z: 246, half: 14, top: 0.78 },
   { z: 260, half: 13, top: 0.95 },
@@ -259,7 +254,6 @@ export function buildCarMesh(colour: string): CarMesh {
   const cz = SPRITE.cy
 
   group.add(mesh(loftGeometry(BODY, BODY_BOTTOM), colour))
-  group.add(mesh(loftGeometry(SPINE_FRONT, SPINE_BOTTOM), sec))
   group.add(mesh(loftGeometry(SPINE_REAR, SPINE_BOTTOM), sec))
 
   // The cockpit: a dark open tub between the surround and the headrest bulkhead, the driver's
