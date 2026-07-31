@@ -24,6 +24,7 @@ import type { SceneryFence } from './scenery-props'
 import { smoothOpenPath } from './track-path'
 import type { Vec } from './geom'
 import { atLeast, rungFor, type Rung } from './lod'
+import { SOFT_BAND_ALPHA } from './terrain-field'
 import { TREE_FLAT } from './scenery-paint'
 import { PERF } from './perf-flags'
 
@@ -814,15 +815,35 @@ const HEDGEROW_M = 2.2
 export function groundOps(
   scenery: Pick<Scenery, 'bands' | 'fields' | 'terrain' | 'runoffs'>,
   u: (m: number) => number,
-  { ground, pxPerM, quality }: { ground: boolean; pxPerM?: number; quality?: number },
+  { ground, pxPerM, quality, foldedBands }: {
+    ground: boolean
+    pxPerM?: number
+    quality?: number
+    /** The bands resolved to one colour over this shot and the surface has been CLEARED to it, so
+     *  drawing them again would lay the same wash on twice. See `bandWash`. */
+    foldedBands?: boolean
+  },
 ): DrawOp[] {
   const px = pxPerM ?? Infinity
   const crop = atLeast(rungFor(CROP_ROW_M, px, quality), 'mid')
   const hedges = atLeast(rungFor(HEDGEROW_M, px, quality), 'mid')
   const ops: DrawOp[] = []
   if (ground) {
-    for (const b of scenery.bands) {
-      ops.push({ d: b.d, fill: b.fill, alpha: b.soft ? 0.3 : 1, evenOdd: true, clip: discOfPath(b, 0) })
+    // Two ops, alpha 0.30, and between them about one full viewport of blended coverage on top of a
+    // surface the clear has already written in full: the most expensive thing a close frame paints
+    // (`npm run close:fill`). They are coverage-bound, so nothing that trims or culls geometry helps,
+    // and the only way to stop paying is not to paint them. Where the shot holds no contour they are
+    // one flat wash, and the clear can carry it for nothing.
+    if (!foldedBands) {
+      for (const b of scenery.bands) {
+        ops.push({
+          d: b.d,
+          fill: b.fill,
+          alpha: b.soft ? SOFT_BAND_ALPHA : 1,
+          evenOdd: true,
+          clip: discOfPath(b, 0),
+        })
+      }
     }
     for (const f of scenery.fields) {
       const clip = discOfPath(f, 0)
@@ -857,6 +878,11 @@ export interface SceneOpts {
   /** Graphics quality, as a multiplier on the ladder's thresholds. */
   quality?: number
   ground: boolean
+  /** The colour the relief bands resolve to over this shot, when they resolve to one, or null when a
+   *  contour is in the disc and they have to be drawn. Non-null is a statement by the CALLER that it
+   *  has cleared the surface to this, so the bands are not emitted here. One value carries both
+   *  halves on purpose: a caller that folded and a scene that drew anyway is the same wash twice. */
+  bandWash?: string | null
   extrude: number
   storeyM: number
   bayM: number
@@ -1069,6 +1095,10 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
     memoGeneration,
     o.view, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
     o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.u(1), o.lighting,
+    // Whether the bands are folded, never WHICH colour they folded to: the ground ops differ by
+    // their presence and by nothing else, and keying on the colour would evict the assembly every
+    // time the camera crossed into a different wash.
+    o.bandWash != null,
     // The rungs themselves, never the scale they came from: see `rungSignature`.
     rungSignature(scenery, o),
   ])
@@ -1087,7 +1117,9 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const px = o.pxPerM ?? Infinity
   const parts: StaticParts = {
     key,
-    ground: groundOps(scenery, o.u, { ground: o.ground, pxPerM: o.pxPerM, quality: o.quality }),
+    ground: groundOps(scenery, o.u, {
+      ground: o.ground, pxPerM: o.pxPerM, quality: o.quality, foldedBands: o.bandWash != null,
+    }),
     // Every one of these now asks the ladder per OBJECT rather than reading one global boolean, so a
     // shed retires while the grandstand beside it is still fully drawn, and each hands back a group that
     // already carries its own disc. A group whose rung came back 'gone' arrives here with no ops and is

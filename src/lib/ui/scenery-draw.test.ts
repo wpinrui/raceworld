@@ -508,6 +508,20 @@ describe('groundOps', () => {
     expect(low.some((op) => refName(op.fill ?? '') === 'tm-crop')).toBe(false)
   })
 
+  it('drops the bands and nothing else once they are folded into the clear', () => {
+    // The fold's whole claim is that the picture is unchanged, so what it may remove is the bands and
+    // exactly the bands: the field quilt washes over them at 0.75 and the terrain and run-off are
+    // opaque on top, and all three have to still be there to paint on the folded surface.
+    const ops = groundOps(ground, u, { ground: true, foldedBands: true })
+    expect(ops.some((op) => op.fill === '#3F602C'), 'the band is gone').toBe(false)
+    expect(ops.some((op) => op.fill === '#4A6B31'), 'the field quilt stays').toBe(true)
+    expect(ops.some((op) => op.fill === '#2E4A6B'), 'the terrain patch stays').toBe(true)
+    expect(ops.some((op) => op.fill === '#7A6A55'), 'the run-off stays').toBe(true)
+    // And it is only the band that went: everything else comes back op for op.
+    const drawn = groundOps(ground, u, { ground: true })
+    expect(ops.map((op) => op.d)).toEqual(drawn.slice(1).map((op) => op.d))
+  })
+
   it('keeps terrain and run-off when the ground itself is switched off', () => {
     // Those are placed features, not the surround; hiding the surround must not take them with it.
     const ops = groundOps(ground, u, { ground: false })

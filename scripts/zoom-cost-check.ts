@@ -31,6 +31,7 @@ import { pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
 import { MOODS, screenUpAzimuth } from '../src/lib/ui/lighting'
 import { sceneryScene, type DrawOp, type SceneItem } from '../src/lib/ui/scenery-draw'
+import { bandWash } from '../src/lib/ui/terrain-field'
 import { QUALITY, lodBucket, lodScale } from '../src/lib/ui/lod'
 
 // Mirrors RaceTrackMap: a 1600x900 viewport, the wheel's own step, and the zoom limits the camera
@@ -105,8 +106,11 @@ for (const id of circuits) {
           },
         ]
       })
+    // Composed the way RaceTrackMap composes: the band fold is decided per compose, so a probe that
+    // skipped it would not be timing what a compose costs.
+    const wash = bandWash(scenery.bands, scenery.bandField, scenery.base, disc)
     return sceneryScene(scenery, {
-      u, lighting, view: viewAz, ground: true, extrude: EXTRUDE,
+      u, lighting, view: viewAz, ground: true, extrude: EXTRUDE, bandWash: wash,
       // Through the bucket's own representative scale, never the live one — the renderer does the same,
       // so a rung is a pure function of the bucket and flips at the same place in both directions.
       pxPerM: lodScale(ppu * z / layout.metresPerUnit), quality: QUALITY.medium,

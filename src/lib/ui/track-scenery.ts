@@ -13,7 +13,9 @@ import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'
 import { blobPath, buildingParts, pickArchetype, type SceneryPart } from './scenery-shapes'
 import { biomeOf, type Biome } from './biomes'
-import { bandsFor, gradeToTrack, makeHeightField, type TerrainBand } from './terrain-field'
+import {
+  bandsFor, gradeToTrack, makeHeightField, type BandField, type TerrainBand,
+} from './terrain-field'
 import {
   FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts,
   type SceneryFence, type SceneryField, type SceneryMarshal,
@@ -62,6 +64,9 @@ export interface SceneryDensity { trees?: number; buildings?: number }
 export interface Scenery {
   /** Terraced relief bands, lowest first — drawn under everything as the ground itself. */
   bands: TerrainBand[]
+  /** The grid those bands were traced out of, so a shot can be asked whether it holds a contour
+   *  without walking their paths. See `bandsCovering`. */
+  bandField: BandField
   /** Ground plane colour, taken from the biome ramp so the bands read as steps out of it. */
   base: string
   fields: SceneryField[]
@@ -153,9 +158,10 @@ export function buildScenery(
   const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
   // Off the flag, a handful of very low-contrast levels: enough that the ground is not one flat
   // sheet stretching to the horizon, without the map-like terracing.
-  const bands = terrainDetail
+  const relief = terrainDetail
     ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM })
     : bandsFor(field, farBox, [bio.ramp[2], bio.ramp[4]], { reliefM: bio.reliefM, soft: true })
+  const bands = relief.bands
 
   // ── Water bodies ──
   // Lakes only: the relief bands carry ground tone now, so the old translucent tint patches just
@@ -491,7 +497,7 @@ export function buildScenery(
   }
 
   return {
-    bands, base: bio.base, fields, fences, marshals,
+    bands, bandField: relief.field, base: bio.base, fields, fences, marshals,
     terrain, runoffs, kerbs, stands, buildings, trees,
   }
 }

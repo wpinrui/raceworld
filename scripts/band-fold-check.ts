@@ -13,9 +13,9 @@
 // both fills. This walks a lap at each scale, asks how often the disc holds no contour at all, and
 // prints what the resulting wash would be.
 //
-// The contour test here is against the DRAWN path's own points, so it answers what is on screen rather
-// than what the field says. Marching-squares vertices are about 45 m apart against a disc of hundreds,
-// so a contour crossing the disc always leaves vertices in it.
+// The test is `bandsCovering`, which is the renderer's own: asked of the grid the contours were traced
+// from, one cell of margin, nested band counts. So what this prints is the hit rate the shipped fold
+// actually gets rather than an approximation of it.
 //
 // Run: npm run band:check  [circuit ...]
 
@@ -23,7 +23,7 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { densifyTrace } from '../src/lib/ui/track-path'
 import { mapPathPoints } from '../src/lib/ui/extrude'
-import { blend } from '../src/lib/ui/surface-ink'
+import { bandWash } from '../src/lib/ui/terrain-field'
 
 const VIEW_W = 1600
 const VIEW_H = 900
@@ -34,8 +34,6 @@ const VIEW_H = 900
 const CULL_MARGIN = Number(
   process.argv.slice(2).find((a) => a.startsWith('--margin='))?.split('=')[1] ?? 1.45,
 )
-/** What the bands are drawn at, straight out of `groundOps`: soft bands are a wash, not a terrace. */
-const SOFT_ALPHA = 0.3
 /** Stations walked per lap. The camera follows the track, so the track is where the question is asked. */
 const STATIONS = 160
 
@@ -51,7 +49,6 @@ const SCALES = [0.6, 1, 1.5, 2, 3, 4, 6, 8, 12, 20]
  *  the circuit: half the viewport diagonal in pixels, divided by pixels per metre, times the margin. */
 const discRadiusM = (pxPerM: number) => ((Math.hypot(VIEW_W, VIEW_H) / 2) / pxPerM) * CULL_MARGIN
 
-interface Pt { x: number; y: number }
 
 console.log('Relief bands: how often the cull disc holds no band contour, walking a lap at each scale.')
 console.log(`Viewport ${VIEW_W}x${VIEW_H}, cull margin ${CULL_MARGIN}, ${STATIONS} stations a lap.`)
@@ -65,6 +62,7 @@ console.log('-'.repeat(header.length))
 
 const foldable: number[][] = SCALES.map(() => [])
 const washes = new Map<string, number>()
+const violations: string[] = []
 
 for (const id of ids) {
   const layout = TRACK_LAYOUTS[id]
@@ -78,41 +76,36 @@ for (const id of ids) {
     biome: layout.biome,
   })
 
-  // Every band's drawn vertices, kept per band: a disc is foldable when NO band has a vertex in it,
-  // and the wash it folds to depends on which bands cover the centre.
-  const bandPts: Pt[][] = scenery.bands.map((b) => {
-    const out: Pt[] = []
-    mapPathPoints(b.d, (x, y) => {
-      out.push({ x, y })
-      return { x, y }
-    })
-    return out
-  })
-
   const centre = densifyTrace(layout.trace).map(([x, y]) => ({ x, y }))
   const stations = Array.from({ length: STATIONS }, (_, i) =>
     centre[Math.floor((i / STATIONS) * centre.length)])
+
+  // Every vertex the bands actually DRAW. The fold is decided off the grid the contours were traced
+  // from; this is the other representation of the same thing, and the two agreeing is the whole
+  // picture-identity claim. A vertex inside a disc the fold accepted is a contour that would have
+  // been on screen and was replaced by a flat wash.
+  const drawn: Array<{ x: number; y: number }> = []
+  for (const b of scenery.bands) {
+    mapPathPoints(b.d, (x, y) => {
+      drawn.push({ x, y })
+      return { x, y }
+    })
+  }
 
   const row: string[] = []
   for (let si = 0; si < SCALES.length; si++) {
     const rU = discRadiusM(SCALES[si]) / mpu
     let clean = 0
     for (const c of stations) {
-      const crossed = bandPts.some((pts) => pts.some(
-        (p) => (p.x - c.x) ** 2 + (p.y - c.y) ** 2 <= rU * rU,
-      ))
-      if (crossed) continue
+      const wash = bandWash(scenery.bands, scenery.bandField, scenery.base, {
+        cx: c.x, cy: c.y, r: rU,
+      })
+      if (wash === null) continue
       clean++
-      // What the shot would be cleared to. A band covers the disc when the disc is inside it and no
-      // contour of it is in shot, which for a point test is "the nearest vertex of that band is
-      // further away than the disc reaches AND the point is inside". Inside-ness is asked of the
-      // drawn region below.
-      let wash = scenery.base
-      for (let bi = 0; bi < scenery.bands.length; bi++) {
-        if (!inside(bandPts[bi], c)) continue
-        wash = blend(wash, scenery.bands[bi].fill, scenery.bands[bi].soft ? SOFT_ALPHA : 1)
-      }
       washes.set(wash, (washes.get(wash) ?? 0) + 1)
+      if (drawn.some((p) => (p.x - c.x) ** 2 + (p.y - c.y) ** 2 <= rU * rU)) {
+        violations.push(`${id} at ${SCALES[si]}px/m near ${c.x.toFixed(0)},${c.y.toFixed(0)}`)
+      }
     }
     const frac = clean / stations.length
     foldable[si].push(frac)
@@ -121,25 +114,13 @@ for (const id of ids) {
   console.log(`${id.padEnd(16)}${row.join('')}`)
 }
 
-/** Even-odd point-in-region against a band's loops, which is the rule the band is FILLED under. The
- *  vertex list is one flat run of every loop, so this walks it as a closed polygon per `M`: crossings
- *  parity over the whole set is exactly even-odd. */
-function inside(pts: Pt[], c: Pt): boolean {
-  let hits = 0
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const a = pts[i]
-    const b = pts[j]
-    if ((a.y > c.y) !== (b.y > c.y)
-      && c.x < ((b.x - a.x) * (c.y - a.y)) / (b.y - a.y) + a.x) hits++
-  }
-  return hits % 2 === 1
-}
-
 const med = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
 console.log('-'.repeat(header.length))
 console.log(`${'median'.padEnd(16)}` + foldable.map((f) => `${(med(f) * 100).toFixed(0)}%`.padStart(8)).join(''))
 console.log(`${'worst layout'.padEnd(16)}` + foldable.map((f) => `${(Math.min(...f) * 100).toFixed(0)}%`.padStart(8)).join(''))
-console.log(`\nDistinct washes over every foldable shot: ${washes.size}`)
+console.log(`\nShots folded with a drawn contour inside the disc: ${violations.length}`)
+for (const v of violations.slice(0, 10)) console.log(`  ${v}`)
+console.log(`Distinct washes over every foldable shot: ${washes.size}`)
 for (const [hex, n] of [...washes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
   console.log(`  ${hex}  ${n} shots`)
 }

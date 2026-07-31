@@ -5,6 +5,7 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
+import { bandWash } from '@/lib/ui/terrain-field'
 import { QUALITY, atLeast, lodBucket, lodScale, rungFor, type Quality } from '@/lib/ui/lod'
 import { SOFT_LAYERS, SOFT_SPREAD } from '@/lib/ui/surface-ink'
 import {
@@ -124,6 +125,14 @@ const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' 
   // which left the pit-straight measurement unable to say which half was the hitch.
   g: 'signs',
 }
+/** A composed static world, and the colour the surface has to be filled with underneath it.
+ *
+ *  `clearTo` travels WITH the items rather than being read off the scenery, because on a shot holding
+ *  no band contour the two are not independent: the scene omits the bands exactly because the fill is
+ *  carrying them. A paint that took its items from here and its colour from anywhere else would drop
+ *  the wash for as long as a swap was in flight. */
+interface ComposedScene { items: SceneItem[]; marks: SceneMark[]; clearTo: string }
+
 /** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
  *  closely than it tracks anything else, so scenery is shed to hold this line. */
 const NODE_BUDGET = 4000
@@ -1737,8 +1746,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       ]
     })
     const marks: SceneMark[] = []
+    // The relief bands, when this shot holds no contour of them: one wash over every pixel, which the
+    // surface fill can carry for nothing instead of two viewport-sized blended fills over a surface
+    // that has just been written in full. Asked of the CULL disc rather than the viewport because the
+    // camera travels inside the disc between composes, and this colour has to be right everywhere it
+    // goes. Null where a contour is in shot, and then the bands are drawn exactly as before.
+    const wash = hidden.has('ground')
+      ? null
+      : bandWash(scenery.bands, scenery.bandField, scenery.base, cullNow)
     const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, ground: !hidden.has('ground'), extrude: EXTRUDE,
+      bandWash: wash,
       // The whole hidden set, not just the two categories the canvas used to read. Ablating a
       // grandstand used to change the SVG picture and leave the canvas one untouched, so a perf run
       // reported that hiding them cost nothing.
@@ -1760,12 +1778,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       pitOver: pitNear ? pitDrawOps.over : [],
       overlay: roadMarkOps,
     }, marks)
-    return { items, marks }
+    return { items, marks, clearTo: wash ?? scenery.base }
   }, [
     canvasOn, view, scenery, u, lighting, viewAz, hidden, trackDrawOps,
     pitDrawOps, pitDisc, scenePxPerM, quality, roadMarkOps,
   ])
-  const sceneRef = useRef<{ items: SceneItem[]; marks: SceneMark[] } | null>(null)
+  const sceneRef = useRef<ComposedScene | null>(null)
   // On a swap, the old scene keeps painting while the new one's paths parse in the background; the
   // swap lands only when the Path2D cache is warm. Parsing them inside the next paint instead was a
   // 2-3 vsync hitch on every disc move â€” the last dip the benchmark found.
@@ -1798,7 +1816,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     swapWatchRef.current = null
     w?.()
   }
-  const swapScene = useCallback((next: { items: SceneItem[]; marks: SceneMark[] } | null) => {
+  const swapScene = useCallback((next: ComposedScene | null) => {
     // Whatever else is in flight, this supersedes it. Without that, a zoom notch that both crosses a
     // detail tier and commits a cull step lands a warm holding the scene as it was BEFORE the tier
     // changed, and the picture stays a tier behind until some later cull step happens to recompose
@@ -1893,7 +1911,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         pc.bounds = bbox ?? vb
         return canvasPaint(name, c, pc) ?? '#FF00FF'
       },
-      scenery.base,
+      sc.clearTo,
       timing,
     )
     if (timing) {
