@@ -28,17 +28,17 @@ interface Station { z: number; half: number; top: number; bottom?: number }
 const BODY: Station[] = [
   // The tip pinches in every axis so the nose ends in a rounded point, not a bulkhead.
   { z: 8, half: 3, top: 0.207, bottom: 0.202 },
-  { z: 12, half: 9, top: 0.218, bottom: 0.197 },
-  { z: 22, half: 12, top: 0.236, bottom: 0.191 },
-  { z: 48, half: 14, top: 0.32, bottom: 0.167 },
-  { z: 110, half: 16, top: 0.44, bottom: 0.124 },
-  { z: 166, half: 25, top: 0.48, bottom: 0.085 },
-  { z: 202, half: 30, top: 0.52 },
-  { z: 224, half: 32, top: 0.54 },
-  { z: 290, half: 32, top: 0.53 },
-  { z: 342, half: 30, top: 0.48 },
-  { z: 380, half: 28, top: 0.45 },
-  { z: 448, half: 28, top: 0.40 },
+  { z: 12, half: 9, top: 0.215, bottom: 0.197 },
+  { z: 22, half: 12, top: 0.228, bottom: 0.191 },
+  { z: 48, half: 14, top: 0.29, bottom: 0.167 },
+  { z: 110, half: 16, top: 0.38, bottom: 0.124 },
+  { z: 166, half: 25, top: 0.42, bottom: 0.085 },
+  { z: 202, half: 30, top: 0.46 },
+  { z: 224, half: 32, top: 0.47 },
+  { z: 290, half: 32, top: 0.47 },
+  { z: 342, half: 30, top: 0.44 },
+  { z: 380, half: 28, top: 0.42 },
+  { z: 448, half: 28, top: 0.38 },
 ]
 const BODY_BOTTOM = 0.06
 
@@ -58,7 +58,7 @@ const POD_BOTTOM = 0.06
 /** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
  *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
 const SPINE_REAR: Station[] = [
-  { z: 246, half: 14, top: 0.66 },
+  { z: 246, half: 14, top: 0.62 },
   { z: 260, half: 13, top: 0.85 },
   { z: 300, half: 10, top: 0.74 },
   { z: 380, half: 8, top: 0.56 },
@@ -67,8 +67,8 @@ const SPINE_REAR: Station[] = [
 const SPINE_BOTTOM = 0.30
 
 /** Cross-section profile, one side, bottom to crown: (fraction of half-width, fraction of height).
- *  Five steps a side keeps the shoulder round instead of a single hard chamfer. */
-const PROFILE: Array<[number, number]> = [[1, 0], [1, 0.45], [0.92, 0.75], [0.72, 0.93], [0.45, 1]]
+ *  The crown is FLAT: rounding lives only in the shoulder where the top rolls into the side wall. */
+const PROFILE: Array<[number, number]> = [[1, 0], [1, 0.55], [0.97, 0.85], [0.88, 0.97], [0.72, 1]]
 
 /** Catmull-Rom subdivisions per station gap: what turns the tables into curves. */
 const LOFT_SUBDIV = 4
@@ -319,10 +319,10 @@ export function buildCarMesh(colour: string): CarMesh {
   // The cockpit: a dark open tub between the surround and the headrest bulkhead, the driver's
   // helmet proud of its rim.
   const tub = new GeometrySink()
-  box(tub, cx - 12, cx + 12, 0.28, 0.56, 206, 246)
+  box(tub, cx - 12, cx + 12, 0.26, 0.50, 206, 246)
   group.add(mesh(tub.build(), CARBON))
   const helmet = mesh(new THREE.SphereGeometry(13, 16, 12), sec)
-  helmet.position.set(0, H(0.56), 228 - cz)
+  helmet.position.set(0, H(0.50), 228 - cz)
   group.add(helmet)
 
   // Sidepod intakes read as OPENINGS: dark mouths on the pods' own front faces.
@@ -341,8 +341,8 @@ export function buildCarMesh(colour: string): CarMesh {
   {
     // Held a clear step AHEAD of the fin's lofted slope: flush placement left it swallowed the
     // moment the airbox height moved.
-    const base = { y: H(0.645), z: 244 - cz }
-    const apex = { y: H(0.83), z: 254 - cz }
+    const base = { y: H(0.60), z: 244 - cz }
+    const apex = { y: H(0.80), z: 254 - cz }
     const at = (x: number, f: number): V3 =>
       v3(x, base.y + (apex.y - base.y) * f, base.z + (apex.z - base.z) * f)
     const rim: Array<[number, number]> = [
@@ -446,12 +446,12 @@ export function buildCarMesh(colour: string): CarMesh {
       new THREE.MeshLambertMaterial({ color: TERTIARY }),
     )
     head.scale.set(5.5, 3.2, 4.5)
-    head.position.set(sign * 46, H(0.52), 214 - cz)
+    head.position.set(sign * 46, H(0.47), 214 - cz)
     head.rotation.y = -sign * 0.5
     head.castShadow = true
     group.add(head)
     group.add(strut(
-      v3(sign * 31, H(0.49), 206 - cz), v3(sign * 44, H(0.515), 213 - cz), 1.1, TERTIARY,
+      v3(sign * 31, H(0.44), 206 - cz), v3(sign * 44, H(0.465), 213 - cz), 1.1, TERTIARY,
     ))
   }
 
