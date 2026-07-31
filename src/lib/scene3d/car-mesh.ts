@@ -230,6 +230,17 @@ function mesh(geo: THREE.BufferGeometry, colour: string): THREE.Mesh {
   return m
 }
 
+/** A thin round member between two points: a mirror stalk. */
+function strut(a: V3, b: V3, radius: number, colour: string): THREE.Mesh {
+  const from = new THREE.Vector3(a.x, a.y, a.z)
+  const to = new THREE.Vector3(b.x, b.y, b.z)
+  const geo = new THREE.CylinderGeometry(radius, radius, from.distanceTo(to), 6)
+  const m = mesh(geo, colour)
+  m.position.copy(from.clone().add(to).multiplyScalar(0.5))
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.sub(from).normalize())
+  return m
+}
+
 /** A suspension member as the WISHBONE BLADE it is: wide in plan, thin edge-on. A tube thick enough
  *  to read from above turns into scaffolding from the side. */
 function blade(a: V3, b: V3, planWidth: number, thick: number, colour: string): THREE.Mesh {
@@ -356,13 +367,38 @@ export function buildCarMesh(colour: string): CarMesh {
   const mainPlane = new GeometrySink()
   box(mainPlane, 30, 210, 0.04, 0.052, 16, 50)
   group.add(mesh(mainPlane.build(), TERTIARY))
-  for (const [x0, x1] of [[34, 96], [144, 206]] as const) {
-    const lower = new GeometrySink()
-    slopedPlate(lower, x0, x1, 22, 38, 0.055, 0.078, 0.018)
-    group.add(mesh(lower.build(), colour))
-    const upper = new GeometrySink()
-    slopedPlate(upper, x0 + 3, x1 - 3, 34, 50, 0.082, 0.118, 0.018)
-    group.add(mesh(upper.build(), sec))
+  // The sculpted flap, plan drawn to the sketch: deepest chord at the endplate, trailing edge
+  // sweeping forward in a concave arc as it runs inboard, camber still rising rearward.
+  for (const sign of [-1, 1]) {
+    const flap = new GeometrySink()
+    const plan: Array<[number, number]> = [[26, 22], [86, 22], [86, 50]]
+    for (let k = 1; k <= 8; k++) {
+      const t = k / 8
+      const s2 = 1 - t
+      plan.push([
+        s2 * s2 * 86 + 2 * s2 * t * 56 + t * t * 26,
+        s2 * s2 * 50 + 2 * s2 * t * 50 + t * t * 30,
+      ])
+    }
+    const yAt = (z: number) => H(0.055 + (0.118 - 0.055) * ((z - 22) / 28))
+    const pts = plan.map(([x, z]) => ({ x: sign * x, z: z - cz, y: yAt(z) }))
+    const tris = THREE.ShapeUtils.triangulateShape(plan.map(([x, z]) => new THREE.Vector2(x, z)), [])
+    const lift = H(0.02)
+    for (const [i, j, k] of tris) {
+      flap.tri(v3(pts[i].x, pts[i].y, pts[i].z), v3(pts[j].x, pts[j].y, pts[j].z), v3(pts[k].x, pts[k].y, pts[k].z))
+      flap.tri(
+        v3(pts[i].x, pts[i].y + lift, pts[i].z), v3(pts[j].x, pts[j].y + lift, pts[j].z),
+        v3(pts[k].x, pts[k].y + lift, pts[k].z),
+      )
+    }
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]
+      const q = pts[(i + 1) % pts.length]
+      flap.quad(
+        v3(p.x, p.y, p.z), v3(q.x, q.y, q.z), v3(q.x, q.y + lift, q.z), v3(p.x, p.y + lift, p.z),
+      )
+    }
+    group.add(mesh(flap.build(), colour))
   }
   for (const x of [28, 208]) {
     const s = new GeometrySink()
@@ -396,13 +432,19 @@ export function buildCarMesh(colour: string): CarMesh {
   box(diff, 76, 164, 0.05, 0.18, 448, 468)
   group.add(mesh(diff.build(), CARBON))
 
-  // Mirrors OUTBOARD of the bodywork on stalks: exterior fittings, not lumps in the cockpit side.
+  // Mirrors: rounded pebbles close to the cockpit sides, their short stalks swept BACKWARDS.
   for (const sign of [-1, 1]) {
-    const head = new GeometrySink()
-    box(head, cx + sign * 58 - 5, cx + sign * 58 + 5, 0.50, 0.545, 202, 209)
-    group.add(mesh(head.build(), TERTIARY))
-    group.add(blade(
-      v3(sign * 28, H(0.48), 206 - cz), v3(sign * 54, H(0.525), 205 - cz), 2.4, 1.6, TERTIARY,
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 12, 9),
+      new THREE.MeshLambertMaterial({ color: TERTIARY }),
+    )
+    head.scale.set(5.5, 3.2, 4.5)
+    head.position.set(sign * 46, H(0.52), 214 - cz)
+    head.rotation.y = -sign * 0.5
+    head.castShadow = true
+    group.add(head)
+    group.add(strut(
+      v3(sign * 31, H(0.49), 206 - cz), v3(sign * 44, H(0.515), 213 - cz), 1.1, TERTIARY,
     ))
   }
 
