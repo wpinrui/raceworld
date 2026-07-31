@@ -6,7 +6,7 @@
 > writing UI copy, news copy, or touching the review/merge flow.
 
 # Flags
--iter means rapidly iterate, ping when there is something new to try/test. The user wants to make inputs into the project.
+-iter means RAPIDLY (NO WRITING OR RUNNING TESTS!!!!!) iterate, ping the nanosecond there is something new to try/test. The user wants to make inputs into the project so do not waste any time on housekeeping. When they tell you to "close the loop", this is the time to do housekeeping that may have been deferred during rapid iter, including test writing and running. Review is strictly not allowed while -iter is in force.
 -afk means the user will be away, and the agent is expected to do work until task completion, including making autonomous decisions, and make incremental commits so that the user can check out a specific commit later
 -rm means review the PR and then merge. -r means review without merge. -m simply means merge, but if the previous review is stale or does not exist then review first.
 
