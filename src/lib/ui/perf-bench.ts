@@ -263,6 +263,16 @@ export function planCells(cfg: LabConfig, cars: number): Cell[] {
       key: `${shotId}/${variant}`, shot: shotId, variant, label, group: 'baseline',
       config: { ...BASELINE_CONFIG },
     })
+    // A discarded cell at the baseline config, FIRST, and it is not a formality.
+    //
+    // The geometry memo and the Path2D cache live across cells, so the first cell of a shot pays for
+    // every rung, bearing and path the shot will ever visit and no later cell pays for any of them. That
+    // is not noise, it is a one-way step: the baseline is the cell that pays, so every row after it is
+    // scored against a number inflated by exactly the thing the caches exist to remove. Measured on
+    // monaco (2026-07-31): the bearing shot's baseline composed 0.95ms/frame and its repeat 0.08, a 12x
+    // spread that made the shot's noise floor 0.90ms and swallowed every row in it, including a geometry
+    // memo that was in fact earning about 0.75ms/frame.
+    out.push(base('warm', 'Warm'))
     out.push(base('baseline', 'Baseline'))
     // Walked in CATALOGUE order rather than selection order, so a report's rows sit in the same places
     // whatever order the boxes happened to be ticked in and two runs can be read side by side.
@@ -686,7 +696,7 @@ export function blocksOf(cells: readonly Cell[], results: ReadonlyMap<string, Ce
       noiseUnit: vsync ? 'ms cpu' : 'ms/frame',
       vsync,
       basis: vsync ? 'cpu' : 'frame',
-      rows: mine.filter((c) => c.variant !== 'baseline' && c.variant !== 'repeat')
+      rows: mine.filter((c) => !['warm', 'baseline', 'repeat'].includes(c.variant))
         .map((c) => results.get(c.key)).filter((r): r is CellResult => !!r),
       skipped: mine.filter((c) => !!c.skip),
     }

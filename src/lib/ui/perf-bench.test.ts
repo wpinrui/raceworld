@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  COLUMNS, DEFAULT_LAB_CONFIG, RUN_CODE_ORDERS, VARIANTS, blocksOf, cellMetrics, decodeRunCode,
+  BASELINE_CONFIG, COLUMNS, DEFAULT_LAB_CONFIG, RUN_CODE_ORDERS, VARIANTS, blocksOf, cellMetrics, decodeRunCode,
   encodeRunCode, estimateSeconds, frameStats, longFramesOf, noiseFloorCpuMs, noiseFloorMs, planCells,
   traceSummary, verdictFor, vsyncBound,
   type Cell, type CellResult, type Counters, type FrameSample,
@@ -53,7 +53,23 @@ describe('planCells', () => {
 
   it('runs one baseline before and one after each shot, so the run carries its own noise floor', () => {
     const cells = planCells({ ...cfg, shots: ['racing'] }, 20)
-    expect(cells.map((c) => c.variant)).toEqual(['baseline', 'off:cameraGuard', 'hide:trees', 'repeat'])
+    expect(cells.map((c) => c.variant))
+      .toEqual(['warm', 'baseline', 'off:cameraGuard', 'hide:trees', 'repeat'])
+  })
+
+  // Without it the baseline is the one cell that fills the geometry memo and the Path2D cache, and
+  // every row after it is scored against a number inflated by exactly what those caches remove.
+  it('throws a warm cell away before the baseline, at the baseline\'s own configuration', () => {
+    const warm = planCells({ ...cfg, shots: ['racing'] }, 20)[0]
+    expect(warm.variant).toBe('warm')
+    expect(warm.config).toEqual(BASELINE_CONFIG)
+    expect(warm.skip).toBeUndefined()
+  })
+
+  it('keeps the warm cell out of the rows, so it is never scored or printed', () => {
+    const cells = planCells({ ...cfg, shots: ['racing'], variants: ['hide:trees'] }, 20)
+    const blocks = blocksOf(cells, new Map(cells.map((c) => [c.key, result(c, 16)])))
+    expect(blocks[0].rows.map((r) => r.cell.variant)).toEqual(['hide:trees'])
   })
 
   it('keeps a variant that cannot apply, with the reason, rather than dropping it silently', () => {
@@ -115,15 +131,15 @@ describe('planCells', () => {
     expect(a.map((c) => c.variant)).toEqual(b.map((c) => c.variant))
   })
 
-  it('costs one cell per variant per shot plus the two baselines, never a cross product', () => {
+  it('costs one cell per variant per shot plus the warm and the two baselines, never a cross product', () => {
     const cells = planCells({ ...cfg, shots: ['racing', 'still'] }, 20)
-    expect(cells.length).toBe(2 * (2 + 2))
+    expect(cells.length).toBe(2 * (2 + 3))
   })
 
   it('leaves a skipped cell out of the estimate', () => {
     const cells = planCells({ ...cfg, shots: ['racing'] }, 20)
     const run = cells.filter((c) => !c.skip).length
-    expect(run).toBe(3)
+    expect(run).toBe(4)
     expect(estimateSeconds(cells, DEFAULT_LAB_CONFIG))
       .toBeCloseTo(run * ((DEFAULT_LAB_CONFIG.frames + DEFAULT_LAB_CONFIG.warmup) / 60 + 0.4), 6)
   })
@@ -346,10 +362,11 @@ describe('the noise floor a vsync-bound block is judged against', () => {
   const pinned = (c: Cell, busyMs: number): CellResult => ({
     ...result(c, 16, busyMs), stats: frameStats(Array(100).fill(16.7)),
   })
+  // cells[0] is the discarded warm cell; the baseline, the row and the repeat follow it.
   const block = (baseBusy: number, repeatBusy: number, rowBusy: number) => blocksOf(cells, new Map([
-    [cells[0].key, pinned(cells[0], baseBusy)],
-    [cells[1].key, pinned(cells[1], rowBusy)],
-    [cells[2].key, pinned(cells[2], repeatBusy)],
+    [cells[1].key, pinned(cells[1], baseBusy)],
+    [cells[2].key, pinned(cells[2], rowBusy)],
+    [cells[3].key, pinned(cells[3], repeatBusy)],
   ]))[0]
 
   it('takes the floor from the two baselines in cpu time, not from a percentage of one of them', () => {
@@ -385,7 +402,7 @@ describe('the noise floor a vsync-bound block is judged against', () => {
   })
 
   it('falls back to the bare floor of the unit when a run was stopped before its repeat', () => {
-    const half = blocksOf(cells, new Map([[cells[0].key, pinned(cells[0], 4)]]))[0]
+    const half = blocksOf(cells, new Map([[cells[1].key, pinned(cells[1], 4)]]))[0]
     expect(half.noiseMs).toBeCloseTo(0.1, 9)
     expect(half.noiseUnit).toBe('ms cpu')
   })

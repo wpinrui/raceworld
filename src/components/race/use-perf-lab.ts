@@ -189,7 +189,9 @@ export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = 
         const done = await runCell(cell, world, config)
         // Null means the run was stopped inside the cell. A truncated cell is not a row.
         if (!done) break
-        results.push(done)
+        // The warm cell is measured and thrown away: its whole job is to leave the caches populated so
+        // the baseline is not the one cell paying to fill them.
+        if (cell.variant !== 'warm') results.push(done)
       }
     } finally {
       h.restore()

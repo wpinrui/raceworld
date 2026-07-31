@@ -39,7 +39,7 @@ function run(): LabReport {
     config,
     aborted: false,
     cells,
-    results: cells.filter((c) => !c.skip).map((c) => result(c, meanFor(c.variant))),
+    results: cells.filter((c) => !c.skip && c.variant !== 'warm').map((c) => result(c, meanFor(c.variant))),
   }
 }
 
@@ -116,7 +116,7 @@ function shotRun(
     config,
     aborted: false,
     cells,
-    results: cells.filter((c) => !c.skip).map((c) => ({ ...result(c, 16), ...over(c) })),
+    results: cells.filter((c) => !c.skip && c.variant !== 'warm').map((c) => ({ ...result(c, 16), ...over(c) })),
   }
 }
 
