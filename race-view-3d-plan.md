@@ -2,7 +2,9 @@
 
 > Authored in plan mode 2026-07-24 and approved then. Increment A landed; the canvas port and the
 > frame-rate campaign then took the branch for a day. Revised 2026-07-25 to re-point the remaining
-> increments at the canvas renderer, which did not exist when this was written.
+> increments at the canvas renderer, which did not exist when this was written. Revised again
+> 2026-07-31: the frame-rate campaign has been **reverted in full** ahead of a WebGL port, so every
+> rule and every probe it left behind is gone from this document too.
 
 ## Status
 
@@ -10,7 +12,7 @@
 |---|---|
 | **A** — one light, obeyed by everything | **Done.** `da38030`, `8870014`, `dbffd49`, `53d3079`, `bdbe467` |
 | **B** — cars in 3D | **Done.** `e035d57` + this commit. Preview: `npx tsx scripts/car-preview.ts` |
-| **C** — the track surface tells a story | **Done** for the circuit (`f6f52fc`). The pit lane is deliberately left bare |
+| **C** — the track surface tells a story | **Done** for the circuit (`f6f52fc`) and the pit lane (`51b401a`), both restored 2026-07-31 |
 | **D** — the track has form | Not started |
 | **E** — moods | Not started (`MOODS` exists, nothing selects between them) |
 
@@ -51,33 +53,28 @@ The static world is no longer SVG. It is described **once** as plain data and pa
   whole world in one ordered stream: ground → garage floors → road → pit complex → kerbs → shadows →
   solids → trees → furniture.
 - [scenery-paint.ts](src/lib/ui/scenery-paint.ts) + [SceneryCanvas.tsx](src/components/race/SceneryCanvas.tsx)
-  — `drawScene()` walks that stream into a `CanvasRenderingContext2D` with cached `Path2D`s.
-- [SceneryLayer.tsx](src/components/race/SceneryLayer.tsx) and
-  [PitBuilding.tsx](src/components/race/PitBuilding.tsx) still map the same description to `<path>`
-  elements. They are the reference renderer, gated behind `canvasOn`, and
-  `scripts/canvas-order-preview.ts` diffs the two pixel for pixel.
+  — `drawScene()` walks that stream into a `CanvasRenderingContext2D`.
 
-**Five rules this imposes on every increment below.**
+There is now exactly ONE renderer. The SVG world layer, the level-of-detail ladder, the cull discs,
+the geometry and path caches, the group batching, the warmed scene swap, the node budget, the frame
+cap, the baked bitmap and the whole perf lab are **gone** — reverted 2026-07-31 ahead of a WebGL
+port. The 2D renderer's remaining job is to be the clearest possible statement of what the picture
+IS, drawn at full fidelity, so the port has one thing to read.
 
-1. **Anything in the static world is a `DrawOp`, not JSX.** Add it in `scenery-draw.ts` and both
-   renderers get it. Adding an SVG path in `RaceTrackMap.tsx` instead is the drift the shared
-   description exists to prevent, and `canvas-order-preview.ts` will show it as a diff.
-2. **Every new op needs a `clip` disc.** The canvas skips ops whose bounding disc misses the
-   viewport, exactly (never as an LOD). An op with no `clip` is drawn every frame forever — correct
-   only for the ground and the road.
-3. **Gradients and patterns are symbolic**, `ref:NAME`, resolved by each renderer and cached. A new
-   gradient goes through that mechanism or it gets rebuilt per frame, which is a defect this branch
-   has already paid for once (`7097630`).
-4. **No full-frame `drawImage`.** His machine rasterizes and copies large canvases slowly: a 6.5MP
-   per-frame blit cost real frames and the bitmap baker was reverted for it (`ec90363`). Small
-   destination blits (≲1MP) are still plausible, with benchmark proof.
-5. **Still no SVG filters** (`feGaussianBlur`, `feDropShadow`). Soft shadows come from stacked fills
-   and gradients. This branch has had three zoom-out performance regressions.
+**Three rules this imposes on every increment below.**
 
-**Known residual:** ~16 dropped frames per lap, all on the pit straight, from the canvas pit
-complex's large fills exceeding GPU raster budget. Accepted, documented, not reopened here — but it
-means the pit straight is the frame budget's tightest point, and increments C and D put new ink on
-exactly that stretch of tarmac.
+1. **Anything in the static world is a `DrawOp`, not JSX.** Add it in `scenery-draw.ts`. The two
+   exceptions are the garage name boards and the pit crews, which carry real text, real flag artwork
+   and per-frame DOM animation, and none of that survives a `DrawOp`.
+2. **Gradients and patterns are symbolic**, `ref:NAME`, resolved by the renderer that paints them.
+   That is what keeps paint out of the geometry, and it is what a WebGL backend will resolve to a
+   texture or a shader uniform.
+3. **No SVG filters** (`feGaussianBlur`, `feDropShadow`), and none is needed: soft shadows and soft
+   marks come from stacked opaque fills. A blur is a raster effect and the picture is described in
+   vectors.
+
+**Do not re-introduce a mitigation here.** If the 2D renderer is too slow, that is an argument for
+finishing the WebGL port, not for putting the ladder back.
 
 **Cars are still SVG.** [`CarSprite`](src/components/race/RaceTrackMap.tsx#L290) renders as an SVG
 sprite over the canvas, as do the garage signs (benched innocent). Increment B is therefore
@@ -113,8 +110,8 @@ contrast), currently hardcoded at
 pit straight. Increment E is what turns that into data.
 
 The target is **diorama, not broadcast graphic**: where a parameter is a judgement call, take the
-bolder value. The one guard is zoom-out — the low-LOD tier still has to read cleanly and stay cheap,
-so extrusion depth and shadow length scale down with LOD rather than being drawn at full strength
+bolder value. The one guard is zoom-out — the whole circuit in one shot still has to read cleanly,
+so extrusion depth and shadow length are chosen to work there as well as at racing zoom
 and shrunk.
 
 ---
@@ -138,7 +135,8 @@ direction so the cars agree with the world they sit in.
   squash under braking, from curvature and the speed profile the loop already has.
 
 *Watch:* ~20 cars × a few extra nodes each is a per-frame SVG cost on the one layer that genuinely
-changes every frame. The `cars` benchmark category already exists (`2bad1b7`) to attribute it.
+changes every frame. The sprites are the last un-ported layer, and the first thing the WebGL port
+should take.
 
 **Pause: preview with a handful of cars at different headings, to check the highlight tracks.**
 
@@ -162,9 +160,8 @@ changes every frame. The `cars` benchmark category already exists (`2bad1b7`) to
   of the car, invisible at racing zoom. The sheen now slides across the bodywork with roll, which is
   the cue that actually reads; body travel went to 4% of the car's length alongside it.
 - **Cost: 104 elements per sprite, up from ~83**, and one CSS `filter` per car removed (the old
-  `drop-shadow` turned with the car, so it could never be a contact shadow). ~+420 document nodes at 20
-  cars, against `NODE_BUDGET` 4000. Not yet measured live: the in-app `cars` benchmark needs
-  `DEBUG_KEYS`.
+  `drop-shadow` turned with the car, so it could never be a contact shadow). ~+420 document nodes at
+  20 cars.
 
 ### Sprite corrections that followed (same branch)
 
@@ -203,11 +200,9 @@ own module rather than growing that file further.
 - **Marbles off-line**: a lighter speckled band outside the racing line through corners. Speckle is
   the expensive shape here — one dashed stroke, not N dots.
 - **A tarmac edge**: a thin dark drop from asphalt into the verge plus a soft shadow beyond it, so
-  the ribbon reads as a slab laid *on* the ground rather than a line drawn into it. This one runs the
-  whole lap and cannot be corner-clipped, so it is the increment's main frame-budget risk — bench it
-  alone before the rest.
+  the ribbon reads as a slab laid *on* the ground rather than a line drawn into it.
 
-**Pause: preview, and a benchmark run before moving on.**
+**Pause: preview before moving on.**
 
 ### What shipped, and the pit lane's answer
 
@@ -298,7 +293,6 @@ original design:
 | `src/lib/ui/lighting.test.ts` | **landed** — shadow vector/length/tint, mood invariants |
 | `src/lib/ui/scenery-draw.ts` | C, D: track-surface ops (rubber, skids, marbles, edge, camber, kerb faces) placed in `sceneryScene`'s order; E: a composite-mode field on `DrawOp` if the night pools stay |
 | `src/lib/ui/scenery-paint.ts` | E: honour the composite mode; any new `ref:` paint |
-| `src/components/race/SceneryLayer.tsx` | mirror the same ops so the reference renderer stays in parity |
 | **new** `src/lib/ui/track-surface.ts` | **landed** — C, for the circuit |
 | **new** `src/lib/ui/surface-ink.ts` | **landed** — the ink it is painted with |
 | `src/components/race/RaceTrackMap.tsx` | B: car shadow, `--car-rot`, roll/dive; E: mood selection replacing the hardcoded afternoon |
@@ -319,11 +313,9 @@ Per increment:
 - `npx tsx scripts/scenery-check.ts` at **ALL SCENERY CHECKS PASS** and
   `npx tsx scripts/pit-geometry-check.ts` at **ALL GEOMETRY CHECKS PASS** — the regression net for
   the geometry underneath all of this.
-- `npx tsx scripts/canvas-order-preview.ts [circuit]` — renders both pipelines and is what proves the
-  SVG reference and the canvas still describe the same picture in the same order. Run it on anything
-  that touches `scenery-draw.ts`.
-- `npx tsx scripts/scenery-preview.ts [--low] [--mood=X] <circuits>` for the still image to actually
-  look at.
-- `npx tsx scripts/canvas-cost-check.ts [circuit]` for headless per-frame cost, and the in-app lap
-  benchmark (`n`, behind `DEBUG_KEYS` in `RaceTrackMap.tsx`) for real fps when an increment adds ink
-  to the whole lap. C's tarmac edge and D's camber gradient both qualify.
+- `npx tsx scripts/scenery-preview.ts [--mood=X] [--zoom=N] [--at=fx,fy] [--cars] <circuits>` for the
+  still image to actually look at. It builds the scene through `sceneryScene` and `roadOps` — the
+  same calls the map makes — so what it renders is what ships. Run it on anything that touches
+  `scenery-draw.ts`.
+- `npx tsx scripts/scenery-check.ts` for placement (clearance, overlaps) and
+  `npx tsx scripts/pit-geometry-check.ts` for the lane's paint geometry.

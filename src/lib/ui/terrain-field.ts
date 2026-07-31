@@ -8,7 +8,6 @@
 // what makes them survive full zoom-out — the one place the old flat ground plane was most obvious.
 
 import { smoothClosed } from './scenery-shapes'
-import { blend } from './surface-ink'
 
 export type Vec = { x: number; y: number }
 
@@ -239,125 +238,16 @@ export interface TerrainBand {
   soft?: boolean
 }
 
-/** The alpha a soft band is washed on at.
- *
- *  Here rather than at the renderer that applies it, because anything folding a stack of bands into
- *  one colour has to composite them at exactly the alpha they would otherwise have been drawn with,
- *  and a second copy of this number is how that quietly stops being true. */
+/** The alpha a soft band is washed on at. Here rather than at the renderer, so the drawing
+ *  description and the generator cannot disagree about it. */
 export const SOFT_BAND_ALPHA = 0.3
 
-/** The sampled grid the contours were traced out of, kept alongside them.
- *
- *  A band is a REGION, not an outline: where no contour of it runs through the shot, every pixel of
- *  that shot takes the same stack of band fills, and a stack of fills that is constant over the whole
- *  surface is a colour the surface could have been cleared to instead. Deciding that needs one
- *  question answered per shot — does the shot hold a contour — and asking it of the paths means
- *  walking tens of thousands of points a compose. Asked of this grid it is a min and a max over the
- *  cells the shot touches, and because it is the same grid the contours were traced from, the answer
- *  cannot disagree with the picture. */
-export interface BandField {
-  /** Row-major corner samples, `(nx + 1) * (ny + 1)` of them. */
-  val: Float64Array
-  box: FieldBox
-  nx: number
-  ny: number
-  /** The level each RETURNED band was traced at, ascending, one per band. Levels that produced no
-   *  loops are not in the band list and are not here either, so the two stay index-aligned. */
-  levels: number[]
-}
-
-/** How many bands cover a whole disc, or null when a contour runs through it.
- *
- *  Bands NEST: each is the region at or above its own level and the levels ascend, so a point is
- *  covered by the first n of them for some n, and "how many" is the whole answer.
- *
- *  A cell holds a contour of level L exactly when its corners straddle L, which is the same test
- *  `isoLoops` marched on. So over the corners the disc reaches: a level in `(min, max]` is crossed
- *  and there is nothing constant to fold, and otherwise the levels at or below the min are the ones
- *  covering the disc.
- *
- *  The reach is the disc plus one and a half cell diagonals, which is derived rather than padded. A
- *  straddling cell has to be scanned WHOLE, since it is the spread across its corners that reveals the
- *  level. Take a drawn contour point inside the disc: it is a point of a `smoothClosed` quadratic
- *  whose control triangle is one raw vertex and the midpoints either side, so it lies within half a
- *  segment of that vertex, and a marching-squares segment runs inside one cell (at most a diagonal).
- *  The vertex itself sits on an edge of the straddling cell, so every corner of that cell is within a
- *  further diagonal. Half plus one, on top of the disc.
- *
- *  Against the DISC rather than its bounding square, which sounds like a detail and is not: at the
- *  close shot the square's corners reach half as far again as the disc does, and every corner that
- *  reaches a contour the shot cannot see is a fold refused for nothing.
- *
- *  A disc reaching outside the box counts as reaching ground below every level, since that is what is
- *  drawn out there: no band paths exist beyond the box. */
-export function bandsCovering(
-  f: BandField, disc: { cx: number; cy: number; r: number } | null,
-): number | null {
-  // No disc is the whole world, which always holds a contour.
-  if (!disc || f.levels.length === 0) return null
-  const gw = f.box.w / f.nx
-  const gh = f.box.h / f.ny
-  const reach = disc.r + 1.5 * Math.hypot(gw, gh)
-  const i0 = Math.max(0, Math.floor((disc.cx - reach - f.box.x) / gw))
-  const i1 = Math.min(f.nx, Math.ceil((disc.cx + reach - f.box.x) / gw))
-  const j0 = Math.max(0, Math.floor((disc.cy - reach - f.box.y) / gh))
-  const j1 = Math.min(f.ny, Math.ceil((disc.cy + reach - f.box.y) / gh))
-  // Reaching past the sampled box is ground below every level, so the minimum goes with it. Asked of
-  // the DISC and not of the scanned indices, or a shot a cell short of the edge would read as
-  // straddling ground that is not out there.
-  const beyond = disc.cx - disc.r < f.box.x || disc.cx + disc.r > f.box.x + f.box.w
-    || disc.cy - disc.r < f.box.y || disc.cy + disc.r > f.box.y + f.box.h
-  let min = beyond ? -Infinity : Infinity
-  let max = -Infinity
-  const r2 = reach * reach
-  for (let j = j0; j <= j1; j++) {
-    const row = j * (f.nx + 1)
-    const dy = f.box.y + j * gh - disc.cy
-    for (let i = i0; i <= i1; i++) {
-      const dx = f.box.x + i * gw - disc.cx
-      if (dx * dx + dy * dy > r2) continue
-      const v = f.val[row + i]
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
-  // The disc is entirely off the sampled box: bare ground, no bands, nothing to draw.
-  if (max === -Infinity) return 0
-  let covering = 0
-  for (const level of f.levels) {
-    if (level > min && level <= max) return null
-    if (level <= min) covering++
-  }
-  return covering
-}
-
-/** What a shot's bands resolve to when they resolve to one colour, or null when they have to be drawn.
- *
- *  Composited in DRAW order at the alpha each band would have been drawn with, through the same sRGB
- *  byte lerp the renderer's own opaque pre-blending uses, which is what `globalAlpha` source-over
- *  does to two opaque colours. */
-export function bandWash(
-  bands: readonly TerrainBand[], f: BandField, base: string,
-  disc: { cx: number; cy: number; r: number } | null,
-): string | null {
-  const n = bandsCovering(f, disc)
-  if (n === null) return null
-  let c = base
-  for (let i = 0; i < n; i++) c = blend(c, bands[i].fill, bands[i].soft ? SOFT_BAND_ALPHA : 1)
-  return c
-}
-
-/** Terraced bands over `box`, lowest first, with the grid they were traced out of. `ramp` supplies the
- *  fill per level (0 = lowest).
- *
- *  The grid comes back rather than being thrown away because a renderer needs to ask, per shot,
- *  whether a contour is in it (see `BandField`), and the only answer that cannot disagree with the
- *  drawn picture is one taken from the samples the picture was traced from. */
+/** Terraced bands over `box`, lowest first. `ramp` supplies the fill per level (0 = lowest). */
 export function bandsFor(
   field: HeightField, box: FieldBox, ramp: string[],
   { nx = 104, ny = 96, reliefM = 55, soft = false }:
   { nx?: number; ny?: number; reliefM?: number; soft?: boolean } = {},
-): { bands: TerrainBand[]; field: BandField } {
+): TerrainBand[] {
   // Damp toward the box edge so every contour closes inside it. Without this, contours run off the
   // edge as open curves and cannot be filled as a region.
   const damped = (p: Vec): number => {
@@ -378,7 +268,6 @@ export function bandsFor(
   }
 
   const out: TerrainBand[] = []
-  const levels: number[] = []
   for (let k = 0; k < ramp.length; k++) {
     // Levels span the middle of the relief range; the extremes carry no readable area.
     const level = ((k + 1) / (ramp.length + 1)) * reliefM
@@ -391,9 +280,6 @@ export function bandsFor(
     const d = loops.map((l) => (l.length >= 4 ? smoothClosed(l) : '')).filter(Boolean).join(' ')
     if (!d) continue
     out.push({ d, fill: ramp[k], soft })
-    // Pushed WITH the band, never per ramp entry: a level that traced no loops is not a band, and a
-    // levels list that counted it would put every later band's level against the wrong one.
-    levels.push(level)
   }
-  return { bands: out, field: { val, box, nx, ny, levels } }
+  return out
 }
