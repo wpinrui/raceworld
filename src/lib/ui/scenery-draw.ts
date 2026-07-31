@@ -127,7 +127,13 @@ const lightKey = (l: Lighting) => `${l.azimuth},${l.elevation},${l.warmth},${l.a
 
 /** How far past its own footprint a built solid's ink can reach, in metres: the height lean the camera
  *  gives it plus the shadow it throws. Generous on purpose — keeping a fraction more than the disc
- *  strictly needs is invisible, while dropping a shadow whose caster is just off the edge is not. */
+ *  strictly needs is invisible, while dropping a shadow whose caster is just off the edge is not.
+ *
+ *  Generous is not free, and the CLOSE shot is where the bill arrives. 80m is 480 screen pixels an edge
+ *  at 6 px/m, so a solid whose ink is most of a screen outside the viewport still passes the skip test
+ *  and is handed to the rasteriser with nothing to show for it. What a shape reaches is knowable from
+ *  the shape, so anything that can measure its own disc does (`discOfPlaced`) and this stands only where
+ *  a disc has to be fixed before the geometry it covers exists. */
 const SOLID_PAD_M = 80
 
 /** The disc a footprint occupies, padded for what its geometry adds beyond it.
@@ -139,6 +145,68 @@ const SOLID_PAD_M = 80
 const discOfFootprint = (
   r: { x: number; y: number; w: number; h: number }, u: (m: number) => number,
 ): Bounds => ({ cx: r.x, cy: r.y, r: Math.hypot(r.w, r.h) / 2 + u(SOLID_PAD_M) })
+
+/** A conservative disc round a path, measured from the path itself.
+ *
+ *  The ground was the first layer to need this, and it is the case the argument is easiest to see in: a
+ *  lake or a field parcel three hundred metres off the shot was submitted whole on every frame, at
+ *  racing zoom, with all of it outside the canvas. Measured at 12-23% of all the path data in a racing
+ *  shot. It is the same argument that cut the road into arcs; the ground under the road never got it,
+ *  because unlike a building or a tree these shapes carry no centre and radius of their own — only a
+ *  path string.
+ *
+ *  So it is read off the string, through the same walker that bakes groups, which is what makes it safe:
+ *  it resolves relative commands rather than mistaking their operands for coordinates. Control points
+ *  count toward the extent, which can only make the disc bigger than it needs to be. Cached on the shape
+ *  object, since a shape's path is fixed for the life of the circuit. */
+const pathDiscCache = new WeakMap<object, Bounds>()
+
+function discOfPath(shape: { d: string }, pad: number): Bounds {
+  const hit = pathDiscCache.get(shape)
+  if (hit) return { ...hit, r: hit.r + pad }
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
+  try {
+    mapPathPoints(shape.d, (x, y) => {
+      if (x < x0) x0 = x
+      if (y < y0) y0 = y
+      if (x > x1) x1 = x
+      if (y > y1) y1 = y
+      return { x, y }
+    })
+  } catch {
+    // The walker throws on a command it does not know. Every ground emitter writes M/L/Q/Z today, but a
+    // future biome reaching for a cubic must not take the race view down from inside a compose: it falls
+    // through to the disc that always passes, which costs a draw call and draws the right picture.
+    x0 = Infinity
+  }
+  const disc: Bounds = Number.isFinite(x0)
+    ? { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 }
+    // A path with no coordinates in it draws nothing, but a disc of NaN would be skipped or kept at
+    // random, so it gets one that always passes.
+    : { cx: 0, cy: 0, r: Number.POSITIVE_INFINITY }
+  pathDiscCache.set(shape, disc)
+  return { ...disc, r: disc.r + pad }
+}
+
+/** The world-space disc of a path drawn inside a PLACED group: `discOfPath` in the group's own frame,
+ *  its centre carried out through the placement. A radius is invariant under a rotation, so only the
+ *  centre moves.
+ *
+ *  This is what a group should carry whenever its geometry exists by the time the disc is written. A
+ *  disc padded to cover every rung and every bearing has to be as big as the WORST of them, so an object
+ *  drawn at any other one is skipped later than it could be; a disc read off the path that was actually
+ *  built is exact for that build, and a memo already keys one build per rung and bearing. */
+function discOfPlaced(d: string, x: number, y: number, rot: number): Bounds {
+  const local = discOfPath({ d }, 0)
+  if (!Number.isFinite(local.r)) return { cx: x, cy: y, r: Number.POSITIVE_INFINITY }
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+  return {
+    cx: x + local.cx * cos - local.cy * sin,
+    cy: y + local.cx * sin + local.cy * cos,
+    r: local.r,
+  }
+}
 
 /** How many builds one object may hold. Four rungs times the handful of bearings a session visits;
  *  the cap only matters because a rotate gesture commits a new bearing each time it settles. */
@@ -503,18 +571,32 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
     // `heightM` is a function and cannot go in a key, so what it RETURNS does. Cheap to call, and it
     // keeps two callers who disagree about how tall a thing is from sharing its shadow.
     return structShadowMemo(r, `${key}|${rung}|${h}`, () => {
-      const clip = discOfFootprint(r, o.u)
-      if (rung === 'gone') return { x: r.x, y: r.y, rot: r.rot, ops: [], clip }
+      // Nothing is drawn, so there is no path to measure a disc off. The footprint's own is the only
+      // thing left, and an empty group costs the filter that drops it and nothing else.
+      if (rung === 'gone') {
+        return { x: r.x, y: r.y, rot: r.rot, ops: [], clip: discOfFootprint(r, o.u) }
+      }
       const lift = o.u(h * o.extrude)
       const cast = o.u(h * reach)
       const off = toLocal(ldir.x * cast, ldir.y * cast, r.rot)
+      const d = sweptHull(partsOf(r), off.x, off.y)
+      const x = r.x + vdir.x * lift
+      const y = r.y + vdir.y * lift
       return {
-        x: r.x + vdir.x * lift,
-        y: r.y + vdir.y * lift,
+        x,
+        y,
         rot: r.rot,
-        // Centred on the FOOTPRINT, not on the lifted base: the pad covers the lean either way, and a
-        // disc that moved with the bearing would be a second thing to keep in step.
-        clip,
+        // Measured off the hull this build actually draws, in the frame it is drawn in.
+        //
+        // It was the FOOTPRINT's disc, padded by SOLID_PAD_M to cover the lean and the cast at any
+        // bearing and any sun. That pad is 480 screen pixels an edge at the close shot's 6 px/m, and a
+        // shadow is the one thing here whose ink is nowhere near its footprint: it is thrown away from
+        // the solid, so the disc had to hold both ends and was mostly empty at either. Over all 37
+        // layouts at the close shot's own aim (`npm run close:fill`), the padded disc submitted 629
+        // shadow draws against 305 for the hull's own. The hull's extent is exact for this build, and
+        // the memo already holds one build per rung and bearing, so it costs one walk of the path per
+        // entry rather than one per frame.
+        clip: discOfPlaced(d, x, y, r.rot),
         // Batchable once it is no longer the top rung, like every other solid: one draw for a whole
         // industrial estate's worth of shade instead of one each.
         flat: rung !== 'near',
@@ -522,11 +604,7 @@ export function structureShadowGroups(structures: SceneryRect[], o: ShadowDrawOp
         // it and a canvas has no such thing: an op with neither fill nor stroke is silently drawn as
         // nothing, which is exactly how every building and grandstand lost its shadow on the canvas
         // while keeping it in SVG. Every shadow in this file now carries its own ink.
-        ops: [{
-          d: sweptHull(partsOf(r), off.x, off.y),
-          fill: shadowFill(o.lighting),
-          alpha: shadowOpacity(o.lighting),
-        }],
+        ops: [{ d, fill: shadowFill(o.lighting), alpha: shadowOpacity(o.lighting) }],
       }
     })
   })
@@ -648,48 +726,6 @@ export function marshalGroups(
  *  textures are judged by, since a texture is only worth drawing while its own features are separable. */
 const CROP_ROW_M = 3.4
 const HEDGEROW_M = 2.2
-
-/** A conservative disc round a path, measured from the path itself.
- *
- *  The ground was the last layer with no discs on it, and it is the only one whose ops the canvas could
- *  therefore never skip: a lake or a field parcel three hundred metres off the shot was submitted whole
- *  on every frame, at racing zoom, with all of it outside the canvas. Measured at 12-23% of all the path
- *  data in a racing shot. It is the same argument that cut the road into arcs; the ground under the road
- *  never got it, because unlike a building or a tree these shapes carry no centre and radius of their
- *  own — only a path string.
- *
- *  So it is read off the string, through the same walker that bakes groups, which is what makes it safe:
- *  it resolves relative commands rather than mistaking their operands for coordinates. Control points
- *  count toward the extent, which can only make the disc bigger than it needs to be. Cached on the shape
- *  object, since a shape's path is fixed for the life of the circuit. */
-const pathDiscCache = new WeakMap<object, Bounds>()
-
-function discOfPath(shape: { d: string }, pad: number): Bounds {
-  const hit = pathDiscCache.get(shape)
-  if (hit) return { ...hit, r: hit.r + pad }
-  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
-  try {
-    mapPathPoints(shape.d, (x, y) => {
-      if (x < x0) x0 = x
-      if (y < y0) y0 = y
-      if (x > x1) x1 = x
-      if (y > y1) y1 = y
-      return { x, y }
-    })
-  } catch {
-    // The walker throws on a command it does not know. Every ground emitter writes M/L/Q/Z today, but a
-    // future biome reaching for a cubic must not take the race view down from inside a compose: it falls
-    // through to the disc that always passes, which costs a draw call and draws the right picture.
-    x0 = Infinity
-  }
-  const disc: Bounds = Number.isFinite(x0)
-    ? { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 }
-    // A path with no coordinates in it draws nothing, but a disc of NaN would be skipped or kept at
-    // random, so it gets one that always passes.
-    : { cx: 0, cy: 0, r: Number.POSITIVE_INFINITY }
-  pathDiscCache.set(shape, disc)
-  return { ...disc, r: disc.r + pad }
-}
 
 export function groundOps(
   scenery: Pick<Scenery, 'bands' | 'fields' | 'terrain' | 'runoffs'>,

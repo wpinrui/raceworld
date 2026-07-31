@@ -9,8 +9,9 @@ import {
   treeShadowOp, treeShadowRatio, treeSolidOps, type DrawOp,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
-import { partsPath } from './extrude'
+import { mapPathPoints, partsPath } from './extrude'
 import type { SceneryTree } from './track-scenery'
+import type { Vec } from './geom'
 
 const tree = (x: number, y: number, r = 4): SceneryTree => ({
   d: `M ${x - r} ${y} L ${x + r} ${y} L ${x} ${y - r} Z`, variant: 0, h: 9, x, y, r,
@@ -242,6 +243,54 @@ describe('structureShadowGroups', () => {
     const tall = structureShadowGroups([rect], { ...shadowOpts, heightM: () => 30 })[0]
     expect(tall.ops[0].d.length).toBeGreaterThanOrEqual(short.ops[0].d.length)
     expect(tall.ops[0].d).not.toBe(short.ops[0].d)
+  })
+
+  /** Every point the group's hull draws, carried out through the group's own placement. */
+  const placedPts = (g: { x: number; y: number; rot: number; ops: DrawOp[] }): Vec[] => {
+    const cos = Math.cos(g.rot)
+    const sin = Math.sin(g.rot)
+    const out: Vec[] = []
+    for (const op of g.ops) {
+      mapPathPoints(op.d, (x, y) => {
+        out.push({ x: g.x + x * cos - y * sin, y: g.y + x * sin + y * cos })
+        return { x, y }
+      })
+    }
+    return out
+  }
+
+  it('measures its disc off the hull it draws, not off the footprint', () => {
+    const [g] = structureShadowGroups([rect], shadowOpts)
+    // Conservative FIRST, because the failure the other way is invisible in a test and obvious on
+    // screen: a disc that misses part of its own hull makes the canvas skip a shadow that has pixels.
+    for (const p of placedPts(g)) {
+      expect(Math.hypot(p.x - g.clip!.cx, p.y - g.clip!.cy)).toBeLessThanOrEqual(g.clip!.r + 1e-6)
+    }
+    // And tighter than the padded footprint disc it used to carry. That pad has to cover the lean and
+    // the cast at every bearing and every sun, so it is as big as the worst of them wherever the
+    // shadow actually landed: 80m of it, which is 480 screen pixels an edge at the close shot's scale.
+    expect(g.clip!.r).toBeLessThan(Math.hypot(rect.w, rect.h) / 2 + opts.u(80))
+  })
+
+  it('follows the hull when the sun moves it, rather than staying on the solid', () => {
+    // The whole reason a footprint disc is wrong here: a shadow's ink is thrown AWAY from its caster,
+    // so the disc has to travel with the sun. One that did not would be padded to hold both ends.
+    const a = structureShadowGroups([rect], shadowOpts)[0]
+    const b = structureShadowGroups([rect], {
+      ...shadowOpts, heightM: () => 40, lighting: { ...opts.lighting, azimuth: opts.lighting.azimuth + 2 },
+    })[0]
+    expect(Math.hypot(a.clip!.cx - b.clip!.cx, a.clip!.cy - b.clip!.cy)).toBeGreaterThan(0)
+    for (const p of placedPts(b)) {
+      expect(Math.hypot(p.x - b.clip!.cx, p.y - b.clip!.cy)).toBeLessThanOrEqual(b.clip!.r + 1e-6)
+    }
+  })
+
+  it('still carries a disc once the ladder has retired it', () => {
+    // Nothing is drawn, so there is no hull to measure: the footprint's own disc is what is left, and
+    // a group with no disc at all would be submitted on every frame forever.
+    const [g] = structureShadowGroups([rect], { ...shadowOpts, pxPerM: 0.001 })
+    expect(g.ops).toHaveLength(0)
+    expect(g.clip).toBeTruthy()
   })
 })
 

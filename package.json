@@ -16,7 +16,8 @@
     "wet:measure": "tsx scripts/wet-fraction-measure.ts",
     "pit:check": "tsx scripts/pit-loss-check.ts",
     "overall:calibrate": "tsx scripts/overall-calibration.ts",
-    "zoom:check": "tsx scripts/zoom-cost-check.ts"
+    "zoom:check": "tsx scripts/zoom-cost-check.ts",
+    "close:fill": "tsx scripts/close-fill-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
