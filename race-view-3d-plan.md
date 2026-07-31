@@ -5,6 +5,10 @@
 > increments at the canvas renderer, which did not exist when this was written. Revised again
 > 2026-07-31: the frame-rate campaign has been **reverted in full** ahead of a WebGL port, so every
 > rule and every probe it left behind is gone from this document too.
+>
+> Superseded 2026-07-31: the port became a real-3D port, planned in [3d-port-plan.md](3d-port-plan.md).
+> Increments A, B and C stand as landed and keep shipping until the swap; D and E fold into the 3D
+> plan's increments 2, 3 and 6. Nothing new lands against this document.
 
 ## Status
 
