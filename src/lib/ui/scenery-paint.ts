@@ -115,7 +115,7 @@ function tilePaint(
   return pattern
 }
 
-interface TileSpec {
+export interface TileSpec {
   /** Tile size in metres. */
   w: number
   h: number
@@ -124,7 +124,8 @@ interface TileSpec {
   draw: (ctx: CanvasRenderingContext2D, u: (m: number) => number) => void
 }
 
-const TILES: Record<string, TileSpec> = {
+/** Exported for the 3D renderer, which wraps the same tiles as repeating textures (#3d-port). */
+export const TILES: Record<string, TileSpec> = {
   'tm-seats': {
     w: 2.4,
     h: 1.5,

@@ -8,7 +8,9 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
+import { MOODS, type Mood } from '../src/lib/ui/lighting'
 import { frameOrtho, parseViewBox } from '../src/lib/scene3d/camera3d'
+import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { buildWorld3D } from '../src/lib/scene3d/world3d'
 
 declare global {
@@ -21,6 +23,7 @@ declare global {
     __scene?: THREE.Scene
     __camera?: THREE.Camera
     __THREE?: typeof THREE
+    __renderer?: THREE.WebGLRenderer
   }
 }
 
@@ -42,7 +45,11 @@ function main() {
   })
   const pitSlots = buildPitSlots(layout, 10)
   const pitZone = buildPitZone(layout, pitSlots)
-  const world = buildWorld3D({ layout, scenery, pitZone })
+  // The mood's own sun, NOT the 2D preview's pit-straight override. That override chained the light
+  // to the oblique extrusion bearing, which threw every shadow up-screen; real shadows tucked behind
+  // their own casters from the tilted camera. In 3D the lean is gone and the light stands alone:
+  // sun up-and-left, shadows down-right, visible from straight above and from the diorama tilt.
+  const lighting = MOODS[(q.get('mood') ?? 'afternoon') as Mood] ?? MOODS.afternoon
 
   // Same pad, crop convention and output width as the 2D preview, so the stills sit side by side.
   const full = parseViewBox(layout.viewBox, TRACK_WIDTH_M / mpu / 2 + 8)
@@ -57,6 +64,10 @@ function main() {
   const w = Math.round(Math.max(vb.w * 2, 900))
   const h = Math.round((w * vb.h) / vb.w)
 
+  // Built after the crop is known, so the sun's shadow map is fitted to what is in shot.
+  const world = buildWorld3D({
+    layout, scenery, pitZone, lighting, textures: buildWorldTextures(), frame: vb,
+  })
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(scenery.base)
   scene.add(world.group)
@@ -64,6 +75,8 @@ function main() {
 
   const canvas = document.getElementById('gl') as HTMLCanvasElement
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
   renderer.setPixelRatio(1)
   renderer.setSize(w, h, false)
   renderer.render(scene, camera)
@@ -72,6 +85,7 @@ function main() {
   window.__scene = scene
   window.__camera = camera
   window.__THREE = THREE
+  window.__renderer = renderer
   if (!q.has('shot')) {
     const controls = new OrbitControls(camera, canvas)
     controls.addEventListener('change', () => renderer.render(scene, camera))

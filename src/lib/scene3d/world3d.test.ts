@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { TRACK_LAYOUTS } from '@/data/tracks'
+import { MOODS } from '@/lib/ui/lighting'
 import { buildScenery } from '@/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
 import { buildWorld3D } from './world3d'
@@ -15,23 +16,22 @@ const scenery = buildScenery(layout.trace, layout.pit, {
   terrainDetail: false,
 })
 const pitZone = buildPitZone(layout, buildPitSlots(layout, 10))
-const world = buildWorld3D({ layout, scenery, pitZone })
+const world = buildWorld3D({ layout, scenery, pitZone, lighting: MOODS.afternoon })
 
 describe('buildWorld3D', () => {
-  it('builds the full increment-1 inventory: ground, two road layers, apron, kerbs, chequer', () => {
-    // ground + 2x(circuit, lane) + apron (casing fill, edge ribbon, tarmac fill) + chequer = 9,
-    // plus a white base and a red dash per kerb. A miscount here means a layer silently vanished.
-    expect(world.stats.meshes).toBe(9 + 2 * scenery.kerbs.length)
-    expect(world.stats.triangles).toBeGreaterThan(0)
-    expect(scenery.kerbs.length).toBeGreaterThan(0)
-  })
-
-  it('keeps the painter order as lifts: ground, casing, tarmac, kerbs, marks', () => {
+  it('keeps the painter order as lifts: ground, casing, tarmac, marks', () => {
     const ys = new Map<string, number>()
     world.group.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return
-      const mat = o.material as THREE.MeshBasicMaterial
-      const y = (o.geometry as THREE.BufferGeometry).attributes.position.getY(0)
+      if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh) return
+      const mat = o.material as THREE.MeshLambertMaterial
+      const g = o.geometry as THREE.BufferGeometry
+      const y = g.attributes.position.getY(0)
+      // Flat layers only: anything with real height reports its lowest vertex, which is not a lift.
+      let flat = true
+      for (let i = 1; i < g.attributes.position.count; i++) {
+        if (Math.abs(g.attributes.position.getY(i) - y) > 1e-4) { flat = false; break }
+      }
+      if (!flat) return
       const seen = ys.get(mat.color.getHexString())
       ys.set(mat.color.getHexString(), Math.max(seen ?? -Infinity, y))
     })
@@ -45,11 +45,40 @@ describe('buildWorld3D', () => {
     expect(marks).toBeGreaterThan(tarmac)
   })
 
-  it('renders every sheet double-sided, because a ribbon has no interior', () => {
+  it('plants every tree as an instance and lights the world with one shadowed sun and one sky', () => {
+    let canopies = 0
+    let suns = 0
+    let skies = 0
     world.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        expect((o.material as THREE.MeshBasicMaterial).side).toBe(THREE.DoubleSide)
+      if (o instanceof THREE.InstancedMesh && (o.geometry as THREE.BufferGeometry).type === 'SphereGeometry') {
+        canopies += o.count
       }
+      if (o instanceof THREE.DirectionalLight) {
+        suns++
+        expect(o.castShadow).toBe(true)
+      }
+      if (o instanceof THREE.HemisphereLight) skies++
     })
+    expect(canopies).toBe(scenery.trees.length)
+    expect(suns).toBe(1)
+    expect(skies).toBe(1)
+  })
+
+  it('stands the world up: structures and trees put real triangles above the ground stack', () => {
+    expect(scenery.buildings.length).toBeGreaterThan(40)
+    expect(scenery.stands.length).toBeGreaterThan(10)
+    let standing = 0
+    world.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      const g = o.geometry as THREE.BufferGeometry
+      let maxY = -Infinity
+      for (let i = 0; i < g.attributes.position.count; i++) {
+        maxY = Math.max(maxY, g.attributes.position.getY(i))
+      }
+      // Anything reaching above two metres is a solid, not a paint layer.
+      if (maxY > 2 / layout.metresPerUnit) standing++
+    })
+    expect(standing).toBeGreaterThan(scenery.buildings.length)
+    expect(world.stats.triangles).toBeGreaterThan(50_000)
   })
 })

@@ -26,10 +26,11 @@ import { flagSvgUrl } from '@/components/world/NationalityFlag'
  *  face does not swallow the boxes at the tightest metres-per-unit. */
 export const PIT_BUILDING_H_M = 8.5
 /** Height of the garage opening. The storey above overhangs it, so this is also how deep the recess
- *  in the front face is measured vertically: a garage door, not a two-storey void. */
-const GARAGE_H_M = 3.2
+ *  in the front face is measured vertically: a garage door, not a two-storey void. Exported for the
+ *  3D complex, which stands the same storeys up for real (#3d-port). */
+export const GARAGE_H_M = 3.2
 /** Rooftop plant boxes stand this proud of the roof. */
-const PLANT_H_M = 2.2
+export const PLANT_H_M = 2.2
 /** Concrete-and-glass white, not another dark infield shed. */
 export const PIT_WHITE = '#E4E2DC'
 

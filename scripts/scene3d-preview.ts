@@ -4,8 +4,8 @@
 // this file into one HTML page; a headless system browser (Edge, else Chrome) rasterises it; and the
 // page itself is left in the output directory as a hand-orbitable viewer, openable straight from disk.
 //
-// Run: npx tsx scripts/scene3d-preview.ts [--tilt=deg] [--zoom=N] [--at=fx,fy] [circuitId ...]
-//   -> scripts/.preview/<id>-3d[-zN].png (top-down), <id>-3d[-zN]-tilt.png (diorama), scene3d-viewer.html
+// Run: npx tsx scripts/scene3d-preview.ts [--tilt=deg] [--zoom=N] [--at=fx,fy] [--mood=X] [circuitId ...]
+//   -> scripts/.preview/<id>-3d[-mood][-zN].png (top-down), ...-tilt.png (diorama), scene3d-viewer.html
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -18,6 +18,7 @@ const argv = process.argv.slice(2)
 const tilt = Number(argv.find((a) => a.startsWith('--tilt='))?.split('=')[1] ?? 24)
 const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
 const at = argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5'
+const mood = argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon'
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
 
@@ -55,9 +56,9 @@ async function main() {
   const page = await browser.newPage()
   page.on('pageerror', (err) => console.error(`page error: ${err.message}`))
   for (const id of ids) {
-    const z = zoom > 1 ? `-z${zoom}` : ''
+    const z = `${mood === 'afternoon' ? '' : `-${mood}`}${zoom > 1 ? `-z${zoom}` : ''}`
     for (const [tag, deg] of [[`-3d${z}`, 0], [`-3d${z}-tilt`, tilt]] as const) {
-      const url = `${pathToFileURL(viewer).href}?shot=1&id=${id}&tilt=${deg}&zoom=${zoom}&at=${at}`
+      const url = `${pathToFileURL(viewer).href}?shot=1&id=${id}&tilt=${deg}&zoom=${zoom}&at=${at}&mood=${mood}`
       await page.goto(url)
       await page.waitForFunction('window.__done === true', undefined, { timeout: 120_000 })
       const error = await page.evaluate('window.__error')

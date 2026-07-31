@@ -419,26 +419,28 @@ export function groundOps(
  *  because a true plan view has no depth cue at all and the map goes back to being a diagram. */
 export const EXTRUDE = 0.4
 
-/** Metres of apparent height per storey. Diorama scale: tall enough that height is unmistakable. */
-const STOREY_M = 4.6
+/** Metres of apparent height per storey. Diorama scale: tall enough that height is unmistakable.
+ *  Exported with the rest of the diorama heights below: the 3D world stands the same solids up for
+ *  real, and both renderers must read one set of numbers (#3d-port). */
+export const STOREY_M = 4.6
 /** Structural bay: how wide one window-and-pier module is on a wall. */
-const WINDOW_BAY_M = 5.4
+export const WINDOW_BAY_M = 5.4
 /** A grandstand's front (trackside) and rear heights in metres. Real seating banks rake up away from
  *  the circuit; extruding one uniformly made them read as tall slabs beside the track.
  *
  *  These stay LOW on purpose. A stand is only 12-17 m deep, so displacing its rear edge by the full
  *  height of a real grandstand shears the deck by nearly half its own depth and the bank reads as a
  *  ski jump. The rake wants to be a gentle ramp; the height is carried by the roof and the shadow. */
-const STAND_FRONT_M = 1.0
-const STAND_REAR_M = 5.5
+export const STAND_FRONT_M = 1.0
+export const STAND_REAR_M = 5.5
 /** How much of the deck the rear roof canopy covers. */
-const STAND_ROOF_FRAC = 0.3
+export const STAND_ROOF_FRAC = 0.3
 /** Marshal hut height, and its footprint. */
-const MARSHAL_H_M = 2.8
-const MARSHAL_W_M = 4.4
-const MARSHAL_D_M = 3.2
+export const MARSHAL_H_M = 2.8
+export const MARSHAL_W_M = 4.4
+export const MARSHAL_D_M = 3.2
 /** Height of the debris fencing standing behind the barrier. */
-const FENCE_H_M = 4
+export const FENCE_H_M = 4
 
 /** A stand casts from its REAR, which is what stands up; a building from its roofline. */
 const solidHeightM = (r: SceneryRect): number =>
