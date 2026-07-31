@@ -663,18 +663,28 @@ export interface VerdictInput {
   basis: 'frame' | 'cpu'
 }
 
+/** The signed number a verdict is a reading of: the row's clock minus its reference's, in the block's
+ *  basis. Positive is the row being SLOWER, whatever the row is.
+ *
+ *  Null where the two are not on the same clock at all. The cpu clock is the CANVAS painter's own
+ *  commands. The SVG renderer reports to it not at all, so its row's cpu time is the race tick alone
+ *  against a baseline of tick plus paint: the comparison comes out large and negative and reads the
+ *  renderer this branch replaced as a main-thread saving. It is only ever comparable on frame time,
+ *  which is where its cost actually lands. */
+export function deltaFor(
+  row: CellResult, reference: CellResult, basis: VerdictInput['basis'],
+): number | null {
+  if (basis === 'cpu' && row.cell.config.canvas === false) return null
+  return basis === 'cpu'
+    ? row.busyMs - reference.busyMs
+    : row.stats.meanMs - reference.stats.meanMs
+}
+
 export function verdictFor({ row, baseline, noiseMs, basis }: VerdictInput): Verdict {
-  // The cpu clock is the CANVAS painter's own commands. The SVG renderer reports to it not at all, so
-  // its row's cpu time is the race tick alone against a baseline of tick plus paint: the comparison
-  // comes out large and negative and reads the renderer this branch replaced as a main-thread saving.
-  // It is only ever comparable on frame time, which is where its cost actually lands.
-  if (basis === 'cpu' && row.cell.config.canvas === false) {
-    return { kind: 'nothing', text: 'not comparable on cpu time', deltaMs: 0 }
-  }
+  const delta = deltaFor(row, baseline, basis)
+  if (delta === null) return { kind: 'nothing', text: 'not comparable on cpu time', deltaMs: 0 }
   const vsync = basis === 'cpu'
-  const deltaMs = vsync
-    ? row.busyMs - baseline.busyMs
-    : row.stats.meanMs - baseline.stats.meanMs
+  const deltaMs = delta
   // One floor, measured, in the unit the delta is in. Not a synthetic percentage standing in for one.
   const floor = noiseMs
   const unit = vsync ? 'ms cpu' : 'ms/frame'

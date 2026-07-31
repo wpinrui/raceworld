@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Check, ClipboardCopy, Gauge, Hash, Play, RotateCcw, Square, X,
+  Braces, Check, ClipboardCopy, Gauge, Hash, Play, RotateCcw, Square, X,
 } from 'lucide-react'
 import {
   COLUMNS, VARIANTS, baselineSummary, decodeRunCode, encodeRunCode, estimateSeconds, referenceFor,
@@ -328,12 +328,12 @@ function RunningStrip({ lab }: { lab: PerfLab }) {
 }
 
 export function PerfLabModal({ lab }: { lab: PerfLab }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'text' | 'raw' | null>(null)
   // Cleared on a timer that is cancelled if the panel goes first, so a close mid-flash cannot set state
   // on an unmounted tree.
   useEffect(() => {
     if (!copied) return
-    const id = setTimeout(() => setCopied(false), 1600)
+    const id = setTimeout(() => setCopied(null), 1600)
     return () => clearTimeout(id)
   }, [copied])
   if (!lab.open) return null
@@ -343,15 +343,15 @@ export function PerfLabModal({ lab }: { lab: PerfLab }) {
 
   if (state.phase === 'running') return <RunningStrip lab={lab} />
 
-  const copy = async () => {
+  const copy = (which: 'text' | 'raw') => async () => {
+    const body = which === 'raw' ? lab.copyRaw() : lab.copyText()
     try {
-      await navigator.clipboard.writeText(lab.copyText())
-      setCopied(true)
+      await navigator.clipboard.writeText(body)
     } catch {
       // No clipboard permission. The console still gets it, so a run is never trapped in the window.
-      console.log(lab.copyText())
-      setCopied(true)
+      console.log(body)
     }
+    setCopied(which)
   }
 
   // Through a portal, and not for tidiness. The map owns a native wheel listener that zooms the camera
@@ -369,13 +369,22 @@ export function PerfLabModal({ lab }: { lab: PerfLab }) {
           </h3>
           {state.phase === 'done' && (
             <>
-              <Tooltip content="Every row plus the full configuration, as text">
+              <Tooltip content="Every row and the configuration, as a table of numbers">
                 <button
                   type="button"
-                  onClick={copy}
+                  onClick={copy('text')}
                   className="flex items-center gap-1.5 rounded bg-[#00D9FF] px-3 py-1.5 text-[12px] font-bold uppercase tracking-widest text-[#0F1419] hover:bg-[#009CB8] cursor-pointer"
                 >
-                  <ClipboardCopy size={14} /> {copied ? 'Copied' : 'Copy'}
+                  <ClipboardCopy size={14} /> {copied === 'text' ? 'Copied' : 'Copy'}
+                </button>
+              </Tooltip>
+              <Tooltip content="The same run as JSON">
+                <button
+                  type="button"
+                  onClick={copy('raw')}
+                  className="flex items-center gap-1.5 rounded bg-[#2A3142] px-3 py-1.5 text-[12px] font-bold uppercase tracking-widest text-[#FFFFFF] hover:bg-[#303848] cursor-pointer"
+                >
+                  <Braces size={14} /> {copied === 'raw' ? 'Copied' : 'Raw'}
                 </button>
               </Tooltip>
               <button

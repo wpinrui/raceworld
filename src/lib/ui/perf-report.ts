@@ -1,16 +1,19 @@
 // The perf lab's run, as text you can paste (#sim-2d).
 //
-// One button has to hand over everything a reader needs to argue with the numbers: which circuit, which
-// viewport, which pixel density, how many frames a cell got, which shots and which variants were
-// selected, what the run's own noise floor turned out to be, and then every row. So the copy carries the
-// configuration inline rather than as a separate thing to remember to include, and it ends with the raw
-// JSON so nothing here has to be the only record.
+// TWO pastes, and the split is the point. This one is the NUMBERS: every cell's columns, every delta,
+// the floor those deltas were read against, and the configuration that produced them. What a number
+// MEANS is not in here. The verdicts, the claims and the sites are on screen in the modal, in front of
+// the run, which is where they can be argued with; in a paste they are the part scrolled past to reach
+// the data. `formatRaw` is the same run as JSON, on its own button, so neither paste is the other's tax.
+//
+// The header still carries the whole configuration inline, because a table of numbers with no circuit,
+// viewport, pixel density or frame count on it cannot be argued with either, and the run code reproduces
+// the selection exactly.
 
 import {
-  COLUMNS, VARIANTS, baselineSummary, blocksOf, longFramesOf, referenceFor, traceSummary, verdictFor,
-  type Cell, type CellResult, type LabConfig, type ShotBlock,
+  COLUMNS, baselineSummary, blocksOf, deltaFor, encodeRunCode, longFramesOf, referenceFor,
+  traceSummary, type Cell, type CellResult, type LabConfig, type ShotBlock,
 } from './perf-bench'
-import { PERF_FLAG_INFO } from './perf-flags'
 
 export interface LabReport {
   circuit: string
@@ -30,14 +33,21 @@ const rt = (s: string, w: number) => (s.length >= w ? s : ' '.repeat(w - s.lengt
 const num = (v: number, w: number, dp = 0) => rt(Number.isFinite(v) ? v.toFixed(dp) : '-', w)
 
 const NAME_W = 30
+const DELTA_W = 10
+
+/** Signed, so the column reads as row-minus-reference without a sentence saying so. `-` is a delta that
+ *  does not exist: the reference was not run, or the two rows are not on the same clock. */
+const delta = (v: number | null, w: number) =>
+  rt(v === null ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}`, w)
 
 const tableHead = (): string =>
-  pad('', NAME_W) + COLUMNS.map((c) => rt(c.head, c.width)).join('') + '   verdict'
+  pad('', NAME_W) + COLUMNS.map((c) => rt(c.head, c.width)).join('') + rt('delta', DELTA_W)
 
-const rowLine = (r: CellResult, verdict: string): string =>
+const rowLine = (r: CellResult, d?: number | null, versus?: string | null): string =>
   pad(`  ${r.cell.label}`, NAME_W)
   + COLUMNS.map((c) => num(c.of(r), c.width, c.dp)).join('')
-  + (verdict ? `   ${verdict}` : '')
+  + (d === undefined ? '' : delta(d, DELTA_W))
+  + (versus ? `  vs ${versus}` : '')
 
 /** The long frames put next to the recomposes, which is the one question an aggregate cannot answer.
  *
@@ -55,56 +65,23 @@ function traceText(b: ShotBlock): string[] {
     const t = traceSummary(r.trace)
     out.push(`  ${pad(r.cell.label, NAME_W - 2)}`
       + `${num(t.crossings, 4)} cross${num(t.swaps, 5)} swap${num(t.longFrames, 6)} long`
-      + ` (${t.longAtCrossing} within a frame of one, ${t.longSteady} nowhere near one)`
-      + `   ${t.crossingMs.toFixed(1)}ms on crossing frames vs ${t.steadyMs.toFixed(1)}ms on the rest`)
+      + `${num(t.longAtCrossing, 6)} atCross${num(t.longSteady, 6)} steady`
+      + `${num(t.crossingMs, 8, 1)}ms cross${num(t.steadyMs, 8, 1)}ms other`)
   }
-  out.push('  baseline by detail bucket, coarsest first:')
+  out.push('  -- baseline buckets --')
   for (const band of base.bands) {
-    out.push(`    bucket ${rt(String(band.bucket), 3)}  ${rt(band.pxPerM.toFixed(2), 6)} px/m`
-      + `${num(band.frames, 6)} frames  ${rt(band.meanMs.toFixed(1), 5)}ms mean${num(band.long, 5)} long`)
+    out.push(`    bucket ${rt(String(band.bucket), 3)}${num(band.pxPerM, 7, 2)} px/m`
+      + `${num(band.frames, 6)} frames${num(band.meanMs, 7, 1)}ms mean${num(band.long, 5)} long`)
   }
   const longs = b.baseline?.trace ? longFramesOf(b.baseline.trace) : []
   if (longs.length > 0) {
-    out.push('  baseline long frames:')
+    out.push('  -- baseline long frames --')
     for (const f of longs) {
-      out.push(`    #${rt(String(f.i), 4)}${num(f.ms, 8, 1)}ms  ${rt(f.pxPerM.toFixed(2), 6)} px/m`
-        + `  bucket ${rt(String(f.bucket), 3)}${f.swapped ? '  a scene landed on this frame' : ''}`)
+      out.push(`    #${rt(String(f.i), 4)}${num(f.ms, 8, 1)}ms${num(f.pxPerM, 7, 2)} px/m`
+        + `  bucket ${rt(String(f.bucket), 3)}  swapped ${f.swapped ? 1 : 0}`)
     }
   }
   return out
-}
-
-function blockText(b: ShotBlock): string[] {
-  const out: string[] = ['', `SHOT ${b.shot.label.toUpperCase()}  ${b.shot.note}`]
-  if (!b.baseline) return [...out, '  not run']
-  if (b.vsync) {
-    out.push(`  VSYNC BOUND: ${(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on the`
-      + ` display's floor, so the verdicts below compare MAIN-THREAD time (cpu ms), not frame time.`
-      + ' Frame time here has no room left to move in either direction.')
-  }
-  // Always, and in the unit the verdicts were read in. A block that printed no floor at all was a block
-  // whose sub-noise rows read exactly like its findings.
-  out.push(`  noise floor ${b.noiseMs.toFixed(2)}${b.noiseUnit} (the two baselines' own spread)`)
-  out.push(tableHead())
-  out.push(rowLine(b.baseline, baselineSummary(b.baseline)))
-  const groups: Array<CellResult['cell']['group']> = ['mitigation', 'layer', 'quality', 'renderer']
-  for (const g of groups) {
-    const rows = b.rows.filter((r) => r.cell.group === g)
-    if (rows.length === 0) continue
-    out.push(`  -- ${g} --`)
-    for (const r of rows) {
-      const against = referenceFor(b, r)
-      if (!against) {
-        out.push(rowLine(r, 'not scored: the row it is read against was not run'))
-        continue
-      }
-      const v = verdictFor({ row: r, baseline: against.ref, noiseMs: b.noiseMs, basis: b.basis })
-      out.push(rowLine(r, against.versus ? `${v.text}, against ${against.versus}` : v.text))
-    }
-  }
-  if (b.repeat) out.push(rowLine(b.repeat, 'the baseline again, at the end of the shot'))
-  for (const c of b.skipped) out.push(`  ${pad(c.label, NAME_W - 2)} skipped: ${c.skip}`)
-  return [...out, ...coldText(b), ...traceText(b)]
 }
 
 /** What one compose costs on a FIRST encounter, which is the only thing several mitigations move.
@@ -116,50 +93,41 @@ function coldText(b: ShotBlock): string[] {
   const rows = [b.baseline, ...b.rows, b.repeat]
     .filter((r): r is CellResult => !!r && r.coldComposes > 0)
   if (rows.length === 0) return []
-  const out = ['  -- cold compose (every cache stranded, one compose timed) --']
+  const out = ['  -- cold compose, ms per compose --']
   for (const r of rows) {
-    out.push(`  ${pad(r.cell.label, NAME_W - 2)}${num(r.coldComposeMs, 8, 2)}ms`
-      + `   against ${r.msPerCompose.toFixed(2)}ms warm`)
+    out.push(`  ${pad(r.cell.label, NAME_W - 2)}${num(r.coldComposeMs, 8, 2)} cold`
+      + `${num(r.msPerCompose, 8, 2)} warm`)
   }
   return out
 }
 
-/** Mitigations that failed to justify themselves anywhere they were measured. The point of the lab.
- *
- *  Read off the ROW, not off a flag name parsed back out of the row's id. A mitigation row can turn off
- *  more than one flag: the named pair has no single flag to look an entry up by, and treating its id as
- *  one is a lookup that returns nothing. The row already carries its label, the flags it turned off, and
- *  the row it was scored against, so nothing here needs to reconstruct any of them. */
-function idleMitigations(blocks: ShotBlock[]): string[] {
-  interface Idle { ran: number; idle: number; backfired: number; cell: Cell; versus: string | null }
-  const seen = new Map<string, Idle>()
-  for (const b of blocks) {
-    if (!b.baseline) continue
-    for (const r of b.rows) {
-      if (r.cell.group !== 'mitigation') continue
+function blockText(b: ShotBlock): string[] {
+  if (!b.baseline) return ['', `shot ${b.shot.id}`, '  not run']
+  const out: string[] = [
+    '',
+    `shot ${b.shot.id}  noise ${b.noiseMs.toFixed(2)}${b.noiseUnit}`
+    + `  atFloor ${(b.baseline.stats.atFloor * 100).toFixed(0)}%`,
+    `  ${baselineSummary(b.baseline)}`,
+    tableHead(),
+    rowLine(b.baseline),
+  ]
+  const groups: Array<CellResult['cell']['group']> = ['mitigation', 'layer', 'quality', 'renderer']
+  for (const g of groups) {
+    const rows = b.rows.filter((r) => r.cell.group === g)
+    if (rows.length === 0) continue
+    out.push(`  -- ${g} --`)
+    for (const r of rows) {
       const against = referenceFor(b, r)
-      if (!against) continue
-      const v = verdictFor({ row: r, baseline: against.ref, noiseMs: b.noiseMs, basis: b.basis })
-      const rec = seen.get(r.cell.variant)
-        ?? { ran: 0, idle: 0, backfired: 0, cell: r.cell, versus: against.versus }
-      rec.ran++
-      if (v.kind === 'nothing') rec.idle++
-      if (v.kind === 'backfires') rec.backfired++
-      seen.set(r.cell.variant, rec)
+      out.push(against
+        ? rowLine(r, deltaFor(r, against.ref, b.basis), against.versus)
+        : rowLine(r, null))
     }
   }
-  const lines: string[] = []
-  for (const [id, rec] of seen) {
-    if (rec.ran === 0 || rec.idle + rec.backfired < rec.ran) continue
-    const how = rec.backfired > 0 ? 'made the frame FASTER when turned off' : 'changed nothing measurable'
-    const against = rec.versus ? `, read against ${rec.versus}` : ''
-    lines.push(`  ${rec.cell.label}: ${how} in all ${rec.ran} shot(s) it ran in${against}.`)
-    const claim = VARIANTS.find((v) => v.id === id)?.reads
-    if (claim) lines.push(`    claim: ${claim}`)
-    const sites = rec.cell.config.flagsOff.map((f) => PERF_FLAG_INFO[f].site)
-    if (sites.length > 0) lines.push(`    site: ${sites.join(', ')}`)
-  }
-  return lines
+  if (b.repeat) out.push(rowLine(b.repeat, deltaFor(b.repeat, b.baseline, b.basis)))
+  // Kept, because a variant that vanishes from the table with no line at all reads as one that was never
+  // selected. The reason is what the cell recorded, not a reading of any number.
+  for (const c of b.skipped) out.push(`  ${pad(c.label, NAME_W - 2)}  skipped: ${c.skip}`)
+  return [...out, ...coldText(b), ...traceText(b)]
 }
 
 export function formatReport(report: LabReport): string {
@@ -168,32 +136,25 @@ export function formatReport(report: LabReport): string {
   const cfg = report.config
   const lines: string[] = [
     'RaceWorld 2D renderer perf lab',
-    `circuit ${report.circuit}   viewport ${report.viewport.w}x${report.viewport.h} @ dpr ${report.dpr}`
-    + `   ${report.cars} cars   ${report.at}`,
-    `${cfg.frames} measured frames per cell (+${cfg.warmup} warmup), uncapped, canvas renderer, quality medium`,
-    `shots: ${cfg.shots.join(', ')}`,
-    `variants: ${cfg.variants.length} selected`,
+    `circuit ${report.circuit}  viewport ${report.viewport.w}x${report.viewport.h}  dpr ${report.dpr}`
+    + `  cars ${report.cars}  at ${report.at}`,
+    `frames ${cfg.frames}  warmup ${cfg.warmup}  cold ${cfg.cold ? 1 : 0}  code ${encodeRunCode(cfg)}`,
+    `shots ${cfg.shots.join(', ')}`,
+    `variants ${cfg.variants.join(', ')}`,
   ]
-  if (report.aborted) lines.push('RUN ABORTED: the rows below are what completed.')
-  lines.push(
-    '',
-    'A mitigation row is that mitigation turned OFF, so "saves 1.2ms" means the shipping renderer is',
-    '1.2ms a frame faster for having it. "no effect" means it is buying nothing here. A layer row is',
-    'that layer hidden, so "worth 1.2ms" is what drawing it costs.',
-    'cpu ms is main-thread time per frame: the race loop\'s tick, the paint commands and the composes.',
-    'comp ms is that last term on its own, which is the only one a compose-time mitigation can move.',
-    'cpu ms does not include the rasteriser, so on a layer row it understates; on a vsync-bound shot it',
-    'is the only thing left that can move.',
-  )
+  if (report.aborted) lines.push('aborted 1')
   for (const b of blocks) lines.push(...blockText(b))
+  return lines.join('\n')
+}
 
-  const idle = idleMitigations(blocks)
-  lines.push('', 'MITIGATIONS THAT EARNED NOTHING')
-  lines.push(...(idle.length > 0 ? idle : ['  none: every measured mitigation moved the frame time.']))
-
-  lines.push('', 'RAW', JSON.stringify({
+/** The same run as JSON, on its own button. Nothing here is derived: the numbers pass through as they
+ *  were measured, so the text above never has to be the only record of a run. */
+export function formatRaw(report: LabReport): string {
+  const blocks = blocksOf(report.cells, new Map(report.results.map((r) => [r.cell.key, r])))
+  return JSON.stringify({
     circuit: report.circuit, at: report.at, dpr: report.dpr, viewport: report.viewport,
-    cars: report.cars, aborted: report.aborted, config: cfg,
+    cars: report.cars, aborted: report.aborted, config: report.config,
+    code: encodeRunCode(report.config),
     rows: report.results.map((r) => ({
       shot: r.cell.shot, variant: r.cell.variant, group: r.cell.group, config: r.cell.config,
       fps: +r.stats.fps.toFixed(1), low1: +r.stats.low1.toFixed(1), meanMs: +r.stats.meanMs.toFixed(3),
@@ -212,6 +173,5 @@ export function formatReport(report: LabReport): string {
     })),
     vsyncBound: blocks.filter((b) => b.vsync).map((b) => b.shot.id),
     skipped: report.cells.filter((c) => c.skip).map((c) => ({ key: c.key, reason: c.skip })),
-  }))
-  return lines.join('\n')
+  })
 }

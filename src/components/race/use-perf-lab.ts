@@ -14,7 +14,7 @@ import {
 } from '@/lib/ui/perf-bench'
 import { lodBucket } from '@/lib/ui/lod'
 import { pxPerMOf, shotById, type Camera, type ShotWorld } from '@/lib/ui/perf-shots'
-import { formatReport, type LabReport } from '@/lib/ui/perf-report'
+import { formatRaw, formatReport, type LabReport } from '@/lib/ui/perf-report'
 import { resetPerfFlags } from '@/lib/ui/perf-flags'
 
 export interface PerfLabHarness {
@@ -259,7 +259,14 @@ export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = 
     [state.report],
   )
 
-  return { open, setOpen, config, setConfig, state, blocks, plan, start, abort, reset, copyText }
+  const copyRaw = useCallback(
+    () => (state.report ? formatRaw(state.report) : ''),
+    [state.report],
+  )
+
+  return {
+    open, setOpen, config, setConfig, state, blocks, plan, start, abort, reset, copyText, copyRaw,
+  }
 }
 
 export type PerfLab = ReturnType<typeof usePerfLab>
