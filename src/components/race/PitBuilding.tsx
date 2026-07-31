@@ -8,6 +8,10 @@
 //     stays put on the ground and the mass lifts UP-light off it.
 //  2. The garages are recesses in the front face rather than doors painted on it, which makes the
 //     outline concave — hence a ring extrusion rather than the box extrusion the scenery uses.
+//
+// The complex itself is DRAW OPS, like the rest of the world. The garage name boards below are the one
+// piece of it that stays in the SVG document, because they carry real text and real flag artwork and
+// neither survives a `DrawOp`.
 
 import { linePath, mapPathPoints, obliqueRingFaces, quad, ringPath, sweptRing, type Vec } from '@/lib/ui/extrude'
 import {
@@ -15,9 +19,8 @@ import {
   tintFace,
 } from '@/lib/ui/lighting'
 import type { PitZone } from '@/lib/ui/pit-zone'
-import { discOfPts as discOf, type DrawOp } from '@/lib/ui/scenery-draw'
+import { EXTRUDE, type DrawOp } from '@/lib/ui/scenery-draw'
 import { flagSvgUrl } from '@/components/world/NationalityFlag'
-import { EXTRUDE } from './SceneryLayer'
 
 /** Roofline of the complex. Tall enough to throw a shadow across the lane, low enough that the wall
  *  face does not swallow the boxes at the tightest metres-per-unit. */
@@ -30,111 +33,6 @@ const PLANT_H_M = 2.2
 /** Concrete-and-glass white, not another dark infield shed. */
 export const PIT_WHITE = '#E4E2DC'
 
-/** The shadow the complex throws across the lane and the track. Drawn as its own layer so it lands on
- *  tarmac already painted, exactly as the scenery shadows do. */
-export function PitBuildingShadow({ zone, u, lighting }: {
-  zone: PitZone; u: (m: number) => number; lighting: Lighting
-}) {
-  // Cast from the footprint along the SUN, so it stays put on the circuit as the camera turns.
-  const dir = lightDir(lighting)
-  const cast = u(PIT_BUILDING_H_M * shadowReach(lighting))
-  // Cast from the UPPER outline: it is the outer envelope, since the storey above overhangs the
-  // garage recesses bitten out of the one below.
-  return (
-    <path
-      d={sweptRing(zone.upperPts, dir.x * cast, dir.y * cast)}
-      fill={shadowFill(lighting)} opacity={shadowOpacity(lighting)}
-    />
-  )
-}
-
-/** The floor of each garage, in that team's colour. Drawn EARLY — before the lane's paint — because
- *  the recesses reach past the working lane's white edge line, and that line has to run unbroken. */
-export function PitGarageFloors({ zone, lighting, garageColor }: {
-  zone: PitZone; lighting: Lighting; garageColor?: (i: number) => string | undefined
-}) {
-  return (
-    <g>
-      {zone.garageFloors.map((r, i) => (
-        <path key={`gf${i}`} d={ringPath(r)} fill={shadeFace(garageColor?.(i) ?? '#2A2F38', lighting)} />
-      ))}
-    </g>
-  )
-}
-
-export function PitBuilding({ zone, u, lighting, view, garageColor }: {
-  zone: PitZone; u: (m: number) => number; lighting: Lighting; view: number
-  /** Team colour for garage i, for the shutter at the back of its bay. */
-  garageColor?: (i: number) => string | undefined
-}) {
-  const dir = dirAt(view)
-  const lift = u(PIT_BUILDING_H_M * EXTRUDE)
-  const mid = u(GARAGE_H_M * EXTRUDE)
-  const plantLift = u(PLANT_H_M * EXTRUDE)
-  const up = (p: { x: number; y: number }, k: number) => ({ x: p.x - dir.x * k, y: p.y - dir.y * k })
-  const lower = zone.buildingPts.map((p) => up(p, mid))
-  const upper = zone.upperPts.map((p) => up(p, lift))
-  const onRoof = `translate(${-dir.x * lift} ${-dir.y * lift})`
-  // Plant sits ON the roof, so its base is already lifted and it lifts again by its own height.
-  const plantTops = zone.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
-  const wall = shadeFace(PIT_WHITE, lighting)
-  // The returns take a second tone. Without it the front of the complex and its ends are one flat
-  // white and the whole mass reads as a cut-out.
-  const ret = tintFace(PIT_WHITE, lighting, -0.45)
-  return (
-    <g>
-      {/* Ground floor first, then the storey standing on it. Height draws LATER everywhere in this
-          renderer — a roof is painted over its own walls — so the upper storey is the nearer surface,
-          and its underside is what closes off the back of each garage recess. Stacked the other way
-          round the ground floor paints straight over the wall above it. */}
-      <path d={sweptRing(lower, dir.x * mid, dir.y * mid)} fill={wall} />
-      {/* The garage door, on the back wall of its bay and in that wall's plane. It replaced a flat
-          rounded rectangle laid on the ground, which was drawn when the complex had no perspective at
-          all and read as a sticker once it gained some. */}
-      {zone.garageFloors.map((r, i) => {
-        const h = mid * 0.82
-        const top = (p: { x: number; y: number }) => ({ x: p.x - dir.x * h, y: p.y - dir.y * h })
-        const lintel = (p: { x: number; y: number }) => ({ x: p.x - dir.x * h * 0.82, y: p.y - dir.y * h * 0.82 })
-        return (
-          <g key={`gd${i}`}>
-            <path d={quad(r[3], r[2], top(r[2]), top(r[3]))} fill="#161A21" />
-            <path d={quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3]))} fill={garageColor?.(i) ?? '#9AA3B2'} />
-          </g>
-        )
-      })}
-      {/* Ends and pier returns LAST of the ground floor, so they occlude any shutter that reached
-          across them. A shutter sits on the back wall of its bay, eight metres deeper into the
-          building than the end wall beside it, so painting it over that wall put the far surface in
-          front of the near one. These are exactly the faces angled away from the view, which is what
-          the oblique split already isolates. */}
-      <path d={obliqueRingFaces(lower, dir.x * mid, dir.y * mid)} fill={ret} />
-      <path d={sweptRing(upper, dir.x * (lift - mid), dir.y * (lift - mid))} fill={wall} />
-      <path d={obliqueRingFaces(upper, dir.x * (lift - mid), dir.y * (lift - mid))} fill={ret} />
-      <path d={ringPath(upper)} fill={litFace(PIT_WHITE, lighting)} />
-      {/* White siding, laid breadth-wise. Drawn as geometry off the zone rather than as a tile
-          pattern: the complex follows the lane's curve, and a tile grid would run straight through
-          it at whatever angle the map happened to sit at. */}
-      <path
-        d={zone.roofSeams} transform={onRoof} fill="none"
-        stroke={tintFace(PIT_WHITE, lighting, -0.16)} strokeWidth={u(0.18)}
-      />
-      {/* Viewing terrace along the front of the roof, and its railing. */}
-      <path d={zone.roofDeck} transform={onRoof} fill={tintFace(PIT_WHITE, lighting, -0.22)} />
-      <path
-        d={linePath(zone.roofRail)}
-        transform={onRoof} fill="none" stroke={shadeFace(PIT_WHITE, lighting)} strokeWidth={u(0.35)}
-      />
-      {/* Rooftop plant, extruded off the roof so the roof itself has relief rather than markings. */}
-      <path
-        d={plantTops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join('')}
-        fill={tintFace(PIT_WHITE, lighting, -0.5)}
-      />
-      <path d={plantTops.map((r) => ringPath(r)).join('')} fill={tintFace(PIT_WHITE, lighting, -0.12)} />
-    </g>
-  )
-}
-
-
 /** Height of the signage band on the fascia above each garage opening. */
 export const SIGN_H_M = 1.5
 /** Pixel size the flag is laid out at before being scaled into wall units. Sub-pixel layout boxes
@@ -142,20 +40,14 @@ export const SIGN_H_M = 1.5
  *  of a unit. */
 const FLAG_PX = 40
 
-/** Lettering is gated by the CALLER, off the shared detail ladder in lib/ui/lod.ts, measured against
- *  the signage band's own height. It used to carry a pixel threshold of its own here, which is exactly
- *  the per-feature hand-tuning the ladder exists to replace. */
-
 /** Driver name boards across each garage fascia, laid IN the plane of that wall.
  *
  *  A label drawn upright on a map is a map label; a real garage's signage sits on the building, so it
  *  takes the same basis the windows take — along the wall, and up it. The one concession to
  *  readability is that the run direction flips when it would otherwise write right-to-left. */
-export function PitGarageSigns({ zone, u, lighting, view, drivers, lettered = true }: {
+export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
   zone: PitZone; u: (m: number) => number; lighting: Lighting; view: number
   drivers: (i: number) => Array<{ name: string; nationality?: string }>
-  /** False once the band is too small on screen to read: boards only, no flags and no names. */
-  lettered?: boolean
 }) {
   const dir = dirAt(view)
   const mid = u(GARAGE_H_M * EXTRUDE)
@@ -181,7 +73,7 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers, lettered = tr
         return (
           <g key={`sg${i}`} transform={m}>
             <rect x={0} y={0} width={len} height={band} fill={shadeFace(PIT_WHITE, lighting)} />
-            {lettered && crew.slice(0, 2).map((d, k) => {
+            {crew.slice(0, 2).map((d, k) => {
               // Centred on the midpoint of its own half of the board, flag and name measured together,
               // so a long surname stays balanced against a short one on the other side.
               const label = shortName(d.name)
@@ -191,8 +83,7 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers, lettered = tr
               const x = len * (0.25 + k * 0.5) - (flagW + gap + textW) / 2
               // The same artwork the rest of the app shows, addressed as a URL rather than mounted as
               // a component. A foreignObject holds real HTML, which means CSS layout and its own
-              // raster on every frame the camera moves; `flagSvgUrl` exists to avoid exactly that and
-              // had no caller until now.
+              // raster on every frame the camera moves; `flagSvgUrl` exists to avoid exactly that.
               //
               // Still built at FLAG_PX and scaled down, which is not about foreignObject at all: a
               // garage board is a fraction of a unit tall, and an external image asked to occupy a
@@ -236,24 +127,16 @@ export function pitFloorOps(
   return zone.garageFloors.map((r, i) => ({
     d: ringPath(r),
     fill: shadeFace(garageColor?.(i) ?? '#2A2F38', lighting),
-    clip: discOf(r, 1),
   }))
 }
 
 /** The complex itself, in paint order: shadow, ground floor, shutters, upper storey, roof and its
- *  furniture, then the lane markings. Same geometry the components draw, described as data so the
- *  canvas can take it.
+ *  furniture, then the lane markings.
  *
- *  Every piece is submitted STRETCH BY STRETCH along the lane rather than whole. The complex is a
- *  couple of hundred metres long and a racing shot holds about forty of them, so a whole-complex fill
- *  is a path whose every edge reaches far outside the viewport and whose disc can never cull it:
- *  measured on a lap benchmark, hiding the complex was the only ablation that moved the frame rate at
- *  all (60 fps and 2 long frames against 57 and 13). It is the same cut, for the same reason, that
- *  `roadArcs` makes in the circuit.
- *
- *  LAYER-MAJOR across the stretches, exactly as the whole-complex version painted: every ground floor
- *  before any upper storey, every wall before any roof. Stretch-major would let one stretch's roof
- *  land under its neighbour's wall, which is a different picture from the one this replaces. */
+ *  Ground floor first, then the storey standing on it. Height draws LATER everywhere in this renderer
+ *  — a roof is painted over its own walls — so the upper storey is the nearer surface, and its
+ *  underside is what closes off the back of each garage recess. Stacked the other way round the
+ *  ground floor paints straight over the wall above it. */
 export function pitComplexOps(
   zone: PitZone, u: (m: number) => number, lighting: Lighting, view: number,
   garageColor?: (i: number) => string | undefined,
@@ -265,95 +148,70 @@ export function pitComplexOps(
   const plantLift = u(PLANT_H_M * EXTRUDE)
   const cast = u(PIT_BUILDING_H_M * shadowReach(lighting))
   const up = (p: Vec, k: number) => ({ x: p.x - dir.x * k, y: p.y - dir.y * k })
-  const by = (pts: Vec[], ox: number, oy: number) => pts.map((p) => ({ x: p.x + ox, y: p.y + oy }))
   const wall = shadeFace(PIT_WHITE, lighting)
+  // The returns take a second tone. Without it the front of the complex and its ends are one flat
+  // white and the whole mass reads as a cut-out.
   const ret = tintFace(PIT_WHITE, lighting, -0.45)
-  const pad = u(0.6)
-  /** A disc round a shape and where the sweep carries it. */
-  const reach = (pts: Vec[], ox: number, oy: number) => discOf([...pts, ...by(pts, ox, oy)], pad)
+  const lower = zone.buildingPts.map((p) => up(p, mid))
+  const upper = zone.upperPts.map((p) => up(p, lift))
+  const rise = lift - mid
+  const plantTops = zone.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
 
-  const ops: DrawOp[] = []
-  // The shadow the complex throws across the lane, cast from the UPPER outline: it is the outer
-  // envelope, since the storey above overhangs the recesses bitten out of the one below.
-  for (const s of zone.spans) {
-    ops.push({
-      d: sweptRing(s.upperPts, ldir.x * cast, ldir.y * cast),
-      fill: shadowFill(lighting), alpha: shadowOpacity(lighting),
-      clip: reach(s.upperPts, ldir.x * cast, ldir.y * cast),
-    })
-  }
-  for (const s of zone.spans) {
-    const lower = s.lowerPts.map((p) => up(p, mid))
-    ops.push({ d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall, clip: reach(lower, dir.x * mid, dir.y * mid) })
-  }
-  // The returns take a second tone, and a CUT is not a return: shading the edge where one stretch ends
-  // would paint a darker band straight down the middle of a wall that carries on into the next.
-  for (const s of zone.spans) {
-    const lower = s.lowerPts.map((p) => up(p, mid))
-    const d = obliqueRingFaces(lower, dir.x * mid, dir.y * mid, undefined, s.lowerSeam)
-    if (d) ops.push({ d, fill: ret, clip: reach(lower, dir.x * mid, dir.y * mid) })
-  }
-  // The garage door, on the back wall of its bay and in that wall's plane. One disc per garage:
-  // driving down the pit straight at racing zoom, most bays are off screen while the building is on it.
+  const ops: DrawOp[] = [
+    // The shadow the complex throws across the lane, cast from the UPPER outline: it is the outer
+    // envelope, since the storey above overhangs the recesses bitten out of the one below.
+    {
+      d: sweptRing(zone.upperPts, ldir.x * cast, ldir.y * cast),
+      fill: shadowFill(lighting),
+      alpha: shadowOpacity(lighting),
+    },
+    { d: sweptRing(lower, dir.x * mid, dir.y * mid), fill: wall },
+  ]
+  // The garage door, on the back wall of its bay and in that wall's plane. It replaced a flat rounded
+  // rectangle laid on the ground, which was drawn when the complex had no perspective at all and read
+  // as a sticker once it gained some.
   for (const [i, r] of zone.garageFloors.entries()) {
     const h = mid * 0.82
     const top = (p: Vec) => up(p, h)
     const lintel = (p: Vec) => up(p, h * 0.82)
-    const clip = discOf(r, mid + u(2))
-    ops.push({ d: quad(r[3], r[2], top(r[2]), top(r[3])), fill: '#161A21', clip })
-    ops.push({ d: quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3])), fill: garageColor?.(i) ?? '#9AA3B2', clip })
+    ops.push({ d: quad(r[3], r[2], top(r[2]), top(r[3])), fill: '#161A21' })
+    ops.push({ d: quad(lintel(r[3]), lintel(r[2]), top(r[2]), top(r[3])), fill: garageColor?.(i) ?? '#9AA3B2' })
   }
-  const rise = lift - mid
-  for (const s of zone.spans) {
-    const upper = s.upperPts.map((p) => up(p, lift))
-    ops.push({ d: sweptRing(upper, dir.x * rise, dir.y * rise), fill: wall, clip: reach(upper, dir.x * rise, dir.y * rise) })
-  }
-  for (const s of zone.spans) {
-    const upper = s.upperPts.map((p) => up(p, lift))
-    const d = obliqueRingFaces(upper, dir.x * rise, dir.y * rise, undefined, s.upperSeam)
-    if (d) ops.push({ d, fill: ret, clip: reach(upper, dir.x * rise, dir.y * rise) })
-  }
-  for (const s of zone.spans) {
-    const upper = s.upperPts.map((p) => up(p, lift))
-    ops.push({ d: ringPath(upper), fill: litFace(PIT_WHITE, lighting), clip: discOf(upper, pad) })
-  }
-  // White siding laid breadth-wise, then the viewing terrace along the front of the roof and its rail.
-  for (const s of zone.spans) {
-    if (!s.seams) continue
-    ops.push({
-      d: mapPathPoints(s.seams, (x, y) => up({ x, y }, lift)),
-      stroke: tintFace(PIT_WHITE, lighting, -0.16), width: u(0.18),
-      clip: discOf(s.upperPts.map((p) => up(p, lift)), pad),
-    })
-  }
-  for (const s of zone.spans) {
-    const deck = s.deck.map((p) => up(p, lift))
-    ops.push({ d: ringPath(deck), fill: tintFace(PIT_WHITE, lighting, -0.22), clip: discOf(deck, pad) })
-  }
-  for (const s of zone.spans) {
-    const rail = s.rail.map((p) => up(p, lift))
-    ops.push({
-      d: linePath(rail), stroke: shadeFace(PIT_WHITE, lighting), width: u(0.35),
-      clip: discOf(rail, u(0.35)),
-    })
-  }
+  // Ends and pier returns LAST of the ground floor, so they occlude any shutter that reached across
+  // them. A shutter sits on the back wall of its bay, eight metres deeper into the building than the
+  // end wall beside it, so painting it over that wall put the far surface in front of the near one.
+  ops.push({ d: obliqueRingFaces(lower, dir.x * mid, dir.y * mid), fill: ret })
+  ops.push({ d: sweptRing(upper, dir.x * rise, dir.y * rise), fill: wall })
+  ops.push({ d: obliqueRingFaces(upper, dir.x * rise, dir.y * rise), fill: ret })
+  ops.push({ d: ringPath(upper), fill: litFace(PIT_WHITE, lighting) })
+  // White siding, laid breadth-wise. Drawn as geometry off the zone rather than as a tile pattern:
+  // the complex follows the lane's curve, and a tile grid would run straight through it at whatever
+  // angle the map happened to sit at.
+  ops.push({
+    d: mapPathPoints(zone.roofSeams, (x, y) => up({ x, y }, lift)),
+    stroke: tintFace(PIT_WHITE, lighting, -0.16),
+    width: u(0.18),
+  })
+  // Viewing terrace along the front of the roof, and its railing.
+  ops.push({ d: ringPath(zone.roofDeck.map((p) => up(p, lift))), fill: tintFace(PIT_WHITE, lighting, -0.22) })
+  ops.push({
+    d: linePath(zone.roofRail.map((p) => up(p, lift))),
+    stroke: shadeFace(PIT_WHITE, lighting),
+    width: u(0.35),
+  })
   // Rooftop plant, extruded off the roof so the roof itself has relief rather than markings.
-  for (const s of zone.spans) {
-    if (s.plant.length === 0) continue
-    const tops = s.plant.map((r) => r.map((p) => up(p, lift + plantLift)))
-    const clip = reach(tops.flat(), dir.x * plantLift, dir.y * plantLift)
-    ops.push({ d: tops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.5), clip })
-    ops.push({ d: tops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12), clip })
-  }
+  ops.push({
+    d: plantTops.map((r) => sweptRing(r, dir.x * plantLift, dir.y * plantLift)).join(''),
+    fill: tintFace(PIT_WHITE, lighting, -0.5),
+  })
+  ops.push({ d: plantTops.map((r) => ringPath(r)).join(''), fill: tintFace(PIT_WHITE, lighting, -0.12) })
   // The lane's own paint, on the ground: the separator stripe down the box row and the two limiter
   // lines that bound it.
   for (const [colour, widthM] of [['#F2F2F2', 0.6], ['#2E62C9', 0.34]] as const) {
-    for (const s of zone.spans) {
-      ops.push({ d: linePath(s.sep), stroke: colour, width: u(widthM), cap: 'round', clip: discOf(s.sep, u(widthM)) })
-    }
+    ops.push({ d: linePath(zone.sep), stroke: colour, width: u(widthM), cap: 'round' })
   }
   for (const l of [zone.limiterIn, zone.limiterOut]) {
-    ops.push({ d: linePath(l), stroke: '#F2F2F2', width: u(0.35), cap: 'butt', clip: discOf(l, u(0.35)) })
+    ops.push({ d: linePath(l), stroke: '#F2F2F2', width: u(0.35), cap: 'butt' })
   }
   return ops
 }

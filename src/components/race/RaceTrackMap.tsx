@@ -5,31 +5,12 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { bandWash } from '@/lib/ui/terrain-field'
-import { QUALITY, atLeast, lodBucket, lodScale, rungFor, type Quality } from '@/lib/ui/lod'
-import { SOFT_LAYERS, SOFT_SPREAD } from '@/lib/ui/surface-ink'
-import {
-  SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer, EXTRUDE, visibleTrees,
-  type Cull, type Hidden, type SceneryPiece,
-} from './SceneryLayer'
-import {
-  MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowReach,
-} from '@/lib/ui/lighting'
+import { MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowReach } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
-import { linePath } from '@/lib/ui/extrude'
-import { useSceneryBitmap } from './use-scenery-bitmap'
-import {
-  SceneryCanvas, clearPathCache, contextFor, drawScene, warmScene, type SceneTiming,
-} from './SceneryCanvas'
-import {
-  clearGeometryMemo, isGroup, sceneryScene,
-  type DrawOp, type SceneItem, type SceneMark,
-} from '@/lib/ui/scenery-draw'
+import { SceneryCanvas, drawScene } from './SceneryCanvas'
+import { EXTRUDE, sceneryScene, type DrawOp, type SceneItem } from '@/lib/ui/scenery-draw'
 import { canvasPaint, type PaintCtx } from '@/lib/ui/scenery-paint'
-import {
-  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M,
-  pitComplexOps, pitFloorOps,
-} from './PitBuilding'
+import { PitGarageSigns, pitComplexOps, pitFloorOps } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { CarSprite } from './CarSprite'
@@ -45,15 +26,8 @@ import { buildRacingLine, type ArcPath } from '@/lib/ui/racing-line'
 import { roadOps } from '@/lib/ui/road-ops'
 import { gridBoxOps, startLineOps } from '@/lib/ui/road-marks'
 import type { Vec } from '@/lib/ui/geom'
-import {
-  LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TARMAC_WIDTH_M,
-  TRACK_WIDTH_M,
-} from '@/lib/ui/track-path'
+import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
-import { PERF, resetPerfFlags, setPerfFlags } from '@/lib/ui/perf-flags'
-import { trackFeatures, type ShotWorld } from '@/lib/ui/perf-shots'
-import { PerfLabModal } from './PerfLabModal'
-import { usePerfLab } from './use-perf-lab'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 
@@ -83,70 +57,6 @@ export interface TrackCarMeta {
  * progress maps through a curvature-derived speed profile (more distance per time step on straights). */
 export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box' | 'out'; stopFrac?: number; pitCalled?: boolean; pitNewCompound?: TyreCompound; gridSlot?: number; launch?: number } | null
 
-/** Frame-rate caps to cycle through, uncapped first. A steady rate reads as smoother than a higher
- *  one that swings, so the cap stays available â€” but with the static world baked to an image there is
- *  no longer a swing to steady, and capping a frame that already fits only throws frames away. */
-const FRAME_CAPS: number[] = [0, 30, 45]
-
-/** The layer switches, the node budget, the frame cap and the baked-world switch are all still wired
- *  and working; only their KEYBOARD shortcuts are off. They belong in settings, and this is the seam
- *  they get driven from when that exists. Typed as boolean so the block below stays live code rather
- *  than something the compiler narrows away.
- *
- *  The readout keeps its backtick: it is worth having to hand at any time. */
-// ON. The layer hotkeys and 'n' for the perf lab; the readout keeps its backtick either way.
-//
-// Three successive comments here claimed this was parked while the value said otherwise, so: it is live,
-// and it is live because ablating a layer is still the only way to attribute a raster cost that only a
-// browser can see. What has been settled without it is the COMMAND cost, which `npm run zoom:check`
-// measures headlessly; the pit straight's raster dips remain the known residual.
-//
-// The cost of leaving it on is that these are bare unmodified letters across the top row, so stray
-// typing silently hides half the world and the only clue is the `off:` list in the readout. They belong
-// behind a settings screen, which is the seam this flag marks. The letters are already off while a text
-// field has focus and while the lab is up, which is what the lab needs to own its own configuration.
-const DEBUG_KEYS: boolean = true
-
-/** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
- *  Along the top letter row rather than the digits, which the race speed controls already own. */
-const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'> = {
-  q: 'trees',
-  w: 'shadows',
-  e: 'buildings',
-  r: 'stands',
-  t: 'furniture',
-  y: 'kerbs',
-  u: 'pit',
-  i: 'ground',
-  o: 'boxes',
-  // The car sprites are the last un-ported layer; hiding them attributes their raster cost live.
-  a: 'cars',
-  // The garage signs alone: 'pit' hides the canvas complex AND these SVG name boards together,
-  // which left the pit-straight measurement unable to say which half was the hitch.
-  g: 'signs',
-}
-/** A composed static world, and the colour the surface has to be filled with underneath it.
- *
- *  `clearTo` travels WITH the items rather than being read off the scenery, because on a shot holding
- *  no band contour the two are not independent: the scene omits the bands exactly because the fill is
- *  carrying them. A paint that took its items from here and its colour from anywhere else would drop
- *  the wash for as long as a swap was in flight. */
-interface ComposedScene { items: SceneItem[]; marks: SceneMark[]; clearTo: string }
-
-/** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
- *  closely than it tracks anything else, so scenery is shed to hold this line. */
-const NODE_BUDGET = 4000
-/** How much wider than the viewport the tree-cull disc is drawn, and how far the camera may travel
- *  inside it before the set is recomputed. Together they decide how often culling costs a re-render. */
-const CULL_MARGIN = 1.45
-const CULL_SLACK = 0.3
-/** Quiet period after the last rotation input before the scene is rebuilt on the new bearing. */
-const ROT_SETTLE_MS = 120
-/** How long the perf lab waits for a composed scene to land before measuring anyway. The warm parses in
- *  time-boxed slices, so a cold scene takes as many frames as it takes; this is the backstop that keeps
- *  a run moving rather than the expected path. */
-const SETTLE_CAP_MS = 400
-
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit. The lane's own
 // cross-section lives with the track's in track-path.ts, since the surface laid on it measures against
 // the same numbers the renderer strokes with.
@@ -156,67 +66,16 @@ const SETTLE_CAP_MS = 400
 const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
-const ZOOM_MIN = 0.6 // full-track view; far-zoom cost is handled by the scenery LOD + composited world layer
-// Detail tiers, in SCREEN PIXELS PER METRE of track.
-//
-// In pixels per metre and not in zoom, because zoom is not a shared unit: a circuit's own metres per
-// unit and viewBox decide how big it draws, and 5x frames Monza very differently from Monaco. The one
-// gate here used to be 3 ZOOM, which works out anywhere between 1.2 and 2.2 px/m across the 37 layouts.
-//
-// There are two of them because the map is DRAW-CALL bound, not pixel bound, and the two halves of the
-// picture reach the point of diminishing returns at very different sizes. Measured on a shot framing the
-// whole pit building (3.5px/m): 993 draw calls against 100-230 at racing zoom, hiding 70% of the pixels
-// changed the frame rate not at all, and ablation put a draw call at about 19 microseconds — so those
-// calls are most of a 33ms frame.
+const ZOOM_MIN = 0.6 // full-track view
+const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
+/** Quiet period after the last rotation input before the world is rebuilt on the new bearing. */
+const ROT_SETTLE_MS = 120
 
-/** Graphics quality presets, as the multipliers the shared ladder in lib/ui/lod.ts is scaled by. These
- *  are the STARTING values for the three user settings; the tuning panel under the fps readout moves
- *  them live so the frame-rate-to-fidelity trade can be judged by eye rather than by rebuild. */
-/** Whether the tarmac carries what has been driven into it: the racing line, the marbles a corner
- *  throws off, the brake marks into every real braking zone, and the road's own grain.
- *
- *  OFF. It is the most expensive thing on the map per unit of picture. Every mark is cut into 128 arcs
- *  and softened by four nested strokes, so a racing shot pulls in a few hundred draw calls and a wide
- *  one most of a thousand — and this renderer is draw-call bound. The tarmac's EDGE is a separate thing
- *  and stays: it is what makes the road read as a slab laid on the ground rather than a line drawn into
- *  it, and as rims it costs about a tenth of what it used to.
- *
- *  Everything behind this flag still works and is still tested; nothing is deleted. Turn it back on when
- *  there is frame budget to spend on it. */
-const SURFACE_INK = false
-
-const QUALITY_PRESETS: Array<{ key: Quality; label: string }> = [
-  { key: 'low', label: 'Low' },
-  { key: 'medium', label: 'Medium' },
-  { key: 'high', label: 'High' },
-]
-
-/** What each remaining gate measures itself by, in metres, so it can go through the same ladder as
- *  every solid rather than carrying a zoom threshold of its own.
- *
- *  The ink's is the width of its whole softening band: four nested strokes a SOFT_SPREAD apart, and once
- *  that band is unresolvable the four are indistinguishable from one. The signage band is the height of
- *  the board the names sit on. */
-const INK_SOFTENING_M = SOFT_LAYERS * SOFT_SPREAD
-const SIGN_BAND_M = SIGN_H_M * EXTRUDE
-const ROT_STEP = Math.PI / 36 // 5Â° per shift+wheel notch
-
-/** Show or hide an element, writing only when it is actually changing.
- *
- *  The render loop settles the visibility of every car and every pit crew on every frame, and on the
- *  overwhelming majority of them the answer is the same as last frame's — twenty cars on track and ten
- *  garages standing idle is thirty style-attribute writes a frame to say nothing. A write goes through
- *  CSSOM parsing whether or not the value moved, so the cheapest place to notice is here. Remembered on
- *  the element, so nothing has to be pruned when a car retires or a circuit changes.
+/** Show or hide an element.
  *
  *  `visibility` rather than `display` throughout, and deliberately: the race loop measures the track
  *  path with `getTotalLength`, which needs the geometry laid out. */
-const VIS = Symbol('vis')
-type Hideable = (SVGElement | HTMLElement) & { [VIS]?: boolean }
-
-function setVis(el: Hideable, shown: boolean): void {
-  if (PERF.visElide && el[VIS] === shown) return
-  el[VIS] = shown
+function setVis(el: SVGElement | HTMLElement, shown: boolean): void {
   el.style.visibility = shown ? '' : 'hidden'
 }
 
@@ -274,12 +133,9 @@ interface Props {
   /** Garage order: team names best-first (constructor standings). Absent/unknown teams follow, so a
    * fresh season's empty table degrades to an arbitrary-but-stable order. */
   teamOrder?: string[]
-  /** Open the perf lab as soon as the map is up. For /dev/perf-lab, whose whole reason to exist is the
-   * lab; everywhere else it stays behind the 'n' key. */
-  openPerfLab?: boolean
 }
 
-function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live', pinnedCard, teamOrder, openPerfLab = false }: Props) {
+function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live', pinnedCard, teamOrder }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -366,201 +222,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
 
-  // Scenery LOD for the SVG layers, off the shared ladder (state flips only on threshold
-  // crossings). The tarmac's ink has its own, earlier tier: it stops being worth softening long before
-  // the scenery stops being worth drawing.
-  const [lodLow, setLodLow] = useState(false)
-  const lodLowRef = useRef(false)
-  const [inkFlat, setInkFlat] = useState(false)
-  const inkFlatRef = useRef(false)
-  // What the per-object detail ladder reads. Committed in half-octave buckets rather than live: a
-  // rung only changes at discrete scales, and recomposing the scene on every zoom notch would cost
-  // far more than the ladder saves.
-  const [scenePxPerM, setScenePxPerM] = useState(Infinity)
-  const sceneBucketRef = useRef(Number.NaN)
-  // Which preset is live, and what each preset is currently worth. Held here rather than in a settings
-  // store because the point is to TUNE them: the sliders write these, the ladder reads them, and the
-  // fps readout above shows what it cost. Whatever survives tuning becomes the shipped defaults.
-  const [qualityKey, setQualityKey] = useState<Quality>('medium')
-  const [qualityOf, setQualityOf] = useState<Record<Quality, number>>({ ...QUALITY })
-  const quality = qualityOf[qualityKey]
-  // applyCam runs outside React, so the gates it computes read the live value through a ref.
-  const qualityRef = useRef(quality)
-  useEffect(() => { qualityRef.current = quality }, [quality])
-  // Garage signage carries the only real TEXT on the map, and text is the one thing on it that does not
-  // degrade gracefully — it stops being legible long before it stops being expensive. Gated on the
-  // band's own height in screen pixels rather than on a zoom number, because a circuit's metres per
-  // unit decides how big the building draws.
-  const [signsLettered, setSignsLettered] = useState(true)
-  const signsLetteredRef = useRef(true)
-
   const vb = useMemo(() => {
     const m = TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8
     const [x, y, w, h] = layout.viewBox.split(' ').map(Number)
     return { x: x - m, y: y - m, w: w + 2 * m, h: h + 2 * m }
   }, [layout.viewBox, layout.metresPerUnit])
 
-  // Frame-rate readout, toggled with the backtick. Deliberately not React state: it writes straight
-  // into a text node from its own rAF loop, so measuring the map costs the map nothing. Node count
-  // comes with it because that is the number the frame rate actually tracks on this renderer.
-  const [hud, setHud] = useState(false)
-  // One hotkey per category, so what is expensive can be MEASURED instead of reasoned about. Each key
-  // skips rendering that category outright rather than hiding it, so the node count moves with it.
-  const [hidden, setHidden] = useState<ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>>(() => new Set())
-  const hiddenRef = useRef<ReadonlySet<string>>(hidden)
-  const [budgetOn, setBudgetOn] = useState(false)
-  const hudRef = useRef<HTMLDivElement>(null)
-  // 0 means uncapped; cycled from the readout so the two can be compared directly.
-  // On by default: it is the fix, not an experiment. The hotkey stays so it can be compared.
-  const [bitmapOn, setBitmapOn] = useState(false)
-  const [canvasOn, setCanvasOn] = useState(true)
-  const staticRef = useRef<SVGGElement>(null)
-  const [frameCap, setFrameCap] = useState(FRAME_CAPS[0])
-  const frameCapRef = useRef(FRAME_CAPS[0])
-  useEffect(() => { hiddenRef.current = hidden }, [hidden])
-  useEffect(() => { frameCapRef.current = frameCap }, [frameCap])
-  // The perf lab, reached through refs because the key listener binds once.
-  const benchKeyRef = useRef<() => void>(() => {})
-  const labOpenRef = useRef(false)
-  const labCloseRef = useRef<() => void>(() => {})
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey) return
-      // These are bare unmodified letters, so a field taking text owns them.
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
-      // The lab drives the layer set, the renderer and the camera for the length of a run; a stray
-      // letter underneath it would silently change the configuration a row is being measured under.
-      // The readout is in that list and not an exception to it: opening it resets the tick stats twice
-      // a second, which is the reason the lab closes it in the first place.
-      if (DEBUG_KEYS && labOpenRef.current) {
-        if (e.key === 'Escape') labCloseRef.current()
-        return
-      }
-      if (e.key === '`') setHud((v) => !v)
-      if (!DEBUG_KEYS) return
-      if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
-      if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
-      if (e.key === 'x' || e.key === 'X') setCanvasOn((v) => !v)
-      if (e.key === 'n' || e.key === 'N') benchKeyRef.current()
-      if (e.key === 'c' || e.key === 'C') {
-        setFrameCap((v) => FRAME_CAPS[(FRAME_CAPS.indexOf(v) + 1) % FRAME_CAPS.length])
-      }
-      const piece = HOTKEYS[e.key.toLowerCase()]
-      if (!piece) return
-      setHidden((prev) => {
-        const next = new Set(prev)
-        if (next.has(piece)) next.delete(piece)
-        else next.add(piece)
-        return next
-      })
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-  useEffect(() => {
-    if (!hud) return
-    let raf = 0
-    let frames = 0
-    let since = performance.now()
-    const tick = () => {
-      frames++
-      const now = performance.now()
-      if (now - since >= 500) {
-        const el = hudRef.current
-        if (el) {
-          const nodes = worldRef.current?.querySelectorAll('*').length ?? 0
-          const fps = Math.round((frames * 1000) / (now - since))
-          // Where the nodes actually are, per tagged subtree, rather than a guess at the split.
-          const world = worldRef.current
-          const by = ['scenery', 'boxes', 'cars'].map((k) => {
-            const n = [...(world?.querySelectorAll(`[data-cost="${k}"]`) ?? [])]
-              .reduce((sum, g) => sum + 1 + g.querySelectorAll('*').length, 0)
-            return `${k} ${n}`
-          }).join('  ')
-          const offList = [...hiddenRef.current].join(',')
-          const capTxt = frameCapRef.current > 0 ? `cap ${frameCapRef.current}` : 'uncapped'
-          // The camera, so a report of where the frame rate went can name the shot it went in. Zoom
-          // alone does not describe one: the same zoom frames a different amount of circuit on every
-          // layout, so the readout carries what that zoom WORKS OUT to here — how many screen pixels
-          // a metre of track covers.
-          const z = camRef.current.z
-          const pxPerM = (stageDimsRef.current.w / vb.w) * z / layout.metresPerUnit
-          const cam = `${z.toFixed(1)}x  ${pxPerM.toFixed(1)}px/m`
-          // Where the canvas's paint time goes, section by section, from the last drawn frame â€”
-          // so a slow corner names its own cost instead of being reasoned about. Main-thread
-          // command cost; the GPU raster that follows is not observable from here.
-          const stats = Object.entries(paintStatsRef.current)
-          const paintTotal = stats.reduce((s, [, v]) => s + v, 0)
-          const paint = paintTotal > 0
-            ? `  |  paint ${paintTotal.toFixed(1)}ms ` + stats
-              .sort((a, b) => b[1] - a[1]).slice(0, 4)
-              .map(([k, v]) => `${k} ${v.toFixed(1)}`).join(' ')
-            : ''
-          const ts = tickStatsRef.current
-          const tickTxt = ts.n > 0 ? `  |  tick ${(ts.sum / ts.n).toFixed(1)}/${ts.max.toFixed(1)}ms` : ''
-          ts.sum = 0
-          ts.n = 0
-          ts.max = 0
-          el.textContent = `${fps} fps (${capTxt})  ${cam}  |  ${nodes} nodes  ${by}${paint}${tickTxt}`
-            + `${offList ? `  |  off: ${offList}` : ''}`
-        }
-        frames = 0
-        since = now
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [hud, vb.w, layout.metresPerUnit])
-
-  // Trees only exist at FULL detail, which is racing zoom â€” exactly when the least of the circuit is
-  // on screen and the most of it is still in the DOM being repainted as the camera follows a car.
-  // So they are culled to a disc around what is visible.
-  //
-  // Committed through state with hysteresis, never per frame: the disc is deliberately larger than
-  // the viewport, and it only moves once the camera has left a good fraction of it. A tree therefore
-  // appears well outside the frame and the set changes a handful of times a lap, not sixty times a
-  // second.
-  const [cull, setCull] = useState<Cull | null>(null)
-  const cullRef = useRef<Cull | null>(null)
-  const updateCull = useCallback(() => {
-    const outer = outerRef.current
-    const { w: sw } = stageDimsRef.current
-    if (!outer || !sw) return
-    const cam = camRef.current
-    const ppu = sw / vb.w // px per viewBox unit before the camera transform
-    // Undo the world transform to find where the viewport centre lands in the drawn scene.
-    const cos = Math.cos(-cam.rot)
-    const sin = Math.sin(-cam.rot)
-    const qx = (-cam.x * cos - -cam.y * sin) / cam.z
-    const qy = (-cam.x * sin + -cam.y * cos) / cam.z
-    const next: Cull = {
-      cx: vb.x + vb.w / 2 + qx / ppu,
-      cy: vb.y + vb.h / 2 + qy / ppu,
-      r: (Math.hypot(outer.clientWidth, outer.clientHeight) / 2 / cam.z / ppu) * CULL_MARGIN,
-    }
-    const prev = cullRef.current
-    if (prev && Math.hypot(next.cx - prev.cx, next.cy - prev.cy) < prev.r * CULL_SLACK
-      && Math.abs(next.r - prev.r) < prev.r * CULL_SLACK) return
-    cullRef.current = next
-    if (canvasOnRef.current && viewRef.current === 'live') {
-      // The canvas is the only consumer of the disc in this mode: recompose off-React and let the
-      // paint that follows in applyCam draw it. A setState here re-rendered the whole component.
-      composeSceneRef.current(next)
-    } else {
-      setCull(next)
-    }
-  }, [vb])
-
   // Painting the canvas is defined further down, once the scene exists; `applyCam` reaches it through
-  // this ref so the two can be declared in whichever order they need to be. The same goes for scene
-  // composition: on a cull step the canvas recomposes IMPERATIVELY through this ref, because pushing
-  // the disc through React state re-rendered and reconciled the whole component â€” thousands of car
-  // and pit-box nodes â€” several times a lap, which is what the recurring fps dips were.
+  // this ref so the two can be declared in whichever order they need to be.
   const paintRef = useRef<() => void>(() => {})
-  const composeSceneRef = useRef<(cull: Cull | null) => void>(() => {})
-  const canvasOnRef = useRef(true)
 
   // Rebuilding the world on a new bearing means regenerating every path that carries height, which is
   // a full re-render of a few thousand nodes. Far too slow to do on each frame of a rotate, so the
@@ -573,60 +243,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }
   useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current) }, [])
 
-  // The camera the world layer and the canvas were last brought up to date for, plus the stage size
-  // that reading was taken at. A follow camera calls `applyCam` every single frame whether or not the
-  // car it is locked to has moved, and it very often has not: a serviced car is PINNED to its box for
-  // the whole stop, and the whole field sits still on the grid before lights out. Repainting the
-  // static world sixty times a second to produce the identical picture is the one cost on this
-  // renderer with no upside at all, and it lands during the pit stop, which is the busiest thing on
-  // the map. NaN so the first call can never match.
-  const paintedRef = useRef({ x: NaN, y: NaN, z: NaN, rot: NaN, w: NaN, h: NaN })
-
-  const applyCam = useCallback((force = false) => {
+  const applyCam = useCallback(() => {
     const world = worldRef.current
     if (!world) return
     const { x, y, z, rot } = camRef.current
-    const { w: stageW, h: stageH } = stageDimsRef.current
-    const was = paintedRef.current
-    if (!force && PERF.cameraGuard && was.x === x && was.y === y && was.z === z && was.rot === rot
-      && was.w === stageW && was.h === stageH) return
-    paintedRef.current = { x, y, z, rot, w: stageW, h: stageH }
     world.style.transform = `translate(${x}px, ${y}px) rotate(${rot}rad) scale(${z})`
     world.style.setProperty('--cam-rot', `${rot}rad`)
     world.style.setProperty('--cam-zoom-inv', String(1 / z))
-    updateCull()
     paintRef.current()
-    // Screen pixels per metre of track: the one measure of "how far out am I" that means the same
-    // thing on every circuit, and what both detail gates below are expressed in.
-    const pxPerM = (stageDimsRef.current.w / vb.w) * z / layout.metresPerUnit
-    const live = viewRef.current === 'live'
-    const rung = (sizeM: number) => (live ? rungFor(sizeM, pxPerM, qualityRef.current) : 'near')
-    // The SVG layers' own two-tier prop, driven off the ladder like everything else: a 12m tree is the
-    // smallest thing they draw, so it decides when they stop drawing the heavy half.
-    const low = !atLeast(rung(12), 'far')
-    if (low !== lodLowRef.current) {
-      lodLowRef.current = low
-      setLodLow(low)
-    }
-    const flat = !atLeast(rung(INK_SOFTENING_M), 'mid')
-    if (flat !== inkFlatRef.current) {
-      inkFlatRef.current = flat
-      setInkFlat(flat)
-    }
-    // The bucket's OWN scale, never the live one: a rung has to be a pure function of the bucket, or
-    // it flips at a different place zooming in than zooming out.
-    const bucket = live ? lodBucket(pxPerM) : Number.POSITIVE_INFINITY
-    if (bucket !== sceneBucketRef.current) {
-      sceneBucketRef.current = bucket
-      setScenePxPerM(live ? lodScale(pxPerM) : Infinity)
-    }
-    const lettered = atLeast(rung(SIGN_BAND_M), 'far')
-    if (lettered !== signsLetteredRef.current) {
-      signsLetteredRef.current = lettered
-      setSignsLettered(lettered)
-    }
-  }, [updateCull, layout.metresPerUnit, vb.w])
-
+  }, [])
 
   // Real-world metres -> viewBox units for this track.
   // Memoised: the scene and its paints are keyed on it, and a fresh closure every render would
@@ -950,9 +575,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       ? { x: 0, y: 0, z: 1, rot: 0 }
       : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
     setCamRot(camRef.current.rot)
-    // Forced: switching views changes what is drawn even when the restored camera happens to match
-    // the one already applied.
-    applyCam(true)
+    applyCam()
   }, [view, defaultRot, applyCam])
 
   // Geometry caches reset ONLY when the circuit changes â€” resetting per render rebuilt the racing-line
@@ -969,22 +592,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
 
   useEffect(() => {
     let raf = 0
-    // Frame cap. It does not make a frame cheaper, it makes the RATE steady, and a steady 30 reads as
-    // smoother than a rate swinging between 40 and 60 as scenery comes in and out of shot. It only
-    // holds while a frame's work fits the budget; past that the cap is simply not the binding
-    // constraint. Half a frame of slack stops it beating against a 60Hz vsync into an uneven 20.
-    let due = 0
-    const tick = (now: number) => {
-      const cap = frameCapRef.current
-      if (cap > 0) {
-        if (now < due) {
-          raf = requestAnimationFrame(tick)
-          return
-        }
-        const step = 1000 / cap
-        due = now + step - Math.min(step / 2, now - due)
-      }
-      const tickT0 = performance.now()
+    const tick = () => {
       const path = pathRef.current
       const pitPath = pitPathRef.current
       const raceLine = raceLineRef.current
@@ -1582,13 +1190,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           tipPosRef.current = null
         }
       }
-      // The tick's own JS cost, for the readout: it splits "the script is slow" from "the browser
-      // is rasterising a heavy document" â€” the two look identical in an fps number alone.
-      const tickDt = performance.now() - tickT0
-      const tstat = tickStatsRef.current
-      tstat.sum += tickDt
-      tstat.n++
-      if (tickDt > tstat.max) tstat.max = tickDt
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -1639,57 +1240,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }),
     [layout, sceneryDensity],
   )
-  // A node BUDGET rather than a fixed tree count. The number that actually predicts frame rate on
-  // this renderer is how many elements are in the document, and that varies with the circuit, the
-  // zoom and how much scenery happens to be in shot â€” so it is measured every half second and the
-  // tree allowance is steered toward the budget rather than guessed at. An estimate would drift from
-  // the renderer the moment the renderer changed.
-  const [maxTrees, setMaxTrees] = useState(Infinity)
-  const maxTreesRef = useRef<number>(Infinity)
-  const nodesRef = useRef(0)
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (!budgetOn) {
-        if (maxTreesRef.current !== Infinity) {
-          maxTreesRef.current = Infinity
-          setMaxTrees(Infinity)
-        }
-        return
-      }
-      const n = worldRef.current?.querySelectorAll('*').length ?? 0
-      if (!n) return
-      nodesRef.current = n
-      const cap = maxTreesRef.current
-      // Two nodes a tree, so a node overshoot converts straight into a tree allowance. Damped by half
-      // so the loop settles instead of hunting, and only committed once it is worth a re-render.
-      const next = n > NODE_BUDGET
-        ? cap - Math.ceil((n - NODE_BUDGET) / 4)
-        : cap + Math.ceil((NODE_BUDGET - n) / 8)
-      const clamped = Math.max(0, Math.min(scenery.trees.length, next))
-      if (Math.abs(clamped - cap) < Math.max(12, cap * 0.06)) return
-      maxTreesRef.current = clamped
-      setMaxTrees(clamped)
-    }, 500)
-    return () => clearInterval(id)
-  }, [scenery.trees.length, budgetOn])
-
-  // Only the scenery categories, narrowed for the layers that take them.
-  const hide = useMemo(() => hidden as Hidden, [hidden])
-
-  // Kerbs are cheap in element count and expensive in pixels, and at racing zoom you are inside one
-  // corner at a time. Same disc the trees use.
-  const visibleKerbs = useMemo(
-    () => (cull
-      ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cull.cx, k.cy - cull.cy) <= cull.r + k.r)
-      : scenery.kerbs),
-    [scenery.kerbs, cull],
-  )
-
   // The static world as one description, drawn straight onto a canvas by the render loop. Vectors are
   // redrawn at the exact camera transform each frame, so it is as sharp at 60x zoom as at 1x â€” which
   // is what the pre-baked image could never be, and the reason it is being replaced.
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  // The road, in the order the SVG lays it: white casing under grey asphalt, for track and lane alike.
+  // The road, in one description: aprons, white casing under grey asphalt for track and lane alike,
+  // and everything driven into the tarmac on top of it.
+  //
   // The ground plane is NOT an op. It used to be a world-sized rect at the bottom of the scene, which
   // meant every frame wrote the whole surface twice — once clearing it, once covering the clear. It is
   // the colour `drawScene` fills the canvas with instead of clearing, so the frame writes it once.
@@ -1697,442 +1254,87 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     layout,
     u,
     pitZone,
+    pitSlots,
     lap: lapLine?.for === layout ? lapLine : null,
     ground: scenery.base,
     shadow: shadowFill(lighting),
-    inkFull: !inkFlat,
-    surfaceInk: SURFACE_INK,
-  }), [layout, pitZone, u, lapLine, inkFlat, scenery.base, lighting])
-  const pitDrawOps = useMemo(() => (pitZone && !hidden.has('pit')
-    ? {
-      under: pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]),
-      over: pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]),
-    }
-    : { under: [], over: [] }), [pitZone, hidden, lighting, u, viewAz, slotOf])
-  // The pit complex is one of the heaviest things on the map and exists in exactly one place, so it
-  // is gated by the same disc the rest of the scenery culls to.
-  const pitDisc = useMemo(() => {
-    if (!pitZone) return null
-    const pts = [...pitZone.buildingPts, ...pitZone.garageFloors.flat()]
-    if (pts.length === 0) return null
-    const xs = pts.map((p) => p.x)
-    const ys = pts.map((p) => p.y)
-    const cx = (Math.min(...xs) + Math.max(...xs)) / 2
-    const cy = (Math.min(...ys) + Math.max(...ys)) / 2
-    const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) + u(80)
-    return { cx, cy, r }
-  }, [pitZone, u])
-  // One composer for both paths: React re-renders call it when the WORLD changes (track, light,
-  // detail tier, hidden set â€” all rare), and `updateCull` calls it through `composeSceneRef` when
-  // only the DISC moves, several times a lap, without a render.
-  const composeScene = useCallback((cullArg: Cull | null) => {
-    if (!(canvasOn && view === 'live')) return null
-    // Disc off: compose the whole circuit however little of it is in shot, which is what the renderer
-    // did before the disc and what its saving is measured against.
-    const cullNow = PERF.cullDisc ? cullArg : null
-    const pitNear = !cullNow || !pitDisc
-      || Math.hypot(pitDisc.cx - cullNow.cx, pitDisc.cy - cullNow.cy) <= cullNow.r + pitDisc.r
-    const kerbs = hidden.has('kerbs') ? [] : (cullNow
-      ? scenery.kerbs.filter((k) => Math.hypot(k.cx - cullNow.cx, k.cy - cullNow.cy) <= cullNow.r + k.r)
-      : scenery.kerbs
-    ).flatMap((k): DrawOp[] => {
-      const clip = { cx: k.cx, cy: k.cy, r: k.r + u(KERB_WIDTH_M) }
-      return [
-        { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round', clip },
+  }), [layout, pitZone, pitSlots, u, lapLine, scenery.base, lighting])
+
+  // The whole static world, in paint order, as one list of draw ops. Built off React's render because
+  // it only changes when the WORLD does: a new circuit, a new bearing, the lap's ink arriving. The
+  // camera never touches it — a camera move is a transform on the same list.
+  const scene = useMemo((): SceneItem[] => {
+    if (view !== 'live') return []
+    return sceneryScene(scenery, {
+      u,
+      lighting,
+      view: viewAz,
+      ground: true,
+      track: trackDrawOps,
+      kerbs: scenery.kerbs.flatMap((k): DrawOp[] => [
+        { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' },
         {
           d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
-          dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 }, clip,
+          dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
         },
-      ]
-    })
-    const marks: SceneMark[] = []
-    // The relief bands, when this shot holds no contour of them: one wash over every pixel, which the
-    // surface fill can carry for nothing instead of two viewport-sized blended fills over a surface
-    // that has just been written in full. Asked of the CULL disc rather than the viewport because the
-    // camera travels inside the disc between composes, and this colour has to be right everywhere it
-    // goes. Null where a contour is in shot, and then the bands are drawn exactly as before.
-    const wash = hidden.has('ground')
-      ? null
-      : bandWash(scenery.bands, scenery.bandField, scenery.base, cullNow)
-    const items = sceneryScene(scenery, {
-      u, lighting, view: viewAz, ground: !hidden.has('ground'), extrude: EXTRUDE,
-      bandWash: wash,
-      // The whole hidden set, not just the two categories the canvas used to read. Ablating a
-      // grandstand used to change the SVG picture and leave the canvas one untouched, so a perf run
-      // reported that hiding them cost nothing.
-      hide: hidden as ReadonlySet<string>,
-      // The detail ladder's input. Bucketed by the scene cache, so this changes the picture at
-      // discrete scales rather than continuously as the camera zooms.
-      pxPerM: scenePxPerM,
-      quality,
-      storeyM: 4.6, bayM: 5.4, standFrontM: 1.0, standRearM: 5.5, standRoofFrac: 0.3,
-      marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4,
-      solidHeightM: (r) => ('facing' in r ? 5.5 : ((r.storeys ?? 1) * 4.6)),
-      // The same disc the SVG solids layer culled to: the canvas walks every op every frame, so a
-      // circuit's whole tree population would be path setup for things nowhere near the shot.
-      trees: hidden.has('trees') ? [] : visibleTrees(scenery.trees, cullNow),
-      cull: cullNow,
-      track: trackDrawOps,
-      kerbs,
-      pitUnder: pitNear ? pitDrawOps.under : [],
-      pitOver: pitNear ? pitDrawOps.over : [],
+      ]),
+      pitUnder: pitZone ? pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]) : [],
+      pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]) : [],
       overlay: roadMarkOps,
-    }, marks)
-    return { items, marks, clearTo: wash ?? scenery.base }
-  }, [
-    canvasOn, view, scenery, u, lighting, viewAz, hidden, trackDrawOps,
-    pitDrawOps, pitDisc, scenePxPerM, quality, roadMarkOps,
-  ])
-  const sceneRef = useRef<ComposedScene | null>(null)
-  // On a swap, the old scene keeps painting while the new one's paths parse in the background; the
-  // swap lands only when the Path2D cache is warm. Parsing them inside the next paint instead was a
-  // 2-3 vsync hitch on every disc move â€” the last dip the benchmark found.
-  const warmTokenRef = useRef<{ cancel: () => void } | null>(null)
-  // ONE owner of the swap, for both paths. It used to be two, and only the cull path warmed: a
-  // render-driven recompose assigned straight to `sceneRef`, so a detail-tier crossing (which is what
-  // rebuilds the geometry, so it is exactly the case where the paths are genuinely new) parsed its
-  // whole scene inside the very next paint. Measured at 26-226KB of fresh path data per crossing,
-  // about one crossing per two wheel notches. That is the hitch this warm exists to prevent, taken on
-  // the one path that skipped it.
-  // One-shot callback fired the moment a scene actually lands, so the perf lab can wait for the picture
-  // it is about to measure rather than guess at a number of frames. Nothing else reads it.
-  const swapWatchRef = useRef<(() => void) | null>(null)
-  // Scenes landed since the map mounted. The watcher above is a one-shot the lab's settle owns and
-  // consumes, which cannot answer "did a scene land on THIS frame" for ninety frames in a row; a tally
-  // can, and the run diffs it per frame to put the long frames next to the recomposes.
-  const swapTallyRef = useRef(0)
-  /** Composes since the map mounted and the main-thread time they took, the warm's slices included.
-   *
-   *  A third clock, because there were only two and neither of them runs here. Composing rebuilds the
-   *  circuit's geometry and the warm parses its paths, both on the main thread and both OUTSIDE any
-   *  paint and outside the race loop's tick — so the lab's `busyMs`, which is those two summed, could
-   *  not see a millisecond of it. That made the two mitigations paid at compose time (the geometry memo
-   *  and the warmed swap) unmeasurable on a vsync-bound shot: they came back "no effect" from a clock
-   *  they do not report to, which is the same defect the SVG row already carries a guard for. */
-  const composeTallyRef = useRef({ n: 0, ms: 0 })
-  const swapped = () => {
-    swapTallyRef.current++
-    const w = swapWatchRef.current
-    swapWatchRef.current = null
-    w?.()
-  }
-  const swapScene = useCallback((next: ComposedScene | null) => {
-    // Whatever else is in flight, this supersedes it. Without that, a zoom notch that both crosses a
-    // detail tier and commits a cull step lands a warm holding the scene as it was BEFORE the tier
-    // changed, and the picture stays a tier behind until some later cull step happens to recompose
-    // it â€” which needs a 30% change in the disc's radius, about two more notches, and a different
-    // number of them zooming in than out because the radius goes as 1/zoom. That was the band where
-    // the trees were missing on the way in and lingering on the way out.
-    warmTokenRef.current?.cancel()
-    // Warm off: swap immediately and let the next paint parse whatever is new inside itself, which is
-    // the 33-50ms frame this warm was added to remove.
-    if (!next || !sceneRef.current || !PERF.warmSwap) {
-      // Nothing to keep painting in the meantime, so there is nothing to be gained by waiting.
-      sceneRef.current = next
-      paintRef.current()
-      swapped()
-      return
-    }
-    warmTokenRef.current = warmScene(next.items, () => {
-      sceneRef.current = next
-      paintRef.current()
-      swapped()
-    }, (ms) => { composeTallyRef.current.ms += ms })
-  }, [])
-  useEffect(() => {
-    composeSceneRef.current = (cullNow) => {
-      // Timed around the geometry build itself. The swap that follows either warms (whose slices report
-      // through the callback above) or assigns and paints (which the painter's own tally already sees).
-      const t0 = performance.now()
-      const next = composeScene(cullNow)
-      const tally = composeTallyRef.current
-      tally.n++
-      tally.ms += performance.now() - t0
-      swapScene(next)
-    }
-    return () => warmTokenRef.current?.cancel()
-  }, [composeScene, swapScene])
-  // The world changed: a new circuit, a new bearing, a detail tier crossed, a layer toggled, the lap's
-  // ink arriving. Composed HERE rather than in a `useMemo` during render, because composing is where
-  // the geometry gets rebuilt and that is 8ms on a Grand Prix circuit and 28ms on Monaco â€” work that
-  // has no business inside a commit. Declared after the effect above so the ref it calls is already
-  // pointing at the current composer.
-  useEffect(() => { composeSceneRef.current(cullRef.current) }, [composeScene])
-  useEffect(() => { canvasOnRef.current = canvasOn }, [canvasOn])
-  // Last frame's paint time by scene section, for the fps readout. Only collected while the
-  // readout is up â€” the timing calls are cheap but not free.
-  const paintStatsRef = useRef<Record<string, number>>({})
-  /** Paints since the map mounted, the section time they logged, and what they put through the
-   *  rasteriser. Only the painter can count these, so it does, and the perf lab reads deltas off it
-   *  rather than inferring them. */
-  const paintTallyRef = useRef({
-    n: 0, ms: 0, drawn: 0, skipped: 0, sections: {} as Record<string, number>,
-  })
-  // True while the perf lab drives the map; keeps paint timing on with the readout closed.
-  const benchRef = useRef(false)
-  // The race tick's JS cost since the readout last sampled: average and worst frame.
-  const tickStatsRef = useRef({ sum: 0, n: 0, max: 0 })
-  // The paint lookup's argument, allocated ONCE and mutated per op. `canvasPaint` reads it and keeps
-  // nothing, and `drawScene` asks for a paint per gradient- or pattern-filled op — every canopy at the
-  // near rung, every stand deck, every roof — so a fresh object and a fresh fallback bounds per lookup
-  // was a few hundred throwaway objects a frame.
+    })
+  }, [view, scenery, u, lighting, viewAz, trackDrawOps, pitZone, slotOf, roadMarkOps])
+
+  // The paint lookup's argument, allocated ONCE and mutated per op: `canvasPaint` reads it and keeps
+  // nothing, and every gradient- or pattern-filled op asks for one, so a fresh object per lookup was a
+  // few hundred throwaway objects a frame.
   const paintCtxRef = useRef<PaintCtx>({
     lighting, u, bounds: { x: 0, y: 0, w: 0, h: 0 }, pxPerUnit: 1,
   })
   // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
   const paintCanvas = useCallback(() => {
     const canvas = canvasRef.current
-    const sc = sceneRef.current
-    const ctx = canvas && contextFor(canvas)
+    const ctx = canvas?.getContext('2d', { alpha: false })
     if (!canvas || !ctx) return
     const { w: sw } = stageDimsRef.current
-    if (!sc || sw === 0) {
-      // Nothing composed yet (the stage has not been measured). The surface is opaque, so it is
-      // FILLED with the ground rather than cleared — a clear on an opaque canvas is black, and the
-      // one frame before the first real paint would flash it.
+    if (sw === 0) {
+      // The stage has not been measured yet. The surface is opaque, so it is FILLED with the ground
+      // rather than cleared — a clear on an opaque canvas is black, and the one frame before the first
+      // real paint would flash it.
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.fillStyle = scenery.base
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       return
     }
     const dpr = window.devicePixelRatio || 1
-    const timing = hudRef.current || benchRef.current
-      ? ({ marks: sc.marks, out: {} } as SceneTiming)
-      : undefined
     const pc = paintCtxRef.current
     pc.lighting = lighting
     pc.u = u
     pc.pxPerUnit = camRef.current.z * (sw / vb.w) * dpr
     drawScene(
-      ctx, sc.items, camRef.current, vb,
+      ctx, sceneRef.current, camRef.current, vb,
       { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
       (name, c, bbox) => {
         // An op with no bbox resolves its paint against the whole viewBox; only a gradient carries one.
         pc.bounds = bbox ?? vb
         return canvasPaint(name, c, pc) ?? '#FF00FF'
       },
-      sc.clearTo,
-      timing,
+      scenery.base,
     )
-    if (timing) {
-      paintStatsRef.current = timing.out
-      // Tallied HERE, by the only thing that knows a paint happened. The lap benchmark used to decide it
-      // from the section timers, counting a frame as painted when they summed above zero — which reads
-      // a frame whose paint rounded to 0.0 as no paint at all, and reads the frame AFTER a skipped one
-      // as a second paint, because the section times are a ref left standing from last time. Both
-      // errors land on the same segments: the cheap ones and the still-camera ones.
-      const tally = paintTallyRef.current
-      tally.n++
-      tally.drawn += timing.drawn ?? 0
-      tally.skipped += timing.skipped ?? 0
-      for (const [k, v] of Object.entries(timing.out)) {
-        tally.ms += v
-        tally.sections[k] = (tally.sections[k] ?? 0) + v
-      }
-    }
   }, [vb, lighting, u, scenery.base])
+  // Read by the painter, which runs outside React: it must draw whatever the last committed render
+  // built, never a closure's snapshot of it.
+  const sceneRef = useRef(scene)
+  sceneRef.current = scene
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
   // The canvas paints when the CAMERA moves, so anything that changes the picture WITHOUT one has to
-  // ask. A newly composed scene asks through `swapScene`; what is left is the painter being rebuilt
-  // and the STAGE being measured or resized. The stage belongs here rather than with the camera
-  // because it is half of pixels-per-metre, and because resizing it clears the canvas's backing
-  // store — with a free camera nothing else would ever repaint it. Declared after the ref above so it
-  // always calls the current painter, never the previous render's.
-  useEffect(() => { applyCam(true) }, [applyCam, paintCanvas, stage.w, stage.h])
+  // ask: a freshly composed scene, the painter being rebuilt, and the STAGE being measured or resized.
+  // The stage belongs here rather than with the camera because it is half of pixels-per-metre, and
+  // because resizing it clears the canvas's backing store — with a free camera nothing else would ever
+  // repaint it. Declared after the ref above so it always calls the current painter.
+  useEffect(() => { applyCam() }, [applyCam, paintCanvas, scene, stage.w, stage.h])
 
-  // ── Perf lab ──
-  //
-  // What replaced the lap benchmark. That one asked a live race to be its clock: one configuration per
-  // LAP, boundaries at the followed car crossing the line, so a run cost fifteen laps and only ever
-  // ablated LAYERS. It could tell you what the trees cost and it could not tell you whether the Path2D
-  // cache was still doing anything.
-  //
-  // This drives the camera itself along scripted shots for a fixed count of FRAMES, so a cell costs a
-  // second and a half instead of a lap, frame 40 of every cell frames the same thing, and the axes
-  // include the MITIGATIONS (lib/ui/perf-flags.ts) rather than only the layers. The plan, the
-  // arithmetic and the text all live in lib/ui/perf-bench.ts and lib/ui/perf-report.ts; the run loop
-  // lives in use-perf-lab.ts. What is left here is the handful of handles a run is allowed to touch.
-  // Keyed on the pit disc as well as the circuit: the disc is what the pit-straight shot aims at, and it
-  // is rebuilt whenever the garage count changes even though the layout has not.
-  const featuresRef = useRef<{
-    for: TrackLayout; disc: unknown; cornerF: number; pitF: number
-  } | null>(null)
-  const perfSavedRef = useRef<{
-    hidden: ReadonlySet<string>; canvas: boolean; quality: Quality; presets: Record<Quality, number>
-    cap: number; follow: string | null
-    cam: { x: number; y: number; z: number; rot: number }; hud: boolean
-  } | null>(null)
-
-  const perfWorld = useCallback((): ShotWorld | null => {
-    const path = pathRef.current
-    const len = lenRef.current
-    const { w, h } = stageDimsRef.current
-    if (!path || !len || !w) return null
-    const at = (f: number) => {
-      const p = path.getPointAtLength(((((f % 1) + 1) % 1)) * len)
-      return { x: p.x, y: p.y }
-    }
-    // Found once per circuit and kept: the search walks 360 stations through getPointAtLength, which is
-    // not something to repeat between cells of the same run.
-    let feat = featuresRef.current
-    if (!feat || feat.for !== layout || feat.disc !== pitDisc) {
-      feat = { for: layout, disc: pitDisc, ...trackFeatures(at, len, layout.metresPerUnit, pitDisc) }
-      featuresRef.current = feat
-    }
-    return {
-      vb, stage: { w, h }, metresPerUnit: layout.metresPerUnit, trackAt: at,
-      cornerF: feat.cornerF, pitF: feat.pitF, rot0: defaultRot,
-    }
-  }, [layout, vb, pitDisc, defaultRot])
-
-  const perfLab = usePerfLab({
-    info: () => ({
-      circuit: layout.circuitId,
-      dpr: window.devicePixelRatio || 1,
-      viewport: { w: outerRef.current?.clientWidth ?? 0, h: outerRef.current?.clientHeight ?? 0 },
-      cars: cars.length,
-    }),
-    world: perfWorld,
-    setCamera: (cam) => {
-      const turned = cam.rot !== camRef.current.rot
-      camRef.current = { ...cam }
-      applyCam()
-      // A bearing only reaches the SOLIDS through `setCamRot`, which the wheel and pointer handlers
-      // call once a gesture settles. `applyCam` turns the transform and nothing else, so without this
-      // the bearing shot would rotate the picture and never rebuild a single thing that carries
-      // height, which is the entire cost it exists to measure.
-      if (turned) settleRot()
-    },
-    applyConfig: (cfg) => {
-      setPerfFlags(cfg.flagsOff)
-      setHidden(new Set(cfg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
-      setQualityKey(cfg.quality)
-      setCanvasOn(cfg.canvas)
-    },
-    // Compose now, and resolve when the scene that lands is on screen. Bounded, because the warm parses
-    // in slices and a cold scene takes as many frames as it takes.
-    settle: () => new Promise<void>((resolve) => {
-      let done = false
-      const finish = () => {
-        if (done) return
-        done = true
-        swapWatchRef.current = null
-        resolve()
-      }
-      swapWatchRef.current = finish
-      composeSceneRef.current(cullRef.current)
-      setTimeout(finish, SETTLE_CAP_MS)
-    }),
-    timing: (on) => {
-      benchRef.current = on
-      if (!on) return
-      perfSavedRef.current = {
-        hidden: hiddenRef.current, canvas: canvasOnRef.current, quality: qualityKey,
-        presets: qualityOf, cap: frameCapRef.current, follow: followRef.current,
-        cam: { ...camRef.current }, hud,
-      }
-      // The readout resets the tick stats twice a second, the cap throws frames away, and the follow
-      // camera would fight the scripted one for the transform. All three go for the length of a run.
-      setHud(false)
-      setFrameCap(0)
-      // The sliders under the readout move what a preset is WORTH, and a run that inherited a hand-tuned
-      // "medium" would report a number nothing else could reproduce. Pinned to the shipped ladder for
-      // the run and handed back after.
-      setQualityOf({ ...QUALITY })
-      followRef.current = null
-      onFollow(null)
-    },
-    paintTally: () => paintTallyRef.current,
-    tickTally: () => tickStatsRef.current,
-    swapTally: () => swapTallyRef.current,
-    composeTally: () => composeTallyRef.current,
-    clearCaches: () => { clearGeometryMemo(); clearPathCache() },
-    scene: () => {
-      const sc = sceneRef.current
-      let ops = 0
-      let chars = 0
-      for (const item of sc?.items ?? []) {
-        if (isGroup(item)) {
-          ops += item.ops.length
-          for (const op of item.ops) chars += op.d.length
-        } else {
-          ops += 1
-          chars += item.d.length
-        }
-      }
-      return {
-        items: sc?.items.length ?? 0,
-        ops,
-        pathKb: chars / 1024,
-        nodes: worldRef.current?.querySelectorAll('*').length ?? 0,
-      }
-    },
-    restore: () => {
-      const saved = perfSavedRef.current
-      if (!saved) return
-      perfSavedRef.current = null
-      setHidden(new Set(saved.hidden) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
-      setCanvasOn(saved.canvas)
-      setQualityKey(saved.quality)
-      setQualityOf(saved.presets)
-      setFrameCap(saved.cap)
-      setHud(saved.hud)
-      // Both halves, mirroring what `timing` took: the ref is what the render loop reads, and waiting
-      // for the prop to round-trip back through its effect leaves a frame following nothing.
-      followRef.current = saved.follow
-      onFollow(saved.follow)
-      camRef.current = { ...saved.cam }
-      requestAnimationFrame(() => applyCam(true))
-    },
-  }, cars.length, openPerfLab)
-  // Published after the commit rather than during it: a discarded render must not be able to leave the
-  // key listener pointing at a lab that never existed.
-  const perfLabRef = useRef(perfLab)
-  useEffect(() => {
-    perfLabRef.current = perfLab
-    labOpenRef.current = perfLab.open
-  })
-  useEffect(() => {
-    benchKeyRef.current = () => perfLabRef.current.setOpen(true)
-    labCloseRef.current = () => {
-      if (perfLabRef.current.state.phase === 'running') perfLabRef.current.abort()
-      else perfLabRef.current.setOpen(false)
-    }
-  }, [])
-  // Unmounting mid-run would otherwise leave the run driving a camera on a dead component for the rest
-  // of the plan, and ship the player a renderer with a mitigation switched off and nothing saying so.
-  useEffect(() => () => {
-    perfLabRef.current.abort()
-    resetPerfFlags()
-  }, [])
-
-  // Baking covers the WHOLE circuit, so culling is switched off while it is on: a disc around the
-  // camera would be baked into the image and then travel with it.
-  const bakeKey = `${layout.circuitId}|${viewAz.toFixed(3)}|${lodLow}|${[...hidden].join(',')}`
-  const bitmap = useSceneryBitmap(staticRef, vb, bitmapOn && view === 'live', bakeKey)
-  const bakeCull = bitmapOn ? null : cull
-
-
-  // One fake sun for the whole map. A low afternoon light is the dry-race default; moods become
-  // data here later (weather, night) rather than separate rendering paths.
-  const sceneryNode = useMemo(
-    () => <SceneryLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} hide={hide} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, hide, lodLow],
-  )
-  const shadowNode = useMemo(
-    () => <SceneryShadowLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={bakeCull} maxTrees={bitmapOn ? undefined : maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, bakeCull, bitmapOn, maxTrees, hide, lodLow],
-  )
-  const solidsNode = useMemo(
-    () => <ScenerySolidsLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} cull={bakeCull} maxTrees={bitmapOn ? undefined : maxTrees} hide={hide} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, bakeCull, bitmapOn, maxTrees, hide, lodLow],
-  )
-  const furnitureNode = useMemo(
-    () => <TrackFurnitureLayer scenery={scenery} u={(m) => m / layout.metresPerUnit} lighting={lighting} view={viewAz} hide={hide} detail={lodLow ? 'low' : 'full'} />,
-    [scenery, layout.metresPerUnit, lighting, viewAz, hide, lodLow],
-  )
   // The garage name boards are the only real TEXT on the map and the only remote artwork on it (the
-  // flags), and they stay in the document even when the canvas owns the world, because neither degrades
+  // flags), so they stay in the document while the canvas owns everything else: neither degrades
   // through a `DrawOp`. Memoised for the same reason the pit boxes are: nothing about who is signed
   // above a garage changes during a race, and the map commits at least once a second regardless.
   const signsNode = useMemo(
@@ -2140,11 +1342,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       ? (
         <PitGarageSigns
           zone={pitZone} u={u} lighting={lighting} view={viewAz}
-          drivers={(gi) => garageCars[gi] ?? []} lettered={signsLettered}
+          drivers={(gi) => garageCars[gi] ?? []}
         />
       )
       : null),
-    [pitZone, u, lighting, viewAz, garageCars, signsLettered],
+    [pitZone, u, lighting, viewAz, garageCars],
   )
 
   return (
@@ -2156,153 +1358,50 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {hud && (
-        <div
-          ref={hudRef}
-          className="absolute left-2 top-2 z-30 rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-[#FFFFFF]"
-        />
-      )}
-      {hud && (
-        <div className="absolute left-2 top-9 z-30 w-56 rounded bg-black/70 px-2 py-2 font-mono text-[11px] text-[#FFFFFF]">
-          <div className="flex gap-1">
-            {QUALITY_PRESETS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => { setQualityKey(key); requestAnimationFrame(() => applyCam(true)) }}
-                className={`flex-1 rounded px-1 py-0.5 ${key === qualityKey ? 'bg-[#2E62C9]' : 'bg-white/15'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {QUALITY_PRESETS.map(({ key, label }) => (
-            <label key={key} className="mt-1.5 flex items-center gap-1.5">
-              <span className="w-12 shrink-0">{label}</span>
-              <input
-                type="range" min={0.2} max={4} step={0.05} value={qualityOf[key]}
-                onChange={(e) => {
-                  const v = Number(e.target.value)
-                  setQualityOf((prev) => ({ ...prev, [key]: v }))
-                  setQualityKey(key)
-                  // The gates live in applyCam, which React does not drive; nudge it so the change
-                  // shows on this frame rather than on the next camera move.
-                  requestAnimationFrame(() => applyCam(true))
-                }}
-                className="min-w-0 flex-1 accent-[#2E62C9]"
-              />
-              <span className="w-8 shrink-0 text-right">{qualityOf[key].toFixed(2)}</span>
-            </label>
-          ))}
-        </div>
-      )}
-      <PerfLabModal lab={perfLab} />
       {/* On the OUTER box, not the stage: the stage letterboxes to the viewBox's aspect, and a canvas
-          clipped to it stops painting at the stage edge â€” the world visibly ended there under zoom.
-          The SVG never had the problem because its overflow is visible. Stage centre and viewport
-          centre coincide, so the camera transform is the same either way. */}
-      {canvasOn && view === 'live' && (
+          clipped to it stops painting at the stage edge — the world visibly ended there under zoom.
+          Stage centre and viewport centre coincide, so the camera transform is the same either way. */}
+      {view === 'live' && (
         <SceneryCanvas
           canvasRef={canvasRef}
           className="absolute inset-0"
           // A resize clears the backing store, and nothing else would repaint it: the paint effect
           // watches the scene, and the camera has not moved. With a free camera (collapse the
           // standings panel without following a car) the world simply stayed blank.
-          onResize={() => applyCam(true)}
+          onResize={() => applyCam()}
         />
       )}
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
         <div ref={worldRef} className="absolute inset-0" style={{ transformOrigin: '50% 50%' }}>
-          {/* overflow visible: the ground plane extends far beyond the canvas so the camera never sees
-              the edge of the world under follow + zoom. */}
+          {/* overflow visible: the world extends far beyond the stage so the camera never sees the
+              edge of it under follow + zoom. */}
           <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
-            {/* Grass ground plane, far beyond the canvas so the camera never sees the edge of the world.
-                The static map view drops the scenery for a clean dark minimap. */}
-            {/* The static world, baked to one image when that mode is on. Hidden by VISIBILITY rather
-                than display, because the race loop measures the track path with getTotalLength and
-                that has to keep working while the picture comes from the bitmap. */}
-            <g ref={staticRef} style={{ visibility: bitmap ? 'hidden' : undefined }}>
-            {(!canvasOn || view === 'map') && (
-              <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill={view === 'map' ? '#0F1319' : scenery.base} />
+            {/* The map view is a clean dark minimap: no scenery, no canvas, just the ribbon and the
+                start's own paint under numbered dots. Everything below is drawn for it alone — the
+                live view's world comes off the canvas behind this document. */}
+            {view === 'map' && (
+              <rect x={vb.x - 4000} y={vb.y - 4000} width={vb.w + 8000} height={vb.h + 8000} fill="#0F1319" />
             )}
-            <g data-cost="scenery">{view === 'live' && !canvasOn && sceneryNode}</g>
-            {pitZone && !hidden.has('pit') && !canvasOn && <PitGarageFloors zone={pitZone} lighting={lighting} garageColor={(gi) => slotOf.colors[gi]} />}
-            {/* Track: white edge lines around grey asphalt. Drawn BEFORE the pit complex so the
-                lane tarmac (same asphalt colour) interrupts the edge line across both pit mouths. */}
             {/* Kept in the document whatever draws it: the race loop measures this path with
                 getTotalLength, which needs it present. Invisible once the canvas has the road. */}
             <path
               ref={pathRef} d={layout.d} fill="none" stroke="#D8D8D2"
               strokeWidth={u(TRACK_WIDTH_M)} strokeLinejoin="round"
-              visibility={canvasOn ? 'hidden' : undefined}
+              visibility={view === 'map' ? undefined : 'hidden'}
             />
-            {!canvasOn && (
-  <path d={layout.pit.fastD} fill="none" stroke="#D8D8D2" strokeWidth={u(LANE_WIDTH_M)} strokeLinejoin="round" strokeLinecap="round" />
-            )}
-            {pitZone && !canvasOn && <path d={pitZone.work} fill="#D8D8D2" stroke="#D8D8D2" strokeWidth={u(2 * LANE_LINE_M)} strokeLinejoin="round" />}
-            {!canvasOn && (
-  <path d={layout.d} fill="none" stroke="#33383E" strokeWidth={u(TARMAC_WIDTH_M)} strokeLinejoin="round" />
-            )}
-            {!canvasOn && (
-  <path d={layout.pit.fastD} fill="none" stroke="#33383E" strokeWidth={u(LANE_TARMAC_M)} strokeLinejoin="round" strokeLinecap="round" />
-            )}
-            {pitZone && !canvasOn && <path d={pitZone.work} fill="#33383E" />}
-            {/* Pit lane: an asphalt ribbon with painted edge lines, pit-box slots, and the wall. */}
+            {/* Measured, never drawn: the lane the pitting cars are placed along. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
-            {/* Pit building first (under everything on the apron side), then paint: the fast lane's
-                track-side line, entry/exit guide lines reaching onto the track, the whiteâ€“blueâ€“white
-                working-lane stripe ONLY along the box zone, and the limiter lines bounding it. */}
-            {pitZone && !hidden.has('pit') && !canvasOn && <PitBuildingShadow zone={pitZone} u={u} lighting={lighting} />}
-            {pitZone && !hidden.has('pit') && !canvasOn && <PitBuilding zone={pitZone} u={u} lighting={lighting} view={viewAz} garageColor={(gi) => slotOf.colors[gi]} />}
-            {!hidden.has('pit') && !hidden.has('signs') && signsNode}
-            {pitZone && !canvasOn && (
-              <g>
-                <path d={pitZone.sep} fill="none" stroke="#F2F2F2" strokeWidth={u(0.6)} strokeLinecap="round" />
-                <path d={pitZone.sep} fill="none" stroke="#2E62C9" strokeWidth={u(0.34)} strokeLinecap="round" />
-                <path d={linePath(pitZone.limiterIn)} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
-                <path d={linePath(pitZone.limiterOut)} stroke="#F2F2F2" strokeWidth={u(0.35)} strokeLinecap="butt" />
-              </g>
-            )}
-            </g>
-            {bitmap?.map((t) => (
-              <image key={t.url} href={t.url} x={t.x} y={t.y} width={t.w} height={t.h} />
-            ))}
-            <g data-cost="boxes" style={{ display: hidden.has('boxes') ? 'none' : undefined }}>
+            {view === 'live' && signsNode}
             <PitBoxes slots={pitSlots} u={u} colors={slotOf.colors} lighting={lighting} refs={pitBoxRefs} />
-            </g>
-            {/* Red/white kerbs through the corners. Once the canvas owns the world these MUST come
-                off the document: a dashed stroke re-expands on every camera frame, which is the
-                measured, hotkey-confirmed cause of the original racing stutter â€” leaving them here
-                meant paying it twice, once per renderer. */}
-            {!canvasOn && !hidden.has('kerbs') && (bitmapOn ? scenery.kerbs : visibleKerbs).map((k, i) => (
-              <g key={`k${i}`}>
-                <path d={k.d} fill="none" stroke="#E6E3DC" strokeWidth={u(KERB_WIDTH_M)} strokeLinecap="round" />
-                <path
-                  d={k.d} fill="none" stroke="#C8352F" strokeWidth={u(KERB_WIDTH_M)}
-                  strokeDasharray={`${u(KERB_BLOCK_M)} ${u(KERB_BLOCK_M)}`}
-                />
-              </g>
-            ))}
-            {/* Scenery shadows fall across the tarmac, so they draw AFTER every piece of track
-                paint; the solids that cast them stand on top. Nothing overlaps the ribbon (the
-                generator guarantees it), so drawing solids here cannot hide the road. The canvas
-                draws all three of these layers itself, in this same order â€” left in the document
-                they rendered the whole static world twice, one world stacked on the other. */}
-            {!canvasOn && view === 'live' && shadowNode}
-            {!canvasOn && view === 'live' && solidsNode}
-            {/* Barriers, tyre walls and marshal posts: circuit furniture sits ON the tarmac's edge,
-                so it draws after the ribbon rather than with the scenery underneath it. */}
-            {!canvasOn && view === 'live' && furnitureNode}
-            {/* The start/finish chequer and the grid boxes. As paths off the shared description, so
-                the canvas and this layer cannot disagree about them; drawn here only when the canvas
-                is not the one drawing them. */}
-            {(!canvasOn || view === 'map') && roadMarkOps.map((op, i) => (
+            {/* The start/finish chequer and the grid boxes, off the same description the canvas takes,
+                so the two views cannot disagree about them. */}
+            {view === 'map' && roadMarkOps.map((op, i) => (
               <path key={`rm${i}`} d={op.d} fill={op.fill} />
             ))}
             {/* Invisible: the computed racing line the cars actually drive (sampled per frame). */}
             <path ref={raceLineRef} fill="none" stroke="none" />
           </svg>
-          <div data-cost="cars" className={hidden.has('cars') ? 'hidden' : 'contents'}>{cars.map((car) => (
+          <div className="contents">{cars.map((car) => (
             <div
               key={car.id}
               ref={markerRef(car.id)}
@@ -2427,7 +1526,6 @@ export const RaceTrackMap = memo(RaceTrackMapImpl, (p, n) =>
   p.sceneryDensity === n.sceneryDensity &&
   p.tipTick === n.tipTick &&
   p.teamOrder === n.teamOrder &&
-  p.openPerfLab === n.openPerfLab &&
   (p.pinnedCard == null) === (n.pinnedCard == null) &&
   sameCars(p.cars, n.cars, (n.view ?? 'live') === 'map'),
 )

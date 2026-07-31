@@ -15,10 +15,7 @@
     "weather:check": "tsx scripts/weather-news-check.ts",
     "wet:measure": "tsx scripts/wet-fraction-measure.ts",
     "pit:check": "tsx scripts/pit-loss-check.ts",
-    "overall:calibrate": "tsx scripts/overall-calibration.ts",
-    "zoom:check": "tsx scripts/zoom-cost-check.ts",
-    "close:fill": "tsx scripts/close-fill-check.ts",
-    "band:check": "tsx scripts/band-fold-check.ts"
+    "overall:calibrate": "tsx scripts/overall-calibration.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

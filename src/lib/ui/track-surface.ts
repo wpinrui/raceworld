@@ -10,21 +10,19 @@
 // [surface-ink.ts](./surface-ink.ts) and is shared with the pit lane. What is here is what only a LAP
 // has: a racing line, apexes, braking zones and the marbles a corner throws off.
 //
-// Every stripe here is cut into ARCS, each carrying its own cull disc. A full-lap stroke as one op is an
-// op the canvas must set up and paint whenever any part of the lap is on screen, which at racing zoom is
-// the whole stripe for the sake of the tenth of it in shot.
+// Every stripe here is cut into ARCS, and the reason is the PICTURE rather than the cost: the marks are
+// painted opaquely, so a mark's strength can only change where one arc ends and the next begins. The arc
+// count is what sets how smoothly a laid line can breathe around a lap.
 
 import type { DrawOp } from './scenery-draw'
 import type { Vec } from './geom'
 import {
   APRON_LINES, MARBLE, RUBBER, SKID, SOFT_LAYERS, SOFT_SPREAD, blend, chunk, curveLimits, edgeLayer,
-  grainWeight, layerStrength, midFrac, noFold, softStroke, spacingOf, stripe, unionOf, type Keep,
+  grainWeight, layerStrength, midFrac, noFold, softStroke, spacingOf, stripe, type Keep,
 } from './surface-ink'
 
-/** Arcs per lap for a full-lap stripe. Two jobs: a cull disc every ~45m on a Grand Prix circuit, so a
- *  corner in shot does not drag half the lap in with it, and fine enough steps that the strength can
- *  VARY from arc to arc without banding. Since the stripes are painted opaquely, a change in strength
- *  can only happen at an arc boundary, so the arcs are what set how smooth the variation can be. */
+/** Arcs per lap for a full-lap stripe: fine enough steps that the strength can VARY from arc to arc
+ *  without banding. */
 const ARCS = 128
 
 /** Peak strength of the laid line, before the variation below scales it. */
@@ -83,11 +81,6 @@ export interface Surface {
   /** The racing line's own offset from the centreline per station, from buildRacingLine. Without it
    *  nothing can be held on the road, so stripes are drawn unclamped. */
   lateral?: Float64Array
-  /** Zoomed out, the whole lap is in shot at once and every stripe's softening layers land on screen
-   *  together -- 616 ops instead of the ~19 a racing shot pulls in. At that zoom the stripe is about a
-   *  pixel wide and a soft edge cannot be seen anyway, so the layers collapse to one. Softening scales
-   *  DOWN with the LOD tier rather than being drawn at full strength and shrunk. */
-  detail?: 'full' | 'low'
 }
 
 const keepOf = (s: Surface): Keep | undefined => (s.lateral && s.tarmacHalfM
@@ -157,11 +150,10 @@ const arcsAll = (n: number): number[] => Array.from({ length: n + 1 }, (_, i) =>
  *  through the corners, where a lap's worth of cars all put their tyres in the same place. */
 export function rubberOps(s: Surface): DrawOp[] {
   const { u, line } = s
-  const pad = u(1.6)
   const core = u(2.2)
   const apexCore = u(1.0)
   const spread = u(SOFT_SPREAD)
-  const layers = s.detail === 'low' ? 1 : SOFT_LAYERS
+  const layers = SOFT_LAYERS
   const keep = keepOf(s)
   const lap = arcs(line, ARCS)
   // Peak curvature sets the scale, so a street circuit of hairpins and a power track of long sweeps each
@@ -181,7 +173,7 @@ export function rubberOps(s: Surface): DrawOp[] {
     // a free end. Round caps are therefore free of nubs here, and the run is not tapered.
     for (const { idx, frac } of lap) {
       const colour = blend(s.tarmac, RUBBER, rubberWeight(frac) * layerStrength(k, layers))
-      const op = softStroke(line, idx, k, layers, { core, spread, colour, pad, keep })
+      const op = softStroke(line, idx, k, layers, { core, spread, colour, keep })
       if (op) ops.push(op)
     }
   }
@@ -194,7 +186,6 @@ export function rubberOps(s: Surface): DrawOp[] {
         core: apexCore,
         spread: spread * 0.6,
         colour: blend(under, RUBBER, 0.4 * layerStrength(k, layers)),
-        pad,
         taper: true,
         keep,
       })
@@ -210,8 +201,7 @@ export function skidOps(s: Surface): DrawOp[] {
   const { u, line } = s
   const width = u(0.42)
   const half = u(s.trackM / 2)
-  const pad = u(1.0)
-  const layers = s.detail === 'low' ? 1 : SOFT_LAYERS
+  const layers = SOFT_LAYERS
   const brakeRuns = runs(line.length, (f) => atFrac(s.long, f) < -BRAKE_THRESHOLD, 2)
   const ops: DrawOp[] = []
   for (let k = 0; k < layers; k++) {
@@ -222,7 +212,7 @@ export function skidOps(s: Surface): DrawOp[] {
       const colour = blend(laid, SKID, 0.62 * layerStrength(k, layers))
       for (const side of [-half, half]) {
         const op = softStroke(line, idx, k, layers, {
-          offset: side, core: width, spread: u(0.16), colour, cap: 'butt', pad, taper: true, keep: keepOf(s),
+          offset: side, core: width, spread: u(0.16), colour, cap: 'butt', taper: true, keep: keepOf(s),
         })
         if (op) ops.push(op)
       }
@@ -270,8 +260,7 @@ export function marbleOps(s: Surface): DrawOp[] {
   let peak = 0
   for (let i = 0; i < s.curvature.length; i++) peak = Math.max(peak, Math.abs(s.curvature[i]))
   if (peak === 0) return []
-  const layers = s.detail === 'low' ? 1 : SOFT_LAYERS
-  const pad = u(1.0)
+  const layers = SOFT_LAYERS
   const core = u(MARBLE_CORE_M)
   const spread = u(MARBLE_SPREAD_M)
   // Every patch of every corner, gathered before anything is drawn, so the layers can go down
@@ -296,53 +285,9 @@ export function marbleOps(s: Surface): DrawOp[] {
         core,
         spread,
         colour: blend(s.tarmac, MARBLE, t),
-        pad,
         keep: keepOf(s),
       })
       if (op) ops.push(op)
-    }
-  }
-  return ops
-}
-
-/** The road itself, stroked in cullable ARCS rather than as one path around the whole circuit.
- *
- *  A stroke's outline has to be generated before it can be clipped, and that generation scales with the
- *  pen's width and the path's length — neither of which shrinks when you zoom IN. So a single
- *  whole-circuit stroke costs the same at 60x as at 1x, except at 60x the pen is 470 pixels across and
- *  all but forty metres of the result is thrown away. Measured: at that zoom the canvas renderer lost to
- *  the SVG one it replaced, which keeps a display list and reuses its raster between frames.
- *
- *  Cut into arcs, only the one or two arcs actually in shot are ever submitted. This is the same trick
- *  and the same arc count the ink worn INTO the road has always used; the road underneath it never got
- *  it. Layer-major, so every arc of the casing is down before any of the tarmac: per-arc it would leave
- *  a casing-coloured notch at each join.
- *
- *  Adjacent arcs share a station, so there is no gap between them to show through. A round cap at an
- *  interior join lands under the next arc's, in the same ink, so only the two ends of an open run keep
- *  a cap you can see.
- *
- *  `count` and `open` are for a road that is not the circuit: the pit lane is a few hundred metres
- *  rather than five kilometres, and it does not loop. It was the last road left submitted whole, on
- *  every frame of every lap, with no disc to drop it by when the shot is on the far side of the
- *  circuit. */
-export function roadArcs(
-  centre: readonly Vec[],
-  layers: ReadonlyArray<{ colour: string; width: number; cap?: 'round' | 'butt' }>,
-  opts: { count?: number; open?: boolean } = {},
-): DrawOp[] {
-  const lap = arcs(centre, opts.count ?? ARCS, opts.open)
-  const ops: DrawOp[] = []
-  for (const layer of layers) {
-    for (const { idx } of lap) {
-      const { d, clip } = stripe(centre, idx, () => 0)
-      ops.push({
-        d,
-        stroke: layer.colour,
-        width: layer.width,
-        cap: layer.cap ?? 'round',
-        clip: { ...clip, r: clip.r + layer.width / 2 },
-      })
     }
   }
   return ops
@@ -370,14 +315,13 @@ const RIM_SAFE = 0.8
  *  the same pixels for about a seventh of that.
  *
  *  Both sides of a band go in ONE op as two subpaths: same colour, same width, and a stroke can carry any
- *  number of subpaths, so the saving does not come back as a doubled op count. */
+ *  number of subpaths. */
 export function edgeOps(s: Surface): DrawOp[] {
   const { u, centre, ground, shadow, ribbonHalfM, lineWidthM } = s
   if (!centre || centre.length < 3 || !ground || !shadow || !ribbonHalfM || !lineWidthM) return []
-  const layers = s.detail === 'low' ? 1 : SOFT_LAYERS
+  const layers = SOFT_LAYERS
   // The asphalt's true outer edge: past the white line by twice the line's own width.
   const apronHalf = u(ribbonHalfM + APRON_LINES * lineWidthM)
-  const pad = u(0.5)
   const bleed = u(RIM_BLEED_M)
   const lap = arcs(centre, ARCS)
   const limits = curveLimits(centre)
@@ -389,14 +333,7 @@ export function edgeOps(s: Surface): DrawOp[] {
     for (const { idx } of lap) {
       const left = stripe(centre, idx, noFold(off, limits, RIM_SAFE))
       const right = stripe(centre, idx, noFold(-off, limits, RIM_SAFE))
-      const clip = unionOf([left.clip, right.clip])
-      ops.push({
-        d: `${left.d} ${right.d}`,
-        stroke: colour,
-        width,
-        cap: 'round',
-        clip: { ...clip, r: clip.r + width / 2 + pad },
-      })
+      ops.push({ d: `${left} ${right}`, stroke: colour, width, cap: 'round' })
     }
   }
   // Widest and faintest first, exactly as the stripes above, and layer-major for the same reason. The
@@ -434,16 +371,13 @@ const GRAIN_PATCH_M = 45
 
 export function grainOps(s: Surface): DrawOp[] {
   const { u, centre, tarmacHalfM } = s
-  // Skipped entirely at zoom-out: it is three grey levels on a road a pixel or two wide, and it would put
-  // several hundred ops on screen at once for nothing.
-  if (!centre || centre.length < 3 || !tarmacHalfM || s.detail === 'low') return []
+  if (!centre || centre.length < 3 || !tarmacHalfM) return []
   const bandW = (2 * tarmacHalfM) / GRAIN_BANDS
   // Stations per patch, measured off the centreline's OWN spacing rather than assumed: it is sampled for
   // the tarmac edge's benefit, not this one's, and that sampling is free to change.
   const spacing = spacingOf(centre, u)
   const perPatch = Math.max(2, Math.round(GRAIN_PATCH_M / Math.max(1e-6, spacing)))
   const whole = Array.from({ length: centre.length + 1 }, (_, i) => i % centre.length)
-  const pad = u(0.5)
   const ops: DrawOp[] = []
   for (let band = 0; band < GRAIN_BANDS; band++) {
     // Band centres, spread across the tarmac from one edge to the other.
@@ -454,13 +388,11 @@ export function grainOps(s: Surface): DrawOp[] {
       const w = grainWeight(midFrac(idx, centre.length), band)
       const t = Math.abs(w) * GRAIN_ALPHA
       if (t < 0.004) continue
-      const { d, clip } = stripe(centre, idx, () => off)
       ops.push({
-        d,
+        d: stripe(centre, idx, () => off),
         stroke: blend(s.tarmac, w > 0 ? MARBLE : RUBBER, t),
         width,
         cap: 'butt',
-        clip: { ...clip, r: clip.r + width / 2 + pad },
       })
     }
   }

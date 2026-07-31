@@ -124,20 +124,14 @@ export function sweptRing(pts: Vec[], ox: number, oy: number): string {
  *  and the neighbouring piece stands against them. Shading those paints a second tone straight down
  *  the middle of a continuous wall. The ring is reversed here when its winding needs it, so the mark
  *  is mapped through that rather than read off the reversed ring. */
-export function obliqueRingFaces(
-  pts: Vec[], ox: number, oy: number, cut = Math.SQRT1_2, skip?: readonly boolean[],
-): string {
+export function obliqueRingFaces(pts: Vec[], ox: number, oy: number, cut = Math.SQRT1_2): string {
   if (pts.length < 3) return ''
   const ol = Math.hypot(ox, oy)
   if (ol < 1e-6) return ''
-  const flip = ringArea(pts) > 0
-  const r = flip ? [...pts].reverse() : pts
+  const r = ringArea(pts) > 0 ? [...pts].reverse() : pts
   const n = r.length
   let d = ''
   for (let i = 0; i < n; i++) {
-    // Reversing maps `r[i]` to `pts[n-1-i]`, so edge i of the reversed ring is edge n-2-i of the
-    // original, walked backwards.
-    if (skip?.[flip ? (((n - 2 - i) % n) + n) % n : i]) continue
     const p = r[i]
     const q = r[(i + 1) % r.length]
     const el = Math.hypot(q.x - p.x, q.y - p.y)

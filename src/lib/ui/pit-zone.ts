@@ -5,7 +5,16 @@ import type { TrackLayout } from '@/data/tracks'
 import { linePath } from './extrude'
 import type { Vec } from './geom'
 import { screenUpAzimuth } from './lighting'
-import { type PitNode, runIn, subdivide } from './pit-profile'
+
+/** A vertex of the complex's outline in (arc, lateral) space. The outline is RECTILINEAR there:
+ *  horizontal runs at a constant offset from the lane, joined by vertical steps at a constant arc
+ *  position, which is what lets the front face carry garage recesses without any intersection work. */
+interface PitNode {
+  /** Arc position along the pit lane's centreline, in viewBox units. */
+  s: number
+  /** Offset from that centreline, in metres, toward the garages. */
+  lat: number
+}
 
 /** Lateral offsets from the lane centreline, in metres, that shape the complex. */
 const GARAGE_FACE = 4.45
@@ -20,58 +29,26 @@ const PLANT_BACK = 13.3
 /** The lane stripe's own offset, on the track side of the box row. */
 const SEP_LAT = -1.3
 
-/** How far past its cut a stretch reaches, in metres.
- *
- *  Neighbouring stretches OVERLAP by twice this rather than abutting. Two opaque fills of the same
- *  colour meeting on a shared edge do not close: each covers about half the seam pixel, and half over
- *  half leaves a quarter of the background showing as a hairline down the wall. Overlapping paints the
- *  same colour twice instead, which is invisible, and the union is unchanged either way because a
- *  stretch is always a subset of the whole complex. */
-const SPAN_LAP_M = 0.4
-/** Even samples per stretch for the pieces that follow the lane's curve: the terrace, its rail and the
- *  box-row stripe. Three per bay is finer than the fixed 20 the whole complex used to get. */
+/** Even samples along the complex for the pieces that follow the lane's curve: the terrace, its rail
+ *  and the box-row stripe. */
 const SPAN_SAMPLES = 3
 /** The apron gets more: it runs past the box row at both ends and its edge is a taper rather than a
  *  constant offset, so it needs the stations to describe a curve the others do not have. */
 const WORK_SAMPLES = 4
 
-/** One stretch of the complex along the lane, and everything standing on it.
- *
- *  The canvas submits a path per piece per stretch instead of a path per piece. At racing zoom the
- *  building is several viewports long, so a whole-complex fill hands the rasteriser a path whose every
- *  edge reaches far outside the shot, which is the same waste `roadArcs` cut out of the circuit.
- *
- *  Every stretch is cut from the same outline the whole-complex fields are built from, so the two
- *  renderers cannot draw different buildings. */
-export interface PitSpan {
-  /** Ground-floor footprint over this stretch, as a ring. */
-  lowerPts: Vec[]
-  /** The overhanging storey's footprint over the same stretch. */
-  upperPts: Vec[]
-  /** Edges of `lowerPts` / `upperPts` that are cuts rather than walls, indexed by ring edge. Both
-   *  rings share the run structure, so one mark set serves both. */
-  lowerSeam: boolean[]
-  upperSeam: boolean[]
-  /** Viewing terrace over this stretch, as a ring, and its rail as an open run. */
-  deck: Vec[]
-  rail: Vec[]
-  /** The box-row stripe over this stretch. */
-  sep: Vec[]
-  /** Roof siding seams whose station falls in this stretch. */
-  seams: string
-  /** Plant units centred in this stretch. */
-  plant: Vec[][]
-}
-
 export interface PitSlot { x: number; y: number; nx: number; ny: number; rot: number }
 
 export interface PitZone {
-  /** The working-lane apron, tapered in and out at each end. */
-  work: string
-  /** The same apron, cut into the stretches a canvas submits it in. */
-  workSpans: Vec[][]
+  /** The working-lane apron, tapered in and out at each end, as a closed ring. */
+  work: Vec[]
+  /** The same apron as its two edges, station for station: outer (garage side, tapering out and back
+   *  in) and inner (a constant 1 m track-side of the lane centreline). What is laid ON the apron --
+   *  its asphalt fringe, its grain -- is a band ACROSS a road that changes width, which a stroke of one
+   *  width cannot describe. */
+  workOuter: Vec[]
+  workInner: Vec[]
   /** The white-on-blue separator stripe down the box row. */
-  sep: string
+  sep: Vec[]
   limiterIn: Vec[]
   limiterOut: Vec[]
   /** The pit building's BASE outline, as a ring: it is surveyed against the lane, so it stays put on
@@ -83,12 +60,10 @@ export interface PitZone {
   garageFloors: Vec[][]
   /** Siding seams across the roof, running front to back and following the lane's curve. */
   roofSeams: string
-  /** Rooftop viewing terrace, its railing line, and the plant units behind it. */
-  roofDeck: string
+  /** Rooftop viewing terrace as a ring, its railing line, and the plant units behind it. */
+  roofDeck: Vec[]
   roofRail: Vec[]
   plant: Vec[][]
-  /** The same complex, cut into stretches for a renderer that pays per path extent. */
-  spans: PitSpan[]
 }
 
 /** The one direction the oblique projection runs in, chosen so the camera sits square in FRONT of the
@@ -334,119 +309,77 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
   // front face runs flat and unbroken. Two prisms, not one.
   const upperFront: PitNode[] = [{ s: a0, lat: GARAGE_FACE }, { s: a1, lat: GARAGE_FACE }]
 
-  // Where the complex is cut, and the two stations either side of each cut. Both outlines carry a
-  // vertex at every one of those, so a stretch's outline is an exact sub-run of the whole one however
-  // hard the lane curves through it.
-  const spanCount = Math.max(1, pitSlots.length)
-  const lap = u1(SPAN_LAP_M)
-  const cuts = Array.from({ length: spanCount + 1 }, (_, i) => (i === spanCount ? a1 : a0 + i * bay))
-  const cutMarks: number[] = []
-  for (let i = 1; i < spanCount; i++) cutMarks.push(cuts[i] - lap, cuts[i] + lap)
-  const frontAll = subdivide(front, cutMarks)
-  const rearAll = subdivide(rear, cutMarks)
-  const upperAll = subdivide(upperFront, cutMarks)
-
-  const place = (n: PitNode) => ptAt(n.s, u1(n.lat))
-  /** The ring between two stations, and which of its edges are cuts rather than walls. */
-  const ringOf = (f: PitNode[], lo: number, hi: number) => {
-    const fr = runIn(f, lo, hi)
-    const re = runIn(rearAll, lo, hi)
-    return {
-      pts: [...fr, ...re].map(place),
-      // The join from the front run's end to the rear run's start, and the one that closes the ring:
-      // walls at the complex's own ends, cuts anywhere else.
-      seam: [...fr, ...re].map((_, i) =>
-        (i === fr.length - 1 && hi < a1 - 1e-9) || (i === fr.length + re.length - 1 && lo > a0 + 1e-9)),
+  const sampleCount = Math.max(1, pitSlots.length) * SPAN_SAMPLES
+  const stations = Array.from(
+    { length: sampleCount + 1 }, (_, j) => a0 + ((a1 - a0) * j) / sampleCount,
+  )
+  /** Insert a vertex wherever a station falls inside a HORIZONTAL run.
+   *
+   *  The outline is rectilinear in (arc, lateral) space, so a long run at a constant offset is a
+   *  straight chord in world space however hard the lane curves through it. Everything standing on the
+   *  roof — the terrace, its rail, the plant — follows the curve, so an un-sampled rear wall leaves 33
+   *  of Monaco's 53 roof furniture points off the building with the garage floors showing through the
+   *  gap. Vertical steps are left alone: a station cannot fall inside one. */
+  const subdivide = (run: readonly PitNode[]): PitNode[] => {
+    const out: PitNode[] = []
+    for (let i = 0; i + 1 < run.length; i++) {
+      const a = run[i]
+      const b = run[i + 1]
+      out.push(a)
+      if (Math.abs(a.lat - b.lat) > 1e-9) continue
+      const inner = stations
+        .filter((s) => s > Math.min(a.s, b.s) + 1e-9 && s < Math.max(a.s, b.s) - 1e-9)
+        .sort((p, q) => (a.s > b.s ? q - p : p - q))
+      for (const s of inner) out.push({ s, lat: a.lat })
     }
+    out.push(run[run.length - 1])
+    return out
   }
-  // Every polyline along the complex is sampled on ONE station list, so a stretch's is a sub-run of
-  // the whole one and the two overlap instead of meeting on a seam.
-  const stations = [...new Set([
-    ...Array.from({ length: spanCount * SPAN_SAMPLES + 1 },
-      (_, j) => a0 + ((a1 - a0) * j) / (spanCount * SPAN_SAMPLES)),
-    ...cutMarks,
-  ])].sort((p, q) => p - q)
-  const runAt = (lat: number, lo: number, hi: number) => stations
-    .filter((s) => s >= lo - 1e-9 && s <= hi + 1e-9)
-    .map((s) => ptAt(s, u1(lat)))
-  const deckOf = (lo: number, hi: number) => [
-    ...runAt(TERRACE_FRONT, lo, hi), ...runAt(TERRACE_BACK, lo, hi).reverse(),
-  ]
+  const rearAll = subdivide(rear)
+  /** A front run joined to the shared rear run, in world space. Consecutive duplicates are dropped:
+   *  the recess loop opens and closes each bay on the same station, and a zero-length edge comes back
+   *  out of `sweptRing` as a wall face standing on nothing. */
+  const ringOf = (f: PitNode[]): Vec[] => {
+    const out: Vec[] = []
+    for (const n of [...subdivide(f), ...rearAll]) {
+      const p = ptAt(n.s, u1(n.lat))
+      const last = out[out.length - 1]
+      if (last && Math.abs(last.x - p.x) < 1e-9 && Math.abs(last.y - p.y) < 1e-9) continue
+      out.push(p)
+    }
+    return out
+  }
+  const runAt = (lat: number) => stations.map((s) => ptAt(s, u1(lat)))
   // Roof siding, front to back, following whatever the roof actually is at each station: the middle of
   // the complex steps out further, and siding that stopped at the main rear wall left that block as a
   // bare white patch.
-  const seamStations: number[] = []
+  const seams: string[] = []
   const seamStep = u1(2.4)
-  for (let sv = a0 + seamStep; sv < a1 - seamStep * 0.5; sv += seamStep) seamStations.push(sv)
-  const seamsIn = (lo: number, hi: number) => seamStations
-    .filter((sv) => sv >= lo && sv < hi)
-    .map((sv) => {
-      const p = ptAt(sv, u1(GARAGE_FACE))
-      const q = ptAt(sv, u1(sv > c0 && sv < c1 ? BLOCK_LAT : REAR_LAT))
-      return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)} L ${q.x.toFixed(1)} ${q.y.toFixed(1)} `
-    })
-    .join('')
-  const plantUnits = Array.from({ length: 7 }, (_, i) => {
-    const c = a0 + (a1 - a0) * ((i + 0.5) / 7)
-    const half = ((a1 - a0) / 7) * 0.26
-    return {
-      s: c,
-      pts: [
-        ptAt(c - half, u1(PLANT_FRONT)), ptAt(c + half, u1(PLANT_FRONT)),
-        ptAt(c + half, u1(PLANT_BACK)), ptAt(c - half, u1(PLANT_BACK)),
-      ],
-    }
-  })
-
-  const whole = ringOf(frontAll, a0, a1)
-  const upperWhole = ringOf(upperAll, a0, a1)
-  const spans: PitSpan[] = cuts.slice(0, -1).map((from, i) => {
-    const to = cuts[i + 1]
-    const lo = Math.max(a0, from - lap)
-    const hi = Math.min(a1, to + lap)
-    const lower = ringOf(frontAll, lo, hi)
-    const upper = ringOf(upperAll, lo, hi)
-    return {
-      lowerPts: lower.pts,
-      lowerSeam: lower.seam,
-      upperPts: upper.pts,
-      upperSeam: upper.seam,
-      deck: deckOf(lo, hi),
-      rail: runAt(TERRACE_BACK, lo, hi),
-      sep: runAt(SEP_LAT, lo, hi),
-      // Bucketed on the CUT, not on the overlap: a seam or a plant unit drawn by two stretches is
-      // paid for twice and looks identical, so there is nothing to gain by it.
-      seams: seamsIn(from, i === spanCount - 1 ? a1 : to),
-      plant: plantUnits.filter((p) => p.s >= from && (p.s < to || i === spanCount - 1)).map((p) => p.pts),
-    }
-  })
-  // The working-lane apron, cut into the same stretches for the same reason: it is a 270 m ribbon
-  // submitted as one closed fill of seventy-odd vertices, which on a racing shot of the pit straight
-  // was the largest single piece of path setup left once the complex above it had been cut.
-  //
-  // Its own station list, because it runs wider than the box row and its taper has corners of its own
-  // that a stretch may not round off.
-  const wcut = (i: number) => (i === spanCount ? wt1 : wt0 + (i * (wt1 - wt0)) / spanCount)
+  for (let sv = a0 + seamStep; sv < a1 - seamStep * 0.5; sv += seamStep) {
+    const p = ptAt(sv, u1(GARAGE_FACE))
+    const q = ptAt(sv, u1(sv > c0 && sv < c1 ? BLOCK_LAT : REAR_LAT))
+    seams.push(`M ${p.x.toFixed(1)} ${p.y.toFixed(1)} L ${q.x.toFixed(1)} ${q.y.toFixed(1)} `)
+  }
+  // The working-lane apron: its own station list, because it runs wider than the box row and its taper
+  // has corners of its own.
   const workStations = [...new Set([
-    ...Array.from({ length: spanCount * WORK_SAMPLES + 1 },
-      (_, j) => wt0 + ((wt1 - wt0) * j) / (spanCount * WORK_SAMPLES)),
-    ...Array.from({ length: spanCount - 1 }, (_, i) => [wcut(i + 1) - lap, wcut(i + 1) + lap]).flat(),
+    ...Array.from({ length: Math.max(1, pitSlots.length) * WORK_SAMPLES + 1 },
+      (_, j) => wt0 + ((wt1 - wt0) * j) / (Math.max(1, pitSlots.length) * WORK_SAMPLES)),
     w0, w1,
   ])].filter((s) => s >= wt0 && s <= wt1).sort((p, q) => p - q)
-  const workRing = (lo: number, hi: number) => {
-    const run = workStations.filter((s) => s >= lo - 1e-9 && s <= hi + 1e-9)
-    return [...run.map((s) => ptAt(s, workOuterLat(s))), ...[...run].reverse().map((s) => ptAt(s, WLAT_IN))]
-  }
+  // The apron as two edges rather than one ring, so what is laid on it can be banded across its
+  // width; the ring is then just the outer edge and the inner edge walked back.
+  const workOuter = workStations.map((s) => ptAt(s, workOuterLat(s)))
+  const workInner = workStations.map((s) => ptAt(s, WLAT_IN))
   return {
-    spans,
-    workSpans: Array.from({ length: spanCount },
-      (_, i) => workRing(Math.max(wt0, wcut(i) - lap), Math.min(wt1, wcut(i + 1) + lap))),
-    work: `${linePath(workRing(wt0, wt1))}Z`,
-    sep: linePath(runAt(SEP_LAT, a0, a1)),
+    work: [...workOuter, ...[...workInner].reverse()],
+    workOuter,
+    workInner,
+    sep: runAt(SEP_LAT),
     limiterIn: limiter(0),
     limiterOut: limiter(arc),
-    buildingPts: whole.pts,
-    upperPts: upperWhole.pts,
+    buildingPts: ringOf(front),
+    upperPts: ringOf(upperFront),
     // Bay found by projecting the slot onto the zone polyline rather than assuming slot i is bay i:
     // the box row is spread independently of the zone bounds and can run either way along it.
     garageFloors: pitSlots.map((slot) => {
@@ -461,9 +394,16 @@ export function buildPitZone(layout: TrackLayout, pitSlots: PitSlot[]): PitZone 
     // Roof furniture. A pit roof is the one big flat plane a player looks straight down on, so it
     // carries the detail: a viewing terrace along the front, its railing, and the plant that every
     // real complex has lined up behind it.
-    roofDeck: `${linePath(deckOf(a0, a1))}Z`,
-    roofSeams: seamsIn(a0, a1),
-    roofRail: runAt(TERRACE_BACK, a0, a1),
-    plant: plantUnits.map((p) => p.pts),
+    roofDeck: [...runAt(TERRACE_FRONT), ...runAt(TERRACE_BACK).reverse()],
+    roofSeams: seams.join(''),
+    roofRail: runAt(TERRACE_BACK),
+    plant: Array.from({ length: 7 }, (_, i) => {
+      const c = a0 + (a1 - a0) * ((i + 0.5) / 7)
+      const half = ((a1 - a0) / 7) * 0.26
+      return [
+        ptAt(c - half, u1(PLANT_FRONT)), ptAt(c + half, u1(PLANT_FRONT)),
+        ptAt(c + half, u1(PLANT_BACK)), ptAt(c - half, u1(PLANT_BACK)),
+      ]
+    }),
   }
 }

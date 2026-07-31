@@ -40,54 +40,21 @@ export interface PaintCtx {
   pxPerUnit?: number
 }
 
-/** Paints are cached because `drawScene` asks for one per op per frame. Uncached, every tree canopy
- *  allocated a fresh radial gradient and every tiled fill rasterised a fresh DOM canvas into a fresh
- *  pattern, sixty times a second — thousands of allocations a frame, measured by
- *  scripts/canvas-cost-check.ts. A gradient is keyed on everything it is built from, so a cache hit
- *  is pixel-identical to a rebuild. Cleared wholesale when oversized: the set turns over on a track
- *  or light change and not at all in between. */
-const gradientCache = new Map<string, CanvasGradient>()
-const patternCache = new Map<string, CanvasPattern>()
-
 /** Build the paint an op named. Returns null for an unknown name so a caller can fail loudly rather
  *  than silently drawing the wrong colour. */
 export function canvasPaint(
   name: string, ctx: CanvasRenderingContext2D, p: PaintCtx,
 ): CanvasGradient | CanvasPattern | null {
-  const { x, y, w, h } = p.bounds
   if (name.startsWith('tm-tree') || name === 'tm-bevel' || name === 'tm-rake' || name === 'tm-rake-flip') {
-    const key = `${name}|${p.lighting.azimuth}|${x},${y},${w},${h}`
-    let g = gradientCache.get(key)
-    if (!g) {
-      const built = buildGradient(name, ctx, p)
-      if (!built) return null
-      if (gradientCache.size > 30000) gradientCache.clear()
-      gradientCache.set(key, built)
-      g = built
-    }
-    return g
+    return buildGradient(name, ctx, p)
   }
-  // Tiles rebuild when the zoom crosses a power-of-two band, so they are always rasterised within
-  // 2x of the resolution they are shown at — a handful of rebuilds across the whole zoom range.
-  const px = tileRes(p)
-  const key = `${name}|${p.u(1)}|${px}`
-  let pat = patternCache.get(key)
-  if (!pat) {
-    const built = tilePaint(name, ctx, p, px)
-    if (!built) return null
-    if (patternCache.size > 200) patternCache.clear()
-    patternCache.set(key, built)
-    pat = built
-  }
-  return pat
+  return tilePaint(name, ctx, p, tileRes(p))
 }
 
-/** Tile raster density in device pixels per viewBox unit: the next power of two above what is on
- *  screen, clamped so far zoom-out never drops detail below legibility and extreme zoom-in cannot
- *  ask for a megapixel tile. */
+/** Tile raster density in device pixels per viewBox unit: what is actually on screen, clamped so far
+ *  zoom-out never drops detail below legibility and extreme zoom-in cannot ask for a megapixel tile. */
 function tileRes(p: PaintCtx): number {
-  const need = p.pxPerUnit ?? 8
-  return Math.min(256, Math.max(8, 2 ** Math.ceil(Math.log2(need))))
+  return Math.min(256, Math.max(8, p.pxPerUnit ?? 8))
 }
 
 function buildGradient(

@@ -7,14 +7,14 @@
 //  - It is OPAQUE and pre-blended. A stripe has to be cut into arcs to be cullable, and translucent
 //    arcs double-paint where their caps meet: a visible dark disc at every join. Opaque paint over the
 //    same colour is idempotent, so the joins vanish -- at the cost of having to know what is underneath.
-//  - It is SOFT by nesting, not by blur. This renderer has no filters (three performance regressions
-//    say so) and a gradient along a curve would need one gradient per arc. So a soft-edged mark is
-//    several opaque strokes, widest and faintest first.
+//  - It is SOFT by nesting, not by blur. This renderer has no filters, and a gradient along a curve
+//    would need one gradient per arc. So a soft-edged mark is several opaque strokes, widest and
+//    faintest first.
 //  - It is LAYER-MAJOR. Every mark's outermost pale layer must be down before any mark's core, or a
 //    neighbour's wide pale layer scrubs out the core beside it and every join shows a light notch.
 //    Callers own that loop, because only they know what "every mark" means.
 
-import { discOfPts, type Bounds, type DrawOp } from './scenery-draw'
+import type { DrawOp } from './scenery-draw'
 import type { Vec } from './geom'
 import { hexToRgb, rgbToHex } from '@/lib/color'
 
@@ -88,8 +88,6 @@ export interface Soft {
   spread: number
   colour: string
   cap?: 'round' | 'butt'
-  /** Extra padding on the clip disc, beyond the stroke's own half-width. */
-  pad?: number
   /** Shorten each layer as well as narrowing it, so the mark's ENDS soften too. Wrong for a run that
    *  closes on itself or abuts a neighbour: there is no free end there to soften. */
   taper?: boolean
@@ -106,9 +104,12 @@ export function softStroke(
   const trim = s.taper ? Math.min(Math.floor(idx.length * 0.2) * k, Math.floor((idx.length - 2) / 2)) : 0
   const cut = trim > 0 ? idx.slice(trim, idx.length - trim) : idx
   if (cut.length < 2) return null
-  const pad = s.pad ?? 0
-  const { d, clip } = stripe(pts, cut, onTrack(s.offset ?? 0, width / 2, s.keep))
-  return { d, stroke: s.colour, width, cap: s.cap ?? 'round', clip: { ...clip, r: clip.r + width / 2 + pad } }
+  return {
+    d: stripe(pts, cut, onTrack(s.offset ?? 0, width / 2, s.keep)),
+    stroke: s.colour,
+    width,
+    cap: s.cap ?? 'round',
+  }
 }
 
 /** Every station of a polyline, in order: what a run that uses all of itself passes as its index list. */
@@ -118,9 +119,7 @@ export const allStations = (n: number): number[] => Array.from({ length: n }, (_
  *
  *  A stroke can carry any number of subpaths, so a row of identical marks -- ten pit boxes' worth of
  *  grime, all the same colour and width at a given layer -- is one path rather than ten. The ink is
- *  identical; what goes away is nine setup-and-stroke calls per layer on every frame the row is in
- *  shot. The cull disc becomes the whole row's, which is the right granularity for something that is
- *  only ever looked at as a row. */
+ *  identical, and a pit straight is looked at as a row rather than a box at a time. */
 export function softStrokeAll(
   runs: readonly (readonly Vec[])[], k: number, layers: number, s: Soft,
 ): DrawOp | null {
@@ -128,24 +127,7 @@ export function softStrokeAll(
     .map((pts) => softStroke(pts, allStations(pts.length), k, layers, s))
     .filter((op): op is DrawOp => op !== null)
   if (parts.length === 0) return null
-  const clip = unionOf(parts.map((p) => p.clip!))
-  return { ...parts[0], d: parts.map((p) => p.d).join(' '), clip }
-}
-
-/** The disc containing every disc given: their extremes' bounding box, centred and half-diagonalled.
- *  Conservative, which is the only thing a cull disc is allowed to be. */
-export function unionOf(discs: readonly Bounds[]): Bounds {
-  let x0 = Infinity
-  let y0 = Infinity
-  let x1 = -Infinity
-  let y1 = -Infinity
-  for (const b of discs) {
-    if (b.cx - b.r < x0) x0 = b.cx - b.r
-    if (b.cy - b.r < y0) y0 = b.cy - b.r
-    if (b.cx + b.r > x1) x1 = b.cx + b.r
-    if (b.cy + b.r > y1) y1 = b.cy + b.r
-  }
-  return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 }
+  return { ...parts[0], d: parts.map((p) => p.d).join(' ') }
 }
 
 /** Unit normal to the LEFT of travel at station i of a polyline. A closed run wraps, so it has no seam;
@@ -213,12 +195,12 @@ export function offsetPolyline(pts: readonly Vec[], offset: number, closed = tru
   })
 }
 
-/** A polyline through the given stations, plus the disc that contains it. `offsetAt` displaces each
- *  station along its own normal, which is how paired streaks are placed either side of a line and how
- *  every stripe is kept on the road. */
+/** A polyline through the given stations, as path data. `offsetAt` displaces each station along its
+ *  own normal, which is how paired streaks are placed either side of a line and how every stripe is
+ *  kept on the road. */
 export function stripe(
   pts: readonly Vec[], idx: number[], offsetAt: (i: number) => number,
-): { d: string; clip: Bounds } {
+): string {
   const n = pts.length
   const out: Vec[] = idx.map((i) => {
     const p = pts[i % n]
@@ -227,13 +209,13 @@ export function stripe(
     const nrm = normalAt(pts, i % n)
     return { x: p.x + nrm.x * offset, y: p.y + nrm.y * offset }
   })
-  return { d: `M ${polyPoints(out)}`, clip: discOfPts(out) }
+  return `M ${polyPoints(out)}`
 }
 
-/** A closed polygon through the given points, plus the disc that contains it. Bands ACROSS a road are
- *  built this way rather than as strokes: a stroke has one width, and a road that tapers does not. */
-export function patch(pts: readonly Vec[]): { d: string; clip: Bounds } {
-  return { d: `M ${polyPoints(pts)} Z`, clip: discOfPts(pts) }
+/** A closed polygon through the given points. Bands ACROSS a road are built this way rather than as
+ *  strokes: a stroke has one width, and a road that tapers does not. */
+export function patch(pts: readonly Vec[]): string {
+  return `M ${polyPoints(pts)} Z`
 }
 
 const polyPoints = (pts: readonly Vec[]) => pts.map((p) => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' L ')
