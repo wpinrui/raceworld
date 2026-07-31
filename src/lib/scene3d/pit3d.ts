@@ -22,6 +22,8 @@ const RAIL_H_M = 0.9
 
 export function buildPitComplex3D(
   zone: PitZone, u: (m: number) => number, materials: SceneMaterials,
+  /** A team's colour bands the lintel over its own garage, as the 2D complex paints it. */
+  garageColors?: (i: number) => string | undefined,
 ): THREE.Group {
   const group = new THREE.Group()
   const mid = u(GARAGE_H_M)
@@ -39,12 +41,13 @@ export function buildPitComplex3D(
   solid(ringSolidGeometry(zone.buildingPts, 0, mid, true), PIT_WHITE)
   solid(ringSolidGeometry(zone.upperPts, mid, top, true), PIT_WHITE)
 
-  // Each garage door on the back wall of its bay, floated a hair off it: shutter, then lintel band.
+  // Each garage door on the back wall of its bay, floated a hair off it: shutter, then lintel band
+  // in the resident team's colour where one is known.
   const doors = new GeometrySink()
-  const lintels = new GeometrySink()
+  const lintels = new Map<string, GeometrySink>()
   const doorH = mid * 0.82
-  for (const r of zone.garageFloors) {
-    if (r.length < 4) continue
+  zone.garageFloors.forEach((r, i) => {
+    if (r.length < 4) return
     const inX = r[0].x - r[3].x
     const inY = r[0].y - r[3].y
     const inL = Math.hypot(inX, inY) || 1
@@ -52,13 +55,21 @@ export function buildPitComplex3D(
     const a = { x: r[3].x + off.x, y: r[3].y + off.y }
     const b = { x: r[2].x + off.x, y: r[2].y + off.y }
     doors.quad(v3(a.x, 0, a.y), v3(b.x, 0, b.y), v3(b.x, doorH, b.y), v3(a.x, doorH, a.y))
-    lintels.quad(
+    const colour = garageColors?.(i) ?? LINTEL
+    let sink = lintels.get(colour)
+    if (!sink) {
+      sink = new GeometrySink()
+      lintels.set(colour, sink)
+    }
+    sink.quad(
       v3(a.x, doorH * 0.82, a.y), v3(b.x, doorH * 0.82, b.y),
       v3(b.x, doorH, b.y), v3(a.x, doorH, a.y),
     )
-  }
+  })
   if (!doors.empty) solid(doors.build(), DOOR).castShadow = false
-  if (!lintels.empty) solid(lintels.build(), LINTEL).castShadow = false
+  for (const [colour, sink] of lintels) {
+    if (!sink.empty) solid(sink.build(), colour).castShadow = false
+  }
 
   // Roof furniture: the viewing terrace, its parapet with a flat top rail, and the plant boxes.
   const deck = new GeometrySink()

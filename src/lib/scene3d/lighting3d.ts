@@ -101,3 +101,24 @@ export function buildLightRig(l: Lighting, vb: ViewBox3D): THREE.Group {
   rig.add(hemi, sun, sun.target)
   return rig
 }
+
+/** Refit an existing sun's shadow box onto a new framed extent: the live camera moved, and the map
+ *  has to follow or its texels are spent on circuit nobody is looking at. The sun's own BEARING is
+ *  kept: this slides the box under the sky, it does not move the sun across it. */
+export function refitShadow(sun: THREE.DirectionalLight, vb: ViewBox3D): void {
+  const cx = vb.x + vb.w / 2
+  const cz = vb.y + vb.h / 2
+  const travel = sun.target.position.clone().sub(sun.position).normalize()
+  const reach = Math.max(200, Math.max(vb.w, vb.h) * 2)
+  sun.position.set(cx, 0, cz).addScaledVector(travel, -reach)
+  sun.target.position.set(cx, 0, cz)
+  const half = Math.max(vb.w, vb.h) / 2 + 60
+  sun.shadow.camera.left = -half
+  sun.shadow.camera.right = half
+  sun.shadow.camera.top = half
+  sun.shadow.camera.bottom = -half
+  sun.shadow.camera.near = reach * 0.2
+  sun.shadow.camera.far = reach * 2.2
+  sun.shadow.camera.updateProjectionMatrix()
+  sun.shadow.normalBias = (2 * half) / 4096
+}

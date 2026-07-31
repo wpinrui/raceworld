@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { frameOrtho, parseViewBox } from './camera3d'
+import * as THREE from 'three'
+import { applyLiveCam, frameOrtho, parseViewBox, type LiveCam } from './camera3d'
 
 describe('parseViewBox', () => {
   it('pads every side', () => {
@@ -35,5 +36,66 @@ describe('frameOrtho', () => {
     // A wider-than-viewBox window grows the width instead.
     const wide = frameOrtho(vb, 0, 4)
     expect([wide.left, wide.right, wide.top, wide.bottom]).toEqual([-100, 100, 25, -25])
+  })
+})
+
+describe('applyLiveCam', () => {
+  /** The 2D pipeline, verbatim: viewport centre, camera pan, roll, zoom, viewBox units. What the
+   *  canvas transform and the world div both do, and what the GL camera must therefore also do. */
+  const screen2D = (
+    p: { x: number; y: number }, cam: LiveCam, vb: { x: number; y: number; w: number; h: number },
+    size: { w: number; h: number }, ppu: number,
+  ) => {
+    const s = cam.z * ppu
+    const dx = (p.x - (vb.x + vb.w / 2)) * s
+    const dy = (p.y - (vb.y + vb.h / 2)) * s
+    const cos = Math.cos(cam.rot)
+    const sin = Math.sin(cam.rot)
+    return {
+      x: size.w / 2 + cam.x + dx * cos - dy * sin,
+      y: size.h / 2 + cam.y + dx * sin + dy * cos,
+    }
+  }
+
+  const screen3D = (
+    p: { x: number; y: number }, camera: THREE.OrthographicCamera, size: { w: number; h: number },
+  ) => {
+    const ndc = new THREE.Vector3(p.x, 0, p.y).project(camera)
+    return { x: (ndc.x * 0.5 + 0.5) * size.w, y: (1 - (ndc.y * 0.5 + 0.5)) * size.h }
+  }
+
+  it('projects every world point onto the same pixel as the 2D transform, at any pan zoom and roll', () => {
+    const vb = { x: -10, y: -18, w: 282, h: 460 }
+    const size = { w: 1280, h: 720 }
+    const ppu = size.w / vb.w * 0.8
+    const camera = new THREE.OrthographicCamera()
+    const cams: LiveCam[] = [
+      { x: 0, y: 0, z: 1, rot: 0 },
+      { x: 120, y: -60, z: 3.5, rot: 0.7 },
+      { x: -300, y: 45, z: 0.4, rot: -2.2 },
+      { x: 18, y: 240, z: 12, rot: 3.05 },
+    ]
+    const points = [{ x: 0, y: 0 }, { x: 131, y: 205 }, { x: -10, y: 442 }, { x: 260, y: 17 }]
+    for (const cam of cams) {
+      applyLiveCam(camera, cam, vb, size, ppu)
+      for (const p of points) {
+        const a = screen2D(p, cam, vb, size, ppu)
+        const b = screen3D(p, camera, size)
+        expect(b.x).toBeCloseTo(a.x, 3)
+        expect(b.y).toBeCloseTo(a.y, 3)
+      }
+    }
+  })
+
+  it('reports the framed world rect for the shadow refit', () => {
+    const camera = new THREE.OrthographicCamera()
+    const frame = applyLiveCam(
+      camera, { x: 0, y: 0, z: 2, rot: 0 }, { x: 0, y: 0, w: 100, h: 100 },
+      { w: 400, h: 200 }, 4,
+    )
+    expect(frame.cx).toBe(50)
+    expect(frame.cz).toBe(50)
+    expect(frame.halfW).toBe(25)
+    expect(frame.halfH).toBe(12.5)
   })
 })

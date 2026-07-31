@@ -3,14 +3,15 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
-import { gridBoxOps, kerbOps, startLineOps, startPose } from '@/lib/ui/road-marks'
+import { gridBoxOps, startLineOps, startPose } from '@/lib/ui/road-marks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowReach } from '@/lib/ui/lighting'
+import { MOODS, dirAt, lightDir, screenUpAzimuth, shadowReach } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
-import { SceneryCanvas, drawScene } from './SceneryCanvas'
-import { EXTRUDE, sceneryScene, type DrawOp, type SceneItem } from '@/lib/ui/scenery-draw'
-import { canvasPaint, type PaintCtx } from '@/lib/ui/scenery-paint'
-import { PitGarageSigns, pitComplexOps, pitFloorOps } from './PitBuilding'
+import { Scene3DCanvas } from './Scene3DCanvas'
+import { buildWorld3D } from '@/lib/scene3d/world3d'
+import { buildWorldTextures } from '@/lib/scene3d/textures3d'
+import { EXTRUDE } from '@/lib/ui/scenery-draw'
+import { PitGarageSigns } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { CarSprite } from './CarSprite'
@@ -23,7 +24,6 @@ import {
   PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics, type LapDynamics,
 } from '@/lib/ui/lap-dynamics'
 import { buildRacingLine, type ArcPath } from '@/lib/ui/racing-line'
-import { roadOps } from '@/lib/ui/road-ops'
 import type { Vec } from '@/lib/ui/geom'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
@@ -1203,17 +1203,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // boxes. Three fills between them, so as ops they are three draw calls; as elements they were a
   // hundred and sixteen rects being re-rasterised inside the camera's own transform every frame.
   //
-  // Handed to the scene as its `overlay`, which paints after the furniture — the same place in the stack
-  // the SVG layer draws them, so the two renderers still agree about whether a grandstand's shadow falls
-  // across the start line. (It does not.)
-  const roadMarkOps = useMemo(() => {
-    const at = startPose(layout.start, layout.metresPerUnit)
-    return [
-      ...startLineOps(at, u),
-      // The grid boxes belong to the live view, exactly as the grid marks always did.
-      ...(view === 'live' ? gridBoxOps(gridMarks, u) : []),
-    ]
-  }, [layout.start, layout.metresPerUnit, u, view, gridMarks])
+  // Handed to the world as its `overlay`, painted over everything on the ground. The chequer itself
+  // is part of the 3D world's own road stack; only the grid's marks arrive from here, because only
+  // this component knows where the cars park.
+  const gridOverlay = useMemo(
+    () => (view === 'live' ? gridBoxOps(gridMarks, u) : []),
+    [u, view, gridMarks],
+  )
+  // The minimap's chequer, still SVG: the map view mounts no GL canvas.
+  const mapMarkOps = useMemo(
+    () => startLineOps(startPose(layout.start, layout.metresPerUnit), u),
+    [layout.start, layout.metresPerUnit, u],
+  )
 
   // Cars render at their true footprint: px per viewBox unit at zoom 1, times the real car length
   // (the sprite's width follows its own aspect ratio).
@@ -1236,92 +1237,33 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }),
     [layout, sceneryDensity],
   )
-  // The static world as one description, drawn straight onto a canvas by the render loop. Vectors are
-  // redrawn at the exact camera transform each frame, so it is as sharp at 60x zoom as at 1x â€” which
-  // is what the pre-baked image could never be, and the reason it is being replaced.
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  // The road, in one description: aprons, white casing under grey asphalt for track and lane alike,
-  // and everything driven into the tarmac on top of it.
-  //
-  // The ground plane is NOT an op. It used to be a world-sized rect at the bottom of the scene, which
-  // meant every frame wrote the whole surface twice — once clearing it, once covering the clear. It is
-  // the colour `drawScene` fills the canvas with instead of clearing, so the frame writes it once.
-  const trackDrawOps = useMemo((): DrawOp[] => roadOps({
-    layout,
-    u,
-    pitZone,
-    pitSlots,
-    lap: lapLine?.for === layout ? lapLine : null,
-    ground: scenery.base,
-    shadow: shadowFill(lighting),
-  }), [layout, pitZone, pitSlots, u, lapLine, scenery.base, lighting])
-
-  // The whole static world, in paint order, as one list of draw ops. Built off React's render because
-  // it only changes when the WORLD does: a new circuit, a new bearing, the lap's ink arriving. The
-  // camera never touches it — a camera move is a transform on the same list.
-  const scene = useMemo((): SceneItem[] => {
-    if (view !== 'live') return []
-    return sceneryScene(scenery, {
-      u,
+  // The tile textures the stands' decks wear, built once per mount: a document is guaranteed here.
+  const worldTextures = useMemo(() => buildWorldTextures(), [])
+  // The whole static world as real geometry, built off React's render because it only changes when
+  // the WORLD does: a new circuit, the lap's ink arriving, the grid being painted, a team claiming
+  // its garage. The camera never touches it — a camera move is a matrix on the same buffers, which
+  // is the entire performance argument of the port (#3d-port increment 5). Note what is ABSENT
+  // against the 2D scene build: no `viewAz`, because nothing leans any more, so rotating the camera
+  // no longer rebuilds anything.
+  const world3d = useMemo(() => {
+    if (view !== 'live') return null
+    return buildWorld3D({
+      layout,
+      scenery,
+      pitZone,
+      pitSlots,
+      lap: lapLine?.for === layout ? lapLine : null,
       lighting,
-      view: viewAz,
-      ground: true,
-      track: trackDrawOps,
-      kerbs: kerbOps(scenery.kerbs, u),
-      pitUnder: pitZone ? pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]) : [],
-      pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]) : [],
-      overlay: roadMarkOps,
+      textures: worldTextures,
+      frame: vb,
+      overlay: gridOverlay,
+      garageColors: (gi) => slotOf.colors[gi],
     })
-  }, [view, scenery, u, lighting, viewAz, trackDrawOps, pitZone, slotOf, roadMarkOps])
-
-  // The paint lookup's argument, allocated ONCE and mutated per op: `canvasPaint` reads it and keeps
-  // nothing, and every gradient- or pattern-filled op asks for one, so a fresh object per lookup was a
-  // few hundred throwaway objects a frame.
-  const paintCtxRef = useRef<PaintCtx>({
-    lighting, u, bounds: { x: 0, y: 0, w: 0, h: 0 }, pxPerUnit: 1,
-  })
-  // Called from applyCam, so the canvas follows the camera on exactly the frames the world does.
-  const paintCanvas = useCallback(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d', { alpha: false })
-    if (!canvas || !ctx) return
-    const { w: sw } = stageDimsRef.current
-    if (sw === 0) {
-      // The stage has not been measured yet. The surface is opaque, so it is FILLED with the ground
-      // rather than cleared — a clear on an opaque canvas is black, and the one frame before the first
-      // real paint would flash it.
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.fillStyle = scenery.base
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      return
-    }
-    const dpr = window.devicePixelRatio || 1
-    const pc = paintCtxRef.current
-    pc.lighting = lighting
-    pc.u = u
-    pc.pxPerUnit = camRef.current.z * (sw / vb.w) * dpr
-    drawScene(
-      ctx, sceneRef.current, camRef.current, vb,
-      { w: canvas.width / dpr, h: canvas.height / dpr }, dpr, sw / vb.w,
-      (name, c, bbox) => {
-        // An op with no bbox resolves its paint against the whole viewBox; only a gradient carries one.
-        pc.bounds = bbox ?? vb
-        return canvasPaint(name, c, pc) ?? '#FF00FF'
-      },
-      scenery.base,
-    )
-  }, [vb, lighting, u, scenery.base])
-  // Read by the painter, which runs outside React: it must draw whatever the last committed render
-  // built, never a closure's snapshot of it.
-  const sceneRef = useRef(scene)
-  sceneRef.current = scene
-  useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
-  // The canvas paints when the CAMERA moves, so anything that changes the picture WITHOUT one has to
-  // ask: a freshly composed scene, the painter being rebuilt, and the STAGE being measured or resized.
-  // The stage belongs here rather than with the camera because it is half of pixels-per-metre, and
-  // because resizing it clears the canvas's backing store — with a free camera nothing else would ever
-  // repaint it. Declared after the ref above so it always calls the current painter.
-  useEffect(() => { applyCam() }, [applyCam, paintCanvas, scene, stage.w, stage.h])
+  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, vb, gridOverlay, slotOf])
+  // The painter repaints when the CAMERA moves; anything that changes the picture WITHOUT one has to
+  // ask: a freshly built world, or the STAGE being measured or resized (it is half of
+  // pixels-per-metre).
+  useEffect(() => { applyCam() }, [applyCam, world3d, stage.w, stage.h])
 
   // The garage name boards are the only real TEXT on the map and the only remote artwork on it (the
   // flags), so they stay in the document while the canvas owns everything else: neither degrades
@@ -1352,13 +1294,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           clipped to it stops painting at the stage edge — the world visibly ended there under zoom.
           Stage centre and viewport centre coincide, so the camera transform is the same either way. */}
       {view === 'live' && (
-        <SceneryCanvas
-          canvasRef={canvasRef}
+        <Scene3DCanvas
+          world={world3d}
+          base={scenery.base}
+          vb={vb}
+          ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
+          camRef={camRef}
+          paintRef={paintRef}
           className="absolute inset-0"
-          // A resize clears the backing store, and nothing else would repaint it: the paint effect
-          // watches the scene, and the camera has not moved. With a free camera (collapse the
-          // standings panel without following a car) the world simply stayed blank.
-          onResize={() => applyCam()}
         />
       )}
       <div ref={stageRef} className="relative" style={{ width: stage.w, height: stage.h }}>
@@ -1383,9 +1326,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
             {view === 'live' && signsNode}
             <PitBoxes slots={pitSlots} u={u} colors={slotOf.colors} lighting={lighting} refs={pitBoxRefs} />
-            {/* The start/finish chequer and the grid boxes, off the same description the canvas takes,
-                so the two views cannot disagree about them. */}
-            {view === 'map' && roadMarkOps.map((op, i) => (
+            {/* The start/finish chequer, off the same description every renderer takes. */}
+            {view === 'map' && mapMarkOps.map((op, i) => (
               <path key={`rm${i}`} d={op.d} fill={op.fill} />
             ))}
             {/* Invisible: the computed racing line the cars actually drive (sampled per frame). */}

@@ -15,6 +15,7 @@ import {
 } from '@/lib/ui/road-ops'
 import { MARK_WHITE, startLineRects, startPose } from '@/lib/ui/road-marks'
 import { KERB_BLOCK_M, KERB_RED, KERB_WHITE, KERB_WIDTH_M, type Scenery } from '@/lib/ui/track-scenery'
+import type { DrawOp } from '@/lib/ui/scenery-draw'
 import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M, densifyOpen, densifyTrace,
 } from '@/lib/ui/track-path'
@@ -54,16 +55,22 @@ export interface World3DInput {
   /** The extent actually in shot, for fitting the sun's shadow map. Defaults to the whole viewBox,
    *  which is only the right answer for a whole-circuit framing. */
   frame?: ViewBox3D
+  /** Extra road paint over everything on the ground: the live view's grid boxes. */
+  overlay?: DrawOp[]
+  /** A team's colour on its own garage floor and lintel, as the 2D pit complex wears it. */
+  garageColors?: (i: number) => string | undefined
 }
 
 export interface World3D {
   group: THREE.Group
+  /** The rig's one shadow-casting sun, held out so a live camera can refit its map per move. */
+  sun: THREE.DirectionalLight
   /** What this scene costs, for the probe's console line. */
   stats: { meshes: number; triangles: number }
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame, overlay, garageColors }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -82,7 +89,7 @@ export function buildWorld3D(
   ground.translate(vx + vw / 2, 0, vy + vh / 2)
   add(ground, scenery.base)
 
-  group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER))
+  group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors))
 
   // The ink, compiled from the same ops the 2D strokes: the edge fades under the road, the driven-in
   // surface over it, each stack at one lift with renderOrder carrying the painter.
@@ -126,12 +133,17 @@ export function buildWorld3D(
   add(localRectsGeometry(
     startPose(layout.start, layout.metresPerUnit), startLineRects(u), lift(LAYER.marks),
   ), MARK_WHITE)
+  if (overlay && overlay.length > 0) {
+    group.add(buildOpsDecals(overlay, { y: lift(LAYER.marks), order: over.nextOrder }, materials).group)
+  }
 
   // The standing world, and the light it all agrees under.
   group.add(buildTrees3D(scenery.trees, u))
   group.add(buildStructures3D(scenery, u, materials, textures))
-  if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials))
-  group.add(buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox)))
+  if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
+  const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
+  group.add(rig)
+  const sun = rig.children.find((o): o is THREE.DirectionalLight => o instanceof THREE.DirectionalLight)!
 
   let meshes = 0
   let triangles = 0
@@ -143,5 +155,5 @@ export function buildWorld3D(
       triangles += o instanceof THREE.InstancedMesh ? per * o.count : per
     }
   })
-  return { group, stats: { meshes, triangles: Math.round(triangles) } }
+  return { group, sun, stats: { meshes, triangles: Math.round(triangles) } }
 }

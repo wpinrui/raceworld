@@ -86,6 +86,28 @@ describe('buildWorld3D', () => {
     expect(world.stats.triangles).toBeGreaterThan(50_000)
   })
 
+  it('hands the rig sun out for live shadow refits', () => {
+    expect(world.sun.castShadow).toBe(true)
+  })
+
+  it('paints the grid overlay and the teams onto their garages', () => {
+    const overlay = [{ d: 'M 0 0 L 4 0 L 4 4 Z', fill: '#E8C33A' }]
+    const teamed = buildWorld3D({
+      layout, scenery, pitZone, pitSlots, lap: null, lighting: MOODS.afternoon,
+      overlay, garageColors: () => '#123456',
+    })
+    const colours = new Set<string>()
+    teamed.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) {
+        colours.add((o.material as THREE.MeshLambertMaterial).color.getHexString())
+      }
+    })
+    expect(colours).toContain('e8c33a')
+    // The lintel wears the team colour raw; the floor wears it in the building's shade.
+    expect(colours).toContain('123456')
+    expect(colours).not.toContain('2a2f38')
+  })
+
   it('lays the driven-in ink as ordered decals that never write depth', () => {
     let decals = 0
     let maxOrder = 0

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { MOODS } from '@/lib/ui/lighting'
-import { buildLightRig, skyShare, sunAltitude, sunIntensity, sunTravel } from './lighting3d'
+import { buildLightRig, refitShadow, skyShare, sunAltitude, sunIntensity, sunTravel } from './lighting3d'
 
 describe('sunTravel', () => {
   it('points straight down under an overhead sun', () => {
@@ -54,5 +54,18 @@ describe('buildLightRig', () => {
     expect(sun.target.position.x).toBe(50)
     expect(sun.target.position.z).toBe(30)
     expect(sun.position.y).toBeGreaterThan(0)
+  })
+
+  it('refits the shadow box onto a new frame without moving the sun across the sky', () => {
+    const fresh = buildLightRig(MOODS.afternoon, vb)
+    const s = fresh.children.find((o): o is THREE.DirectionalLight => o instanceof THREE.DirectionalLight)!
+    const bearingBefore = s.target.position.clone().sub(s.position).normalize()
+    refitShadow(s, { x: 200, y: 300, w: 40, h: 20 })
+    expect(s.target.position.x).toBe(220)
+    expect(s.target.position.z).toBe(310)
+    expect(s.shadow.camera.left).toBe(-(40 / 2 + 60))
+    expect(s.shadow.camera.projectionMatrix.elements[0]).toBeCloseTo(1 / 80, 10)
+    const bearingAfter = s.target.position.clone().sub(s.position).normalize()
+    expect(bearingAfter.distanceTo(bearingBefore)).toBeLessThan(1e-6)
   })
 })

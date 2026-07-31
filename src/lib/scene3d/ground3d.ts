@@ -3,6 +3,7 @@
 // paints them in. The organic shapes arrive as path strings and are sampled back to polygons here.
 
 import * as THREE from 'three'
+import { shade } from '@/lib/color'
 import type { PitZone } from '@/lib/ui/pit-zone'
 import type { Scenery } from '@/lib/ui/track-scenery'
 import { SOFT_BAND_ALPHA } from '@/lib/ui/terrain-field'
@@ -48,6 +49,8 @@ export function buildGroundStack3D(
   scenery: Scenery, pitZone: PitZone | null, u: (m: number) => number,
   materials: SceneMaterials, lift: (layer: number) => number,
   layers: { bands: number; fields: number; terrain: number; runoffs: number; floors: number },
+  /** A team's colour lands on its own garage floor, exactly as `pitFloorOps` paints it. */
+  garageColors?: (i: number) => string | undefined,
 ): THREE.Group {
   const group = new THREE.Group()
   const add = (geo: THREE.BufferGeometry | null, colour: string, alpha = 1) => {
@@ -66,9 +69,20 @@ export function buildGroundStack3D(
   for (const t of scenery.terrain) add(pathFillGeometry(t.d, lift(layers.terrain)), t.fill)
   for (const r of scenery.runoffs) add(pathFillGeometry(r.d, lift(layers.runoffs)), r.fill)
   if (pitZone) {
-    const s = new GeometrySink()
-    for (const r of pitZone.garageFloors) addPolyCap(s, r, [], lift(layers.floors))
-    add(s.empty ? null : s.build(), '#2A2F38')
+    // A garage floor sits in the building's own shade in the 2D; the albedo carries that darkening
+    // because the recess is too shallow for the real shadow map to supply it.
+    const byColour = new Map<string, GeometrySink>()
+    pitZone.garageFloors.forEach((r, i) => {
+      const team = garageColors?.(i)
+      const colour = team ? shade(team, 0.55) : '#2A2F38'
+      let s = byColour.get(colour)
+      if (!s) {
+        s = new GeometrySink()
+        byColour.set(colour, s)
+      }
+      addPolyCap(s, r, [], lift(layers.floors))
+    })
+    for (const [colour, s] of byColour) add(s.empty ? null : s.build(), colour)
   }
   return group
 }
