@@ -61,16 +61,25 @@ const POD: PodStation[] = [
 /** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
  *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
 const SPINE_REAR: Station[] = [
-  // The airbox is a rounded POD standing proud of the engine cover, not a triangular sail: it
-  // steps up behind the headrest, domes, and falls away down the spine.
-  { z: 246, half: 14, top: 0.62 },
-  { z: 254, half: 15, top: 0.78 },
-  { z: 264, half: 16, top: 0.87 },
-  { z: 276, half: 15, top: 0.86 },
-  { z: 292, half: 13, top: 0.76 },
-  { z: 330, half: 10, top: 0.62 },
-  { z: 380, half: 8, top: 0.50 },
+  // The RECESSED body of the fin: its front face is the set-back plane under the tip's overhang.
+  // The protruding tip itself is its own piece below.
+  { z: 246, half: 14, top: 0.58 },
+  { z: 252, half: 14, top: 0.70 },
+  { z: 258, half: 14, top: 0.76 },
+  { z: 270, half: 15, top: 0.84 },
+  { z: 284, half: 15, top: 0.86 },
+  { z: 300, half: 13, top: 0.80 },
+  { z: 330, half: 10, top: 0.66 },
+  { z: 380, half: 8, top: 0.52 },
   { z: 446, half: 6, top: 0.42 },
+]
+
+/** The airbox TIP: a square snorkel jutting FORWARD of the fin's face, flat on top, its underside
+ *  the cut-back step the sketch draws. The mouth opens on its front cap. */
+const SNOUT: Station[] = [
+  { z: 240, half: 10, top: 0.855, bottom: 0.765 },
+  { z: 252, half: 12, top: 0.865, bottom: 0.755 },
+  { z: 284, half: 13, top: 0.87, bottom: 0.75 },
 ]
 const SPINE_BOTTOM = 0.30
 
@@ -325,6 +334,7 @@ export function buildCarMesh(colour: string): CarMesh {
 
   group.add(mesh(loftGeometry(BODY, BODY_BOTTOM), colour))
   group.add(mesh(loftGeometry(SPINE_REAR, SPINE_BOTTOM), sec))
+  group.add(mesh(loftGeometry(SNOUT, 0.75), sec))
   for (const sign of [-1, 1]) group.add(mesh(podGeometry(sign), colour))
 
   // The cockpit: a dark open tub between the surround and the headrest bulkhead, the driver's
@@ -352,8 +362,9 @@ export function buildCarMesh(colour: string): CarMesh {
   {
     // Held a clear step AHEAD of the fin's lofted slope: flush placement left it swallowed the
     // moment the airbox height moved.
-    const base = { y: H(0.60), z: 244 - cz }
-    const apex = { y: H(0.80), z: 254 - cz }
+    // On the snout's front cap, floated a hair ahead of it.
+    const base = { y: H(0.775), z: 238.5 - cz }
+    const apex = { y: H(0.845), z: 239.5 - cz }
     const at = (x: number, f: number): V3 =>
       v3(x, base.y + (apex.y - base.y) * f, base.z + (apex.z - base.z) * f)
     const rim: Array<[number, number]> = [
