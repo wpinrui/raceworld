@@ -4,12 +4,14 @@ import {
 } from './perf-bench'
 import { formatReport, type LabReport } from './perf-report'
 
+/** Frame times spread either side of the mean, so the run is not read as pinned to the display. */
 const result = (cell: Cell, meanMs: number): CellResult => ({
   cell,
-  stats: frameStats([...Array(99).fill(meanMs), meanMs * 3]),
+  stats: frameStats([...Array.from({ length: 99 }, (_, i) => meanMs + (i % 5) - 2), meanMs * 3]),
   paint: { msPerPaint: 4.2, frac: 1, calls: 318, skipped: 44, sections: { trees: 1.1 } },
   scene: { items: 640, ops: 1180, pathKb: 96, nodes: 2400 },
   tickMs: 0.8,
+  busyMs: 5,
 })
 
 /** A run where one mitigation pays and one does nothing, which is the pair the report has to separate. */

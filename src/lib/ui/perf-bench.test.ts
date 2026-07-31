@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LAB_CONFIG, LAP_FRAMES, RACE_PX_PER_M, SHOTS, blocksOf, centreOn, estimateSeconds,
-  frameStats, noiseFloorMs, planCells, shotById, trackFeatures, verdictFor, zoomForPxPerM,
-  type Cell, type CellResult, type ShotWorld,
+  frameStats, noiseFloorMs, planCells, shotById, trackFeatures, verdictFor, vsyncBound,
+  zoomForPxPerM, type Cell, type CellResult, type ShotWorld,
 } from './perf-bench'
 
 const world = (over: Partial<ShotWorld> = {}): ShotWorld => ({
@@ -191,14 +191,29 @@ describe('planCells', () => {
   })
 })
 
-const stats = (meanMs: number) => frameStats(Array(100).fill(meanMs))
+/** A cell whose frame times vary, so it is not mistaken for one pinned to the display. */
+const stats = (meanMs: number) => frameStats(
+  Array.from({ length: 100 }, (_, i) => meanMs + (i % 5) - 2),
+)
 
-const result = (cell: Cell, meanMs: number): CellResult => ({
+const result = (cell: Cell, meanMs: number, busyMs = 5): CellResult => ({
   cell,
   stats: stats(meanMs),
   paint: { msPerPaint: 1, frac: 1, calls: 100, skipped: 0, sections: {} },
   scene: { items: 10, ops: 20, pathKb: 1, nodes: 100 },
   tickMs: 0.5,
+  busyMs,
+})
+
+describe('vsyncBound', () => {
+  it('calls a cell pinned to the display floor bound, whatever its mean says', () => {
+    expect(vsyncBound(frameStats(Array(100).fill(16.7)))).toBe(true)
+    expect(vsyncBound(frameStats([...Array(95).fill(16.7), ...Array(5).fill(40)]))).toBe(true)
+  })
+
+  it('leaves a cell with real spread alone', () => {
+    expect(vsyncBound(stats(24))).toBe(false)
+  })
 })
 
 describe('verdicts', () => {
@@ -207,27 +222,41 @@ describe('verdicts', () => {
   )
   const mitigation = cells.find((c) => c.variant === 'off:pathCache')!
   const layer = cells.find((c) => c.variant === 'hide:trees')!
+  const base = result(cells[0], 16)
 
   it('reads a slower mitigation-off row as the mitigation earning its keep', () => {
-    const v = verdictFor(result(mitigation, 18), stats(16), 0.2)
+    const v = verdictFor(result(mitigation, 18), base, 0.2)
     expect(v.kind).toBe('saves')
     expect(v.text).toBe('saves 2.00ms/frame')
   })
 
   it('reads a level mitigation-off row as the mitigation earning nothing', () => {
-    expect(verdictFor(result(mitigation, 16.1), stats(16), 0.2).kind).toBe('nothing')
+    expect(verdictFor(result(mitigation, 16.1), base, 0.2).kind).toBe('nothing')
   })
 
   it('reads a faster mitigation-off row as the mitigation costing more than it saves', () => {
-    const v = verdictFor(result(mitigation, 15), stats(16), 0.2)
+    const v = verdictFor(result(mitigation, 15), base, 0.2)
     expect(v.kind).toBe('backfires')
     expect(v.text).toBe('costs 1.00ms/frame')
   })
 
   it('reads a faster layer-hidden row as what that layer costs to draw', () => {
-    const v = verdictFor(result(layer, 14), stats(16), 0.2)
+    const v = verdictFor(result(layer, 14), base, 0.2)
     expect(v.kind).toBe('cost')
     expect(v.text).toBe('worth 2.00ms/frame')
+  })
+
+  it('judges on main-thread time when the shot had no frame-time headroom', () => {
+    // Same frame time either way, which is what a vsync ceiling does to every row on a fast machine.
+    const row = result(mitigation, 16, 9)
+    expect(verdictFor(row, base, 0.2, false).kind).toBe('nothing')
+    const v = verdictFor(row, base, 0.2, true)
+    expect(v.kind).toBe('saves')
+    expect(v.text).toBe('saves 4.00ms cpu')
+  })
+
+  it('still calls a mitigation idle when neither frame time nor cpu time moved', () => {
+    expect(verdictFor(result(mitigation, 16, 5.1), base, 0.2, true).kind).toBe('nothing')
   })
 
   it('takes the noise floor from the two baselines, with a floor under it', () => {
@@ -254,5 +283,14 @@ describe('blocksOf', () => {
     expect(blocks[0].skipped.map((c) => c.variant)).toEqual(['off:cameraGuard'])
     expect(blocks[0].rows.map((r) => r.cell.variant)).toEqual(['hide:trees'])
     expect(blocks[1].rows.map((r) => r.cell.variant)).toEqual(['off:cameraGuard', 'hide:trees'])
+    expect(blocks[0].vsync).toBe(false)
+  })
+
+  it('marks a shot vsync bound from its own baseline', () => {
+    const cells = planCells({ ...DEFAULT_LAB_CONFIG, shots: ['racing'], variants: [] }, 20)
+    const pinned = (c: Cell): CellResult => ({
+      ...result(c, 16), stats: frameStats(Array(100).fill(16.7)),
+    })
+    expect(blocksOf(cells, new Map(cells.map((c) => [c.key, pinned(c)])))[0].vsync).toBe(true)
   })
 })

@@ -375,6 +375,11 @@ export function estimateSeconds(cells: readonly Cell[], cfg: LabConfig): number 
 
 // ── Frame arithmetic ──
 
+/** How close to the fastest frame in a cell still counts as sitting on the display's own floor. */
+const FLOOR_BAND_MS = 1.5
+/** The share of a cell's frames that has to be on that floor before the cell is called vsync bound. */
+const FLOOR_SHARE = 0.7
+
 export interface FrameStats {
   frames: number
   fps: number
@@ -383,12 +388,17 @@ export interface FrameStats {
   low1: number
   low1Ms: number
   p95Ms: number
+  minMs: number
   maxMs: number
   longFrames: number
+  /** Share of frames sitting within a hair of the fastest one, which is what a vsync-locked cell looks
+   *  like. A cell with headroom cannot be compared on frame time, because the display is choosing it. */
+  atFloor: number
 }
 
 const EMPTY_STATS: FrameStats = {
-  frames: 0, fps: 0, meanMs: 0, low1: 0, low1Ms: 0, p95Ms: 0, maxMs: 0, longFrames: 0,
+  frames: 0, fps: 0, meanMs: 0, low1: 0, low1Ms: 0, p95Ms: 0, minMs: 0, maxMs: 0,
+  longFrames: 0, atFloor: 0,
 }
 
 export function frameStats(deltas: readonly number[]): FrameStats {
@@ -399,6 +409,7 @@ export function frameStats(deltas: readonly number[]): FrameStats {
   // At least one frame, so a short cell reports its worst rather than reporting nothing.
   const worst = sorted.slice(-Math.max(1, Math.round(n * 0.01)))
   const worstMean = worst.reduce((s, v) => s + v, 0) / worst.length
+  const floor = sorted[0]
   return {
     frames: n,
     fps: mean > 0 ? 1000 / mean : 0,
@@ -406,10 +417,21 @@ export function frameStats(deltas: readonly number[]): FrameStats {
     low1: worstMean > 0 ? 1000 / worstMean : 0,
     low1Ms: worstMean,
     p95Ms: sorted[Math.min(n - 1, Math.floor(n * 0.95))],
+    minMs: floor,
     maxMs: sorted[n - 1],
     longFrames: sorted.filter((d) => d > LONG_FRAME_MS).length,
+    atFloor: sorted.filter((d) => d <= floor + FLOOR_BAND_MS).length / n,
   }
 }
+
+/** True when the cell spent most of its frames waiting for the display rather than working.
+ *
+ *  This is the one thing that would otherwise make the whole lab lie. A machine with headroom runs the
+ *  baseline at 60 and runs every mitigation-off row at 60 as well, because the saving was never the
+ *  binding constraint, and every row comes back "no effect" whether the mitigation is worth 4ms or
+ *  worth nothing at all. When a shot is up against the vsync ceiling the rows have to be judged on the
+ *  main-thread time they actually spend, and the report has to say that is what it did. */
+export const vsyncBound = (s: FrameStats): boolean => s.atFloor >= FLOOR_SHARE
 
 export interface CellResult {
   cell: Cell
@@ -427,6 +449,11 @@ export interface CellResult {
   scene: { items: number; ops: number; pathKb: number; nodes: number }
   /** The race loop's own JS cost per frame, which separates a slow script from a heavy raster. */
   tickMs: number
+  /** Main-thread time this cell spends per FRAME: the loop's tick plus the paint commands, counting a
+   *  frame that skipped its paint as having paid nothing for it. What the verdict falls back to when
+   *  frame time has no headroom left to move in. It is not the whole frame: the rasteriser's own work
+   *  and the document renderer's layout are not observable from here, so this UNDERSTATES a layer. */
+  busyMs: number
 }
 
 /** The floor below which a difference is the machine rather than the change.
@@ -443,23 +470,39 @@ export type VerdictKind = 'saves' | 'nothing' | 'backfires' | 'cost'
 
 export interface Verdict { kind: VerdictKind; text: string; deltaMs: number }
 
-/** What a row means. A mitigation row is the mitigation turned OFF, so a row that is SLOWER than the
- *  baseline is a mitigation that is working, and one that is level is a mitigation buying nothing. A
- *  mitigation row that is FASTER than the baseline is the finding worth having: the thing is costing
- *  more to run than it saves. */
-export function verdictFor(row: CellResult, baseline: FrameStats, noiseMs: number): Verdict {
-  const deltaMs = row.stats.meanMs - baseline.meanMs
+/** The main-thread floor a difference has to clear when the verdict is being read off `busyMs`. The
+ *  performance clock is coarser than the numbers being subtracted, so a small floor stands under it. */
+const BUSY_FLOOR_MS = 0.1
+
+/** What a row means.
+ *
+ *  A mitigation row is the mitigation turned OFF, so a row that is SLOWER than the baseline is a
+ *  mitigation that is working, and one that is level is a mitigation buying nothing. A mitigation row
+ *  that is FASTER than the baseline is the finding worth having: the thing costs more to run than it
+ *  saves.
+ *
+ *  `vsync` says the shot had no frame-time headroom, in which case the comparison moves to main-thread
+ *  time. That reads a bit lower than the truth (the rasteriser is not on this clock) but it MOVES, which
+ *  a frame time pinned to the display does not. */
+export function verdictFor(
+  row: CellResult, baseline: CellResult, noiseMs: number, vsync = false,
+): Verdict {
+  const deltaMs = vsync
+    ? row.busyMs - baseline.busyMs
+    : row.stats.meanMs - baseline.stats.meanMs
+  const floor = vsync ? Math.max(BUSY_FLOOR_MS, baseline.busyMs * 0.05) : noiseMs
+  const unit = vsync ? 'ms cpu' : 'ms/frame'
   const ms = Math.abs(deltaMs).toFixed(2)
   if (row.cell.group === 'mitigation') {
-    if (deltaMs > noiseMs) return { kind: 'saves', text: `saves ${ms}ms/frame`, deltaMs }
-    if (deltaMs < -noiseMs) return { kind: 'backfires', text: `costs ${ms}ms/frame`, deltaMs }
+    if (deltaMs > floor) return { kind: 'saves', text: `saves ${ms}${unit}`, deltaMs }
+    if (deltaMs < -floor) return { kind: 'backfires', text: `costs ${ms}${unit}`, deltaMs }
     return { kind: 'nothing', text: 'no effect', deltaMs }
   }
-  if (Math.abs(deltaMs) <= noiseMs) return { kind: 'nothing', text: 'no effect', deltaMs }
+  if (Math.abs(deltaMs) <= floor) return { kind: 'nothing', text: 'no effect', deltaMs }
   // Hiding a layer that makes the frame FASTER means the layer costs that much.
   return deltaMs < 0
-    ? { kind: 'cost', text: `worth ${ms}ms/frame`, deltaMs }
-    : { kind: 'backfires', text: `${ms}ms/frame slower`, deltaMs }
+    ? { kind: 'cost', text: `worth ${ms}${unit}`, deltaMs }
+    : { kind: 'backfires', text: `${ms}${unit} slower`, deltaMs }
 }
 
 export interface ShotBlock {
@@ -467,6 +510,8 @@ export interface ShotBlock {
   baseline?: CellResult
   repeat?: CellResult
   noiseMs: number
+  /** The baseline never left the display's floor, so this shot's verdicts read main-thread time. */
+  vsync: boolean
   rows: CellResult[]
   skipped: Cell[]
 }
@@ -484,6 +529,7 @@ export function blocksOf(cells: readonly Cell[], results: ReadonlyMap<string, Ce
       baseline,
       repeat,
       noiseMs: baseline && repeat ? noiseFloorMs(baseline.stats, repeat.stats) : 0.15,
+      vsync: !!baseline && vsyncBound(baseline.stats),
       rows: mine.filter((c) => c.variant !== 'baseline' && c.variant !== 'repeat')
         .map((c) => results.get(c.key)).filter((r): r is CellResult => !!r),
       skipped: mine.filter((c) => !!c.skip),

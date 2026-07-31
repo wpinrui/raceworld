@@ -29,34 +29,40 @@ const num = (v: number, w: number, dp = 0) => rt(Number.isFinite(v) ? v.toFixed(
 const NAME_W = 30
 /** Column headings and their widths, so the heading row and the data rows cannot drift apart. */
 const COLS: ReadonlyArray<readonly [string, number]> = [
-  ['fps', 6], ['1% low', 8], ['p95ms', 8], ['max ms', 8], ['long', 6], ['paint', 8], ['calls', 8],
+  ['fps', 6], ['1% low', 8], ['p95ms', 8], ['max ms', 8], ['long', 6], ['cpu ms', 8], ['calls', 8],
 ]
 
 const tableHead = (): string =>
   pad('', NAME_W) + COLS.map(([h, w]) => rt(h, w)).join('') + '   verdict'
 
 function rowLine(r: CellResult, verdict: string): string {
-  const { stats: s, paint: p } = r
+  const s = r.stats
   return pad(`  ${r.cell.label}`, NAME_W)
     + num(s.fps, 6) + num(s.low1, 8) + num(s.p95Ms, 8, 1) + num(s.maxMs, 8, 1)
-    + num(s.longFrames, 6) + num(p.msPerPaint, 8, 2) + num(p.calls, 8)
+    + num(s.longFrames, 6) + num(r.busyMs, 8, 2) + num(r.paint.calls, 8)
     + (verdict ? `   ${verdict}` : '')
 }
 
 function blockText(b: ShotBlock): string[] {
   const out: string[] = ['', `SHOT ${b.shot.label.toUpperCase()}  ${b.shot.note}`]
   if (!b.baseline) return [...out, '  not run']
-  out.push(`  noise floor ${b.noiseMs.toFixed(2)}ms/frame (the two baselines' own spread)`)
+  out.push(b.vsync
+    ? `  VSYNC BOUND: ${(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on the`
+      + ` display's floor, so the verdicts below compare MAIN-THREAD time (cpu ms), not frame time.`
+      + ' Frame time here has no room left to move in either direction.'
+    : `  noise floor ${b.noiseMs.toFixed(2)}ms/frame (the two baselines' own spread)`)
   out.push(tableHead())
   out.push(rowLine(b.baseline, `scene ${b.baseline.scene.items} items, ${b.baseline.scene.ops} ops, `
     + `${b.baseline.scene.pathKb.toFixed(0)}KB paths, ${b.baseline.scene.nodes} nodes, `
-    + `tick ${b.baseline.tickMs.toFixed(2)}ms, painted ${(b.baseline.paint.frac * 100).toFixed(0)}% of frames`))
+    + `tick ${b.baseline.tickMs.toFixed(2)}ms, paint ${b.baseline.paint.msPerPaint.toFixed(2)}ms on `
+    + `${(b.baseline.paint.frac * 100).toFixed(0)}% of frames, `
+    + `${b.baseline.paint.skipped} items skipped/frame`))
   const groups: Array<CellResult['cell']['group']> = ['mitigation', 'layer', 'quality', 'renderer']
   for (const g of groups) {
     const rows = b.rows.filter((r) => r.cell.group === g)
     if (rows.length === 0) continue
     out.push(`  -- ${g} --`)
-    for (const r of rows) out.push(rowLine(r, verdictFor(r, b.baseline.stats, b.noiseMs).text))
+    for (const r of rows) out.push(rowLine(r, verdictFor(r, b.baseline, b.noiseMs, b.vsync).text))
   }
   if (b.repeat) out.push(rowLine(b.repeat, 'the baseline again, at the end of the shot'))
   for (const c of b.skipped) out.push(`  ${pad(c.label, NAME_W - 2)} skipped: ${c.skip}`)
@@ -70,7 +76,7 @@ function idleMitigations(blocks: ShotBlock[]): string[] {
     if (!b.baseline) continue
     for (const r of b.rows) {
       if (r.cell.group !== 'mitigation') continue
-      const v = verdictFor(r, b.baseline.stats, b.noiseMs)
+      const v = verdictFor(r, b.baseline, b.noiseMs, b.vsync)
       const rec = seen.get(r.cell.variant) ?? { ran: 0, idle: 0, backfired: 0 }
       rec.ran++
       if (v.kind === 'nothing') rec.idle++
@@ -109,6 +115,9 @@ export function formatReport(report: LabReport): string {
     'A mitigation row is that mitigation turned OFF, so "saves 1.2ms" means the shipping renderer is',
     '1.2ms a frame faster for having it. "no effect" means it is buying nothing here. A layer row is',
     'that layer hidden, so "worth 1.2ms" is what drawing it costs.',
+    'cpu ms is main-thread time per frame (the race loop\'s tick plus the paint commands). It does not',
+    'include the rasteriser, so on a layer row it understates; on a vsync-bound shot it is the only',
+    'thing left that can move.',
   )
   for (const b of blocks) lines.push(...blockText(b))
 
@@ -122,9 +131,12 @@ export function formatReport(report: LabReport): string {
     rows: report.results.map((r) => ({
       shot: r.cell.shot, variant: r.cell.variant, group: r.cell.group, config: r.cell.config,
       fps: +r.stats.fps.toFixed(1), low1: +r.stats.low1.toFixed(1), meanMs: +r.stats.meanMs.toFixed(3),
-      p95Ms: +r.stats.p95Ms.toFixed(2), maxMs: +r.stats.maxMs.toFixed(2), longFrames: r.stats.longFrames,
-      frames: r.stats.frames, paint: r.paint, scene: r.scene, tickMs: +r.tickMs.toFixed(3),
+      p95Ms: +r.stats.p95Ms.toFixed(2), minMs: +r.stats.minMs.toFixed(2),
+      maxMs: +r.stats.maxMs.toFixed(2), longFrames: r.stats.longFrames,
+      atFloor: +r.stats.atFloor.toFixed(2), frames: r.stats.frames,
+      paint: r.paint, scene: r.scene, tickMs: +r.tickMs.toFixed(3), busyMs: +r.busyMs.toFixed(3),
     })),
+    vsyncBound: blocks.filter((b) => b.vsync).map((b) => b.shot.id),
     skipped: report.cells.filter((c) => c.skip).map((c) => ({ key: c.key, reason: c.skip })),
   }))
   return lines.join('\n')

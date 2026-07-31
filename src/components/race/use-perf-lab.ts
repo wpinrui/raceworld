@@ -97,12 +97,15 @@ export function usePerfLab(harness: PerfLabHarness, cars: number) {
     const p1 = h.paintTally()
     const t1 = h.tickTally()
     const paints = p1.n - p0.n
+    const msPerPaint = paints > 0 ? (p1.ms - p0.ms) / paints : 0
+    const frac = deltas.length > 0 ? paints / deltas.length : 0
+    const tickMs = t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0
     return {
       cell,
       stats: frameStats(deltas),
       paint: {
-        msPerPaint: paints > 0 ? (p1.ms - p0.ms) / paints : 0,
-        frac: deltas.length > 0 ? paints / deltas.length : 0,
+        msPerPaint,
+        frac,
         calls: paints > 0 ? Math.round((p1.drawn - p0.drawn) / paints) : 0,
         skipped: paints > 0 ? Math.round((p1.skipped - p0.skipped) / paints) : 0,
         sections: paints > 0
@@ -111,7 +114,10 @@ export function usePerfLab(harness: PerfLabHarness, cars: number) {
           : {},
       },
       scene: h.scene(),
-      tickMs: t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0,
+      tickMs,
+      // Per FRAME, not per paint: a still camera under the repaint guard paints on a fraction of its
+      // frames, and the whole point of the guard is that the frames it skips cost nothing.
+      busyMs: tickMs + msPerPaint * frac,
     }
   }, [])
 

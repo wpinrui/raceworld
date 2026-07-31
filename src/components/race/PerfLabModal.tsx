@@ -139,7 +139,7 @@ function ConfigPane({ config, setConfig }: {
 
 const HEADS: ReadonlyArray<readonly [string, string]> = [
   ['fps', 'w-14'], ['1% low', 'w-16'], ['p95 ms', 'w-16'], ['max ms', 'w-16'],
-  ['long', 'w-12'], ['paint ms', 'w-20'], ['calls', 'w-16'],
+  ['long', 'w-12'], ['cpu ms', 'w-16'], ['calls', 'w-16'],
 ]
 
 function ResultsPane({ lab }: { lab: PerfLab }) {
@@ -152,14 +152,23 @@ function ResultsPane({ lab }: { lab: PerfLab }) {
             <span className="ml-2 font-normal text-[#9CA3AF]">{b.shot.note}</span>
           </div>
           {b.baseline && (
-            <div className="mb-1 text-[11px] text-[#9CA3AF]">
-              noise floor {b.noiseMs.toFixed(2)}ms/frame ·
-              {' '}{b.baseline.scene.items} items, {b.baseline.scene.ops} ops,
-              {' '}{b.baseline.scene.pathKb.toFixed(0)}KB paths, {b.baseline.scene.nodes} nodes ·
-              {' '}tick {b.baseline.tickMs.toFixed(2)}ms ·
-              {' '}painted {(b.baseline.paint.frac * 100).toFixed(0)}% of frames ·
-              {' '}{b.baseline.paint.skipped} items skipped/frame
-            </div>
+            <>
+              {b.vsync && (
+                <div className="mb-1 text-[11px] text-[#F59E0B]">
+                  Vsync bound: {(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on
+                  the display floor, so these verdicts compare cpu ms, not frame time.
+                </div>
+              )}
+              <div className="mb-1 text-[11px] text-[#9CA3AF]">
+                noise floor {b.noiseMs.toFixed(2)}ms/frame ·
+                {' '}{b.baseline.scene.items} items, {b.baseline.scene.ops} ops,
+                {' '}{b.baseline.scene.pathKb.toFixed(0)}KB paths, {b.baseline.scene.nodes} nodes ·
+                {' '}tick {b.baseline.tickMs.toFixed(2)}ms ·
+                {' '}paint {b.baseline.paint.msPerPaint.toFixed(2)}ms on
+                {' '}{(b.baseline.paint.frac * 100).toFixed(0)}% of frames ·
+                {' '}{b.baseline.paint.skipped} items skipped/frame
+              </div>
+            </>
           )}
           <div className="flex border-b border-[#2A3142] pb-1 text-[#9CA3AF]">
             <span className="flex-1">configuration</span>
@@ -169,7 +178,7 @@ function ResultsPane({ lab }: { lab: PerfLab }) {
           {[b.baseline, ...b.rows, b.repeat].map((r, i, all) => {
             if (!r) return null
             const v = b.baseline && r.cell.group !== 'baseline'
-              ? verdictFor(r, b.baseline.stats, b.noiseMs)
+              ? verdictFor(r, b.baseline, b.noiseMs, b.vsync)
               : null
             const prev = all[i - 1]
             const head = r.cell.group !== 'baseline' && r.cell.group !== prev?.cell.group
@@ -187,7 +196,7 @@ function ResultsPane({ lab }: { lab: PerfLab }) {
                 {[
                   r.stats.fps.toFixed(0), r.stats.low1.toFixed(0), r.stats.p95Ms.toFixed(1),
                   r.stats.maxMs.toFixed(1), String(r.stats.longFrames),
-                  r.paint.msPerPaint.toFixed(2), String(r.paint.calls),
+                  r.busyMs.toFixed(2), String(r.paint.calls),
                 ].map((cell, j) => (
                   <span key={HEADS[j][0]} className={`${HEADS[j][1]} text-right text-[#FFFFFF]`}>{cell}</span>
                 ))}
