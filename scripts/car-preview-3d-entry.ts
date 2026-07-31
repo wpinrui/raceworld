@@ -48,7 +48,7 @@ function main() {
   scene.add(buildLightRig(MOODS.afternoon, { x: -300, y: -300, w: 600, h: 600 }))
 
   const len = SPRITE.len
-  const dist = len * 1.35
+  const dist = len * 1.5
   const az = (view.az * Math.PI) / 180
   const elev = (view.elev * Math.PI) / 180
   const camera = new THREE.PerspectiveCamera(32, 1.5, 1, dist * 6)
@@ -57,7 +57,7 @@ function main() {
     Math.sin(elev) * dist + 20,
     -Math.cos(az) * Math.cos(elev) * dist,
   )
-  camera.lookAt(0, 18, 0)
+  camera.lookAt(0, 18, -20)
 
   const canvas = document.getElementById('gl') as HTMLCanvasElement
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })

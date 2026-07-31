@@ -26,13 +26,16 @@ interface Station { z: number; half: number; top: number; bottom?: number }
  *  The nose carries its own UNDERSIDE ramp: a slim raised spar a quarter as thick as the top line
  *  implies, its base sweeping down to the floor only where the sidepods begin. */
 const BODY: Station[] = [
-  // The tip pinches in every axis so the nose ends in a rounded point, not a bulkhead.
-  { z: 8, half: 3, top: 0.207, bottom: 0.202 },
-  { z: 12, half: 9, top: 0.215, bottom: 0.197 },
-  { z: 22, half: 12, top: 0.228, bottom: 0.191 },
-  { z: 48, half: 14, top: 0.29, bottom: 0.167 },
-  { z: 110, half: 16, top: 0.38, bottom: 0.124 },
-  { z: 166, half: 25, top: 0.42, bottom: 0.085 },
+  // The tip pinches in every axis so the nose ends in a rounded point, not a bulkhead. The nose
+  // reaches thirty units further forward than the sprite drew it: the wheelbase grew through it,
+  // and the whole front assembly (wing, wheels, suspension) went along. The belly stays HIGH the
+  // whole way out, only dropping to floor height at the monocoque.
+  { z: -22, half: 3, top: 0.207, bottom: 0.202 },
+  { z: -18, half: 9, top: 0.215, bottom: 0.197 },
+  { z: -8, half: 12, top: 0.228, bottom: 0.193 },
+  { z: 18, half: 14, top: 0.29, bottom: 0.183 },
+  { z: 80, half: 16, top: 0.38, bottom: 0.16 },
+  { z: 166, half: 25, top: 0.42, bottom: 0.12 },
   { z: 202, half: 30, top: 0.46 },
   { z: 224, half: 32, top: 0.47 },
   { z: 290, half: 32, top: 0.47 },
@@ -44,25 +47,30 @@ const BODY_BOTTOM = 0.06
 
 /** The sidepods as their OWN volumes, hung either side of a monocoque that stays narrow: their
  *  front faces are where the mouths open, and the undercut between pod and floor stays air. */
-interface PodStation { z: number; inner: number; outer: number; top: number }
+interface PodStation { z: number; inner: number; outer: number; top: number; bottom: number }
 const POD: PodStation[] = [
-  // The intake's top lip IS the pod's summit: nothing behind it runs higher.
-  { z: 212, inner: 30, outer: 52, top: 0.40 },
-  { z: 224, inner: 26, outer: 70, top: 0.40 },
-  { z: 300, inner: 26, outer: 70, top: 0.39 },
-  { z: 356, inner: 26, outer: 56, top: 0.34 },
-  { z: 392, inner: 24, outer: 34, top: 0.29 },
+  // The intake's top lip IS the pod's summit: nothing behind it runs higher. The underside
+  // boat-tails, sweeping up toward the coke bottle.
+  { z: 212, inner: 30, outer: 52, top: 0.40, bottom: 0.06 },
+  { z: 224, inner: 26, outer: 70, top: 0.40, bottom: 0.06 },
+  { z: 300, inner: 26, outer: 70, top: 0.39, bottom: 0.07 },
+  { z: 356, inner: 26, outer: 56, top: 0.34, bottom: 0.12 },
+  { z: 392, inner: 24, outer: 34, top: 0.29, bottom: 0.17 },
 ]
-const POD_BOTTOM = 0.06
 
 /** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
  *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
 const SPINE_REAR: Station[] = [
+  // The airbox is a rounded POD standing proud of the engine cover, not a triangular sail: it
+  // steps up behind the headrest, domes, and falls away down the spine.
   { z: 246, half: 14, top: 0.62 },
-  { z: 260, half: 13, top: 0.85 },
-  { z: 300, half: 10, top: 0.74 },
-  { z: 380, half: 8, top: 0.56 },
-  { z: 446, half: 6, top: 0.44 },
+  { z: 254, half: 15, top: 0.78 },
+  { z: 264, half: 16, top: 0.87 },
+  { z: 276, half: 15, top: 0.86 },
+  { z: 292, half: 13, top: 0.76 },
+  { z: 330, half: 10, top: 0.62 },
+  { z: 380, half: 8, top: 0.50 },
+  { z: 446, half: 6, top: 0.42 },
 ]
 const SPINE_BOTTOM = 0.30
 
@@ -82,10 +90,12 @@ const TERTIARY = '#969CA6'
 
 /** Wheel geometry off the artwork: the drawn tyre footprints ARE the diameters and widths. */
 const WHEELS = [
-  { tag: 'fl', x: -90, z: 108, r: 44, w: 48 },
-  { tag: 'fr', x: 90, z: 108, r: 44, w: 48 },
-  { tag: 'rl', x: -90, z: 398, r: 48, w: 52 },
-  { tag: 'rr', x: 90, z: 398, r: 48, w: 52 },
+  // Front axle thirty units ahead of the sprite's: the wheelbase lengthened through the nose.
+  // Radii at 0.9 of the drawn tyre; pivots sit at radius height so every tyre still touches.
+  { tag: 'fl', x: -90, z: 78, r: 39.6, w: 48 },
+  { tag: 'fr', x: 90, z: 78, r: 39.6, w: 48 },
+  { tag: 'rl', x: -90, z: 398, r: 43.2, w: 52 },
+  { tag: 'rr', x: 90, z: 398, r: 43.2, w: 52 },
 ] as const
 
 export interface CarMesh {
@@ -139,12 +149,13 @@ function podGeometry(sign: number): THREE.BufferGeometry {
   const s = new GeometrySink()
   const ring = (p: PodStation): V3[] => {
     const z = p.z - SPRITE.cy
-    const b = H(POD_BOTTOM)
+    const b = H(p.bottom)
     const t = H(p.top)
-    const mid = p.inner + (p.outer - p.inner) * 0.55
+    const at = (f: number) => p.inner + (p.outer - p.inner) * f
+    // The flank curves INWARD and UPWARD into a rounded shoulder: no boxy corner at the top.
     return [
-      v3(sign * p.inner, b, z), v3(sign * p.outer, b, z), v3(sign * p.outer, b + (t - b) * 0.72, z),
-      v3(sign * mid, t, z), v3(sign * p.inner, t, z),
+      v3(sign * p.inner, b, z), v3(sign * at(1), b, z), v3(sign * at(1), b + (t - b) * 0.5, z),
+      v3(sign * at(0.93), b + (t - b) * 0.85, z), v3(sign * at(0.5), t, z), v3(sign * p.inner, t, z),
     ]
   }
   const rings = POD.map(ring)
@@ -271,7 +282,7 @@ function endplateGeometry(xCentre: number, thick: number): THREE.BufferGeometry 
   const yBot = H(0.30)
   const zFront = 418
   const zRear = 490
-  const tyre = { z: 398, y: 48, r: 62 }
+  const tyre = { z: 398, y: 43.2, r: 57 }
   const outline: Array<{ z: number; y: number }> = [
     { z: zFront, y: yTop }, { z: zRear, y: yTop }, { z: zRear, y: yBot },
   ]
@@ -365,7 +376,7 @@ export function buildCarMesh(colour: string): CarMesh {
   // bare where the pylons take it — with the sculpted lift built as taller cambered flap stacks
   // OUTBOARD only, rising rearward over each wheel's approach.
   const mainPlane = new GeometrySink()
-  box(mainPlane, 30, 210, 0.04, 0.052, 16, 50)
+  box(mainPlane, 30, 210, 0.04, 0.052, -14, 20)
   group.add(mesh(mainPlane.build(), TERTIARY))
   // The sculpted flaps, plan drawn to the sketch: TWO thin red elements sharing the swept outline,
   // overlapping a little where the second takes over, both running hard into the endplate.
@@ -404,18 +415,18 @@ export function buildCarMesh(colour: string): CarMesh {
     group.add(mesh(flap.build(), colour))
   }
   for (const sign of [-1, 1]) {
-    flapElement(sign, 22, 38, [60, 40], [26, 28], 0.055, 0.085)
-    flapElement(sign, 34, 50, [58, 50], [30, 36], 0.082, 0.118)
+    flapElement(sign, -8, 8, [60, 10], [26, -2], 0.055, 0.085)
+    flapElement(sign, 4, 20, [58, 20], [30, 6], 0.082, 0.118)
   }
   for (const x of [28, 208]) {
     const s = new GeometrySink()
-    box(s, x, x + 4, 0.03, 0.165, 9, 52)
+    box(s, x, x + 4, 0.03, 0.165, -21, 22)
     group.add(mesh(s.build(), TERTIARY))
   }
   // The wing hangs off the nose on two vertical pylons just ahead of the spar's droop.
   for (const x of [104, 130]) {
     const s = new GeometrySink()
-    box(s, x, x + 6, 0.052, 0.19, 24, 40)
+    box(s, x, x + 6, 0.052, 0.19, -6, 10)
     group.add(mesh(s.build(), colour))
   }
 
