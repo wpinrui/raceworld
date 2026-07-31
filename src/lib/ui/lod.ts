@@ -18,15 +18,21 @@
 // them, so every object holds its detail to a smaller on-screen size and the whole ladder slides out
 // with the zoom. That is the only knob a settings dial ever has to touch.
 //
-// The middle rung is the point of the exercise, and it exists because of BATCHING rather than because
-// of pixels. This renderer is draw-call bound (measured at roughly 19 microseconds a call on the
-// machine this was tuned against, with 993 calls in the bad shot and hiding 70% of the PIXELS changing
-// nothing). One draw call per object is the cost whatever that object is made of, so a "simpler tree"
-// saves nothing on its own. It only pays if a hundred trees become one draw, and they can only merge
-// if they share a paint — which is why the mid rung drops per-object gradients. That is the trade: an
-// object at mid keeps its position, size, silhouette and colour, and loses its internal shading.
+// The middle rung was introduced for BATCHING rather than for pixels: it drops per-object gradients so
+// that a hundred flat canopies sharing one paint could be concatenated into a single draw call. That
+// merge is GONE, and the reason is worth keeping. The perf lab ablated it (hungary, 2026-07-26): with
+// the merge off every shot ran 60 fps at a 1% low of 60, against 13-27ms frames with it on, while
+// issuing MORE draw calls (1910 against 2165) for LESS main-thread time (2.93ms against 2.71ms). The
+// premise "draw-call bound at 19 microseconds a call" did not survive contact with this machine, which
+// is fill-rate bound: one concatenated fill covers the union of its parts' extents in a single coverage
+// pass and can no longer be culled a part at a time, so trading N small draws for one screen-sized one
+// is a straight loss.
+//
+// So the mid rung currently sheds internal shading and buys nothing that has been measured. It stays
+// as it is for now: the whole ladder has to be re-derived against the floor that removing the merge
+// exposed, and guessing at new rungs before re-measuring is how the old premise got here.
 
-import type { Bounds, DrawOp } from './scenery-draw'
+import type { Bounds } from './scenery-draw'
 import { PERF } from './perf-flags'
 
 /** How much of an object is drawn. Ordered coarsest last, so comparisons read the way they sound. */
@@ -91,21 +97,6 @@ export function lodScale(pxPerM: number): number {
   return 2 ** (lodBucket(pxPerM) / 2)
 }
 
-/** Everything a paint is identified by. Two ops with the same signature draw identically, so they can
- *  be one path with two subpaths and cost one draw call instead of two.
- *
- *  An op carrying a `bbox` is given a key of its own and never merges with anything: a bbox is there
- *  because the paint is a gradient resolving against that shape's own extent, so merging two would
- *  stretch one ramp across both. This is what confines merging to the flat rungs without any caller
- *  having to remember to. */
-function paintKey(op: DrawOp, i: number): string {
-  if (op.bbox) return `bbox${i}`
-  return [
-    op.fill ?? '', op.stroke ?? '', op.width ?? '', op.cap ?? '', op.alpha ?? '',
-    op.evenOdd ? 'eo' : '', op.dash ? `${op.dash.on},${op.dash.off},${op.dash.shift}` : '',
-  ].join('|')
-}
-
 /** The disc containing every disc given. Conservative, which is the only thing a cull disc may be. */
 export function unionOf(discs: readonly Bounds[]): Bounds {
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity
@@ -116,45 +107,4 @@ export function unionOf(discs: readonly Bounds[]): Bounds {
     if (b.cy + b.r > y1) y1 = b.cy + b.r
   }
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: Math.hypot(x1 - x0, y1 - y0) / 2 }
-}
-
-/** Merge ops that paint identically into one path each, preserving the order they were given in.
- *
- *  What makes the mid rung affordable. A stroke or a fill carries any number of subpaths, so a hundred
- *  flat canopies of the same green are one call. Two limits are deliberate and worth knowing:
- *
- *  Merging is only order-safe among ops that do not need to interleave with each other, so it is the
- *  CALLER's business to hand over a run where that holds. Flat trees qualify because opaque paint of
- *  one colour over itself is idempotent — which is exactly what the mid rung buys by dropping the
- *  gradients, and exactly why the near rung cannot merge.
- *
- *  A merged op carries the union of its parts' clip discs, so it stops being cullable one object at a
- *  time. That is the right trade at this size: the parts are inside the cull disc already, and one
- *  draw call for a whole grove is cheaper than culling half of it away at one call each.
- *
- *  Ops with no clip disc merge too; the result simply has none, and is drawn always. */
-export function mergeByPaint(ops: readonly DrawOp[]): DrawOp[] {
-  // Batching off: one draw call per op, which is what the mid rung was invented to escape.
-  if (!PERF.mergePaint) return [...ops]
-  const order: string[] = []
-  const groups = new Map<string, DrawOp[]>()
-  for (let i = 0; i < ops.length; i++) {
-    const op = ops[i]
-    const key = paintKey(op, i)
-    const got = groups.get(key)
-    if (got) got.push(op)
-    else {
-      groups.set(key, [op])
-      order.push(key)
-    }
-  }
-  return order.map((key) => {
-    const run = groups.get(key)!
-    if (run.length === 1) return run[0]
-    const clips = run.map((o) => o.clip).filter((c): c is Bounds => !!c)
-    const merged: DrawOp = { ...run[0], d: run.map((o) => o.d).join(' ') }
-    if (clips.length === run.length) merged.clip = unionOf(clips)
-    else delete merged.clip
-    return merged
-  })
 }

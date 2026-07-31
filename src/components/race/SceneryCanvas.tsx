@@ -85,9 +85,9 @@ export function warmScene(scene: Scene, onReady: () => void): { cancel: () => vo
 /** The context state `applyOp` has already set, mirrored on the JS side.
  *
  *  Every one of these setters costs something real per call: a colour string has to be parsed,
- *  `setLineDash` takes a fresh array, and the scene is walked op by op sixty times a second. The
- *  scene is also ORDERED BY PAINT wherever it can be (`mergeByPaint`), so consecutive ops share
- *  their ink far more often than not and most of those writes are the same value twice.
+ *  `setLineDash` takes a fresh array, and the scene is walked op by op sixty times a second. Neighbours
+ *  in the scene are usually the same kind of thing painted the same way (a run of flat canopies, a run
+ *  of barrier posts), so most of those writes are the same value twice.
  *
  *  `undefined` means "unknown, write it": what a group's save/restore leaves behind, since a restore
  *  reverts the real context underneath the mirror. */

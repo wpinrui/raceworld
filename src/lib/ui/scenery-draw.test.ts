@@ -480,17 +480,15 @@ describe('treeSolidOps across the detail ladder', () => {
     expect(refName(ops[1].fill!)).toBe('tm-tree0')
   })
 
-  it('collapses a whole grove to a couple of draws once they are small', () => {
+  it('keeps a small tree its own draw rather than concatenating the grove into one', () => {
     const ops = at(1.2)
-    // A trunk batch and a canopy batch, not eighty draw calls.
-    expect(ops.length).toBeLessThanOrEqual(4)
-    expect(ops.length).toBeGreaterThan(0)
-    // Every tree is still THERE: each canopy path appears in the merged subpaths.
-    const d = ops.map((o) => o.d).join(' ')
-    for (const t of grove) expect(d).toContain(t.d)
+    // Every tree is still THERE, and each op carries exactly one tree's path: the merge that made a
+    // grove one screen-sized fill cost more in raster than it ever saved in draw calls.
+    expect(ops).toHaveLength(grove.length * 2)
+    for (const t of grove) expect(ops.some((o) => o.d === t.d)).toBe(true)
   })
 
-  it('drops the gradient when it batches, because that is what lets them share a paint', () => {
+  it('drops the gradient at the flat rungs, because that shading is smaller than the eye resolves', () => {
     for (const op of at(1.2)) {
       expect(op.bbox).toBeUndefined()
       expect(refName(op.fill ?? '')).toBeNull()
@@ -504,30 +502,34 @@ describe('treeSolidOps across the detail ladder', () => {
     expect(at(0.02)).toEqual([])
   })
 
-  it('lays every trunk down before any canopy, so no bark paints over leaves', () => {
-    // Trunk width scales with canopy size, so a grove of mixed sizes makes several trunk paints. If
-    // those are ordered by first appearance against the canopies, half the bark lands on top.
+  it('puts a trunk immediately under its own canopy, so no bark paints over leaves', () => {
+    // Trunk width scales with canopy size, so a grove of mixed sizes makes several trunk paints. The
+    // batcher grouped those by first appearance and landed half the bark on top of the leaves; the
+    // workaround for that laid every trunk before every canopy, which let a far canopy bury a near
+    // trunk. Pairing each tree's own two ops is what neither could do.
     const mixed = grove.map((t, i) => ({ ...t, r: t.r * (1 + (i % 4) * 0.4) }))
-    // 0.55 keeps every one of them on a flat rung; a near tree would draw its own trunk last, and
-    // legitimately so.
+    // 0.55 keeps every one of them on a flat rung.
     const ops = treeSolidOps(mixed, { ...opts, pxPerM: 0.55 })
-    const lastTrunk = ops.reduce((k, o, i) => (o.stroke ? i : k), -1)
-    const firstCanopy = ops.findIndex((o) => o.fill)
-    expect(lastTrunk).toBeGreaterThanOrEqual(0)
-    expect(firstCanopy).toBeGreaterThan(lastTrunk)
-  })
-
-  it('keeps a merged batch cullable, with a disc reaching every tree in it', () => {
-    for (const op of at(1.2)) {
-      expect(op.clip).toBeTruthy()
-      for (const t of grove) {
-        expect(Math.hypot(t.x - op.clip!.cx, t.y - op.clip!.cy)).toBeLessThanOrEqual(op.clip!.r + 1e-6)
-      }
+    expect(ops).toHaveLength(mixed.length * 2)
+    for (let i = 0; i < ops.length; i += 2) {
+      expect(ops[i].stroke, `op ${i} is a trunk`).toBeTruthy()
+      expect(ops[i + 1].fill, `op ${i + 1} is a canopy`).toBeTruthy()
     }
   })
 
-  it('never merges anything while the trees are drawn in detail', () => {
-    // Batching the near rung would pool the trunks and let a far canopy bury a near one.
+  it('gives every op a disc around its own tree, so the cull can drop one at a time', () => {
+    const ops = at(1.2)
+    const canopies = ops.filter((o) => o.fill)
+    expect(canopies).toHaveLength(grove.length)
+    for (const t of grove) {
+      const own = canopies.find((o) => o.d === t.d)!
+      // Tight to that tree: a merged disc spanned the whole 280-unit grove and could never be culled.
+      expect(Math.hypot(t.x - own.clip!.cx, t.y - own.clip!.cy)).toBeLessThanOrEqual(own.clip!.r)
+      expect(own.clip!.r).toBeLessThan(t.r * 4)
+    }
+  })
+
+  it('keeps a detailed tree on its own gradient', () => {
     const ops = at(20)
     for (let i = 0; i < ops.length; i += 2) expect(ops[i + 1].bbox).toBeTruthy()
   })

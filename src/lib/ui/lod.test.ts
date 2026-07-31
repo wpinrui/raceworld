@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QUALITY, atLeast, lodBucket, lodScale, mergeByPaint, rungFor } from './lod'
-import type { DrawOp } from './scenery-draw'
+import { QUALITY, atLeast, lodBucket, lodScale, rungFor, unionOf } from './lod'
 
 describe('rungFor', () => {
   it('reads an object\'s own pixel size, so size and zoom are interchangeable', () => {
@@ -71,71 +70,24 @@ describe('lodBucket', () => {
   })
 })
 
-describe('mergeByPaint', () => {
-  const op = (d: string, fill: string, clip?: { cx: number; cy: number; r: number }): DrawOp => (
-    { d, fill, clip }
-  )
-
-  it('collapses identical paints into one draw with many subpaths', () => {
-    const out = mergeByPaint([
-      op('M 0 0 L 1 1', '#0F0'),
-      op('M 5 5 L 6 6', '#0F0'),
-      op('M 9 9 L 8 8', '#0F0'),
-    ])
-    expect(out).toHaveLength(1)
-    expect(out[0].d).toBe('M 0 0 L 1 1 M 5 5 L 6 6 M 9 9 L 8 8')
+describe('unionOf', () => {
+  it('reaches every disc it was given, which is the only thing a cull disc may do', () => {
+    const parts = [
+      { cx: 0, cy: 0, r: 1 },
+      { cx: 10, cy: 0, r: 1 },
+      { cx: 0, cy: 6, r: 2 },
+    ]
+    const out = unionOf(parts)
+    for (const p of parts) {
+      expect(Math.hypot(p.cx - out.cx, p.cy - out.cy) + p.r).toBeLessThanOrEqual(out.r + 1e-9)
+    }
   })
 
-  it('keeps different paints apart, in the order they arrived', () => {
-    const out = mergeByPaint([op('M 0 0', '#0F0'), op('M 1 1', '#F00'), op('M 2 2', '#0F0')])
-    expect(out.map((o) => o.fill)).toEqual(['#0F0', '#F00'])
-    expect(out[0].d).toBe('M 0 0 M 2 2')
-  })
-
-  it('does not merge across a difference that would change the picture', () => {
-    const wide: DrawOp = { d: 'M 0 0', stroke: '#FFF', width: 2 }
-    const thin: DrawOp = { d: 'M 1 1', stroke: '#FFF', width: 1 }
-    expect(mergeByPaint([wide, thin])).toHaveLength(2)
-    const solid: DrawOp = { d: 'M 0 0', stroke: '#FFF', width: 1 }
-    const dashed: DrawOp = { d: 'M 1 1', stroke: '#FFF', width: 1, dash: { on: 1, off: 1, shift: 0 } }
-    expect(mergeByPaint([solid, dashed])).toHaveLength(2)
-  })
-
-  it('unions the clip discs it merged, so nothing merged is culled away', () => {
-    const out = mergeByPaint([
-      op('M 0 0', '#0F0', { cx: 0, cy: 0, r: 1 }),
-      op('M 10 0', '#0F0', { cx: 10, cy: 0, r: 1 }),
-    ])
-    expect(out).toHaveLength(1)
-    const clip = out[0].clip!
-    expect(clip.cx).toBeCloseTo(5, 6)
-    // Must reach both parts, or the merged draw disappears while part of it is on screen.
-    expect(Math.hypot(0 - clip.cx, 0 - clip.cy) + 1).toBeLessThanOrEqual(clip.r + 1e-9)
-    expect(Math.hypot(10 - clip.cx, 0 - clip.cy) + 1).toBeLessThanOrEqual(clip.r + 1e-9)
-  })
-
-  it('drops the clip entirely if any part had none, rather than inventing one', () => {
-    const out = mergeByPaint([op('M 0 0', '#0F0', { cx: 0, cy: 0, r: 1 }), op('M 90 0', '#0F0')])
-    expect(out).toHaveLength(1)
-    expect(out[0].clip).toBeUndefined()
-  })
-
-  it('never merges gradient ops, which each resolve against their own extent', () => {
-    // The guard that confines merging to the flat rungs without any caller having to remember to.
-    const a: DrawOp = { d: 'M 0 0', fill: 'ref:tm-tree0', bbox: { x: 0, y: 0, w: 2, h: 2 } }
-    const b: DrawOp = { d: 'M 9 9', fill: 'ref:tm-tree0', bbox: { x: 9, y: 9, w: 2, h: 2 } }
-    const out = mergeByPaint([a, b])
-    expect(out).toHaveLength(2)
-    expect(out[0].bbox).toEqual({ x: 0, y: 0, w: 2, h: 2 })
-  })
-
-  it('leaves a lone op exactly as it was', () => {
-    const only = op('M 0 0', '#0F0', { cx: 0, cy: 0, r: 3 })
-    expect(mergeByPaint([only])[0]).toBe(only)
-  })
-
-  it('has nothing to say about an empty scene', () => {
-    expect(mergeByPaint([])).toEqual([])
+  it('gives a lone disc back at least as big as it was', () => {
+    const out = unionOf([{ cx: 3, cy: 4, r: 2 }])
+    expect(out.cx).toBeCloseTo(3, 6)
+    expect(out.cy).toBeCloseTo(4, 6)
+    expect(out.r).toBeGreaterThanOrEqual(2 - 1e-9)
   })
 })
 

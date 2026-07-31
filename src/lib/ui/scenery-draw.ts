@@ -22,7 +22,7 @@ import {
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
-import { atLeast, mergeByPaint, rungFor, type Rung } from './lod'
+import { atLeast, rungFor, type Rung } from './lod'
 import { TREE_FLAT } from './scenery-paint'
 import { PERF } from './perf-flags'
 
@@ -199,30 +199,27 @@ const shadowSizeM = (r: SceneryRect, m: (units: number) => number) => m(Math.max
  *  batch, a near trunk ends up buried by a far canopy. That holds at the NEAR rung, which is the only
  *  one that draws a tree at a time.
  *
- *  Below it every tree of a variant shares one flat green, so the whole grove merges into a couple of
- *  draws (`mergeByPaint`). Trees keep their place, size and silhouette and lose the sphere shading —
- *  which is the trade that lets them exist at all out here. Before the ladder they were simply deleted
- *  at this zoom, because at one draw call each a simpler tree saved nothing.
+ *  Below it every tree of a variant shares one flat green. Trees keep their place, size and silhouette
+ *  and lose the sphere shading, which is the trade that lets them exist at all out here. Before the
+ *  ladder they were simply deleted at this zoom.
  *
  *  A tree picks its own rung from its own canopy, so a sapling flattens while an oak beside it has not.
- *  Merging then reorders flat canopies of DIFFERENT variants against each other, which is a pixel or
- *  two of overlap on a shape this small; within a variant the paint is opaque and identical, so order
- *  cannot matter at all. */
+ *  The flat ops used to be concatenated by paint, which reordered canopies of different variants
+ *  against each other; they now go down in depth order like the near rung, so nothing reorders. */
 const treeSolidMemo = objectMemo<SceneryTree, DrawOp[]>()
 
 export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
   const dir = dirAt(o.view)
   const base = `${o.view}|${o.extrude}|${o.u(1)}|${lightKey(o.lighting)}`
-  // Split by rung, because only the flat ones may merge. Batching the NEAR rung would pool every
-  // trunk into one draw and let a far canopy bury a near trunk, which is the very thing keeping each
-  // trunk beside its own canopy exists to prevent.
+  // Split by rung, so the flat trees go down before the detailed ones. Within each half a tree's own
+  // trunk stays immediately under its own canopy, which is the depth order the flat rungs used to have
+  // to give up: paint batching grouped by first appearance, and since a trunk's width scales with the
+  // canopy it carries, trunks of different sizes were different paints and came out trunk-width-A,
+  // canopy, trunk-width-B, canopy... painting half the bark ON TOP of the leaves. The workaround was to
+  // put every trunk down before any canopy, which let a far canopy bury a near trunk instead. With
+  // nothing reordering the run there is no reason for either.
   const near: DrawOp[] = []
-  // Trunks and canopies are kept apart at the flat rungs, and it matters. A trunk's width scales with
-  // the canopy it carries, so trunks of different sizes are different paints, and merging by paint
-  // orders groups by first appearance: trunk-width-A, canopy, trunk-width-B, canopy... which paints
-  // half the bark ON TOP of the leaves. Every trunk goes down before any canopy instead.
-  const flatTrunks: DrawOp[] = []
-  const flatCanopies: DrawOp[] = []
+  const flat: DrawOp[] = []
   // Canopy diameter in metres. Scene geometry is in viewBox units and `u` converts the other way.
   const metres = (units: number) => units / o.u(1)
   for (const t of depthSorted(trees, dir)) {
@@ -254,20 +251,16 @@ export function treeSolidOps(trees: SceneryTree[], o: TreeDrawOpts): DrawOp[] {
           bbox: { x: t.x - t.r, y: t.y - t.r, w: t.r * 2, h: t.r * 2 },
           clip,
         }
-        // No bbox: that is what tells mergeByPaint this one may batch.
+        // No bbox: a flat canopy is one colour, so it has no ramp to resolve against its own extent.
         : { d: t.d, fill: TREE_FLAT[t.variant] ?? TREE_FLAT[0], clip })
       return out
     })
     // The trunk (when there is one) leads; the canopy is always last.
-    if (rung === 'near') near.push(...ops)
-    else {
-      if (ops.length > 1) flatTrunks.push(ops[0])
-      flatCanopies.push(ops[ops.length - 1])
-    }
+    ;(rung === 'near' ? near : flat).push(...ops)
   }
   // Flat first: a tree only lands on the near rung by being the bigger one, so the detailed trees
   // painting last is the depth order that survives the split more often than the other way round.
-  return [...mergeByPaint(flatTrunks), ...mergeByPaint(flatCanopies), ...near]
+  return [...flat, ...near]
 }
 
 /** Every tree's shadow as ONE op. They share a fill and never overlap meaningfully, so a single path
@@ -971,10 +964,9 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
 /** A placed group's ops in WORLD space, its translate-and-rotate baked into every path.
  *
  *  A group exists so a building's geometry can be built once around its own origin and placed by a
- *  transform, which is right while it is drawn on its own. It is also what stops two buildings ever
- *  sharing a draw call: a canvas applies the placement with save/translate/rotate/restore, so each
- *  group is its own submission however little it paints. Baking costs one rotation per point, once per
- *  cull step, and buys the chance to merge. */
+ *  transform, which is right while it is drawn on its own. It also costs a save/translate/rotate/restore
+ *  per group however little that group paints. Baking pays one rotation per point, once per cull step,
+ *  to be rid of all four. */
 /** Keyed on the group ITSELF, which is exact only because of an invariant worth stating: a group is
  *  never written to after it is built. Its producer stamps its own disc inside the memo and hands back
  *  the same object for the same (solid, bearing, rung); nothing downstream touches it. `stamp` survives
@@ -998,15 +990,16 @@ function bakedOps(g: DrawGroup): DrawOp[] {
   return out
 }
 
-/** Batch every placed group that is flat enough to batch, and leave the rest as groups.
+/** Bake every placed group that is flat enough to bake into one run of ops, and leave the rest as
+ *  groups.
+ *
+ *  What baking saves is the placement: a canvas applies a group with save/translate/rotate/restore, so
+ *  a group is its own submission however little it paints. A baked op carries its points already in
+ *  scene space and joins the flat run beside it.
  *
  *  "Flat enough" is exactly "carries no gradient": an op with a bbox resolves its ramp against its own
- *  extent and cannot share a path, which is the same rule that confines tree batching to the flat rungs.
- *  So this needs no rung of its own — it reads the consequence of the rung each object already picked.
- *
- *  Merging reorders ops of DIFFERENT paints against each other, so where two solids overlap, one's face
- *  can land over the other's silhouette. At the rungs this applies to they are flat shapes a few pixels
- *  across, and built scenery is laid out without overlapping in the first place. */
+ *  extent, and it is the same rule that keeps the near rung out of the flat run. So this needs no rung
+ *  of its own, it reads the consequence of the rung each object already picked. */
 /** Paths `mapPathPoints` can rewrite: absolute M/L/Q/T/Z and numbers, nothing else. A path carrying a
  *  relative or shorthand command (`h`, `v`, `c`) cannot be baked, so its group stays a group rather than
  *  the bake throwing. Cheaper to ask than to try and catch, and it fails toward the correct picture. */
@@ -1022,8 +1015,8 @@ function batchFlat(groups: DrawGroup[]): SceneItem[] {
     if (!PERF.batchFlat || !g.flat || g.ops.some((op) => op.bbox || !BAKEABLE.test(op.d))) kept.push(g)
     else flat.push(...bakedOps(g))
   }
-  // Batched first, detailed last: an object only keeps its gradients by being the bigger one.
-  return [...mergeByPaint(flat), ...kept]
+  // Baked first, detailed last: an object only keeps its gradients by being the bigger one.
+  return [...flat, ...kept]
 }
 
 /** A section boundary in a composed scene: everything from `at` until the next mark belongs to

@@ -75,7 +75,6 @@ const NEEDS: Record<PerfFlag, Need> = {
   itemCull: 'repaint',
   // These change what a paint is HANDED. The composing is done once by the settle either way, so what
   // they need is repeated paints to hand it to, not repeated composes.
-  mergePaint: 'repaint',
   batchFlat: 'repaint',
   lodRungs: 'repaint',
   cullDisc: 'repaint',
@@ -144,7 +143,7 @@ export const VARIANTS: readonly Variant[] = [
 export const DEFAULT_VARIANTS: string[] = VARIANTS.filter((v) => v.group === 'mitigation').map((v) => v.id)
 /** The default plan. Four shots rather than three, and the two additions are not decoration: the
  *  parked camera is the ONLY shot the repaint guard can act in, and the zoom sweep is the only one
- *  that composes anything, so without them the shipped run cannot answer three of the eleven
+ *  that composes anything, so without them the shipped run cannot answer three of the ten
  *  mitigations at all. */
 export const DEFAULT_SHOTS: ShotId[] = ['racing', 'pit', 'wide', 'zoom', 'still']
 

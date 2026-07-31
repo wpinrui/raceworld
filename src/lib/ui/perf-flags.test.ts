@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { PERF, PERF_FLAGS, resetPerfFlags, setPerfFlags } from './perf-flags'
-import { mergeByPaint, rungFor } from './lod'
-import type { DrawOp } from './scenery-draw'
+import { rungFor } from './lod'
 
 afterEach(resetPerfFlags)
 
@@ -15,8 +14,8 @@ describe('the switches themselves', () => {
   it('turns exactly one off and puts every other one back', () => {
     setPerfFlags(['pathCache'])
     expect(off()).toEqual(['pathCache'])
-    setPerfFlags(['mergePaint'])
-    expect(off()).toEqual(['mergePaint'])
+    setPerfFlags(['cullDisc'])
+    expect(off()).toEqual(['cullDisc'])
     resetPerfFlags()
     expect(off()).toEqual([])
   })
@@ -29,15 +28,5 @@ describe('the sites read them', () => {
     expect(rungFor(1, 1)).toBe('gone')
     setPerfFlags(['lodRungs'])
     expect(rungFor(1, 1)).toBe('near')
-  })
-
-  it('stops paint batching, so identical ops cost a draw call each', () => {
-    const ops: DrawOp[] = [
-      { d: 'M0 0 L1 1', fill: '#123456' },
-      { d: 'M2 2 L3 3', fill: '#123456' },
-    ]
-    expect(mergeByPaint(ops)).toHaveLength(1)
-    setPerfFlags(['mergePaint'])
-    expect(mergeByPaint(ops)).toHaveLength(2)
   })
 })

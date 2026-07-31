@@ -20,9 +20,7 @@ export interface PerfFlags {
   paintState: boolean
   /** The per-item disc test in `drawScene`: an item wholly off screen is not handed to the rasteriser. */
   itemCull: boolean
-  /** `mergeByPaint`: ops that paint identically become one path, so a grove is one draw call. */
-  mergePaint: boolean
-  /** `batchFlat`: a placed group carrying no gradient is baked into the flat run and merged with it. */
+  /** `batchFlat`: a placed group carrying no gradient is baked into the flat run beside it. */
   batchFlat: boolean
   /** The per-object geometry memo, so a zoom notch rebuilds the objects whose rung moved and no others. */
   geomCache: boolean
@@ -57,11 +55,6 @@ export const PERF_FLAG_INFO: Record<PerfFlag, { label: string; claim: string; si
     label: 'Viewport item skip',
     claim: 'the cull disc is wider than the shot, so much of the scene has no pixels on screen',
     site: 'SceneryCanvas.drawScene',
-  },
-  mergePaint: {
-    label: 'Paint batching',
-    claim: 'a hundred flat canopies of one green cost one draw call instead of a hundred',
-    site: 'lod.mergeByPaint',
   },
   batchFlat: {
     label: 'Group baking',

@@ -65,7 +65,7 @@ describe('planCells', () => {
   })
 
   it('skips every paint-side mitigation in the parked shot, which only ever paints once', () => {
-    const inside = ['off:pathCache', 'off:paintState', 'off:itemCull', 'off:mergePaint',
+    const inside = ['off:pathCache', 'off:paintState', 'off:itemCull',
       'off:batchFlat', 'off:lodRungs', 'off:cullDisc']
     const cells = planCells({ ...cfg, shots: ['still'], variants: inside }, 20)
     for (const id of inside) {

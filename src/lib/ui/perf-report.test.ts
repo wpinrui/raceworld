@@ -19,12 +19,12 @@ function run(): LabReport {
   const config = {
     ...DEFAULT_LAB_CONFIG,
     shots: ['racing' as const],
-    variants: ['off:pathCache', 'off:mergePaint', 'hide:trees'],
+    variants: ['off:pathCache', 'off:visElide', 'hide:trees'],
   }
   const cells = planCells(config, 20)
   const meanFor = (variant: string) => {
     if (variant === 'off:pathCache') return 22 // the cache is earning 6ms a frame
-    if (variant === 'off:mergePaint') return 16.02 // batching is doing nothing here
+    if (variant === 'off:visElide') return 16.02 // the elision is doing nothing here
     if (variant === 'hide:trees') return 12 // the trees cost 4ms a frame
     return 16
   }
@@ -65,7 +65,7 @@ describe('formatReport', () => {
   // and the deltas below are 6ms and 4ms scaled by it.
   it('separates a mitigation that pays from one that does not', () => {
     expect(text).toMatch(/Path2D cache.*saves 6\.12ms\/frame/)
-    expect(text).toMatch(/Paint batching.*no effect/)
+    expect(text).toMatch(/Visibility write elision.*no effect/)
   })
 
   it('reads a hidden layer as what drawing it costs', () => {
@@ -74,8 +74,8 @@ describe('formatReport', () => {
 
   it('names every mitigation that earned nothing, with its claim and its site', () => {
     const tail = text.slice(text.indexOf('MITIGATIONS THAT EARNED NOTHING'))
-    expect(tail).toContain('Paint batching')
-    expect(tail).toContain('lod.mergeByPaint')
+    expect(tail).toContain('Visibility write elision')
+    expect(tail).toContain('RaceTrackMap.setVis')
     expect(tail).not.toContain('Path2D cache')
   })
 
