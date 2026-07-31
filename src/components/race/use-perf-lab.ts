@@ -9,9 +9,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  DEFAULT_LAB_CONFIG, blocksOf, frameStats, planCells, shotById,
-  type Cell, type CellConfig, type CellResult, type Camera, type LabConfig, type ShotWorld,
+  DEFAULT_LAB_CONFIG, blocksOf, cellMetrics, frameStats, planCells,
+  type Cell, type CellConfig, type CellResult, type Counters, type LabConfig,
 } from '@/lib/ui/perf-bench'
+import { shotById, type Camera, type ShotWorld } from '@/lib/ui/perf-shots'
 import { formatReport, type LabReport } from '@/lib/ui/perf-report'
 import { resetPerfFlags } from '@/lib/ui/perf-flags'
 
@@ -50,13 +51,15 @@ export interface LabState {
 const nextFrame = () => new Promise<number>((res) => { requestAnimationFrame(res) })
 const waitFrames = async (n: number) => { for (let i = 0; i < n; i++) await nextFrame() }
 
-const zeroSections = (a: Record<string, number>, b: Record<string, number>) => {
-  const out: Record<string, number> = {}
-  for (const k of Object.keys(a)) {
-    const d = (a[k] ?? 0) - (b[k] ?? 0)
-    if (d > 0) out[k] = +d.toFixed(2)
+/** Both tallies plus the caller's painted-frame count, as one reading. Sections are COPIED: the map
+ *  accumulates into the same object every frame, so a reference would read as its own future. */
+const snapshot = (h: PerfLabHarness, paintedFrames: number): Counters => {
+  const p = h.paintTally()
+  const t = h.tickTally()
+  return {
+    n: p.n, ms: p.ms, drawn: p.drawn, skipped: p.skipped, sections: { ...p.sections },
+    tickN: t.n, tickSum: t.sum, paintedFrames,
   }
-  return out
 }
 
 /** `cars` is a parameter rather than something read back off the harness because the plan depends on it
@@ -74,50 +77,50 @@ export function usePerfLab(harness: PerfLabHarness, cars: number) {
   const harnessRef = useRef(harness)
   useEffect(() => { harnessRef.current = harness })
 
-  /** One cell: drive the shot's camera for warmup+measured frames and read every counter as a delta. */
-  const runCell = useCallback(async (cell: Cell, world: ShotWorld, cfg: LabConfig): Promise<CellResult> => {
+  /** One cell: drive the shot's camera for warmup+measured frames, and read every counter across the
+   *  MEASURED window only.
+   *
+   *  The window matters more than it looks. Snapshotting the counters before the warmup instead of at
+   *  the first measured frame folds the configuration switch, its React render and its forced compose
+   *  into the cell's cpu time, which at the shipped defaults is twenty warmup frames charged against
+   *  ninety measured ones: an overstatement of about a fifth on the very number the vsync verdict is
+   *  read from. Frames and counters have to span the same frames.
+   *
+   *  Returns null when the run was stopped part way through: a cell that got four frames is not a row,
+   *  and scoring it against a full baseline would print a verdict out of nothing. */
+  const runCell = useCallback(async (
+    cell: Cell, world: ShotWorld, cfg: LabConfig,
+  ): Promise<CellResult | null> => {
     const h = harnessRef.current
     const shot = shotById(cell.shot)
     const n = cfg.frames
     const deltas: number[] = []
-    const before = h.paintTally()
-    const p0 = { ...before, sections: { ...before.sections } }
-    const t0 = { ...h.tickTally() }
+    let painted = 0
+    let mark: Counters | null = null
+    let paintsAt = h.paintTally().n
     let last = performance.now()
     for (let i = -cfg.warmup; i < n; i++) {
+      // Read at the first MEASURED frame, not before the warmup.
+      if (i === 0) mark = snapshot(h, painted)
       h.setCamera(shot.pose(i, n, world))
       const now = await nextFrame()
-      // Warmup frames pay the configuration switch, which is a render the lab caused rather than
-      // anything the game does. They move the camera so the shot is already in motion, and vote on
-      // nothing.
-      if (i >= 0) deltas.push(now - last)
+      const paintsNow = h.paintTally().n
+      // One sample a frame: a single frame can paint more than once (a cull step composes and paints
+      // inside the camera's own paint), so counting paints would put this fraction above one.
+      if (i >= 0) {
+        deltas.push(now - last)
+        if (paintsNow > paintsAt) painted++
+      }
+      paintsAt = paintsNow
       last = now
-      if (abortRef.current) break
+      if (abortRef.current) return null
     }
-    const p1 = h.paintTally()
-    const t1 = h.tickTally()
-    const paints = p1.n - p0.n
-    const msPerPaint = paints > 0 ? (p1.ms - p0.ms) / paints : 0
-    const frac = deltas.length > 0 ? paints / deltas.length : 0
-    const tickMs = t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0
+    if (!mark) return null
     return {
       cell,
       stats: frameStats(deltas),
-      paint: {
-        msPerPaint,
-        frac,
-        calls: paints > 0 ? Math.round((p1.drawn - p0.drawn) / paints) : 0,
-        skipped: paints > 0 ? Math.round((p1.skipped - p0.skipped) / paints) : 0,
-        sections: paints > 0
-          ? Object.fromEntries(Object.entries(zeroSections(p1.sections, p0.sections))
-            .map(([k, v]) => [k, +(v / paints).toFixed(2)]))
-          : {},
-      },
+      ...cellMetrics(mark, snapshot(h, painted), deltas.length),
       scene: h.scene(),
-      tickMs,
-      // Per FRAME, not per paint: a still camera under the repaint guard paints on a fraction of its
-      // frames, and the whole point of the guard is that the frames it skips cost nothing.
-      busyMs: tickMs + msPerPaint * frac,
     }
   }, [])
 
@@ -149,8 +152,13 @@ export function usePerfLab(harness: PerfLabHarness, cars: number) {
         // Two frames for the render the configuration change commits, then a forced compose so the
         // scene being measured is the scene the configuration describes.
         await waitFrames(2)
+        if (abortRef.current) break
         await h.settle()
-        results.push(await runCell(cell, world, config))
+        if (abortRef.current) break
+        const done = await runCell(cell, world, config)
+        // Null means the run was stopped inside the cell. A truncated cell is not a row.
+        if (!done) break
+        results.push(done)
       }
     } finally {
       h.restore()

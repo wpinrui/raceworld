@@ -11,6 +11,14 @@ export type Vec = { x: number; y: number }
 /** An oriented (rotated) rectangle: centre, overall size, rotation in radians. */
 export interface Obb { x: number; y: number; w: number; h: number; rot: number }
 
+/** The 2D camera: a pan in stage pixels, a scale, and a bearing. Applied as one transform on the world
+ *  layer and as one `setTransform` on the canvas, so both renderers read the same four numbers. Here
+ *  rather than with either renderer, because the perf lab scripts it and is neither. */
+export interface Camera { x: number; y: number; z: number; rot: number }
+
+/** The authored viewBox, padded. The frame every world coordinate is expressed against. */
+export interface ViewBox { x: number; y: number; w: number; h: number }
+
 /** Exact distance from a point to a segment, clamped to the segment's ends. */
 export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
   const vx = b.x - a.x

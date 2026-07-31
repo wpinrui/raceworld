@@ -1,23 +1,24 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { PERF, PERF_FLAGS, perfFlagsOff, resetPerfFlags, setPerfFlags } from './perf-flags'
+import { PERF, PERF_FLAGS, resetPerfFlags, setPerfFlags } from './perf-flags'
 import { mergeByPaint, rungFor } from './lod'
 import type { DrawOp } from './scenery-draw'
 
 afterEach(resetPerfFlags)
 
+const off = () => PERF_FLAGS.filter((k) => !PERF[k])
+
 describe('the switches themselves', () => {
   it('ships with every mitigation on', () => {
-    expect(PERF_FLAGS.every((k) => PERF[k])).toBe(true)
-    expect(perfFlagsOff()).toEqual([])
+    expect(off()).toEqual([])
   })
 
   it('turns exactly one off and puts every other one back', () => {
     setPerfFlags(['pathCache'])
-    expect(perfFlagsOff()).toEqual(['pathCache'])
+    expect(off()).toEqual(['pathCache'])
     setPerfFlags(['mergePaint'])
-    expect(perfFlagsOff()).toEqual(['mergePaint'])
+    expect(off()).toEqual(['mergePaint'])
     resetPerfFlags()
-    expect(perfFlagsOff()).toEqual([])
+    expect(off()).toEqual([])
   })
 })
 

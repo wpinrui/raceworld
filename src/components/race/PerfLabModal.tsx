@@ -9,15 +9,16 @@
 // While a run is going the panel COLLAPSES to a strip in the corner. A full-screen overlay in front of
 // the canvas occludes it, and an occluded canvas rasterises less: the modal would be measuring itself.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Check, ClipboardCopy, Gauge, Play, RotateCcw, Square, X,
 } from 'lucide-react'
 import {
-  SHOTS, VARIANTS, estimateSeconds, verdictFor,
-  type LabConfig, type ShotId, type VariantGroup, type VerdictKind,
+  COLUMNS, VARIANTS, baselineSummary, estimateSeconds, verdictFor,
+  type LabConfig, type VariantGroup, type VerdictKind,
 } from '@/lib/ui/perf-bench'
+import { SHOTS, type ShotId } from '@/lib/ui/perf-shots'
 import { Tooltip } from '@/components/ui/Tooltip'
 import type { PerfLab } from './use-perf-lab'
 
@@ -56,7 +57,7 @@ function Box({ on, label, note, onClick }: {
       </span>
       <span className="min-w-0">
         <span className="block text-[12px] text-[#FFFFFF]">{label}</span>
-        {note && <span className="block text-[11px] text-[#9CA3AF]">{note}</span>}
+        {note && <span className="block text-[11px] text-[#FFFFFF]">{note}</span>}
       </span>
     </button>
   )
@@ -137,128 +138,135 @@ function ConfigPane({ config, setConfig }: {
   )
 }
 
-const HEADS: ReadonlyArray<readonly [string, string]> = [
-  ['fps', 'w-14'], ['1% low', 'w-16'], ['p95 ms', 'w-16'], ['max ms', 'w-16'],
-  ['long', 'w-12'], ['cpu ms', 'w-16'], ['calls', 'w-16'],
-]
+/** Tailwind widths for the shared column model, in the same order. The numbers and their precision
+ *  live in perf-bench.ts, so this table and the pasted one cannot disagree about either. */
+const COL_W = ['w-14', 'w-16', 'w-16', 'w-16', 'w-12', 'w-16', 'w-16']
 
-function ResultsPane({ lab }: { lab: PerfLab }) {
+function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
+  const rows = [b.baseline, ...b.rows, b.repeat]
   return (
-    <div className="max-h-[62vh] overflow-y-auto font-mono text-[11px]">
-      {lab.blocks.map((b) => (
-        <div key={b.shot.id} className="mb-5">
-          <div className="mb-1 text-[12px] font-semibold text-[#FFFFFF]">
-            {b.shot.label}
-            <span className="ml-2 font-normal text-[#9CA3AF]">{b.shot.note}</span>
-          </div>
-          {b.baseline && (
-            <>
-              {b.vsync && (
-                <div className="mb-1 text-[11px] text-[#F59E0B]">
-                  Vsync bound: {(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on
-                  the display floor, so these verdicts compare cpu ms, not frame time.
-                </div>
-              )}
-              <div className="mb-1 text-[11px] text-[#9CA3AF]">
-                noise floor {b.noiseMs.toFixed(2)}ms/frame ·
-                {' '}{b.baseline.scene.items} items, {b.baseline.scene.ops} ops,
-                {' '}{b.baseline.scene.pathKb.toFixed(0)}KB paths, {b.baseline.scene.nodes} nodes ·
-                {' '}tick {b.baseline.tickMs.toFixed(2)}ms ·
-                {' '}paint {b.baseline.paint.msPerPaint.toFixed(2)}ms on
-                {' '}{(b.baseline.paint.frac * 100).toFixed(0)}% of frames ·
-                {' '}{b.baseline.paint.skipped} items skipped/frame
+    <div className="mb-5">
+      <div className="mb-1 text-[12px] font-semibold text-[#FFFFFF]">
+        {b.shot.label}
+        <span className="ml-2 font-normal">{b.shot.note}</span>
+      </div>
+      {b.vsync && b.baseline && (
+        <div className="mb-1 text-[11px] text-[#F59E0B]">
+          Vsync bound: {(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on the
+          display floor, so these verdicts compare cpu ms, not frame time.
+        </div>
+      )}
+      {b.baseline && (
+        <div className="mb-1 text-[11px] text-[#FFFFFF]">
+          noise floor {b.noiseMs.toFixed(2)}ms/frame | {baselineSummary(b.baseline)}
+        </div>
+      )}
+      <div className="flex border-b border-[#2A3142] pb-1 text-[#FFFFFF]">
+        <span className="flex-1">configuration</span>
+        {COLUMNS.map((c, i) => <span key={c.key} className={`${COL_W[i]} text-right`}>{c.head}</span>)}
+        <span className="w-40 pl-3">verdict</span>
+      </div>
+      {rows.map((r, i) => {
+        if (!r) return null
+        const v = b.baseline && r.cell.group !== 'baseline'
+          ? verdictFor({ row: r, baseline: b.baseline, noiseMs: b.noiseMs, basis: b.basis })
+          : null
+        const prev = rows[i - 1]
+        const head = r.cell.group !== 'baseline' && r.cell.group !== prev?.cell.group
+          ? GROUP_LABEL[r.cell.group]
+          : null
+        return (
+          <div key={`${r.cell.key}-${i}`}>
+            {head && (
+              <div className="pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-[#FFFFFF]">
+                {head}
               </div>
-            </>
-          )}
-          <div className="flex border-b border-[#2A3142] pb-1 text-[#9CA3AF]">
-            <span className="flex-1">configuration</span>
-            {HEADS.map(([h, w]) => <span key={h} className={`${w} text-right`}>{h}</span>)}
-            <span className="w-40 pl-3">verdict</span>
-          </div>
-          {[b.baseline, ...b.rows, b.repeat].map((r, i, all) => {
-            if (!r) return null
-            const v = b.baseline && r.cell.group !== 'baseline'
-              ? verdictFor(r, b.baseline, b.noiseMs, b.vsync)
-              : null
-            const prev = all[i - 1]
-            const head = r.cell.group !== 'baseline' && r.cell.group !== prev?.cell.group
-              ? GROUP_LABEL[r.cell.group]
-              : null
-            return (
-              <div key={`${r.cell.key}-${i}`}>
-                {head && (
-                  <div className="pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-[#9CA3AF]">
-                    {head}
-                  </div>
-                )}
-                <div className="flex border-b border-[#1B2130] py-0.5">
-                <span className="flex-1 truncate text-[#FFFFFF]">{r.cell.label}</span>
-                {[
-                  r.stats.fps.toFixed(0), r.stats.low1.toFixed(0), r.stats.p95Ms.toFixed(1),
-                  r.stats.maxMs.toFixed(1), String(r.stats.longFrames),
-                  r.busyMs.toFixed(2), String(r.paint.calls),
-                ].map((cell, j) => (
-                  <span key={HEADS[j][0]} className={`${HEADS[j][1]} text-right text-[#FFFFFF]`}>{cell}</span>
-                ))}
-                <span className="w-40 truncate pl-3" style={{ color: v ? VERDICT_COLOR[v.kind] : '#9CA3AF' }}>
-                  {v ? v.text : ''}
+            )}
+            <div className="flex border-b border-[#1B2130] py-0.5">
+              <span className="flex-1 truncate text-[#FFFFFF]">{r.cell.label}</span>
+              {COLUMNS.map((c, j) => (
+                <span key={c.key} className={`${COL_W[j]} text-right text-[#FFFFFF]`}>
+                  {c.of(r).toFixed(c.dp)}
                 </span>
-                </div>
-              </div>
-            )
-          })}
-          {b.skipped.map((c) => (
-            <div key={c.key} className="flex py-0.5 text-[#9CA3AF]">
-              <span className="flex-1 truncate">{c.label}</span>
-              <span className="pl-3">skipped: {c.skip}</span>
+              ))}
+              <span className="w-40 truncate pl-3" style={{ color: v ? VERDICT_COLOR[v.kind] : '#FFFFFF' }}>
+                {v ? v.text : ''}
+              </span>
             </div>
-          ))}
+          </div>
+        )
+      })}
+      {b.skipped.map((c) => (
+        <div key={c.key} className="flex py-0.5 text-[#FFFFFF]">
+          <span className="flex-1 truncate">{c.label}</span>
+          <span className="pl-3">skipped: {c.skip}</span>
         </div>
       ))}
     </div>
   )
 }
 
+const ResultsPane = ({ lab }: { lab: PerfLab }) => (
+  <div className="max-h-[62vh] overflow-y-auto font-mono text-[11px]">
+    {lab.blocks.map((b) => <ShotBlockView key={b.shot.id} b={b} />)}
+  </div>
+)
+
+/** A strip, not a sheet: an overlay in front of the canvas occludes it, and an occluded canvas
+ *  rasterises less, so the modal would be measuring itself. */
+function RunningStrip({ lab }: { lab: PerfLab }) {
+  const total = lab.state.cells.filter((c) => !c.skip).length
+  const done = lab.state.results.length
+  return (
+    <div
+      className="absolute left-1/2 top-2 z-40 -translate-x-1/2 rounded-lg border border-[#2A3142] bg-[#1E2431]/95 px-3 py-2"
+      // The strip lives inside the map, which takes a pointer-down as the start of a camera drag.
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center gap-3 font-mono text-[12px] text-[#FFFFFF]">
+        <Gauge size={16} color="#00D9FF" />
+        <span>{done}/{total}</span>
+        <span className="w-64 truncate">{lab.state.status}</span>
+        <button
+          type="button"
+          onClick={lab.abort}
+          className="flex items-center gap-1 rounded bg-[#2A3142] px-2 py-1 hover:bg-[#303848] cursor-pointer"
+        >
+          <Square size={12} /> Stop
+        </button>
+      </div>
+      <div className="mt-1.5 h-1 w-full overflow-hidden rounded bg-[#2A3142]">
+        <div className="h-full bg-[#00D9FF]" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
+      </div>
+    </div>
+  )
+}
+
 export function PerfLabModal({ lab }: { lab: PerfLab }) {
   const [copied, setCopied] = useState(false)
+  // Cleared on a timer that is cancelled if the panel goes first, so a close mid-flash cannot set state
+  // on an unmounted tree.
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 1600)
+    return () => clearTimeout(id)
+  }, [copied])
   if (!lab.open) return null
 
   const { state, config, plan } = lab
   const runnable = plan.filter((c) => !c.skip).length
 
-  // Running: a strip, not a sheet. The map has to be measured with nothing in front of it.
-  if (state.phase === 'running') {
-    const total = state.cells.filter((c) => !c.skip).length
-    const done = state.results.length
-    return (
-      <div
-        className="absolute left-1/2 top-2 z-40 -translate-x-1/2 rounded-lg border border-[#2A3142] bg-[#1E2431]/95 px-3 py-2"
-        // The strip lives inside the map, which takes a pointer-down as the start of a camera drag.
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 font-mono text-[12px] text-[#FFFFFF]">
-          <Gauge size={16} color="#00D9FF" />
-          <span>{done}/{total}</span>
-          <span className="w-64 truncate">{state.status}</span>
-          <button
-            type="button"
-            onClick={lab.abort}
-            className="flex items-center gap-1 rounded bg-[#2A3142] px-2 py-1 hover:bg-[#303848] cursor-pointer"
-          >
-            <Square size={12} /> Stop
-          </button>
-        </div>
-        <div className="mt-1.5 h-1 w-full overflow-hidden rounded bg-[#2A3142]">
-          <div className="h-full bg-[#00D9FF]" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
-        </div>
-      </div>
-    )
-  }
+  if (state.phase === 'running') return <RunningStrip lab={lab} />
 
   const copy = async () => {
-    await navigator.clipboard.writeText(lab.copyText())
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1600)
+    try {
+      await navigator.clipboard.writeText(lab.copyText())
+      setCopied(true)
+    } catch {
+      // No clipboard permission. The console still gets it, so a run is never trapped in the window.
+      console.log(lab.copyText())
+      setCopied(true)
+    }
   }
 
   // Through a portal, and not for tidiness. The map owns a native wheel listener that zooms the camera

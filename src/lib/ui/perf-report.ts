@@ -6,7 +6,10 @@
 // configuration inline rather than as a separate thing to remember to include, and it ends with the raw
 // JSON so nothing here has to be the only record.
 
-import { blocksOf, verdictFor, type Cell, type CellResult, type LabConfig, type ShotBlock } from './perf-bench'
+import {
+  COLUMNS, baselineSummary, blocksOf, verdictFor,
+  type Cell, type CellResult, type LabConfig, type ShotBlock,
+} from './perf-bench'
 import { PERF_FLAG_INFO, type PerfFlag } from './perf-flags'
 
 export interface LabReport {
@@ -27,21 +30,14 @@ const rt = (s: string, w: number) => (s.length >= w ? s : ' '.repeat(w - s.lengt
 const num = (v: number, w: number, dp = 0) => rt(Number.isFinite(v) ? v.toFixed(dp) : '-', w)
 
 const NAME_W = 30
-/** Column headings and their widths, so the heading row and the data rows cannot drift apart. */
-const COLS: ReadonlyArray<readonly [string, number]> = [
-  ['fps', 6], ['1% low', 8], ['p95ms', 8], ['max ms', 8], ['long', 6], ['cpu ms', 8], ['calls', 8],
-]
 
 const tableHead = (): string =>
-  pad('', NAME_W) + COLS.map(([h, w]) => rt(h, w)).join('') + '   verdict'
+  pad('', NAME_W) + COLUMNS.map((c) => rt(c.head, c.width)).join('') + '   verdict'
 
-function rowLine(r: CellResult, verdict: string): string {
-  const s = r.stats
-  return pad(`  ${r.cell.label}`, NAME_W)
-    + num(s.fps, 6) + num(s.low1, 8) + num(s.p95Ms, 8, 1) + num(s.maxMs, 8, 1)
-    + num(s.longFrames, 6) + num(r.busyMs, 8, 2) + num(r.paint.calls, 8)
-    + (verdict ? `   ${verdict}` : '')
-}
+const rowLine = (r: CellResult, verdict: string): string =>
+  pad(`  ${r.cell.label}`, NAME_W)
+  + COLUMNS.map((c) => num(c.of(r), c.width, c.dp)).join('')
+  + (verdict ? `   ${verdict}` : '')
 
 function blockText(b: ShotBlock): string[] {
   const out: string[] = ['', `SHOT ${b.shot.label.toUpperCase()}  ${b.shot.note}`]
@@ -52,17 +48,15 @@ function blockText(b: ShotBlock): string[] {
       + ' Frame time here has no room left to move in either direction.'
     : `  noise floor ${b.noiseMs.toFixed(2)}ms/frame (the two baselines' own spread)`)
   out.push(tableHead())
-  out.push(rowLine(b.baseline, `scene ${b.baseline.scene.items} items, ${b.baseline.scene.ops} ops, `
-    + `${b.baseline.scene.pathKb.toFixed(0)}KB paths, ${b.baseline.scene.nodes} nodes, `
-    + `tick ${b.baseline.tickMs.toFixed(2)}ms, paint ${b.baseline.paint.msPerPaint.toFixed(2)}ms on `
-    + `${(b.baseline.paint.frac * 100).toFixed(0)}% of frames, `
-    + `${b.baseline.paint.skipped} items skipped/frame`))
+  out.push(rowLine(b.baseline, baselineSummary(b.baseline)))
   const groups: Array<CellResult['cell']['group']> = ['mitigation', 'layer', 'quality', 'renderer']
   for (const g of groups) {
     const rows = b.rows.filter((r) => r.cell.group === g)
     if (rows.length === 0) continue
     out.push(`  -- ${g} --`)
-    for (const r of rows) out.push(rowLine(r, verdictFor(r, b.baseline, b.noiseMs, b.vsync).text))
+    for (const r of rows) {
+      out.push(rowLine(r, verdictFor({ row: r, baseline: b.baseline, noiseMs: b.noiseMs, basis: b.basis }).text))
+    }
   }
   if (b.repeat) out.push(rowLine(b.repeat, 'the baseline again, at the end of the shot'))
   for (const c of b.skipped) out.push(`  ${pad(c.label, NAME_W - 2)} skipped: ${c.skip}`)
@@ -76,7 +70,7 @@ function idleMitigations(blocks: ShotBlock[]): string[] {
     if (!b.baseline) continue
     for (const r of b.rows) {
       if (r.cell.group !== 'mitigation') continue
-      const v = verdictFor(r, b.baseline, b.noiseMs, b.vsync)
+      const v = verdictFor({ row: r, baseline: b.baseline, noiseMs: b.noiseMs, basis: b.basis })
       const rec = seen.get(r.cell.variant) ?? { ran: 0, idle: 0, backfired: 0 }
       rec.ran++
       if (v.kind === 'nothing') rec.idle++

@@ -45,7 +45,7 @@ import {
 } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
 import { PERF, resetPerfFlags, setPerfFlags } from '@/lib/ui/perf-flags'
-import { trackFeatures, type ShotWorld } from '@/lib/ui/perf-bench'
+import { trackFeatures, type ShotWorld } from '@/lib/ui/perf-shots'
 import { PerfLabModal } from './PerfLabModal'
 import { usePerfLab } from './use-perf-lab'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -128,8 +128,9 @@ const CULL_MARGIN = 1.45
 const CULL_SLACK = 0.3
 /** Quiet period after the last rotation input before the scene is rebuilt on the new bearing. */
 const ROT_SETTLE_MS = 120
-/** How long the perf lab waits for a composed scene to land before measuring anyway. A configuration
- *  that composes nothing (the SVG renderer, the map view) never swaps, so the wait has to end somehow. */
+/** How long the perf lab waits for a composed scene to land before measuring anyway. The warm parses in
+ *  time-boxed slices, so a cold scene takes as many frames as it takes; this is the backstop that keeps
+ *  a run moving rather than the expected path. */
 const SETTLE_CAP_MS = 400
 
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit. The lane's own
@@ -411,14 +412,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       // These are bare unmodified letters, so a field taking text owns them.
       const tag = (e.target as HTMLElement | null)?.tagName
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
-      if (e.key === '`') setHud((v) => !v)
-      if (!DEBUG_KEYS) return
       // The lab drives the layer set, the renderer and the camera for the length of a run; a stray
       // letter underneath it would silently change the configuration a row is being measured under.
-      if (labOpenRef.current) {
+      // The readout is in that list and not an exception to it: opening it resets the tick stats twice
+      // a second, which is the reason the lab closes it in the first place.
+      if (DEBUG_KEYS && labOpenRef.current) {
         if (e.key === 'Escape') labCloseRef.current()
         return
       }
+      if (e.key === '`') setHud((v) => !v)
+      if (!DEBUG_KEYS) return
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
       if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
       if (e.key === 'x' || e.key === 'X') setCanvasOn((v) => !v)
@@ -1947,8 +1950,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       setQualityKey(cfg.quality)
       setCanvasOn(cfg.canvas)
     },
-    // Compose now, and resolve when the scene that lands is on screen. Bounded, because a configuration
-    // that composes nothing at all (the SVG renderer) never swaps and would otherwise hang the run.
+    // Compose now, and resolve when the scene that lands is on screen. Bounded, because the warm parses
+    // in slices and a cold scene takes as many frames as it takes.
     settle: () => new Promise<void>((resolve) => {
       let done = false
       const finish = () => {
@@ -2012,24 +2015,34 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       setQualityOf(saved.presets)
       setFrameCap(saved.cap)
       setHud(saved.hud)
+      // Both halves, mirroring what `timing` took: the ref is what the render loop reads, and waiting
+      // for the prop to round-trip back through its effect leaves a frame following nothing.
+      followRef.current = saved.follow
       onFollow(saved.follow)
       camRef.current = { ...saved.cam }
       requestAnimationFrame(() => applyCam(true))
     },
   }, cars.length)
+  // Published after the commit rather than during it: a discarded render must not be able to leave the
+  // key listener pointing at a lab that never existed.
   const perfLabRef = useRef(perfLab)
-  perfLabRef.current = perfLab
-  labOpenRef.current = perfLab.open
-  labCloseRef.current = () => {
-    if (perfLabRef.current.state.phase === 'running') perfLabRef.current.abort()
-    else perfLabRef.current.setOpen(false)
-  }
+  useEffect(() => {
+    perfLabRef.current = perfLab
+    labOpenRef.current = perfLab.open
+  })
   useEffect(() => {
     benchKeyRef.current = () => perfLabRef.current.setOpen(true)
+    labCloseRef.current = () => {
+      if (perfLabRef.current.state.phase === 'running') perfLabRef.current.abort()
+      else perfLabRef.current.setOpen(false)
+    }
   }, [])
-  // A run left mid-cell by a navigation would otherwise ship the player a renderer with a mitigation
-  // switched off, and nothing on screen would say so.
-  useEffect(() => resetPerfFlags, [])
+  // Unmounting mid-run would otherwise leave the run driving a camera on a dead component for the rest
+  // of the plan, and ship the player a renderer with a mitigation switched off and nothing saying so.
+  useEffect(() => () => {
+    perfLabRef.current.abort()
+    resetPerfFlags()
+  }, [])
 
   // Baking covers the WHOLE circuit, so culling is switched off while it is on: a disc around the
   // camera would be baked into the image and then travel with it.

@@ -121,8 +121,3 @@ export function setPerfFlags(off: readonly PerfFlag[]): void {
 export function resetPerfFlags(): void {
   setPerfFlags([])
 }
-
-/** Which mitigations are currently off, for a report header. */
-export function perfFlagsOff(): PerfFlag[] {
-  return PERF_FLAGS.filter((k) => !PERF[k])
-}

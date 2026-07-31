@@ -16,9 +16,11 @@ import { useEffect, useRef } from 'react'
 import type { DrawOp, SceneItem, SceneMark } from '@/lib/ui/scenery-draw'
 import { isGroup, refName } from '@/lib/ui/scenery-draw'
 import { PERF } from '@/lib/ui/perf-flags'
+import type { Camera, ViewBox } from '@/lib/ui/geom'
 
-export interface Camera { x: number; y: number; z: number; rot: number }
-export interface ViewBox { x: number; y: number; w: number; h: number }
+// One definition, in lib/ui/geom.ts, because the perf lab scripts the camera and belongs to neither
+// renderer. Re-exported so every existing importer keeps reading it from the drawing surface it drives.
+export type { Camera, ViewBox } from '@/lib/ui/geom'
 
 /** A scene is ONE sequence of flat ops and placed groups, painted in order. Splitting ops from
  *  groups and painting them as two passes put every solid over the trees and kerbs in front of it. */

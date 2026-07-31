@@ -8,7 +8,7 @@ import { formatReport, type LabReport } from './perf-report'
 const result = (cell: Cell, meanMs: number): CellResult => ({
   cell,
   stats: frameStats([...Array.from({ length: 99 }, (_, i) => meanMs + (i % 5) - 2), meanMs * 3]),
-  paint: { msPerPaint: 4.2, frac: 1, calls: 318, skipped: 44, sections: { trees: 1.1 } },
+  paint: { msPerPaint: 4.2, paintedFrac: 1, calls: 318, skipped: 44, sections: { trees: 1.1 } },
   scene: { items: 640, ops: 1180, pathKb: 96, nodes: 2400 },
   tickMs: 0.8,
   busyMs: 5,

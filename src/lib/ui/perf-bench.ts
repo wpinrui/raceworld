@@ -6,204 +6,19 @@
 // ablated LAYERS: it could say what the trees cost, and it could not say whether the Path2D cache was
 // still doing anything.
 //
-// What replaces it drives the camera itself. A cell is a fixed number of FRAMES on a scripted camera
-// path, so frame 40 of one cell frames exactly what frame 40 of every other cell frames, and a cell
-// costs a second and a half rather than a lap. Camera scale is written in SCREEN PIXELS PER METRE, which
-// is the one measure that means the same thing on Monaco and on Monza, and the shots anchor to features
-// the circuit describes for itself (its tightest corner, its pit straight, its start line) rather than
-// to authored coordinates. So the same lab runs anywhere and the rows compare.
+// What replaces it drives the camera itself (the shots live in perf-shots.ts). A cell is a fixed number
+// of FRAMES on a scripted camera path, so frame 40 of one cell frames exactly what frame 40 of every
+// other cell frames, and a cell costs a second and a half rather than a lap.
+//
+// What is here is everything downstream of that: what a run is made of, what it is allowed to skip, and
+// the arithmetic that turns a pile of frame times into a sentence about one mitigation.
 
 import type { Quality } from './lod'
 import { PERF_FLAGS, PERF_FLAG_INFO, type PerfFlag } from './perf-flags'
+import { shotById, type Shot, type ShotId } from './perf-shots'
 
-export interface Camera { x: number; y: number; z: number; rot: number }
-
-/** Everything a shot needs to aim itself, measured from the live map by the caller. */
-export interface ShotWorld {
-  vb: { x: number; y: number; w: number; h: number }
-  stage: { w: number; h: number }
-  metresPerUnit: number
-  /** A point on the track centreline at lap fraction `f`, in viewBox units. Wraps. */
-  trackAt: (f: number) => { x: number; y: number }
-  /** Lap fraction of the circuit's tightest corner: the most scenery, kerb and camber per metre. */
-  cornerF: number
-  /** Lap fraction on the pit straight, where the complex is in shot. */
-  pitF: number
-  /** The bearing the player opens on, so a run is judged in the orientation the game ships. */
-  rot0: number
-}
-
-/** Racing scale. Zoom 20 works out anywhere between 1.2 and 2.2 px/m across the 37 layouts, so the
- *  lab picks the number rather than the zoom and every circuit is framed the same. */
-export const RACE_PX_PER_M = 2
-/** Frames a lap takes at racing pace: a ~90s lap at 60Hz. The camera advances 1/this per frame, so a
- *  sweeping shot travels at the speed a followed car actually travels and the cull disc steps at the
- *  cadence it actually steps. A cell that covered a quarter lap in ninety frames would be measuring a
- *  camera nobody drives. */
-export const LAP_FRAMES = 5400
-/** The bearing shot holds still between steps, so the rebuild the settle triggers lands inside the
- *  measured window instead of being smeared across it. */
-const ROT_HOLD_FRAMES = 24
-const ROT_STEP_RAD = Math.PI / 12
-/** Octaves the zoom shot sweeps down and back. Rungs are keyed in half-octaves, so three octaves is
- *  six bucket crossings each way: the recompose cadence a player produces looking for the field. */
-const ZOOM_OCTAVES = 3
 /** A frame this long is felt rather than measured. */
 export const LONG_FRAME_MS = 25
-
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
-
-export function zoomForPxPerM(pxPerM: number, w: ShotWorld): number {
-  return (pxPerM * w.metresPerUnit * w.vb.w) / Math.max(1, w.stage.w)
-}
-
-/** The camera that puts a world point at the centre of the stage. The follow camera's own arithmetic. */
-export function centreOn(pt: { x: number; y: number }, z: number, rot: number, w: ShotWorld): Camera {
-  const dx = ((pt.x - w.vb.x) / w.vb.w) * w.stage.w - w.stage.w / 2
-  const dy = ((pt.y - w.vb.y) / w.vb.h) * w.stage.h - w.stage.h / 2
-  const cos = Math.cos(rot)
-  const sin = Math.sin(rot)
-  return { x: -z * (dx * cos - dy * sin), y: -z * (dx * sin + dy * cos), z, rot }
-}
-
-/** Stations walked when looking for a circuit's own landmarks. About one every 10-20m on a real lap,
- *  which resolves a hairpin without making the search cost anything worth caching harder than a ref. */
-const FEATURE_STATIONS = 360
-/** The arc a corner is judged over. Short enough that a hairpin is not averaged out by the straights
- *  either side of it, long enough that a spline vertex is not mistaken for a corner. */
-const CORNER_WINDOW_M = 15
-
-/** The two places on a circuit a shot can aim at without knowing anything about the circuit.
- *
- *  The tightest corner because that is where scenery, kerb and camber are densest per metre, and it is
- *  where a follow camera spends its worst frames. The pit straight because the complex is the heaviest
- *  single object on the map and the one whose cost has never fully come down. Both are FOUND, so the
- *  lab has no per-circuit table to keep up to date and the same run means the same thing on all 37. */
-export function trackFeatures(
-  at: (f: number) => { x: number; y: number },
-  lengthUnits: number,
-  metresPerUnit: number,
-  pit: { cx: number; cy: number } | null,
-): { cornerF: number; pitF: number } {
-  const totalM = Math.max(1, lengthUnits * metresPerUnit)
-  const step = CORNER_WINDOW_M / totalM
-  const heading: number[] = []
-  for (let i = 0; i < FEATURE_STATIONS; i++) {
-    const f = i / FEATURE_STATIONS
-    const a = at(f)
-    const b = at(f + step)
-    heading.push(Math.atan2(b.y - a.y, b.x - a.x))
-  }
-  let cornerF = 0
-  let tightest = -1
-  for (let i = 0; i < FEATURE_STATIONS; i++) {
-    const raw = heading[(i + 1) % FEATURE_STATIONS] - heading[i]
-    const turn = Math.abs(((raw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI)
-    if (turn > tightest) { tightest = turn; cornerF = i / FEATURE_STATIONS }
-  }
-  let pitF = 0
-  if (pit) {
-    let best = Infinity
-    for (let i = 0; i < FEATURE_STATIONS; i++) {
-      const f = i / FEATURE_STATIONS
-      const p = at(f)
-      const d = (p.x - pit.cx) ** 2 + (p.y - pit.cy) ** 2
-      if (d < best) { best = d; pitF = f }
-    }
-  }
-  return { cornerF, pitF }
-}
-
-export type ShotId = 'racing' | 'pit' | 'start' | 'wide' | 'zoom' | 'rotate' | 'still'
-
-export interface Shot {
-  id: ShotId
-  label: string
-  note: string
-  /** False only for the parked camera, which is the one case the repaint guard can fire in. */
-  moves: boolean
-  /** True where the shot crosses cull steps or detail rungs, so scenes are composed and swapped in it. */
-  recomposes: boolean
-  /** True where the whole circuit is framed, so a cull disc contains everything and saves nothing. */
-  whole: boolean
-  pose: (i: number, n: number, w: ShotWorld) => Camera
-}
-
-/** A shot travelling along the track, centred on its landmark: the cell's middle frame sits ON `f0`, so
- *  the landmark is passed inside the measured window whatever the cell's length is set to. Warmup frames
- *  come in with a negative `i` and simply start further back up the road, which is what a warmup should
- *  be doing anyway. */
-const sweep = (f0: number, i: number, n: number, w: ShotWorld, px = RACE_PX_PER_M): Camera =>
-  centreOn(w.trackAt(f0 + (i - n / 2) / LAP_FRAMES), zoomForPxPerM(px, w), w.rot0, w)
-
-export const SHOTS: readonly Shot[] = [
-  {
-    id: 'racing',
-    label: 'Racing corner',
-    note: 'follow camera at racing scale through the circuit\'s tightest corner',
-    moves: true, recomposes: true, whole: false,
-    pose: (i, n, w) => sweep(w.cornerF, i, n, w),
-  },
-  {
-    id: 'pit',
-    label: 'Pit straight',
-    note: 'the same camera down the pit straight, with the complex and the garages in shot',
-    moves: true, recomposes: true, whole: false,
-    pose: (i, n, w) => sweep(w.pitF, i, n, w),
-  },
-  {
-    id: 'start',
-    label: 'Start line',
-    note: 'the chequer, the grid boxes and the packed field at racing scale',
-    moves: true, recomposes: true, whole: false,
-    pose: (i, n, w) => sweep(0, i, n, w),
-  },
-  {
-    id: 'wide',
-    label: 'Whole circuit',
-    note: 'the full track fitted to the stage, panning: the most draw calls a frame ever pays',
-    moves: true, recomposes: false, whole: true,
-    pose: (i, n, w) => {
-      const cam = centreOn(w.trackAt(0), 1, w.rot0, w)
-      // A slow pan across a tenth of the stage. At this scale nothing crosses a rung or a disc, so the
-      // camera moving is the whole of what separates this from the parked shot.
-      return { ...cam, x: cam.x + Math.sin((clamp01(i / Math.max(1, n))) * Math.PI * 2) * w.stage.w * 0.05 }
-    },
-  },
-  {
-    id: 'zoom',
-    label: 'Zoom sweep',
-    note: `racing scale out ${ZOOM_OCTAVES} octaves and back: every detail rung crossed twice`,
-    moves: true, recomposes: true, whole: false,
-    pose: (i, n, w) => {
-      // Clamped, so warmup's negative index holds the shot at its starting scale rather than sweeping
-      // out past the camera's own zoom limits before the measured frames begin.
-      const t = clamp01(i / Math.max(1, n))
-      const tri = 1 - Math.abs(1 - 2 * t) // 0 -> 1 -> 0
-      const px = RACE_PX_PER_M * 2 ** (-ZOOM_OCTAVES * (1 - tri))
-      return centreOn(w.trackAt(w.cornerF), zoomForPxPerM(px, w), w.rot0, w)
-    },
-  },
-  {
-    id: 'rotate',
-    label: 'Bearing steps',
-    note: 'the camera turned in held steps, so each rebuild on the new bearing lands inside the window',
-    moves: true, recomposes: true, whole: false,
-    pose: (i, n, w) => {
-      const rot = w.rot0 + Math.floor(i / ROT_HOLD_FRAMES) * ROT_STEP_RAD
-      return centreOn(w.trackAt(w.cornerF), zoomForPxPerM(RACE_PX_PER_M, w), rot, w)
-    },
-  },
-  {
-    id: 'still',
-    label: 'Parked camera',
-    note: 'the shot a serviced car and a pre-race grid actually produce: nothing moves',
-    moves: false, recomposes: false, whole: false,
-    pose: (i, n, w) => centreOn(w.trackAt(w.cornerF), zoomForPxPerM(RACE_PX_PER_M, w), w.rot0, w),
-  },
-]
-
-export const shotById = (id: ShotId): Shot => SHOTS.find((s) => s.id === id) ?? SHOTS[0]
 
 // ── Configurations ──
 
@@ -230,29 +45,61 @@ export interface Variant {
   skipIn?: (shot: Shot, cars: number) => string | null
 }
 
-/** The drawn layers, one per category, exactly the set the map can hide. */
-const LAYERS: Array<{ id: string; label: string }> = [
-  { id: 'trees', label: 'Trees and marshal posts' },
-  { id: 'shadows', label: 'Scenery shadows' },
-  { id: 'buildings', label: 'Buildings' },
-  { id: 'stands', label: 'Grandstands' },
-  { id: 'furniture', label: 'Barriers and fences' },
-  { id: 'ground', label: 'Ground plane' },
-  { id: 'kerbs', label: 'Kerbs' },
-  { id: 'pit', label: 'Pit complex' },
-  { id: 'signs', label: 'Garage name boards' },
-  { id: 'boxes', label: 'Pit boxes and crew' },
-  { id: 'cars', label: 'Car sprites' },
+/** The drawn layers the map can hide, one per category, plus the two SPLITS: the whole static world
+ *  against the whole moving one. Those two are what say whether a frame's cost is the circuit standing
+ *  there or the field driving through it, which no single category can answer. */
+const STATIC_LAYERS = ['trees', 'shadows', 'buildings', 'stands', 'furniture', 'ground', 'kerbs', 'pit']
+const DYNAMIC_LAYERS = ['cars', 'boxes']
+
+const LAYERS: Array<{ id: string; label: string; hide: string[] }> = [
+  ...[
+    ['trees', 'Trees and marshal posts'], ['shadows', 'Scenery shadows'], ['buildings', 'Buildings'],
+    ['stands', 'Grandstands'], ['furniture', 'Barriers and fences'], ['ground', 'Ground plane'],
+    ['kerbs', 'Kerbs'], ['pit', 'Pit complex'], ['signs', 'Garage name boards'],
+    ['boxes', 'Pit boxes and crew'], ['cars', 'Car sprites'],
+  ].map(([id, label]) => ({ id, label, hide: [id] })),
+  { id: 'static', label: 'The whole static world', hide: STATIC_LAYERS },
+  { id: 'dynamic', label: 'The whole moving world', hide: DYNAMIC_LAYERS },
 ]
 
-/** Where a mitigation cannot show itself, stated as the property of the shot that makes it moot. Each
- *  of these is the difference between a lab that runs in a minute and one that runs in ten. */
-const MITIGATION_SKIP: Partial<Record<PerfFlag, (shot: Shot, cars: number) => string | null>> = {
-  cameraGuard: (s) => (s.moves ? 'camera moves every frame, so the guard never fires' : null),
-  warmSwap: (s) => (s.recomposes ? null : 'no scene is composed during this shot'),
-  cullDisc: (s) => (s.whole ? 'the whole circuit is in shot, so the disc contains everything' : null),
-  visElide: (_s, cars) => (cars > 0 ? null : 'no cars on the map to write visibility for'),
-  geomCache: (s) => (s.recomposes ? null : 'no geometry is rebuilt during this shot'),
+/** What a mitigation needs from a shot before it can possibly show itself. Skipping the rest is the
+ *  difference between a lab that runs in a minute and one that runs in ten, and it is also what keeps
+ *  the report honest: a mitigation measured where it cannot act comes back "no effect", and "no effect"
+ *  is the verdict this whole thing exists to be trusted on. */
+type Need = 'repaint' | 'compose' | 'stillCamera' | 'cars'
+
+const NEEDS: Record<PerfFlag, Need> = {
+  // Everything that lives inside a paint needs the shot to keep painting.
+  pathCache: 'repaint',
+  paintState: 'repaint',
+  itemCull: 'repaint',
+  // These change what a paint is HANDED. The composing is done once by the settle either way, so what
+  // they need is repeated paints to hand it to, not repeated composes.
+  mergePaint: 'repaint',
+  batchFlat: 'repaint',
+  lodRungs: 'repaint',
+  cullDisc: 'repaint',
+  // These are paid at COMPOSE time and nowhere else.
+  geomCache: 'compose',
+  warmSwap: 'compose',
+  // The guard's whole subject is a camera that is not moving.
+  cameraGuard: 'stillCamera',
+  visElide: 'cars',
+}
+
+const SKIP_REASON: Record<Need, (shot: Shot, cars: number) => string | null> = {
+  repaint: (s) => (s.repaints ? null : 'the guard holds this shot to one paint, so nothing inside a paint can differ'),
+  compose: (s) => (s.recomposes ? null : 'no geometry is composed during this shot'),
+  stillCamera: (s) => (s.moves ? 'camera moves every frame, so the guard never fires' : null),
+  cars: (_s, cars) => (cars > 0 ? null : 'no cars on the map to write visibility for'),
+}
+
+const mitigationSkip = (flag: PerfFlag) => (shot: Shot, cars: number): string | null => {
+  // One extra rule on top of the need, because a disc that contains the whole circuit is not a disc.
+  if (flag === 'cullDisc' && shot.whole) {
+    return 'the whole circuit is in shot, so the disc contains everything'
+  }
+  return SKIP_REASON[NEEDS[flag]](shot, cars)
 }
 
 export const VARIANTS: readonly Variant[] = [
@@ -262,14 +109,14 @@ export const VARIANTS: readonly Variant[] = [
     label: PERF_FLAG_INFO[flag].label,
     reads: PERF_FLAG_INFO[flag].claim,
     config: { flagsOff: [flag] },
-    skipIn: MITIGATION_SKIP[flag],
+    skipIn: mitigationSkip(flag),
   })),
   ...LAYERS.map((l): Variant => ({
     id: `hide:${l.id}`,
     group: 'layer',
     label: l.label,
     reads: 'what this layer costs the frame',
-    config: { hide: [l.id] },
+    config: { hide: l.hide },
   })),
   {
     id: 'quality:low',
@@ -293,8 +140,6 @@ export const VARIANTS: readonly Variant[] = [
     config: { canvas: false },
   },
 ]
-
-export const variantById = (id: string): Variant | undefined => VARIANTS.find((v) => v.id === id)
 
 export const DEFAULT_VARIANTS: string[] = VARIANTS.filter((v) => v.group === 'mitigation').map((v) => v.id)
 export const DEFAULT_SHOTS: ShotId[] = ['racing', 'pit', 'wide']
@@ -437,23 +282,75 @@ export interface CellResult {
   cell: Cell
   stats: FrameStats
   paint: {
-    /** Main-thread command time per PAINTED frame. */
+    /** Main-thread command time per PAINT. */
     msPerPaint: number
-    /** Painted frames over total frames: a still camera under the guard paints none of them. */
-    frac: number
-    /** Draw calls issued and scene items skipped by the viewport test, per painted frame. */
+    /** Share of frames that painted at all. A still camera under the repaint guard paints once and
+     *  then never again, which is the whole of what the guard buys. */
+    paintedFrac: number
+    /** Draw calls issued and scene items skipped by the viewport test, per paint. */
     calls: number
     skipped: number
+    /** Paint time by scene section, per frame. */
     sections: Record<string, number>
   }
   scene: { items: number; ops: number; pathKb: number; nodes: number }
   /** The race loop's own JS cost per frame, which separates a slow script from a heavy raster. */
   tickMs: number
-  /** Main-thread time this cell spends per FRAME: the loop's tick plus the paint commands, counting a
-   *  frame that skipped its paint as having paid nothing for it. What the verdict falls back to when
-   *  frame time has no headroom left to move in. It is not the whole frame: the rasteriser's own work
-   *  and the document renderer's layout are not observable from here, so this UNDERSTATES a layer. */
+  /** Main-thread time this cell spends per FRAME: the loop's tick plus the paint commands, taken over
+   *  frames rather than over paints so a frame that skipped its paint counts as having paid nothing for
+   *  it. What the verdict falls back to when frame time has no headroom left to move in. It is not the
+   *  whole frame: the rasteriser's own work and the document renderer's layout are not observable from
+   *  here, so this UNDERSTATES a layer. */
   busyMs: number
+}
+
+/** Everything the painter and the race loop counted, read once. Deltas between two of these are what a
+ *  cell's numbers are made of. */
+export interface Counters {
+  /** Paints, and the section time they logged. */
+  n: number
+  ms: number
+  drawn: number
+  skipped: number
+  sections: Record<string, number>
+  /** Race-loop ticks, and the JS time they spent. */
+  tickN: number
+  tickSum: number
+  /** Frames on which the painter ran at all. Counted by the caller, one sample per frame, because a
+   *  single frame can paint more than once (a cull step composes and paints inside the camera's own
+   *  paint) and "paints over frames" is then not a fraction at all. */
+  paintedFrames: number
+}
+
+/** A cell's numbers from the counters either side of its MEASURED window.
+ *
+ *  Pure and exported because this is where the arithmetic that decides every verdict lives, and because
+ *  the window is the thing that is easy to get wrong: the counters have to be read at the first measured
+ *  frame, not before the warmup, or a cell's cpu time carries frames the design threw away. */
+export function cellMetrics(
+  before: Counters, after: Counters, frames: number,
+): Pick<CellResult, 'paint' | 'tickMs' | 'busyMs'> {
+  const paints = after.n - before.n
+  const f = Math.max(1, frames)
+  const paintMs = Math.max(0, after.ms - before.ms)
+  const ticks = after.tickN - before.tickN
+  const sections: Record<string, number> = {}
+  for (const [k, v] of Object.entries(after.sections)) {
+    const d = v - (before.sections[k] ?? 0)
+    if (d > 0) sections[k] = +(d / f).toFixed(3)
+  }
+  const tickMs = ticks > 0 ? Math.max(0, after.tickSum - before.tickSum) / ticks : 0
+  return {
+    paint: {
+      msPerPaint: paints > 0 ? paintMs / paints : 0,
+      paintedFrac: Math.min(1, (after.paintedFrames - before.paintedFrames) / f),
+      calls: paints > 0 ? Math.round((after.drawn - before.drawn) / paints) : 0,
+      skipped: paints > 0 ? Math.round((after.skipped - before.skipped) / paints) : 0,
+      sections,
+    },
+    tickMs,
+    busyMs: tickMs + paintMs / f,
+  }
 }
 
 /** The floor below which a difference is the machine rather than the change.
@@ -484,9 +381,17 @@ const BUSY_FLOOR_MS = 0.1
  *  `vsync` says the shot had no frame-time headroom, in which case the comparison moves to main-thread
  *  time. That reads a bit lower than the truth (the rasteriser is not on this clock) but it MOVES, which
  *  a frame time pinned to the display does not. */
-export function verdictFor(
-  row: CellResult, baseline: CellResult, noiseMs: number, vsync = false,
-): Verdict {
+export interface VerdictInput {
+  row: CellResult
+  baseline: CellResult
+  noiseMs: number
+  /** 'frame' is what the player feels; 'cpu' is main-thread time, which is all that is left to read
+   *  once the display is choosing the frame time. `blocksOf` picks this per shot. */
+  basis: 'frame' | 'cpu'
+}
+
+export function verdictFor({ row, baseline, noiseMs, basis }: VerdictInput): Verdict {
+  const vsync = basis === 'cpu'
   const deltaMs = vsync
     ? row.busyMs - baseline.busyMs
     : row.stats.meanMs - baseline.stats.meanMs
@@ -512,8 +417,39 @@ export interface ShotBlock {
   noiseMs: number
   /** The baseline never left the display's floor, so this shot's verdicts read main-thread time. */
   vsync: boolean
+  /** What every verdict in this block is measured on, derived from `vsync`. */
+  basis: VerdictInput['basis']
   rows: CellResult[]
   skipped: Cell[]
+}
+
+/** The row of numbers both the modal and the pasted report print, defined once so they cannot drift.
+ *  It already had: one said `p95ms` and the other `p95 ms` for the same column. */
+export interface Column {
+  key: string
+  head: string
+  /** Fixed-width slot in the text report; the modal picks its own Tailwind width. */
+  width: number
+  dp: number
+  of: (r: CellResult) => number
+}
+
+export const COLUMNS: readonly Column[] = [
+  { key: 'fps', head: 'fps', width: 6, dp: 0, of: (r) => r.stats.fps },
+  { key: 'low1', head: '1% low', width: 8, dp: 0, of: (r) => r.stats.low1 },
+  { key: 'p95', head: 'p95 ms', width: 8, dp: 1, of: (r) => r.stats.p95Ms },
+  { key: 'max', head: 'max ms', width: 8, dp: 1, of: (r) => r.stats.maxMs },
+  { key: 'long', head: 'long', width: 6, dp: 0, of: (r) => r.stats.longFrames },
+  { key: 'cpu', head: 'cpu ms', width: 8, dp: 2, of: (r) => r.busyMs },
+  { key: 'calls', head: 'calls', width: 8, dp: 0, of: (r) => r.paint.calls },
+]
+
+/** What the baseline row says about the scene it was measured on. One sentence, one definition. */
+export function baselineSummary(b: CellResult): string {
+  return `scene ${b.scene.items} items, ${b.scene.ops} ops, ${b.scene.pathKb.toFixed(0)}KB paths, `
+    + `${b.scene.nodes} nodes | tick ${b.tickMs.toFixed(2)}ms | `
+    + `paint ${b.paint.msPerPaint.toFixed(2)}ms on ${(b.paint.paintedFrac * 100).toFixed(0)}% of frames`
+    + ` | ${b.paint.skipped} items skipped/paint`
 }
 
 /** Group a finished run by shot, resolving each shot's baselines and its noise floor. */
@@ -524,12 +460,14 @@ export function blocksOf(cells: readonly Cell[], results: ReadonlyMap<string, Ce
     const mine = cells.filter((c) => c.shot === id)
     const baseline = results.get(`${id}/baseline`)
     const repeat = results.get(`${id}/repeat`)
+    const vsync = !!baseline && vsyncBound(baseline.stats)
     return {
       shot: shotById(id),
       baseline,
       repeat,
       noiseMs: baseline && repeat ? noiseFloorMs(baseline.stats, repeat.stats) : 0.15,
-      vsync: !!baseline && vsyncBound(baseline.stats),
+      vsync,
+      basis: vsync ? 'cpu' : 'frame',
       rows: mine.filter((c) => c.variant !== 'baseline' && c.variant !== 'repeat')
         .map((c) => results.get(c.key)).filter((r): r is CellResult => !!r),
       skipped: mine.filter((c) => !!c.skip),
