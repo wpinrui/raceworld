@@ -1,0 +1,67 @@
+// Probe: turntable stills of the lofted 3D car (#3d-port increment 4). The height profile in
+// car-mesh.ts is judged against these, angle by angle, the way the 2D sprite was judged against
+// scripts/car-preview.ts.
+//
+// Run: npx tsx scripts/car-preview-3d.ts [--colour=RRGGBB] [--steer]
+//   -> scripts/.preview/car-3d-front.png, -side, -rear, -top
+
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { build } from 'esbuild'
+import { chromium } from 'playwright-core'
+
+const OUT = 'scripts/.preview'
+const argv = process.argv.slice(2)
+const colour = argv.find((a) => a.startsWith('--colour='))?.split('=')[1] ?? 'E8442E'
+const steer = argv.includes('--steer') ? '&steer=1' : ''
+
+async function main() {
+  mkdirSync(OUT, { recursive: true })
+  const bundle = await build({
+    entryPoints: ['scripts/car-preview-3d-entry.ts'],
+    bundle: true,
+    write: false,
+    format: 'iife',
+    target: 'es2022',
+    alias: { '@': resolve('src') },
+    logLevel: 'silent',
+  })
+  const page = resolve(OUT, 'car-3d-viewer.html')
+  writeFileSync(page, '<!doctype html><html><head><meta charset="utf-8"><title>car 3d</title>'
+    + '<style>html,body{margin:0;background:#101318}canvas{display:block}</style></head>'
+    + `<body><canvas id="gl"></canvas><script>${bundle.outputFiles[0].text}</script></body></html>`)
+
+  let browser = null
+  for (const channel of ['msedge', 'chrome'] as const) {
+    try {
+      browser = await chromium.launch({ channel, headless: true })
+      break
+    } catch {
+      // Try the next channel.
+    }
+  }
+  if (!browser) {
+    console.error('neither Edge nor Chrome could be launched')
+    process.exitCode = 1
+    return
+  }
+  const tab = await browser.newPage({ viewport: { width: 1200, height: 800 } })
+  tab.on('pageerror', (err) => console.error(`page error: ${err.message}`))
+  for (const angle of ['front', 'side', 'rear', 'top']) {
+    await tab.goto(`${pathToFileURL(page).href}?angle=${angle}&colour=${colour}${steer}`)
+    await tab.waitForFunction('window.__done === true', undefined, { timeout: 60_000 })
+    const error = await tab.evaluate('window.__error')
+    if (error) {
+      console.error(`${angle}: ${error}`)
+      process.exitCode = 1
+      continue
+    }
+    const file = `${OUT}/car-3d-${angle}.png`
+    await tab.locator('#gl').screenshot({ path: file })
+    console.log(`${angle.padEnd(6)} -> ${file}`)
+  }
+  await browser.close()
+}
+
+main()

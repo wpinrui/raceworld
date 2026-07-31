@@ -19,14 +19,12 @@ import { PitGarageSigns, pitComplexOps, pitFloorOps } from '../src/components/ra
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
 import { MOODS, shadowFill, screenUpAzimuth, type Mood } from '../src/lib/ui/lighting'
 import { CarSprite } from '../src/components/race/CarSprite'
-import {
-  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, carAttitude, carLight, steerAngles,
-} from '../src/lib/ui/car-sprite'
+import { CAR_LENGTH_M, CAR_SCALE, SPRITE, carLight } from '../src/lib/ui/car-sprite'
+import { PREVIEW_LIVERIES as LIVERIES, carField } from '../src/lib/ui/car-field'
 import { roadLap, solveLap } from '../src/lib/ui/lap-solve'
 import { roadOps } from '../src/lib/ui/road-ops'
 import { gridBoxOps, kerbOps, startLineOps, startPose } from '../src/lib/ui/road-marks'
 import { isGroup, refName, sceneryScene, type DrawOp, type SceneItem } from '../src/lib/ui/scenery-draw'
-import { PROFILE_N, lateralG, sampleLap } from '../src/lib/ui/lap-dynamics'
 import type { Lighting } from '../src/lib/ui/lighting'
 import type { TrackLayout } from '../src/data/tracks'
 
@@ -47,7 +45,6 @@ const carCount = carsArg ? Number(carsArg.split('=')[1] ?? 12) : 0
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
 
-const LIVERIES = ['#E8442E', '#2F7BE8', '#F2C230', '#39B26A', '#B565E0', '#E8792E', '#39C4C4', '#E85BA0']
 
 const paintAttr = (v: string) => (refName(v) ? `url(#${refName(v)})` : v)
 
@@ -110,57 +107,20 @@ function defs(u: (m: number) => number, lighting: Lighting): string {
     + '</defs>'
 }
 
-/** Resample a closed polyline to `n` points of equal arc length: what the profile physics assumes. */
-function equalArc(pts: { x: number; y: number }[], n: number) {
-  const cum = [0]
-  for (let i = 1; i <= pts.length; i++) {
-    const a = pts[i - 1]
-    const b = pts[i % pts.length]
-    cum.push(cum[i - 1] + Math.hypot(b.x - a.x, b.y - a.y))
-  }
-  const len = cum[pts.length]
-  const out: { x: number; y: number }[] = []
-  let j = 0
-  for (let i = 0; i < n; i++) {
-    const target = (i / n) * len
-    while (j < pts.length - 1 && cum[j + 1] < target) j++
-    const a = pts[j]
-    const b = pts[(j + 1) % pts.length]
-    const seg = cum[j + 1] - cum[j] || 1
-    const f = (target - cum[j]) / seg
-    out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f })
-  }
-  return { pts: out, len }
-}
-
-/** The cars, strung round the solved RACING LINE, leaning and steering exactly as much as the lap's own
- *  dynamics say they should at that point. */
+/** The cars, strung round the solved RACING LINE by the shared field, dressed as SVG sprites. */
 function carsMarkup(layout: TrackLayout, lighting: Lighting, n: number): string[] {
-  const lap = solveLap(layout)
-  const { pts, len } = equalArc(lap.line.pts, PROFILE_N)
-  const dyn = lap.dyn
   const light = carLight(lighting)
   const carLen = (CAR_LENGTH_M * CAR_SCALE) / layout.metresPerUnit
   const scale = carLen / SPRITE.len
-  return Array.from({ length: n }, (_, i) => {
-    const frac = i / n
-    const st = Math.round(frac * PROFILE_N) % PROFILE_N
-    const here = pts[st]
-    const ahead = pts[(st + 2) % PROFILE_N]
-    const spriteRot = Math.atan2(ahead.y - here.y, ahead.x - here.x) + Math.PI / 2
-    const attitude = carAttitude(sampleLap(dyn.lat, frac), sampleLap(dyn.long, frac))
-    // Wheels turned for the corner a front axle's lead up the road, as the live map does it.
-    const steer = steerAngles(
-      sampleLap(dyn.curvature, frac + FRONT_LEAD_M / layout.metresPerUnit / len) / layout.metresPerUnit,
-      lateralG(dyn, frac, layout.metresPerUnit),
-    )
+  return carField(layout, n).map((car, i) => {
     const sprite = renderToStaticMarkup(createElement(CarSprite, {
-      id: `p${i}`, color: LIVERIES[i % LIVERIES.length], length: SPRITE.len, light, spriteRot, attitude, steer,
+      id: `p${i}`, color: LIVERIES[i % LIVERIES.length], length: SPRITE.len, light,
+      spriteRot: car.rot, attitude: car.attitude, steer: car.steer,
     }))
     // The sprite is its own <svg>, and a nested one CLIPS to its viewBox, which would cut the contact
     // shadow's tail off. So it goes in as a <g> instead, scaled from sprite units into track units.
     const body = sprite.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')
-    return `<g transform="translate(${here.x} ${here.y}) rotate(${(spriteRot * 180) / Math.PI}) `
+    return `<g transform="translate(${car.x} ${car.y}) rotate(${(car.rot * 180) / Math.PI}) `
       + `scale(${scale}) translate(${-SPRITE.cx} ${-SPRITE.cy})">${body}</g>`
   })
 }

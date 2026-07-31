@@ -19,6 +19,8 @@ const tilt = Number(argv.find((a) => a.startsWith('--tilt='))?.split('=')[1] ?? 
 const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
 const at = argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5'
 const mood = argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon'
+const carsArg = argv.find((a) => a === '--cars' || a.startsWith('--cars='))
+const cars = carsArg ? Number(carsArg.split('=')[1] ?? 12) : 0
 const named = argv.filter((a) => !a.startsWith('--'))
 const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
 
@@ -75,9 +77,9 @@ async function main() {
   const page = await browser.newPage()
   page.on('pageerror', (err) => console.error(`page error: ${err.message}`))
   for (const id of ids) {
-    const z = `${mood === 'afternoon' ? '' : `-${mood}`}${zoom > 1 ? `-z${zoom}` : ''}`
+    const z = `${mood === 'afternoon' ? '' : `-${mood}`}${zoom > 1 ? `-z${zoom}` : ''}${cars > 0 ? '-cars' : ''}`
     for (const [tag, deg] of [[`-3d${z}`, 0], [`-3d${z}-tilt`, tilt]] as const) {
-      const url = `${pathToFileURL(viewer).href}?shot=1&id=${id}&tilt=${deg}&zoom=${zoom}&at=${at}&mood=${mood}`
+      const url = `${pathToFileURL(viewer).href}?shot=1&id=${id}&tilt=${deg}&zoom=${zoom}&at=${at}&mood=${mood}&cars=${cars}`
       await page.goto(url)
       await page.waitForFunction('window.__done === true', undefined, { timeout: 120_000 })
       const error = await page.evaluate('window.__error')

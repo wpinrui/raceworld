@@ -12,7 +12,7 @@
 | **1** — ground truth: the road on the ground, previewable | **Done.** `8066744` |
 | **2** — the world stands up: structures, trees, light | **Done.** `5f59773` |
 | **3** — the surface keeps its story: ink as decal geometry | **Done.** Compiled, not baked: the ops were already polyline strokes, and merged static ribbons are exact at every zoom with no bake pass and no texel budget. `roadInkUnder`/`roadInkOver` + `ops3d.ts` |
-| **4** — cars: impostor, then the parametric loft | Not started |
+| **4** — cars: impostor, then the parametric loft | **In progress.** Impostors landed (`--cars` on the probe); the loft's first draft renders via `scripts/car-preview-3d.ts`, height profile now iterating on turntable stills |
 | **5** — the live view swaps | Not started |
 | **6** — moods and night, with real lights | Not started |
 
