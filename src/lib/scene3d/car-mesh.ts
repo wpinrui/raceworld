@@ -46,11 +46,12 @@ const BODY_BOTTOM = 0.06
  *  front faces are where the mouths open, and the undercut between pod and floor stays air. */
 interface PodStation { z: number; inner: number; outer: number; top: number }
 const POD: PodStation[] = [
+  // The intake's top lip IS the pod's summit: nothing behind it runs higher.
   { z: 212, inner: 30, outer: 52, top: 0.40 },
-  { z: 224, inner: 26, outer: 70, top: 0.54 },
-  { z: 300, inner: 26, outer: 70, top: 0.53 },
-  { z: 356, inner: 26, outer: 56, top: 0.46 },
-  { z: 392, inner: 24, outer: 34, top: 0.40 },
+  { z: 224, inner: 26, outer: 70, top: 0.40 },
+  { z: 300, inner: 26, outer: 70, top: 0.39 },
+  { z: 356, inner: 26, outer: 56, top: 0.34 },
+  { z: 392, inner: 24, outer: 34, top: 0.29 },
 ]
 const POD_BOTTOM = 0.06
 
@@ -317,8 +318,8 @@ export function buildCarMesh(colour: string): CarMesh {
   const mouths = new GeometrySink()
   for (const sign of [-1, 1]) {
     mouths.quad(
-      v3(sign * 31, H(0.10), 210.5 - cz), v3(sign * 50, H(0.12), 211.5 - cz),
-      v3(sign * 50, H(0.36), 211.5 - cz), v3(sign * 31, H(0.38), 210.5 - cz),
+      v3(sign * 30.5, H(0.10), 210.5 - cz), v3(sign * 51.5, H(0.12), 211.5 - cz),
+      v3(sign * 51.5, H(0.375), 211.5 - cz), v3(sign * 30.5, H(0.385), 210.5 - cz),
     )
   }
   group.add(mesh(mouths.build(), CARBON))
