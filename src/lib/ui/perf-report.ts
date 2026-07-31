@@ -7,10 +7,10 @@
 // JSON so nothing here has to be the only record.
 
 import {
-  COLUMNS, baselineSummary, blocksOf, longFramesOf, referenceFor, traceSummary, verdictFor,
+  COLUMNS, VARIANTS, baselineSummary, blocksOf, longFramesOf, referenceFor, traceSummary, verdictFor,
   type Cell, type CellResult, type LabConfig, type ShotBlock,
 } from './perf-bench'
-import { PERF_FLAG_INFO, type PerfFlag } from './perf-flags'
+import { PERF_FLAG_INFO } from './perf-flags'
 
 export interface LabReport {
   circuit: string
@@ -124,9 +124,15 @@ function coldText(b: ShotBlock): string[] {
   return out
 }
 
-/** Mitigations that failed to justify themselves anywhere they were measured. The point of the lab. */
+/** Mitigations that failed to justify themselves anywhere they were measured. The point of the lab.
+ *
+ *  Read off the ROW, not off a flag name parsed back out of the row's id. A mitigation row can turn off
+ *  more than one flag: the named pair has no single flag to look an entry up by, and treating its id as
+ *  one is a lookup that returns nothing. The row already carries its label, the flags it turned off, and
+ *  the row it was scored against, so nothing here needs to reconstruct any of them. */
 function idleMitigations(blocks: ShotBlock[]): string[] {
-  const seen = new Map<string, { ran: number; idle: number; backfired: number }>()
+  interface Idle { ran: number; idle: number; backfired: number; cell: Cell; versus: string | null }
+  const seen = new Map<string, Idle>()
   for (const b of blocks) {
     if (!b.baseline) continue
     for (const r of b.rows) {
@@ -134,7 +140,8 @@ function idleMitigations(blocks: ShotBlock[]): string[] {
       const against = referenceFor(b, r)
       if (!against) continue
       const v = verdictFor({ row: r, baseline: against.ref, noiseMs: b.noiseMs, basis: b.basis })
-      const rec = seen.get(r.cell.variant) ?? { ran: 0, idle: 0, backfired: 0 }
+      const rec = seen.get(r.cell.variant)
+        ?? { ran: 0, idle: 0, backfired: 0, cell: r.cell, versus: against.versus }
       rec.ran++
       if (v.kind === 'nothing') rec.idle++
       if (v.kind === 'backfires') rec.backfired++
@@ -144,12 +151,13 @@ function idleMitigations(blocks: ShotBlock[]): string[] {
   const lines: string[] = []
   for (const [id, rec] of seen) {
     if (rec.ran === 0 || rec.idle + rec.backfired < rec.ran) continue
-    const flag = id.slice('off:'.length) as PerfFlag
-    const info = PERF_FLAG_INFO[flag]
     const how = rec.backfired > 0 ? 'made the frame FASTER when turned off' : 'changed nothing measurable'
-    lines.push(`  ${info.label}: ${how} in all ${rec.ran} shot(s) it ran in.`)
-    lines.push(`    claim: ${info.claim}`)
-    lines.push(`    site: ${info.site}`)
+    const against = rec.versus ? `, read against ${rec.versus}` : ''
+    lines.push(`  ${rec.cell.label}: ${how} in all ${rec.ran} shot(s) it ran in${against}.`)
+    const claim = VARIANTS.find((v) => v.id === id)?.reads
+    if (claim) lines.push(`    claim: ${claim}`)
+    const sites = rec.cell.config.flagsOff.map((f) => PERF_FLAG_INFO[f].site)
+    if (sites.length > 0) lines.push(`    site: ${sites.join(', ')}`)
   }
   return lines
 }

@@ -106,6 +106,42 @@ describe('formatReport', () => {
   })
 })
 
+// A mitigation row can turn off more than one flag, and the pair's id is not a flag name. The section
+// used to read one back out of the id and index the flag table with it, which is undefined for the pair.
+describe('a mitigation row that turns off a pair of flags', () => {
+  const config = {
+    ...DEFAULT_LAB_CONFIG,
+    shots: ['zoom' as const],
+    variants: ['off:geomCache', 'off:cullDisc+geomCache'],
+  }
+  const cells = planCells(config, 20)
+  // Every cell at the same mean, so both rows come back idle and both reach the section.
+  const text = formatReport({
+    circuit: 'monaco',
+    at: '2026-07-31T09:00:00.000Z',
+    dpr: 2,
+    viewport: { w: 1600, h: 900 },
+    cars: 20,
+    config,
+    aborted: false,
+    cells,
+    results: cells.filter((c) => !c.skip && c.variant !== 'warm').map((c) => result(c, 16)),
+  })
+  const tail = text.slice(text.indexOf('MITIGATIONS THAT EARNED NOTHING'))
+
+  it('names it by its own label rather than by a flag parsed out of its id', () => {
+    expect(tail).toContain('Cull disc, memo off')
+  })
+
+  it('names every site it turned off, not one', () => {
+    expect(tail).toContain('RaceTrackMap.composeScene, scenery-draw.objectMemo')
+  })
+
+  it('says which row it was read against, since it is not the baseline', () => {
+    expect(tail).toMatch(/Cull disc, memo off.*read against off:geomCache/)
+  })
+})
+
 /** A run of one shot, with the frame times and the trace the caller cares about. */
 function shotRun(
   shot: 'zoom' | 'racing',
