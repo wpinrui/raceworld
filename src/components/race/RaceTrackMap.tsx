@@ -260,9 +260,12 @@ interface Props {
   /** Garage order: team names best-first (constructor standings). Absent/unknown teams follow, so a
    * fresh season's empty table degrades to an arbitrary-but-stable order. */
   teamOrder?: string[]
+  /** Open the perf lab as soon as the map is up. For /dev/perf-lab, whose whole reason to exist is the
+   * lab; everywhere else it stays behind the 'n' key. */
+  openPerfLab?: boolean
 }
 
-function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live', pinnedCard, teamOrder }: Props) {
+function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live', pinnedCard, teamOrder, openPerfLab = false }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -2032,7 +2035,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       camRef.current = { ...saved.cam }
       requestAnimationFrame(() => applyCam(true))
     },
-  }, cars.length)
+  }, cars.length, openPerfLab)
   // Published after the commit rather than during it: a discarded render must not be able to leave the
   // key listener pointing at a lab that never existed.
   const perfLabRef = useRef(perfLab)
@@ -2375,6 +2378,7 @@ export const RaceTrackMap = memo(RaceTrackMapImpl, (p, n) =>
   p.sceneryDensity === n.sceneryDensity &&
   p.tipTick === n.tipTick &&
   p.teamOrder === n.teamOrder &&
+  p.openPerfLab === n.openPerfLab &&
   (p.pinnedCard == null) === (n.pinnedCard == null) &&
   sameCars(p.cars, n.cars, (n.view ?? 'live') === 'map'),
 )

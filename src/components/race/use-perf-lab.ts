@@ -64,8 +64,8 @@ const snapshot = (h: PerfLabHarness, paintedFrames: number): Counters => {
 
 /** `cars` is a parameter rather than something read back off the harness because the plan depends on it
  *  (a field of nothing cannot exercise the visibility-write elision) and the plan is rendered. */
-export function usePerfLab(harness: PerfLabHarness, cars: number) {
-  const [open, setOpen] = useState(false)
+export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = false) {
+  const [open, setOpen] = useState(openOnMount)
   const [config, setConfig] = useState<LabConfig>(DEFAULT_LAB_CONFIG)
   const [state, setState] = useState<LabState>({
     phase: 'config', cells: [], results: [], at: 0, status: '', report: null,
