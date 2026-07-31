@@ -1,47 +1,42 @@
-// Probe: rasterise the real scenery components for a few circuits so the world can be eyeballed
-// without starting the app. Mirrors the draw order RaceTrackMap uses (ground, scenery, track
-// ribbon, kerbs, furniture). Follows scripts/team-colours-preview.ts: emit a static artefact to
-// look at before merging.
-// Run: npx tsx scripts/scenery-preview.ts [--low] [--terrain] [--mood=afternoon|midday|dusk|overcast|night] [circuitId ...]
-// --low renders the zoom-out LOD tier, which is the one that has regressed performance before.
+// Probe: rasterise the world for a few circuits so it can be eyeballed without starting the app.
+//
+// It builds the scene through `sceneryScene` and `roadOps` — the exact calls the map makes — and maps
+// each `DrawOp` to an SVG path, so what is previewed is what ships. The one thing SVG needs that the
+// canvas supplies itself is the gradients and patterns a `ref:` names, which are written out below from
+// the same numbers lib/ui/scenery-paint.ts builds them from.
+//
+// Run: npx tsx scripts/scenery-preview.ts [--terrain] [--mood=afternoon|midday|dusk|overcast|night]
+//        [--zoom=N] [--at=fx,fy] [--cars[=N]] [circuitId ...]
 
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, mkdirSync } from 'node:fs'
 import sharp from 'sharp'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
-import { buildScenery } from '../src/lib/ui/track-scenery'
-import {
-  LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M,
-} from '../src/lib/ui/track-path'
-import { SceneryLayer, SceneryShadowLayer, ScenerySolidsLayer, TrackFurnitureLayer } from '../src/components/race/SceneryLayer'
-import {
-  PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns,
-} from '../src/components/race/PitBuilding'
+import { KERB_BLOCK_M, KERB_WIDTH_M, buildScenery } from '../src/lib/ui/track-scenery'
+import { TRACK_WIDTH_M, densifyTrace } from '../src/lib/ui/track-path'
+import { PitGarageSigns, pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
-import { MOODS, shadowFill, type Mood } from '../src/lib/ui/lighting'
-import { densifyTrace } from '../src/lib/ui/track-path'
+import { MOODS, shadowFill, screenUpAzimuth, type Mood } from '../src/lib/ui/lighting'
 import { CarSprite } from '../src/components/race/CarSprite'
 import {
-  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, TRACK_M, carAttitude, carLight, steerAngles,
+  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, carAttitude, carLight, steerAngles,
 } from '../src/lib/ui/car-sprite'
 import { buildRacingLine, polylineArc } from '../src/lib/ui/racing-line'
-import { edgeOps, surfaceOps } from '../src/lib/ui/track-surface'
-import { refName, type DrawOp } from '../src/lib/ui/scenery-draw'
+import { roadOps } from '../src/lib/ui/road-ops'
+import { gridBoxOps, startLineOps } from '../src/lib/ui/road-marks'
+import { isGroup, refName, sceneryScene, type DrawOp, type SceneItem } from '../src/lib/ui/scenery-draw'
 import { PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
 import type { Lighting } from '../src/lib/ui/lighting'
 import type { TrackLayout } from '../src/data/tracks'
 
-
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
-const low = argv.includes('--low')
 const terrainDetail = argv.includes('--terrain')
-const detail = low ? 'low' : 'full'
 const moodArg = (argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon') as Mood
 const mood = MOODS[moodArg] ?? MOODS.afternoon
 // Crop to a fraction of the viewBox around a normalised centre, so detail that only exists at
-// racing zoom (glazing, kerb faces, tyre stacks) can actually be judged from a still.
+// racing zoom (glazing, kerb faces, the ink worn into the tarmac) can be judged from a still.
 const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
 const [cxf, cyf] = (argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5').split(',').map(Number)
 // Cars round the lap, each at its real heading, so the contact shadow and the world-locked sheen can
@@ -56,7 +51,8 @@ const LIVERIES = ['#E8442E', '#2F7BE8', '#F2C230', '#39B26A', '#B565E0', '#E8792
 
 const paintAttr = (v: string) => (refName(v) ? `url(#${refName(v)})` : v)
 
-/** Same mapping the SVG reference renderer applies. Duplicated from canvas-order-preview for now. */
+/** One draw op as an SVG path. A gradient resolves against the shape's own extent in SVG, so the op's
+ *  `bbox` (which only the canvas needs) is simply ignored here. */
 function opSvg(op: DrawOp): string {
   const parts = [`d="${op.d}"`, `fill="${op.fill ? paintAttr(op.fill) : 'none'}"`]
   if (op.stroke) parts.push(`stroke="${paintAttr(op.stroke)}"`, `stroke-width="${op.width ?? 1}"`)
@@ -66,6 +62,52 @@ function opSvg(op: DrawOp): string {
   if (op.evenOdd) parts.push('fill-rule="evenodd"')
   parts.push('stroke-linejoin="round"')
   return `<path ${parts.join(' ')} />`
+}
+
+const itemSvg = (item: SceneItem): string => (isGroup(item)
+  ? `<g transform="translate(${item.x} ${item.y}) rotate(${(item.rot * 180) / Math.PI})">`
+    + `${item.ops.map(opSvg).join('')}</g>`
+  : opSvg(item))
+
+/** The gradients and patterns a `ref:` names, from the same numbers the canvas builds them from. */
+function defs(u: (m: number) => number, lighting: Lighting): string {
+  const deg = (lighting.azimuth * 180) / Math.PI
+  const dx = Math.cos(lighting.azimuth)
+  const dy = Math.sin(lighting.azimuth)
+  const canopy = (id: string, [a, b, c]: [string, string, string]) =>
+    `<radialGradient id="${id}" fx="${0.5 - dx * 0.3}" fy="${0.5 - dy * 0.3}">`
+    + `<stop offset="0%" stop-color="${a}"/><stop offset="45%" stop-color="${b}"/>`
+    + `<stop offset="100%" stop-color="${c}"/></radialGradient>`
+  return '<defs>'
+    + `<pattern id="tm-seats" width="${u(2.4)}" height="${u(1.5)}" patternUnits="userSpaceOnUse">`
+    + `<rect width="${u(2.4)}" height="${u(1.5)}" fill="#3E4552"/>`
+    + `<rect y="${u(0.95)}" width="${u(2.4)}" height="${u(0.55)}" fill="#575F6E"/></pattern>`
+    + `<pattern id="tm-crowd" width="${u(3.2)}" height="${u(3.2)}" patternUnits="userSpaceOnUse">`
+    + `<circle cx="${u(0.7)}" cy="${u(0.8)}" r="${u(0.3)}" fill="#DC143C" opacity="0.5"/>`
+    + `<circle cx="${u(2.2)}" cy="${u(1.7)}" r="${u(0.3)}" fill="#00D9FF" opacity="0.45"/>`
+    + `<circle cx="${u(1.3)}" cy="${u(2.6)}" r="${u(0.3)}" fill="#E8B923" opacity="0.45"/>`
+    + `<circle cx="${u(2.7)}" cy="${u(0.5)}" r="${u(0.3)}" fill="#FFFFFF" opacity="0.4"/></pattern>`
+    + `<pattern id="tm-roof" width="${u(3.6)}" height="${u(3.6)}" patternUnits="userSpaceOnUse">`
+    + `<rect width="${u(0.35)}" height="${u(3.6)}" fill="#000000" opacity="0.055"/>`
+    + `<rect x="${u(0.35)}" width="${u(0.3)}" height="${u(3.6)}" fill="#FFFFFF" opacity="0.04"/></pattern>`
+    + `<pattern id="tm-water" width="${u(9)}" height="${u(6)}" patternUnits="userSpaceOnUse">`
+    + `<path d="M 0 ${u(2)} q ${u(2.2)} ${-u(1.4)} ${u(4.5)} 0 t ${u(4.5)} 0" fill="none" stroke="#A8D4E6" stroke-width="${u(0.35)}" opacity="0.3"/>`
+    + `<path d="M ${-u(2)} ${u(4.6)} q ${u(2.2)} ${-u(1.4)} ${u(4.5)} 0 t ${u(4.5)} 0" fill="none" stroke="#A8D4E6" stroke-width="${u(0.35)}" opacity="0.2"/></pattern>`
+    + `<pattern id="tm-crop" width="${u(11)}" height="${u(11)}" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">`
+    + `<rect width="${u(3.4)}" height="${u(11)}" fill="#FFFFFF" opacity="0.05"/></pattern>`
+    + canopy('tm-tree0', ['#8FB35F', '#4F7B3A', '#2C4B22'])
+    + canopy('tm-tree1', ['#A8B368', '#6B7A35', '#3D4A1E'])
+    + `<linearGradient id="tm-bevel" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${deg - 45} 0.5 0.5)">`
+    + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"/>'
+    + '<stop offset="45%" stop-color="#FFFFFF" stop-opacity="0"/>'
+    + '<stop offset="100%" stop-color="#000000" stop-opacity="0.22"/></linearGradient>'
+    + '<linearGradient id="tm-rake" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>'
+    + '<stop offset="100%" stop-color="#000000" stop-opacity="0.30"/></linearGradient>'
+    + '<linearGradient id="tm-rake-flip" x1="0" y1="1" x2="0" y2="0">'
+    + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>'
+    + '<stop offset="100%" stop-color="#000000" stop-opacity="0.30"/></linearGradient>'
+    + '</defs>'
 }
 
 /** The racing line solved off the circuit's own trace, plus the lap dynamics along it. Everything the
@@ -79,27 +121,6 @@ function solveLap(layout: TrackLayout) {
   const n = Math.max(512, Math.min(4096, Math.round((centreArc.length * layout.metresPerUnit) / 3)))
   const centre = Array.from({ length: n }, (_, i) => centreArc.at((i / n) * centreArc.length))
   return { line, arc, centre, dyn: lapDynamics(pts, arc.length, trackPhysics(layout.metresPerUnit)) }
-}
-
-/** The pit lane as the map lays it: garage floors under the lane's paint, then casing-then-asphalt for
- *  the lane and its working apron. */
-function pitRoadMarkup(layout: TrackLayout, lighting: Lighting, u: (m: number) => number): string[] {
-  const zone = buildPitZone(layout, buildPitSlots(layout, 10))
-  return [
-    ...(zone ? [renderToStaticMarkup(createElement(PitGarageFloors, { zone, lighting }))] : []),
-    renderToStaticMarkup(createElement('path', {
-      d: layout.pit.fastD, fill: 'none', stroke: '#D8D8D2', strokeWidth: u(LANE_WIDTH_M),
-      strokeLinejoin: 'round', strokeLinecap: 'round',
-    })),
-    ...(zone ? [renderToStaticMarkup(createElement('path', {
-      d: zone.work, fill: '#D8D8D2', stroke: '#D8D8D2', strokeWidth: u(2 * LANE_LINE_M), strokeLinejoin: 'round',
-    }))] : []),
-    renderToStaticMarkup(createElement('path', {
-      d: layout.pit.fastD, fill: 'none', stroke: '#33383E', strokeWidth: u(LANE_TARMAC_M),
-      strokeLinejoin: 'round', strokeLinecap: 'round',
-    })),
-    ...(zone ? [renderToStaticMarkup(createElement('path', { d: zone.work, fill: '#33383E' }))] : []),
-  ]
 }
 
 /** Resample a closed polyline to `n` points of equal arc length: what the profile physics assumes. */
@@ -160,122 +181,99 @@ function carsMarkup(layout: TrackLayout, lighting: Lighting, n: number): string[
 mkdirSync(OUT, { recursive: true })
 
 async function main() {
-for (const id of ids) {
-  const layout = TRACK_LAYOUTS[id]
-  if (!layout) {
-    console.log(`${id}: no such layout`)
-    continue
-  }
-  // Same standardised bearing the map uses, or the preview would not be checking what ships.
-  const az = pitViewAzimuth(layout)
-  const lighting = az === null ? mood : { ...mood, azimuth: az }
-  const mpu = layout.metresPerUnit
-  const u = (m: number) => m / mpu
-  const scenery = buildScenery(layout.trace, layout.pit, {
-    circuitId: layout.circuitId,
-    metresPerUnit: mpu,
-    viewBox: layout.viewBox,
-    pitOutside: layout.pitOutside,
-    biome: layout.biome,
-    terrainDetail,
-  })
-
-  const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
-  const m = TRACK_WIDTH_M / mpu / 2 + 8
-  const full = { x: vx - m, y: vy - m, w: vw + 2 * m, h: vh + 2 * m }
-  const vb = zoom > 1
-    ? {
-      x: full.x + full.w * cxf - full.w / zoom / 2, y: full.y + full.h * cyf - full.h / zoom / 2,
-      w: full.w / zoom, h: full.h / zoom,
+  for (const id of ids) {
+    const layout = TRACK_LAYOUTS[id]
+    if (!layout) {
+      console.log(`${id}: no such layout`)
+      continue
     }
-    : full
+    // Same standardised bearing the map opens on, or the preview would not be checking what ships.
+    const az = pitViewAzimuth(layout)
+    const lighting = az === null ? mood : { ...mood, azimuth: az }
+    const viewAz = az === null ? mood.azimuth : screenUpAzimuth(screenUpAzimuth(az))
+    const mpu = layout.metresPerUnit
+    const u = (m: number) => m / mpu
+    const scenery = buildScenery(layout.trace, layout.pit, {
+      circuitId: layout.circuitId,
+      metresPerUnit: mpu,
+      viewBox: layout.viewBox,
+      pitOutside: layout.pitOutside,
+      biome: layout.biome,
+      terrainDetail,
+    })
+    const pitSlots = buildPitSlots(layout, 10)
+    const pitZone = buildPitZone(layout, pitSlots)
+    const lap = solveLap(layout)
 
-  const body = [
-    renderToStaticMarkup(createElement('rect', {
-      x: vb.x - 4000, y: vb.y - 4000, width: vb.w + 8000, height: vb.h + 8000, fill: scenery.base,
-    })),
-    renderToStaticMarkup(createElement(SceneryLayer, { scenery, u, lighting, detail })),
-    ...(() => {
-      const lap = solveLap(layout)
-      return edgeOps({
-        u, line: lap.line.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
-        tarmac: '#33383E', centre: lap.centre, ground: scenery.base, shadow: shadowFill(lighting),
-        ribbonHalfM: TRACK_WIDTH_M / 2, lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
-        tarmacHalfM: TARMAC_WIDTH_M / 2, lateral: lap.line.lateral,
-      }).map(opSvg)
-    })(),
-    renderToStaticMarkup(createElement('path', {
-      d: layout.d, fill: 'none', stroke: '#D8D8D2', strokeWidth: u(TRACK_WIDTH_M), strokeLinejoin: 'round',
-    })),
-    renderToStaticMarkup(createElement('path', {
-      d: layout.d, fill: 'none', stroke: '#33383E', strokeWidth: u(TARMAC_WIDTH_M), strokeLinejoin: 'round',
-    })),
-    // The pit lane's road, in the map's own order.
-    ...pitRoadMarkup(layout, lighting, u),
-    // Worn into the tarmac, between the road and the kerbs, exactly where the map places it.
-    ...(() => {
-      const lap = solveLap(layout)
-      return surfaceOps({
+    const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
+    const m = TRACK_WIDTH_M / mpu / 2 + 8
+    const full = { x: vx - m, y: vy - m, w: vw + 2 * m, h: vh + 2 * m }
+    const vb = zoom > 1
+      ? {
+        x: full.x + full.w * cxf - full.w / zoom / 2, y: full.y + full.h * cyf - full.h / zoom / 2,
+        w: full.w / zoom, h: full.h / zoom,
+      }
+      : full
+
+    const { x, y, angle } = layout.start
+    const lead = 1.5 / mpu
+    const startAt = { x: x + Math.cos(angle) * lead, y: y + Math.sin(angle) * lead, angle }
+    const scene = sceneryScene(scenery, {
+      u,
+      lighting,
+      view: viewAz,
+      ground: true,
+      track: roadOps({
+        layout, u, pitZone, pitSlots, ground: scenery.base, shadow: shadowFill(lighting),
+        lap: { pts: lap.line.pts, lateral: lap.line.lateral, centre: lap.centre, dyn: lap.dyn },
+      }),
+      kerbs: scenery.kerbs.flatMap((k): DrawOp[] => [
+        { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' },
+        {
+          d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
+          dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
+        },
+      ]),
+      pitUnder: pitZone ? pitFloorOps(pitZone, lighting) : [],
+      pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz) : [],
+      overlay: [...startLineOps(startAt, u), ...gridBoxOps([], u)],
+    })
+
+    const body = [
+      defs(u, lighting),
+      // The surface the canvas CLEARS to, which is what the ground plane is at runtime.
+      `<rect x="${vb.x - 4000}" y="${vb.y - 4000}" width="${vb.w + 8000}" height="${vb.h + 8000}" fill="${scenery.base}"/>`,
+      ...scene.map(itemSvg),
+      // The garage boards are the one part of the world that stays real SVG in the map too.
+      ...(pitZone ? [renderToStaticMarkup(createElement(PitGarageSigns, {
+        zone: pitZone,
         u,
-        line: lap.line.pts,
-        curvature: lap.dyn.curvature,
-        long: lap.dyn.long,
-        trackM: TRACK_M,
-        tarmac: '#33383E', centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
-        lateral: lap.line.lateral,
-      }).map(opSvg)
-    })(),
-    ...scenery.kerbs.flatMap((k) => [
-      renderToStaticMarkup(createElement('path', {
-        d: k.d, fill: 'none', stroke: '#E6E3DC', strokeWidth: u(1.3), strokeLinecap: 'round',
-      })),
-      renderToStaticMarkup(createElement('path', {
-        d: k.d, fill: 'none', stroke: '#C8352F', strokeWidth: u(1.3), strokeDasharray: `${u(3)} ${u(3)}`,
-      })),
-    ]),
-    renderToStaticMarkup(createElement(SceneryShadowLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
-    renderToStaticMarkup(createElement(ScenerySolidsLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
-    renderToStaticMarkup(createElement(TrackFurnitureLayer, { scenery, u, lighting, view: az ?? mood.azimuth, detail })),
-    ...(() => {
-      // The pit complex, drawn from the same pure geometry the map uses, so this preview checks it
-      // rather than checking the scenery alone.
-      const zone = buildPitZone(layout, buildPitSlots(layout, 10))
-      if (!zone) return []
-      return [
-        renderToStaticMarkup(createElement(PitBuildingShadow, { zone, u, lighting })),
-        renderToStaticMarkup(createElement(PitBuilding, { zone, u, lighting, view: az ?? mood.azimuth })),
-        renderToStaticMarkup(createElement(PitGarageSigns, {
-          zone, u, lighting, view: az ?? mood.azimuth,
-          drivers: () => [
-            { name: 'Kimi Raikkonen', nationality: 'FI' },
-            { name: 'Felipe Massa', nationality: 'BR' },
-          ],
-        })),
-      ]
-    })(),
-    // Last: the cars sit on top of the world, as they do in the map.
-    ...(carCount > 0 ? carsMarkup(layout, lighting, carCount) : []),
-  ].join('\n')
+        lighting,
+        view: viewAz,
+        drivers: () => [
+          { name: 'Kimi Raikkonen', nationality: 'FI' },
+          { name: 'Felipe Massa', nationality: 'BR' },
+        ],
+      }))] : []),
+      // Last: the cars sit on top of the world, as they do in the map.
+      ...(carCount > 0 ? carsMarkup(layout, lighting, carCount) : []),
+    ].join('\n')
 
-  // Fixed output width whatever the zoom, so a hard crop is actually inspectable rather than
-  // shrinking with the region it selects.
-  const outW = Math.round(Math.max(vb.w * 2, 900))
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${outW}" height="${Math.round((outW * vb.h) / vb.w)}">${body}</svg>`
-  const tag = `${id}${low ? '-low' : ''}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}${zoom > 1 ? `-z${zoom}` : ''}`
-  writeFileSync(`${OUT}/${tag}.svg`, svg)
-  // Counted off the rendered markup, not estimated: an estimate drifts from the renderer the moment
-  // the renderer changes, and a wrong performance number is worse than none.
-  const els = (svg.match(/<(path|rect|circle|ellipse|g|clipPath|pattern|linearGradient|radialGradient)[ >]/g) ?? []).length
-  const tfs = (svg.match(/transform="/g) ?? []).length
-  const counts = `${els} elements, ${tfs} transforms; trees ${scenery.trees.length}, `
-    + `stands ${scenery.stands.length}, buildings ${scenery.buildings.length}`
-  try {
-    await sharp(Buffer.from(svg)).png().toFile(`${OUT}/${tag}.png`)
-    console.log(`${tag.padEnd(16)} ${layout.biome.padEnd(10)} ${moodArg.padEnd(9)} -> ${OUT}/${tag}.png   (${counts})`)
-  } catch (err) {
-    console.log(`${id.padEnd(12)} SVG written, raster failed: ${(err as Error).message}`)
+    // Fixed output width whatever the zoom, so a hard crop is actually inspectable rather than
+    // shrinking with the region it selects.
+    const outW = Math.round(Math.max(vb.w * 2, 900))
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${outW}" height="${Math.round((outW * vb.h) / vb.w)}">${body}</svg>`
+    const tag = `${id}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}${zoom > 1 ? `-z${zoom}` : ''}`
+    writeFileSync(`${OUT}/${tag}.svg`, svg)
+    const counts = `${scene.length} items; trees ${scenery.trees.length}, `
+      + `stands ${scenery.stands.length}, buildings ${scenery.buildings.length}`
+    try {
+      await sharp(Buffer.from(svg)).png().toFile(`${OUT}/${tag}.png`)
+      console.log(`${tag.padEnd(16)} ${layout.biome.padEnd(10)} ${moodArg.padEnd(9)} -> ${OUT}/${tag}.png   (${counts})`)
+    } catch (err) {
+      console.log(`${id.padEnd(12)} SVG written, raster failed: ${(err as Error).message}`)
+    }
   }
-}
 }
 
 main()

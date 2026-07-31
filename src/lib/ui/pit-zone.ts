@@ -2,7 +2,6 @@
 // preview script and the geometry probe all measure the same numbers, and none of it needs a DOM.
 
 import type { TrackLayout } from '@/data/tracks'
-import { linePath } from './extrude'
 import type { Vec } from './geom'
 import { screenUpAzimuth } from './lighting'
 

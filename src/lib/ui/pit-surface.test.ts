@@ -3,12 +3,13 @@ import { TRACK_LAYOUTS } from '@/data/tracks'
 import { buildPitSlots, buildPitZone } from './pit-zone'
 import { LANE_TARMAC_M, LANE_WIDTH_M } from './track-path'
 import { pitEdgeOps, pitSurfaceOps, type PitSurface } from './pit-surface'
-import type { Bounds, DrawOp } from './scenery-draw'
+import { SOFT_LAYERS } from './surface-ink'
+import type { DrawOp } from './scenery-draw'
 
 const GROUND = '#3F602C'
 const TARMAC = '#33383E'
 
-function surfaceFor(id: string, detail: 'full' | 'low' = 'full'): PitSurface {
+function surfaceFor(id: string): PitSurface {
   const layout = TRACK_LAYOUTS[id]
   const slots = buildPitSlots(layout, 10)
   const zone = buildPitZone(layout, slots)
@@ -19,7 +20,6 @@ function surfaceFor(id: string, detail: 'full' | 'low' = 'full'): PitSurface {
     boxes: slots,
     tarmac: TARMAC,
     ground: GROUND,
-    detail,
   }
 }
 
@@ -31,27 +31,9 @@ function pointsOf(op: DrawOp): Array<{ x: number; y: number }> {
   return out
 }
 
-/** How far outside `clip` the op's own ink reaches: its farthest point plus half its stroke. */
-function overflow(op: DrawOp, clip: Bounds): number {
-  const half = (op.width ?? 0) / 2
-  return Math.max(...pointsOf(op).map((p) => Math.hypot(p.x - clip.cx, p.y - clip.cy) + half - clip.r))
-}
-
 const IDS = ['britain', 'monaco', 'belgium']
 
 describe('pit surface', () => {
-  it('gives every op a cull disc that actually contains its ink', () => {
-    // The canvas skips an op whose disc misses the viewport, EXACTLY -- so a disc that does not hold
-    // the ink does not lose a level of detail, it makes a mark vanish while it is still on screen.
-    for (const id of IDS) {
-      const s = surfaceFor(id)
-      for (const op of [...pitEdgeOps(s), ...pitSurfaceOps(s)]) {
-        expect(op.clip, `${id}: op with no clip disc`).toBeDefined()
-        expect(overflow(op, op.clip!), `${id}: ink outside its own disc`).toBeLessThanOrEqual(0)
-      }
-    }
-  })
-
   it('paints opaque colour only, never a translucent stripe', () => {
     // Arcs abut, so a translucent one double-paints at every join. The ink is pre-blended instead.
     for (const id of IDS) {
@@ -129,15 +111,14 @@ describe('pit surface', () => {
     }
   })
 
-  it('collapses to one softening layer and drops the grain when zoomed out', () => {
+  it('softens every mark by nesting, and mottles the lane at every zoom', () => {
+    // Softness is nested opaque strokes rather than a blur, so a mark is SOFT_LAYERS strokes wide;
+    // the grain is the only thing here drawn as a fill.
     for (const id of IDS) {
-      const full = surfaceFor(id, 'full')
-      const low = surfaceFor(id, 'low')
-      expect(pitEdgeOps(low).length).toBeLessThan(pitEdgeOps(full).length)
-      expect(pitSurfaceOps(low).length).toBeLessThan(pitSurfaceOps(full).length)
-      // Grain is the only thing here drawn as a fill, and it is what zoom-out drops entirely.
-      expect(pitSurfaceOps(low).some((o) => o.fill && !o.stroke)).toBe(false)
-      expect(pitSurfaceOps(full).some((o) => o.fill && !o.stroke)).toBe(true)
+      const s = surfaceFor(id)
+      const widths = new Set(pitEdgeOps(s).map((o) => o.width))
+      expect(widths.size, `${id}: the apron fade is not nested`).toBeGreaterThanOrEqual(SOFT_LAYERS)
+      expect(pitSurfaceOps(s).some((o) => o.fill && !o.stroke), `${id}: no grain`).toBe(true)
     }
   })
 

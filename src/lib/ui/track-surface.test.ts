@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APRON_LINES, SOFT_LAYERS, curveLimits, edgeLayer, noFold } from './surface-ink'
-import { edgeOps, roadArcs } from './track-surface'
+import { edgeOps } from './track-surface'
 import type { Vec } from './geom'
 
 /** A circle is the one centreline whose every offset is known in closed form: a point `o` to the LEFT of
@@ -16,7 +16,7 @@ const RIBBON_HALF_M = 6.65
 const LINE_M = 0.65
 const APRON_HALF = RIBBON_HALF_M + APRON_LINES * LINE_M
 
-const surface = (centre: Vec[], detail: 'full' | 'low' = 'full') => ({
+const surface = (centre: Vec[]) => ({
   u: (m: number) => m,
   line: centre,
   curvature: new Float64Array(1),
@@ -29,7 +29,6 @@ const surface = (centre: Vec[], detail: 'full' | 'low' = 'full') => ({
   ribbonHalfM: RIBBON_HALF_M,
   lineWidthM: LINE_M,
   tarmacHalfM: 6,
-  detail,
 })
 
 /** Every point of every subpath, as its distance from the origin the test circle is centred on. */
@@ -140,12 +139,6 @@ describe('edgeOps', () => {
     for (const op of ops) expect(op.width).toBeLessThan(RIBBON_HALF_M)
   })
 
-  it('collapses to one falloff band plus the apron at zoom-out', () => {
-    const low = edgeOps(surface(centre, 'low'))
-    expect(new Set(low.map((op) => op.stroke)).size).toBe(2)
-    expect(low.length).toBe(128 * 2)
-  })
-
   it('pinches its rims instead of turning them inside out in a hairpin', () => {
     // A corner tighter than the rim's own offset. Without the clamp the offset run crosses itself and
     // the band bulges out the far side; with it, nothing reaches past the corner's centre.
@@ -162,74 +155,3 @@ describe('edgeOps', () => {
   })
 })
 
-describe('roadArcs', () => {
-  const centre = circle(60)
-  const layers = [{ colour: '#D8D8D2', width: 4 }, { colour: '#33383E', width: 3.4 }]
-  const ops = roadArcs(centre, layers)
-
-  it('cuts the road into cullable pieces instead of one whole-circuit stroke', () => {
-    // The point: a stroke's outline is generated before it can be clipped, and that cost does not
-    // shrink as you zoom in. Every op has to carry a disc or nothing can be skipped.
-    expect(ops.length).toBe(128 * layers.length)
-    for (const op of ops) expect(op.clip).toBeTruthy()
-  })
-
-  it('lays every arc of a layer before any of the next, or the joins notch', () => {
-    const firstOfSecond = ops.findIndex((op) => op.stroke === layers[1].colour)
-    const lastOfFirst = ops.reduce((k, op, i) => (op.stroke === layers[0].colour ? i : k), -1)
-    expect(firstOfSecond).toBeGreaterThan(lastOfFirst)
-  })
-
-  it('covers the whole lap, with adjacent arcs sharing a station so no gap shows', () => {
-    const casing = ops.filter((op) => op.stroke === layers[0].colour)
-    const ends = casing.map((op) => {
-      const n = op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
-      return { first: [n[0], n[1]], last: [n[n.length - 2], n[n.length - 1]] }
-    })
-    for (let i = 1; i < ends.length; i++) {
-      expect(ends[i].first).toEqual(ends[i - 1].last)
-    }
-    // And it closes the loop.
-    expect(ends[0].first).toEqual(ends[ends.length - 1].last)
-  })
-
-  it('leaves an open run open, so the pit lane does not stroke itself across the map', () => {
-    // The pit lane joins the circuit at both ends rather than looping. Cut as a closed lap, its last
-    // arc wraps back to its first and draws a lane-width stroke straight across whatever lies between.
-    const line: Vec[] = Array.from({ length: 40 }, (_, i) => ({ x: i * 3, y: 0 }))
-    const open = roadArcs(line, [layers[0]], { count: 8, open: true })
-    const pts = (op: (typeof open)[number]) => op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
-    for (const op of open) {
-      const n = pts(op)
-      // Every station of the run climbs in x. A wrap puts the last point back at the first's.
-      for (let i = 2; i + 1 < n.length; i += 2) expect(n[i]).toBeGreaterThan(n[i - 2])
-    }
-    const first = pts(open[0])
-    const last = pts(open[open.length - 1])
-    expect(first[0]).toBe(0)
-    expect(last[last.length - 2]).toBe(line[line.length - 1].x)
-    // Still contiguous: adjacent arcs share a station, as they do on the lap.
-    for (let i = 1; i < open.length; i++) {
-      const prev = pts(open[i - 1])
-      const cur = pts(open[i])
-      expect([cur[0], cur[1]]).toEqual([prev[prev.length - 2], prev[prev.length - 1]])
-    }
-  })
-
-  it('takes an arc count, so a few hundred metres of lane is not cut like five kilometres of lap', () => {
-    expect(roadArcs(circle(60), [layers[0]], { count: 8 })).toHaveLength(8)
-  })
-
-  it('pads each disc by the pen it is stroked with, so a wide road is not culled early', () => {
-    for (const op of ops) {
-      const n = op.d.match(/-?\d+(\.\d+)?/g)!.map(Number)
-      let far = 0
-      for (let i = 0; i + 1 < n.length; i += 2) {
-        far = Math.max(far, Math.hypot(n[i] - op.clip!.cx, n[i + 1] - op.clip!.cy))
-      }
-      // Allow a rounding step: the disc is measured off the unrounded points, the path is written to
-      // two decimals, so a written point can land a hundredth outside the disc it came from.
-      expect(op.clip!.r).toBeGreaterThanOrEqual(far + (op.width ?? 0) / 2 - 0.01)
-    }
-  })
-})

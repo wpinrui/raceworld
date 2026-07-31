@@ -62,16 +62,6 @@ describe('startLineOps', () => {
     expect(has(op, svgPlaced(100, 50, deg, -0.25, -5.5))).toBe(true)
   })
 
-  it('carries a disc that contains every square it draws', () => {
-    for (const angle of [0, 0.4, 2.2, -1.1]) {
-      const op = startLineOps({ x: 100, y: 50, angle }, u)[0]
-      const c = op.clip!
-      for (const p of points(op)) {
-        expect(Math.hypot(p.x - c.cx, p.y - c.cy)).toBeLessThanOrEqual(c.r + 1e-6)
-      }
-    }
-  })
-
   it('scales through `u`, so a circuit metres-per-unit reaches it', () => {
     const half = startLineOps(at, (m) => m / 2)[0]
     const ys = points(half).map((q) => q.y)
@@ -108,14 +98,5 @@ describe('gridBoxOps', () => {
     expect(has(white, svgPlaced(x, y, deg, 2.49, -1.7))).toBe(true)
     // The yellow guide's near corner: local x 1.31, y 1.2.
     expect(has(yellow, svgPlaced(x, y, deg, 1.31, 1.2))).toBe(true)
-  })
-
-  it('carries a disc that contains every box on the grid', () => {
-    for (const op of gridBoxOps(boxes, u)) {
-      const c = op.clip!
-      for (const p of points(op)) {
-        expect(Math.hypot(p.x - c.cx, p.y - c.cy)).toBeLessThanOrEqual(c.r + 1e-6)
-      }
-    }
   })
 })
