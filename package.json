@@ -30,6 +30,7 @@
     "react-country-flag": "^3.1.0",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
+    "three": "^0.185.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -40,10 +41,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^6.0.2",
+    "esbuild": "^0.28.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
+    "playwright-core": "^1.62.1",
     "sharp": "0.34.5",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",

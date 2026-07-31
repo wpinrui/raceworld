@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { writeFileSync, mkdirSync } from 'node:fs'
 import sharp from 'sharp'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
-import { KERB_BLOCK_M, KERB_WIDTH_M, buildScenery } from '../src/lib/ui/track-scenery'
+import { buildScenery } from '../src/lib/ui/track-scenery'
 import { TRACK_WIDTH_M, densifyTrace } from '../src/lib/ui/track-path'
 import { PitGarageSigns, pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
@@ -24,7 +24,7 @@ import {
 } from '../src/lib/ui/car-sprite'
 import { buildRacingLine, polylineArc } from '../src/lib/ui/racing-line'
 import { roadOps } from '../src/lib/ui/road-ops'
-import { gridBoxOps, startLineOps } from '../src/lib/ui/road-marks'
+import { gridBoxOps, kerbOps, startLineOps, startPose } from '../src/lib/ui/road-marks'
 import { isGroup, refName, sceneryScene, type DrawOp, type SceneItem } from '../src/lib/ui/scenery-draw'
 import { PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
 import type { Lighting } from '../src/lib/ui/lighting'
@@ -215,9 +215,7 @@ async function main() {
       }
       : full
 
-    const { x, y, angle } = layout.start
-    const lead = 1.5 / mpu
-    const startAt = { x: x + Math.cos(angle) * lead, y: y + Math.sin(angle) * lead, angle }
+    const startAt = startPose(layout.start, mpu)
     const scene = sceneryScene(scenery, {
       u,
       lighting,
@@ -227,13 +225,7 @@ async function main() {
         layout, u, pitZone, pitSlots, ground: scenery.base, shadow: shadowFill(lighting),
         lap: { pts: lap.line.pts, lateral: lap.line.lateral, centre: lap.centre, dyn: lap.dyn },
       }),
-      kerbs: scenery.kerbs.flatMap((k): DrawOp[] => [
-        { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' },
-        {
-          d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
-          dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
-        },
-      ]),
+      kerbs: kerbOps(scenery.kerbs, u),
       pitUnder: pitZone ? pitFloorOps(pitZone, lighting) : [],
       pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz) : [],
       overlay: [...startLineOps(startAt, u), ...gridBoxOps([], u)],

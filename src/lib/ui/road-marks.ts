@@ -1,13 +1,26 @@
-// The paint on the road that is neither the surface nor the kerbs (#sim-2d): the start/finish
-// chequer, and the grid box each car lines up in.
+// The paint on and beside the road surface (#sim-2d): the start/finish chequer, the grid box each
+// car lines up in, and the kerbs' two strokes.
 //
-// Described as `DrawOp`s like everything else on the map, and as THREE of them: a hundred and sixteen
+// Described as `DrawOp`s like everything else on the map, and as few of them: a hundred and sixteen
 // little rects carry three distinct fills between them, so each fill is one path of many subpaths.
 //
-// Both are laid out in the frame of the thing they belong to (the line's own heading, the box's own
-// heading) and baked into world space here, so a renderer only has to fill them.
+// The chequer and boxes are laid out in the frame of the thing they belong to (the line's own
+// heading, the box's own heading) and baked into world space here, so a renderer only has to fill them.
 
 import type { DrawOp } from './scenery-draw'
+import { KERB_BLOCK_M, KERB_RED, KERB_WHITE, KERB_WIDTH_M, type SceneryKerb } from './track-scenery'
+
+/** A kerb's paint: the white round-capped base with the red blocks dashed over it. One home for the
+ *  numbers, because the map, the 2D preview and the 3D world all lay the same kerb (#3d-port). */
+export function kerbOps(kerbs: readonly SceneryKerb[], u: (m: number) => number): DrawOp[] {
+  return kerbs.flatMap((k): DrawOp[] => [
+    { d: k.d, stroke: KERB_WHITE, width: u(KERB_WIDTH_M), cap: 'round' },
+    {
+      d: k.d, stroke: KERB_RED, width: u(KERB_WIDTH_M), cap: 'butt',
+      dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
+    },
+  ])
+}
 
 /** One axis-aligned rectangle in a local frame, written into world space as a closed path. */
 function rectPath(
@@ -24,6 +37,34 @@ const SF_ROWS = 3
 const SF_COLS = 24
 const SF_SQUARE_M = 0.5
 
+/** The marks' white, shared by the chequer and the grid boxes' frame. */
+export const MARK_WHITE = '#F2F2F2'
+
+/** Where the start/finish band actually sits: nudged forward of the path start so the band clears
+ *  the pole box's crossbar. One home for the nudge, because the map, the 2D preview and the 3D world
+ *  must lay the band on the same spot (#3d-port). */
+export function startPose(
+  start: { x: number; y: number; angle: number }, metresPerUnit: number,
+): { x: number; y: number; angle: number } {
+  const lead = 1.5 / metresPerUnit
+  return { x: start.x + Math.cos(start.angle) * lead, y: start.y + Math.sin(start.angle) * lead, angle: start.angle }
+}
+
+/** The chequer's painted squares in the line's own frame, for any renderer to fill. */
+export function startLineRects(u: (m: number) => number): Array<[number, number, number, number]> {
+  const s = u(SF_SQUARE_M)
+  const x0 = -u(0.75)
+  const y0 = -u(6)
+  const rects: Array<[number, number, number, number]> = []
+  for (let i = 0; i < SF_ROWS * SF_COLS; i++) {
+    const row = i % SF_ROWS
+    const col = Math.floor(i / SF_ROWS)
+    if ((row + col) % 2 === 1) continue
+    rects.push([x0 + row * s, y0 + col * s, s, s])
+  }
+  return rects
+}
+
 /** The start/finish line: a chequered band spanning EXACTLY the tarmac width.
  *
  *  One op of alternating squares as subpaths. They share a fill and never touch, so a single fill is
@@ -32,18 +73,9 @@ export function startLineOps(
   at: { x: number; y: number; angle: number }, u: (m: number) => number,
 ): DrawOp[] {
   const o = { x: at.x, y: at.y, cos: Math.cos(at.angle), sin: Math.sin(at.angle) }
-  const s = u(SF_SQUARE_M)
-  const x0 = -u(0.75)
-  const y0 = -u(6)
-  const d: string[] = []
-  for (let i = 0; i < SF_ROWS * SF_COLS; i++) {
-    const row = i % SF_ROWS
-    const col = Math.floor(i / SF_ROWS)
-    if ((row + col) % 2 === 1) continue
-    d.push(rectPath(o, x0 + row * s, y0 + col * s, s, s))
-  }
+  const d = startLineRects(u).map(([x, y, w, h]) => rectPath(o, x, y, w, h))
   if (d.length === 0) return []
-  return [{ d: d.join(' '), fill: '#F2F2F2' }]
+  return [{ d: d.join(' '), fill: MARK_WHITE }]
 }
 
 /** A starting box, anchored to the PARKED CAR (centre at the slot origin, CAR_SCALE applied): an
@@ -69,7 +101,7 @@ export function gridBoxOps(
     yellow.push(rectPath(o, u(1.31), u(1.2), u(0.18), u(1.6)))
   }
   return [
-    { d: white.join(' '), fill: '#F2F2F2' },
+    { d: white.join(' '), fill: MARK_WHITE },
     { d: yellow.join(' '), fill: '#E8C33A' },
   ]
 }

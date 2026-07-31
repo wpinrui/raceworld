@@ -3,7 +3,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
-import { KERB_BLOCK_M, KERB_WIDTH_M } from '@/lib/ui/track-scenery'
+import { gridBoxOps, kerbOps, startLineOps, startPose } from '@/lib/ui/road-marks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import { MOODS, dirAt, lightDir, screenUpAzimuth, shadowFill, shadowReach } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
@@ -24,7 +24,6 @@ import {
 } from '@/lib/ui/lap-dynamics'
 import { buildRacingLine, type ArcPath } from '@/lib/ui/racing-line'
 import { roadOps } from '@/lib/ui/road-ops'
-import { gridBoxOps, startLineOps } from '@/lib/ui/road-marks'
 import type { Vec } from '@/lib/ui/geom'
 import { PIT_ENTRY_FRAC, PIT_EXIT_FRAC, TRACK_WIDTH_M } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
@@ -1208,10 +1207,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // the SVG layer draws them, so the two renderers still agree about whether a grandstand's shadow falls
   // across the start line. (It does not.)
   const roadMarkOps = useMemo(() => {
-    const { x, y, angle } = layout.start
-    // Nudged forward of the path start so the band clears the pole box's crossbar.
-    const lead = 1.5 / layout.metresPerUnit
-    const at = { x: x + Math.cos(angle) * lead, y: y + Math.sin(angle) * lead, angle }
+    const at = startPose(layout.start, layout.metresPerUnit)
     return [
       ...startLineOps(at, u),
       // The grid boxes belong to the live view, exactly as the grid marks always did.
@@ -1271,13 +1267,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       view: viewAz,
       ground: true,
       track: trackDrawOps,
-      kerbs: scenery.kerbs.flatMap((k): DrawOp[] => [
-        { d: k.d, stroke: '#E6E3DC', width: u(KERB_WIDTH_M), cap: 'round' },
-        {
-          d: k.d, stroke: '#C8352F', width: u(KERB_WIDTH_M), cap: 'butt',
-          dash: { on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M), shift: 0 },
-        },
-      ]),
+      kerbs: kerbOps(scenery.kerbs, u),
       pitUnder: pitZone ? pitFloorOps(pitZone, lighting, (gi) => slotOf.colors[gi]) : [],
       pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz, (gi) => slotOf.colors[gi]) : [],
       overlay: roadMarkOps,

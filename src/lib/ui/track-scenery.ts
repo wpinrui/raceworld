@@ -52,9 +52,15 @@ export interface SceneryTree {
 /** Painted width of a kerb and the pitch of its red blocks, in metres. */
 export const KERB_WIDTH_M = 1.3
 export const KERB_BLOCK_M = 3
+/** A kerb's two paints, owned beside its dimensions so every renderer lays the same colours. */
+export const KERB_WHITE = '#E6E3DC'
+export const KERB_RED = '#C8352F'
 
 export interface SceneryKerb {
   d: string
+  /** The control points `d` is smoothed through: the 3D renderer samples the same curve back out of
+   *  them with `densifyOpen`, so both renderers draw one kerb (#3d-port). */
+  pts: Array<{ x: number; y: number }>
   /** Bounding disc, so a kerb far from the camera can be skipped outright. */
   cx: number; cy: number; r: number
 }
@@ -246,6 +252,7 @@ export function buildScenery(
         const cy = (Math.min(...ys) + Math.max(...ys)) / 2
         kerbs.push({
           d: smoothOpenPath(pts),
+          pts,
           cx,
           cy,
           r: Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))),

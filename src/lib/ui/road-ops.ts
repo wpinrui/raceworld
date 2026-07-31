@@ -17,8 +17,9 @@ import type { LapDynamics } from './lap-dynamics'
 /** Half-width of the racing line the surface ink is hung off, in metres. */
 const TRACK_M = 1.6
 
-const CASING = '#D8D8D2'
-const TARMAC = '#33383E'
+/** The road's two paints, exported so the 3D renderer lays the same colours (#3d-port). */
+export const ROAD_CASING = '#D8D8D2'
+export const ROAD_TARMAC = '#33383E'
 
 export interface RoadOpts {
   layout: TrackLayout
@@ -44,7 +45,7 @@ export function roadOps(o: RoadOpts): DrawOp[] {
   const { layout, u, pitZone, pitSlots, lap } = o
   const ink = lap && {
     u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
-    tarmac: TARMAC, centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
+    tarmac: ROAD_TARMAC, centre: lap.centre, tarmacHalfM: TARMAC_WIDTH_M / 2,
     lateral: lap.lateral,
   }
   const pitInk = {
@@ -52,7 +53,7 @@ export function roadOps(o: RoadOpts): DrawOp[] {
     fast: layout.pit.fastPts,
     apron: pitZone ? { outer: pitZone.workOuter, inner: pitZone.workInner } : undefined,
     boxes: pitSlots,
-    tarmac: TARMAC,
+    tarmac: ROAD_TARMAC,
     ground: o.ground,
   }
   const ops: DrawOp[] = []
@@ -70,7 +71,7 @@ export function roadOps(o: RoadOpts): DrawOp[] {
   }
   ops.push(...pitEdgeOps(pitInk))
   for (const [colour, trackW, laneW] of [
-    [CASING, TRACK_WIDTH_M, LANE_WIDTH_M], [TARMAC, TARMAC_WIDTH_M, LANE_TARMAC_M],
+    [ROAD_CASING, TRACK_WIDTH_M, LANE_WIDTH_M], [ROAD_TARMAC, TARMAC_WIDTH_M, LANE_TARMAC_M],
   ] as const) {
     ops.push({ d: layout.d, stroke: colour, width: u(trackW), cap: 'round' })
     ops.push({ d: layout.pit.fastD, stroke: colour, width: u(laneW), cap: 'round' })
@@ -79,7 +80,7 @@ export function roadOps(o: RoadOpts): DrawOp[] {
     ops.push({
       d: `${linePath(pitZone.work)}Z`,
       fill: colour,
-      ...(colour === CASING ? { stroke: colour, width: u(2 * LANE_LINE_M) } : {}),
+      ...(colour === ROAD_CASING ? { stroke: colour, width: u(2 * LANE_LINE_M) } : {}),
     })
   }
   // Worn into the tarmac, on top of the road and under the kerbs.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { gridBoxOps, startLineOps } from './road-marks'
+import { gridBoxOps, kerbOps, startLineOps, startLineRects, startPose } from './road-marks'
+import { KERB_RED, KERB_WHITE, type SceneryKerb } from './track-scenery'
 import type { DrawOp } from './scenery-draw'
 
 /** Metres straight through, so every number in a test reads as metres. */
@@ -98,5 +99,41 @@ describe('gridBoxOps', () => {
     expect(has(white, svgPlaced(x, y, deg, 2.49, -1.7))).toBe(true)
     // The yellow guide's near corner: local x 1.31, y 1.2.
     expect(has(yellow, svgPlaced(x, y, deg, 1.31, 1.2))).toBe(true)
+  })
+})
+
+describe('startPose', () => {
+  it('nudges 1.5 real metres along the direction of travel, whatever the scale', () => {
+    const at = startPose({ x: 10, y: 5, angle: Math.PI / 2 }, 3)
+    expect(at.x).toBeCloseTo(10, 10)
+    expect(at.y).toBeCloseTo(5.5, 10)
+    expect(at.angle).toBe(Math.PI / 2)
+  })
+})
+
+describe('startLineRects', () => {
+  it('is the chequer startLineOps paints: 36 alternating squares over the same span', () => {
+    const rects = startLineRects(u)
+    expect(rects).toHaveLength(36)
+    expect(Math.min(...rects.map(([x]) => x))).toBeCloseTo(-0.75, 10)
+    expect(Math.max(...rects.map(([, y, , h]) => y + h))).toBeCloseTo(6, 10)
+    expect(rects.every(([, , w, h]) => w === 0.5 && h === 0.5)).toBe(true)
+  })
+})
+
+describe('kerbOps', () => {
+  const kerb: SceneryKerb = { d: 'M 0 0 L 20 0', pts: [{ x: 0, y: 0 }, { x: 20, y: 0 }], cx: 10, cy: 0, r: 10 }
+
+  it('lays the white base round-capped under the red blocks, butt-cut at the 3m pitch', () => {
+    const [white, red] = kerbOps([kerb], u)
+    expect(white).toMatchObject({ d: kerb.d, stroke: KERB_WHITE, width: 1.3, cap: 'round' })
+    expect(red).toMatchObject({
+      d: kerb.d, stroke: KERB_RED, width: 1.3, cap: 'butt', dash: { on: 3, off: 3, shift: 0 },
+    })
+  })
+
+  it('is two ops per kerb, in base-then-blocks order across the whole set', () => {
+    const ops = kerbOps([kerb, kerb], u)
+    expect(ops.map((o) => o.stroke)).toEqual([KERB_WHITE, KERB_RED, KERB_WHITE, KERB_RED])
   })
 })
