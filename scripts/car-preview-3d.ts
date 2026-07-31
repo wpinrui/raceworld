@@ -57,8 +57,14 @@ async function main() {
       process.exitCode = 1
       continue
     }
-    const file = `${OUT}/car-3d-${angle}.png`
-    await tab.locator('#gl').screenshot({ path: file })
+    let file = `${OUT}/car-3d-${angle}.png`
+    try {
+      await tab.locator('#gl').screenshot({ path: file })
+    } catch {
+      // The old still is open in a viewer and Windows has it locked; write beside it.
+      file = `${OUT}/car-3d-${angle}-new.png`
+      await tab.locator('#gl').screenshot({ path: file })
+    }
     console.log(`${angle.padEnd(6)} -> ${file}`)
   }
   await browser.close()

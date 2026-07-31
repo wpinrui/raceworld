@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
-import { buildCarMesh } from './car-mesh'
+import { CAR_HEIGHT_SCALE, buildCarMesh } from './car-mesh'
 
 const car = buildCarMesh('#E8442E')
 car.group.updateMatrixWorld(true)
@@ -13,9 +13,9 @@ describe('buildCarMesh', () => {
     expect(bounds.max.z - bounds.min.z).toBeGreaterThan(460)
     expect(bounds.max.z - bounds.min.z).toBeLessThan(510)
     expect(bounds.max.x - bounds.min.x).toBeLessThanOrEqual(SPRITE.len / 520 * 240)
-    // The airbox is the summit, authored at 0.95m.
-    expect(bounds.max.y).toBeGreaterThan(0.88 * UNITS_PER_M)
-    expect(bounds.max.y).toBeLessThan(1.05 * UNITS_PER_M)
+    // The airbox is the summit, authored at 0.95m through the car's vertical exaggeration.
+    expect(bounds.max.y).toBeGreaterThan(0.88 * CAR_HEIGHT_SCALE * UNITS_PER_M)
+    expect(bounds.max.y).toBeLessThan(1.05 * CAR_HEIGHT_SCALE * UNITS_PER_M)
     // Nothing pokes through the tarmac.
     expect(bounds.min.y).toBeGreaterThanOrEqual(0)
   })
