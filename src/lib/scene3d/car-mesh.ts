@@ -328,8 +328,10 @@ export function buildCarMesh(colour: string): CarMesh {
   // apex up, so the bodywork visibly wraps the opening instead of wearing a sticker.
   const intake = new GeometrySink()
   {
-    const base = { y: H(0.645), z: 247.5 - cz }
-    const apex = { y: H(0.83), z: 257.5 - cz }
+    // Held a clear step AHEAD of the fin's lofted slope: flush placement left it swallowed the
+    // moment the airbox height moved.
+    const base = { y: H(0.645), z: 244 - cz }
+    const apex = { y: H(0.83), z: 254 - cz }
     const at = (x: number, f: number): V3 =>
       v3(x, base.y + (apex.y - base.y) * f, base.z + (apex.z - base.z) * f)
     const rim: Array<[number, number]> = [
