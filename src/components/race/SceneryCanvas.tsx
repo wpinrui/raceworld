@@ -62,7 +62,14 @@ function pathFor(d: string): Path2D {
  *  33-50ms frame, the one hitch the lap benchmark left standing. The disc is wider than the
  *  viewport, so everything entering is still off screen: the renderer can keep painting the OLD
  *  scene for the few frames this takes and swap when the cache is warm. */
-export function warmScene(scene: Scene, onReady: () => void): { cancel: () => void } {
+export function warmScene(
+  scene: Scene,
+  onReady: () => void,
+  /** Main-thread time each slice spent, for the perf lab. This is real work on the same thread as the
+   *  paint and it reports to no clock without this: the whole point of the warm is that it happens
+   *  OUTSIDE a paint, which is exactly what makes the painter's own tally unable to see it. */
+  onSlice?: (ms: number) => void,
+): { cancel: () => void } {
   let cancelled = false
   const ds: string[] = []
   for (const item of scene) {
@@ -75,6 +82,7 @@ export function warmScene(scene: Scene, onReady: () => void): { cancel: () => vo
     const t0 = performance.now()
     // A warm entry is a Map hit, so a mostly-cached scene completes in one slice.
     while (i < ds.length && performance.now() - t0 < 3) pathFor(ds[i++])
+    onSlice?.(performance.now() - t0)
     if (i < ds.length) requestAnimationFrame(step)
     else onReady()
   }

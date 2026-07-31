@@ -147,9 +147,10 @@ export function formatReport(report: LabReport): string {
     'A mitigation row is that mitigation turned OFF, so "saves 1.2ms" means the shipping renderer is',
     '1.2ms a frame faster for having it. "no effect" means it is buying nothing here. A layer row is',
     'that layer hidden, so "worth 1.2ms" is what drawing it costs.',
-    'cpu ms is main-thread time per frame (the race loop\'s tick plus the paint commands). It does not',
-    'include the rasteriser, so on a layer row it understates; on a vsync-bound shot it is the only',
-    'thing left that can move.',
+    'cpu ms is main-thread time per frame: the race loop\'s tick, the paint commands and the composes.',
+    'comp ms is that last term on its own, which is the only one a compose-time mitigation can move.',
+    'cpu ms does not include the rasteriser, so on a layer row it understates; on a vsync-bound shot it',
+    'is the only thing left that can move.',
   )
   for (const b of blocks) lines.push(...blockText(b))
 
@@ -166,7 +167,8 @@ export function formatReport(report: LabReport): string {
       p95Ms: +r.stats.p95Ms.toFixed(2), minMs: +r.stats.minMs.toFixed(2),
       maxMs: +r.stats.maxMs.toFixed(2), longFrames: r.stats.longFrames,
       atFloor: +r.stats.atFloor.toFixed(2), frames: r.stats.frames,
-      paint: r.paint, scene: r.scene, tickMs: +r.tickMs.toFixed(3), busyMs: +r.busyMs.toFixed(3),
+      paint: r.paint, scene: r.scene, tickMs: +r.tickMs.toFixed(3),
+      composeMs: +r.composeMs.toFixed(3), busyMs: +r.busyMs.toFixed(3),
       // The trace SUMMARISED, plus the long frames themselves. The per-frame arrays are three hundred
       // numbers a cell and twenty cells a run, which would make the one thing anybody pastes too big to
       // paste; everything a reader argues with is in the summary and the frames it points at.

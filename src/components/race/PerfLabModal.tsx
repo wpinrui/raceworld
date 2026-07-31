@@ -150,7 +150,8 @@ function ConfigPane({ config, setConfig }: {
  *  `className="undefined"` the first time a column is added. The numbers and their precision live in
  *  perf-bench.ts, so this table and the pasted one cannot disagree about either. */
 const COL_W: Record<string, string> = {
-  fps: 'w-14', low1: 'w-16', p95: 'w-16', max: 'w-16', long: 'w-12', cpu: 'w-16', calls: 'w-16',
+  fps: 'w-14', low1: 'w-16', p95: 'w-16', max: 'w-16', long: 'w-12', cpu: 'w-16', compose: 'w-16',
+  calls: 'w-16',
 }
 const widthOf = (key: string) => COL_W[key] ?? 'w-16'
 

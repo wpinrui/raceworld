@@ -138,12 +138,14 @@ const result = (cell: Cell, meanMs: number, busyMs = 5): CellResult => ({
   paint: { msPerPaint: 1, paintedFrac: 1, calls: 100, skipped: 0, sections: {} },
   scene: { items: 10, ops: 20, pathKb: 1, nodes: 100 },
   tickMs: 0.5,
+  composeMs: 0,
   busyMs,
 })
 
 describe('cellMetrics', () => {
   const counters = (over: Partial<Counters> = {}): Counters => ({
-    n: 0, ms: 0, drawn: 0, skipped: 0, sections: {}, tickN: 0, tickSum: 0, paintedFrames: 0, ...over,
+    n: 0, ms: 0, drawn: 0, skipped: 0, sections: {}, tickN: 0, tickSum: 0,
+    composeN: 0, composeSum: 0, paintedFrames: 0, ...over,
   })
 
   it('spreads paint time over FRAMES and command time over PAINTS', () => {
@@ -193,6 +195,34 @@ describe('cellMetrics', () => {
     expect(m.paint.calls).toBe(300)
     expect(m.paint.skipped).toBe(40)
     expect(m.paint.sections).toEqual({ trees: 1, road: 0.5 })
+  })
+
+  // The blind spot the Monaco run exposed: composing and warming are main-thread work that happens
+  // outside every paint and outside the tick, so a cpu figure that summed those two saw none of it and
+  // the two mitigations paid at compose time were scored on a clock they do not report to.
+  it('counts compose and warm time, which neither the painter nor the race loop runs', () => {
+    const m = cellMetrics(
+      counters(),
+      // 90 frames, 90 paints of 4ms, 90 ticks of 0.8ms, and 12 composes costing 90ms between them.
+      counters({ n: 90, ms: 360, tickN: 90, tickSum: 72, composeN: 12, composeSum: 90, paintedFrames: 90 }),
+      90,
+    )
+    expect(m.composeMs).toBeCloseTo(1, 9)
+    expect(m.busyMs).toBeCloseTo(4.8 + 1, 9)
+  })
+
+  it('spreads compose time over frames, not over composes: the row is a cost per frame', () => {
+    const one = cellMetrics(counters(), counters({ composeN: 1, composeSum: 90 }), 90)
+    const many = cellMetrics(counters(), counters({ composeN: 30, composeSum: 90 }), 90)
+    expect(one.composeMs).toBeCloseTo(many.composeMs, 9)
+  })
+
+  it('leaves cpu time where it was on a cell that composed nothing', () => {
+    const m = cellMetrics(
+      counters(), counters({ n: 90, ms: 360, tickN: 90, tickSum: 72, paintedFrames: 90 }), 90,
+    )
+    expect(m.composeMs).toBe(0)
+    expect(m.busyMs).toBeCloseTo(4.8, 9)
   })
 
   it('reports zeroes rather than dividing by nothing on a cell that never painted or ticked', () => {

@@ -1778,6 +1778,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // consumes, which cannot answer "did a scene land on THIS frame" for ninety frames in a row; a tally
   // can, and the run diffs it per frame to put the long frames next to the recomposes.
   const swapTallyRef = useRef(0)
+  /** Composes since the map mounted and the main-thread time they took, the warm's slices included.
+   *
+   *  A third clock, because there were only two and neither of them runs here. Composing rebuilds the
+   *  circuit's geometry and the warm parses its paths, both on the main thread and both OUTSIDE any
+   *  paint and outside the race loop's tick — so the lab's `busyMs`, which is those two summed, could
+   *  not see a millisecond of it. That made the two mitigations paid at compose time (the geometry memo
+   *  and the warmed swap) unmeasurable on a vsync-bound shot: they came back "no effect" from a clock
+   *  they do not report to, which is the same defect the SVG row already carries a guard for. */
+  const composeTallyRef = useRef({ n: 0, ms: 0 })
   const swapped = () => {
     swapTallyRef.current++
     const w = swapWatchRef.current
@@ -1805,10 +1814,19 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       sceneRef.current = next
       paintRef.current()
       swapped()
-    })
+    }, (ms) => { composeTallyRef.current.ms += ms })
   }, [])
   useEffect(() => {
-    composeSceneRef.current = (cullNow) => swapScene(composeScene(cullNow))
+    composeSceneRef.current = (cullNow) => {
+      // Timed around the geometry build itself. The swap that follows either warms (whose slices report
+      // through the callback above) or assigns and paints (which the painter's own tally already sees).
+      const t0 = performance.now()
+      const next = composeScene(cullNow)
+      const tally = composeTallyRef.current
+      tally.n++
+      tally.ms += performance.now() - t0
+      swapScene(next)
+    }
     return () => warmTokenRef.current?.cancel()
   }, [composeScene, swapScene])
   // The world changed: a new circuit, a new bearing, a detail tier crossed, a layer toggled, the lap's
@@ -2004,6 +2022,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     paintTally: () => paintTallyRef.current,
     tickTally: () => tickStatsRef.current,
     swapTally: () => swapTallyRef.current,
+    composeTally: () => composeTallyRef.current,
     scene: () => {
       const sc = sceneRef.current
       let ops = 0

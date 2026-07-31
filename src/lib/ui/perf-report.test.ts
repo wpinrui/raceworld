@@ -12,6 +12,7 @@ const result = (cell: Cell, meanMs: number): CellResult => ({
   paint: { msPerPaint: 4.2, paintedFrac: 1, calls: 318, skipped: 44, sections: { trees: 1.1 } },
   scene: { items: 640, ops: 1180, pathKb: 96, nodes: 2400 },
   tickMs: 0.8,
+  composeMs: 0.3,
   busyMs: 5,
 })
 
@@ -56,6 +57,11 @@ describe('formatReport', () => {
 
   it('reports the 1% low as a column of its own', () => {
     expect(text).toContain('1% low')
+  })
+
+  it('carries compose time as its own column, the one clock a compose-time mitigation reports to', () => {
+    expect(text).toContain('comp ms')
+    expect(text).toContain('compose 0.30ms/frame')
   })
 
   it('states the noise floor the verdicts were judged against', () => {

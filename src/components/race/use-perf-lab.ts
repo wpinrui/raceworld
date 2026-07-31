@@ -34,6 +34,9 @@ export interface PerfLabHarness {
   tickTally: () => { n: number; sum: number }
   /** Scenes that have LANDED since the map mounted, for the per-frame trace. */
   swapTally: () => number
+  /** Composes since the map mounted and the main-thread time they took, the warm's slices included.
+   *  Neither the painter nor the race loop runs this work, so without it a cell's cpu time omits it. */
+  composeTally: () => { n: number; ms: number }
   scene: () => { items: number; ops: number; pathKb: number; nodes: number }
   /** Everything the player had before the run: camera, follow lock, layers, quality, renderer, cap. */
   restore: () => void
@@ -59,9 +62,10 @@ const waitFrames = async (n: number) => { for (let i = 0; i < n; i++) await next
 const snapshot = (h: PerfLabHarness, paintedFrames: number): Counters => {
   const p = h.paintTally()
   const t = h.tickTally()
+  const c = h.composeTally()
   return {
     n: p.n, ms: p.ms, drawn: p.drawn, skipped: p.skipped, sections: { ...p.sections },
-    tickN: t.n, tickSum: t.sum, paintedFrames,
+    tickN: t.n, tickSum: t.sum, composeN: c.n, composeSum: c.ms, paintedFrames,
   }
 }
 

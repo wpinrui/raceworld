@@ -299,11 +299,20 @@ export interface CellResult {
   scene: { items: number; ops: number; pathKb: number; nodes: number }
   /** The race loop's own JS cost per frame, which separates a slow script from a heavy raster. */
   tickMs: number
-  /** Main-thread time this cell spends per FRAME: the loop's tick plus the paint commands, taken over
-   *  frames rather than over paints so a frame that skipped its paint counts as having paid nothing for
-   *  it. What the verdict falls back to when frame time has no headroom left to move in. It is not the
-   *  whole frame: the rasteriser's own work and the document renderer's layout are not observable from
-   *  here, so this UNDERSTATES a layer. */
+  /** Geometry rebuilt and paths warmed, per FRAME. The third main-thread clock, and the only one the
+   *  two compose-time mitigations report to. */
+  composeMs: number
+  /** Main-thread time this cell spends per FRAME: the loop's tick, the paint commands and the composes,
+   *  taken over frames rather than over paints so a frame that skipped its paint counts as having paid
+   *  nothing for it. What the verdict falls back to when frame time has no headroom left to move in.
+   *
+   *  The compose term was missing, and its absence was not a rounding error. Composing and warming are
+   *  main-thread work that happens outside any paint and outside the tick, so a sum of those two saw
+   *  none of it: every row for a mitigation paid at compose time was scored on a clock that could not
+   *  move, and printed "no effect" as though that were a measurement.
+   *
+   *  It is still not the whole frame: the rasteriser's own work and the document renderer's layout are
+   *  not observable from here, so this UNDERSTATES a layer. */
   busyMs: number
   /** Every measured frame, for the question an aggregate cannot answer: WHERE the cost fell. */
   trace?: FrameSample[]
@@ -419,6 +428,9 @@ export interface Counters {
   /** Race-loop ticks, and the JS time they spent. */
   tickN: number
   tickSum: number
+  /** Composes, and the main-thread time they and their warms spent. */
+  composeN: number
+  composeSum: number
   /** Frames on which the painter ran at all. Counted by the caller, one sample per frame, because a
    *  single frame can paint more than once (a cull step composes and paints inside the camera's own
    *  paint) and "paints over frames" is then not a fraction at all. */
@@ -432,10 +444,11 @@ export interface Counters {
  *  frame, not before the warmup, or a cell's cpu time carries frames the design threw away. */
 export function cellMetrics(
   before: Counters, after: Counters, frames: number,
-): Pick<CellResult, 'paint' | 'tickMs' | 'busyMs'> {
+): Pick<CellResult, 'paint' | 'tickMs' | 'composeMs' | 'busyMs'> {
   const paints = after.n - before.n
   const f = Math.max(1, frames)
   const paintMs = Math.max(0, after.ms - before.ms)
+  const composeMs = Math.max(0, after.composeSum - before.composeSum)
   const ticks = after.tickN - before.tickN
   const sections: Record<string, number> = {}
   for (const [k, v] of Object.entries(after.sections)) {
@@ -452,7 +465,10 @@ export function cellMetrics(
       sections,
     },
     tickMs,
-    busyMs: tickMs + paintMs / f,
+    composeMs: composeMs / f,
+    // Over FRAMES, like the paint term: a compose lands on one frame of the window and the question the
+    // verdict asks is what the cell cost per frame, not what one compose cost.
+    busyMs: tickMs + paintMs / f + composeMs / f,
   }
 }
 
@@ -567,6 +583,9 @@ export const COLUMNS: readonly Column[] = [
   { key: 'max', head: 'max ms', width: 8, dp: 1, of: (r) => r.stats.maxMs },
   { key: 'long', head: 'long', width: 6, dp: 0, of: (r) => r.stats.longFrames },
   { key: 'cpu', head: 'cpu ms', width: 8, dp: 2, of: (r) => r.busyMs },
+  // Beside the cpu total rather than folded into it, because it is the only column the geometry memo and
+  // the warmed swap can move and it is a rounding error next to the paint on every other row.
+  { key: 'compose', head: 'comp ms', width: 9, dp: 2, of: (r) => r.composeMs },
   { key: 'calls', head: 'calls', width: 8, dp: 0, of: (r) => r.paint.calls },
 ]
 
@@ -575,7 +594,7 @@ export function baselineSummary(b: CellResult): string {
   return `scene ${b.scene.items} items, ${b.scene.ops} ops, ${b.scene.pathKb.toFixed(0)}KB paths, `
     + `${b.scene.nodes} nodes | tick ${b.tickMs.toFixed(2)}ms | `
     + `paint ${b.paint.msPerPaint.toFixed(2)}ms on ${(b.paint.paintedFrac * 100).toFixed(0)}% of frames`
-    + ` | ${b.paint.skipped} items skipped/paint`
+    + ` | ${b.paint.skipped} items skipped/paint | compose ${b.composeMs.toFixed(2)}ms/frame`
 }
 
 /** Group a finished run by shot, resolving each shot's baselines and its noise floor. */
