@@ -5,8 +5,8 @@ import { describe, it, expect } from 'vitest'
 import { MOODS } from './lighting'
 import {
   REF, buildingRoofGroups, buildingWallGroups, depthSorted, isGroup, partsOf, refName, standGroups,
-  toLocal, fenceOps, groundOps, marshalGroups, runShadowOp, sceneryScene, structureShadowGroups,
-  treeShadowOp, treeShadowRatio, treeSolidOps, type DrawOp,
+  toLocal, fenceOps, groundOps, marshalGroups, runShadowOp, runSpans, sceneryScene,
+  structureShadowGroups, treeShadowOp, treeShadowRatio, treeSolidOps, type DrawOp,
 } from './scenery-draw'
 import type { SceneryRect } from './track-scenery'
 import { mapPathPoints, partsPath } from './extrude'
@@ -311,19 +311,137 @@ describe('fenceOps', () => {
   })
 })
 
+describe('runSpans', () => {
+  // 11 points 10 units apart: segment i spans x = i*10 to (i+1)*10.
+  const pts = Array.from({ length: 11 }, (_, i) => ({ x: i * 10, y: 0 }))
+
+  it('keeps the whole run when nothing is culling', () => {
+    expect(runSpans(pts, null)).toEqual([[0, 10]])
+  })
+
+  it('drops a run the disc cannot reach', () => {
+    expect(runSpans(pts, { cx: 50, cy: 900, r: 20 })).toEqual([])
+  })
+
+  it('keeps a straight that crosses the disc with both ends outside it', () => {
+    // Asked vertex by vertex this run has no point inside the disc at all, and a fence running
+    // straight through the middle of the shot would vanish.
+    expect(runSpans([{ x: -500, y: 0 }, { x: 500, y: 0 }], { cx: 0, cy: 0, r: 20 })).toEqual([[0, 1]])
+  })
+
+  it('cuts past the boundary rather than on it', () => {
+    // The disc reaches segments 3 to 6; the stretch carries a vertex either side of them, so the end
+    // of the trimmed path is outside the disc rather than sitting on its edge.
+    const [span] = runSpans(pts, { cx: 50, cy: 0, r: 11 })
+    expect(span[0]).toBeLessThan(3)
+    expect(span[1]).toBeGreaterThan(7)
+  })
+
+  it('keeps the two ends of a run that passes the disc twice, and not the length between', () => {
+    // The pathological case for a single span. This run leaves the disc, goes six hundred units away
+    // and comes back, so one span across both ends keeps nearly the whole thing and then rebuilds it
+    // on every disc step: 19.6ms a step on nurburgring against 1.8ms before the trim existed.
+    const weave = [
+      { x: 0, y: 0 }, { x: 10, y: 0 },
+      { x: 10, y: 200 }, { x: 20, y: 400 }, { x: 30, y: 600 }, { x: 40, y: 400 }, { x: 40, y: 200 },
+      { x: 40, y: 0 }, { x: 50, y: 0 },
+    ]
+    const spans = runSpans(weave, { cx: 25, cy: 0, r: 20 })
+    expect(spans).toEqual([[0, 3], [5, 8]])
+    // The point at the far end of the detour is in neither, which is the whole saving.
+    expect(spans.some(([i0, i1]) => i0 <= 4 && 4 <= i1)).toBe(false)
+  })
+
+  it('merges two stretches the one-vertex extension made touch', () => {
+    // One segment out of the disc and back is not worth a break: left unmerged, the extension would
+    // write that segment into the path from both sides.
+    const dip = [
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: -100 }, { x: 30, y: -100 },
+      { x: 30, y: 0 }, { x: 40, y: 0 },
+    ]
+    expect(runSpans(dip, { cx: 20, cy: 0, r: 15 })).toEqual([[0, 5]])
+  })
+})
+
+describe('fence runs against the cull disc', () => {
+  // A 590-unit run, which is the shape the trim exists for: a shot holds tens of units of it and the
+  // untrimmed ribbon is flattened over all of it before anything is clipped away.
+  const pts = Array.from({ length: 60 }, (_, i) => ({ x: i * 10, y: 0 }))
+  const scenery = {
+    base: '#3E5A34', bands: [], fields: [], terrain: [], runoffs: [], kerbs: [], marshals: [],
+    stands: [], buildings: [], trees: [], fences: [{ d: 'M 0 0 L 590 0', pts }],
+  } as never as Parameters<typeof sceneryScene>[0]
+  const sceneOpts = {
+    u: (m: number) => m / 3, lighting: MOODS.afternoon, view: 0.4, ground: true, extrude: 0.62,
+    storeyM: 4.6, bayM: 5.4, standFrontM: 1, standRearM: 5.5, standRoofFrac: 0.3,
+    marshalM: 2.8, marshalW: 4.4, marshalD: 3.2, fenceM: 4, solidHeightM: () => 9, trees: [],
+  }
+  const disc = { cx: 300, cy: 0, r: 60 }
+  /** The mesh face, which is the only thing the fence run fills. */
+  const meshFor = (cull: typeof disc | null) => sceneryScene(scenery, { ...sceneOpts, cull })
+    .filter((i): i is DrawOp => !isGroup(i) && i.fill === '#AEB6C2')
+  const coordsOf = (d: string) => {
+    const n = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? []
+    const out: Vec[] = []
+    for (let i = 0; i + 1 < n.length; i += 2) out.push({ x: n[i], y: n[i + 1] })
+    return out
+  }
+
+  it('stays one path and one fill, so there is no seam to double-blend', () => {
+    const [mesh] = meshFor(disc)
+    expect(mesh).toBeTruthy()
+    expect((mesh.d.match(/M/g) ?? []).length, 'one subpath, not a set of pieces').toBe(1)
+  })
+
+  it('still draws every point of the run the disc holds', () => {
+    // The picture-identity claim, checked rather than asserted: the disc carries CULL_MARGIN, so
+    // trimming may only ever remove geometry the compose was already free to drop.
+    const drawn = coordsOf(meshFor(disc)[0].d)
+    for (const p of pts) {
+      if (Math.hypot(p.x - disc.cx, p.y - disc.cy) > disc.r) continue
+      expect(
+        drawn.some((q) => Math.abs(q.x - p.x) < 0.02 && Math.abs(q.y - p.y) < 0.02),
+        `the disc holds the run at x=${p.x}, so it has to still be drawn`,
+      ).toBe(true)
+    }
+  })
+
+  it('hands over a fraction of the path, and a disc the size of what it drew', () => {
+    const whole = meshFor(null)[0]
+    const trimmed = meshFor(disc)[0]
+    expect(trimmed.d.length).toBeLessThan(whole.d.length / 3)
+    // The second half of the saving: the per-frame viewport skip reads this, and a run-length disc
+    // could never miss the viewport whatever the camera did.
+    expect(trimmed.clip!.r).toBeLessThan(whole.clip!.r / 3)
+  })
+
+  it('builds nothing at all for a run the disc has left', () => {
+    expect(meshFor({ cx: 0, cy: 5000, r: 60 })).toHaveLength(0)
+  })
+})
+
 describe('runShadowOp', () => {
   const pts = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 4 }]
 
   it('sweeps from the base rather than offsetting a copy', () => {
     // An offset copy leaves a gap between the object and its shadow, which reads as levitation.
-    const op = runShadowOp(pts, 4, opts)
+    const op = runShadowOp([pts], 4, opts)
     expect(op.d.startsWith('M ')).toBe(true)
     // A ribbon closes back on itself: twice the points of the run it was built from.
     expect((op.d.match(/L /g) ?? []).length).toBe(pts.length * 2 - 1)
   })
 
   it('lengthens with height', () => {
-    expect(runShadowOp(pts, 12, opts).d).not.toBe(runShadowOp(pts, 2, opts).d)
+    expect(runShadowOp([pts], 12, opts).d).not.toBe(runShadowOp([pts], 2, opts).d)
+  })
+
+  it('puts several stretches in ONE path, so a trimmed run is still one fill', () => {
+    // Two pieces meeting inside the shot is the seam this avoids; subpaths of one path composite
+    // once, so the shade cannot double-blend wherever they happen to fall.
+    const far = [{ x: 400, y: 0 }, { x: 410, y: 0 }]
+    const op = runShadowOp([pts, far], 4, opts)
+    expect((op.d.match(/M /g) ?? []).length).toBe(2)
+    expect(op.alpha).toBe(runShadowOp([pts], 4, opts).alpha)
   })
 })
 
@@ -602,7 +720,7 @@ describe('every op carries its own ink', () => {
     for (const g of structureShadowGroups([rect(0, 0), rect(90, 40)], shadowOpts)) {
       expect(g.ops.every(painted), 'structure cast shadow').toBe(true)
     }
-    expect(painted(runShadowOp([{ x: 0, y: 0 }, { x: 50, y: 8 }], 4, opts)), 'fence run shadow').toBe(true)
+    expect(painted(runShadowOp([[{ x: 0, y: 0 }, { x: 50, y: 8 }]], 4, opts)), 'fence run shadow').toBe(true)
     for (const g of marshalGroups([{ x: 0, y: 0, rot: 0 }], shadowOpts)) {
       expect(painted(g.shadow), 'marshal hut shadow').toBe(true)
     }

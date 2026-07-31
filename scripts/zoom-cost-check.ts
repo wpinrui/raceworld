@@ -1,25 +1,31 @@
-// Probe: what a ZOOM GESTURE costs the 2D map, which is the one camera move that rebuilds geometry.
+// Probe: what a camera move costs the 2D map, for the two moves that rebuild geometry.
 //
-// The detail ladder (lib/ui/lod.ts) decides how much of each object is drawn from how many screen pixels
-// it covers, so crossing a rung boundary changes the picture and the scene has to be recomposed. A wheel
-// notch is 1.18x and the rungs are keyed in half-octaves, so a boundary falls about every second notch:
-// a player zooming out to find the field and back in to watch a car crosses a dozen of them each way.
-// Every one of those is a synchronous rebuild, and it lands in a frame.
+// A ZOOM GESTURE is the first. The detail ladder (lib/ui/lod.ts) decides how much of each object is
+// drawn from how many screen pixels it covers, so crossing a rung boundary changes the picture and the
+// scene has to be recomposed. A wheel notch is 1.18x and the rungs are keyed in half-octaves, so a
+// boundary falls about every second notch: a player zooming out to find the field and back in to watch a
+// car crosses a dozen of them each way. Every one of those is a synchronous rebuild, and it lands in a
+// frame. So this walks the camera notch by notch along the path a player actually drives, composes on
+// exactly the commits the renderer would commit on, and reports the worst single compose — the frame the
+// stutter lives in.
 //
-// So this walks the camera notch by notch along the path a player actually drives, composes on exactly
-// the commits the renderer would commit on, and reports the worst single compose — the frame the stutter
-// lives in. Also reported: how many of the composed ops survive the per-frame viewport skip, since the
-// renderer is draw-call bound and that is the number a frame pays.
+// A DISC STEP is the second, and it did not use to be. The cull disc recommits once the camera has left
+// CULL_SLACK of its radius, which travelling a lap is once every 30% of a disc, and everything a commit
+// touched was served whole out of the static cache. The fence runs are now TRIMMED to the disc, so a
+// commit rebuilds their geometry: that is the trim's whole cost, and it is why the second block below
+// exists. The disc's radius goes as 1/scale, so the close shot steps three times as often as racing
+// scale does and both are walked.
 //
-// Canvas raster time itself needs a browser (use the in-game `n` benchmark for that); this counts and
-// times the work the main thread does before the rasteriser sees anything.
+// Also reported: how many of the composed ops survive the per-frame viewport skip, since that is the
+// number a frame pays. Canvas raster time itself needs a browser (use the in-game `n` benchmark for
+// that); this counts and times the work the main thread does before the rasteriser sees anything.
 //
 // Run: npm run zoom:check  [circuit...]
 
 import { performance } from 'node:perf_hooks'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery, KERB_BLOCK_M, KERB_WIDTH_M } from '../src/lib/ui/track-scenery'
-import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
+import { TRACK_WIDTH_M, densifyTrace } from '../src/lib/ui/track-path'
 import { EXTRUDE } from '../src/components/race/SceneryLayer'
 import { pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
@@ -32,10 +38,17 @@ import { QUALITY, lodBucket, lodScale } from '../src/lib/ui/lod'
 const VIEW_W = 1600
 const VIEW_H = 900
 const CULL_MARGIN = 1.45
+/** How far the camera may travel inside a disc before the set is recomputed. */
+const CULL_SLACK = 0.3
 const ZOOM_STEP = 1.18
 const ZOOM_MIN = 0.6
 const ZOOM_MAX = 60
 const RACE_Z = 20
+/** The two scales the disc walk is measured at, in screen pixels per metre: racing scale, and the
+ *  scale a player watches a car at. The disc's radius goes as 1/scale, so the close one steps three
+ *  times as often over the same lap. */
+const RACE_PX_PER_M = 2
+const CLOSE_PX_PER_M = 6
 
 const flatten = (items: SceneItem[]): DrawOp[] => items.flatMap((i) => ('ops' in i ? i.ops : [i]))
 
@@ -45,11 +58,14 @@ const circuits = ids.length ? ids : Object.keys(TRACK_LAYOUTS).sort()
 console.log(`Zoom gesture through the detail ladder: ${RACE_Z}x -> ${ZOOM_MIN}x -> ${RACE_Z}x -> ${ZOOM_MAX}x -> ${RACE_Z}x`)
 console.log('One compose per notch that crosses a rung boundary, which is what the renderer recomposes on.')
 console.log('"worst" is the longest single compose in the sweep. "drawn" is composed ops that survive the')
-console.log('viewport skip at racing zoom, meaned over 40 shots round the lap.\n')
+console.log('viewport skip at racing zoom, meaned over 40 shots round the lap.')
+console.log('Disc steps read mean/worst ms per step and the KB composed, with the FIRST step (a first')
+console.log('encounter with every span on the circuit) printed apart from the steps a lap then repeats.\n')
 console.log('circuit            composes    total ms   worst ms    mean ms  |  ops at 20x   drawn')
 console.log('-'.repeat(86))
 
 const worstOf: Array<{ id: string; worst: number }> = []
+const stepsOf: Array<{ id: string; race: number; close: number; closeWorst: number }> = []
 for (const id of circuits) {
   const layout = TRACK_LAYOUTS[id]
   if (!layout) { console.log(`${id}: no such layout`); continue }
@@ -150,10 +166,64 @@ for (const id of circuits) {
     + `${worst.toFixed(1).padStart(10)} ${(total / Math.max(1, ms.length)).toFixed(2).padStart(10)}  |  `
     + `${(composed / shots).toFixed(0).padStart(10)} ${(drawn / shots).toFixed(0).padStart(7)}`,
   )
+
+  // ── The disc walk ──
+  //
+  // A lap driven at one scale, composing on exactly the commits `updateCull` would commit on: a step
+  // once the camera has left CULL_SLACK of the disc's radius. Path KB is what the compose handed the
+  // renderer, which is the other half of the trim's story and moves in the opposite direction to the
+  // time.
+  const lap = densifyTrace(layout.trace)
+  const discWalk = (pxm: number) => {
+    const z = (pxm * layout.metresPerUnit) / ppu
+    const step = (Math.hypot(VIEW_W, VIEW_H) / 2 / z / ppu) * CULL_MARGIN * CULL_SLACK
+    // The map as it already is when the lap starts, so the first timed step is a step and not a
+    // circuit's worth of first-encounter geometry.
+    composeAt(z, lap[0][0], lap[0][1])
+    const took: number[] = []
+    let kb = 0
+    let last: [number, number] = lap[0]
+    for (const [sx, sy] of lap) {
+      if (Math.hypot(sx - last[0], sy - last[1]) < step) continue
+      last = [sx, sy]
+      const t0 = performance.now()
+      const items = composeAt(z, sx, sy)
+      took.push(performance.now() - t0)
+      kb += flatten(items).reduce((s, op) => s + op.d.length, 0) / 1024
+    }
+    // The FIRST step apart from the rest. Arriving at a scale is a first encounter with every span on
+    // the circuit, so it rebuilds the lot; every step after it moves a few spans. Meaning them
+    // together prints one number that is neither, and the one a lap pays repeatedly is the second.
+    const rest = took.slice(1)
+    const sum = rest.reduce((s, v) => s + v, 0)
+    return {
+      n: took.length,
+      first: took[0] ?? 0,
+      mean: sum / Math.max(1, rest.length),
+      worst: rest.length ? Math.max(...rest) : 0,
+      kb: kb / Math.max(1, took.length),
+    }
+  }
+  const race = discWalk(RACE_PX_PER_M)
+  const close = discWalk(CLOSE_PX_PER_M)
+  stepsOf.push({ id, race: race.mean, close: close.mean, closeWorst: close.worst })
+  console.log(
+    `${' '.repeat(18)}disc steps  ${RACE_PX_PER_M}px/m ${String(race.n).padStart(4)} steps `
+    + `${race.mean.toFixed(2)}/${race.worst.toFixed(1)}ms first ${race.first.toFixed(1)} ${race.kb.toFixed(0)}KB  |  `
+    + `${CLOSE_PX_PER_M}px/m ${String(close.n).padStart(4)} steps `
+    + `${close.mean.toFixed(2)}/${close.worst.toFixed(1)}ms first ${close.first.toFixed(1)} ${close.kb.toFixed(0)}KB`,
+  )
 }
 
 if (worstOf.length > 1) {
   console.log('-'.repeat(86))
   const heaviest = [...worstOf].sort((a, b) => b.worst - a.worst).slice(0, 5)
   console.log(`Heaviest single compose: ${heaviest.map((w) => `${w.id} ${w.worst.toFixed(1)}ms`).join(', ')}`)
+  const med = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+  console.log(
+    `Disc step, median across ${stepsOf.length} layouts: `
+    + `${RACE_PX_PER_M}px/m ${med(stepsOf.map((s) => s.race)).toFixed(2)}ms, `
+    + `${CLOSE_PX_PER_M}px/m ${med(stepsOf.map((s) => s.close)).toFixed(2)}ms `
+    + `(worst step ${Math.max(...stepsOf.map((s) => s.closeWorst)).toFixed(1)}ms)`,
+  )
 }

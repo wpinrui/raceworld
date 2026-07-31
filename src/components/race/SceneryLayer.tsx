@@ -358,7 +358,7 @@ export function TrackFurnitureLayer({ scenery, u, lighting, view, hide, detail =
           {/* Debris fencing is tall, so leaving it shadowless makes it levitate too — but it is a
               mesh, so what it casts is faint. */}
           {full && scenery.fences.map((b, i) => {
-            const op = runShadowOp(b.pts, FENCE_H_M, furnOpts)
+            const op = runShadowOp([b.pts], FENCE_H_M, furnOpts)
             return <path key={`fs${i}`} opacity={op.alpha} fill={op.fill} stroke="none" d={op.d} />
           })}
         </g>

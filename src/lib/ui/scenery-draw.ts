@@ -21,6 +21,7 @@ import {
 } from './lighting'
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 import type { SceneryFence } from './scenery-props'
+import { smoothOpenPath } from './track-path'
 import type { Vec } from './geom'
 import { atLeast, rungFor, type Rung } from './lod'
 import { TREE_FLAT } from './scenery-paint'
@@ -622,20 +623,97 @@ export interface FenceDrawOpts extends TreeDrawOpts {
  *  posts as verticals — one path for a whole circuit's worth. */
 const fenceMemo = objectMemo<SceneryFence, DrawOp[]>()
 
-export function fenceOps(fences: SceneryFence[], o: FenceDrawOpts): DrawOp[][] {
+/** One fence's three ops from the stretches it is drawn across, with the top line's own path given
+ *  rather than derived: it is a SMOOTHED curve through the points the face and posts are built from,
+ *  and a trimmed run needs the curve through its trimmed points, not the whole run's.
+ *
+ *  One path per op however many stretches there are, so a run trimmed to a disc it passes twice is
+ *  still one fill and one stroke. */
+function fenceRunOps(runs: readonly Vec[][], topD: string, o: FenceDrawOpts): DrawOp[] {
   const dir = dirAt(o.view)
   const lift = o.u(o.fenceM * o.extrude)
   const ox = dir.x * lift
   const oy = dir.y * lift
+  return [
+    // You can see the circuit through debris fencing, so the face is barely there.
+    { d: runs.map((r) => ribbon(r, ox, oy)).join(''), fill: '#AEB6C2', alpha: 0.13 },
+    { d: runs.map((r) => posts(r, ox, oy, 2)).join(''), stroke: '#79808C', width: o.u(0.35), alpha: 0.5 },
+    { d: topD, stroke: '#79808C', width: o.u(0.4), alpha: 0.6 },
+  ]
+}
+
+export function fenceOps(fences: SceneryFence[], o: FenceDrawOpts): DrawOp[][] {
   // No rung of its own: the fencing is gated wholesale by its height, so its geometry only ever
   // changes with the bearing. A run of posts round a whole circuit is not cheap to write out.
   const key = `${o.view}|${o.extrude}|${o.fenceM}|${o.u(1)}`
-  return fences.map((f) => fenceMemo(f, key, () => [
-    // You can see the circuit through debris fencing, so the face is barely there.
-    { d: ribbon(f.pts, ox, oy), fill: '#AEB6C2', alpha: 0.13 },
-    { d: posts(f.pts, ox, oy, 2), stroke: '#79808C', width: o.u(0.35), alpha: 0.5 },
-    { d: f.d, stroke: '#79808C', width: o.u(0.4), alpha: 0.6 },
-  ]))
+  return fences.map((f) => fenceMemo(f, key, () => fenceRunOps([f.pts], f.d, o)))
+}
+
+/** Whether a segment comes within a disc: the distance from the centre to the nearest point ON the
+ *  segment, against the radius. Squared, because this runs per segment per run per compose. */
+function segNearDisc(a: Vec, b: Vec, c: Bounds): boolean {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len2 = dx * dx + dy * dy
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((c.cx - a.x) * dx + (c.cy - a.y) * dy) / len2)) : 0
+  const px = a.x + dx * t - c.cx
+  const py = a.y + dy * t - c.cy
+  return px * px + py * py <= c.r * c.r
+}
+
+/** The stretches of a run a cull disc can hold, as inclusive index bounds into its points. Empty when
+ *  the disc holds none of it.
+ *
+ *  A run is the one thing on the map that is neither near the shot nor far from it: a debris fence is a
+ *  single path hundreds of metres long, and a shot sees a few metres of it. Every other layer answers
+ *  that with a disc and gets dropped whole or kept whole, which for a run means kept whole every time.
+ *  The cost of keeping it whole is not the fill (a frame paints 0.14 Mpx of shade and is charged
+ *  milliseconds for it) but the FLATTENING: the ribbon is walked and its edges set up over the run's
+ *  whole length before anything is clipped away, which is where the stencil work measured at 149,225
+ *  Mpx-edges against the structures' rounding error actually goes.
+ *
+ *  So a run is TRIMMED rather than cut into pieces. The stretches come back as SUBPATHS of one path
+ *  drawn by one fill, which is what keeps the trim invisible: pieces would meet inside the shot and a
+ *  shared edge at alpha 0.35 either double-blends into a dark joint or leaves a hairline, and subpaths
+ *  of one path composite once and never meet at all.
+ *
+ *  Several stretches rather than the one spanning them, and the difference is not academic. A run that
+ *  passes the disc twice (a fence between two straights, a hairpin doubling back) has almost its whole
+ *  length between its two near ends, so one span kept nearly everything and then REBUILT it on every
+ *  disc step, where before it was built once and cached forever: measured at a 19.6ms step on
+ *  nurburgring against 1.8ms before it. Per stretch, what a step rebuilds is bounded by the disc.
+ *
+ *  Segment-wise rather than vertex-wise, so a long straight passing through the disc with both ends
+ *  outside it is kept rather than dropped. Extended a vertex either side, so a cut lands past the
+ *  boundary rather than on it, and merged where that extension makes two stretches meet.
+ *
+ *  Trimming to the CULL disc and never to the viewport is what makes it invisible: the disc carries
+ *  CULL_MARGIN and is already the line every other layer is dropped at, so a trimmed end is as far off
+ *  screen as a dropped tree. */
+export function runSpans(pts: readonly Vec[], cull: Bounds | null): Array<[number, number]> {
+  const last = pts.length - 1
+  if (last < 1) return []
+  if (!cull) return [[0, last]]
+  const out: Array<[number, number]> = []
+  const push = (lo: number, hi: number) => {
+    const span: [number, number] = [Math.max(0, lo - 1), Math.min(last, hi + 1)]
+    const prev = out[out.length - 1]
+    // The one-vertex extension can make two stretches touch or overlap. Merged, so the same geometry
+    // is never written into the path twice.
+    if (prev && span[0] <= prev[1]) prev[1] = Math.max(prev[1], span[1])
+    else out.push(span)
+  }
+  let lo = -1
+  for (let i = 0; i < last; i++) {
+    const near = segNearDisc(pts[i], pts[i + 1], cull)
+    if (near && lo < 0) lo = i
+    if (!near && lo >= 0) {
+      push(lo, i)
+      lo = -1
+    }
+  }
+  if (lo >= 0) push(lo, last)
+  return out
 }
 
 /** The shadow a run of fencing or tyre wall throws.
@@ -644,14 +722,20 @@ export function fenceOps(fences: SceneryFence[], o: FenceDrawOpts): DrawOp[][] {
  *  leaves a gap between the object and its own shadow, which reads as levitation and implies
  *  something taller than the thing drawn. */
 export function runShadowOp(
-  pts: Vec[], heightM: number, o: TreeDrawOpts,
+  /** The stretches to draw across. More than one where the run has been trimmed to a disc it passes
+   *  twice; they are subpaths of ONE path under ONE fill, so nothing composites twice. */
+  runs: readonly Vec[][], heightM: number, o: TreeDrawOpts,
 ): DrawOp {
   const dir = dirAt(o.view)
   const ldir = dirAt(o.lighting.azimuth)
   const base = o.u(heightM * o.extrude)
   const cast = o.u(heightM * shadowReach(o.lighting))
   return {
-    d: ribbon(pts.map((p) => ({ x: p.x + dir.x * base, y: p.y + dir.y * base })), ldir.x * cast, ldir.y * cast),
+    d: runs
+      .map((pts) => ribbon(
+        pts.map((p) => ({ x: p.x + dir.x * base, y: p.y + dir.y * base })), ldir.x * cast, ldir.y * cast,
+      ))
+      .join(''),
     fill: shadowFill(o.lighting),
     alpha: shadowOpacity(o.lighting),
   }
@@ -840,9 +924,10 @@ interface StaticParts {
   wallGroups: DrawGroup[]
   standGs: DrawGroup[]
   roofGs: DrawGroup[]
-  runShadows: DrawOp[]
-  fenceRuns: DrawOp[]
   marshalGs: DrawGroup[]
+  // The fence runs are NOT here. Everything above is a function of the bearing, the light and the
+  // rungs, which is what lets a disc step re-filter this rather than rebuild it; a run is trimmed to
+  // the disc, so it belongs to the compose that knows where the disc is. See `fenceRunItems`.
 }
 
 /** The disc containing a point set: centred on its extent, radius half the diagonal, plus whatever the
@@ -915,6 +1000,55 @@ function rungSignature(scenery: Scenery, o: SceneOpts): string {
 
 const fenceRunMemo = objectMemo<SceneryFence, { shadow: DrawOp; runs: DrawOp[] }>()
 
+/** The fence runs a shot can hold: their shade, their mesh face and their posts, each built across the
+ *  stretches `runSpans` trimmed the run to.
+ *
+ *  This is the one producer that reads the CULL DISC, and it sits here rather than in `staticParts`
+ *  because of it. Everything in there is a function of the bearing, the light and the rungs, so a disc
+ *  step only re-filters it; a trimmed run is a function of where the disc is, so it cannot be cached
+ *  under a key that does not mention it. What is left of the caching is per (run, span): a disc step
+ *  that leaves a run's span alone is still a hit, and a run the disc has left entirely is skipped
+ *  without building anything at all.
+ *
+ *  The trim is invisible by construction. It is one path with one fill either way, so there is no seam
+ *  and nothing double-blends; the ends move, and they move to somewhere the cull disc had already
+ *  decided nothing is drawn. */
+function fenceRunItems(scenery: Scenery, o: SceneOpts): { shadows: DrawOp[]; runs: DrawOp[] } {
+  const shadows: DrawOp[] = []
+  const runs: DrawOp[] = []
+  // A fence is judged on its HEIGHT, not the length of its run: what makes it read as debris fencing
+  // rather than a hedge is the mesh face standing up off the ground, and that is what shrinks.
+  if (!atLeast(rungFor(o.fenceM, o.pxPerM ?? Infinity, o.quality), 'mid')) return { shadows, runs }
+  const treeOpts = {
+    u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view, pxPerM: o.pxPerM, quality: o.quality,
+  }
+  const runPad = o.u(25)
+  const key = `${o.view}|${o.extrude}|${o.fenceM}|${o.u(1)}|${lightKey(o.lighting)}|${runPad}`
+  const cull = o.cull ?? null
+  const fenceOpts = { ...treeOpts, fenceM: o.fenceM }
+  for (const f of scenery.fences) {
+    const spans = runSpans(f.pts, cull)
+    if (spans.length === 0) continue
+    // Stamped inside the memo, so what comes back out already carries its disc and nothing here has to
+    // reach into a shared object and write to it.
+    const built = fenceRunMemo(f, `${key}|${spans.map((s) => s.join('-')).join(',')}`, () => {
+      const whole = spans.length === 1 && spans[0][0] === 0 && spans[0][1] === f.pts.length - 1
+      const stretches = whole ? [f.pts] : spans.map(([i0, i1]) => f.pts.slice(i0, i1 + 1))
+      const topD = whole ? f.d : stretches.map((s) => smoothOpenPath(s)).join('')
+      // Off the trimmed points, so the per-frame viewport skip gets a disc the size of what is drawn
+      // rather than one the size of the circuit.
+      const disc = discOfPts(stretches.flat(), runPad)
+      return {
+        shadow: stamp({ ...runShadowOp(stretches, o.fenceM, treeOpts), alpha: 0.35 }, disc),
+        runs: fenceRunOps(stretches, topD, fenceOpts).map((op) => stamp(op, disc)),
+      }
+    })
+    shadows.push(built.shadow)
+    runs.push(...built.runs)
+  }
+  return { shadows, runs }
+}
+
 /** A hut and its own shadow folded into one group. Keyed on what `marshalGroups` handed back, which is
  *  already memoised, so the fold is done once rather than allocating a group per post per compose. */
 const hutCache = new WeakMap<object, DrawGroup>()
@@ -949,30 +1083,8 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const treeOpts = {
     u: o.u, extrude: o.extrude, lighting: o.lighting, view: o.view, pxPerM: o.pxPerM, quality: o.quality,
   }
-  const runPad = o.u(25)
   const structures: SceneryRect[] = [...scenery.stands, ...scenery.buildings]
-  const runShadows: DrawOp[] = []
-  const fenceRuns: DrawOp[] = []
-  // A fence is judged on its HEIGHT, not the length of its run: what makes it read as debris fencing
-  // rather than a hedge is the mesh face standing up off the ground, and that is what shrinks.
   const px = o.pxPerM ?? Infinity
-  const fenceRung = rungFor(o.fenceM, px, o.quality)
-  if (atLeast(fenceRung, 'mid')) {
-    // Stamped inside the memo, so what comes back out already carries its disc and nothing here has to
-    // reach into a shared object and write to it.
-    const key = `${o.view}|${o.extrude}|${o.fenceM}|${o.u(1)}|${lightKey(o.lighting)}|${runPad}`
-    for (const f of scenery.fences) {
-      const built = fenceRunMemo(f, key, () => {
-        const disc = discOfPts(f.pts, runPad)
-        return {
-          shadow: stamp({ ...runShadowOp(f.pts, o.fenceM, treeOpts), alpha: 0.35 }, disc),
-          runs: fenceOps([f], { ...treeOpts, fenceM: o.fenceM })[0].map((op) => stamp({ ...op }, disc)),
-        }
-      })
-      runShadows.push(built.shadow)
-      fenceRuns.push(...built.runs)
-    }
-  }
   const parts: StaticParts = {
     key,
     ground: groundOps(scenery, o.u, { ground: o.ground, pxPerM: o.pxPerM, quality: o.quality }),
@@ -992,8 +1104,6 @@ function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
     roofGs: keepDrawn(
       buildingRoofGroups(scenery.buildings, { u: o.u, pxPerM: o.pxPerM, quality: o.quality }),
     ),
-    runShadows,
-    fenceRuns,
     // A 2.8m hut is the smallest built thing on the map, so it reaches the bottom of the ladder first.
     marshalGs: atLeast(rungFor(o.marshalW, px, o.quality), 'far')
       ? marshalGroups(scenery.marshals, {
@@ -1150,10 +1260,13 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   }
   mark('furniture')
   if (shown('furniture')) {
+    // Trimmed to the disc rather than filtered against it, so there is no `keep` here: what comes back
+    // is already only the spans the disc holds, and each carries a disc measured off its own span.
+    const fences = fenceRunItems(scenery, o)
     // The fence's own shadow goes with the fence, not with the scenery shadows: hiding the barriers
     // and leaving their shadows lying on the tarmac is not an ablation of anything.
-    if (shown('shadows')) items.push(...keep(s.runShadows))
-    items.push(...keep(s.fenceRuns))
+    if (shown('shadows')) items.push(...fences.shadows)
+    items.push(...fences.runs)
   }
   // The start's own paint, over everything, as the SVG layer has always drawn it.
   mark('road')
