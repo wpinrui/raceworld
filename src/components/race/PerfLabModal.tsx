@@ -12,11 +12,11 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Check, ClipboardCopy, Gauge, Play, RotateCcw, Square, X,
+  Check, ClipboardCopy, Gauge, Hash, Play, RotateCcw, Square, X,
 } from 'lucide-react'
 import {
-  COLUMNS, VARIANTS, baselineSummary, estimateSeconds, traceSummary, verdictFor,
-  type LabConfig, type VariantGroup, type VerdictKind,
+  COLUMNS, VARIANTS, baselineSummary, decodeRunCode, encodeRunCode, estimateSeconds, traceSummary,
+  verdictFor, type LabConfig, type VariantGroup, type VerdictKind,
 } from '@/lib/ui/perf-bench'
 import { SHOTS, type ShotId } from '@/lib/ui/perf-shots'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -63,6 +63,59 @@ function Box({ on, label, note, onClick }: {
         {note && <span className="block text-[11px] text-[#FFFFFF]">{note}</span>}
       </span>
     </button>
+  )
+}
+
+/** The whole selection as one token, in and out.
+ *
+ *  Typed rather than derived from `config`, because a code is edited a character at a time and half of
+ *  one is not a selection: the field holds what was typed and only applies it once it decodes. */
+function RunCodeField({ config, setConfig }: {
+  config: LabConfig; setConfig: (c: LabConfig) => void
+}) {
+  const [typed, setTyped] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 1600)
+    return () => clearTimeout(id)
+  }, [copied])
+  const shown = typed ?? encodeRunCode(config)
+  const bad = typed !== null && typed.trim() !== '' && !decodeRunCode(typed)
+  return (
+    <div className="flex items-center gap-1.5">
+      <Hash size={14} color="#00D9FF" />
+      <input
+        value={shown}
+        spellCheck={false}
+        onChange={(e) => {
+          setTyped(e.target.value)
+          const cfg = decodeRunCode(e.target.value)
+          if (cfg) setConfig(cfg)
+        }}
+        // Back to mirroring the boxes: leaving the field means the ticks are the truth again.
+        onBlur={() => setTyped(null)}
+        className="w-44 rounded border bg-[#151A22] px-2 py-1 font-mono text-[12px] text-[#FFFFFF]"
+        style={{ borderColor: bad ? '#DC143C' : '#2A3142' }}
+      />
+      <Tooltip content="Copy this selection as a run code">
+        <button
+          type="button"
+          onClick={async () => {
+            const code = encodeRunCode(config)
+            try {
+              await navigator.clipboard.writeText(code)
+            } catch {
+              console.log(code)
+            }
+            setCopied(true)
+          }}
+          className="rounded bg-[#2A3142] p-1.5 text-[#FFFFFF] hover:bg-[#303848] cursor-pointer"
+        >
+          {copied ? <Check size={14} color="#00D9FF" /> : <ClipboardCopy size={14} />}
+        </button>
+      </Tooltip>
+    </div>
   )
 }
 
@@ -338,6 +391,7 @@ export function PerfLabModal({ lab }: { lab: PerfLab }) {
           <>
             <ConfigPane config={config} setConfig={lab.setConfig} />
             <div className="mt-4 flex items-center gap-4 border-t border-[#2A3142] pt-3">
+              <RunCodeField config={config} setConfig={lab.setConfig} />
               <span className="text-[12px] text-[#FFFFFF]">
                 {runnable} cells · about {mmss(estimateSeconds(plan, config))}
               </span>

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  COLUMNS, DEFAULT_LAB_CONFIG, blocksOf, cellMetrics, estimateSeconds, frameStats, longFramesOf,
-  noiseFloorCpuMs, noiseFloorMs, planCells, traceSummary, verdictFor, vsyncBound,
+  COLUMNS, DEFAULT_LAB_CONFIG, RUN_CODE_ORDERS, VARIANTS, blocksOf, cellMetrics, decodeRunCode,
+  encodeRunCode, estimateSeconds, frameStats, longFramesOf, noiseFloorCpuMs, noiseFloorMs, planCells,
+  traceSummary, verdictFor, vsyncBound,
   type Cell, type CellResult, type Counters, type FrameSample,
 } from './perf-bench'
+import { SHOTS } from './perf-shots'
 
 describe('frameStats', () => {
   it('reports the 1% low as the mean of the worst one per cent of frames', () => {
@@ -386,6 +388,63 @@ describe('the noise floor a vsync-bound block is judged against', () => {
     const half = blocksOf(cells, new Map([[cells[0].key, pinned(cells[0], 4)]]))[0]
     expect(half.noiseMs).toBeCloseTo(0.1, 9)
     expect(half.noiseUnit).toBe('ms cpu')
+  })
+})
+
+describe('run codes', () => {
+  const cfg = {
+    shots: ['zoom', 'rotate'] as const, variants: ['off:geomCache', 'off:warmSwap'],
+    frames: 360, warmup: 20,
+  }
+
+  it('round-trips a selection exactly', () => {
+    const back = decodeRunCode(encodeRunCode({ ...cfg, shots: [...cfg.shots] }))
+    expect(back).toEqual({ ...cfg, shots: [...cfg.shots] })
+  })
+
+  it('round-trips every shot and every variant at once, and none at all', () => {
+    const all = {
+      shots: SHOTS.map((s) => s.id), variants: VARIANTS.map((v) => v.id), frames: 600, warmup: 600,
+    }
+    expect(decodeRunCode(encodeRunCode(all))).toEqual(all)
+    const none = { shots: ['racing' as const], variants: [], frames: 30, warmup: 0 }
+    expect(decodeRunCode(encodeRunCode(none))).toEqual(none)
+  })
+
+  it('is one token, and takes one back however it was pasted', () => {
+    const code = encodeRunCode({ ...cfg, shots: [...cfg.shots] })
+    expect(code).toHaveLength(16)
+    expect(code).toMatch(/^[0-9a-f]+$/)
+    expect(decodeRunCode(` ${code.toUpperCase()} `)).toEqual(decodeRunCode(code))
+  })
+
+  it('orders the decoded selection by the catalogue, so two codes for one run are one code', () => {
+    const a = encodeRunCode({ ...cfg, shots: ['zoom', 'rotate'] })
+    const b = encodeRunCode({ ...cfg, shots: ['rotate', 'zoom'] })
+    expect(a).toBe(b)
+    expect(decodeRunCode(a)!.shots).toEqual(['zoom', 'rotate'])
+  })
+
+  it('refuses anything that is not a code rather than applying half of one', () => {
+    for (const bad of ['', 'nope', '1300', '2' + '0'.repeat(15), '1'.repeat(17), '1zz00000a0168014']) {
+      expect(decodeRunCode(bad), bad).toBeNull()
+    }
+  })
+
+  it('refuses a code selecting no shots, which would offer a run that measures nothing', () => {
+    expect(decodeRunCode(encodeRunCode({ ...cfg, shots: [] }))).toBeNull()
+  })
+
+  it('clamps a frame count the config screen would not have allowed', () => {
+    const low = decodeRunCode(encodeRunCode({ ...cfg, shots: [...cfg.shots], frames: 1, warmup: 0 }))
+    expect(low!.frames).toBe(30)
+  })
+
+  // The one way a frozen bit order goes wrong: a variant added to the catalogue and not to the order,
+  // which would decode every later bit one row off and every existing code with it.
+  it('assigns a bit to every shot and every variant there is, and to nothing else', () => {
+    expect([...RUN_CODE_ORDERS.shots].sort()).toEqual(SHOTS.map((s) => s.id).sort())
+    expect([...RUN_CODE_ORDERS.variants].sort()).toEqual(VARIANTS.map((v) => v.id).sort())
   })
 })
 

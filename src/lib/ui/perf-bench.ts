@@ -163,6 +163,73 @@ export const DEFAULT_LAB_CONFIG: LabConfig = {
   warmup: 20,
 }
 
+// ── Run codes ──
+//
+// A selection is seven shots against twenty-six variants plus two frame counts, and ticking it by hand
+// is both slow and a place to make a mistake nobody can see afterwards. A run code is that selection as
+// sixteen hex characters, so a run can be handed over in a sentence and reproduced exactly.
+//
+// The bit order is FROZEN and is not the order anything is displayed in. Reordering the catalogue would
+// otherwise silently repoint every code ever pasted at different rows; new entries go on the END of
+// these lists, and a test fails if one is added to the catalogue and not to them.
+
+const RUN_CODE_VERSION = 1
+
+const SHOT_CODE_ORDER: readonly ShotId[] = [
+  'racing', 'pit', 'start', 'wide', 'zoom', 'rotate', 'still',
+]
+
+const VARIANT_CODE_ORDER: readonly string[] = [
+  'off:pathCache', 'off:paintState', 'off:itemCull', 'off:batchFlat', 'off:geomCache',
+  'off:cameraGuard', 'off:cullDisc', 'off:lodRungs', 'off:warmSwap', 'off:visElide',
+  'hide:trees', 'hide:shadows', 'hide:buildings', 'hide:stands', 'hide:furniture', 'hide:ground',
+  'hide:kerbs', 'hide:pit', 'hide:signs', 'hide:boxes', 'hide:cars', 'hide:static', 'hide:dynamic',
+  'quality:low', 'quality:high', 'renderer:svg',
+]
+
+/** Exported for the test that keeps them in step with the catalogue, and for nothing else. */
+export const RUN_CODE_ORDERS = { shots: SHOT_CODE_ORDER, variants: VARIANT_CODE_ORDER }
+
+/** Widths in hex characters, in order. Fixed rather than delimited, so a code is one token to select. */
+const CODE_FIELDS = { version: 1, shots: 2, variants: 7, frames: 3, warmup: 3 }
+const CODE_LENGTH = Object.values(CODE_FIELDS).reduce((s, w) => s + w, 0)
+
+/** What the config screen will accept, mirroring what its own number fields clamp to. */
+const FRAME_BOUNDS = { min: 30, max: 600 }
+const clampTo = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+export function encodeRunCode(cfg: LabConfig): string {
+  const mask = (order: readonly string[], on: readonly string[]) =>
+    order.reduce((m, id, i) => (on.includes(id) ? m | (1 << i) : m), 0)
+  const hex = (v: number, w: number) => Math.max(0, Math.round(v)).toString(16).padStart(w, '0').slice(-w)
+  return `${RUN_CODE_VERSION}`
+    + hex(mask(SHOT_CODE_ORDER, cfg.shots), CODE_FIELDS.shots)
+    + hex(mask(VARIANT_CODE_ORDER, cfg.variants), CODE_FIELDS.variants)
+    + hex(cfg.frames, CODE_FIELDS.frames)
+    + hex(cfg.warmup, CODE_FIELDS.warmup)
+}
+
+/** A code back into a selection, or null if it is not one. Null rather than a partial config: half a
+ *  run applied from a mistyped code is worse than nothing happening. */
+export function decodeRunCode(code: string): LabConfig | null {
+  const s = code.trim().toLowerCase().replace(/[\s-]/g, '')
+  if (s.length !== CODE_LENGTH || !/^[0-9a-f]+$/.test(s)) return null
+  if (s[0] !== String(RUN_CODE_VERSION)) return null
+  let at = CODE_FIELDS.version
+  const take = (w: number) => { const v = parseInt(s.slice(at, at + w), 16); at += w; return v }
+  const pick = <T extends string>(order: readonly T[], m: number) => order.filter((_, i) => (m >> i) & 1)
+  const shots = pick(SHOT_CODE_ORDER, take(CODE_FIELDS.shots))
+  const variants = pick(VARIANT_CODE_ORDER, take(CODE_FIELDS.variants))
+  // A run of no shots is not a run, and the screen would offer a Run button that measures nothing.
+  if (shots.length === 0) return null
+  return {
+    shots: [...shots],
+    variants: [...variants],
+    frames: clampTo(take(CODE_FIELDS.frames), FRAME_BOUNDS.min, FRAME_BOUNDS.max),
+    warmup: clampTo(take(CODE_FIELDS.warmup), 0, FRAME_BOUNDS.max),
+  }
+}
+
 export interface Cell {
   key: string
   shot: ShotId
