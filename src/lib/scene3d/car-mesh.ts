@@ -61,15 +61,16 @@ const POD: PodStation[] = [
 /** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
  *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
 const SPINE_REAR: Station[] = [
-  // The engine cover to the sketch's green line: a small rounded crest just behind the headrest,
-  // then one long LOW fall to the tail. No sail, no dome above it.
-  { z: 246, half: 14, top: 0.60 },
-  { z: 256, half: 15, top: 0.68 },
-  { z: 272, half: 14, top: 0.66 },
-  { z: 300, half: 11, top: 0.58 },
-  { z: 340, half: 9, top: 0.48 },
-  { z: 390, half: 7, top: 0.38 },
-  { z: 446, half: 6, top: 0.30 },
+  // The airbox is a rounded POD standing proud of the engine cover, not a triangular sail: it
+  // steps up behind the headrest, domes, and falls away down the spine.
+  { z: 246, half: 14, top: 0.62 },
+  { z: 254, half: 15, top: 0.78 },
+  { z: 264, half: 16, top: 0.87 },
+  { z: 276, half: 15, top: 0.86 },
+  { z: 292, half: 13, top: 0.76 },
+  { z: 330, half: 10, top: 0.62 },
+  { z: 380, half: 8, top: 0.50 },
+  { z: 446, half: 6, top: 0.42 },
 ]
 const SPINE_BOTTOM = 0.30
 
@@ -351,8 +352,8 @@ export function buildCarMesh(colour: string): CarMesh {
   {
     // Held a clear step AHEAD of the fin's lofted slope: flush placement left it swallowed the
     // moment the airbox height moved.
-    const base = { y: H(0.555), z: 243 - cz }
-    const apex = { y: H(0.665), z: 253 - cz }
+    const base = { y: H(0.60), z: 244 - cz }
+    const apex = { y: H(0.80), z: 254 - cz }
     const at = (x: number, f: number): V3 =>
       v3(x, base.y + (apex.y - base.y) * f, base.z + (apex.z - base.z) * f)
     const rim: Array<[number, number]> = [
