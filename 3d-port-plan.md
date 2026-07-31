@@ -9,8 +9,8 @@
 
 | Increment | State |
 |---|---|
-| **1** — ground truth: the road on the ground, previewable | In progress |
-| **2** — the world stands up: structures, trees, light | Not started |
+| **1** — ground truth: the road on the ground, previewable | **Done.** `8066744` |
+| **2** — the world stands up: structures, trees, light | **Done.** `5f59773` |
 | **3** — the surface keeps its story: ink baked to texture | Not started |
 | **4** — cars: impostor, then the parametric loft | Not started |
 | **5** — the live view swaps | Not started |
