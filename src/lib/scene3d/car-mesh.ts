@@ -33,14 +33,26 @@ const BODY: Station[] = [
   { z: 48, half: 14, top: 0.32, bottom: 0.167 },
   { z: 110, half: 16, top: 0.44, bottom: 0.124 },
   { z: 166, half: 25, top: 0.48, bottom: 0.085 },
-  { z: 202, half: 46, top: 0.52 },
-  { z: 224, half: 70, top: 0.54 },
-  { z: 290, half: 70, top: 0.53 },
-  { z: 342, half: 52, top: 0.48 },
-  { z: 380, half: 30, top: 0.45 },
+  { z: 202, half: 30, top: 0.52 },
+  { z: 224, half: 32, top: 0.54 },
+  { z: 290, half: 32, top: 0.53 },
+  { z: 342, half: 30, top: 0.48 },
+  { z: 380, half: 28, top: 0.45 },
   { z: 448, half: 28, top: 0.40 },
 ]
 const BODY_BOTTOM = 0.06
+
+/** The sidepods as their OWN volumes, hung either side of a monocoque that stays narrow: their
+ *  front faces are where the mouths open, and the undercut between pod and floor stays air. */
+interface PodStation { z: number; inner: number; outer: number; top: number }
+const POD: PodStation[] = [
+  { z: 212, inner: 30, outer: 52, top: 0.40 },
+  { z: 224, inner: 26, outer: 70, top: 0.54 },
+  { z: 300, inner: 26, outer: 70, top: 0.53 },
+  { z: 356, inner: 26, outer: 56, top: 0.46 },
+  { z: 392, inner: 24, outer: 34, top: 0.40 },
+]
+const POD_BOTTOM = 0.06
 
 /** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
  *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
@@ -119,6 +131,37 @@ function section(s: Required<Station>): V3[] {
   const left = PROFILE.map(([w, f]) => v3(-s.half * w, y(f), z))
   const right = [...PROFILE].reverse().map(([w, f]) => v3(s.half * w, y(f), z))
   return [...left, ...right]
+}
+
+/** One sidepod: an asymmetric loft from inner wall to outer flank, capped fore and aft. */
+function podGeometry(sign: number): THREE.BufferGeometry {
+  const s = new GeometrySink()
+  const ring = (p: PodStation): V3[] => {
+    const z = p.z - SPRITE.cy
+    const b = H(POD_BOTTOM)
+    const t = H(p.top)
+    const mid = p.inner + (p.outer - p.inner) * 0.55
+    return [
+      v3(sign * p.inner, b, z), v3(sign * p.outer, b, z), v3(sign * p.outer, b + (t - b) * 0.72, z),
+      v3(sign * mid, t, z), v3(sign * p.inner, t, z),
+    ]
+  }
+  const rings = POD.map(ring)
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const a = rings[i]
+    const b = rings[i + 1]
+    for (let k = 0; k < a.length; k++) {
+      const k2 = (k + 1) % a.length
+      s.quad(a[k], a[k2], b[k2], b[k])
+    }
+  }
+  for (const [ringPts, flip] of [[rings[0], false], [rings[rings.length - 1], true]] as const) {
+    for (let k = 1; k + 1 < ringPts.length; k++) {
+      if (flip) s.tri(ringPts[0], ringPts[k + 1], ringPts[k])
+      else s.tri(ringPts[0], ringPts[k], ringPts[k + 1])
+    }
+  }
+  return s.build()
 }
 
 function loftGeometry(stations: Station[], bottomM: number): THREE.BufferGeometry {
@@ -259,6 +302,7 @@ export function buildCarMesh(colour: string): CarMesh {
 
   group.add(mesh(loftGeometry(BODY, BODY_BOTTOM), colour))
   group.add(mesh(loftGeometry(SPINE_REAR, SPINE_BOTTOM), sec))
+  for (const sign of [-1, 1]) group.add(mesh(podGeometry(sign), colour))
 
   // The cockpit: a dark open tub between the surround and the headrest bulkhead, the driver's
   // helmet proud of its rim.
@@ -269,12 +313,12 @@ export function buildCarMesh(colour: string): CarMesh {
   helmet.position.set(0, H(0.56), 228 - cz)
   group.add(helmet)
 
-  // Sidepod intakes read as OPENINGS: dark mouths floated just off the pods' angled fronts.
+  // Sidepod intakes read as OPENINGS: dark mouths on the pods' own front faces.
   const mouths = new GeometrySink()
   for (const sign of [-1, 1]) {
     mouths.quad(
-      v3(sign * 35, H(0.16), 203.5 - cz), v3(sign * 69, H(0.16), 221.5 - cz),
-      v3(sign * 69, H(0.48), 221.5 - cz), v3(sign * 35, H(0.48), 203.5 - cz),
+      v3(sign * 31, H(0.10), 210.5 - cz), v3(sign * 50, H(0.12), 211.5 - cz),
+      v3(sign * 50, H(0.36), 211.5 - cz), v3(sign * 31, H(0.38), 210.5 - cz),
     )
   }
   group.add(mesh(mouths.build(), CARBON))
@@ -355,7 +399,7 @@ export function buildCarMesh(colour: string): CarMesh {
     box(head, cx + sign * 58 - 5, cx + sign * 58 + 5, 0.50, 0.545, 202, 209)
     group.add(mesh(head.build(), TERTIARY))
     group.add(blade(
-      v3(sign * 44, H(0.48), 206 - cz), v3(sign * 54, H(0.525), 205 - cz), 2.4, 1.6, TERTIARY,
+      v3(sign * 28, H(0.48), 206 - cz), v3(sign * 54, H(0.525), 205 - cz), 2.4, 1.6, TERTIARY,
     ))
   }
 
