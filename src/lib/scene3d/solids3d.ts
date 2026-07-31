@@ -4,8 +4,13 @@
 // non-indexed with face normals: a box's whole read here is flat planes under one sun.
 
 import * as THREE from 'three'
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Vec } from '@/lib/ui/geom'
 import type { SceneryPart } from '@/lib/ui/scenery-shapes'
+
+/** Edges turning less than this shade as one continuous surface; sharper ones keep their crease.
+ *  What lets a loft read as a curve instead of a count of flat facets, without blunting a box. */
+const CREASE = 0.6
 
 export interface V3 { x: number; y: number; z: number }
 export const v3 = (x: number, y: number, z: number): V3 => ({ x, y, z })
@@ -32,8 +37,9 @@ export class GeometrySink {
   build(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3))
-    g.computeVertexNormals()
-    return g
+    // Creased rather than per-face normals: consecutive shallow facets smooth into one surface,
+    // right angles stay sharp.
+    return toCreasedNormals(g, CREASE)
   }
 }
 

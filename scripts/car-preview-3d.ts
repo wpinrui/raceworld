@@ -32,8 +32,27 @@ async function main() {
   })
   const page = resolve(OUT, 'car-3d-viewer.html')
   writeFileSync(page, '<!doctype html><html><head><meta charset="utf-8"><title>car 3d</title>'
-    + '<style>html,body{margin:0;background:#101318}canvas{display:block}</style></head>'
-    + `<body><canvas id="gl"></canvas><script>${bundle.outputFiles[0].text}</script></body></html>`)
+    + '<style>'
+    + 'html,body{margin:0;background:#101318;height:100%;overflow:hidden;color-scheme:dark}'
+    + 'canvas{display:block}'
+    + '#bar{position:fixed;top:0;left:0;right:0;z-index:1;display:flex;gap:8px;align-items:center;'
+    + 'padding:8px 10px;background:rgba(10,12,16,.85);font:13px system-ui,sans-serif;color:#FFFFFF}'
+    + '#bar button,#bar input[type=color]{background:#1A1F27;color:#FFFFFF;border:1px solid #2A313C;'
+    + 'border-radius:4px;padding:4px 10px;font:inherit;cursor:pointer;height:28px}'
+    + '#bar input[type=color]{padding:2px 4px;width:44px}'
+    + '#bar button:hover,#bar input[type=color]:hover{border-color:#00D9FF}'
+    + '#bar button.on{border-color:#00D9FF;color:#00D9FF}'
+    + 'body.shot #bar{display:none}'
+    + '</style></head>'
+    + '<body><div id="bar">'
+    + '<button id="ours">Ours</button>'
+    + '<button id="model">Model</button>'
+    + '<button id="both">Both</button>'
+    + '<input id="colour" type="color" value="#E8442E">'
+    + '<button id="steer">Steer</button>'
+    + '<button id="spin">Spin</button>'
+    + '</div><canvas id="gl"></canvas>'
+    + `<script>${bundle.outputFiles[0].text}</script></body></html>`)
 
   let browser = null
   for (const channel of ['msedge', 'chrome'] as const) {
@@ -59,7 +78,7 @@ async function main() {
 
   /** Render one still and write it, walking name suffixes past any viewer's file lock. */
   const shoot = async (params: string, base: string): Promise<string> => {
-    await tab.goto(`${pathToFileURL(page).href}?${params}`)
+    await tab.goto(`${pathToFileURL(page).href}?shot=1&${params}`)
     await tab.waitForFunction('window.__done === true', undefined, { timeout: 60_000 })
     const error = await tab.evaluate('window.__error')
     if (error) {
@@ -92,12 +111,22 @@ async function main() {
       const oursFile = await shoot(`angle=${angle}&silhouette=E0322D`, `car-sil-ours-${angle}`)
       const modelFile = await shoot(`angle=${angle}&silhouette=2F55E0&model=1`, `car-sil-model-${angle}`)
       if (!oursFile || !modelFile) continue
-      const out = `${OUT}/car-overlay-${angle}.png`
-      await sharp(oursFile).composite([{ input: modelFile, blend: 'multiply' }]).toFile(out)
-      console.log(`${angle.padEnd(6)} -> ${out}`)
+      // The composite walks the same suffixes the screenshots do: a viewer holding the last
+      // overlay open must never kill the run.
+      let out = ''
+      for (const suffix of ['', '-new', '-b', '-c']) {
+        try {
+          out = `${OUT}/car-overlay-${angle}${suffix}.png`
+          await sharp(oursFile).composite([{ input: modelFile, blend: 'multiply' }]).toFile(out)
+          break
+        } catch {
+          out = ''
+        }
+      }
+      console.log(`${angle.padEnd(6)} -> ${out || 'UNWRITABLE: close some image viewers'}`)
     }
   } else {
-    for (const angle of ['front', 'side', 'rear', 'top']) {
+    for (const angle of ['front', 'side', 'rear', 'top', 'cockpit', 'cockrear', 'cockside', 'cockfront']) {
       const file = await shoot(`angle=${angle}&colour=${colour}${steer}${model}`, `car-3d-${angle}`)
       if (file) console.log(`${angle.padEnd(6)} -> ${file}`)
     }

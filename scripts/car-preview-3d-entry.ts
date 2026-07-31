@@ -1,9 +1,13 @@
 // Browser half of the car turntable probe (#3d-port increment 4): one lofted car on bare tarmac
 // under the afternoon rig, shot from a named angle. The 3D sibling of scripts/car-preview.ts, and
 // the still the height profile in car-mesh.ts is iterated against.
+//
+// Opened from disk WITHOUT ?shot it is the hand-orbitable car viewer: Ours / Model / Both, livery
+// colour, steering lock and a turntable spin, the car sibling of scene3d-viewer.html.
 
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { MOODS } from '../src/lib/ui/lighting'
 import { SPRITE } from '../src/lib/ui/car-sprite'
 import { buildCarMesh } from '../src/lib/scene3d/car-mesh'
@@ -19,11 +23,15 @@ declare global {
 /** Camera bearings, degrees round the car: 0 looks at the nose. The `o` angles are ORTHOGRAPHIC
  *  elevations sharing one frustum, so a silhouette shot of either car lands on the same pixels and
  *  the node side can composite them into a proportion overlay. */
-const ANGLES: Record<string, { az: number; elev: number; ortho?: boolean }> = {
+const ANGLES: Record<string, { az: number; elev: number; ortho?: boolean; dist?: number; at?: [number, number, number] }> = {
   front: { az: 25, elev: 22 },
   side: { az: 90, elev: 16 },
   rear: { az: 205, elev: 22 },
   top: { az: 90, elev: 88 },
+  cockpit: { az: 38, elev: 42, dist: 0.2, at: [0, 66, -32] },
+  cockrear: { az: 148, elev: 30, dist: 0.38, at: [0, 62, -32] },
+  cockside: { az: 86, elev: 14, dist: 0.34, at: [0, 62, -32] },
+  cockfront: { az: 8, elev: 20, dist: 0.38, at: [0, 62, -32] },
   oside: { az: 90, elev: 0, ortho: true },
   ofront: { az: 0, elev: 0, ortho: true },
   otop: { az: 90, elev: 89.9, ortho: true },
@@ -117,7 +125,8 @@ function toSilhouette(group: THREE.Object3D, colour: string) {
   })
 }
 
-async function main() {
+async function shotMain() {
+  document.body.classList.add('shot')
   const q = new URLSearchParams(location.search)
   const colour = `#${q.get('colour') ?? 'E8442E'}`
   const view = ANGLES[q.get('angle') ?? 'front'] ?? ANGLES.front
@@ -196,10 +205,11 @@ async function main() {
     cam.lookAt(ORTHO_CENTRE)
     camera = cam
   } else {
-    const dist = SPRITE.len * (compare ? 2.6 : 1.5)
+    const dist = SPRITE.len * (view.dist ?? (compare ? 2.6 : 1.5))
     const cam = new THREE.PerspectiveCamera(32, 1.5, 1, dist * 6)
-    cam.position.copy(dir).multiplyScalar(dist).add(new THREE.Vector3(0, 20, 0))
-    cam.lookAt(0, 18, -20)
+    const at = new THREE.Vector3(...(view.at ?? [0, 18, -20]))
+    cam.position.copy(dir).multiplyScalar(dist).add(view.at ? at : new THREE.Vector3(0, 20, 0))
+    cam.lookAt(at)
     camera = cam
   }
 
@@ -212,9 +222,116 @@ async function main() {
   renderer.render(scene, camera)
 }
 
+/** The hand-orbitable car viewer: rebuilds in place off the bar's controls. */
+function viewerMain() {
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color('#33383E')
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: '#33383E' }),
+  )
+  ground.rotateX(-Math.PI / 2)
+  ground.receiveShadow = true
+  scene.add(ground)
+  scene.add(buildLightRig(MOODS.afternoon, { x: -300, y: -300, w: 600, h: 600 }))
+  let carRoot = new THREE.Group()
+  scene.add(carRoot)
+
+  const canvas = document.getElementById('gl') as HTMLCanvasElement
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.setPixelRatio(window.devicePixelRatio)
+  renderer.setSize(window.innerWidth, window.innerHeight, true)
+
+  const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 1, SPRITE.len * 12)
+  camera.position.set(SPRITE.len * 0.55, SPRITE.len * 0.5, -SPRITE.len * 1.25)
+  const controls = new OrbitControls(camera, canvas)
+  controls.target.set(0, 30, -20)
+  controls.autoRotateSpeed = 1.6
+
+  const buttons = {
+    ours: document.getElementById('ours') as HTMLButtonElement,
+    model: document.getElementById('model') as HTMLButtonElement,
+    both: document.getElementById('both') as HTMLButtonElement,
+    steer: document.getElementById('steer') as HTMLButtonElement,
+    spin: document.getElementById('spin') as HTMLButtonElement,
+  }
+  const colourInput = document.getElementById('colour') as HTMLInputElement
+  let mode: 'ours' | 'model' | 'both' = 'ours'
+  let steered = false
+  let building = 0
+
+  const rebuild = async () => {
+    const token = ++building
+    const colour = colourInput.value
+    const fresh = new THREE.Group()
+    if (mode !== 'model') {
+      const car = buildCarMesh(colour)
+      if (steered) {
+        car.wheels.fl.rotation.y = -(20 * Math.PI) / 180
+        car.wheels.fr.rotation.y = -(23 * Math.PI) / 180
+      }
+      if (mode === 'both') car.group.position.x = -170
+      fresh.add(car.group)
+    }
+    if (mode !== 'ours') {
+      const model = await loadModelCar(colour)
+      if (mode === 'both') model.position.x = 170
+      fresh.add(model)
+    }
+    if (token !== building) return
+    carRoot.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        ;(o.geometry as THREE.BufferGeometry).dispose()
+        const m = o.material
+        for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
+      }
+    })
+    scene.remove(carRoot)
+    carRoot = fresh
+    scene.add(carRoot)
+  }
+
+  const setMode = (next: typeof mode) => {
+    mode = next
+    for (const key of ['ours', 'model', 'both'] as const) {
+      buttons[key].classList.toggle('on', key === mode)
+    }
+    void rebuild()
+  }
+  buttons.ours.addEventListener('click', () => setMode('ours'))
+  buttons.model.addEventListener('click', () => setMode('model'))
+  buttons.both.addEventListener('click', () => setMode('both'))
+  buttons.steer.addEventListener('click', () => {
+    steered = !steered
+    buttons.steer.classList.toggle('on', steered)
+    void rebuild()
+  })
+  buttons.spin.addEventListener('click', () => {
+    controls.autoRotate = !controls.autoRotate
+    buttons.spin.classList.toggle('on', controls.autoRotate)
+  })
+  colourInput.addEventListener('change', () => void rebuild())
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight, true)
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+  })
+
+  buttons.ours.classList.add('on')
+  void rebuild()
+  const tick = () => {
+    controls.update()
+    renderer.render(scene, camera)
+    requestAnimationFrame(tick)
+  }
+  tick()
+}
+
 ;(async () => {
   try {
-    await main()
+    if (new URLSearchParams(location.search).has('shot')) await shotMain()
+    else viewerMain()
   } catch (err) {
     window.__error = err instanceof Error ? (err.stack ?? err.message) : String(err)
   }
