@@ -367,23 +367,26 @@ export function buildCarMesh(colour: string): CarMesh {
   const mainPlane = new GeometrySink()
   box(mainPlane, 30, 210, 0.04, 0.052, 16, 50)
   group.add(mesh(mainPlane.build(), TERTIARY))
-  // The sculpted flap, plan drawn to the sketch: deepest chord at the endplate, trailing edge
-  // sweeping forward in a concave arc as it runs inboard, camber still rising rearward.
-  for (const sign of [-1, 1]) {
+  // The sculpted flaps, plan drawn to the sketch: TWO thin red elements sharing the swept outline,
+  // overlapping a little where the second takes over, both running hard into the endplate.
+  const flapElement = (
+    sign: number, zLead: number, zTrailOut: number,
+    ctrl: [number, number], inEnd: [number, number], yF: number, yR: number,
+  ) => {
     const flap = new GeometrySink()
-    const plan: Array<[number, number]> = [[26, 22], [86, 22], [86, 50]]
+    const plan: Array<[number, number]> = [[inEnd[0], zLead], [89, zLead], [89, zTrailOut]]
     for (let k = 1; k <= 8; k++) {
       const t = k / 8
       const s2 = 1 - t
       plan.push([
-        s2 * s2 * 86 + 2 * s2 * t * 56 + t * t * 26,
-        s2 * s2 * 50 + 2 * s2 * t * 50 + t * t * 30,
+        s2 * s2 * 89 + 2 * s2 * t * ctrl[0] + t * t * inEnd[0],
+        s2 * s2 * zTrailOut + 2 * s2 * t * ctrl[1] + t * t * inEnd[1],
       ])
     }
-    const yAt = (z: number) => H(0.055 + (0.118 - 0.055) * ((z - 22) / 28))
+    const yAt = (z: number) => H(yF + (yR - yF) * Math.min(1, Math.max(0, (z - zLead) / (zTrailOut - zLead))))
     const pts = plan.map(([x, z]) => ({ x: sign * x, z: z - cz, y: yAt(z) }))
     const tris = THREE.ShapeUtils.triangulateShape(plan.map(([x, z]) => new THREE.Vector2(x, z)), [])
-    const lift = H(0.02)
+    const lift = H(0.01)
     for (const [i, j, k] of tris) {
       flap.tri(v3(pts[i].x, pts[i].y, pts[i].z), v3(pts[j].x, pts[j].y, pts[j].z), v3(pts[k].x, pts[k].y, pts[k].z))
       flap.tri(
@@ -399,6 +402,10 @@ export function buildCarMesh(colour: string): CarMesh {
       )
     }
     group.add(mesh(flap.build(), colour))
+  }
+  for (const sign of [-1, 1]) {
+    flapElement(sign, 22, 38, [60, 40], [26, 28], 0.055, 0.085)
+    flapElement(sign, 34, 50, [58, 50], [30, 36], 0.082, 0.118)
   }
   for (const x of [28, 208]) {
     const s = new GeometrySink()
