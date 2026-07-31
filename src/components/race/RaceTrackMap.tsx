@@ -17,8 +17,8 @@ import {
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { linePath } from '@/lib/ui/extrude'
 import { useSceneryBitmap } from './use-scenery-bitmap'
-import { SceneryCanvas, contextFor, drawScene, warmScene } from './SceneryCanvas'
-import { sceneryScene, type DrawOp, type SceneItem, type SceneMark } from '@/lib/ui/scenery-draw'
+import { SceneryCanvas, contextFor, drawScene, warmScene, type SceneTiming } from './SceneryCanvas'
+import { isGroup, sceneryScene, type DrawOp, type SceneItem, type SceneMark } from '@/lib/ui/scenery-draw'
 import { canvasPaint, type PaintCtx } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M,
@@ -44,6 +44,10 @@ import {
   TRACK_WIDTH_M,
 } from '@/lib/ui/track-path'
 import { liveBridge } from '@/lib/store/live-bridge'
+import { PERF, resetPerfFlags, setPerfFlags } from '@/lib/ui/perf-flags'
+import { trackFeatures, type ShotWorld } from '@/lib/ui/perf-bench'
+import { PerfLabModal } from './PerfLabModal'
+import { usePerfLab } from './use-perf-lab'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { NationalityFlag } from '@/components/world/NationalityFlag'
 
@@ -84,7 +88,7 @@ const FRAME_CAPS: number[] = [0, 30, 45]
  *  than something the compiler narrows away.
  *
  *  The readout keeps its backtick: it is worth having to hand at any time. */
-// ON. The layer hotkeys and the 'n' lap benchmark; the readout keeps its backtick either way.
+// ON. The layer hotkeys and 'n' for the perf lab; the readout keeps its backtick either way.
 //
 // Three successive comments here claimed this was parked while the value said otherwise, so: it is live,
 // and it is live because ablating a layer is still the only way to attribute a raster cost that only a
@@ -93,7 +97,8 @@ const FRAME_CAPS: number[] = [0, 30, 45]
 //
 // The cost of leaving it on is that these are bare unmodified letters across the top row, so stray
 // typing silently hides half the world and the only clue is the `off:` list in the readout. They belong
-// behind a settings screen, which is the seam this flag marks.
+// behind a settings screen, which is the seam this flag marks. The letters are already off while a text
+// field has focus and while the lab is up, which is what the lab needs to own its own configuration.
 const DEBUG_KEYS: boolean = true
 
 /** Diagnostic hotkeys: one category each, so the cost of a layer can be measured by removing it.
@@ -111,7 +116,7 @@ const HOTKEYS: Record<string, SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' 
   // The car sprites are the last un-ported layer; hiding them attributes their raster cost live.
   a: 'cars',
   // The garage signs alone: 'pit' hides the canvas complex AND these SVG name boards together,
-  // which left the benchmark unable to say which half was the pit straight's hitch.
+  // which left the pit-straight measurement unable to say which half was the hitch.
   g: 'signs',
 }
 /** Element budget for the drawn world. Frame rate on this renderer tracks document node count more
@@ -123,6 +128,9 @@ const CULL_MARGIN = 1.45
 const CULL_SLACK = 0.3
 /** Quiet period after the last rotation input before the scene is rebuilt on the new bearing. */
 const ROT_SETTLE_MS = 120
+/** How long the perf lab waits for a composed scene to land before measuring anyway. A configuration
+ *  that composes nothing (the SVG renderer, the map view) never swaps, so the wait has to end somehow. */
+const SETTLE_CAP_MS = 400
 
 // Real-world sizes, rendered at true scale through each layout's metresPerUnit. The lane's own
 // cross-section lives with the track's in track-path.ts, since the surface laid on it measures against
@@ -192,7 +200,7 @@ const VIS = Symbol('vis')
 type Hideable = (SVGElement | HTMLElement) & { [VIS]?: boolean }
 
 function setVis(el: Hideable, shown: boolean): void {
-  if (el[VIS] === shown) return
+  if (PERF.visElide && el[VIS] === shown) return
   el[VIS] = shown
   el.style.visibility = shown ? '' : 'hidden'
 }
@@ -393,13 +401,24 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const frameCapRef = useRef(FRAME_CAPS[0])
   useEffect(() => { hiddenRef.current = hidden }, [hidden])
   useEffect(() => { frameCapRef.current = frameCap }, [frameCap])
-  // Benchmark entry, reached through a ref because the key listener binds once.
+  // The perf lab, reached through refs because the key listener binds once.
   const benchKeyRef = useRef<() => void>(() => {})
+  const labOpenRef = useRef(false)
+  const labCloseRef = useRef<() => void>(() => {})
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return
+      // These are bare unmodified letters, so a field taking text owns them.
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
       if (e.key === '`') setHud((v) => !v)
       if (!DEBUG_KEYS) return
+      // The lab drives the layer set, the renderer and the camera for the length of a run; a stray
+      // letter underneath it would silently change the configuration a row is being measured under.
+      if (labOpenRef.current) {
+        if (e.key === 'Escape') labCloseRef.current()
+        return
+      }
       if (e.key === 'b' || e.key === 'B') setBudgetOn((v) => !v)
       if (e.key === 'p' || e.key === 'P') setBitmapOn((v) => !v)
       if (e.key === 'x' || e.key === 'X') setCanvasOn((v) => !v)
@@ -549,7 +568,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const { x, y, z, rot } = camRef.current
     const { w: stageW, h: stageH } = stageDimsRef.current
     const was = paintedRef.current
-    if (!force && was.x === x && was.y === y && was.z === z && was.rot === rot
+    if (!force && PERF.cameraGuard && was.x === x && was.y === y && was.z === z && was.rot === rot
       && was.w === stageW && was.h === stageH) return
     paintedRef.current = { x, y, z, rot, w: stageW, h: stageH }
     world.style.transform = `translate(${x}px, ${y}px) rotate(${rot}rad) scale(${z})`
@@ -1686,8 +1705,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // One composer for both paths: React re-renders call it when the WORLD changes (track, light,
   // detail tier, hidden set â€” all rare), and `updateCull` calls it through `composeSceneRef` when
   // only the DISC moves, several times a lap, without a render.
-  const composeScene = useCallback((cullNow: Cull | null) => {
+  const composeScene = useCallback((cullArg: Cull | null) => {
     if (!(canvasOn && view === 'live')) return null
+    // Disc off: compose the whole circuit however little of it is in shot, which is what the renderer
+    // did before the disc and what its saving is measured against.
+    const cullNow = PERF.cullDisc ? cullArg : null
     const pitNear = !cullNow || !pitDisc
       || Math.hypot(pitDisc.cx - cullNow.cx, pitDisc.cy - cullNow.cy) <= cullNow.r + pitDisc.r
     const kerbs = hidden.has('kerbs') ? [] : (cullNow
@@ -1739,6 +1761,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // whole scene inside the very next paint. Measured at 26-226KB of fresh path data per crossing,
   // about one crossing per two wheel notches. That is the hitch this warm exists to prevent, taken on
   // the one path that skipped it.
+  // One-shot callback fired the moment a scene actually lands, so the perf lab can wait for the picture
+  // it is about to measure rather than guess at a number of frames. Nothing else reads it.
+  const swapWatchRef = useRef<(() => void) | null>(null)
+  const swapped = () => {
+    const w = swapWatchRef.current
+    swapWatchRef.current = null
+    w?.()
+  }
   const swapScene = useCallback((next: { items: SceneItem[]; marks: SceneMark[] } | null) => {
     // Whatever else is in flight, this supersedes it. Without that, a zoom notch that both crosses a
     // detail tier and commits a cull step lands a warm holding the scene as it was BEFORE the tier
@@ -1747,15 +1777,19 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // number of them zooming in than out because the radius goes as 1/zoom. That was the band where
     // the trees were missing on the way in and lingering on the way out.
     warmTokenRef.current?.cancel()
-    if (!next || !sceneRef.current) {
+    // Warm off: swap immediately and let the next paint parse whatever is new inside itself, which is
+    // the 33-50ms frame this warm was added to remove.
+    if (!next || !sceneRef.current || !PERF.warmSwap) {
       // Nothing to keep painting in the meantime, so there is nothing to be gained by waiting.
       sceneRef.current = next
       paintRef.current()
+      swapped()
       return
     }
     warmTokenRef.current = warmScene(next.items, () => {
       sceneRef.current = next
       paintRef.current()
+      swapped()
     })
   }, [])
   useEffect(() => {
@@ -1772,10 +1806,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Last frame's paint time by scene section, for the fps readout. Only collected while the
   // readout is up â€” the timing calls are cheap but not free.
   const paintStatsRef = useRef<Record<string, number>>({})
-  /** Paints since the map mounted, and the section time they logged. Only the painter can count these,
-   *  so it does, and the benchmark reads deltas off it rather than inferring them. */
-  const paintTallyRef = useRef({ n: 0, ms: 0 })
-  // True while the benchmark drives the map; keeps paint timing on with the readout closed.
+  /** Paints since the map mounted, the section time they logged, and what they put through the
+   *  rasteriser. Only the painter can count these, so it does, and the perf lab reads deltas off it
+   *  rather than inferring them. */
+  const paintTallyRef = useRef({
+    n: 0, ms: 0, drawn: 0, skipped: 0, sections: {} as Record<string, number>,
+  })
+  // True while the perf lab drives the map; keeps paint timing on with the readout closed.
   const benchRef = useRef(false)
   // The race tick's JS cost since the readout last sampled: average and worst frame.
   const tickStatsRef = useRef({ sum: 0, n: 0, max: 0 })
@@ -1804,7 +1841,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     const dpr = window.devicePixelRatio || 1
     const timing = hudRef.current || benchRef.current
-      ? { marks: sc.marks, out: {} as Record<string, number> }
+      ? ({ marks: sc.marks, out: {} } as SceneTiming)
       : undefined
     const pc = paintCtxRef.current
     pc.lighting = lighting
@@ -1823,14 +1860,19 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     )
     if (timing) {
       paintStatsRef.current = timing.out
-      // Tallied HERE, by the only thing that knows a paint happened. The benchmark used to decide it
+      // Tallied HERE, by the only thing that knows a paint happened. The lap benchmark used to decide it
       // from the section timers, counting a frame as painted when they summed above zero — which reads
       // a frame whose paint rounded to 0.0 as no paint at all, and reads the frame AFTER a skipped one
       // as a second paint, because the section times are a ref left standing from last time. Both
       // errors land on the same segments: the cheap ones and the still-camera ones.
       const tally = paintTallyRef.current
       tally.n++
-      for (const v of Object.values(timing.out)) tally.ms += v
+      tally.drawn += timing.drawn ?? 0
+      tally.skipped += timing.skipped ?? 0
+      for (const [k, v] of Object.entries(timing.out)) {
+        tally.ms += v
+        tally.sections[k] = (tally.sections[k] ?? 0) + v
+      }
     }
   }, [vb, lighting, u, scenery.base])
   useEffect(() => { paintRef.current = paintCanvas }, [paintCanvas])
@@ -1842,171 +1884,152 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // always calls the current painter, never the previous render's.
   useEffect(() => { applyCam(true) }, [applyCam, paintCanvas, stage.w, stage.h])
 
-  // â”€â”€ Benchmark mode â”€â”€
+  // ── Perf lab ──
   //
-  // One keypress runs an ablation matrix over a live race: the same follow camera at racing zoom,
-  // one FULL LAP per configuration so every segment covers the identical corners â€” the segment
-  // boundary is the followed car crossing the line. Configurations: each layer hidden in turn, the
-  // dynamic layers isolated, and the SVG renderer as the old baseline. The result prints as a
-  // table and downloads as JSON, so a perf report is a file rather than a screenshot relay.
-  const [benchOn, setBenchOn] = useState(false)
-  const benchStatusRef = useRef<HTMLDivElement>(null)
-  const benchAbortRef = useRef(false)
-  const runBench = useCallback(async () => {
-    if (viewRef.current !== 'live' || cars.length === 0) return
-    const SEGMENTS: Array<{ name: string; canvas: boolean; hide: string[] }> = [
-      { name: 'baseline', canvas: true, hide: [] },
-      { name: 'no-trees', canvas: true, hide: ['trees'] },
-      { name: 'no-shadows', canvas: true, hide: ['shadows'] },
-      { name: 'no-buildings', canvas: true, hide: ['buildings'] },
-      { name: 'no-stands', canvas: true, hide: ['stands'] },
-      { name: 'no-furniture', canvas: true, hide: ['furniture'] },
-      { name: 'no-ground', canvas: true, hide: ['ground'] },
-      { name: 'no-kerbs', canvas: true, hide: ['kerbs'] },
-      { name: 'no-pit', canvas: true, hide: ['pit'] },
-      // Splits the pit finding: the signs are SVG text boards, the complex is canvas fills.
-      { name: 'no-signs', canvas: true, hide: ['signs'] },
-      { name: 'no-boxes', canvas: true, hide: ['boxes'] },
-      { name: 'no-cars', canvas: true, hide: ['cars'] },
-      { name: 'no-cars-boxes', canvas: true, hide: ['cars', 'boxes'] },
-      { name: 'dynamic-only', canvas: true, hide: ['trees', 'shadows', 'buildings', 'stands', 'furniture', 'ground', 'kerbs', 'pit'] },
-      { name: 'svg-mode', canvas: false, hide: [] },
-    ]
-    const sleep = (ms: number) => new Promise((r) => { setTimeout(r, ms) })
-    // The followed car's lap fraction, when it is actually lapping: in the pit lane (or on the
-    // grid) `prog` measures something else, so those frames cannot vote on a crossing.
-    const lapOf = () => {
-      const fid = followRef.current
-      const s = fid ? sampleRef.current(fid) : null
-      return s && !s.pit && s.gridSlot == null ? s.prog : null
-    }
-    // Frames until the followed car next crosses the line: rAF deltas, plus the canvas paints those
-    // frames actually made, read as a delta off the painter's own tally. A lap that never completes
-    // (race over, car parked) times out rather than hanging the run.
-    const TIMEOUT_MS = 240000
-    const untilCrossing = (collect: boolean) => new Promise<{
-      deltas: number[]; paintMs: number; paintN: number; seconds: number; timedOut: boolean
-    }>((resolve) => {
-      const deltas: number[] = []
-      const tally = paintTallyRef.current
-      const fromN = tally.n
-      const fromMs = tally.ms
-      const start = performance.now()
-      let last = start
-      let prev = lapOf()
-      const loop = (now: number) => {
-        if (collect) deltas.push(now - last)
-        last = now
-        const prog = lapOf()
-        const crossed = prev != null && prog != null && prev > 0.7 && prog < 0.3
-        if (prog != null) prev = prog
-        const timedOut = now - start > TIMEOUT_MS
-        if (crossed || timedOut || benchAbortRef.current) {
-          resolve({
-            deltas, paintMs: tally.ms - fromMs, paintN: tally.n - fromN,
-            seconds: (now - start) / 1000, timedOut,
-          })
-          return
-        }
-        requestAnimationFrame(loop)
-      }
-      requestAnimationFrame(loop)
-    })
-    const status = (t: string) => { if (benchStatusRef.current) benchStatusRef.current.textContent = t }
+  // What replaced the lap benchmark. That one asked a live race to be its clock: one configuration per
+  // LAP, boundaries at the followed car crossing the line, so a run cost fifteen laps and only ever
+  // ablated LAYERS. It could tell you what the trees cost and it could not tell you whether the Path2D
+  // cache was still doing anything.
+  //
+  // This drives the camera itself along scripted shots for a fixed count of FRAMES, so a cell costs a
+  // second and a half instead of a lap, frame 40 of every cell frames the same thing, and the axes
+  // include the MITIGATIONS (lib/ui/perf-flags.ts) rather than only the layers. The plan, the
+  // arithmetic and the text all live in lib/ui/perf-bench.ts and lib/ui/perf-report.ts; the run loop
+  // lives in use-perf-lab.ts. What is left here is the handful of handles a run is allowed to touch.
+  // Keyed on the pit disc as well as the circuit: the disc is what the pit-straight shot aims at, and it
+  // is rebuilt whenever the garage count changes even though the layout has not.
+  const featuresRef = useRef<{
+    for: TrackLayout; disc: unknown; cornerF: number; pitF: number
+  } | null>(null)
+  const perfSavedRef = useRef<{
+    hidden: ReadonlySet<string>; canvas: boolean; quality: Quality; presets: Record<Quality, number>
+    cap: number; follow: string | null
+    cam: { x: number; y: number; z: number; rot: number }; hud: boolean
+  } | null>(null)
 
-    benchRef.current = true
-    benchAbortRef.current = false
-    setBenchOn(true)
-    const prev = {
-      hidden: hiddenRef.current as ReadonlySet<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>,
-      canvas: canvasOnRef.current,
-      cap: frameCapRef.current,
-      follow: followRef.current,
-      z: camRef.current.z,
+  const perfWorld = useCallback((): ShotWorld | null => {
+    const path = pathRef.current
+    const len = lenRef.current
+    const { w, h } = stageDimsRef.current
+    if (!path || !len || !w) return null
+    const at = (f: number) => {
+      const p = path.getPointAtLength(((((f % 1) + 1) % 1)) * len)
+      return { x: p.x, y: p.y }
     }
-    setHud(false) // the readout resets the tick stats every half second, which would corrupt the report
-    setFrameCap(0)
-    // The racing shot: leader followed at racing zoom, the case every number so far describes.
-    const leader = cars.find((c) => c.pos === 1) ?? cars[0]
-    onFollow(leader.id)
-    camRef.current.z = 20
-    applyCam()
-    const segments: Array<Record<string, number | string | boolean>> = []
-    try {
-      status('waiting for the leader to cross the lineâ€¦')
-      await untilCrossing(false)
-      for (let i = 0; i < SEGMENTS.length; i++) {
-        const seg = SEGMENTS[i]
-        if (benchAbortRef.current) break
-        status(`bench ${i + 1}/${SEGMENTS.length}  ${seg.name}  (one lap)`)
-        setCanvasOn(seg.canvas)
-        setHidden(new Set(seg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
-        const t0 = { ...tickStatsRef.current }
-        const r = await untilCrossing(true)
-        const t1 = tickStatsRef.current
-        // The first beat of a segment pays the configuration switch itself (a React render the
-        // benchmark caused, not the game) â€” those frames don't get to vote.
-        let skipped = 0
-        let skipMs = 0
-        while (skipped < r.deltas.length && skipMs < 300) skipMs += r.deltas[skipped++]
-        const sorted = r.deltas.slice(skipped).sort((a, b) => a - b)
-        const mean = sorted.reduce((s, v) => s + v, 0) / Math.max(1, sorted.length)
-        const worst = sorted.slice(-Math.max(1, Math.round(sorted.length * 0.01)))
-        segments.push({
-          name: seg.name,
-          fps: Math.round(1000 / mean),
-          low1: Math.round(1000 / (worst.reduce((s, v) => s + v, 0) / worst.length)),
-          p95ms: +(sorted[Math.floor(sorted.length * 0.95)] ?? 0).toFixed(1),
-          maxMs: +(sorted[sorted.length - 1] ?? 0).toFixed(1),
-          longFrames: sorted.filter((d) => d > 25).length,
-          // Per PAINTED frame, not per frame. The camera guard means a still camera does not repaint at
-          // all, so a segment where the followed car sat in its pit box has fewer paints than frames.
-          // `paintFrac` is what makes the two readings comparable, and what stops this column being
-          // read against reports from before the guard existed. Counted by the painter, so a paint too
-          // cheap for the section timers to register is still a paint.
-          paintMs: +(r.paintN > 0 ? r.paintMs / r.paintN : 0).toFixed(2),
-          paintFrac: +(r.deltas.length > 0 ? r.paintN / r.deltas.length : 0).toFixed(2),
-          tickMs: +(t1.n > t0.n ? Math.max(0, t1.sum - t0.sum) / (t1.n - t0.n) : 0).toFixed(2),
-          lapSec: +r.seconds.toFixed(1),
-          ...(r.timedOut ? { timedOut: true } : {}),
-        })
-        if (r.timedOut) break
-      }
-    } finally {
-      setHidden(new Set(prev.hidden))
-      setCanvasOn(prev.canvas)
-      setFrameCap(prev.cap)
-      onFollow(prev.follow)
-      camRef.current.z = prev.z
-      applyCam()
-      benchRef.current = false
+    // Found once per circuit and kept: the search walks 360 stations through getPointAtLength, which is
+    // not something to repeat between cells of the same run.
+    let feat = featuresRef.current
+    if (!feat || feat.for !== layout || feat.disc !== pitDisc) {
+      feat = { for: layout, disc: pitDisc, ...trackFeatures(at, len, layout.metresPerUnit, pitDisc) }
+      featuresRef.current = feat
     }
-    const report = {
+    return {
+      vb, stage: { w, h }, metresPerUnit: layout.metresPerUnit, trackAt: at,
+      cornerF: feat.cornerF, pitF: feat.pitF, rot0: defaultRot,
+    }
+  }, [layout, vb, pitDisc, defaultRot])
+
+  const perfLab = usePerfLab({
+    info: () => ({
       circuit: layout.circuitId,
-      at: new Date().toISOString(),
       dpr: window.devicePixelRatio || 1,
       viewport: { w: outerRef.current?.clientWidth ?? 0, h: outerRef.current?.clientHeight ?? 0 },
-      aborted: benchAbortRef.current,
-      segments,
-    }
-    console.table(segments)
-    console.log('BENCH JSON', JSON.stringify(report))
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `bench-${layout.circuitId}-${Date.now()}.json`
-    a.click()
-    URL.revokeObjectURL(a.href)
-    status(benchAbortRef.current ? 'bench aborted' : 'bench done â€” report downloaded')
-    await sleep(2500)
-    setBenchOn(false)
-  }, [cars, layout.circuitId, onFollow, applyCam, sampleRef])
+      cars: cars.length,
+    }),
+    world: perfWorld,
+    setCamera: (cam) => {
+      camRef.current = { ...cam }
+      applyCam()
+    },
+    applyConfig: (cfg) => {
+      setPerfFlags(cfg.flagsOff)
+      setHidden(new Set(cfg.hide) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
+      setQualityKey(cfg.quality)
+      setCanvasOn(cfg.canvas)
+    },
+    // Compose now, and resolve when the scene that lands is on screen. Bounded, because a configuration
+    // that composes nothing at all (the SVG renderer) never swaps and would otherwise hang the run.
+    settle: () => new Promise<void>((resolve) => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        swapWatchRef.current = null
+        resolve()
+      }
+      swapWatchRef.current = finish
+      composeSceneRef.current(cullRef.current)
+      setTimeout(finish, SETTLE_CAP_MS)
+    }),
+    timing: (on) => {
+      benchRef.current = on
+      if (!on) return
+      perfSavedRef.current = {
+        hidden: hiddenRef.current, canvas: canvasOnRef.current, quality: qualityKey,
+        presets: qualityOf, cap: frameCapRef.current, follow: followRef.current,
+        cam: { ...camRef.current }, hud,
+      }
+      // The readout resets the tick stats twice a second, the cap throws frames away, and the follow
+      // camera would fight the scripted one for the transform. All three go for the length of a run.
+      setHud(false)
+      setFrameCap(0)
+      // The sliders under the readout move what a preset is WORTH, and a run that inherited a hand-tuned
+      // "medium" would report a number nothing else could reproduce. Pinned to the shipped ladder for
+      // the run and handed back after.
+      setQualityOf({ ...QUALITY })
+      followRef.current = null
+      onFollow(null)
+    },
+    paintTally: () => paintTallyRef.current,
+    tickTally: () => tickStatsRef.current,
+    scene: () => {
+      const sc = sceneRef.current
+      let ops = 0
+      let chars = 0
+      for (const item of sc?.items ?? []) {
+        if (isGroup(item)) {
+          ops += item.ops.length
+          for (const op of item.ops) chars += op.d.length
+        } else {
+          ops += 1
+          chars += item.d.length
+        }
+      }
+      return {
+        items: sc?.items.length ?? 0,
+        ops,
+        pathKb: chars / 1024,
+        nodes: worldRef.current?.querySelectorAll('*').length ?? 0,
+      }
+    },
+    restore: () => {
+      const saved = perfSavedRef.current
+      if (!saved) return
+      perfSavedRef.current = null
+      setHidden(new Set(saved.hidden) as Set<SceneryPiece | 'kerbs' | 'pit' | 'boxes' | 'cars' | 'signs'>)
+      setCanvasOn(saved.canvas)
+      setQualityKey(saved.quality)
+      setQualityOf(saved.presets)
+      setFrameCap(saved.cap)
+      setHud(saved.hud)
+      onFollow(saved.follow)
+      camRef.current = { ...saved.cam }
+      requestAnimationFrame(() => applyCam(true))
+    },
+  }, cars.length)
+  const perfLabRef = useRef(perfLab)
+  perfLabRef.current = perfLab
+  labOpenRef.current = perfLab.open
+  labCloseRef.current = () => {
+    if (perfLabRef.current.state.phase === 'running') perfLabRef.current.abort()
+    else perfLabRef.current.setOpen(false)
+  }
   useEffect(() => {
-    benchKeyRef.current = () => {
-      if (benchRef.current) benchAbortRef.current = true
-      else void runBench()
-    }
-  }, [runBench])
+    benchKeyRef.current = () => perfLabRef.current.setOpen(true)
+  }, [])
+  // A run left mid-cell by a navigation would otherwise ship the player a renderer with a mitigation
+  // switched off, and nothing on screen would say so.
+  useEffect(() => resetPerfFlags, [])
 
   // Baking covers the WHOLE circuit, so culling is switched off while it is on: a disc around the
   // camera would be baked into the image and then travel with it.
@@ -2098,12 +2121,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           ))}
         </div>
       )}
-      {benchOn && (
-        <div
-          ref={benchStatusRef}
-          className="absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded bg-black/70 px-3 py-1 font-mono text-[12px] text-[#FFFFFF]"
-        />
-      )}
+      <PerfLabModal lab={perfLab} />
       {/* On the OUTER box, not the stage: the stage letterboxes to the viewBox's aspect, and a canvas
           clipped to it stops painting at the stage edge â€” the world visibly ended there under zoom.
           The SVG never had the problem because its overflow is visible. Stage centre and viewport

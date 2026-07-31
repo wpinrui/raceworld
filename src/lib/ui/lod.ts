@@ -27,6 +27,7 @@
 // object at mid keeps its position, size, silhouette and colour, and loses its internal shading.
 
 import type { Bounds, DrawOp } from './scenery-draw'
+import { PERF } from './perf-flags'
 
 /** How much of an object is drawn. Ordered coarsest last, so comparisons read the way they sound. */
 export type Rung = 'near' | 'mid' | 'far' | 'gone'
@@ -52,6 +53,9 @@ export type Quality = keyof typeof QUALITY
 /** The rule. `sizeM` is the object's own characteristic size in metres — a canopy's diameter, a
  *  building's frontage, a stripe's width — and `pxPerM` is the camera's scale. */
 export function rungFor(sizeM: number, pxPerM: number, quality = 1): Rung {
+  // Ladder off: everything is drawn at full detail whatever size it covers, which is the renderer as it
+  // was before this file existed and the thing the ladder's saving is measured against.
+  if (!PERF.lodRungs) return 'near'
   const px = sizeM * pxPerM * quality
   if (px >= NEAR_PX) return 'near'
   if (px >= MID_PX) return 'mid'
@@ -130,6 +134,8 @@ export function unionOf(discs: readonly Bounds[]): Bounds {
  *
  *  Ops with no clip disc merge too; the result simply has none, and is drawn always. */
 export function mergeByPaint(ops: readonly DrawOp[]): DrawOp[] {
+  // Batching off: one draw call per op, which is what the mid rung was invented to escape.
+  if (!PERF.mergePaint) return [...ops]
   const order: string[] = []
   const groups = new Map<string, DrawOp[]>()
   for (let i = 0; i < ops.length; i++) {

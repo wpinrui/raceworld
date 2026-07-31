@@ -24,6 +24,7 @@ import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
 import { atLeast, mergeByPaint, rungFor, type Rung } from './lod'
 import { TREE_FLAT } from './scenery-paint'
+import { PERF } from './perf-flags'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
  *  pattern the renderer supplies — the SVG layer resolves those to `url(#NAME)`, the canvas to a
@@ -161,6 +162,9 @@ const MEMO_PER_OBJECT = 16
 function objectMemo<T extends object, R>(): (item: T, key: string, build: () => R) => R {
   const cache = new WeakMap<T, Map<string, R>>()
   return (item, key, build) => {
+    // Memo off: every object rebuilds its string geometry on every compose, which is the 8ms-a-notch
+    // (28ms on Monaco) the per-object cache was introduced to stop paying.
+    if (!PERF.geomCache) return build()
     let by = cache.get(item)
     if (!by) {
       by = new Map()
@@ -1008,7 +1012,9 @@ function batchFlat(groups: DrawGroup[]): SceneItem[] {
   const kept: DrawGroup[] = []
   for (const g of groups) {
     if (g.ops.length === 0) continue
-    if (!g.flat || g.ops.some((op) => op.bbox || !BAKEABLE.test(op.d))) kept.push(g)
+    // Baking off: every group stays a group, so each pays its own save/translate/rotate/restore and
+    // none of them can merge with the flat run beside it.
+    if (!PERF.batchFlat || !g.flat || g.ops.some((op) => op.bbox || !BAKEABLE.test(op.d))) kept.push(g)
     else flat.push(...bakedOps(g))
   }
   // Batched first, detailed last: an object only keeps its gradients by being the bigger one.

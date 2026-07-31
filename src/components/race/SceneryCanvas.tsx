@@ -15,6 +15,7 @@
 import { useEffect, useRef } from 'react'
 import type { DrawOp, SceneItem, SceneMark } from '@/lib/ui/scenery-draw'
 import { isGroup, refName } from '@/lib/ui/scenery-draw'
+import { PERF } from '@/lib/ui/perf-flags'
 
 export interface Camera { x: number; y: number; z: number; rot: number }
 export interface ViewBox { x: number; y: number; w: number; h: number }
@@ -34,6 +35,9 @@ const cache = new Map<string, Path2D>()
  *  a wholesale clear made the next frame re-parse every path on screen at once, which is exactly
  *  the hitch this cache exists to prevent. */
 function pathFor(d: string): Path2D {
+  // The perf lab turns the cache off to find out what it is worth: without it every op on screen is
+  // re-parsed on every frame, which is the state this whole file exists to avoid.
+  if (!PERF.pathCache) return new Path2D(d)
   let p = cache.get(d)
   if (!p) {
     p = new Path2D(d)
@@ -112,6 +116,9 @@ function forget(s: PaintState): void {
 function applyOp(
   ctx: CanvasRenderingContext2D, op: DrawOp, paintFor: PaintFor, s: PaintState,
 ): void {
+  // Forgetting the mirror before every op is exactly "write every setter every time", which is what the
+  // mirror is measured against.
+  if (!PERF.paintState) forget(s)
   const path = pathFor(op.d)
   const alpha = op.alpha ?? 1
   if (s.alpha !== alpha) {
@@ -161,6 +168,16 @@ function applyOp(
   }
 }
 
+/** Where a paint reports itself: section times, and what the frame put through the rasteriser. */
+export interface SceneTiming {
+  marks: SceneMark[]
+  out: Record<string, number>
+  /** Draw calls issued (a fill and a stroke on one op are two). */
+  drawn?: number
+  /** Scene items the viewport test dropped before they cost anything. */
+  skipped?: number
+}
+
 /** Draw a whole scene under a camera. Exported so the render loop can call it directly rather than
  *  going through React, which has no business running sixty times a second.
  *
@@ -179,8 +196,10 @@ export function drawScene(
    *  see-through, and every pixel has to be written every frame for that to be sound. */
   clearTo: string,
   /** When given, paint time is attributed per scene section into `out` (ms by section name) —
-   *  what the fps readout shows so a slow corner names its own cost. */
-  timing?: { marks: SceneMark[]; out: Record<string, number> },
+   *  what the fps readout shows so a slow corner names its own cost. `drawn` and `skipped` come back
+   *  with it: the renderer is draw-call bound, so the number of calls a frame actually issued is the
+   *  one figure a paint time can be read against. */
+  timing?: SceneTiming,
 ): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.fillStyle = clearTo
@@ -217,6 +236,9 @@ export function drawScene(
   }
   const state: PaintState = {}
   let m = 0
+  let drawn = 0
+  let skipped = 0
+  const callsOf = (op: DrawOp) => (op.fill ? 1 : 0) + (op.stroke ? 1 : 0)
   let section = 'setup'
   let tPrev = timing ? performance.now() : 0
   const close = (next: string) => {
@@ -233,7 +255,10 @@ export function drawScene(
       }
     }
     const item = scene[i]
-    if (item.clip && offscreen(item.clip)) continue
+    if (PERF.itemCull && item.clip && offscreen(item.clip)) {
+      skipped++
+      continue
+    }
     if (isGroup(item)) {
       ctx.save()
       ctx.translate(item.x, item.y)
@@ -242,11 +267,17 @@ export function drawScene(
       ctx.restore()
       // The restore reverted the ink underneath the mirror, so nothing about it is known any more.
       forget(state)
+      if (timing) for (const op of item.ops) drawn += callsOf(op)
     } else {
       applyOp(ctx, item, paintFor, state)
+      if (timing) drawn += callsOf(item)
     }
   }
-  if (timing) close('setup')
+  if (timing) {
+    close('setup')
+    timing.drawn = drawn
+    timing.skipped = skipped
+  }
   ctx.globalAlpha = 1
 }
 
