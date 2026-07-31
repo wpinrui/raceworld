@@ -26,7 +26,10 @@ interface Station { z: number; half: number; top: number; bottom?: number }
  *  The nose carries its own UNDERSIDE ramp: a slim raised spar a quarter as thick as the top line
  *  implies, its base sweeping down to the floor only where the sidepods begin. */
 const BODY: Station[] = [
-  { z: 8, half: 13, top: 0.24, bottom: 0.195 },
+  // The tip pinches in every axis so the nose ends in a rounded point, not a bulkhead.
+  { z: 8, half: 3, top: 0.207, bottom: 0.202 },
+  { z: 12, half: 9, top: 0.218, bottom: 0.197 },
+  { z: 22, half: 12, top: 0.236, bottom: 0.191 },
   { z: 48, half: 14, top: 0.32, bottom: 0.167 },
   { z: 110, half: 16, top: 0.44, bottom: 0.124 },
   { z: 166, half: 25, top: 0.48, bottom: 0.085 },
@@ -39,12 +42,13 @@ const BODY: Station[] = [
 ]
 const BODY_BOTTOM = 0.06
 
-/** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead. */
+/** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
+ *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
 const SPINE_REAR: Station[] = [
-  { z: 246, half: 14, top: 0.78 },
-  { z: 260, half: 13, top: 0.95 },
-  { z: 300, half: 10, top: 0.82 },
-  { z: 380, half: 8, top: 0.58 },
+  { z: 246, half: 14, top: 0.66 },
+  { z: 260, half: 13, top: 0.85 },
+  { z: 300, half: 10, top: 0.74 },
+  { z: 380, half: 8, top: 0.56 },
   { z: 446, half: 6, top: 0.44 },
 ]
 const SPINE_BOTTOM = 0.30
@@ -269,8 +273,8 @@ export function buildCarMesh(colour: string): CarMesh {
   // the helmet, one sidepod mouth per flank on the pods' angled fronts.
   const mouths = new GeometrySink()
   mouths.quad(
-    v3(-8, H(0.78), 244 - cz), v3(8, H(0.78), 244 - cz),
-    v3(8, H(0.93), 246.5 - cz), v3(-8, H(0.93), 246.5 - cz),
+    v3(-8, H(0.65), 244 - cz), v3(8, H(0.65), 244 - cz),
+    v3(8, H(0.83), 247 - cz), v3(-8, H(0.83), 247 - cz),
   )
   for (const sign of [-1, 1]) {
     mouths.quad(
@@ -302,6 +306,12 @@ export function buildCarMesh(colour: string): CarMesh {
     const s = new GeometrySink()
     box(s, x, x + 4, 0.03, 0.165, 9, 52)
     group.add(mesh(s.build(), TERTIARY))
+  }
+  // The wing hangs off the nose on two vertical pylons, one either side of the spar.
+  for (const x of [104, 130]) {
+    const s = new GeometrySink()
+    box(s, x, x + 6, 0.14, 0.19, 34, 50)
+    group.add(mesh(s.build(), colour))
   }
 
   // Rear wing: beam low, main plane high, and a top element that SLOPES, trailing edge higher.
