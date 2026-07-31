@@ -167,13 +167,18 @@ export function buildFences3D(
   const postGeo = new THREE.CylinderGeometry(1, 1, 1, 4)
   const postMat = materials.get(FENCE_STEEL, 0.5)
   const posts: THREE.Vector3[] = []
+  // Fencing composites AFTER the road's ink decals (which own the low renderOrders): a cage face
+  // blended before the ink underneath it would be stamped over by the ink's later draw.
+  const FENCE_ORDER = 1000
   for (const f of fences) {
     const face = new THREE.Mesh(wallStripGeometry(f.pts, 0, h), materials.get(FENCE_FACE, 0.13))
     face.receiveShadow = true
+    face.renderOrder = FENCE_ORDER
     group.add(face)
     const rail = new THREE.Mesh(
       ribbonGeometry(f.pts, { halfW: u(0.2), y: h }), materials.get(FENCE_STEEL, 0.6),
     )
+    rail.renderOrder = FENCE_ORDER
     group.add(rail)
     for (let i = 0; i < f.pts.length; i += 2) posts.push(new THREE.Vector3(f.pts[i].x, 0, f.pts[i].y))
   }
@@ -185,6 +190,7 @@ export function buildFences3D(
       m.makeScale(rad, h, rad).setPosition(p.x, h / 2, p.z)
       mesh.setMatrixAt(i, m)
     })
+    mesh.renderOrder = FENCE_ORDER
     group.add(mesh)
   }
   return group

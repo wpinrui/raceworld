@@ -36,6 +36,9 @@ function toGeometry(positions: number[], indices: number[]): THREE.BufferGeometr
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   g.setIndex(indices)
+  // Flat sheets still need real normals: a lit material reads the attribute, and an absent one is
+  // whatever the driver defaults, not "up".
+  g.computeVertexNormals()
   return g
 }
 
@@ -106,6 +109,8 @@ export interface DashOpts {
    *  exactly as the 2D dashed stroke lays them. */
   on: number
   off: number
+  /** Pattern shift, the 2D's `lineDashOffset`: stacked bands lay their blocks out of phase with it. */
+  shift?: number
 }
 
 /** The painted blocks of a dashed stroke (a kerb's red) as flat quads along an open polyline. Block
@@ -116,7 +121,7 @@ export function dashGeometry(pts: readonly Vec[], o: DashOpts): THREE.BufferGeom
   const period = o.on + o.off
   const positions: number[] = []
   const indices: number[] = []
-  let s = 0
+  let s = ((o.shift ?? 0) % period + period) % period
   let open = false
   const pair = (x: number, y2: number, fx: number, fy: number) => {
     const at = positions.length / 3

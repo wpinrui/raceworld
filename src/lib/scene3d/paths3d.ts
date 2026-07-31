@@ -9,21 +9,28 @@ import type { Vec } from '@/lib/ui/geom'
  *  few centimetres of the drawn curve, far under a pixel at any zoom the map has. */
 const QUAD_SEGS = 6
 
-/** Sample a path's subpaths into rings of points. Closing Z points are not duplicated: a ring's last
- *  point never repeats its first. Degenerate subpaths (under 3 points) are dropped. */
-export function samplePathRings(d: string, quadSegs = QUAD_SEGS): Vec[][] {
+export interface SampledPoly {
+  pts: Vec[]
+  /** True when the subpath ended on a Z. An open stroke keeps its ends; a fill treats every subpath
+   *  as a ring regardless, exactly as SVG fills do. */
+  closed: boolean
+}
+
+/** Sample a path's subpaths into polylines. Closing Z points are not duplicated: a closed poly's
+ *  last point never repeats its first. Degenerate subpaths (under 2 points) are dropped. */
+export function samplePathPolys(d: string, quadSegs = QUAD_SEGS): SampledPoly[] {
   const toks = d.match(/[MLQZzHhVv]|-?\d*\.?\d+(?:e-?\d+)?/g) ?? []
-  const rings: Vec[][] = []
+  const polys: SampledPoly[] = []
   let ring: Vec[] = []
   let cx = 0
   let cy = 0
-  const close = () => {
-    if (ring.length >= 2) {
+  const close = (closed: boolean) => {
+    if (closed && ring.length >= 2) {
       const a = ring[0]
       const b = ring[ring.length - 1]
       if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) ring.pop()
     }
-    if (ring.length >= 3) rings.push(ring)
+    if (ring.length >= (closed ? 3 : 2)) polys.push({ pts: ring, closed })
     ring = []
   }
   const push = (x: number, y: number) => {
@@ -36,11 +43,11 @@ export function samplePathRings(d: string, quadSegs = QUAD_SEGS): Vec[][] {
     switch (tok) {
       case 'Z':
       case 'z':
-        close()
+        close(true)
         i += 1
         break
       case 'M':
-        close()
+        close(false)
         push(Number(toks[i + 1]), Number(toks[i + 2]))
         i += 3
         break
@@ -80,11 +87,16 @@ export function samplePathRings(d: string, quadSegs = QUAD_SEGS): Vec[][] {
         i += 2
         break
       default:
-        throw new Error(`samplePathRings: unsupported command "${tok}"`)
+        throw new Error(`samplePathPolys: unsupported command "${tok}"`)
     }
   }
-  close()
-  return rings
+  close(false)
+  return polys
+}
+
+/** Every subpath as a ring, for fills: SVG closes an unclosed subpath the moment it fills it. */
+export function samplePathRings(d: string, quadSegs = QUAD_SEGS): Vec[][] {
+  return samplePathPolys(d, quadSegs).filter((p) => p.pts.length >= 3).map((p) => p.pts)
 }
 
 /** Is the point inside the ring, by ray cast? On-edge behaviour is unspecified, which is fine for

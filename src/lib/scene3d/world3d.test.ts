@@ -4,6 +4,7 @@ import { TRACK_LAYOUTS } from '@/data/tracks'
 import { MOODS } from '@/lib/ui/lighting'
 import { buildScenery } from '@/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
+import { roadLap, solveLap } from '@/lib/ui/lap-solve'
 import { buildWorld3D } from './world3d'
 
 const layout = TRACK_LAYOUTS.britain
@@ -15,8 +16,11 @@ const scenery = buildScenery(layout.trace, layout.pit, {
   biome: layout.biome,
   terrainDetail: false,
 })
-const pitZone = buildPitZone(layout, buildPitSlots(layout, 10))
-const world = buildWorld3D({ layout, scenery, pitZone, lighting: MOODS.afternoon })
+const pitSlots = buildPitSlots(layout, 10)
+const pitZone = buildPitZone(layout, pitSlots)
+const world = buildWorld3D({
+  layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting: MOODS.afternoon,
+})
 
 describe('buildWorld3D', () => {
   it('keeps the painter order as lifts: ground, casing, tarmac, marks', () => {
@@ -80,5 +84,21 @@ describe('buildWorld3D', () => {
     })
     expect(standing).toBeGreaterThan(scenery.buildings.length)
     expect(world.stats.triangles).toBeGreaterThan(50_000)
+  })
+
+  it('lays the driven-in ink as ordered decals that never write depth', () => {
+    let decals = 0
+    let maxOrder = 0
+    world.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || o.renderOrder === 0 || o.renderOrder >= 1000) return
+      decals++
+      maxOrder = Math.max(maxOrder, o.renderOrder)
+      const mat = o.material as THREE.MeshLambertMaterial
+      expect(mat.transparent).toBe(true)
+      expect(mat.depthWrite).toBe(false)
+    })
+    // The surface story is hundreds of ops but only dozens of paints: runs merged, order kept.
+    expect(decals).toBeGreaterThan(10)
+    expect(maxOrder).toBe(decals)
   })
 })

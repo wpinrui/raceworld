@@ -14,7 +14,7 @@ import { writeFileSync, mkdirSync } from 'node:fs'
 import sharp from 'sharp'
 import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
-import { TRACK_WIDTH_M, densifyTrace } from '../src/lib/ui/track-path'
+import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { PitGarageSigns, pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
 import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
 import { MOODS, shadowFill, screenUpAzimuth, type Mood } from '../src/lib/ui/lighting'
@@ -22,11 +22,11 @@ import { CarSprite } from '../src/components/race/CarSprite'
 import {
   CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, carAttitude, carLight, steerAngles,
 } from '../src/lib/ui/car-sprite'
-import { buildRacingLine, polylineArc } from '../src/lib/ui/racing-line'
+import { roadLap, solveLap } from '../src/lib/ui/lap-solve'
 import { roadOps } from '../src/lib/ui/road-ops'
 import { gridBoxOps, kerbOps, startLineOps, startPose } from '../src/lib/ui/road-marks'
 import { isGroup, refName, sceneryScene, type DrawOp, type SceneItem } from '../src/lib/ui/scenery-draw'
-import { PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics } from '../src/lib/ui/lap-dynamics'
+import { PROFILE_N, lateralG, sampleLap } from '../src/lib/ui/lap-dynamics'
 import type { Lighting } from '../src/lib/ui/lighting'
 import type { TrackLayout } from '../src/data/tracks'
 
@@ -108,19 +108,6 @@ function defs(u: (m: number) => number, lighting: Lighting): string {
     + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>'
     + '<stop offset="100%" stop-color="#000000" stop-opacity="0.30"/></linearGradient>'
     + '</defs>'
-}
-
-/** The racing line solved off the circuit's own trace, plus the lap dynamics along it. Everything the
- *  track surface and the cars need, without a browser. */
-function solveLap(layout: TrackLayout) {
-  const centreArc = polylineArc(densifyTrace(layout.trace, 6).map(([x, y]) => ({ x, y })))
-  const line = buildRacingLine(centreArc, layout.metresPerUnit)
-  const arc = polylineArc(line.pts)
-  const pts = Array.from({ length: PROFILE_N }, (_, i) => arc.at((i / PROFILE_N) * arc.length))
-  // Same ~3m centreline stations the map samples for the tarmac edge.
-  const n = Math.max(512, Math.min(4096, Math.round((centreArc.length * layout.metresPerUnit) / 3)))
-  const centre = Array.from({ length: n }, (_, i) => centreArc.at((i / n) * centreArc.length))
-  return { line, arc, centre, dyn: lapDynamics(pts, arc.length, trackPhysics(layout.metresPerUnit)) }
 }
 
 /** Resample a closed polyline to `n` points of equal arc length: what the profile physics assumes. */
@@ -223,7 +210,7 @@ async function main() {
       ground: true,
       track: roadOps({
         layout, u, pitZone, pitSlots, ground: scenery.base, shadow: shadowFill(lighting),
-        lap: { pts: lap.line.pts, lateral: lap.line.lateral, centre: lap.centre, dyn: lap.dyn },
+        lap: roadLap(lap),
       }),
       kerbs: kerbOps(scenery.kerbs, u),
       pitUnder: pitZone ? pitFloorOps(pitZone, lighting) : [],

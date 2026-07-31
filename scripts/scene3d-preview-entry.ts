@@ -8,6 +8,7 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
+import { roadLap, solveLap } from '../src/lib/ui/lap-solve'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
 import { frameOrtho, parseViewBox } from '../src/lib/scene3d/camera3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
@@ -66,7 +67,8 @@ function main() {
 
   // Built after the crop is known, so the sun's shadow map is fitted to what is in shot.
   const world = buildWorld3D({
-    layout, scenery, pitZone, lighting, textures: buildWorldTextures(), frame: vb,
+    layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting,
+    textures: buildWorldTextures(), frame: vb,
   })
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(scenery.base)

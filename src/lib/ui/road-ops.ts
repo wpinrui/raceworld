@@ -35,13 +35,8 @@ export interface RoadOpts {
   shadow: string
 }
 
-/** The whole road surface, in paint order.
- *
- *  LAYER-MAJOR across the circuit, the pit lane AND the apron: every white casing goes down before any
- *  dark tarmac. Interleaved per road instead, the lane's casing lands on top of the track it has
- *  already merged into, and its round cap leaves a white outline curving across the tarmac with a blob
- *  on the end of it. */
-export function roadOps(o: RoadOpts): DrawOp[] {
+/** The two ink bundles every surface module reads, built once from the shared opts. */
+function inkArgs(o: RoadOpts) {
   const { layout, u, pitZone, pitSlots, lap } = o
   const ink = lap && {
     u, line: lap.pts, curvature: lap.dyn.curvature, long: lap.dyn.long, trackM: TRACK_M,
@@ -56,10 +51,16 @@ export function roadOps(o: RoadOpts): DrawOp[] {
     tarmac: ROAD_TARMAC,
     ground: o.ground,
   }
+  return { ink, pitInk }
+}
+
+/** The asphalt aprons and their fade into the verge, UNDER the road: the circuit's under its own
+ *  ribbon, the lane's under the garage floors, which is what lets the working apron's fringe run
+ *  toward the garages without anything having to clamp it. Exported apart from `roadOps` so the 3D
+ *  world can lay the same ink at its own lifts (#3d-port). */
+export function roadInkUnder(o: RoadOpts): DrawOp[] {
+  const { ink, pitInk } = inkArgs(o)
   const ops: DrawOp[] = []
-  // The asphalt aprons and their fade into the verge go UNDER everything: the circuit's under its own
-  // ribbon, the lane's under the garage floors, which is what lets the working apron's fringe run
-  // toward the garages without anything having to clamp it.
   if (ink) {
     ops.push(...edgeOps({
       ...ink,
@@ -70,6 +71,27 @@ export function roadOps(o: RoadOpts): DrawOp[] {
     }))
   }
   ops.push(...pitEdgeOps(pitInk))
+  return ops
+}
+
+/** Worn into the tarmac, on top of the road and under the kerbs. */
+export function roadInkOver(o: RoadOpts): DrawOp[] {
+  const { ink, pitInk } = inkArgs(o)
+  const ops: DrawOp[] = []
+  if (ink) ops.push(...surfaceOps(ink))
+  ops.push(...pitSurfaceOps(pitInk))
+  return ops
+}
+
+/** The whole road surface, in paint order.
+ *
+ *  LAYER-MAJOR across the circuit, the pit lane AND the apron: every white casing goes down before any
+ *  dark tarmac. Interleaved per road instead, the lane's casing lands on top of the track it has
+ *  already merged into, and its round cap leaves a white outline curving across the tarmac with a blob
+ *  on the end of it. */
+export function roadOps(o: RoadOpts): DrawOp[] {
+  const { layout, u, pitZone } = o
+  const ops: DrawOp[] = roadInkUnder(o)
   for (const [colour, trackW, laneW] of [
     [ROAD_CASING, TRACK_WIDTH_M, LANE_WIDTH_M], [ROAD_TARMAC, TARMAC_WIDTH_M, LANE_TARMAC_M],
   ] as const) {
@@ -83,8 +105,6 @@ export function roadOps(o: RoadOpts): DrawOp[] {
       ...(colour === ROAD_CASING ? { stroke: colour, width: u(2 * LANE_LINE_M) } : {}),
     })
   }
-  // Worn into the tarmac, on top of the road and under the kerbs.
-  if (ink) ops.push(...surfaceOps(ink))
-  ops.push(...pitSurfaceOps(pitInk))
+  ops.push(...roadInkOver(o))
   return ops
 }

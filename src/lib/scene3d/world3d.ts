@@ -8,9 +8,11 @@
 
 import * as THREE from 'three'
 import type { TrackLayout } from '@/data/tracks'
-import type { PitZone } from '@/lib/ui/pit-zone'
-import type { Lighting } from '@/lib/ui/lighting'
-import { ROAD_CASING, ROAD_TARMAC } from '@/lib/ui/road-ops'
+import type { PitSlot, PitZone } from '@/lib/ui/pit-zone'
+import { shadowFill, type Lighting } from '@/lib/ui/lighting'
+import {
+  ROAD_CASING, ROAD_TARMAC, roadInkOver, roadInkUnder, type RoadOpts,
+} from '@/lib/ui/road-ops'
 import { MARK_WHITE, startLineRects, startPose } from '@/lib/ui/road-marks'
 import { KERB_BLOCK_M, KERB_RED, KERB_WHITE, KERB_WIDTH_M, type Scenery } from '@/lib/ui/track-scenery'
 import {
@@ -23,6 +25,7 @@ import { buildGroundStack3D } from './ground3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
 import { buildTrees3D } from './trees3d'
+import { buildOpsDecals } from './ops3d'
 import { buildPitComplex3D, buildPitPaint3D } from './pit3d'
 import type { WorldTextures } from './textures3d'
 
@@ -33,14 +36,18 @@ const GROUND_PAD = 4000
  *  24-bit depth buffer at any framing, far too little for any camera to read as height. */
 const LIFT_M = 0.04
 const LAYER = {
-  bands: 1, fields: 2, terrain: 3, runoffs: 4, floors: 5,
-  casing: 6, tarmac: 7, lanePaint: 8, kerbWhite: 9, kerbRed: 10, marks: 11,
+  bands: 1, fields: 2, terrain: 3, runoffs: 4, floors: 5, inkUnder: 6,
+  casing: 7, tarmac: 8, inkOver: 9, lanePaint: 10, kerbWhite: 11, kerbRed: 12, marks: 13,
 } as const
 
 export interface World3DInput {
   layout: TrackLayout
   scenery: Scenery
   pitZone: PitZone | null
+  pitSlots: PitSlot[]
+  /** The solved racing line, once there is one; before that the tarmac carries no ink, exactly as
+   *  the 2D draws its first frame. */
+  lap: RoadOpts['lap']
   lighting: Lighting
   /** Tile textures, browser-built; absent (in tests) the patterned surfaces fall back to flat. */
   textures?: WorldTextures
@@ -56,7 +63,7 @@ export interface World3D {
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, lighting, textures, frame }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -76,6 +83,16 @@ export function buildWorld3D(
   add(ground, scenery.base)
 
   group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER))
+
+  // The ink, compiled from the same ops the 2D strokes: the edge fades under the road, the driven-in
+  // surface over it, each stack at one lift with renderOrder carrying the painter.
+  const roadOpts: RoadOpts = {
+    layout, u, pitZone, pitSlots, lap, ground: scenery.base, shadow: shadowFill(lighting),
+  }
+  const under = buildOpsDecals(roadInkUnder(roadOpts), { y: lift(LAYER.inkUnder), order: 1 }, materials)
+  group.add(under.group)
+  const over = buildOpsDecals(roadInkOver(roadOpts), { y: lift(LAYER.inkOver), order: under.nextOrder }, materials)
+  group.add(over.group)
 
   // The roads, layer-major exactly as `roadOps` strokes them: every white casing goes down before
   // any dark tarmac, across the circuit, the lane and the apron alike.
