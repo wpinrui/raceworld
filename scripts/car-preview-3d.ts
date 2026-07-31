@@ -10,11 +10,14 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 import { chromium } from 'playwright-core'
+import sharp from 'sharp'
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
 const colour = argv.find((a) => a.startsWith('--colour='))?.split('=')[1] ?? 'E8442E'
 const steer = argv.includes('--steer') ? '&steer=1' : ''
+const model = argv.includes('--model') ? '&model=1' : ''
+const compare = argv.includes('--compare')
 
 async function main() {
   mkdirSync(OUT, { recursive: true })
@@ -35,7 +38,11 @@ async function main() {
   let browser = null
   for (const channel of ['msedge', 'chrome'] as const) {
     try {
-      browser = await chromium.launch({ channel, headless: true })
+      // file-access flag: the GLB is fetched from disk by the page, and file:// fetches are
+      // otherwise blocked cross-"origin" in headless Chromium.
+      browser = await chromium.launch({
+        channel, headless: true, args: ['--allow-file-access-from-files'],
+      })
       break
     } catch {
       // Try the next channel.
@@ -48,24 +55,52 @@ async function main() {
   }
   const tab = await browser.newPage({ viewport: { width: 1200, height: 800 } })
   tab.on('pageerror', (err) => console.error(`page error: ${err.message}`))
-  for (const angle of ['front', 'side', 'rear', 'top']) {
-    await tab.goto(`${pathToFileURL(page).href}?angle=${angle}&colour=${colour}${steer}`)
+  tab.on('console', (msg) => console.log(msg.text()))
+
+  /** Render one still and write it, walking name suffixes past any viewer's file lock. */
+  const shoot = async (params: string, base: string): Promise<string> => {
+    await tab.goto(`${pathToFileURL(page).href}?${params}`)
     await tab.waitForFunction('window.__done === true', undefined, { timeout: 60_000 })
     const error = await tab.evaluate('window.__error')
     if (error) {
-      console.error(`${angle}: ${error}`)
+      console.error(`${base}: ${error}`)
       process.exitCode = 1
-      continue
+      return ''
     }
-    let file = `${OUT}/car-3d-${angle}.png`
-    try {
-      await tab.locator('#gl').screenshot({ path: file })
-    } catch {
-      // The old still is open in a viewer and Windows has it locked; write beside it.
-      file = `${OUT}/car-3d-${angle}-new.png`
-      await tab.locator('#gl').screenshot({ path: file })
+    for (const suffix of ['', '-new', '-b', '-c']) {
+      const file = `${OUT}/${base}${suffix}.png`
+      try {
+        await tab.locator('#gl').screenshot({ path: file })
+        return file
+      } catch {
+        // Locked by a viewer; try the next name.
+      }
     }
-    console.log(`${angle.padEnd(6)} -> ${file}`)
+    console.error(`${base}: UNWRITABLE, close some image viewers`)
+    return ''
+  }
+
+  if (compare) {
+    // Pairs: ours flanking left, the reference model right, identical light and lens.
+    for (const angle of ['front', 'side', 'rear', 'top']) {
+      const file = await shoot(`angle=${angle}&colour=${colour}&compare=1`, `car-compare-${angle}`)
+      if (file) console.log(`${angle.padEnd(6)} -> ${file}`)
+    }
+    // Silhouette overlays: ours in red, the model in blue, multiplied so overlap reads dark and
+    // either car's overhang keeps its own colour.
+    for (const angle of ['oside', 'ofront', 'otop']) {
+      const oursFile = await shoot(`angle=${angle}&silhouette=E0322D`, `car-sil-ours-${angle}`)
+      const modelFile = await shoot(`angle=${angle}&silhouette=2F55E0&model=1`, `car-sil-model-${angle}`)
+      if (!oursFile || !modelFile) continue
+      const out = `${OUT}/car-overlay-${angle}.png`
+      await sharp(oursFile).composite([{ input: modelFile, blend: 'multiply' }]).toFile(out)
+      console.log(`${angle.padEnd(6)} -> ${out}`)
+    }
+  } else {
+    for (const angle of ['front', 'side', 'rear', 'top']) {
+      const file = await shoot(`angle=${angle}&colour=${colour}${steer}${model}`, `car-3d-${angle}`)
+      if (file) console.log(`${angle.padEnd(6)} -> ${file}`)
+    }
   }
   await browser.close()
 }

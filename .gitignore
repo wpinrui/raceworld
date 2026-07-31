@@ -51,3 +51,4 @@ scripts/.preview/
 # Subagent review scratch (never committed)
 scripts/_tmp_*
 **/zz-scratch-*
+public/models/f1.glb

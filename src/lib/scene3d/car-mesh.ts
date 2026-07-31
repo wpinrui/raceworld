@@ -38,10 +38,13 @@ const BODY: Station[] = [
   { z: 166, half: 25, top: 0.42, bottom: 0.12 },
   { z: 202, half: 30, top: 0.46 },
   { z: 224, half: 32, top: 0.47 },
-  { z: 290, half: 32, top: 0.47 },
-  { z: 342, half: 30, top: 0.44 },
-  { z: 380, half: 28, top: 0.42 },
-  { z: 448, half: 28, top: 0.38 },
+  // Behind the cockpit the body SCULPTS AWAY under the spine: a slimming keel, not a flat slab,
+  // so the airbox tube and the pods carry the rear bodywork's form.
+  { z: 264, half: 30, top: 0.45 },
+  { z: 300, half: 25, top: 0.40 },
+  { z: 342, half: 21, top: 0.34 },
+  { z: 380, half: 17, top: 0.29 },
+  { z: 448, half: 13, top: 0.23 },
 ]
 const BODY_BOTTOM = 0.06
 
@@ -51,37 +54,85 @@ interface PodStation { z: number; inner: number; outer: number; top: number; bot
 const POD: PodStation[] = [
   // The intake's top lip IS the pod's summit: nothing behind it runs higher. The underside
   // boat-tails, sweeping up toward the coke bottle.
-  { z: 212, inner: 30, outer: 52, top: 0.40, bottom: 0.06 },
-  { z: 224, inner: 26, outer: 70, top: 0.40, bottom: 0.06 },
-  { z: 300, inner: 26, outer: 70, top: 0.39, bottom: 0.07 },
-  { z: 356, inner: 26, outer: 56, top: 0.34, bottom: 0.12 },
-  { z: 392, inner: 24, outer: 34, top: 0.29, bottom: 0.17 },
+  // Inner edges track the slimming keel so pod and body stay one surface with no slot between.
+  // Stations dense through the shoulder and the boat-tail so the PLAN reads as one swept curve.
+  // Below the mouth's sill the front face RECEDES: an undercut sweeping back and down into the
+  // floor, the sill itself the forward-most point. The step to full height hides behind the
+  // socket's recessed cap.
+  { z: 209, inner: 30, outer: 52, top: 0.235, bottom: 0.20 },
+  { z: 213, inner: 29, outer: 56, top: 0.24, bottom: 0.13 },
+  { z: 219, inner: 28, outer: 62, top: 0.24, bottom: 0.07 },
+  { z: 222, inner: 27, outer: 66, top: 0.40, bottom: 0.06 },
+  { z: 226, inner: 26, outer: 68, top: 0.40, bottom: 0.06 },
+  { z: 244, inner: 25, outer: 70, top: 0.40, bottom: 0.06 },
+  { z: 296, inner: 22, outer: 68, top: 0.39, bottom: 0.07 },
+  // The REAR closes early in a tight inward curl to the keel, per the sketch: no drawn-out sliver.
+  { z: 326, inner: 20, outer: 62, top: 0.37, bottom: 0.08 },
+  { z: 350, inner: 18, outer: 52, top: 0.34, bottom: 0.11 },
+  { z: 366, inner: 16, outer: 38, top: 0.31, bottom: 0.14 },
+  { z: 376, inner: 15, outer: 22, top: 0.29, bottom: 0.16 },
 ]
 
-/** The airbox-to-tail engine cover behind the open cockpit; its front cap is the headrest bulkhead.
- *  The summit keeps the intake's BOTTOM lip just above the helmet's crown, no higher. */
-const SPINE_REAR: Station[] = [
-  // The RECESSED body of the fin: its front face is the set-back plane under the tip's overhang.
-  // The protruding tip itself is its own piece below.
-  { z: 246, half: 14, top: 0.58 },
-  { z: 252, half: 14, top: 0.70 },
-  { z: 258, half: 14, top: 0.76 },
-  { z: 270, half: 15, top: 0.84 },
-  { z: 284, half: 15, top: 0.86 },
-  { z: 300, half: 13, top: 0.80 },
-  { z: 330, half: 10, top: 0.66 },
-  { z: 380, half: 8, top: 0.52 },
-  { z: 446, half: 6, top: 0.42 },
+/** Rounded-triangle rim, apex up: (x in ninths of the half-width, height fraction). ONE shape for
+ *  the airbox mouth and the spine it opens in: the hole and the body agree by construction. */
+const TRI_RIM: Array<[number, number]> = [
+  [0, 0.97], [3.5, 0.9], [6.5, 0.74], [8.2, 0.5], [9, 0.24], [7.6, 0.06], [4, 0.01],
+  [0, 0], [-4, 0.01], [-7.6, 0.06], [-9, 0.24], [-8.2, 0.5], [-6.5, 0.74], [-3.5, 0.9],
 ]
 
-/** The airbox TIP: a square snorkel jutting FORWARD of the fin's face, flat on top, its underside
- *  the cut-back step the sketch draws. The mouth opens on its front cap. */
-const SNOUT: Station[] = [
-  { z: 240, half: 10, top: 0.855, bottom: 0.765 },
-  { z: 252, half: 12, top: 0.865, bottom: 0.755 },
-  { z: 284, half: 13, top: 0.87, bottom: 0.75 },
+/** The WHOLE spine as one seamless rounded-triangular loft: it starts as the snorkel sitting RIGHT
+ *  above the driver's head, nothing taller, and tapers away to the tail. No fin behind it. */
+interface SpineStation { z: number; half: number; yBase: number; yApex: number }
+const SPINE: SpineStation[] = [
+  // The belly OVERHANGS only across the open cockpit; from the headrest back it sinks BELOW the
+  // deck line, so tube and bodywork are one surface with no daylight between them.
+  { z: 240, half: 9, yBase: 0.575, yApex: 0.71 },
+  { z: 252, half: 11, yBase: 0.52, yApex: 0.73 },
+  { z: 270, half: 12, yBase: 0.43, yApex: 0.72 },
+  { z: 300, half: 11, yBase: 0.37, yApex: 0.65 },
+  { z: 350, half: 9, yBase: 0.29, yApex: 0.52 },
+  { z: 400, half: 7, yBase: 0.23, yApex: 0.42 },
+  { z: 446, half: 6, yBase: 0.19, yApex: 0.33 },
 ]
-const SPINE_BOTTOM = 0.30
+
+function spineGeometry(): THREE.BufferGeometry {
+  const s = new GeometrySink()
+  // Catmull over every field, so the stations read as one sculpted body rather than joined tubes.
+  const dense: SpineStation[] = []
+  for (let i = 0; i + 1 < SPINE.length; i++) {
+    const p0 = SPINE[Math.max(0, i - 1)]
+    const p1 = SPINE[i]
+    const p2 = SPINE[i + 1]
+    const p3 = SPINE[Math.min(SPINE.length - 1, i + 2)]
+    for (let k = 0; k < 3; k++) {
+      const t = k / 3
+      dense.push({
+        z: catmull(p0.z, p1.z, p2.z, p3.z, t),
+        half: catmull(p0.half, p1.half, p2.half, p3.half, t),
+        yBase: catmull(p0.yBase, p1.yBase, p2.yBase, p3.yBase, t),
+        yApex: catmull(p0.yApex, p1.yApex, p2.yApex, p3.yApex, t),
+      })
+    }
+  }
+  dense.push(SPINE[SPINE.length - 1])
+  const rings = dense.map((st) => TRI_RIM.map(([fx, fy]) =>
+    v3((fx / 9) * st.half, H(st.yBase + (st.yApex - st.yBase) * fy), st.z - SPRITE.cy)))
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const a = rings[i]
+    const b = rings[i + 1]
+    for (let k = 0; k < a.length; k++) {
+      const k2 = (k + 1) % a.length
+      s.quad(a[k], a[k2], b[k2], b[k])
+    }
+  }
+  for (const [ring, flip] of [[rings[0], false], [rings[rings.length - 1], true]] as const) {
+    for (let k = 1; k + 1 < ring.length; k++) {
+      if (flip) s.tri(ring[0], ring[k + 1], ring[k])
+      else s.tri(ring[0], ring[k], ring[k + 1])
+    }
+  }
+  return s.build()
+}
 
 /** Cross-section profile, one side, bottom to crown: (fraction of half-width, fraction of height).
  *  The crown is FLAT: rounding lives only in the shoulder where the top rolls into the side wall. */
@@ -153,9 +204,12 @@ function section(s: Required<Station>): V3[] {
   return [...left, ...right]
 }
 
-/** One sidepod: an asymmetric loft from inner wall to outer flank, capped fore and aft. */
-function podGeometry(sign: number): THREE.BufferGeometry {
+/** One sidepod: an asymmetric loft from inner wall to outer flank, capped aft. The FRONT is a real
+ *  socket: the loft's own first ring, collared backward into a recessed dark cap, so the intake is
+ *  a modelled hole in the surface rather than paint laid over it. */
+function podGeometry(sign: number): { body: THREE.BufferGeometry; mouth: THREE.BufferGeometry } {
   const s = new GeometrySink()
+  const m = new GeometrySink()
   const ring = (p: PodStation): V3[] => {
     const z = p.z - SPRITE.cy
     const b = H(p.bottom)
@@ -167,7 +221,26 @@ function podGeometry(sign: number): THREE.BufferGeometry {
       v3(sign * at(0.93), b + (t - b) * 0.85, z), v3(sign * at(0.5), t, z), v3(sign * p.inner, t, z),
     ]
   }
-  const rings = POD.map(ring)
+  // Catmull between stations: the plan outline sweeps rather than cornering station to station.
+  const dense: PodStation[] = []
+  for (let i = 0; i + 1 < POD.length; i++) {
+    const p0 = POD[Math.max(0, i - 1)]
+    const p1 = POD[i]
+    const p2 = POD[i + 1]
+    const p3 = POD[Math.min(POD.length - 1, i + 2)]
+    for (let k = 0; k < 3; k++) {
+      const t = k / 3
+      dense.push({
+        z: catmull(p0.z, p1.z, p2.z, p3.z, t),
+        inner: catmull(p0.inner, p1.inner, p2.inner, p3.inner, t),
+        outer: catmull(p0.outer, p1.outer, p2.outer, p3.outer, t),
+        top: catmull(p0.top, p1.top, p2.top, p3.top, t),
+        bottom: catmull(p0.bottom, p1.bottom, p2.bottom, p3.bottom, t),
+      })
+    }
+  }
+  dense.push(POD[POD.length - 1])
+  const rings = dense.map(ring)
   for (let i = 0; i + 1 < rings.length; i++) {
     const a = rings[i]
     const b = rings[i + 1]
@@ -176,13 +249,28 @@ function podGeometry(sign: number): THREE.BufferGeometry {
       s.quad(a[k], a[k2], b[k2], b[k])
     }
   }
+  // Caps fore and aft on the body; the lip's front cap is small and low.
   for (const [ringPts, flip] of [[rings[0], false], [rings[rings.length - 1], true]] as const) {
     for (let k = 1; k + 1 < ringPts.length; k++) {
       if (flip) s.tri(ringPts[0], ringPts[k + 1], ringPts[k])
       else s.tri(ringPts[0], ringPts[k], ringPts[k + 1])
     }
   }
-  return s.build()
+  // The intake: a WIDE socket standing in the top half of the front face, its dark collar sweeping
+  // back over the lip's rising slope into a recessed cap.
+  const outline: V3[] = ([
+    [31, 0.245], [49, 0.245], [51, 0.27], [51, 0.355], [48, 0.375], [33, 0.375], [31, 0.35],
+  ] as Array<[number, number]>).map(([x, y]) => v3(sign * x, H(y), 209 - SPRITE.cy))
+  const ocx = outline.reduce((acc, p) => acc + p.x, 0) / outline.length
+  const ocy = outline.reduce((acc, p) => acc + p.y, 0) / outline.length
+  // Shallow collar: the cap must sit AHEAD of the step wall behind it, or the wall shows through.
+  const inset = outline.map((p) => v3(ocx + (p.x - ocx) * 0.85, ocy + (p.y - ocy) * 0.85, p.z + 6))
+  for (let k = 0; k < outline.length; k++) {
+    const k2 = (k + 1) % outline.length
+    m.quad(outline[k], outline[k2], inset[k2], inset[k])
+  }
+  for (let k = 1; k + 1 < inset.length; k++) m.tri(inset[0], inset[k], inset[k + 1])
+  return { body: s.build(), mouth: m.build() }
 }
 
 function loftGeometry(stations: Station[], bottomM: number): THREE.BufferGeometry {
@@ -333,9 +421,14 @@ export function buildCarMesh(colour: string): CarMesh {
   const cz = SPRITE.cy
 
   group.add(mesh(loftGeometry(BODY, BODY_BOTTOM), colour))
-  group.add(mesh(loftGeometry(SPINE_REAR, SPINE_BOTTOM), sec))
-  group.add(mesh(loftGeometry(SNOUT, 0.75), sec))
-  for (const sign of [-1, 1]) group.add(mesh(podGeometry(sign), colour))
+  group.add(mesh(spineGeometry(), sec))
+  for (const sign of [-1, 1]) {
+    const pod = podGeometry(sign)
+    group.add(mesh(pod.body, colour))
+    const socket = mesh(pod.mouth, CARBON)
+    socket.castShadow = false
+    group.add(socket)
+  }
 
   // The cockpit: a dark open tub between the surround and the headrest bulkhead, the driver's
   // helmet proud of its rim.
@@ -346,35 +439,19 @@ export function buildCarMesh(colour: string): CarMesh {
   helmet.position.set(0, H(0.50), 228 - cz)
   group.add(helmet)
 
-  // Sidepod intakes read as OPENINGS: dark mouths on the pods' own front faces.
-  const mouths = new GeometrySink()
-  for (const sign of [-1, 1]) {
-    mouths.quad(
-      v3(sign * 30.5, H(0.10), 210.5 - cz), v3(sign * 51.5, H(0.12), 211.5 - cz),
-      v3(sign * 51.5, H(0.375), 211.5 - cz), v3(sign * 30.5, H(0.385), 210.5 - cz),
-    )
-  }
-  group.add(mesh(mouths.build(), CARBON))
 
-  // The airbox mouth: an ELONGATED rounded triangle lying in the plane of the fin's front slope,
-  // apex up, so the bodywork visibly wraps the opening instead of wearing a sticker.
+  // The airbox mouth IS the snorkel's front cap: the same rim, a step inset and a hair proud, so
+  // the hole and the prism it opens can never disagree.
   const intake = new GeometrySink()
   {
-    // Held a clear step AHEAD of the fin's lofted slope: flush placement left it swallowed the
-    // moment the airbox height moved.
-    // On the snout's front cap, floated a hair ahead of it.
-    const base = { y: H(0.775), z: 238.5 - cz }
-    const apex = { y: H(0.845), z: 239.5 - cz }
-    const at = (x: number, f: number): V3 =>
-      v3(x, base.y + (apex.y - base.y) * f, base.z + (apex.z - base.z) * f)
-    const rim: Array<[number, number]> = [
-      [0, 0.97], [3.5, 0.9], [6.5, 0.74], [8.2, 0.5], [9, 0.24], [7.6, 0.06], [4, 0.01],
-      [0, 0], [-4, 0.01], [-7.6, 0.06], [-9, 0.24], [-8.2, 0.5], [-6.5, 0.74], [-3.5, 0.9],
-    ]
-    const tris = THREE.ShapeUtils.triangulateShape(rim.map(([x, f]) => new THREE.Vector2(x, f)), [])
-    for (const [i, j, k] of tris) {
-      intake.tri(at(rim[i][0], rim[i][1]), at(rim[j][0], rim[j][1]), at(rim[k][0], rim[k][1]))
-    }
+    const st = SPINE[0]
+    const span = st.yApex - st.yBase
+    const ring = TRI_RIM.map(([fx, fy]) => v3(
+      (fx / 9) * st.half * 0.82,
+      H(st.yBase + span * (0.08 + fy * 0.84)),
+      st.z - 1.2 - cz,
+    ))
+    for (let k = 1; k + 1 < ring.length; k++) intake.tri(ring[0], ring[k], ring[k + 1])
   }
   group.add(mesh(intake.build(), CARBON))
 
@@ -453,7 +530,7 @@ export function buildCarMesh(colour: string): CarMesh {
   group.add(mesh(upper.build(), sec))
   for (const x of [-83, 83]) group.add(mesh(endplateGeometry(x, 4), TERTIARY))
   const pylon = new GeometrySink()
-  box(pylon, 116, 124, 0.38, 0.53, 412, 452)
+  box(pylon, 116, 124, 0.26, 0.53, 412, 452)
   group.add(mesh(pylon.build(), STRUCTURE))
 
   // Diffuser wedge under the tail.
@@ -481,7 +558,7 @@ export function buildCarMesh(colour: string): CarMesh {
   // so they stay attached at any steering lock. The track rod runs lower and narrower.
   for (const w of WHEELS) {
     const front = w.z < SPRITE.cy
-    const inX = Math.sign(w.x) * (front ? 13 : 20)
+    const inX = Math.sign(w.x) * (front ? 13 : 14)
     const hub: V3 = v3(w.x * 0.82, w.r, w.z - cz)
     const spread = front ? 30 : 26
     group.add(blade(v3(inX, H(0.28), w.z - cz - spread), hub, 7, 2, CARBON))
@@ -489,13 +566,30 @@ export function buildCarMesh(colour: string): CarMesh {
     group.add(blade(v3(inX, H(0.20), w.z - cz + 4), hub, 4, 1.6, STRUCTURE))
   }
 
-  // Wheels last, each in its own pivot group so steering and spin are plain rotations.
+  // Wheels last, each in its own pivot group so steering and spin are plain rotations. The tyre is
+  // a lathe with FILLETED shoulders: tread rolling into sidewall, not a sharp-edged cylinder.
+  const tyreGeometry = (r: number, w: number): THREE.BufferGeometry => {
+    const f = r * 0.16
+    const pts: THREE.Vector2[] = [new THREE.Vector2(r * 0.58, -w / 2), new THREE.Vector2(r - f, -w / 2)]
+    for (let k = 1; k <= 4; k++) {
+      const a = (k / 4) * (Math.PI / 2)
+      pts.push(new THREE.Vector2(r - f + Math.sin(a) * f, -w / 2 + f - Math.cos(a) * f))
+    }
+    pts.push(new THREE.Vector2(r, w / 2 - f))
+    for (let k = 1; k <= 4; k++) {
+      const a = (k / 4) * (Math.PI / 2)
+      pts.push(new THREE.Vector2(r - f + Math.cos(a) * f, w / 2 - f + Math.sin(a) * f))
+    }
+    pts.push(new THREE.Vector2(r * 0.58, w / 2))
+    const g = new THREE.LatheGeometry(pts, 28)
+    g.rotateZ(Math.PI / 2)
+    return g
+  }
   const wheels = {} as CarMesh['wheels']
   for (const w of WHEELS) {
     const pivot = new THREE.Group()
     pivot.position.set(w.x, w.r, w.z - cz)
-    const tyre = mesh(new THREE.CylinderGeometry(w.r, w.r, w.w, 24), TYRE)
-    tyre.geometry.rotateZ(Math.PI / 2)
+    const tyre = mesh(tyreGeometry(w.r, w.w), TYRE)
     pivot.add(tyre)
     const hubDisc = mesh(new THREE.CylinderGeometry(w.r * 0.55, w.r * 0.55, w.w + 2, 18), HUB)
     hubDisc.geometry.rotateZ(Math.PI / 2)
