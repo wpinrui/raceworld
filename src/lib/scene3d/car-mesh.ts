@@ -20,17 +20,19 @@ export const CAR_HEIGHT_SCALE = 1.75
 const M = (metres: number) => metres * UNITS_PER_M
 const H = (metres: number) => M(metres * CAR_HEIGHT_SCALE)
 
-interface Station { z: number; half: number; top: number }
+interface Station { z: number; half: number; top: number; bottom?: number }
 
-/** The BODY loft: nose into chassis into coke bottle, half-widths traced off NOSE_D / CHASSIS_D. */
+/** The BODY loft: nose into chassis into coke bottle, half-widths traced off NOSE_D / CHASSIS_D.
+ *  The nose carries its own UNDERSIDE ramp: a slim raised spar a quarter as thick as the top line
+ *  implies, its base sweeping down to the floor only where the sidepods begin. */
 const BODY: Station[] = [
-  { z: 8, half: 13, top: 0.24 },
-  { z: 48, half: 14, top: 0.32 },
-  { z: 110, half: 16, top: 0.44 },
-  { z: 166, half: 25, top: 0.56 },
-  { z: 202, half: 46, top: 0.62 },
-  { z: 224, half: 70, top: 0.60 },
-  { z: 290, half: 70, top: 0.55 },
+  { z: 8, half: 13, top: 0.24, bottom: 0.195 },
+  { z: 48, half: 14, top: 0.32, bottom: 0.167 },
+  { z: 110, half: 16, top: 0.44, bottom: 0.124 },
+  { z: 166, half: 25, top: 0.48, bottom: 0.085 },
+  { z: 202, half: 46, top: 0.52 },
+  { z: 224, half: 70, top: 0.54 },
+  { z: 290, half: 70, top: 0.53 },
   { z: 342, half: 52, top: 0.48 },
   { z: 380, half: 30, top: 0.45 },
   { z: 448, half: 28, top: 0.40 },
@@ -40,11 +42,11 @@ const BODY_BOTTOM = 0.06
 /** The cockpit surround ahead of the tub, and the airbox-to-tail engine cover behind it. The gap
  *  between them IS the cockpit opening; the rear loft's front cap is the headrest bulkhead. */
 const SPINE_FRONT: Station[] = [
-  { z: 188, half: 17, top: 0.66 },
-  { z: 206, half: 16, top: 0.72 },
+  { z: 188, half: 17, top: 0.56 },
+  { z: 206, half: 16, top: 0.60 },
 ]
 const SPINE_REAR: Station[] = [
-  { z: 246, half: 14, top: 0.82 },
+  { z: 246, half: 14, top: 0.78 },
   { z: 260, half: 13, top: 0.95 },
   { z: 300, half: 10, top: 0.82 },
   { z: 380, half: 8, top: 0.58 },
@@ -86,9 +88,9 @@ const catmull = (a: number, b: number, c: number, d: number, t: number): number 
   return 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3)
 }
 
-function densify(stations: Station[], per = LOFT_SUBDIV): Station[] {
+function densify(stations: Required<Station>[], per = LOFT_SUBDIV): Required<Station>[] {
   const n = stations.length
-  const out: Station[] = []
+  const out: Required<Station>[] = []
   for (let i = 0; i + 1 < n; i++) {
     const p0 = stations[Math.max(0, i - 1)]
     const p1 = stations[i]
@@ -100,6 +102,7 @@ function densify(stations: Station[], per = LOFT_SUBDIV): Station[] {
         z: catmull(p0.z, p1.z, p2.z, p3.z, t),
         half: Math.max(1, catmull(p0.half, p1.half, p2.half, p3.half, t)),
         top: catmull(p0.top, p1.top, p2.top, p3.top, t),
+        bottom: catmull(p0.bottom, p1.bottom, p2.bottom, p3.bottom, t),
       })
     }
   }
@@ -109,10 +112,10 @@ function densify(stations: Station[], per = LOFT_SUBDIV): Station[] {
 
 /** One station's full cross-section ring: left side bottom-to-crown, right side crown-to-bottom,
  *  so the wrap edge closes the underside. */
-function section(s: Station, bottomM: number): V3[] {
+function section(s: Required<Station>): V3[] {
   const z = s.z - SPRITE.cy
   const top = H(s.top)
-  const bottom = H(bottomM)
+  const bottom = H(s.bottom)
   const y = (f: number) => bottom + (top - bottom) * f
   const left = PROFILE.map(([w, f]) => v3(-s.half * w, y(f), z))
   const right = [...PROFILE].reverse().map(([w, f]) => v3(s.half * w, y(f), z))
@@ -121,7 +124,8 @@ function section(s: Station, bottomM: number): V3[] {
 
 function loftGeometry(stations: Station[], bottomM: number): THREE.BufferGeometry {
   const s = new GeometrySink()
-  const rings = densify(stations).map((st) => section(st, bottomM))
+  const resolved = stations.map((st) => ({ ...st, bottom: st.bottom ?? bottomM }))
+  const rings = densify(resolved).map((st) => section(st))
   for (let i = 0; i + 1 < rings.length; i++) {
     const a = rings[i]
     const b = rings[i + 1]
@@ -207,7 +211,9 @@ function blade(a: V3, b: V3, planWidth: number, thick: number, colour: string): 
 /** A rear wing endplate, its lower-front corner cut in an arc round the rear tyre plus margin. */
 function endplateGeometry(xCentre: number, thick: number): THREE.BufferGeometry {
   const cz = SPRITE.cy
-  const yTop = H(0.92)
+  // The square part above the tyre-clearance arc, halved: the arc's crest sits near 0.55 of car
+  // height, so the plate tops out half the old headroom above it.
+  const yTop = H(0.73)
   const yBot = H(0.30)
   const zFront = 418
   const zRear = 490
@@ -259,10 +265,10 @@ export function buildCarMesh(colour: string): CarMesh {
   // The cockpit: a dark open tub between the surround and the headrest bulkhead, the driver's
   // helmet proud of its rim.
   const tub = new GeometrySink()
-  box(tub, cx - 12, cx + 12, 0.30, 0.66, 206, 246)
+  box(tub, cx - 12, cx + 12, 0.28, 0.56, 206, 246)
   group.add(mesh(tub.build(), CARBON))
   const helmet = mesh(new THREE.SphereGeometry(13, 16, 12), sec)
-  helmet.position.set(0, H(0.66), 228 - cz)
+  helmet.position.set(0, H(0.56), 228 - cz)
   group.add(helmet)
 
   // Intakes read as OPENINGS: dark mouths floated just off their leading faces — the airbox above
@@ -288,10 +294,10 @@ export function buildCarMesh(colour: string): CarMesh {
   // Front wing: the cascade climbs REARWARD from the lowest leading element, the drawn plan's
   // colours kept per plate, endplates bookending the stack.
   const wingF = [
-    { x0: 56, x1: 184, z0: 13, z1: 20, y: 0.09, colour: TERTIARY },
-    { x0: 44, x1: 196, z0: 21, z1: 30, y: 0.15, colour: sec },
-    { x0: 36, x1: 204, z0: 31, z1: 41, y: 0.21, colour },
-    { x0: 30, x1: 210, z0: 42, z1: 52, y: 0.27, colour: sec },
+    { x0: 56, x1: 184, z0: 13, z1: 20, y: 0.045, colour: TERTIARY },
+    { x0: 44, x1: 196, z0: 21, z1: 30, y: 0.075, colour: sec },
+    { x0: 36, x1: 204, z0: 31, z1: 41, y: 0.105, colour },
+    { x0: 30, x1: 210, z0: 42, z1: 52, y: 0.135, colour: sec },
   ]
   for (const p of wingF) {
     const s = new GeometrySink()
@@ -300,7 +306,7 @@ export function buildCarMesh(colour: string): CarMesh {
   }
   for (const x of [28, 208]) {
     const s = new GeometrySink()
-    box(s, x, x + 4, 0.05, 0.31, 9, 52)
+    box(s, x, x + 4, 0.03, 0.165, 9, 52)
     group.add(mesh(s.build(), TERTIARY))
   }
 
@@ -309,14 +315,14 @@ export function buildCarMesh(colour: string): CarMesh {
   box(beam, 44, 196, 0.36, 0.385, 446, 453)
   group.add(mesh(beam.build(), TERTIARY))
   const main = new GeometrySink()
-  box(main, 44, 196, 0.72, 0.745, 453, 464)
+  box(main, 44, 196, 0.53, 0.555, 453, 464)
   group.add(mesh(main.build(), colour))
   const upper = new GeometrySink()
-  slopedPlate(upper, 42, 198, 466, 481, 0.80, 0.86, 0.025)
+  slopedPlate(upper, 42, 198, 466, 481, 0.61, 0.67, 0.025)
   group.add(mesh(upper.build(), sec))
   for (const x of [-83, 83]) group.add(mesh(endplateGeometry(x, 4), TERTIARY))
   const pylon = new GeometrySink()
-  box(pylon, 116, 124, 0.40, 0.72, 412, 452)
+  box(pylon, 116, 124, 0.38, 0.53, 412, 452)
   group.add(mesh(pylon.build(), STRUCTURE))
 
   // Diffuser wedge under the tail.
@@ -332,22 +338,22 @@ export function buildCarMesh(colour: string): CarMesh {
   halo.castShadow = true
   halo.geometry.rotateZ(Math.PI)
   halo.geometry.rotateX(Math.PI / 2 - 0.35)
-  halo.position.set(0, H(0.78), 212 - cz)
+  halo.position.set(0, H(0.68), 212 - cz)
   group.add(halo)
   const leg = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.8, 1.8, H(0.78) - H(0.68), 6),
+    new THREE.CylinderGeometry(1.8, 1.8, H(0.68) - H(0.58), 6),
     new THREE.MeshLambertMaterial({ color: TERTIARY, side: THREE.DoubleSide }),
   )
-  leg.position.set(0, (H(0.78) + H(0.68)) / 2, 198 - cz)
+  leg.position.set(0, (H(0.68) + H(0.58)) / 2, 198 - cz)
   group.add(leg)
 
   // Mirrors OUTBOARD of the bodywork on stalks: exterior fittings, not lumps in the cockpit side.
   for (const sign of [-1, 1]) {
     const head = new GeometrySink()
-    box(head, cx + sign * 58 - 5, cx + sign * 58 + 5, 0.56, 0.605, 202, 209)
+    box(head, cx + sign * 58 - 5, cx + sign * 58 + 5, 0.50, 0.545, 202, 209)
     group.add(mesh(head.build(), TERTIARY))
     group.add(blade(
-      v3(sign * 44, H(0.54), 206 - cz), v3(sign * 54, H(0.585), 205 - cz), 2.4, 1.6, TERTIARY,
+      v3(sign * 44, H(0.48), 206 - cz), v3(sign * 54, H(0.525), 205 - cz), 2.4, 1.6, TERTIARY,
     ))
   }
 
