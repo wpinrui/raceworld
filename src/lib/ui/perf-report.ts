@@ -7,7 +7,7 @@
 // JSON so nothing here has to be the only record.
 
 import {
-  COLUMNS, baselineSummary, blocksOf, verdictFor,
+  COLUMNS, baselineSummary, blocksOf, longFramesOf, traceSummary, verdictFor,
   type Cell, type CellResult, type LabConfig, type ShotBlock,
 } from './perf-bench'
 import { PERF_FLAG_INFO, type PerfFlag } from './perf-flags'
@@ -39,14 +39,52 @@ const rowLine = (r: CellResult, verdict: string): string =>
   + COLUMNS.map((c) => num(c.of(r), c.width, c.dp)).join('')
   + (verdict ? `   ${verdict}` : '')
 
+/** The long frames put next to the recomposes, which is the one question an aggregate cannot answer.
+ *
+ *  Printed where a shot composes anything or where the baseline stuttered, and left out otherwise: a
+ *  clean shot that never leaves its bucket has a trace saying so in one bucket and one number, and
+ *  twelve rows of it in every block is how a report stops being read. */
+function traceText(b: ShotBlock): string[] {
+  const traced = [b.baseline, ...b.rows, b.repeat]
+    .filter((r): r is CellResult & { trace: NonNullable<CellResult['trace']> } => !!r?.trace?.length)
+  const base = b.baseline?.trace ? traceSummary(b.baseline.trace) : null
+  if (traced.length === 0 || !base) return []
+  if (!b.shot.recomposes && base.longFrames === 0) return []
+  const out: string[] = ['  -- frame trace --']
+  for (const r of traced) {
+    const t = traceSummary(r.trace)
+    out.push(`  ${pad(r.cell.label, NAME_W - 2)}`
+      + `${num(t.crossings, 4)} cross${num(t.swaps, 5)} swap${num(t.longFrames, 6)} long`
+      + ` (${t.longAtCrossing} within a frame of one, ${t.longSteady} nowhere near one)`
+      + `   ${t.crossingMs.toFixed(1)}ms on crossing frames vs ${t.steadyMs.toFixed(1)}ms on the rest`)
+  }
+  out.push('  baseline by detail bucket, coarsest first:')
+  for (const band of base.bands) {
+    out.push(`    bucket ${rt(String(band.bucket), 3)}  ${rt(band.pxPerM.toFixed(2), 6)} px/m`
+      + `${num(band.frames, 6)} frames  ${rt(band.meanMs.toFixed(1), 5)}ms mean${num(band.long, 5)} long`)
+  }
+  const longs = b.baseline?.trace ? longFramesOf(b.baseline.trace) : []
+  if (longs.length > 0) {
+    out.push('  baseline long frames:')
+    for (const f of longs) {
+      out.push(`    #${rt(String(f.i), 4)}${num(f.ms, 8, 1)}ms  ${rt(f.pxPerM.toFixed(2), 6)} px/m`
+        + `  bucket ${rt(String(f.bucket), 3)}${f.swapped ? '  a scene landed on this frame' : ''}`)
+    }
+  }
+  return out
+}
+
 function blockText(b: ShotBlock): string[] {
   const out: string[] = ['', `SHOT ${b.shot.label.toUpperCase()}  ${b.shot.note}`]
   if (!b.baseline) return [...out, '  not run']
-  out.push(b.vsync
-    ? `  VSYNC BOUND: ${(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on the`
+  if (b.vsync) {
+    out.push(`  VSYNC BOUND: ${(b.baseline.stats.atFloor * 100).toFixed(0)}% of baseline frames sat on the`
       + ` display's floor, so the verdicts below compare MAIN-THREAD time (cpu ms), not frame time.`
-      + ' Frame time here has no room left to move in either direction.'
-    : `  noise floor ${b.noiseMs.toFixed(2)}ms/frame (the two baselines' own spread)`)
+      + ' Frame time here has no room left to move in either direction.')
+  }
+  // Always, and in the unit the verdicts were read in. A block that printed no floor at all was a block
+  // whose sub-noise rows read exactly like its findings.
+  out.push(`  noise floor ${b.noiseMs.toFixed(2)}${b.noiseUnit} (the two baselines' own spread)`)
   out.push(tableHead())
   out.push(rowLine(b.baseline, baselineSummary(b.baseline)))
   const groups: Array<CellResult['cell']['group']> = ['mitigation', 'layer', 'quality', 'renderer']
@@ -60,7 +98,7 @@ function blockText(b: ShotBlock): string[] {
   }
   if (b.repeat) out.push(rowLine(b.repeat, 'the baseline again, at the end of the shot'))
   for (const c of b.skipped) out.push(`  ${pad(c.label, NAME_W - 2)} skipped: ${c.skip}`)
-  return out
+  return [...out, ...traceText(b)]
 }
 
 /** Mitigations that failed to justify themselves anywhere they were measured. The point of the lab. */
@@ -129,6 +167,10 @@ export function formatReport(report: LabReport): string {
       maxMs: +r.stats.maxMs.toFixed(2), longFrames: r.stats.longFrames,
       atFloor: +r.stats.atFloor.toFixed(2), frames: r.stats.frames,
       paint: r.paint, scene: r.scene, tickMs: +r.tickMs.toFixed(3), busyMs: +r.busyMs.toFixed(3),
+      // The trace SUMMARISED, plus the long frames themselves. The per-frame arrays are three hundred
+      // numbers a cell and twenty cells a run, which would make the one thing anybody pastes too big to
+      // paste; everything a reader argues with is in the summary and the frames it points at.
+      ...(r.trace ? { trace: traceSummary(r.trace), longFrameDetail: longFramesOf(r.trace) } : {}),
     })),
     vsyncBound: blocks.filter((b) => b.vsync).map((b) => b.shot.id),
     skipped: report.cells.filter((c) => c.skip).map((c) => ({ key: c.key, reason: c.skip })),

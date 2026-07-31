@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  COLUMNS, DEFAULT_LAB_CONFIG, blocksOf, cellMetrics, estimateSeconds, frameStats, noiseFloorMs,
-  planCells, verdictFor, vsyncBound, type Cell, type CellResult, type Counters,
+  COLUMNS, DEFAULT_LAB_CONFIG, blocksOf, cellMetrics, estimateSeconds, frameStats, longFramesOf,
+  noiseFloorCpuMs, noiseFloorMs, planCells, traceSummary, verdictFor, vsyncBound,
+  type Cell, type CellResult, type Counters, type FrameSample,
 } from './perf-bench'
 
 describe('frameStats', () => {
@@ -302,5 +303,130 @@ describe('blocksOf', () => {
       ...result(c, 16), stats: frameStats(Array(100).fill(16.7)),
     })
     expect(blocksOf(cells, new Map(cells.map((c) => [c.key, pinned(c)])))[0].vsync).toBe(true)
+  })
+})
+
+describe('the noise floor a vsync-bound block is judged against', () => {
+  const cells = planCells(
+    { ...DEFAULT_LAB_CONFIG, shots: ['racing'], variants: ['off:pathCache'] }, 20,
+  )
+  /** Frame time pinned to the display, so the block reads cpu time; cpu time is the argument. */
+  const pinned = (c: Cell, busyMs: number): CellResult => ({
+    ...result(c, 16, busyMs), stats: frameStats(Array(100).fill(16.7)),
+  })
+  const block = (baseBusy: number, repeatBusy: number, rowBusy: number) => blocksOf(cells, new Map([
+    [cells[0].key, pinned(cells[0], baseBusy)],
+    [cells[1].key, pinned(cells[1], rowBusy)],
+    [cells[2].key, pinned(cells[2], repeatBusy)],
+  ]))[0]
+
+  it('takes the floor from the two baselines in cpu time, not from a percentage of one of them', () => {
+    expect(noiseFloorCpuMs(result(cells[0], 16, 4), result(cells[2], 16, 4.8))).toBeCloseTo(0.8, 9)
+    // Identical baselines do not make every row significant: 5% of the baseline stands under it.
+    expect(noiseFloorCpuMs(result(cells[0], 16, 4), result(cells[2], 16, 4))).toBeCloseTo(0.2, 9)
+    // And a small absolute floor under THAT, because the clock is coarser than the subtraction.
+    expect(noiseFloorCpuMs(result(cells[0], 16, 1), result(cells[2], 16, 1))).toBeCloseTo(0.1, 9)
+  })
+
+  it('reports the floor in the unit its own verdicts are read in', () => {
+    expect(block(4, 4.8, 4).noiseUnit).toBe('ms cpu')
+    const cells2 = planCells({ ...DEFAULT_LAB_CONFIG, shots: ['racing'], variants: [] }, 20)
+    const loose = blocksOf(cells2, new Map(cells2.map((c) => [c.key, result(c, 16)])))[0]
+    expect(loose.noiseUnit).toBe('ms/frame')
+  })
+
+  // The bug: a block whose baselines drifted 0.8ms was scoring rows against 5% of the baseline, so a
+  // 0.5ms row read as a finding when the run could not tell it from the machine.
+  it('calls a row inside the baselines\' own drift no effect', () => {
+    const drifted = block(4, 4.8, 4.5)
+    expect(drifted.noiseMs).toBeCloseTo(0.8, 9)
+    expect(verdictFor({
+      row: drifted.rows[0], baseline: drifted.baseline!, noiseMs: drifted.noiseMs, basis: drifted.basis,
+    }).kind).toBe('nothing')
+  })
+
+  it('still calls a row that clears that drift a finding', () => {
+    const steady = block(4, 4.05, 4.5)
+    expect(verdictFor({
+      row: steady.rows[0], baseline: steady.baseline!, noiseMs: steady.noiseMs, basis: steady.basis,
+    }).kind).toBe('saves')
+  })
+
+  it('falls back to the bare floor of the unit when a run was stopped before its repeat', () => {
+    const half = blocksOf(cells, new Map([[cells[0].key, pinned(cells[0], 4)]]))[0]
+    expect(half.noiseMs).toBeCloseTo(0.1, 9)
+    expect(half.noiseUnit).toBe('ms cpu')
+  })
+})
+
+describe('the per-frame trace', () => {
+  const sample = (over: Partial<FrameSample> & { i: number }): FrameSample => ({
+    ms: 10, pxPerM: 2, bucket: 2, swapped: false, ...over,
+  })
+  /** Twenty frames that cross one bucket at frame 10, with the long frames placed by the caller. */
+  const crossingAt10 = (longAt: number[]) => Array.from({ length: 20 }, (_, i) => sample({
+    i, bucket: i < 10 ? 2 : 1, pxPerM: i < 10 ? 2 : 1.4, ms: longAt.includes(i) ? 40 : 10,
+  }))
+
+  it('separates a long frame at a crossing from one nowhere near a crossing', () => {
+    const t = traceSummary(crossingAt10([10, 15]))
+    expect(t.frames).toBe(20)
+    expect(t.crossings).toBe(1)
+    expect(t.longFrames).toBe(2)
+    expect(t.longAtCrossing).toBe(1)
+    expect(t.longSteady).toBe(1)
+  })
+
+  it('blames the frame AFTER a crossing on it, which is where the fresh geometry is first painted', () => {
+    expect(traceSummary(crossingAt10([11])).longAtCrossing).toBe(1)
+    expect(traceSummary(crossingAt10([12])).longAtCrossing).toBe(0)
+    expect(traceSummary(crossingAt10([12])).longSteady).toBe(1)
+  })
+
+  it('counts a landed scene as an event in its own right, with no bucket change', () => {
+    const trace = Array.from({ length: 20 }, (_, i) => sample({
+      i, swapped: i === 5, ms: i === 5 ? 40 : 10,
+    }))
+    const t = traceSummary(trace)
+    expect(t.crossings).toBe(0)
+    expect(t.swaps).toBe(1)
+    expect(t.longAtCrossing).toBe(1)
+  })
+
+  it('never counts the first frame as a crossing, having nothing to differ from', () => {
+    expect(traceSummary([sample({ i: 0, bucket: 2 }), sample({ i: 1, bucket: 2 })]).crossings).toBe(0)
+  })
+
+  it('means the two populations separately, so the answer does not rest on the long frames alone', () => {
+    // Frames 9, 10 and 11 are the crossing's window; every one of them is 20ms and the rest are 10.
+    const trace = Array.from({ length: 20 }, (_, i) => sample({
+      i, bucket: i < 10 ? 2 : 1, ms: i >= 9 && i <= 11 ? 20 : 10,
+    }))
+    const t = traceSummary(trace)
+    expect(t.crossingMs).toBeCloseTo(20, 9)
+    expect(t.steadyMs).toBeCloseTo(10, 9)
+  })
+
+  it('breaks the frames down by detail bucket, coarsest first', () => {
+    const t = traceSummary(crossingAt10([15]))
+    expect(t.bands.map((b) => b.bucket)).toEqual([1, 2])
+    expect(t.bands.map((b) => b.frames)).toEqual([10, 10])
+    expect(t.bands[0].pxPerM).toBeCloseTo(1.4, 9)
+    expect(t.bands[0].long).toBe(1)
+    expect(t.bands[1].long).toBe(0)
+    expect(t.bands[0].meanMs).toBeCloseTo(13, 9)
+  })
+
+  it('lists the long frames themselves, with what the camera was doing on each', () => {
+    const longs = longFramesOf(crossingAt10([10, 15]))
+    expect(longs.map((f) => f.i)).toEqual([10, 15])
+    expect(longs[0].bucket).toBe(1)
+  })
+
+  it('survives a cell with no trace at all', () => {
+    const t = traceSummary([])
+    expect(t.frames).toBe(0)
+    expect(t.bands).toEqual([])
+    expect(t.crossingMs).toBe(0)
   })
 })

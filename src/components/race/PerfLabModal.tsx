@@ -15,7 +15,7 @@ import {
   Check, ClipboardCopy, Gauge, Play, RotateCcw, Square, X,
 } from 'lucide-react'
 import {
-  COLUMNS, VARIANTS, baselineSummary, estimateSeconds, verdictFor,
+  COLUMNS, VARIANTS, baselineSummary, estimateSeconds, traceSummary, verdictFor,
   type LabConfig, type VariantGroup, type VerdictKind,
 } from '@/lib/ui/perf-bench'
 import { SHOTS, type ShotId } from '@/lib/ui/perf-shots'
@@ -156,6 +156,9 @@ const widthOf = (key: string) => COL_W[key] ?? 'w-16'
 
 function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
   const rows = [b.baseline, ...b.rows, b.repeat]
+  // The baseline's own trace, which is where the crossings-or-steady-state question is read. The full
+  // per-row traces are in the pasted report; the window carries the one line that decides it.
+  const trace = b.baseline?.trace ? traceSummary(b.baseline.trace) : null
   return (
     <div className="mb-5">
       <div className="mb-1 text-[12px] font-semibold text-[#FFFFFF]">
@@ -170,7 +173,14 @@ function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
       )}
       {b.baseline && (
         <div className="mb-1 text-[11px] text-[#FFFFFF]">
-          noise floor {b.noiseMs.toFixed(2)}ms/frame | {baselineSummary(b.baseline)}
+          noise floor {b.noiseMs.toFixed(2)}{b.noiseUnit} | {baselineSummary(b.baseline)}
+        </div>
+      )}
+      {trace && (
+        <div className="mb-1 text-[11px] text-[#FFFFFF]">
+          {trace.crossings} crossings, {trace.swaps} swaps | {trace.longFrames} long
+          ({trace.longAtCrossing} within a frame of one, {trace.longSteady} nowhere near one) |
+          {' '}{trace.crossingMs.toFixed(1)}ms on crossing frames vs {trace.steadyMs.toFixed(1)}ms on the rest
         </div>
       )}
       <div className="flex border-b border-[#2A3142] pb-1 text-[#FFFFFF]">

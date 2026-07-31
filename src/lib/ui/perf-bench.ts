@@ -305,7 +305,107 @@ export interface CellResult {
    *  whole frame: the rasteriser's own work and the document renderer's layout are not observable from
    *  here, so this UNDERSTATES a layer. */
   busyMs: number
+  /** Every measured frame, for the question an aggregate cannot answer: WHERE the cost fell. */
+  trace?: FrameSample[]
 }
+
+// ── The per-frame trace ──
+//
+// A cell's aggregate says a shot lost twenty frames of ninety. It cannot say whether they were twenty
+// stalls at the moments the scene recomposed or twenty frames of a band that is simply expensive to
+// draw, and those two have nothing in common: one is fixed in the swap, the other in the ladder. So each
+// frame carries what the camera was doing on it, and the summary below puts the long frames next to the
+// crossings and lets the run answer it.
+
+/** One measured frame. `pxPerM` and `bucket` come from the POSE, which is pure in the frame index, so
+ *  they cost nothing and cannot be a frame out of step with what was drawn. */
+export interface FrameSample {
+  i: number
+  ms: number
+  pxPerM: number
+  bucket: number
+  /** A freshly composed scene replaced the painted one on this frame. */
+  swapped: boolean
+}
+
+/** How near a crossing a long frame has to land to be blamed on it. One frame either side: the compose
+ *  runs on the frame the bucket changes and the paint that first hands its geometry to the rasteriser is
+ *  the frame after, so a crossing's cost can show up on either. */
+const CROSSING_WINDOW = 1
+
+/** One detail bucket's worth of frames. `pxPerM` is the mean scale the frames in it were actually at,
+ *  rather than the bucket's representative scale, so a band that was only clipped reads as clipped. */
+export interface BandRow { bucket: number; pxPerM: number; frames: number; meanMs: number; long: number }
+
+export interface TraceSummary {
+  frames: number
+  /** Frames whose detail bucket differs from the frame before. */
+  crossings: number
+  swaps: number
+  longFrames: number
+  /** Long frames within `CROSSING_WINDOW` of a crossing or a landed swap, and the rest. */
+  longAtCrossing: number
+  longSteady: number
+  /** Mean frame time on those same two populations, which is the same question asked of every frame
+   *  rather than only of the long ones. */
+  crossingMs: number
+  steadyMs: number
+  /** Frame time by detail bucket, coarsest first: where in the zoom band the cost actually lives. */
+  bands: BandRow[]
+}
+
+const meanOf = (v: readonly number[]): number => (v.length ? v.reduce((s, x) => s + x, 0) / v.length : 0)
+
+/** What a trace says, as the numbers the crossings-or-steady-state question is decided on.
+ *
+ *  Pure, and the whole verdict is arithmetic rather than a reading, because "the long frames looked
+ *  clustered" is exactly the kind of claim this lab exists to stop anyone making. */
+export function traceSummary(trace: readonly FrameSample[]): TraceSummary {
+  const n = trace.length
+  const empty: TraceSummary = {
+    frames: 0, crossings: 0, swaps: 0, longFrames: 0, longAtCrossing: 0, longSteady: 0,
+    crossingMs: 0, steadyMs: 0, bands: [],
+  }
+  if (n === 0) return empty
+  // A frame is an EVENT frame if the bucket moved on it or a scene landed on it. The first frame has no
+  // predecessor to differ from, so it is never a crossing on its own account.
+  const event = trace.map((f, i) => f.swapped || (i > 0 && f.bucket !== trace[i - 1].bucket))
+  const nearEvent = trace.map((_, i) => {
+    for (let k = Math.max(0, i - CROSSING_WINDOW); k <= Math.min(n - 1, i + CROSSING_WINDOW); k++) {
+      if (event[k]) return true
+    }
+    return false
+  })
+  const long = trace.map((f) => f.ms > LONG_FRAME_MS)
+  const bands = new Map<number, { px: number[]; ms: number[]; long: number }>()
+  for (const f of trace) {
+    const b = bands.get(f.bucket) ?? { px: [], ms: [], long: 0 }
+    b.px.push(f.pxPerM)
+    b.ms.push(f.ms)
+    if (f.ms > LONG_FRAME_MS) b.long++
+    bands.set(f.bucket, b)
+  }
+  return {
+    frames: n,
+    crossings: trace.filter((f, i) => i > 0 && f.bucket !== trace[i - 1].bucket).length,
+    swaps: trace.filter((f) => f.swapped).length,
+    longFrames: long.filter(Boolean).length,
+    longAtCrossing: long.filter((v, i) => v && nearEvent[i]).length,
+    longSteady: long.filter((v, i) => v && !nearEvent[i]).length,
+    crossingMs: meanOf(trace.filter((_, i) => nearEvent[i]).map((f) => f.ms)),
+    steadyMs: meanOf(trace.filter((_, i) => !nearEvent[i]).map((f) => f.ms)),
+    bands: [...bands.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([bucket, b]) => ({
+        bucket, pxPerM: meanOf(b.px), frames: b.ms.length, meanMs: meanOf(b.ms), long: b.long,
+      })),
+  }
+}
+
+/** The long frames themselves, with what the camera was doing on each. Short by construction (a cell
+ *  that stutters on most of its frames has bigger problems than where), so it prints in full. */
+export const longFramesOf = (trace: readonly FrameSample[]): FrameSample[] =>
+  trace.filter((f) => f.ms > LONG_FRAME_MS)
 
 /** Everything the painter and the race loop counted, read once. Deltas between two of these are what a
  *  cell's numbers are made of. */
@@ -366,13 +466,24 @@ export function noiseFloorMs(baseline: FrameStats, repeat: FrameStats): number {
   return Math.max(spread, 0.15, baseline.meanMs * 0.02)
 }
 
-export type VerdictKind = 'saves' | 'nothing' | 'backfires' | 'cost'
-
-export interface Verdict { kind: VerdictKind; text: string; deltaMs: number }
-
 /** The main-thread floor a difference has to clear when the verdict is being read off `busyMs`. The
  *  performance clock is coarser than the numbers being subtracted, so a small floor stands under it. */
 const BUSY_FLOOR_MS = 0.1
+
+/** The same floor in MAIN-THREAD time, which is the only unit a vsync-bound shot's rows are judged in.
+ *
+ *  It used to have no measured floor at all. The block printed its frame-time floor or, once the shot
+ *  came back vsync bound, printed no floor and quietly scored every row against five per cent of the
+ *  baseline's cpu time: a number derived from nothing that had been measured. The two baselines differ
+ *  by nothing but drift in cpu time exactly as they do in frame time, so that spread is the floor, and
+ *  the block prints whichever one its verdicts were actually read against. */
+export function noiseFloorCpuMs(baseline: CellResult, repeat: CellResult): number {
+  return Math.max(Math.abs(baseline.busyMs - repeat.busyMs), BUSY_FLOOR_MS, baseline.busyMs * 0.05)
+}
+
+export type VerdictKind = 'saves' | 'nothing' | 'backfires' | 'cost'
+
+export interface Verdict { kind: VerdictKind; text: string; deltaMs: number }
 
 /** What a row means.
  *
@@ -387,6 +498,7 @@ const BUSY_FLOOR_MS = 0.1
 export interface VerdictInput {
   row: CellResult
   baseline: CellResult
+  /** The block's own measured floor, IN THE BASIS BELOW. `blocksOf` takes it from the two baselines. */
   noiseMs: number
   /** 'frame' is what the player feels; 'cpu' is main-thread time, which is all that is left to read
    *  once the display is choosing the frame time. `blocksOf` picks this per shot. */
@@ -405,7 +517,8 @@ export function verdictFor({ row, baseline, noiseMs, basis }: VerdictInput): Ver
   const deltaMs = vsync
     ? row.busyMs - baseline.busyMs
     : row.stats.meanMs - baseline.stats.meanMs
-  const floor = vsync ? Math.max(BUSY_FLOOR_MS, baseline.busyMs * 0.05) : noiseMs
+  // One floor, measured, in the unit the delta is in. Not a synthetic percentage standing in for one.
+  const floor = noiseMs
   const unit = vsync ? 'ms cpu' : 'ms/frame'
   const ms = Math.abs(deltaMs).toFixed(2)
   if (row.cell.group === 'mitigation') {
@@ -424,7 +537,10 @@ export interface ShotBlock {
   shot: Shot
   baseline?: CellResult
   repeat?: CellResult
+  /** The two baselines' own spread, in whatever unit `basis` says the verdicts are read in. */
   noiseMs: number
+  /** The name of that unit, so a printed floor can never be read as the other one. */
+  noiseUnit: string
   /** The baseline never left the display's floor, so this shot's verdicts read main-thread time. */
   vsync: boolean
   /** What every verdict in this block is measured on, derived from `vsync`. */
@@ -471,11 +587,17 @@ export function blocksOf(cells: readonly Cell[], results: ReadonlyMap<string, Ce
     const baseline = results.get(`${id}/baseline`)
     const repeat = results.get(`${id}/repeat`)
     const vsync = !!baseline && vsyncBound(baseline.stats)
+    // Measured in the unit the block's verdicts are read in, not in frame time and then applied to cpu
+    // numbers. Falls back to the bare floor of that unit when a run was stopped before its repeat.
+    const floor = baseline && repeat
+      ? (vsync ? noiseFloorCpuMs(baseline, repeat) : noiseFloorMs(baseline.stats, repeat.stats))
+      : (vsync ? BUSY_FLOOR_MS : 0.15)
     return {
       shot: shotById(id),
       baseline,
       repeat,
-      noiseMs: baseline && repeat ? noiseFloorMs(baseline.stats, repeat.stats) : 0.15,
+      noiseMs: floor,
+      noiseUnit: vsync ? 'ms cpu' : 'ms/frame',
       vsync,
       basis: vsync ? 'cpu' : 'frame',
       rows: mine.filter((c) => c.variant !== 'baseline' && c.variant !== 'repeat')

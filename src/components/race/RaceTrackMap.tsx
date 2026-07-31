@@ -1774,7 +1774,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // One-shot callback fired the moment a scene actually lands, so the perf lab can wait for the picture
   // it is about to measure rather than guess at a number of frames. Nothing else reads it.
   const swapWatchRef = useRef<(() => void) | null>(null)
+  // Scenes landed since the map mounted. The watcher above is a one-shot the lab's settle owns and
+  // consumes, which cannot answer "did a scene land on THIS frame" for ninety frames in a row; a tally
+  // can, and the run diffs it per frame to put the long frames next to the recomposes.
+  const swapTallyRef = useRef(0)
   const swapped = () => {
+    swapTallyRef.current++
     const w = swapWatchRef.current
     swapWatchRef.current = null
     w?.()
@@ -1998,6 +2003,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     },
     paintTally: () => paintTallyRef.current,
     tickTally: () => tickStatsRef.current,
+    swapTally: () => swapTallyRef.current,
     scene: () => {
       const sc = sceneRef.current
       let ops = 0

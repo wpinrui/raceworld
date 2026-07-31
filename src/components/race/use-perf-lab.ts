@@ -10,9 +10,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_LAB_CONFIG, blocksOf, cellMetrics, frameStats, planCells,
-  type Cell, type CellConfig, type CellResult, type Counters, type LabConfig,
+  type Cell, type CellConfig, type CellResult, type Counters, type FrameSample, type LabConfig,
 } from '@/lib/ui/perf-bench'
-import { shotById, type Camera, type ShotWorld } from '@/lib/ui/perf-shots'
+import { lodBucket } from '@/lib/ui/lod'
+import { pxPerMOf, shotById, type Camera, type ShotWorld } from '@/lib/ui/perf-shots'
 import { formatReport, type LabReport } from '@/lib/ui/perf-report'
 import { resetPerfFlags } from '@/lib/ui/perf-flags'
 
@@ -31,6 +32,8 @@ export interface PerfLabHarness {
   timing: (on: boolean) => void
   paintTally: () => { n: number; ms: number; drawn: number; skipped: number; sections: Record<string, number> }
   tickTally: () => { n: number; sum: number }
+  /** Scenes that have LANDED since the map mounted, for the per-frame trace. */
+  swapTally: () => number
   scene: () => { items: number; ops: number; pathKb: number; nodes: number }
   /** Everything the player had before the run: camera, follow lock, layers, quality, renderer, cap. */
   restore: () => void
@@ -94,33 +97,54 @@ export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = 
     const h = harnessRef.current
     const shot = shotById(cell.shot)
     const n = cfg.frames
-    const deltas: number[] = []
+    // Primitive arrays, filled in place. The trace is a per-frame record and the measured window is the
+    // one place in this file that must not be allocating: the objects are assembled after the last
+    // frame, out of the numbers, where nothing is being timed.
+    const ms = new Float64Array(n)
+    const px = new Float64Array(n)
+    const bucket = new Int16Array(n)
+    const swaps = new Uint8Array(n)
+    let count = 0
     let painted = 0
     let mark: Counters | null = null
     let paintsAt = h.paintTally().n
+    let swapsAt = h.swapTally()
     let last = performance.now()
     for (let i = -cfg.warmup; i < n; i++) {
       // Read at the first MEASURED frame, not before the warmup.
       if (i === 0) mark = snapshot(h, painted)
-      h.setCamera(shot.pose(i, n, world))
+      const cam = shot.pose(i, n, world)
+      h.setCamera(cam)
       const now = await nextFrame()
       const paintsNow = h.paintTally().n
+      const swapsNow = h.swapTally()
       // One sample a frame: a single frame can paint more than once (a cull step composes and paints
       // inside the camera's own paint), so counting paints would put this fraction above one.
       if (i >= 0) {
-        deltas.push(now - last)
+        const pxPerM = pxPerMOf(cam.z, world)
+        ms[count] = now - last
+        px[count] = pxPerM
+        bucket[count] = lodBucket(pxPerM)
+        swaps[count] = swapsNow > swapsAt ? 1 : 0
+        count++
         if (paintsNow > paintsAt) painted++
       }
       paintsAt = paintsNow
+      swapsAt = swapsNow
       last = now
       if (abortRef.current) return null
     }
     if (!mark) return null
+    const deltas = Array.from(ms.subarray(0, count))
+    const trace: FrameSample[] = Array.from({ length: count }, (_, k) => ({
+      i: k, ms: ms[k], pxPerM: px[k], bucket: bucket[k], swapped: swaps[k] === 1,
+    }))
     return {
       cell,
       stats: frameStats(deltas),
-      ...cellMetrics(mark, snapshot(h, painted), deltas.length),
+      ...cellMetrics(mark, snapshot(h, painted), count),
       scene: h.scene(),
+      trace,
     }
   }, [])
 
