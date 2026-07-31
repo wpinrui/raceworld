@@ -15,8 +15,8 @@ import {
   Check, ClipboardCopy, Gauge, Hash, Play, RotateCcw, Square, X,
 } from 'lucide-react'
 import {
-  COLUMNS, VARIANTS, baselineSummary, decodeRunCode, encodeRunCode, estimateSeconds, traceSummary,
-  verdictFor, type LabConfig, type VariantGroup, type VerdictKind,
+  COLUMNS, VARIANTS, baselineSummary, decodeRunCode, encodeRunCode, estimateSeconds, referenceFor,
+  traceSummary, verdictFor, type LabConfig, type VariantGroup, type VerdictKind,
 } from '@/lib/ui/perf-bench'
 import { SHOTS, type ShotId } from '@/lib/ui/perf-shots'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -152,6 +152,14 @@ function ConfigPane({ config, setConfig }: {
             onClick={() => toggleShot(s.id)}
           />
         ))}
+        <div className="mt-3">
+          <Box
+            on={config.cold}
+            label="Cold compose"
+            note="strand every cache and time one compose per cell, on top of the warm window"
+            onClick={() => setConfig({ ...config, cold: !config.cold })}
+          />
+        </div>
         <div className="mt-3 flex items-center gap-4">
           {([['frames', 'Measured frames'], ['warmup', 'Warmup frames']] as const).map(([key, label]) => (
             <label key={key} className="flex items-center gap-2 text-[12px] text-[#FFFFFF]">
@@ -244,8 +252,9 @@ function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
       </div>
       {rows.map((r, i) => {
         if (!r) return null
-        const v = b.baseline && r.cell.group !== 'baseline'
-          ? verdictFor({ row: r, baseline: b.baseline, noiseMs: b.noiseMs, basis: b.basis })
+        const against = r.cell.group !== 'baseline' ? referenceFor(b, r) : null
+        const v = against
+          ? verdictFor({ row: r, baseline: against.ref, noiseMs: b.noiseMs, basis: b.basis })
           : null
         const prev = rows[i - 1]
         const head = r.cell.group !== 'baseline' && r.cell.group !== prev?.cell.group

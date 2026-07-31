@@ -15,7 +15,7 @@
 
 import type { Quality } from './lod'
 import { PERF_FLAGS, PERF_FLAG_INFO, type PerfFlag } from './perf-flags'
-import { shotById, type Shot, type ShotId } from './perf-shots'
+import { SHOTS, shotById, type Shot, type ShotId } from './perf-shots'
 
 /** A frame this long is felt rather than measured. */
 export const LONG_FRAME_MS = 25
@@ -43,6 +43,14 @@ export interface Variant {
   /** A reason this variant cannot differ from the baseline in this shot, or null to run it. Returning a
    *  reason is not hiding the row: the plan keeps it and the report prints the reason. */
   skipIn?: (shot: Shot, cars: number) => string | null
+  /** Another variant's id to score this row against instead of the baseline.
+   *
+   *  The plan is one step from the baseline by design, and this does not open that up: it is not a
+   *  cross-product facility and there is no way to ask for an arbitrary pair. It exists because two
+   *  mitigations can SHADOW each other, where the second absorbs what turning off the first would have
+   *  cost, and the only way to see through that is to turn off both and subtract the second on its own.
+   *  Each such pair is written out here by hand, with the reason. */
+  versus?: string
 }
 
 /** The drawn layers the map can hide, one per category, plus the two SPLITS: the whole static world
@@ -110,6 +118,20 @@ export const VARIANTS: readonly Variant[] = [
     config: { flagsOff: [flag] },
     skipIn: mitigationSkip(flag),
   })),
+  {
+    // The one named pair. The disc decides how much scene gets BUILT, and the memo serves per-object
+    // geometry from a cache, so with the disc off the far-side objects are built once on the first
+    // compose and are hits for every one after: a cell with fifteen composes charges the disc a
+    // fifteenth of what it saves. Turning both off and subtracting the memo's own row is the only way
+    // to read the disc rather than the memo's absorption of it.
+    id: 'off:cullDisc+geomCache',
+    group: 'mitigation',
+    label: 'Cull disc, memo off',
+    reads: 'what the disc saves once the memo cannot hide it, against the memo off on its own',
+    config: { flagsOff: ['cullDisc', 'geomCache'] },
+    versus: 'off:geomCache',
+    skipIn: (shot, cars) => mitigationSkip('cullDisc')(shot, cars) ?? mitigationSkip('geomCache')(shot, cars),
+  },
   ...LAYERS.map((l): Variant => ({
     id: `hide:${l.id}`,
     group: 'layer',
@@ -154,6 +176,9 @@ export interface LabConfig {
   frames: number
   /** Frames thrown away first: the configuration switch is a render the lab caused, not the game. */
   warmup: number
+  /** Time one compose per cell with every cache stranded, on top of the warm window. Costs a full
+   *  uncached rebuild per cell, which is why it is asked for rather than always done. */
+  cold: boolean
 }
 
 export const DEFAULT_LAB_CONFIG: LabConfig = {
@@ -161,6 +186,7 @@ export const DEFAULT_LAB_CONFIG: LabConfig = {
   variants: DEFAULT_VARIANTS,
   frames: 90,
   warmup: 20,
+  cold: false,
 }
 
 // ── Run codes ──
@@ -173,10 +199,16 @@ export const DEFAULT_LAB_CONFIG: LabConfig = {
 // otherwise silently repoint every code ever pasted at different rows; new entries go on the END of
 // these lists, and a test fails if one is added to the catalogue and not to them.
 
-const RUN_CODE_VERSION = 1
+/** Bumped from 1 when the ninth shot arrived: shots outgrew a two-hex field, and a code is a bit
+ *  position, so a v1 code read under v2 widths would name different rows. Version 1 codes are now
+ *  refused rather than misread. */
+const RUN_CODE_VERSION = 2
 
 const SHOT_CODE_ORDER: readonly ShotId[] = [
   'racing', 'pit', 'start', 'wide', 'zoom', 'rotate', 'still',
+  // Appended, never inserted: a code is a bit position, so inserting would repoint every code ever
+  // pasted at a different shot.
+  'close', 'zoomin',
 ]
 
 const VARIANT_CODE_ORDER: readonly string[] = [
@@ -185,13 +217,16 @@ const VARIANT_CODE_ORDER: readonly string[] = [
   'hide:trees', 'hide:shadows', 'hide:buildings', 'hide:stands', 'hide:furniture', 'hide:ground',
   'hide:kerbs', 'hide:pit', 'hide:signs', 'hide:boxes', 'hide:cars', 'hide:static', 'hide:dynamic',
   'quality:low', 'quality:high', 'renderer:svg',
+  'off:cullDisc+geomCache',
 ]
 
 /** Exported for the test that keeps them in step with the catalogue, and for nothing else. */
 export const RUN_CODE_ORDERS = { shots: SHOT_CODE_ORDER, variants: VARIANT_CODE_ORDER }
 
 /** Widths in hex characters, in order. Fixed rather than delimited, so a code is one token to select. */
-const CODE_FIELDS = { version: 1, shots: 2, variants: 7, frames: 3, warmup: 3 }
+const CODE_FIELDS = { version: 1, shots: 3, variants: 7, frames: 3, warmup: 3, flags: 1 }
+/** Bit positions inside the trailing flags nibble. Appended to, never reordered, like the lists above. */
+const CODE_FLAGS: readonly (keyof LabConfig)[] = ['cold']
 const CODE_LENGTH = Object.values(CODE_FIELDS).reduce((s, w) => s + w, 0)
 
 /** What the config screen will accept, mirroring what its own number fields clamp to. */
@@ -202,11 +237,13 @@ export function encodeRunCode(cfg: LabConfig): string {
   const mask = (order: readonly string[], on: readonly string[]) =>
     order.reduce((m, id, i) => (on.includes(id) ? m | (1 << i) : m), 0)
   const hex = (v: number, w: number) => Math.max(0, Math.round(v)).toString(16).padStart(w, '0').slice(-w)
+  const flags = CODE_FLAGS.reduce((m, k, i) => (cfg[k] ? m | (1 << i) : m), 0)
   return `${RUN_CODE_VERSION}`
     + hex(mask(SHOT_CODE_ORDER, cfg.shots), CODE_FIELDS.shots)
     + hex(mask(VARIANT_CODE_ORDER, cfg.variants), CODE_FIELDS.variants)
     + hex(cfg.frames, CODE_FIELDS.frames)
     + hex(cfg.warmup, CODE_FIELDS.warmup)
+    + hex(flags, CODE_FIELDS.flags)
 }
 
 /** A code back into a selection, or null if it is not one. Null rather than a partial config: half a
@@ -218,15 +255,26 @@ export function decodeRunCode(code: string): LabConfig | null {
   let at = CODE_FIELDS.version
   const take = (w: number) => { const v = parseInt(s.slice(at, at + w), 16); at += w; return v }
   const pick = <T extends string>(order: readonly T[], m: number) => order.filter((_, i) => (m >> i) & 1)
-  const shots = pick(SHOT_CODE_ORDER, take(CODE_FIELDS.shots))
-  const variants = pick(VARIANT_CODE_ORDER, take(CODE_FIELDS.variants))
+  // Back in CATALOGUE order, not bit order. The two coincided until shots were appended to the frozen
+  // list, and they must not drift: shot order is run order, so a decoded config has to be the same
+  // config the boxes would have produced, and two codes for one run have to decode identically.
+  const byCatalogue = <T extends string>(ids: readonly T[], all: readonly T[]) =>
+    [...ids].sort((a, b) => all.indexOf(a) - all.indexOf(b))
+  const shots = byCatalogue(pick(SHOT_CODE_ORDER, take(CODE_FIELDS.shots)), SHOTS.map((s) => s.id))
+  const variants = byCatalogue(
+    pick(VARIANT_CODE_ORDER, take(CODE_FIELDS.variants)), VARIANTS.map((v) => v.id),
+  )
   // A run of no shots is not a run, and the screen would offer a Run button that measures nothing.
   if (shots.length === 0) return null
+  const frames = clampTo(take(CODE_FIELDS.frames), FRAME_BOUNDS.min, FRAME_BOUNDS.max)
+  const warmup = clampTo(take(CODE_FIELDS.warmup), 0, FRAME_BOUNDS.max)
+  const flags = take(CODE_FIELDS.flags)
   return {
     shots: [...shots],
     variants: [...variants],
-    frames: clampTo(take(CODE_FIELDS.frames), FRAME_BOUNDS.min, FRAME_BOUNDS.max),
-    warmup: clampTo(take(CODE_FIELDS.warmup), 0, FRAME_BOUNDS.max),
+    frames,
+    warmup,
+    cold: ((flags >> CODE_FLAGS.indexOf('cold')) & 1) === 1,
   }
 }
 
@@ -402,6 +450,11 @@ export interface CellResult {
   busyMs: number
   /** Every measured frame, for the question an aggregate cannot answer: WHERE the cost fell. */
   trace?: FrameSample[]
+  /** What ONE compose cost with every cache stranded, and how many were timed. Zero when the run did
+   *  not ask for it. This is the first-encounter number, and it is the only one several mitigations
+   *  exist to move. */
+  coldComposeMs: number
+  coldComposes: number
 }
 
 // ── The per-frame trace ──
@@ -652,6 +705,19 @@ export interface ShotBlock {
   basis: VerdictInput['basis']
   rows: CellResult[]
   skipped: Cell[]
+}
+
+/** What a row is scored against, which is the baseline unless the variant names another row.
+ *
+ *  Null when the named row was not run: a shadowed pair scored against the baseline instead would print
+ *  a number that looks like the others and means something different, which is worse than no verdict. */
+export function referenceFor(
+  block: ShotBlock, row: CellResult,
+): { ref: CellResult; versus: string | null } | null {
+  const versus = VARIANTS.find((v) => v.id === row.cell.variant)?.versus
+  if (!versus) return block.baseline ? { ref: block.baseline, versus: null } : null
+  const ref = block.rows.find((r) => r.cell.variant === versus)
+  return ref ? { ref, versus } : null
 }
 
 /** The row of numbers both the modal and the pasted report print, defined once so they cannot drift.

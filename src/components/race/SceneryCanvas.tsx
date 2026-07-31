@@ -33,6 +33,12 @@ export type PaintFor = (
 
 const cache = new Map<string, Path2D>()
 
+/** Drop every parsed path. The lab's cold-compose measurement calls this; nothing in the game does,
+ *  and the eviction inside `pathFor` deliberately never does it wholesale for the reason stated there. */
+export function clearPathCache(): void {
+  cache.clear()
+}
+
 /** Path2D for some path data, built once. Over the cap the OLDEST quarter goes, not the whole set:
  *  a wholesale clear made the next frame re-parse every path on screen at once, which is exactly
  *  the hitch this cache exists to prevent. */

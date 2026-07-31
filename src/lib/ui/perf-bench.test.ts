@@ -156,7 +156,7 @@ const result = (cell: Cell, meanMs: number, busyMs = 5): CellResult => ({
   paint: { msPerPaint: 1, paintedFrac: 1, calls: 100, skipped: 0, sections: {} },
   scene: { items: 10, ops: 20, pathKb: 1, nodes: 100 },
   tickMs: 0.5,
-  composeMs: 0, composes: 0, msPerCompose: 0,
+  composeMs: 0, composes: 0, msPerCompose: 0, coldComposeMs: 0, coldComposes: 0,
   busyMs,
 })
 
@@ -426,7 +426,7 @@ describe('the noise floor a vsync-bound block is judged against', () => {
 describe('run codes', () => {
   const cfg = {
     shots: ['zoom', 'rotate'] as const, variants: ['off:geomCache', 'off:warmSwap'],
-    frames: 360, warmup: 20,
+    frames: 360, warmup: 20, cold: false,
   }
 
   it('round-trips a selection exactly', () => {
@@ -436,18 +436,31 @@ describe('run codes', () => {
 
   it('round-trips every shot and every variant at once, and none at all', () => {
     const all = {
-      shots: SHOTS.map((s) => s.id), variants: VARIANTS.map((v) => v.id), frames: 600, warmup: 600,
+      shots: SHOTS.map((s) => s.id), variants: VARIANTS.map((v) => v.id),
+      frames: 600, warmup: 600, cold: true,
     }
     expect(decodeRunCode(encodeRunCode(all))).toEqual(all)
-    const none = { shots: ['racing' as const], variants: [], frames: 30, warmup: 0 }
+    const none = { shots: ['racing' as const], variants: [], frames: 30, warmup: 0, cold: false }
     expect(decodeRunCode(encodeRunCode(none))).toEqual(none)
+  })
+
+  it('carries the cold-compose mode, which changes what a run measures and not only how much', () => {
+    const cold = decodeRunCode(encodeRunCode({ ...cfg, shots: [...cfg.shots], cold: true }))
+    expect(cold!.cold).toBe(true)
+    expect(decodeRunCode(encodeRunCode({ ...cfg, shots: [...cfg.shots], cold: false }))!.cold).toBe(false)
   })
 
   it('is one token, and takes one back however it was pasted', () => {
     const code = encodeRunCode({ ...cfg, shots: [...cfg.shots] })
-    expect(code).toHaveLength(16)
+    expect(code).toHaveLength(18)
     expect(code).toMatch(/^[0-9a-f]+$/)
     expect(decodeRunCode(` ${code.toUpperCase()} `)).toEqual(decodeRunCode(code))
+  })
+
+  // Nine shots outgrew the two-hex field, so the widths moved. A v1 code read under v2 widths would
+  // name different shots and different variants, silently.
+  it('refuses a code from the previous layout rather than reading it under the new widths', () => {
+    expect(decodeRunCode('1300000151168014')).toBeNull()
   })
 
   it('orders the decoded selection by the catalogue, so two codes for one run are one code', () => {
@@ -458,7 +471,7 @@ describe('run codes', () => {
   })
 
   it('refuses anything that is not a code rather than applying half of one', () => {
-    for (const bad of ['', 'nope', '1300', '2' + '0'.repeat(15), '1'.repeat(17), '1zz00000a0168014']) {
+    for (const bad of ['', 'nope', '2300', '3' + '0'.repeat(17), '2'.repeat(19), '2zz00000a01680140']) {
       expect(decodeRunCode(bad), bad).toBeNull()
     }
   })

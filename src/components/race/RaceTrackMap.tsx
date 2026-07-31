@@ -17,8 +17,13 @@ import {
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { linePath } from '@/lib/ui/extrude'
 import { useSceneryBitmap } from './use-scenery-bitmap'
-import { SceneryCanvas, contextFor, drawScene, warmScene, type SceneTiming } from './SceneryCanvas'
-import { isGroup, sceneryScene, type DrawOp, type SceneItem, type SceneMark } from '@/lib/ui/scenery-draw'
+import {
+  SceneryCanvas, clearPathCache, contextFor, drawScene, warmScene, type SceneTiming,
+} from './SceneryCanvas'
+import {
+  clearGeometryMemo, isGroup, sceneryScene,
+  type DrawOp, type SceneItem, type SceneMark,
+} from '@/lib/ui/scenery-draw'
 import { canvasPaint, type PaintCtx } from '@/lib/ui/scenery-paint'
 import {
   PitBuilding, PitBuildingShadow, PitGarageFloors, PitGarageSigns, SIGN_H_M,
@@ -2023,6 +2028,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     tickTally: () => tickStatsRef.current,
     swapTally: () => swapTallyRef.current,
     composeTally: () => composeTallyRef.current,
+    clearCaches: () => { clearGeometryMemo(); clearPathCache() },
     scene: () => {
       const sc = sceneRef.current
       let ops = 0

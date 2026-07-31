@@ -159,9 +159,24 @@ const MEMO_PER_OBJECT = 16
  *  object, a notch costs the few objects that actually changed.
  *
  *  A WeakMap, so a circuit's scenery going out of scope takes its geometry with it. */
+/** Bumped to make every memo below miss at once, for the lab's cold-compose measurement.
+ *
+ *  A generation rather than a set of clear calls, because the memos are WeakMaps keyed by the scenery
+ *  objects themselves and there is nothing to enumerate. Every string key is prefixed with this, so one
+ *  increment strands the lot and the next compose builds the circuit from nothing, which is what the
+ *  FIRST encounter with a scale or a bearing costs. That first encounter is the only thing several of
+ *  these mitigations exist for, and it is exactly what a lab measuring the second encounter cannot see. */
+let memoGeneration = 0
+
+/** Forget every cached geometry. The lab calls this; nothing in the game does. */
+export function clearGeometryMemo(): void {
+  memoGeneration++
+}
+
 function objectMemo<T extends object, R>(): (item: T, key: string, build: () => R) => R {
   const cache = new WeakMap<T, Map<string, R>>()
-  return (item, key, build) => {
+  return (item, rawKey, build) => {
+    const key = `${memoGeneration}|${rawKey}`
     // Memo off: every object rebuilds its string geometry on every compose, which is the 8ms-a-notch
     // (28ms on Monaco) the per-object cache was introduced to stop paying.
     if (!PERF.geomCache) return build()
@@ -867,9 +882,11 @@ const fenceRunMemo = objectMemo<SceneryFence, { shadow: DrawOp; runs: DrawOp[] }
 /** A hut and its own shadow folded into one group. Keyed on what `marshalGroups` handed back, which is
  *  already memoised, so the fold is done once rather than allocating a group per post per compose. */
 const hutCache = new WeakMap<object, DrawGroup>()
+const hutGeneration = new WeakMap<object, number>()
 const hutMemo = (from: object, build: () => DrawGroup): DrawGroup => {
-  const hit = hutCache.get(from)
+  const hit = hutGeneration.get(from) === memoGeneration ? hutCache.get(from) : undefined
   if (hit) return hit
+  hutGeneration.set(from, memoGeneration)
   const made = build()
   hutCache.set(from, made)
   return made
@@ -879,6 +896,7 @@ const staticCache = new WeakMap<Scenery, StaticParts[]>()
 
 function staticParts(scenery: Scenery, o: SceneOpts): StaticParts {
   const key = JSON.stringify([
+    memoGeneration,
     o.view, o.ground, o.extrude, o.storeyM, o.bayM, o.standFrontM, o.standRearM,
     o.standRoofFrac, o.marshalM, o.marshalW, o.marshalD, o.fenceM, o.u(1), o.lighting,
     // The rungs themselves, never the scale they came from: see `rungSignature`.

@@ -37,6 +37,8 @@ export interface PerfLabHarness {
   /** Composes since the map mounted and the main-thread time they took, the warm's slices included.
    *  Neither the painter nor the race loop runs this work, so without it a cell's cpu time omits it. */
   composeTally: () => { n: number; ms: number }
+  /** Strand every cached geometry and every parsed path, so the next compose is a first encounter. */
+  clearCaches: () => void
   scene: () => { items: number; ops: number; pathKb: number; nodes: number }
   /** Everything the player had before the run: camera, follow lock, layers, quality, renderer, cap. */
   restore: () => void
@@ -69,6 +71,15 @@ const snapshot = (h: PerfLabHarness, paintedFrames: number): Counters => {
   }
 }
 
+/** Strand every cache, compose once, and report what that one compose cost. */
+const coldCompose = async (h: PerfLabHarness): Promise<{ ms: number; n: number }> => {
+  const before = h.composeTally()
+  h.clearCaches()
+  await h.settle()
+  const after = h.composeTally()
+  return { ms: Math.max(0, after.ms - before.ms), n: Math.max(0, after.n - before.n) }
+}
+
 /** `cars` is a parameter rather than something read back off the harness because the plan depends on it
  *  (a field of nothing cannot exercise the visibility-write elision) and the plan is rendered. */
 export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = false) {
@@ -96,7 +107,7 @@ export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = 
    *  Returns null when the run was stopped part way through: a cell that got four frames is not a row,
    *  and scoring it against a full baseline would print a verdict out of nothing. */
   const runCell = useCallback(async (
-    cell: Cell, world: ShotWorld, cfg: LabConfig,
+    cell: Cell, world: ShotWorld, cfg: LabConfig, cold: { ms: number; n: number },
   ): Promise<CellResult | null> => {
     const h = harnessRef.current
     const shot = shotById(cell.shot)
@@ -149,6 +160,8 @@ export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = 
       ...cellMetrics(mark, snapshot(h, painted), count),
       scene: h.scene(),
       trace,
+      coldComposeMs: cold.n > 0 ? cold.ms / cold.n : 0,
+      coldComposes: cold.n,
     }
   }, [])
 
@@ -186,7 +199,16 @@ export function usePerfLab(harness: PerfLabHarness, cars: number, openOnMount = 
         h.setCamera(shotById(cell.shot).pose(-config.warmup, config.frames, world))
         await h.settle()
         if (abortRef.current) break
-        const done = await runCell(cell, world, config)
+        // The FIRST encounter, measured on purpose and separately from the window that follows.
+        //
+        // Every cache in the renderer is there for the first time a scale, a bearing or a path is seen,
+        // and a lab that measures the second time cannot see any of them: the cache-filling baseline hid
+        // the geometry memo, the warm cell hides the warmed swap, and the memo hides the cull disc. So
+        // once the picture is settled, strand every cache and settle again, and charge that compose on
+        // its own. The measured window afterwards is warm, exactly as before.
+        const cold = config.cold ? await coldCompose(h) : { ms: 0, n: 0 }
+        if (abortRef.current) break
+        const done = await runCell(cell, world, config, cold)
         // Null means the run was stopped inside the cell. A truncated cell is not a row.
         if (!done) break
         // The warm cell is measured and thrown away: its whole job is to leave the caches populated so

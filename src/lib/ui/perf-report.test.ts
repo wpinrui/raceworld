@@ -12,7 +12,7 @@ const result = (cell: Cell, meanMs: number): CellResult => ({
   paint: { msPerPaint: 4.2, paintedFrac: 1, calls: 318, skipped: 44, sections: { trees: 1.1 } },
   scene: { items: 640, ops: 1180, pathKb: 96, nodes: 2400 },
   tickMs: 0.8,
-  composeMs: 0.3, composes: 12, msPerCompose: 9,
+  composeMs: 0.3, composes: 12, msPerCompose: 9, coldComposeMs: 0, coldComposes: 0,
   busyMs: 5,
 })
 

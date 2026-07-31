@@ -68,6 +68,17 @@ const ZOOM_OCTAVES_PER_SEC = 1
 /** Frames one full out-and-back takes at that rate. A cell shorter than this measures part of the sweep,
  *  a cell longer measures more than one, and neither changes what the shot is doing per frame. */
 export const ZOOM_SWEEP_FRAMES = Math.round((2 * ZOOM_OCTAVES * FRAME_HZ) / ZOOM_OCTAVES_PER_SEC)
+/** The scale a player watching a car actually uses, and the half of the range nothing measured.
+ *
+ *  Racing scale is calibrated to ZOOM_DEFAULT, and every shot here sat at it or swept OUT from it, so
+ *  the lab never rendered a frame inward of the view the game opens on. The wheel goes seven more
+ *  notches past it (ZOOM_MAX 60 against ZOOM_DEFAULT 20 at ZOOM_STEP 1.18), and that is where an object
+ *  reaches its finest rung and where the cull disc is finally small enough to leave anything out. */
+export const CLOSE_PX_PER_M = 6
+/** Octaves from racing scale up to close: log2(6/2). */
+const ZOOMIN_OCTAVES = Math.log2(CLOSE_PX_PER_M / RACE_PX_PER_M)
+/** Frames one full in-and-out takes, at the same cadence the outward sweep travels at. */
+export const ZOOMIN_SWEEP_FRAMES = Math.round((2 * ZOOMIN_OCTAVES * FRAME_HZ) / ZOOM_OCTAVES_PER_SEC)
 /** The wide shot's pan, there and back, in seconds. Same fault as the zoom and the same fix: its pan was
  *  a fraction of the cell rather than a speed, so the camera crossed the stage faster the shorter the
  *  cell was. Two seconds across a tenth of the stage is a drag rather than a flick. */
@@ -149,7 +160,8 @@ export function trackFeatures(
   return { cornerF, pitF }
 }
 
-export type ShotId = 'racing' | 'pit' | 'start' | 'wide' | 'zoom' | 'rotate' | 'still'
+export type ShotId =
+  'racing' | 'pit' | 'start' | 'wide' | 'zoom' | 'zoomin' | 'close' | 'rotate' | 'still'
 
 export interface Shot {
   id: ShotId
@@ -231,6 +243,33 @@ export const SHOTS: readonly Shot[] = [
       // Racing scale at both ends and fully out in the middle, which is the gesture a player makes
       // looking for the field: out to find it, back in to watch it.
       const px = RACE_PX_PER_M * 2 ** (-ZOOM_OCTAVES * tri)
+      return centreOn(w.trackAt(w.cornerF), zoomForPxPerM(px, w), w.rot0, w)
+    },
+  },
+  {
+    id: 'close',
+    label: 'Close corner',
+    note: `the same corner as the racing shot, at ${CLOSE_PX_PER_M} px/m: the scale a player watches a`
+      + ' car at, and the only one where the cull disc is smaller than a circuit',
+    // RECOMPOSING, unlike its racing-scale twin, and the difference is arithmetic rather than a
+    // judgement. The disc steps once the camera has left 30% of its radius; the radius goes as 1/scale,
+    // so tripling the scale thirds it. On monaco that is 874m and 424 frames a step at racing scale
+    // against 291m and 141 frames here, so a cell of any usable length crosses several.
+    moves: true, repaints: true, recomposes: true, whole: false,
+    pose: (i, n, w) => sweep(w.cornerF, i, n, w, CLOSE_PX_PER_M),
+  },
+  {
+    id: 'zoomin',
+    label: 'Close zoom sweep',
+    note: `racing scale in to ${CLOSE_PX_PER_M} px/m and back at ${ZOOM_OCTAVES_PER_SEC} octave a`
+      + ` second: a full sweep is ${ZOOMIN_SWEEP_FRAMES} frames`,
+    // The outward sweep's mirror. Both are needed rather than one shot spanning the whole range,
+    // because a rung is a threshold: the costly band is where the most objects are in shot AND at their
+    // finest rung, which is somewhere between the two ends and not at either of them.
+    moves: true, repaints: true, recomposes: true, whole: false,
+    pose: (i, _n, w) => {
+      const tri = 1 - Math.abs(1 - 2 * phaseOf(i, ZOOMIN_SWEEP_FRAMES)) // 0 -> 1 -> 0
+      const px = RACE_PX_PER_M * 2 ** (ZOOMIN_OCTAVES * tri)
       return centreOn(w.trackAt(w.cornerF), zoomForPxPerM(px, w), w.rot0, w)
     },
   },

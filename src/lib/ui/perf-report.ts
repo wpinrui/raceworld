@@ -7,7 +7,7 @@
 // JSON so nothing here has to be the only record.
 
 import {
-  COLUMNS, baselineSummary, blocksOf, longFramesOf, traceSummary, verdictFor,
+  COLUMNS, baselineSummary, blocksOf, longFramesOf, referenceFor, traceSummary, verdictFor,
   type Cell, type CellResult, type LabConfig, type ShotBlock,
 } from './perf-bench'
 import { PERF_FLAG_INFO, type PerfFlag } from './perf-flags'
@@ -93,12 +93,35 @@ function blockText(b: ShotBlock): string[] {
     if (rows.length === 0) continue
     out.push(`  -- ${g} --`)
     for (const r of rows) {
-      out.push(rowLine(r, verdictFor({ row: r, baseline: b.baseline, noiseMs: b.noiseMs, basis: b.basis }).text))
+      const against = referenceFor(b, r)
+      if (!against) {
+        out.push(rowLine(r, 'not scored: the row it is read against was not run'))
+        continue
+      }
+      const v = verdictFor({ row: r, baseline: against.ref, noiseMs: b.noiseMs, basis: b.basis })
+      out.push(rowLine(r, against.versus ? `${v.text}, against ${against.versus}` : v.text))
     }
   }
   if (b.repeat) out.push(rowLine(b.repeat, 'the baseline again, at the end of the shot'))
   for (const c of b.skipped) out.push(`  ${pad(c.label, NAME_W - 2)} skipped: ${c.skip}`)
-  return [...out, ...traceText(b)]
+  return [...out, ...coldText(b), ...traceText(b)]
+}
+
+/** What one compose costs on a FIRST encounter, which is the only thing several mitigations move.
+ *
+ *  Its own section rather than a column, because it is measured once per cell outside the window while
+ *  every column is an average across it, and printing the two side by side invites reading a per-compose
+ *  figure as a per-frame one. */
+function coldText(b: ShotBlock): string[] {
+  const rows = [b.baseline, ...b.rows, b.repeat]
+    .filter((r): r is CellResult => !!r && r.coldComposes > 0)
+  if (rows.length === 0) return []
+  const out = ['  -- cold compose (every cache stranded, one compose timed) --']
+  for (const r of rows) {
+    out.push(`  ${pad(r.cell.label, NAME_W - 2)}${num(r.coldComposeMs, 8, 2)}ms`
+      + `   against ${r.msPerCompose.toFixed(2)}ms warm`)
+  }
+  return out
 }
 
 /** Mitigations that failed to justify themselves anywhere they were measured. The point of the lab. */
@@ -108,7 +131,9 @@ function idleMitigations(blocks: ShotBlock[]): string[] {
     if (!b.baseline) continue
     for (const r of b.rows) {
       if (r.cell.group !== 'mitigation') continue
-      const v = verdictFor({ row: r, baseline: b.baseline, noiseMs: b.noiseMs, basis: b.basis })
+      const against = referenceFor(b, r)
+      if (!against) continue
+      const v = verdictFor({ row: r, baseline: against.ref, noiseMs: b.noiseMs, basis: b.basis })
       const rec = seen.get(r.cell.variant) ?? { ran: 0, idle: 0, backfired: 0 }
       rec.ran++
       if (v.kind === 'nothing') rec.idle++
@@ -173,6 +198,9 @@ export function formatReport(report: LabReport): string {
       // numbers a cell and twenty cells a run, which would make the one thing anybody pastes too big to
       // paste; everything a reader argues with is in the summary and the frames it points at.
       ...(r.trace ? { trace: traceSummary(r.trace), longFrameDetail: longFramesOf(r.trace) } : {}),
+      ...(r.coldComposes > 0
+        ? { coldComposeMs: +r.coldComposeMs.toFixed(3), coldComposes: r.coldComposes }
+        : {}),
     })),
     vsyncBound: blocks.filter((b) => b.vsync).map((b) => b.shot.id),
     skipped: report.cells.filter((c) => c.skip).map((c) => ({ key: c.key, reason: c.skip })),
