@@ -12,7 +12,7 @@ const result = (cell: Cell, meanMs: number): CellResult => ({
   paint: { msPerPaint: 4.2, paintedFrac: 1, calls: 318, skipped: 44, sections: { trees: 1.1 } },
   scene: { items: 640, ops: 1180, pathKb: 96, nodes: 2400 },
   tickMs: 0.8,
-  composeMs: 0.3,
+  composeMs: 0.3, composes: 12, msPerCompose: 9,
   busyMs: 5,
 })
 
@@ -61,7 +61,13 @@ describe('formatReport', () => {
 
   it('carries compose time as its own column, the one clock a compose-time mitigation reports to', () => {
     expect(text).toContain('comp ms')
-    expect(text).toContain('compose 0.30ms/frame')
+  })
+
+  // A claim about composing is written per compose ("28ms on Monaco"), and the per-frame figure is that
+  // divided by however often the shot happened to compose. Both, or the claim cannot be checked.
+  it('reports what ONE compose cost, not only what composing cost a frame', () => {
+    expect(text).toContain('ms/comp')
+    expect(text).toContain('12 composes at 9.00ms each')
   })
 
   it('states the noise floor the verdicts were judged against', () => {

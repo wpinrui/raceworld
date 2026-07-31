@@ -379,6 +379,15 @@ export interface CellResult {
   /** Geometry rebuilt and paths warmed, per FRAME. The third main-thread clock, and the only one the
    *  two compose-time mitigations report to. */
   composeMs: number
+  /** Composes in the window, and what one of them cost.
+   *
+   *  Per FRAME is what a verdict needs, because that is the unit the other two clocks are in and the
+   *  unit a cell is judged in. Per COMPOSE is what a claim about composing is written in ("8ms on a GP
+   *  circuit, 28ms on Monaco"), and the two differ by however often the shot happened to compose, so a
+   *  mitigation whose whole subject is the cost of one compose cannot be checked against its own claim
+   *  without it. Both, therefore, from the same counter. */
+  composes: number
+  msPerCompose: number
   /** Main-thread time this cell spends per FRAME: the loop's tick, the paint commands and the composes,
    *  taken over frames rather than over paints so a frame that skipped its paint counts as having paid
    *  nothing for it. What the verdict falls back to when frame time has no headroom left to move in.
@@ -521,11 +530,12 @@ export interface Counters {
  *  frame, not before the warmup, or a cell's cpu time carries frames the design threw away. */
 export function cellMetrics(
   before: Counters, after: Counters, frames: number,
-): Pick<CellResult, 'paint' | 'tickMs' | 'composeMs' | 'busyMs'> {
+): Pick<CellResult, 'paint' | 'tickMs' | 'composeMs' | 'composes' | 'msPerCompose' | 'busyMs'> {
   const paints = after.n - before.n
   const f = Math.max(1, frames)
   const paintMs = Math.max(0, after.ms - before.ms)
   const composeMs = Math.max(0, after.composeSum - before.composeSum)
+  const composes = Math.max(0, after.composeN - before.composeN)
   const ticks = after.tickN - before.tickN
   const sections: Record<string, number> = {}
   for (const [k, v] of Object.entries(after.sections)) {
@@ -543,6 +553,8 @@ export function cellMetrics(
     },
     tickMs,
     composeMs: composeMs / f,
+    composes,
+    msPerCompose: composes > 0 ? composeMs / composes : 0,
     // Over FRAMES, like the paint term: a compose lands on one frame of the window and the question the
     // verdict asks is what the cell cost per frame, not what one compose cost.
     busyMs: tickMs + paintMs / f + composeMs / f,
@@ -663,6 +675,8 @@ export const COLUMNS: readonly Column[] = [
   // Beside the cpu total rather than folded into it, because it is the only column the geometry memo and
   // the warmed swap can move and it is a rounding error next to the paint on every other row.
   { key: 'compose', head: 'comp ms', width: 9, dp: 2, of: (r) => r.composeMs },
+  // What ONE compose cost, which is the unit every claim about composing is written in.
+  { key: 'perCompose', head: 'ms/comp', width: 9, dp: 2, of: (r) => r.msPerCompose },
   { key: 'calls', head: 'calls', width: 8, dp: 0, of: (r) => r.paint.calls },
 ]
 
@@ -671,7 +685,8 @@ export function baselineSummary(b: CellResult): string {
   return `scene ${b.scene.items} items, ${b.scene.ops} ops, ${b.scene.pathKb.toFixed(0)}KB paths, `
     + `${b.scene.nodes} nodes | tick ${b.tickMs.toFixed(2)}ms | `
     + `paint ${b.paint.msPerPaint.toFixed(2)}ms on ${(b.paint.paintedFrac * 100).toFixed(0)}% of frames`
-    + ` | ${b.paint.skipped} items skipped/paint | compose ${b.composeMs.toFixed(2)}ms/frame`
+    + ` | ${b.paint.skipped} items skipped/paint`
+    + ` | ${b.composes} composes at ${b.msPerCompose.toFixed(2)}ms each`
 }
 
 /** Group a finished run by shot, resolving each shot's baselines and its noise floor. */

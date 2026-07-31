@@ -156,7 +156,7 @@ const result = (cell: Cell, meanMs: number, busyMs = 5): CellResult => ({
   paint: { msPerPaint: 1, paintedFrac: 1, calls: 100, skipped: 0, sections: {} },
   scene: { items: 10, ops: 20, pathKb: 1, nodes: 100 },
   tickMs: 0.5,
-  composeMs: 0,
+  composeMs: 0, composes: 0, msPerCompose: 0,
   busyMs,
 })
 
@@ -233,6 +233,21 @@ describe('cellMetrics', () => {
     const one = cellMetrics(counters(), counters({ composeN: 1, composeSum: 90 }), 90)
     const many = cellMetrics(counters(), counters({ composeN: 30, composeSum: 90 }), 90)
     expect(one.composeMs).toBeCloseTo(many.composeMs, 9)
+  })
+
+  // And separately what ONE cost, because that is the unit every claim about composing is written in
+  // and the two differ by however often the shot happened to compose.
+  it('reports the cost of a single compose alongside the per-frame figure', () => {
+    const m = cellMetrics(counters(), counters({ composeN: 12, composeSum: 90 }), 90)
+    expect(m.composes).toBe(12)
+    expect(m.msPerCompose).toBeCloseTo(7.5, 9)
+    expect(m.composeMs).toBeCloseTo(1, 9)
+  })
+
+  it('reports no per-compose cost rather than dividing by nothing on a cell that composed nothing', () => {
+    const m = cellMetrics(counters(), counters({ composeSum: 0 }), 90)
+    expect(m.composes).toBe(0)
+    expect(m.msPerCompose).toBe(0)
   })
 
   it('leaves cpu time where it was on a cell that composed nothing', () => {
