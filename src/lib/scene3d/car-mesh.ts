@@ -269,13 +269,8 @@ export function buildCarMesh(colour: string): CarMesh {
   helmet.position.set(0, H(0.56), 228 - cz)
   group.add(helmet)
 
-  // Intakes read as OPENINGS: dark mouths floated just off their leading faces — the airbox above
-  // the helmet, one sidepod mouth per flank on the pods' angled fronts.
+  // Sidepod intakes read as OPENINGS: dark mouths floated just off the pods' angled fronts.
   const mouths = new GeometrySink()
-  mouths.quad(
-    v3(-8, H(0.65), 244 - cz), v3(8, H(0.65), 244 - cz),
-    v3(8, H(0.83), 247 - cz), v3(-8, H(0.83), 247 - cz),
-  )
   for (const sign of [-1, 1]) {
     mouths.quad(
       v3(sign * 35, H(0.16), 203.5 - cz), v3(sign * 69, H(0.16), 221.5 - cz),
@@ -284,33 +279,53 @@ export function buildCarMesh(colour: string): CarMesh {
   }
   group.add(mesh(mouths.build(), CARBON))
 
+  // The airbox mouth: an ELONGATED rounded triangle lying in the plane of the fin's front slope,
+  // apex up, so the bodywork visibly wraps the opening instead of wearing a sticker.
+  const intake = new GeometrySink()
+  {
+    const base = { y: H(0.645), z: 247.5 - cz }
+    const apex = { y: H(0.83), z: 257.5 - cz }
+    const at = (x: number, f: number): V3 =>
+      v3(x, base.y + (apex.y - base.y) * f, base.z + (apex.z - base.z) * f)
+    const rim: Array<[number, number]> = [
+      [0, 0.97], [3.5, 0.9], [6.5, 0.74], [8.2, 0.5], [9, 0.24], [7.6, 0.06], [4, 0.01],
+      [0, 0], [-4, 0.01], [-7.6, 0.06], [-9, 0.24], [-8.2, 0.5], [-6.5, 0.74], [-3.5, 0.9],
+    ]
+    const tris = THREE.ShapeUtils.triangulateShape(rim.map(([x, f]) => new THREE.Vector2(x, f)), [])
+    for (const [i, j, k] of tris) {
+      intake.tri(at(rim[i][0], rim[i][1]), at(rim[j][0], rim[j][1]), at(rim[k][0], rim[k][1]))
+    }
+  }
+  group.add(mesh(intake.build(), CARBON))
+
   // Floor, proud of the body's sides the way the drawn floor peeks past the coke bottle.
   const floor = new GeometrySink()
   box(floor, 60, 180, 0.03, 0.05, 190, 458)
   group.add(mesh(floor.build(), FLOOR))
 
-  // Front wing: the cascade climbs REARWARD from the lowest leading element, the drawn plan's
-  // colours kept per plate, endplates bookending the stack.
-  const wingF = [
-    { x0: 56, x1: 184, z0: 13, z1: 20, y: 0.045, colour: TERTIARY },
-    { x0: 44, x1: 196, z0: 21, z1: 30, y: 0.075, colour: sec },
-    { x0: 36, x1: 204, z0: 31, z1: 41, y: 0.105, colour },
-    { x0: 30, x1: 210, z0: 42, z1: 52, y: 0.135, colour: sec },
-  ]
-  for (const p of wingF) {
-    const s = new GeometrySink()
-    box(s, p.x0, p.x1, p.y, p.y + 0.02, p.z0, p.z1)
-    group.add(mesh(s.build(), p.colour))
+  // Front wing, shaped like the reference: one THIN full-width neutral plane low to the ground —
+  // bare where the pylons take it — with the sculpted lift built as taller cambered flap stacks
+  // OUTBOARD only, rising rearward over each wheel's approach.
+  const mainPlane = new GeometrySink()
+  box(mainPlane, 30, 210, 0.04, 0.052, 16, 50)
+  group.add(mesh(mainPlane.build(), TERTIARY))
+  for (const [x0, x1] of [[34, 96], [144, 206]] as const) {
+    const lower = new GeometrySink()
+    slopedPlate(lower, x0, x1, 22, 38, 0.055, 0.078, 0.018)
+    group.add(mesh(lower.build(), colour))
+    const upper = new GeometrySink()
+    slopedPlate(upper, x0 + 3, x1 - 3, 34, 50, 0.082, 0.118, 0.018)
+    group.add(mesh(upper.build(), sec))
   }
   for (const x of [28, 208]) {
     const s = new GeometrySink()
     box(s, x, x + 4, 0.03, 0.165, 9, 52)
     group.add(mesh(s.build(), TERTIARY))
   }
-  // The wing hangs off the nose on two vertical pylons, one either side of the spar.
+  // The wing hangs off the nose on two vertical pylons just ahead of the spar's droop.
   for (const x of [104, 130]) {
     const s = new GeometrySink()
-    box(s, x, x + 6, 0.14, 0.19, 34, 50)
+    box(s, x, x + 6, 0.052, 0.19, 24, 40)
     group.add(mesh(s.build(), colour))
   }
 
