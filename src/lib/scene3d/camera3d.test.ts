@@ -27,4 +27,13 @@ describe('frameOrtho', () => {
     expect(tilted.position.y).toBeLessThan(flat.position.y)
     expect([tilted.left, tilted.right, tilted.top, tilted.bottom]).toEqual([-50, 50, 25, -25])
   })
+
+  it('letterboxes into a given aspect instead of stretching', () => {
+    // The viewBox is 2:1; a square window must widen nothing and heighten the frustum.
+    const cam = frameOrtho(vb, 0, 1)
+    expect([cam.left, cam.right, cam.top, cam.bottom]).toEqual([-50, 50, 50, -50])
+    // A wider-than-viewBox window grows the width instead.
+    const wide = frameOrtho(vb, 0, 4)
+    expect([wide.left, wide.right, wide.top, wide.bottom]).toEqual([-100, 100, 25, -25])
+  })
 })

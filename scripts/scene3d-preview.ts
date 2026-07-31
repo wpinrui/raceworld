@@ -35,8 +35,27 @@ async function main() {
   })
   const viewer = resolve(OUT, 'scene3d-viewer.html')
   writeFileSync(viewer, '<!doctype html><html><head><meta charset="utf-8"><title>scene3d preview</title>'
-    + '<style>html,body{margin:0;background:#101318}canvas{display:block}</style></head>'
-    + `<body><canvas id="gl"></canvas><script>${bundle.outputFiles[0].text}</script></body></html>`)
+    + '<style>'
+    + 'html,body{margin:0;background:#101318;height:100%;overflow:hidden;color-scheme:dark}'
+    + 'canvas{display:block}'
+    + '#bar{position:fixed;top:0;left:0;right:0;z-index:1;display:flex;gap:8px;align-items:center;'
+    + 'padding:8px 10px;background:rgba(10,12,16,.85);font:13px system-ui,sans-serif;color:#FFFFFF}'
+    + '#bar select,#bar button{background:#1A1F27;color:#FFFFFF;border:1px solid #2A313C;'
+    + 'border-radius:4px;padding:4px 10px;font:inherit;cursor:pointer}'
+    + '#bar select:hover,#bar button:hover{border-color:#00D9FF}'
+    + '#bar select:focus-visible,#bar button:focus-visible{outline:1px solid #00D9FF;outline-offset:1px}'
+    + '#bar :disabled{color:#6B7280;border-color:#2A313C;cursor:default}'
+    + '#stat{margin-left:auto;color:#FFFFFF}'
+    + 'body.shot #bar{display:none}'
+    + '</style></head>'
+    + '<body><div id="bar">'
+    + '<select id="circuit"></select>'
+    + '<select id="mood"></select>'
+    + '<button id="top">Top</button>'
+    + '<button id="tilt">Tilt</button>'
+    + '<span id="stat"></span>'
+    + '</div><canvas id="gl"></canvas>'
+    + `<script>${bundle.outputFiles[0].text}</script></body></html>`)
 
   let browser = null
   for (const channel of ['msedge', 'chrome'] as const) {

@@ -13,14 +13,21 @@ export function parseViewBox(s: string, pad = 0): ViewBox3D {
 }
 
 /** An orthographic camera looking at the viewBox's centre: straight down at tilt 0, from screen-south
- *  as the tilt grows. The frustum stays the viewBox, so a tilted shot foreshortens the plan by the
- *  tilt's cosine instead of reframing it. */
-export function frameOrtho(vb: ViewBox3D, tiltDeg = 0): THREE.OrthographicCamera {
+ *  as the tilt grows. The frustum is the viewBox exactly, so a tilted shot foreshortens the plan by
+ *  the tilt's cosine instead of reframing it. Given an `aspect` (the viewer's window, say) the
+ *  frustum grows on one axis to letterbox the viewBox inside it instead of stretching it. */
+export function frameOrtho(vb: ViewBox3D, tiltDeg = 0, aspect?: number): THREE.OrthographicCamera {
   const cx = vb.x + vb.w / 2
   const cz = vb.y + vb.h / 2
   const d = 2 * Math.max(vb.w, vb.h)
   const t = (tiltDeg * Math.PI) / 180
-  const cam = new THREE.OrthographicCamera(-vb.w / 2, vb.w / 2, vb.h / 2, -vb.h / 2, 1, 4 * d)
+  let halfW = vb.w / 2
+  let halfH = vb.h / 2
+  if (aspect) {
+    if (aspect > halfW / halfH) halfW = halfH * aspect
+    else halfH = halfW / aspect
+  }
+  const cam = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 1, 4 * d)
   cam.position.set(cx, d * Math.cos(t), cz + d * Math.sin(t))
   cam.up.set(0, 0, -1)
   cam.lookAt(cx, 0, cz)
