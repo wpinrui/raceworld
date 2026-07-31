@@ -9,6 +9,11 @@
 // A pose is a pure function of the frame INDEX, which is what makes a cell reproducible: frame 40 of
 // one configuration frames exactly what frame 40 of every other one frames. Warmup frames arrive with a
 // negative index and simply start further back up the road.
+//
+// Every moving shot is also written at a CADENCE: metres a second, octaves a second, degrees a step. Not
+// one is written as a fraction of the cell. A shot posed off `i / n` covers its whole path in whatever
+// window it is handed, which makes the cell length part of the workload: the same shot at 90 frames and
+// at 300 is then two different gestures, and the longer run is not the finer measurement it looks like.
 
 import type { Camera } from './geom'
 
@@ -41,14 +46,50 @@ export const LAP_FRAMES = 5400
  *  measured window instead of being smeared across it. */
 const ROT_HOLD_FRAMES = 24
 const ROT_STEP_RAD = Math.PI / 12
+/** The rate every cadence below is written at. Nominal rather than measured: the lab runs uncapped, so a
+ *  cell that drops to 45fps takes longer in wall clock than the seconds these constants name. Anchoring
+ *  the poses to the INDEX is what keeps frame 40 of one cell framing what frame 40 of every other one
+ *  frames, and the seconds are how a gesture gets chosen and argued about. */
+const FRAME_HZ = 60
 /** Octaves the zoom shot sweeps down and back. Rungs are keyed in half-octaves, so three octaves is
- *  six bucket crossings each way: the recompose cadence a player produces looking for the field. */
+ *  six bucket crossings each way: the whole ladder, twice. */
 const ZOOM_OCTAVES = 3
+/** How fast the zoom shot travels, and the reason this file has a cadence section at all.
+ *
+ *  The shot used to pose off `i / n`, which put the entire out-and-back inside whatever window the cell
+ *  was given: at ninety frames that is six octaves in a second and a half, twelve bucket crossings, about
+ *  sixteen wheel notches a second. Nobody scrolls like that, so the cell was not measuring a zoom, and
+ *  raising its frame count did not sample the same workload more finely, it made the zoom slower. A rate
+ *  fixes both: the gesture is the same gesture whatever `n` is, and more frames are simply more of it.
+ *
+ *  One octave a second is two bucket crossings a second, about four wheel notches: a deliberate zoom out
+ *  to find the field rather than a flick. */
+const ZOOM_OCTAVES_PER_SEC = 1
+/** Frames one full out-and-back takes at that rate. A cell shorter than this measures part of the sweep,
+ *  a cell longer measures more than one, and neither changes what the shot is doing per frame. */
+export const ZOOM_SWEEP_FRAMES = Math.round((2 * ZOOM_OCTAVES * FRAME_HZ) / ZOOM_OCTAVES_PER_SEC)
+/** The wide shot's pan, there and back, in seconds. Same fault as the zoom and the same fix: its pan was
+ *  a fraction of the cell rather than a speed, so the camera crossed the stage faster the shorter the
+ *  cell was. Two seconds across a tenth of the stage is a drag rather than a flick. */
+const WIDE_PAN_SECONDS = 2
+const WIDE_PAN_FRAMES = Math.round(WIDE_PAN_SECONDS * FRAME_HZ)
 
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+/** Position within a repeating cadence, as 0..1. Warmup arrives with a negative index and holds at the
+ *  phase the measured window opens on, rather than running the gesture backwards into it. */
+const phaseOf = (i: number, periodFrames: number): number => {
+  const f = Math.max(0, i) / periodFrames
+  return f - Math.floor(f)
+}
 
 export function zoomForPxPerM(pxPerM: number, w: ShotWorld): number {
   return (pxPerM * w.metresPerUnit * w.vb.w) / Math.max(1, w.stage.w)
+}
+
+/** The scale a camera is actually at, which is the above run backwards. The per-frame trace needs it and
+ *  gets it from the POSE rather than from the renderer: a shot is a pure function of the frame index, so
+ *  what the camera was showing on frame 40 is knowable without asking the map anything. */
+export function pxPerMOf(z: number, w: ShotWorld): number {
+  return (z * Math.max(1, w.stage.w)) / (w.metresPerUnit * w.vb.w)
 }
 
 /** The camera that puts a world point at the centre of the stage. The follow camera's own arithmetic. */
@@ -166,23 +207,27 @@ export const SHOTS: readonly Shot[] = [
     label: 'Whole circuit',
     note: 'the full track fitted to the stage, panning: the most draw calls a frame ever pays',
     moves: true, repaints: true, recomposes: false, whole: true,
-    pose: (i, n, w) => {
+    pose: (i, _n, w) => {
       const cam = centreOn(w.trackAt(0), 1, w.rot0, w)
-      // A slow pan across a tenth of the stage. At this scale nothing crosses a rung or a disc, so the
-      // camera moving is the whole of what separates this from the parked shot.
-      return { ...cam, x: cam.x + Math.sin((clamp01(i / Math.max(1, n))) * Math.PI * 2) * w.stage.w * 0.05 }
+      // A slow pan across a tenth of the stage, at a speed rather than at a fraction of the cell. At this
+      // scale nothing crosses a rung or a disc, so the camera moving is the whole of what separates this
+      // from the parked shot.
+      const pan = Math.sin(phaseOf(i, WIDE_PAN_FRAMES) * Math.PI * 2) * w.stage.w * 0.05
+      return { ...cam, x: cam.x + pan }
     },
   },
   {
     id: 'zoom',
     label: 'Zoom sweep',
-    note: `racing scale out ${ZOOM_OCTAVES} octaves and back: every detail rung crossed twice`,
+    note: `racing scale out ${ZOOM_OCTAVES} octaves and back at ${ZOOM_OCTAVES_PER_SEC} octave a second:`
+      + ` a full sweep is ${ZOOM_SWEEP_FRAMES} frames`,
     moves: true, repaints: true, recomposes: true, whole: false,
-    pose: (i, n, w) => {
-      // Clamped, so warmup's negative index holds the shot at its starting scale rather than sweeping
-      // out past the camera's own zoom limits before the measured frames begin.
-      const t = clamp01(i / Math.max(1, n))
-      const tri = 1 - Math.abs(1 - 2 * t) // 0 -> 1 -> 0
+    pose: (i, _n, w) => {
+      // Periodic and paced, NOT `i / n`. The sweep takes as long as it takes at the shipped cadence and
+      // repeats, so the cell's length decides how much of the gesture is sampled and never how fast the
+      // gesture is. Warmup holds at the starting scale rather than sweeping out past the camera's own
+      // zoom limits before the measured frames begin.
+      const tri = 1 - Math.abs(1 - 2 * phaseOf(i, ZOOM_SWEEP_FRAMES)) // 0 -> 1 -> 0
       // Racing scale at both ends and fully out in the middle, which is the gesture a player makes
       // looking for the field: out to find it, back in to watch it.
       const px = RACE_PX_PER_M * 2 ** (-ZOOM_OCTAVES * tri)

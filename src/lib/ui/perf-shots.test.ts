@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  LAP_FRAMES, RACE_PX_PER_M, SHOTS, centreOn, shotById, trackFeatures, zoomForPxPerM,
-  type ShotWorld,
+  LAP_FRAMES, RACE_PX_PER_M, SHOTS, ZOOM_SWEEP_FRAMES, centreOn, pxPerMOf, shotById, trackFeatures,
+  zoomForPxPerM, type ShotWorld,
 } from './perf-shots'
+import { lodBucket } from './lod'
 
 const world = (over: Partial<ShotWorld> = {}): ShotWorld => ({
   vb: { x: 0, y: 0, w: 1000, h: 600 },
@@ -76,6 +77,64 @@ describe('shots', () => {
 
   it('gives every shot a distinct id', () => {
     expect(new Set(SHOTS.map((s) => s.id)).size).toBe(SHOTS.length)
+  })
+
+  it('turns a zoom back into the scale it produces, which is what the trace records', () => {
+    const w = world()
+    expect(pxPerMOf(zoomForPxPerM(0.37, w), w)).toBeCloseTo(0.37, 9)
+  })
+})
+
+// The fault this section exists for: a pose written as `i / n` puts its whole path inside whatever
+// window the cell is given, so the cell length becomes part of the workload. The zoom shot had it
+// (six octaves in a second and a half at the shipped ninety frames, about sixteen wheel notches a
+// second) and so did the wide shot's pan. Every moving shot now travels at a rate.
+describe('shot cadence', () => {
+  const w = world()
+  const pxAt = (id: 'zoom', i: number, n: number) => pxPerMOf(shotById(id).pose(i, n, w).z, w)
+
+  it('sweeps the zoom at the same rate whatever the cell length is', () => {
+    for (const i of [0, 15, 45, 89]) {
+      expect(pxAt('zoom', i, 360)).toBeCloseTo(pxAt('zoom', i, 90), 9)
+      expect(pxAt('zoom', i, 90)).toBeCloseTo(pxAt('zoom', i, 600), 9)
+    }
+  })
+
+  it('crosses two detail buckets a second, which is about four wheel notches', () => {
+    const buckets = Array.from({ length: 61 }, (_, i) => lodBucket(pxAt('zoom', i, 90)))
+    const crossings = buckets.filter((b, i) => i > 0 && b !== buckets[i - 1]).length
+    expect(crossings).toBe(2)
+  })
+
+  it('opens and closes a full sweep at racing scale, fully out at its middle', () => {
+    expect(pxAt('zoom', 0, 90)).toBeCloseTo(RACE_PX_PER_M, 9)
+    expect(pxAt('zoom', ZOOM_SWEEP_FRAMES / 2, 90)).toBeCloseTo(RACE_PX_PER_M / 8, 9)
+    expect(pxAt('zoom', ZOOM_SWEEP_FRAMES, 90)).toBeCloseTo(RACE_PX_PER_M, 9)
+  })
+
+  it('covers only as much of the sweep as the cell has frames for, and repeats past it', () => {
+    // Ninety frames is a quarter of the sweep: out about an octave and a half, and no further. The old
+    // pose reached full extent in every cell, however short.
+    const ninety = Array.from({ length: 90 }, (_, i) => pxAt('zoom', i, 90))
+    expect(Math.min(...ninety)).toBeGreaterThan(RACE_PX_PER_M / 4)
+    expect(pxAt('zoom', ZOOM_SWEEP_FRAMES + 30, 90)).toBeCloseTo(pxAt('zoom', 30, 90), 9)
+  })
+
+  it('pans the wide shot at a speed rather than at a fraction of the cell', () => {
+    const wide = shotById('wide')
+    for (const i of [0, 20, 55, 89]) {
+      expect(wide.pose(i, 300, w).x).toBeCloseTo(wide.pose(i, 90, w).x, 9)
+    }
+    // And it is still a pan: the camera is somewhere else a second in.
+    expect(wide.pose(30, 90, w).x).not.toBeCloseTo(wide.pose(0, 90, w).x, 6)
+  })
+
+  it('holds every shot at its opening pose through warmup, however long the warmup is', () => {
+    for (const id of ['zoom', 'wide'] as const) {
+      const shot = shotById(id)
+      expect(shot.pose(-20, 90, w)).toEqual(shot.pose(0, 90, w))
+      expect(shot.pose(-60, 90, w)).toEqual(shot.pose(0, 90, w))
+    }
   })
 
   it('aims the parked shot at the pit straight, which is where a serviced car sits', () => {
