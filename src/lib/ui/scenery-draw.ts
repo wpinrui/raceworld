@@ -742,6 +742,11 @@ export interface SceneOpts {
   /** A stand casts from its rear, a building from its roofline. */
   solidHeightM: (r: SceneryRect) => number
   trees: SceneryTree[]
+  /** Categories to leave out entirely, by the same names the map's layer switches use. The SVG layers
+   *  have always taken a hide set; the canvas took only `ground` and `trees`, so ablating a grandstand
+   *  or a scenery shadow changed the SVG picture and left the canvas one identical. A perf run then
+   *  reported that hiding the buildings cost nothing, which was true and useless. */
+  hide?: ReadonlySet<string>
   /** Drop everything outside this disc. The canvas walks every op every frame, so anything nowhere
    *  near the shot is pure path setup; the disc is the trees' — bigger than the viewport, moved with
    *  hysteresis — so nothing pops inside the frame. Each entry's own radius is respected, so a
@@ -1056,16 +1061,21 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
   mark('kerbs')
   if (o.kerbs) items.push(...o.kerbs)
 
+  const shown = (piece: string) => !o.hide?.has(piece)
   mark('shadows')
-  // Shadows before every solid, so nothing casts over the thing standing on it. No gate: each shadow
-  // already asked the ladder for itself, and a whole grove's is ONE op however many trees are in it.
-  items.push(...batchFlat(keep(s.shadowGroups)))
-  const treeShade = treeShadowOp(o.trees, treeOpts)
-  if (treeShade) items.push(treeShade)
+  // Shadows before every solid, so nothing casts over the thing standing on it. No ladder gate: each
+  // shadow already asked for itself, and a whole grove's is ONE op however many trees are in it.
+  if (shown('shadows')) {
+    items.push(...batchFlat(keep(s.shadowGroups)))
+    const treeShade = treeShadowOp(o.trees, treeOpts)
+    if (treeShade) items.push(treeShade)
+  }
   mark('solids')
-  items.push(...batchFlat(keep(s.wallGroups)))
-  items.push(...batchFlat(keep(s.standGs)))
-  items.push(...batchFlat(keep(s.roofGs)))
+  if (shown('buildings')) items.push(...batchFlat(keep(s.wallGroups)))
+  if (shown('stands')) {
+    items.push(...batchFlat(keep(s.standGs)))
+    items.push(...batchFlat(keep(s.roofGs)))
+  }
   // Trees and MARSHAL POSTS in one depth order. Posts stand out among the trees, so drawing every post
   // after every tree let a 2.8m hut paint over a 12m tree standing in front of it, which is the exact
   // thing depth sorting exists to prevent. Fences stay last and unsorted: they genuinely do line the
@@ -1092,8 +1102,12 @@ export function sceneryScene(scenery: Scenery, o: SceneOpts, marks?: SceneMark[]
     if (ti < trees.length) items.push(...treeSolidOps(trees.slice(ti), treeOpts))
   }
   mark('furniture')
-  items.push(...keep(s.runShadows))
-  items.push(...keep(s.fenceRuns))
+  if (shown('furniture')) {
+    // The fence's own shadow goes with the fence, not with the scenery shadows: hiding the barriers
+    // and leaving their shadows lying on the tarmac is not an ablation of anything.
+    if (shown('shadows')) items.push(...keep(s.runShadows))
+    items.push(...keep(s.fenceRuns))
+  }
   // The start's own paint, over everything, as the SVG layer has always drawn it.
   mark('road')
   if (o.overlay) items.push(...o.overlay)

@@ -76,6 +76,14 @@ describe('planCells', () => {
     for (const id of inside) expect(racing.find((c) => c.variant === id)!.skip).toBeUndefined()
   })
 
+  it('can answer every mitigation across the default plan, which is the point of the defaults', () => {
+    const cells = planCells(DEFAULT_LAB_CONFIG, 20)
+    for (const id of DEFAULT_LAB_CONFIG.variants) {
+      const ran = cells.filter((c) => c.variant === id && !c.skip)
+      expect(ran.length, `${id} is skipped in every default shot`).toBeGreaterThan(0)
+    }
+  })
+
   it('splits the static world from the moving one, which no single category can', () => {
     const cells = planCells({ ...cfg, shots: ['racing'], variants: ['hide:static', 'hide:dynamic'] }, 20)
     expect(cells.find((c) => c.variant === 'hide:static')!.config.hide).toContain('trees')
@@ -239,14 +247,26 @@ describe('verdicts', () => {
   it('judges on main-thread time when the shot had no frame-time headroom', () => {
     // Same frame time either way, which is what a vsync ceiling does to every row on a fast machine.
     const row = result(mitigation, 16, 9)
-    expect(verdictFor({ row: row, baseline: base, noiseMs: 0.2, basis: false ? 'cpu' : 'frame' }).kind).toBe('nothing')
-    const v = verdictFor({ row: row, baseline: base, noiseMs: 0.2, basis: true ? 'cpu' : 'frame' })
+    expect(verdictFor({ row: row, baseline: base, noiseMs: 0.2, basis: 'frame' }).kind).toBe('nothing')
+    const v = verdictFor({ row: row, baseline: base, noiseMs: 0.2, basis: 'cpu' })
     expect(v.kind).toBe('saves')
     expect(v.text).toBe('saves 4.00ms cpu')
   })
 
   it('still calls a mitigation idle when neither frame time nor cpu time moved', () => {
-    expect(verdictFor({ row: result(mitigation, 16, 5.1), baseline: base, noiseMs: 0.2, basis: true ? 'cpu' : 'frame' }).kind).toBe('nothing')
+    expect(verdictFor({ row: result(mitigation, 16, 5.1), baseline: base, noiseMs: 0.2, basis: 'cpu' }).kind).toBe('nothing')
+  })
+
+  it('refuses a cpu verdict on the SVG row, whose cost is not on the canvas painter\'s clock', () => {
+    const svg = planCells({ ...DEFAULT_LAB_CONFIG, shots: ['racing'], variants: ['renderer:svg'] }, 20)
+      .find((c) => c.variant === 'renderer:svg')!
+    // Its busyMs is the race tick alone, so a raw cpu comparison reads the old renderer as a saving.
+    const row = result(svg, 16, 0.8)
+    expect(verdictFor({ row, baseline: base, noiseMs: 0.2, basis: 'cpu' }).text)
+      .toBe('not comparable on cpu time')
+    // On frame time it is comparable, and says what it should.
+    expect(verdictFor({ row: result(svg, 24, 0.8), baseline: base, noiseMs: 0.2, basis: 'frame' }).kind)
+      .toBe('backfires')
   })
 
   it('takes the noise floor from the two baselines, with a floor under it', () => {

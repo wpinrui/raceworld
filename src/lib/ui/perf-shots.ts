@@ -139,21 +139,26 @@ export const SHOTS: readonly Shot[] = [
     id: 'racing',
     label: 'Racing corner',
     note: 'follow camera at racing scale through the circuit\'s tightest corner',
-    moves: true, repaints: true, recomposes: true, whole: false,
+    // NOT a recomposing shot, and that is measured rather than assumed: the cull disc only steps once
+    // the camera has left 30% of its radius, which at racing scale is about 175m, and a 110-frame cell
+    // covers 2% of a lap. The zoom holds, so no detail rung moves either. Nothing composes in the
+    // window, which is why the compose-time mitigations are skipped here instead of coming back
+    // "no effect" and being printed as mitigations that earned nothing.
+    moves: true, repaints: true, recomposes: false, whole: false,
     pose: (i, n, w) => sweep(w.cornerF, i, n, w),
   },
   {
     id: 'pit',
     label: 'Pit straight',
     note: 'the same camera down the pit straight, with the complex and the garages in shot',
-    moves: true, repaints: true, recomposes: true, whole: false,
+    moves: true, repaints: true, recomposes: false, whole: false,
     pose: (i, n, w) => sweep(w.pitF, i, n, w),
   },
   {
     id: 'start',
     label: 'Start line',
     note: 'the chequer, the grid boxes and the packed field at racing scale',
-    moves: true, repaints: true, recomposes: true, whole: false,
+    moves: true, repaints: true, recomposes: false, whole: false,
     pose: (i, n, w) => sweep(0, i, n, w),
   },
   {

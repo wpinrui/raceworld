@@ -38,6 +38,9 @@ const GROUP_LABEL: Record<VariantGroup, string> = {
 
 const GROUPS = Object.keys(GROUP_LABEL) as VariantGroup[]
 
+/** Below this a cell cannot carry a 1% low worth the name, let alone a stable mean. */
+const MIN_FRAMES = 30
+
 const mmss = (s: number) => `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, '0')}s`
 
 function Box({ on, label, note, onClick }: {
@@ -101,9 +104,14 @@ function ConfigPane({ config, setConfig }: {
             <label key={key} className="flex items-center gap-2 text-[12px] text-[#FFFFFF]">
               {label}
               <input
-                type="number" min={key === 'frames' ? 30 : 0} max={600} step={10}
+                type="number" min={key === 'frames' ? MIN_FRAMES : 0} max={600} step={10}
                 value={config[key]}
-                onChange={(e) => setConfig({ ...config, [key]: Math.max(0, Number(e.target.value) || 0) })}
+                onChange={(e) => setConfig({
+                  ...config,
+                  // Clamped to what the field advertises: a cell of nought frames measures nothing and
+                  // ends the run on its first cell with a report of no rows and no reason given.
+                  [key]: Math.max(key === 'frames' ? MIN_FRAMES : 0, Number(e.target.value) || 0),
+                })}
                 className="w-16 rounded border border-[#2A3142] bg-[#151A22] px-1.5 py-1 text-[#FFFFFF]"
               />
             </label>
@@ -138,9 +146,13 @@ function ConfigPane({ config, setConfig }: {
   )
 }
 
-/** Tailwind widths for the shared column model, in the same order. The numbers and their precision
- *  live in perf-bench.ts, so this table and the pasted one cannot disagree about either. */
-const COL_W = ['w-14', 'w-16', 'w-16', 'w-16', 'w-12', 'w-16', 'w-16']
+/** Tailwind widths for the shared column model, BY KEY: a positional list beside COLUMNS renders
+ *  `className="undefined"` the first time a column is added. The numbers and their precision live in
+ *  perf-bench.ts, so this table and the pasted one cannot disagree about either. */
+const COL_W: Record<string, string> = {
+  fps: 'w-14', low1: 'w-16', p95: 'w-16', max: 'w-16', long: 'w-12', cpu: 'w-16', calls: 'w-16',
+}
+const widthOf = (key: string) => COL_W[key] ?? 'w-16'
 
 function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
   const rows = [b.baseline, ...b.rows, b.repeat]
@@ -163,7 +175,7 @@ function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
       )}
       <div className="flex border-b border-[#2A3142] pb-1 text-[#FFFFFF]">
         <span className="flex-1">configuration</span>
-        {COLUMNS.map((c, i) => <span key={c.key} className={`${COL_W[i]} text-right`}>{c.head}</span>)}
+        {COLUMNS.map((c) => <span key={c.key} className={`${widthOf(c.key)} text-right`}>{c.head}</span>)}
         <span className="w-40 pl-3">verdict</span>
       </div>
       {rows.map((r, i) => {
@@ -184,8 +196,8 @@ function ShotBlockView({ b }: { b: PerfLab['blocks'][number] }) {
             )}
             <div className="flex border-b border-[#1B2130] py-0.5">
               <span className="flex-1 truncate text-[#FFFFFF]">{r.cell.label}</span>
-              {COLUMNS.map((c, j) => (
-                <span key={c.key} className={`${COL_W[j]} text-right text-[#FFFFFF]`}>
+              {COLUMNS.map((c) => (
+                <span key={c.key} className={`${widthOf(c.key)} text-right text-[#FFFFFF]`}>
                   {c.of(r).toFixed(c.dp)}
                 </span>
               ))}

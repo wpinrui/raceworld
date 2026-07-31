@@ -1731,6 +1731,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const marks: SceneMark[] = []
     const items = sceneryScene(scenery, {
       u, lighting, view: viewAz, ground: !hidden.has('ground'), extrude: EXTRUDE,
+      // The whole hidden set, not just the two categories the canvas used to read. Ablating a
+      // grandstand used to change the SVG picture and leave the canvas one untouched, so a perf run
+      // reported that hiding them cost nothing.
+      hide: hidden as ReadonlySet<string>,
       // The detail ladder's input. Bucketed by the scene cache, so this changes the picture at
       // discrete scales rather than continuously as the camera zooms.
       pxPerM: scenePxPerM,
@@ -1941,8 +1945,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }),
     world: perfWorld,
     setCamera: (cam) => {
+      const turned = cam.rot !== camRef.current.rot
       camRef.current = { ...cam }
       applyCam()
+      // A bearing only reaches the SOLIDS through `setCamRot`, which the wheel and pointer handlers
+      // call once a gesture settles. `applyCam` turns the transform and nothing else, so without this
+      // the bearing shot would rotate the picture and never rebuild a single thing that carries
+      // height, which is the entire cost it exists to measure.
+      if (turned) settleRot()
     },
     applyConfig: (cfg) => {
       setPerfFlags(cfg.flagsOff)

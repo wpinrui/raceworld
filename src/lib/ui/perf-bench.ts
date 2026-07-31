@@ -142,7 +142,11 @@ export const VARIANTS: readonly Variant[] = [
 ]
 
 export const DEFAULT_VARIANTS: string[] = VARIANTS.filter((v) => v.group === 'mitigation').map((v) => v.id)
-export const DEFAULT_SHOTS: ShotId[] = ['racing', 'pit', 'wide']
+/** The default plan. Four shots rather than three, and the two additions are not decoration: the
+ *  parked camera is the ONLY shot the repaint guard can act in, and the zoom sweep is the only one
+ *  that composes anything, so without them the shipped run cannot answer three of the eleven
+ *  mitigations at all. */
+export const DEFAULT_SHOTS: ShotId[] = ['racing', 'pit', 'wide', 'zoom', 'still']
 
 export interface LabConfig {
   shots: ShotId[]
@@ -391,6 +395,13 @@ export interface VerdictInput {
 }
 
 export function verdictFor({ row, baseline, noiseMs, basis }: VerdictInput): Verdict {
+  // The cpu clock is the CANVAS painter's own commands. The SVG renderer reports to it not at all, so
+  // its row's cpu time is the race tick alone against a baseline of tick plus paint: the comparison
+  // comes out large and negative and reads the renderer this branch replaced as a main-thread saving.
+  // It is only ever comparable on frame time, which is where its cost actually lands.
+  if (basis === 'cpu' && row.cell.config.canvas === false) {
+    return { kind: 'nothing', text: 'not comparable on cpu time', deltaMs: 0 }
+  }
   const vsync = basis === 'cpu'
   const deltaMs = vsync
     ? row.busyMs - baseline.busyMs

@@ -149,10 +149,13 @@ export function usePerfLab(harness: PerfLabHarness, cars: number) {
           status: `${shotById(cell.shot).label} - ${cell.label}`,
         }))
         h.applyConfig(cell.config)
-        // Two frames for the render the configuration change commits, then a forced compose so the
-        // scene being measured is the scene the configuration describes.
+        // Two frames for the render the configuration change commits, then the shot's own opening
+        // camera, then a forced compose. The camera comes BEFORE the settle deliberately: a compose is
+        // against the cull disc the camera left behind, so settling first would compose the previous
+        // cell's shot and hand this one its recompose to pay inside the window.
         await waitFrames(2)
         if (abortRef.current) break
+        h.setCamera(shotById(cell.shot).pose(-config.warmup, config.frames, world))
         await h.settle()
         if (abortRef.current) break
         const done = await runCell(cell, world, config)
