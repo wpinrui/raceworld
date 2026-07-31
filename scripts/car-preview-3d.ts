@@ -37,20 +37,21 @@ async function main() {
     + 'canvas{display:block}'
     + '#bar{position:fixed;top:0;left:0;right:0;z-index:1;display:flex;gap:8px;align-items:center;'
     + 'padding:8px 10px;background:rgba(10,12,16,.85);font:13px system-ui,sans-serif;color:#FFFFFF}'
-    + '#bar button,#bar input[type=color]{background:#1A1F27;color:#FFFFFF;border:1px solid #2A313C;'
-    + 'border-radius:4px;padding:4px 10px;font:inherit;cursor:pointer;height:28px}'
-    + '#bar input[type=color]{padding:2px 4px;width:44px}'
-    + '#bar button:hover,#bar input[type=color]:hover{border-color:#00D9FF}'
-    + '#bar button.on{border-color:#00D9FF;color:#00D9FF}'
+    + '#bar select{background:#1A1F27;color:#FFFFFF;border:1px solid #2A313C;'
+    + 'border-radius:4px;padding:4px 8px;font:inherit;cursor:pointer;height:28px}'
+    + '#bar select:hover{border-color:#00D9FF}'
+    + '#bar label{display:flex;gap:6px;align-items:center}'
+    + '#bar input[type=range]{width:150px;accent-color:#00D9FF}'
+    + '#swatch{display:flex;gap:3px;margin-left:4px}'
+    + '#swatch i{width:16px;height:16px;border-radius:3px;border:1px solid #2A313C}'
     + 'body.shot #bar{display:none}'
     + '</style></head>'
     + '<body><div id="bar">'
-    + '<button id="ours">Ours</button>'
-    + '<button id="model">Model</button>'
-    + '<button id="both">Both</button>'
-    + '<input id="colour" type="color" value="#E8442E">'
-    + '<button id="steer">Steer</button>'
-    + '<button id="spin">Spin</button>'
+    + '<label>Year <select id="year"></select></label>'
+    + '<label>Team <select id="team"></select></label>'
+    + '<span id="swatch"></span>'
+    + '<label>Steer <input id="steer" type="range" min="-24" max="24" step="1" value="0"></label>'
+    + '<span id="steerv">0&deg;</span>'
     + '</div><canvas id="gl"></canvas>'
     + `<script>${bundle.outputFiles[0].text}</script></body></html>`)
 
@@ -126,7 +127,7 @@ async function main() {
       console.log(`${angle.padEnd(6)} -> ${out || 'UNWRITABLE: close some image viewers'}`)
     }
   } else {
-    for (const angle of ['front', 'side', 'rear', 'top', 'cockpit', 'cockrear', 'cockside', 'cockfront']) {
+    for (const angle of ['front', 'side', 'rear', 'top', 'under', 'cockpit', 'cockrear', 'cockside', 'cockfront']) {
       const file = await shoot(`angle=${angle}&colour=${colour}${steer}${model}`, `car-3d-${angle}`)
       if (file) console.log(`${angle.padEnd(6)} -> ${file}`)
     }

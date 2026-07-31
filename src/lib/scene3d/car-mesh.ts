@@ -36,13 +36,14 @@ const BODY: Station[] = [
   // staying chassis-narrow longer so it tapers into the pods further back.
   // The cone runs FLAT at 0.30 from the chassis until it clears the front upper arm (z~50), then
   // slants down to the tip: three co-linear stations pin the flat, the knee sits at the arm.
-  // The tip is a ROUNDED CAP, not a chopped-off cone. Three stations shrink the section on a
-  // circular arc about z-22, width and height together so it closes as a dome rather than a
-  // flattened blade, and the loft's own end cap lands as a disc small enough to disappear.
-  { z: -24.9, half: 0.77, top: 0.1957, bottom: 0.1893 },
-  { z: -24.4, half: 1.8, top: 0.1996, bottom: 0.1854 },
-  { z: -23.4, half: 2.66, top: 0.2036, bottom: 0.1814 },
-  { z: -22, half: 3, top: 0.205, bottom: 0.18 },
+  // The tip is a plain ROUNDED END: the section shrinks about a constant centreline at 0.1955,
+  // keeping its own width-to-height ratio the whole way, so it closes the way the nose's own
+  // ellipse would. Capping a narrow z-22 station and then flaring hard to half 9 at z-18 is what
+  // made a snout: a thin muzzle poking out of a body that was still full width behind it.
+  { z: -24, half: 0.9, top: 0.1985, bottom: 0.1925 },
+  { z: -23.3, half: 2.9, top: 0.2013, bottom: 0.1897 },
+  { z: -22, half: 5.0, top: 0.2058, bottom: 0.1852 },
+  { z: -20, half: 7.3, top: 0.2105, bottom: 0.1805 },
   { z: -18, half: 9, top: 0.215, bottom: 0.176 },
   { z: -8, half: 12, top: 0.235, bottom: 0.172 },
   { z: 18, half: 14, top: 0.27, bottom: 0.168 },
@@ -120,6 +121,27 @@ const POD: PodStation[] = [
   { z: 366, inner: 15, outer: 23, top: 0.288, bottom: 0.175, chan: 0.04 },
   { z: 384, inner: 13, outer: 17, top: 0.272, bottom: 0.205, chan: 0 },
 ]
+
+/** The pod's TOP SURFACE height at a point on it. Anything sitting on the pod reads this rather
+ *  than a fixed number: the top line falls the pod's whole length AND falls again outboard of the
+ *  crown, so one height for three fins leaves the outer two hanging in the air. */
+function podTopAt(xAbs: number, z: number): number {
+  let i = 0
+  while (i + 2 < POD.length && POD[i + 1].z < z) i++
+  const a = POD[i]
+  const b = POD[i + 1]
+  const t = Math.min(1, Math.max(0, (z - a.z) / (b.z - a.z)))
+  const mix = (u: number, v: number) => u + (v - u) * t
+  const inner = mix(a.inner, b.inner)
+  const outer = mix(a.outer, b.outer)
+  const top = mix(a.top, b.top)
+  const bottom = mix(a.bottom, b.bottom)
+  const at = (f: number) => inner + (outer - inner) * f
+  const xCrown = at(0.55)
+  if (xAbs <= xCrown) return top
+  const shoulder = bottom + (top - bottom) * 0.8
+  return top + (shoulder - top) * Math.min(1, (xAbs - xCrown) / (at(0.95) - xCrown))
+}
 
 /** Rounded-triangle rim, apex up: (x in ninths of the half-width, height fraction). ONE shape for
  *  the airbox mouth and the spine it opens in: the hole and the body agree by construction. */
@@ -270,22 +292,34 @@ function wingElementGeometry(stations: WingStation[], sign: number): THREE.Buffe
 /** The FLOOR in plan: it narrows toward its leading edge and again into the diffuser's throat,
  *  rather than being a rectangular slab with a blunt end under the nose. */
 const FLOOR_PLAN = [
-  { z: 190, half: 40 },
-  { z: 206, half: 52 },
-  { z: 230, half: 58 },
-  { z: 300, half: 60 },
-  { z: 360, half: 58 },
-  { z: 402, half: 52 },
+  { z: 190, half: 40, tun: 0 },
+  { z: 206, half: 52, tun: 0.35 },
+  { z: 230, half: 58, tun: 1 },
+  { z: 300, half: 60, tun: 1 },
+  { z: 360, half: 58, tun: 1 },
+  { z: 402, half: 52, tun: 0.3 },
 ]
 const FLOOR_TOP = 0.05
+const FLOOR_BOT = 0.03
+/** The PLANK: the wooden skid block down the centreline, the strip the underside is measured by.
+ *  It also sets where the tunnels have to stop, since they run either side of it. */
+const PLANK = { half: 15, z0: 202, z1: 396, bottom: 0.0205 }
 
 function floorGeometry(): THREE.BufferGeometry {
   const s = new GeometrySink()
   skinRings(s, densifyBy(FLOOR_PLAN, 4).map((st) => {
     const z = st.z - SPRITE.cy
+    // The underside is not a flat plate: a VENTURI TUNNEL is recessed either side of the plank's
+    // land, so from below the floor reads as two channels rather than one black sheet.
+    const d = 0.011 * st.tun
+    const xo = Math.min(st.half - 6, 50)
+    const xi = PLANK.half + 2
+    const lo = (x: number, y: number) => v3(x, H(y), z)
     return [
-      v3(-st.half, H(0.03), z), v3(st.half, H(0.03), z),
-      v3(st.half, H(FLOOR_TOP), z), v3(-st.half, H(FLOOR_TOP), z),
+      lo(-st.half, FLOOR_BOT), lo(-xo - 2, FLOOR_BOT), lo(-xo, FLOOR_BOT + d),
+      lo(-xi - 1, FLOOR_BOT + d), lo(-xi + 1, FLOOR_BOT), lo(xi - 1, FLOOR_BOT),
+      lo(xi + 1, FLOOR_BOT + d), lo(xo, FLOOR_BOT + d), lo(xo + 2, FLOOR_BOT), lo(st.half, FLOOR_BOT),
+      lo(st.half, FLOOR_TOP), lo(-st.half, FLOOR_TOP),
     ]
   }))
   return s.build()
@@ -409,21 +443,32 @@ function diffuserCrown(z: number): number {
 function diffuserGeometry(): THREE.BufferGeometry {
   const s = new GeometrySink()
   const { half, floor, terraces } = DIFFUSER
-  skinRings(s, densifyBy(DIFFUSER_ROOF, 4).map((st) => {
+  // An OPEN strip, not a closed ring: up one outer wall, across the terraced ceiling, down the
+  // other. A diffuser has no bottom. Closing the ring laid a slab across the underside at floor
+  // height, and that slab was coplanar with the floor plate's own underside AND with the bottom
+  // edge of every strake standing on it, which is three surfaces sharing one plane.
+  const rows = densifyBy(DIFFUSER_ROOF, 4).map((st) => {
     const z = st.z - SPRITE.cy
     const y = (frac: number) => H(floor + (st.crown - floor) * frac)
     // Each terrace contributes its tread and the riser that lifts onto the next one inboard.
-    const half9: Array<[number, number]> = []
+    const left: Array<[number, number]> = []
     for (let i = terraces.length - 1; i >= 0; i--) {
       const [edge, frac] = terraces[i]
-      half9.push([edge, frac], [i === 0 ? 0 : terraces[i - 1][0], frac])
+      left.push([-edge, frac], [i === 0 ? 0 : -terraces[i - 1][0], frac])
     }
-    // Bottom left to right, up the right wall, then the terraced ceiling back across to the left.
-    const ring = [v3(-half, H(floor), z), v3(half, H(floor), z)]
-    for (const [x, frac] of half9) ring.push(v3(x, y(frac), z))
-    for (let k = half9.length - 2; k >= 0; k--) ring.push(v3(-half9[k][0], y(half9[k][1]), z))
-    return ring
-  }), true, false)
+    const right = left.map(([x, frac]) => [-x, frac] as [number, number]).reverse()
+    return [
+      v3(-half, H(floor), z),
+      ...left.map(([x, frac]) => v3(x, y(frac), z)),
+      ...right.slice(1).map(([x, frac]) => v3(x, y(frac), z)),
+      v3(half, H(floor), z),
+    ]
+  })
+  for (let i = 0; i + 1 < rows.length; i++) {
+    for (let k = 0; k + 1 < rows[i].length; k++) {
+      s.quad(rows[i][k], rows[i][k + 1], rows[i + 1][k + 1], rows[i + 1][k])
+    }
+  }
   return s.build()
 }
 
@@ -628,6 +673,8 @@ const TYRE = '#16181D'
 const HUB = '#2E3138'
 const FLOOR = '#14171E'
 const TERTIARY = '#969CA6'
+/** The plank is WOOD, and it is the only part of the car that is. */
+const PLANK_WOOD = '#9A7B4F'
 /** The rain light's lens: a fixed red, never the livery, because it has to read as a lamp on a car
  *  of any colour. */
 const RAIN_LENS = '#E4161F'
@@ -644,10 +691,49 @@ const WHEELS = [
   { tag: 'rr', x: 90, z: 398, r: 38.9, w: 46.8 },
 ] as const
 
+/** Sidewall band colours, Pirelli's own set. The game passes a compound and the tyres wear it. */
+export const TYRE_BANDS = {
+  soft: '#E4161F',
+  medium: '#F3D02F',
+  hard: '#EDEDED',
+  intermediate: '#3FBF43',
+  wet: '#2060D0',
+} as const
+export type TyreCompound = keyof typeof TYRE_BANDS
+
+/** The car's painted surfaces, five slots, each independently colourable. Everything NOT here is
+ *  either rubber or genuinely carbon: no texture is used for the carbon, because nothing else in
+ *  this renderer is textured, the lofts carry no UVs to put a weave on, and at race zoom a weave
+ *  is sub-pixel. What made it read as mixed black and grey was picking the dark values ad hoc,
+ *  which the three CARBON_* constants now settle by job. */
+export interface CarPaint {
+  /** Monocoque, nose, sidepods, wing pylons. */
+  body: string
+  /** Engine cover and airbox spine, the rear flap, the shoulder fins. */
+  cover: string
+  /** Front wing's neutral plane and the beam wing: the structural planes. */
+  wing: string
+  /** Front wing flaps and the rear mainplane: the working elements. */
+  accent: string
+  /** Endplates, mirrors, wheel centre caps. */
+  trim: string
+}
+
+export type CarLivery = string | CarPaint
+
+/** A single colour expands to the palette the car wore before liveries existed, so every old
+ *  caller keeps its exact look. */
+export const asPaint = (livery: CarLivery): CarPaint => typeof livery !== 'string' ? livery : {
+  body: livery, cover: shade(livery, 0.62), wing: TERTIARY, accent: livery, trim: TERTIARY,
+}
+
 export interface CarMesh {
   group: THREE.Group
-  /** Steerable and spinnable wheels, keyed the way the sprite tags them. */
+  /** STEERING pivots, keyed the way the sprite tags them. The brake duct hangs off these, because
+   *  a duct turns with the wheel but does not go round with it. */
   wheels: Record<'fl' | 'fr' | 'rl' | 'rr', THREE.Object3D>
+  /** ROLLING part of each wheel, inside its steering pivot: tyre, rim and everything on them. */
+  spin: Record<'fl' | 'fr' | 'rl' | 'rr', THREE.Object3D>
 }
 
 const catmull = (a: number, b: number, c: number, d: number, t: number): number => {
@@ -944,9 +1030,22 @@ function finGeometry(outline: Array<[number, number]>, xCentre: number, thick: n
   return s.build()
 }
 
-function mesh(geo: THREE.BufferGeometry, colour: string): THREE.Mesh {
+/** Surface finish. `flat` is the diorama's matte default; `metal` adds a specular highlight, which
+ *  the existing rig gives for free off its directional sun. Deliberately NOT `MeshStandardMaterial`
+ *  with metalness: a metal is pure reflection, so with no environment map in the rig it renders
+ *  black. An env map is a rig-wide look decision, not a per-part one. */
+export type Finish = 'flat' | 'metal'
+
+function mesh(geo: THREE.BufferGeometry, colour: string, finish: Finish = 'flat'): THREE.Mesh {
   // DoubleSide: the sink's quads are wound by hand and a culled wing is a missing wing.
-  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: colour, side: THREE.DoubleSide }))
+  const material = finish === 'metal'
+    ? new THREE.MeshPhongMaterial({
+      // A BROAD lobe, not a tight one: spoke faces are flat and small, and a hard highlight only
+      // lands on the one spoke whose normal happens to bisect sun and eye. Wide catches several.
+      color: colour, side: THREE.DoubleSide, shininess: 34, specular: new THREE.Color('#CBD4DE'),
+    })
+    : new THREE.MeshLambertMaterial({ color: colour, side: THREE.DoubleSide })
+  const m = new THREE.Mesh(geo, material)
   m.castShadow = true
   m.receiveShadow = true
   return m
@@ -1027,8 +1126,20 @@ function endplateGeometry(xCentre: number, thick: number): THREE.BufferGeometry 
   // plate wraps it instead of standing off.
   const { yTop, yBot, zFront, zRear } = REAR_PLATE
   const tyre = { z: 398, y: 38.9, r: 44 }
+  // Corners are RADIUSED, not mitred: a plate this size with square corners reads as a cut sheet.
+  const rc = 9
+  const corner = (cz2: number, cy: number, from: number, to: number) => {
+    const out: Array<{ z: number; y: number }> = []
+    for (let k = 0; k <= 5; k++) {
+      const a = from + ((to - from) * k) / 5
+      out.push({ z: cz2 + Math.cos(a) * rc, y: cy + Math.sin(a) * rc })
+    }
+    return out
+  }
   const outline: Array<{ z: number; y: number }> = [
-    { z: zFront, y: yTop }, { z: zRear, y: yTop }, { z: zRear, y: yBot },
+    { z: zFront + rc, y: yTop },
+    ...corner(zRear - rc, yTop - rc, Math.PI / 2, 0),
+    ...corner(zRear - rc, yBot + rc, 0, -Math.PI / 2),
   ]
   // Bottom edge runs forward only to the tyre's clearance arc, then the arc climbs to the front edge.
   const dzBottom = Math.sqrt(tyre.r * tyre.r - (yBot - tyre.y) ** 2)
@@ -1152,9 +1263,11 @@ function buildHelmet(sec: string): THREE.Group {
   return g
 }
 
-export function buildCarMesh(colour: string): CarMesh {
+export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium'): CarMesh {
   const group = new THREE.Group()
-  const sec = shade(colour, 0.62)
+  const paint = asPaint(livery)
+  const colour = paint.body
+  const sec = paint.cover
   const cx = SPRITE.cx
   const cz = SPRITE.cy
 
@@ -1314,6 +1427,16 @@ export function buildCarMesh(colour: string): CarMesh {
   // at the rear axle and hands straight over to the diffuser's throat, rather than the two running
   // past each other for a stretch.
   group.add(mesh(floorGeometry(), FLOOR))
+  // The plank, proud of the floor's underside by a couple of millimetres, and the titanium skids
+  // let into it: the four bright squares that actually touch the road.
+  const plank = new GeometrySink()
+  box(plank, cx - PLANK.half, cx + PLANK.half, PLANK.bottom, FLOOR_BOT + 0.0005, PLANK.z0, PLANK.z1)
+  group.add(mesh(plank.build(), PLANK_WOOD))
+  const skids = new GeometrySink()
+  for (const z of [228, 278, 328, 372]) {
+    box(skids, cx - 9, cx + 9, PLANK.bottom - 0.0012, PLANK.bottom + 0.004, z, z + 15)
+  }
+  group.add(mesh(skids.build(), TERTIARY))
   for (const sign of [-1, 1]) {
     for (const f of FLOOR_FENCES) group.add(mesh(fenceGeometry(sign, f), STRUCTURE))
     group.add(mesh(floorEdgeGeometry(sign), STRUCTURE))
@@ -1339,20 +1462,22 @@ export function buildCarMesh(colour: string): CarMesh {
   // real section with a rounded nose and a slot of air under the one above it.
   for (const sign of [-1, 1]) {
     FRONT_WING.forEach((element, i) => {
-      group.add(mesh(wingElementGeometry(element, sign), i === 0 ? TERTIARY : colour))
+      group.add(mesh(wingElementGeometry(element, sign), i === 0 ? paint.wing : paint.accent))
     })
-    group.add(mesh(frontEndplateGeometry(sign), TERTIARY))
+    group.add(mesh(frontEndplateGeometry(sign), paint.trim))
   }
   // The wing hangs off the nose on two pylons: BLADES raked forward as they climb, rooted inside
   // the neutral section and buried in the nose at the top, not square posts standing in the open.
+  // Thin, and set so their outer face sits FLUSH with the nose's flank (half ~13 at these
+  // stations) rather than standing proud of it as a pair of posts in the airflow.
   for (const sign of [-1, 1]) {
-    group.add(mesh(finGeometry([[2, 0.048], [13, 0.048], [9, 0.20], [-3, 0.20]], sign * 13, 2.8), colour))
+    group.add(mesh(finGeometry([[2, 0.048], [13, 0.048], [9, 0.20], [-3, 0.20]], sign * 12.3, 1.5), colour))
   }
 
   // Rear wing: beam low, mainplane, flap above it, each a lofted section running unbroken into a
   // plate that bows outboard behind the tyre. The whole assembly still sits INTO the car's
   // silhouette (iteration A): the airbox is the tallest point and the wing second.
-  const REAR_SKIN = [TERTIARY, TERTIARY, colour, sec]
+  const REAR_SKIN = [paint.wing, paint.wing, paint.accent, paint.cover]
   for (const sign of [-1, 1]) {
     REAR_WING.forEach((element, i) => {
       group.add(mesh(wingElementGeometry(element, sign), REAR_SKIN[i]))
@@ -1360,7 +1485,7 @@ export function buildCarMesh(colour: string): CarMesh {
     // The flap carries a gurney: a real wing's last two centimetres are a square lip, and its
     // shadow line is most of what tells you the flap is a wing and not a plank.
     group.add(mesh(gurneyGeometry(REAR_WING[3], sign, 1.8), sec))
-    group.add(mesh(endplateGeometry(sign * REAR_PLATE.x, REAR_PLATE.thick), TERTIARY))
+    group.add(mesh(endplateGeometry(sign * REAR_PLATE.x, REAR_PLATE.thick), paint.trim))
     // LOUVRES up the plate's rear quarter: on a real car the panel is slotted and each strip of it
     // rolled outboard, so they read as dark gills lying along the plate rather than as paint.
     for (const y of [0.455, 0.492, 0.529, 0.566]) {
@@ -1409,13 +1534,43 @@ export function buildCarMesh(colour: string): CarMesh {
   box(lens, SPRITE.cx - 5, SPRITE.cx + 5, 0.254, 0.296, 465, 467.5)
   group.add(mesh(lens.build(), RAIN_LENS))
 
+  // Developed-car detail, the things a launch car does not have yet.
+  for (const sign of [-1, 1]) {
+    // VORTEX GENERATORS on the pod's shoulder: three little fins straddling its top surface, so
+    // each is rooted whatever the pod's top line is doing at that station.
+    for (const [x, z0, z1] of [[41, 231, 243], [48, 233, 244], [55, 235, 245]]) {
+      const y0 = podTopAt(x, z0)
+      const y1 = podTopAt(x, z1)
+      group.add(mesh(finGeometry(
+        [[z0, y0 - 0.016], [z1, y1 - 0.016], [z1, y1 + 0.021], [z0, y0 + 0.017]], sign * x, 0.8,
+      ), sec))
+    }
+    // COOLING LOUVRES on the engine cover's shoulder, laid on the body's own flank. Each reads its
+    // corner off `bodyMount`, so the panel sits on the skin wherever the shoulder line moves to.
+    const gills = new GeometrySink()
+    const at = (z: number, f: number, out: number, drop: number) => {
+      const p = bodyMount(z, f, -out, sign)
+      return v3(p.x, p.y - drop, p.z)
+    }
+    for (const [z0, f] of [[268, 0.83], [277, 0.81], [286, 0.79], [295, 0.77]] as const) {
+      const lip = [at(z0, f, 0.2, 0), at(z0 + 7, f - 0.02, 0.2, 0)]
+      const out = [at(z0 + 7, f - 0.02, 1.9, 1.5), at(z0, f, 1.9, 1.5)]
+      gills.quad(lip[0], lip[1], out[0], out[1])
+      gills.quad(
+        v3(lip[0].x, lip[0].y - 0.9, lip[0].z), v3(lip[1].x, lip[1].y - 0.9, lip[1].z),
+        out[0], out[1],
+      )
+    }
+    group.add(mesh(gills.build(), STRUCTURE))
+  }
+
   // Mirrors: rounded-rectangle housings in the LIVERY colour, glass on the driver's side, their
   // stalks rooted INSIDE the deck flank so nothing floats.
   for (const sign of [-1, 1]) {
     const rot = -sign * 0.32
     // Mounted where the sprite draws them: on the chassis shoulder BESIDE the cockpit, ahead of
     // the pad. The stalk starts inside the shoulder and ends inside the head.
-    const head = mesh(new RoundedBoxGeometry(5.4, 3.4, 1.4, 4, 0.65), colour)
+    const head = mesh(new RoundedBoxGeometry(5.4, 3.4, 1.4, 4, 0.65), paint.trim)
     head.position.set(sign * 30.5, H(0.41), 208 - cz)
     head.rotation.y = rot
     group.add(head)
@@ -1477,18 +1632,111 @@ export function buildCarMesh(colour: string): CarMesh {
     g.rotateZ(Math.PI / 2)
     return g
   }
+  // The RIM is an assembly, not a filled disc: a barrel at the bead seat, a flange lipping over it
+  // at each face, ten spokes standing off both faces and a centre lock nut through the middle.
+  // Everything here rides the wheel's own pivot, so it all steers and spins with the tyre.
   const wheels = {} as CarMesh['wheels']
+  const spin = {} as CarMesh['spin']
+  const band = TYRE_BANDS[compound]
   for (const w of WHEELS) {
     const pivot = new THREE.Group()
     pivot.position.set(w.x, w.r, w.z - cz)
-    const tyre = mesh(tyreGeometry(w.r, w.w), TYRE)
-    pivot.add(tyre)
-    const hubDisc = mesh(new THREE.CylinderGeometry(w.r * 0.55, w.r * 0.55, w.w + 2, 18), HUB)
-    hubDisc.geometry.rotateZ(Math.PI / 2)
-    pivot.add(hubDisc)
+    // Everything that ROLLS goes in here; the duct below stays on the steering pivot outside it.
+    const roll = new THREE.Group()
+    pivot.add(roll)
+    roll.add(mesh(tyreGeometry(w.r, w.w), TYRE))
+    // Barrel and flanges are OPEN ENDED. A capped cylinder puts a solid disc across the wheel's
+    // face and every spoke behind it disappears; what fills the middle is the brake disc, which is
+    // what fills it on the car.
+    const barrel = mesh(new THREE.CylinderGeometry(w.r * 0.60, w.r * 0.60, w.w - 1, 26, 1, true), CARBON)
+    barrel.geometry.rotateZ(Math.PI / 2)
+    roll.add(barrel)
+    const brake = mesh(new THREE.CylinderGeometry(w.r * 0.42, w.r * 0.42, 2.6, 22), STRUCTURE)
+    brake.geometry.rotateZ(Math.PI / 2)
+    roll.add(brake)
+    for (const side of [-1, 1]) {
+      const flange = mesh(new THREE.CylinderGeometry(w.r * 0.645, w.r * 0.60, 2.2, 26, 1, true), HUB, 'metal')
+      flange.geometry.rotateZ(Math.PI / 2)
+      flange.position.x = side * (w.w / 2 - 1.4)
+      roll.add(flange)
+      // The rim's EDGE: a flat annulus standing PROUD of the spoke web. It is most of what you see
+      // of a wheel's rim, and without it the spokes appear to run straight into the tyre.
+      const rimFace = mesh(new THREE.RingGeometry(w.r * 0.50, w.r * 0.632, 34), HUB, 'metal')
+      rimFace.geometry.rotateY(Math.PI / 2)
+      rimFace.position.x = side * (w.w / 2 - 1.0)
+      roll.add(rimFace)
+      // The COMPOUND band, on the flat of the sidewall and a hair proud of it. Casts no shadow:
+      // it is a marking, and a marking that shadows reads as a raised ring. BOTH walls carry it,
+      // so it is added before the outboard-only work below.
+      const ring = mesh(new THREE.RingGeometry(w.r * 0.70, w.r * 0.80, 32), band)
+      ring.geometry.rotateY(Math.PI / 2)
+      ring.position.x = side * (w.w / 2 + 0.25)
+      ring.castShadow = false
+      roll.add(ring)
+      // Spokes on the OUTBOARD face only. The inboard face of an F1 wheel is not a mirror of it:
+      // that side is taken up by the brake duct and the upright, and nobody sees a spoke there.
+      if (side !== Math.sign(w.x)) continue
+      const web = mesh(new THREE.CylinderGeometry(w.r * 0.21, w.r * 0.21, 1.8, 22), HUB, 'metal')
+      web.geometry.rotateZ(Math.PI / 2)
+      web.position.x = side * (w.w / 2 - 2.2)
+      roll.add(web)
+      // Set BACK from the rim face and stopping just inside it, so the web reads as recessed. The
+      // spokes are the one part of the car that should CATCH the light as the wheel turns.
+      for (let k = 0; k < 10; k++) {
+        const spoke = mesh(new THREE.BoxGeometry(1.1, w.r * 0.36, 2.8), HUB, 'metal')
+        spoke.position.set(side * (w.w / 2 - 2.4), 0, 0)
+        spoke.rotation.x = (k / 10) * Math.PI * 2
+        spoke.translateY(w.r * 0.35)
+        roll.add(spoke)
+      }
+      // Bolt circle on the web, then the centre lock: retaining collar, hex nut, coloured cap.
+      for (let k = 0; k < 8; k++) {
+        const bolt = mesh(new THREE.CylinderGeometry(w.r * 0.022, w.r * 0.022, 1.4, 8), STRUCTURE)
+        bolt.geometry.rotateZ(Math.PI / 2)
+        bolt.position.set(side * (w.w / 2 - 1.6), 0, 0)
+        bolt.rotation.x = (k / 8) * Math.PI * 2
+        bolt.translateY(w.r * 0.155)
+        roll.add(bolt)
+      }
+      for (const [rad, len, off, seg, tint] of [
+        [0.135, 2.6, 0.6, 24, STRUCTURE], [0.098, 4.4, 1.9, 6, HUB], [0.055, 5.6, 2.6, 16, paint.trim],
+      ] as const) {
+        const part = mesh(new THREE.CylinderGeometry(w.r * rad, w.r * rad, len, seg), tint, 'metal')
+        part.geometry.rotateZ(Math.PI / 2)
+        part.position.x = side * (w.w / 2 + off)
+        roll.add(part)
+      }
+    }
+    const axle = mesh(new THREE.CylinderGeometry(w.r * 0.075, w.r * 0.075, w.w + 1, 12), STRUCTURE)
+    axle.geometry.rotateZ(Math.PI / 2)
+    roll.add(axle)
+
+    // BRAKE DUCT: a drum wrapping the disc on the wheel's inboard face, with a scoop under its
+    // leading edge feeding it. On the STEERING pivot rather than inside the rolling group, because
+    // a duct turns with the wheel and stays put while the wheel goes round.
+    const inb = -Math.sign(w.x)
+    const drum = mesh(new THREE.CylinderGeometry(w.r * 0.55, w.r * 0.50, 13, 20, 1, true), CARBON)
+    drum.geometry.rotateZ(Math.PI / 2)
+    drum.position.x = inb * (w.w / 2 - 2)
+    pivot.add(drum)
+    // The duct's BACKPLATE is solid, and has to be. The old wheel filled its centre with a hub
+    // disc; the open rim that replaced it left a clear line of sight into the middle of the wheel,
+    // and the suspension's outboard ends sit in there. At lock they swung into view.
+    const back = mesh(new THREE.CylinderGeometry(w.r * 0.52, w.r * 0.52, 2.2, 22), CARBON)
+    back.geometry.rotateZ(Math.PI / 2)
+    back.position.x = inb * (w.w / 2 + 4)
+    pivot.add(back)
+    const scoop = mesh(new RoundedBoxGeometry(9, 12, 10, 3, 1.8), CARBON)
+    scoop.position.set(inb * (w.w / 2 - 2), -w.r * 0.33, -w.r * 0.42)
+    pivot.add(scoop)
+    const mouth = mesh(new THREE.BoxGeometry(6.4, 8.4, 1.4), STRUCTURE)
+    mouth.position.set(inb * (w.w / 2 - 2), -w.r * 0.33, -w.r * 0.42 - 4.9)
+    pivot.add(mouth)
+
     wheels[w.tag] = pivot
+    spin[w.tag] = roll
     group.add(pivot)
   }
 
-  return { group, wheels }
+  return { group, wheels, spin }
 }

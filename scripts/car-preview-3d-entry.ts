@@ -11,6 +11,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { MOODS } from '../src/lib/ui/lighting'
 import { SPRITE } from '../src/lib/ui/car-sprite'
 import { buildCarMesh } from '../src/lib/scene3d/car-mesh'
+import { historicalGrids } from '../src/data/history/grids'
+import { liveryFor } from '../src/data/history/liveries'
 import { buildLightRig } from '../src/lib/scene3d/lighting3d'
 
 declare global {
@@ -28,6 +30,7 @@ const ANGLES: Record<string, { az: number; elev: number; ortho?: boolean; dist?:
   side: { az: 90, elev: 16 },
   rear: { az: 205, elev: 22 },
   top: { az: 90, elev: 88 },
+  under: { az: 90, elev: -78 },
   cockpit: { az: 38, elev: 42, dist: 0.2, at: [0, 66, -32] },
   cockrear: { az: 148, elev: 30, dist: 0.38, at: [0, 62, -32] },
   cockside: { az: 86, elev: 14, dist: 0.34, at: [0, 62, -32] },
@@ -249,37 +252,58 @@ function viewerMain() {
   controls.target.set(0, 30, -20)
   controls.autoRotateSpeed = 1.6
 
-  const buttons = {
-    ours: document.getElementById('ours') as HTMLButtonElement,
-    model: document.getElementById('model') as HTMLButtonElement,
-    both: document.getElementById('both') as HTMLButtonElement,
-    steer: document.getElementById('steer') as HTMLButtonElement,
-    spin: document.getElementById('spin') as HTMLButtonElement,
-  }
-  const colourInput = document.getElementById('colour') as HTMLInputElement
-  let mode: 'ours' | 'model' | 'both' = 'ours'
-  let steered = false
-  let building = 0
+  // Year and team drive the livery; steer is a slider so any lock can be inspected, not just the
+  // one hard-coded angle a toggle gave.
+  const yearSel = document.getElementById('year') as HTMLSelectElement
+  const teamSel = document.getElementById('team') as HTMLSelectElement
+  const steerInput = document.getElementById('steer') as HTMLInputElement
+  const steerOut = document.getElementById('steerv') as HTMLSpanElement
+  const swatch = document.getElementById('swatch') as HTMLSpanElement
 
-  const rebuild = async () => {
-    const token = ++building
-    const colour = colourInput.value
+  for (const g of historicalGrids) {
+    const opt = document.createElement('option')
+    opt.value = String(g.year)
+    opt.textContent = String(g.year)
+    yearSel.append(opt)
+  }
+  yearSel.value = String(historicalGrids[historicalGrids.length - 1].year)
+
+  const gridFor = (year: number) =>
+    historicalGrids.find((g) => g.year === year) ?? historicalGrids[historicalGrids.length - 1]
+
+  const fillTeams = () => {
+    const keep = teamSel.value
+    teamSel.replaceChildren()
+    for (const t of gridFor(Number(yearSel.value)).teams) {
+      const opt = document.createElement('option')
+      opt.value = t.id
+      opt.textContent = t.name
+      teamSel.append(opt)
+    }
+    // Hold the same constructor across a year change where it stayed on the grid.
+    if ([...teamSel.options].some((o) => o.value === keep)) teamSel.value = keep
+  }
+
+  const currentPaint = () => {
+    const year = Number(yearSel.value)
+    const team = gridFor(year).teams.find((t) => t.id === teamSel.value) ?? gridFor(year).teams[0]
+    return liveryFor(team.id, year, team.color)
+  }
+
+  const rebuild = () => {
+    const paint = currentPaint()
+    swatch.replaceChildren(...Object.values(paint).map((c) => {
+      const i = document.createElement('i')
+      i.style.background = c
+      return i
+    }))
+    const lock = Number(steerInput.value)
+    steerOut.textContent = `${lock}°`
+    const car = buildCarMesh(paint)
+    car.wheels.fl.rotation.y = (-lock * Math.PI) / 180
+    car.wheels.fr.rotation.y = (-lock * 1.15 * Math.PI) / 180
     const fresh = new THREE.Group()
-    if (mode !== 'model') {
-      const car = buildCarMesh(colour)
-      if (steered) {
-        car.wheels.fl.rotation.y = -(20 * Math.PI) / 180
-        car.wheels.fr.rotation.y = -(23 * Math.PI) / 180
-      }
-      if (mode === 'both') car.group.position.x = -170
-      fresh.add(car.group)
-    }
-    if (mode !== 'ours') {
-      const model = await loadModelCar(colour)
-      if (mode === 'both') model.position.x = 170
-      fresh.add(model)
-    }
-    if (token !== building) return
+    fresh.add(car.group)
     carRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) {
         ;(o.geometry as THREE.BufferGeometry).dispose()
@@ -292,34 +316,20 @@ function viewerMain() {
     scene.add(carRoot)
   }
 
-  const setMode = (next: typeof mode) => {
-    mode = next
-    for (const key of ['ours', 'model', 'both'] as const) {
-      buttons[key].classList.toggle('on', key === mode)
-    }
-    void rebuild()
-  }
-  buttons.ours.addEventListener('click', () => setMode('ours'))
-  buttons.model.addEventListener('click', () => setMode('model'))
-  buttons.both.addEventListener('click', () => setMode('both'))
-  buttons.steer.addEventListener('click', () => {
-    steered = !steered
-    buttons.steer.classList.toggle('on', steered)
-    void rebuild()
+  yearSel.addEventListener('change', () => {
+    fillTeams()
+    rebuild()
   })
-  buttons.spin.addEventListener('click', () => {
-    controls.autoRotate = !controls.autoRotate
-    buttons.spin.classList.toggle('on', controls.autoRotate)
-  })
-  colourInput.addEventListener('change', () => void rebuild())
+  teamSel.addEventListener('change', rebuild)
+  steerInput.addEventListener('input', rebuild)
   window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight, true)
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
   })
 
-  buttons.ours.classList.add('on')
-  void rebuild()
+  fillTeams()
+  rebuild()
   const tick = () => {
     controls.update()
     renderer.render(scene, camera)
