@@ -330,23 +330,6 @@ export function buildCarMesh(colour: string): CarMesh {
   box(diff, 76, 164, 0.05, 0.18, 448, 468)
   group.add(mesh(diff.build(), CARBON))
 
-  // Halo over the tub, its leg down to the nose deck.
-  const halo = new THREE.Mesh(
-    new THREE.TorusGeometry(16, 2.6, 8, 20, Math.PI),
-    new THREE.MeshLambertMaterial({ color: TERTIARY, side: THREE.DoubleSide }),
-  )
-  halo.castShadow = true
-  halo.geometry.rotateZ(Math.PI)
-  halo.geometry.rotateX(Math.PI / 2 - 0.35)
-  halo.position.set(0, H(0.68), 212 - cz)
-  group.add(halo)
-  const leg = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.8, 1.8, H(0.68) - H(0.58), 6),
-    new THREE.MeshLambertMaterial({ color: TERTIARY, side: THREE.DoubleSide }),
-  )
-  leg.position.set(0, (H(0.68) + H(0.58)) / 2, 198 - cz)
-  group.add(leg)
-
   // Mirrors OUTBOARD of the bodywork on stalks: exterior fittings, not lumps in the cockpit side.
   for (const sign of [-1, 1]) {
     const head = new GeometrySink()
