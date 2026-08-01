@@ -28,11 +28,12 @@ export interface CarPose {
   ground?: number
 }
 
-/** Body angles at the limit. Bolder than a real car's degree-or-two for the same reason every cue
- *  on this map is: at map scale the honest value does not exist. Only the CHASSIS takes them: the
- *  wheels stay planted, and the body's own ground clearance absorbs the outboard dip. */
-const ROLL_MAX_RAD = (3.6 * Math.PI) / 180
-const DIVE_MAX_RAD = (2.4 * Math.PI) / 180
+/** Body angles at the limit, at REAL F1 stiffness. The 2D exaggerated its cues because a top-down
+ *  view could not show honest ones; a perspective camera at wing height can, and an F1 car barely
+ *  moves: a degree of roll at full lateral load, under a degree of dive on the brakes. Only the
+ *  CHASSIS takes them; the wheels stay planted. */
+const ROLL_MAX_RAD = (1.3 * Math.PI) / 180
+const DIVE_MAX_RAD = (0.8 * Math.PI) / 180
 
 const WHEEL_TAGS = ['fl', 'fr', 'rl', 'rr'] as const
 
