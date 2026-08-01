@@ -66,22 +66,8 @@ function inkArgs(o: RoadOpts) {
  *  toward the garages without anything having to clamp it. Exported apart from `roadOps` so the 3D
  *  world can lay the same ink at its own lifts (#3d-port). */
 export function roadInkUnder(o: RoadOpts): DrawOp[] {
-  const { ink, pitInk } = inkArgs(o)
-  // LAYER-MAJOR across the circuit and the lane, exactly as the casing merges: every wide faint
-  // fade layer of BOTH roads goes down before either's next, and all the asphalt goes down after
-  // all the fade. The layers share their per-layer colours, so at a junction the two falloffs read
-  // as ONE band round the union, and no fade ever crosses the other road's asphalt.
-  const pit = pitEdgeOpsByLayer(pitInk)
-  const track = ink
-    ? edgeOpsByLayer({
-      ...ink,
-      ground: o.ground,
-      shadow: o.shadow,
-      ribbonHalfM: TRACK_WIDTH_M / 2,
-      lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
-    })
-    : { fades: [], asphalt: [] }
-  // NEITHER the circuit's falloff bands NOR its apron are laid any more. Only the pit lane's.
+  // NEITHER the circuit's falloff bands NOR its apron are laid any more, so the circuit builds
+  // nothing at all here and only the pit lane's apron survives.
   //
   // The falloff was a 2D device: with no real light, a hard tarmac-to-grass edge read as a sticker,
   // and a gradient was how the flat renderer suggested a shoulder. A lit scene does not need the
@@ -90,9 +76,13 @@ export function roadInkUnder(o: RoadOpts): DrawOp[] {
   // marking its edge.
   //
   // The pit lane keeps its apron: that one is a real working surface, the ground the garages and
-  // the crews stand on, and without it the pit complex sits on grass. `edgeOpsByLayer` still builds
-  // both for the circuit; nothing here asks for them.
-  return [...pit.asphalt]
+  // the crews stand on, and without it the pit complex sits on grass.
+  //
+  // `edgeOpsByLayer` in `track-surface` is what used to build the circuit's pair, and it is no
+  // longer called from anywhere. Left exported and tested rather than deleted: it is the only
+  // description of that edge treatment, and reinstating it is a one-line call if a mood ever wants
+  // a soft shoulder again.
+  return [...pitEdgeOpsByLayer(inkArgs(o).pitInk).asphalt]
 }
 
 /** Worn into the tarmac, on top of the road and under the kerbs. Pit first here too: the lane's
