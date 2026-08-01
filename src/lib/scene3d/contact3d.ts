@@ -71,8 +71,12 @@ function occlusionAt(x: number, z: number): number {
   return most * MAX_OCCLUSION
 }
 
-/** Black with the occlusion in its alpha, so the material's `opacity` scales the whole patch and a
- *  retiring car can fade its shadow out with the rest of itself. */
+/** The occlusion, written into the colour channels.
+ *
+ *  Into COLOUR, not into alpha, however wrong that reads: three's `alphaMap` samples the GREEN
+ *  channel (`diffuseColor.a *= texture2D( alphaMap, vAlphaMapUv ).g`), not the alpha one. Putting it
+ *  in alpha where it belongs multiplies every texel's opacity by a green of zero, and the patch is
+ *  invisible everywhere, which is exactly how it first shipped. */
 function occlusionTexture(): THREE.CanvasTexture | null {
   const canvas = document.createElement('canvas')
   canvas.width = TEX_W
@@ -86,7 +90,11 @@ function occlusionTexture(): THREE.CanvasTexture | null {
       // `PlaneGeometry` laid flat by `rotateX(-90)` sends its v=1 edge to LOW z, which is the nose.
       const z = (0.5 - (py + 0.5) / TEX_H) * 2 * HALF_L
       const i = (py * TEX_W + px) * 4
-      image.data[i + 3] = occlusionAt(x, z) * 255
+      const occl = occlusionAt(x, z) * 255
+      image.data[i] = occl
+      image.data[i + 1] = occl
+      image.data[i + 2] = occl
+      image.data[i + 3] = 255
     }
   }
   ctx.putImageData(image, 0, 0)
