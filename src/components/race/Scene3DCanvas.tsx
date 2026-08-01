@@ -13,17 +13,17 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import type { ViewBox } from '@/lib/ui/geom'
 import type { Lighting } from '@/lib/ui/lighting'
 import { applyOrbitCam, type OrbitCam } from '@/lib/scene3d/camera3d'
 import { balanceAmbient, refitShadow } from '@/lib/scene3d/lighting3d'
 import {
   applyToneMapping, buildSky, refitFog, type SkyEnv,
 } from '@/lib/scene3d/sky3d'
+import { bakeWorldEnv, type WorldEnv } from '@/lib/scene3d/env3d'
 import { buildPost, type Post } from '@/lib/scene3d/post3d'
-import { GROUND_PAD, type World3D } from '@/lib/scene3d/world3d'
+import { type World3D } from '@/lib/scene3d/world3d'
 
-export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, vb, ppu, metresPerUnit, camRef, camera, paintRef, className }: {
+export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, ppu, camRef, camera, paintRef, className }: {
   world: World3D | null
   /** The live car field, mounted beside the world so a circuit rebuild never drops the cars. */
   carsGroup?: THREE.Group | null
@@ -36,11 +36,8 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   night?: boolean
   /** Freezes the sky's cloud field, so each circuit wears its own weather. */
   skySeed?: number
-  vb: ViewBox
   /** Stage pixels per viewBox unit at zoom 1: half of the camera's scale, the stage's letterbox fit. */
   ppu: number
-  /** The circuit's real scale, so the haze can hold one visibility in METRES across every track. */
-  metresPerUnit: number
   /** The map's orbit state, read imperatively on every paint. */
   camRef: React.RefObject<OrbitCam>
   /** The one perspective camera, owned by the map so its loop can project the DOM overlay with it. */
@@ -59,7 +56,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   // Read by the painter, which runs outside React: always the last committed props, never a
   // closure's snapshot of them. Synced by the dependency-less effect below, which commits before
   // any later effect (here or in the parent) can call the painter.
-  const stateRef = useRef({ world, base, vb, ppu, metresPerUnit })
+  const stateRef = useRef({ world, ppu, carsGroup, crewGroup })
   // Whether the mounted environment carries the sky's share of the light, read by the scene-swap
   // effect below. A ref, because the world and the sky are swapped by two independent effects and
   // whichever runs second has to see the other's answer.
@@ -69,7 +66,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     const gl = glRef.current
     const cam = camRef.current
     const canvas = canvasRef.current
-    const { world, vb, ppu, metresPerUnit } = stateRef.current
+    const { world, ppu } = stateRef.current
     if (!gl || !cam || !canvas) return
     const w = canvas.clientWidth
     const h = canvas.clientHeight
@@ -86,14 +83,9 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // the haze do: on the camera MOVING, never per frame.
       world.trees.update(camera.position)
       // Haze follows the camera for the same reason the shadow box does: it is fitted to the shot,
-      // not to the circuit. The radius is the ground plane's INSCRIBED reach, the nearest distance
-      // at which the world can stop, so the fog is finished before any edge of it can show.
-      if (gl.scene.fog instanceof THREE.Fog) {
-        refitFog(gl.scene.fog, camera, {
-          x: vb.x + vb.w / 2, z: vb.y + vb.h / 2,
-          radius: Math.min(vb.w, vb.h) / 2 + GROUND_PAD, metresPerUnit,
-        })
-      }
+      // not to the circuit. It is fitted against the world's OWN ground plane, so the fog is
+      // finished before any edge of it can show.
+      if (gl.scene.fog instanceof THREE.Fog) refitFog(gl.scene.fog, camera, world.ground)
       gl.post.render()
     }
   }, [camRef, camera])
@@ -118,8 +110,31 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     }
   }, [camera])
 
+  useEffect(() => {
+    stateRef.current = { world, ppu, carsGroup, crewGroup }
+  })
+
+  // The world swaps only when the WORLD does: a new circuit, the lap's ink arriving, the grid being
+  // painted. The camera never touches it.
+  //
+  // DECLARED BEFORE THE SKY, and it has to stay that way: the sky effect below shoots this scene
+  // into a reflection probe, so the world it is meant to reflect must already be in it. React runs
+  // effects in declaration order, and both re-run when the world does.
+  useEffect(() => {
+    const gl = glRef.current
+    if (!gl) return
+    gl.scene.clear()
+    // The environment map IS the sky light, so the rig's own hemisphere stands down to it.
+    if (world) balanceAmbient(world.sky, envRef.current)
+    if (world) gl.scene.add(world.group)
+    if (carsGroup) gl.scene.add(carsGroup)
+    if (crewGroup) gl.scene.add(crewGroup)
+    paint()
+  }, [world, carsGroup, crewGroup, paint])
+
   // The sky is baked, not drawn: it changes when the MOOD changes and never on a camera move. The
   // fog is born with it, carrying the sky's own measured horizon colour, and is refitted per paint.
+  // The world's own reflection probe is baked here too, off the sky this run just mounted.
   useEffect(() => {
     const gl = glRef.current
     if (!gl) return
@@ -142,6 +157,26 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     if (world) balanceAmbient(world.sky, envRef.current)
     // Near and far are placeholders: every paint refits them to what the camera can see.
     gl.scene.fog = env ? new THREE.Fog(env.horizon, 1, 2) : null
+    // ...and now the world goes in front of that sky, from a probe over the start straight, and
+    // THAT is what everything reflects. A sky-only environment is why paint read as vinyl: a flank
+    // is nearly all horizon and almost no sky. Once per world and once per mood, never per frame.
+    let worldEnv: WorldEnv | null = null
+    if (world) {
+      // The wood packs its detail tiers to whoever is looking, and for six faces that is the probe.
+      // The `paint()` below hands them straight back to the live camera.
+      world.trees.update(world.probe)
+      worldEnv = bakeWorldEnv(gl.renderer, gl.scene, {
+        at: world.probe,
+        ground: world.ground,
+        // Off the ref, not the props: the movers are hidden for the bake either way, so their
+        // arriving is no reason to re-shoot the sky and the probe.
+        hide: [stateRef.current.carsGroup, stateRef.current.crewGroup],
+      })
+      if (worldEnv) {
+        gl.scene.environment = worldEnv.environment
+        gl.scene.environmentIntensity = worldEnv.intensity
+      }
+    }
     paint()
     return () => {
       // Only while the context is still alive. React runs effect cleanups in DECLARATION order, so
@@ -152,6 +187,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // renderer released the whole context the cube lived in. The path that DOES need freeing, a
       // mood change, re-runs this with the renderer alive and frees normally.
       if (!glRef.current) return
+      worldEnv?.dispose()
       env?.dispose()
       envRef.current = false
       gl.scene.background = null
@@ -159,24 +195,6 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       gl.scene.fog = null
     }
   }, [lighting, night, skySeed, base, world, paint])
-
-  useEffect(() => {
-    stateRef.current = { world, base, vb, ppu, metresPerUnit }
-  })
-
-  // The world swaps only when the WORLD does: a new circuit, the lap's ink arriving, the grid being
-  // painted. The camera never touches it.
-  useEffect(() => {
-    const gl = glRef.current
-    if (!gl) return
-    gl.scene.clear()
-    // The environment map IS the sky light, so the rig's own hemisphere stands down to it.
-    if (world) balanceAmbient(world.sky, envRef.current)
-    if (world) gl.scene.add(world.group)
-    if (carsGroup) gl.scene.add(carsGroup)
-    if (crewGroup) gl.scene.add(crewGroup)
-    paint()
-  }, [world, carsGroup, crewGroup, paint])
 
   useEffect(() => {
     paintRef.current = paint

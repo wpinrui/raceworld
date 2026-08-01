@@ -168,7 +168,7 @@ const FOG_FAR = 0.8
  *  still finished before the cut. `applyOrbitCam` now opens the far plane out when the camera leans
  *  toward the horizon, so the ramp can run to the ground plane's real edge and everything a player
  *  would call "not that far" stays crisp. */
-const FOG_CLEAR_M = 1500
+export const FOG_CLEAR_M = 1500
 
 /** ...but never nearer than this many camera distances, which is what keeps the whole-circuit
  *  framing crisp. From 1.6km up, every point of the circuit is past any fixed clear distance, and a
@@ -177,7 +177,18 @@ const FOG_NEAR_DIST = 2.5
 
 /** ...and never past this fraction of the far, or the ramp cannot finish before the world stops.
  *  Binds at the closest zoom, where the far plane is only 585m out on Britain. */
-const FOG_NEAR_CAP = 0.55
+export const FOG_NEAR_CAP = 0.55
+
+/** The ground plane as everything that has to stop before its edge addresses it: the haze, and the
+ *  reflection probe. `radius` is the INSCRIBED reach, the nearest distance at which the world can
+ *  stop, so no bearing is left uncovered. Built once by `buildWorld3D`, which is the thing that
+ *  actually lays the plane down. */
+export interface GroundExtent {
+  x: number
+  z: number
+  radius: number
+  metresPerUnit: number
+}
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -472,13 +483,9 @@ function groundDistance(camera: THREE.Camera): number {
  *  Where the haze STARTS is the day's fixed visibility, so the air does not thicken when the player
  *  zooms, held off the two framings that would misuse it: never nearer than a few camera distances
  *  (the whole-circuit view, which is entirely past any fixed distance and must stay crisp), never
- *  past a fraction of the far (the close-up, whose far plane arrives too soon for a long ramp).
- *
- *  `ground` is the ground plane as a disc in world units. Pass its INSCRIBED reach, the nearest
- *  distance at which it can stop, so no bearing is left uncovered. */
+ *  past a fraction of the far (the close-up, whose far plane arrives too soon for a long ramp). */
 export function refitFog(
-  fog: THREE.Fog, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera,
-  ground: { x: number; z: number; radius: number; metresPerUnit: number },
+  fog: THREE.Fog, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, ground: GroundExtent,
 ): void {
   const toEdge = Math.hypot(camera.position.x - ground.x, camera.position.z - ground.z) + ground.radius
   fog.far = Math.min(camera.far, toEdge) * FOG_FAR

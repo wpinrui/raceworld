@@ -1,12 +1,14 @@
 // One material per colour-and-finish for the whole 3D world (#photoreal). Standard everywhere: the
 // 2D's colours are authored albedo, the light rig is calibrated so a horizontal surface renders
-// close to it, and the baked sky supplies the ambient and the reflections through
-// `scene.environment`. Double-sided because half the world is sheets; transparent entries skip
-// depth writes so the coplanar ground stack never sorts against itself.
+// close to it, and the baked environment supplies the ambient and the reflections through
+// `scene.environment` (the sky at first; the world itself since `bakeWorldEnv`). Double-sided
+// because half the world is sheets; transparent entries skip depth writes so the coplanar ground
+// stack never sorts against itself.
 //
 // Standard, not Lambert, and this file is why the switch had to be all at once: Lambert ignores
 // `envMap` entirely, so a half-converted world would have had the sky lighting some of it and not
-// the rest. Every mesh in the scene comes through here or through `surface` below.
+// the rest. Every mesh in the scene comes through here or through `surface` below. The one step
+// past standard is `LACQUER`, which builds a physical material for the two-lobe finish car paint is.
 
 import * as THREE from 'three'
 import type { SurfaceDetail } from './detail3d'
@@ -23,9 +25,11 @@ export const DECAL_PULL = 16
  *  because the whole value of moving off Lambert is that a kerb and a windscreen stop being the
  *  same material, and that difference should be legible in the code that places them.
  *
- *  Deliberately no value under 0.3. A near-mirror needs an environment with something in it to
- *  reflect, and this one holds sky and cloud, no ground and no grandstands: below about 0.3 a
- *  surface starts mirroring blank sky at angles where a real one would be showing the pit wall. */
+ *  Deliberately no value under 0.3, and it STAYS that way now the environment has the world in it
+ *  (`bakeWorldEnv`). Not because a sharper reflection would be wrong out here, but because this is
+ *  the BASE coat, and a livery has to read as its authored colour: drop the base toward a mirror
+ *  and the team's blue becomes whatever the pit wall is. Where a surface genuinely wants a sharp
+ *  lobe, it gets one from `LACQUER` on top, which is how real paint does it. */
 export const ROUGH = {
   /** Glass, polished bodywork, standing water. */
   gloss: 0.32,
@@ -36,6 +40,21 @@ export const ROUGH = {
   /** Grass, gravel, cloth, foliage: no coherent reflection at all. */
   chalk: 1,
 } as const
+
+/** The clear coat over a livery: a thin near-mirror lacquer sitting on the colour coat.
+ *
+ *  A race car's finish is TWO lobes, and the single-lobe standard material can only ever average
+ *  them into one wrong answer: an authored `ROUGH.paint` reads as a slightly shiny wall, and
+ *  anything glossier than that bleaches the livery out. Splitting them gives both at once, the
+ *  colour staying flat and readable underneath while the lacquer throws the hard sun streak that
+ *  slides down a sidepod as the car turns. That streak is most of what "expensive car paint" means
+ *  on screen, and it costs one extra lobe rather than any change to the base colour.
+ *
+ *  Near 1 rather than a fraction: clear coat is clear, and a partial one is a material that is
+ *  half-lacquered, not one that is lightly lacquered. The roughness is where the finish lives, and
+ *  0.08 is polished-but-not-chrome: sharp enough to hold the sun as a streak rather than a smear,
+ *  soft enough that the reflected pit wall stays a suggestion. */
+export const LACQUER = { clearcoat: 1, clearcoatRoughness: 0.08 } as const
 
 /** Per-material control of how much environment a surface reflects is NOT available while the sky
  *  is mounted as `scene.environment`. three overwrites `envMapIntensity` outright in that case
@@ -69,15 +88,26 @@ export interface SurfaceOpts {
   /** Generated grain: normal and roughness maps, projected by `planarUV` on the geometry side.
    *  Where the surface's roughness comes from a map, the scalar `roughness` still multiplies it. */
   detail?: SurfaceDetail | null
+  /** How much clear coat sits over the colour, 0 none to 1 fully lacquered. Above 0 the surface is
+   *  built as a `MeshPhysicalMaterial` (which IS a standard material, with the second lobe) rather
+   *  than a plain standard one. Spread `LACQUER` rather than picking numbers here. */
+  clearcoat?: number
+  /** How sharp that lacquer is, 0 mirror to 1 chalk. Ignored without `clearcoat`. */
+  clearcoatRoughness?: number
 }
 
 /** Build one surface. The single place in the codebase that decides what a lit material IS. */
 export function surface(colour: string, opts: SurfaceOpts = {}): THREE.MeshStandardMaterial {
   const {
     alpha = 1, roughness = ROUGH.matte, metalness = 0, decal = false, layer = 0, map, detail,
+    clearcoat = 0, clearcoatRoughness = 0,
   } = opts
-  return new THREE.MeshStandardMaterial({
+  // Physical only where a second lobe was ASKED for: it compiles a longer shader and every surface
+  // out here that is not car paint wants exactly one lobe.
+  const Material = clearcoat > 0 ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial
+  return new Material({
     color: colour,
+    ...(clearcoat > 0 ? { clearcoat, clearcoatRoughness } : {}),
     side: THREE.DoubleSide,
     roughness,
     metalness,
@@ -105,15 +135,18 @@ export class SceneMaterials {
   get(colour: string, opts: SurfaceOpts = {}): THREE.MeshStandardMaterial {
     const {
       alpha = 1, roughness = ROUGH.chalk, metalness = 0, decal = false, layer = 0, detail,
+      clearcoat = 0, clearcoatRoughness = 0,
     } = opts
     // Keyed on the grain's IDENTITY, not its tile size: the kerb's corrugation and the tarmac's
     // aggregate are different surfaces that could perfectly well be authored at the same scale, and
     // a size-keyed cache would hand the second one the first one's maps.
     const key = `${colour}@${alpha}#${roughness}#${metalness}${decal ? '#decal' : ''}#${layer}`
-      + `#${detail ? detail.normalMap.uuid : 'flat'}`
+      + `#${detail ? detail.normalMap.uuid : 'flat'}#${clearcoat}/${clearcoatRoughness}`
     let mat = this.cache.get(key)
     if (!mat) {
-      mat = surface(colour, { alpha, roughness, metalness, decal, layer, detail })
+      mat = surface(colour, {
+        alpha, roughness, metalness, decal, layer, detail, clearcoat, clearcoatRoughness,
+      })
       this.cache.set(key, mat)
     }
     return mat

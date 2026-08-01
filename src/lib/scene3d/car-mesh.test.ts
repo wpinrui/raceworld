@@ -87,3 +87,38 @@ describe('buildCarMesh', () => {
     expect(painted).not.toContain(TYRE_BANDS.wet.toLowerCase())
   })
 })
+
+describe('the car\'s two-lobe paint', () => {
+  /** Every material on the car, by the colour it wears. */
+  const byColour = new Map<string, THREE.Material[]>()
+  car.group.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return
+    const m = o.material as THREE.MeshStandardMaterial
+    const key = `#${m.color.getHexString().toUpperCase()}`
+    byColour.set(key, [...(byColour.get(key) ?? []), m])
+  })
+
+  it('lacquers the bodywork, which is what puts the sun streak down a sidepod', () => {
+    const body = byColour.get('#E8442E') ?? []
+    expect(body.length).toBeGreaterThan(0)
+    for (const m of body) expect(m).toBeInstanceOf(THREE.MeshPhysicalMaterial)
+  })
+
+  it('does NOT lacquer rubber: a sidewall has no clear coat over it', () => {
+    // A tyre wearing the bodywork's finish puts a hard reflected sun on the one surface out here
+    // that should be swallowing the light.
+    const band = byColour.get(TYRE_BANDS.medium.toUpperCase()) ?? []
+    expect(band.length).toBeGreaterThan(0)
+    for (const m of band) expect(m).not.toBeInstanceOf(THREE.MeshPhysicalMaterial)
+  })
+
+  it('leaves the metal finish alone: rims reflect, they are not painted', () => {
+    for (const list of byColour.values()) {
+      for (const m of list) {
+        if ((m as THREE.MeshStandardMaterial).metalness === 1) {
+          expect(m).not.toBeInstanceOf(THREE.MeshPhysicalMaterial)
+        }
+      }
+    }
+  })
+})

@@ -52,6 +52,51 @@ const RADIUS = 0.4
 /** Multisampling on the composer's target, replacing what `antialias: true` gave the canvas. */
 const SAMPLES = 4
 
+/** The brightest a pixel may count as when it goes INTO the blur.
+ *
+ *  three's bright pass passes the whole texel through above the threshold, unbounded, so the spill
+ *  is proportional to the peak: a pixel at 30 throws thirty times the light of a pixel at 1. That
+ *  was harmless while the sharpest lobe in the world was `ROUGH.gloss` and nothing could return more
+ *  than a diffuse highlight. Car paint has a clear coat now (`LACQUER`), and a near-mirror pointed at
+ *  the sun's own disc is a different order of number entirely.
+ *
+ *  MEASURED, over one frame of Britain at racing zoom, as peak linear radiance:
+ *
+ *      afternoon, no clear coat     1.32     nothing in frame past 2
+ *      afternoon, clear coat        35.2     7 pixels past 8
+ *      night, floodlights in shot   2.12     the halo this pass exists for
+ *
+ *  So the glint spills seventeen times what the strength above was ever tuned against, and it eats
+ *  the car it is supposed to be sliding across. Turning STRENGTH down instead would have taken the
+ *  night halo with it in the same proportion, and the night halo is the whole point of the pass:
+ *  one global scalar cannot separate a 2 from a 35. A ceiling can. Set above the floodlights, so
+ *  night is untouched to the pixel, and well under the glint, which now spills like a very bright
+ *  thing rather than like the sun. Luminance-preserving: the texel is scaled, not clipped per
+ *  channel, so a clamped white highlight cannot drift toward a hue. */
+const BLOOM_CEILING = 2.6
+
+/** The line in three's bright pass that this module rewrites. Kept as an exact string so a three
+ *  upgrade that moves it is caught by unit test rather than by someone noticing the sun went off. */
+export const BRIGHT_PASS_LINE = 'gl_FragColor = mix( outputColor, texel, alpha );'
+
+/** Rewrite it to hold the ceiling. Warns rather than throws, the way the sky's cloud patch does: a
+ *  bloom that is too hot is worse than one that is right and better than no picture at all. */
+function patchBloomCeiling(pass: UnrealBloomPass): void {
+  const material = pass.materialHighPassFilter
+  if (!material.fragmentShader.includes(BRIGHT_PASS_LINE)) {
+    console.warn('three bright pass changed: bloom runs unbounded, highlights will flare')
+    return
+  }
+  material.uniforms.bloomCeiling = { value: BLOOM_CEILING }
+  material.fragmentShader = material.fragmentShader
+    .replace('uniform float smoothWidth;', 'uniform float smoothWidth;\nuniform float bloomCeiling;')
+    .replace(
+      BRIGHT_PASS_LINE,
+      'texel.rgb *= min( 1.0, bloomCeiling / max( v, 0.0001 ) );\n\t'
+      + 'gl_FragColor = mix( outputColor, texel, alpha );',
+    )
+}
+
 export interface Post {
   /** Draw the world through the chain. Replaces `renderer.render(scene, camera)`. */
   render(): void
@@ -68,9 +113,9 @@ export function buildPost(
   })
   const composer = new EffectComposer(renderer, target)
   composer.addPass(new RenderPass(scene, camera))
-  composer.addPass(new UnrealBloomPass(
-    new THREE.Vector2(1, 1), STRENGTH, RADIUS, THRESHOLD,
-  ))
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), STRENGTH, RADIUS, THRESHOLD)
+  patchBloomCeiling(bloom)
+  composer.addPass(bloom)
   composer.addPass(new OutputPass())
   return {
     render: () => composer.render(),

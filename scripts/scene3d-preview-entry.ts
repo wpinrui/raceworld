@@ -28,12 +28,12 @@ import { balanceAmbient, refitShadow } from '../src/lib/scene3d/lighting3d'
 import {
   applyToneMapping, buildSky, refitFog, skySeedFor, type SkyEnv,
 } from '../src/lib/scene3d/sky3d'
+import { bakeWorldEnv, type WorldEnv } from '../src/lib/scene3d/env3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { buildWorldDetail } from '../src/lib/scene3d/detail3d'
 import { buildPost } from '../src/lib/scene3d/post3d'
-import { buildWorld3D, GROUND_PAD } from '../src/lib/scene3d/world3d'
+import { buildWorld3D, type World3D } from '../src/lib/scene3d/world3d'
 import { loadTreePack, type TreePack } from '../src/lib/scene3d/treepack3d'
-import type { Trees3D } from '../src/lib/scene3d/trees3d'
 
 /** The probe runs off file://, where `public/` is not a served root; the .glb is addressed relative
  *  to the written page instead, and the node half copies it in beside the viewer. */
@@ -70,6 +70,15 @@ declare global {
     __full?: ViewBox3D
     /** Where the front row parks, so a probe can point at the grid without hunting for it. */
     __gridAt?: { x: number; z: number } | null
+    /** Both baked environments, mountable one against the other: the sky alone, and the world shot
+     *  in front of it. What a probe needs to answer whether swapping them moved the LIGHT, which is
+     *  a separate question from whether the reflections got better. */
+    __envs?: {
+      sky: THREE.Texture | null
+      skyIntensity: number
+      probe: THREE.Texture | null
+      probeIntensity: number
+    }
   }
 }
 
@@ -83,12 +92,9 @@ interface BuiltScene {
   layout: TrackLayout
   /** The padded whole-circuit box, the framing every shot and the viewer's resets share. */
   full: ViewBox3D
-  /** The rig's sun, so a pitched shot can refit its shadow box the way the live canvas does. */
-  sun: THREE.DirectionalLight
-  /** The rig's hemisphere, so a mounted environment map can stand it down. */
-  sky: THREE.HemisphereLight
-  /** The wood, so a shot or an orbit can repack its detail tiers the way the live canvas does. */
-  trees: Trees3D
+  /** The world as built, for everything the live canvas reads off it after the fact: the sun's
+   *  shadow box, the wood's tiers, the ground the haze stops at, the reflection probe's stand. */
+  world: World3D
   stats: { meshes: number; triangles: number }
 }
 
@@ -199,7 +205,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     crew.setFlip(si, yLocal > 0 ? -1 : 1)
   })
   scene.add(crew.group)
-  return { scene, layout, full, sun: world.sun, sky: world.sky, trees: world.trees, stats: world.stats }
+  return { scene, layout, full, world, stats: world.stats }
 }
 
 /** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
@@ -260,10 +266,13 @@ function makeRenderer(preserve = false): THREE.WebGLRenderer {
   return renderer
 }
 
-/** Hang the mood's sky behind a built scene, with the haze that joins it to the ground. Called after
- *  the renderer exists, because baking one is a render. Mirrors `Scene3DCanvas` exactly, including
- *  the fallback: no sky bakeable, flat ground colour, still a picture. */
-function dressSky(built: BuiltScene, moodName: string): SkyEnv | null {
+/** Hang the mood's sky behind a built scene, with the haze that joins it to the ground, then shoot
+ *  the world's own reflection probe off it. Called after the renderer exists, because baking either
+ *  one is a render. Mirrors `Scene3DCanvas` exactly, including the fallback: no sky bakeable, flat
+ *  ground colour, still a picture. */
+function dressSky(
+  built: BuiltScene, moodName: string, cars?: THREE.Object3D | null,
+): Array<SkyEnv | WorldEnv> {
   const lighting = MOODS[moodName as Mood] ?? MOODS.afternoon
   let env: SkyEnv | null = null
   try {
@@ -280,8 +289,22 @@ function dressSky(built: BuiltScene, moodName: string): SkyEnv | null {
     built.scene.environmentIntensity = env.lightIntensity
     built.scene.fog = new THREE.Fog(env.horizon, 1, 2)
   }
-  balanceAmbient(built.sky, !!env?.lightsScene)
-  return env
+  balanceAmbient(built.world.sky, !!env?.lightsScene)
+  built.world.trees.update(built.world.probe)
+  const probe = bakeWorldEnv(window.__renderer!, built.scene, {
+    at: built.world.probe, ground: built.world.ground, hide: [cars],
+  })
+  if (probe) {
+    built.scene.environment = probe.environment
+    built.scene.environmentIntensity = probe.intensity
+  }
+  window.__envs = {
+    sky: env?.environment ?? null,
+    skyIntensity: env?.lightIntensity ?? 1,
+    probe: probe?.environment ?? null,
+    probeIntensity: probe?.intensity ?? 1,
+  }
+  return [env, probe].filter((e): e is SkyEnv | WorldEnv => !!e)
 }
 
 /** The haze actually in force, for the probe's console line. */
@@ -298,15 +321,11 @@ function fogSpanOf(built: BuiltScene): [number, number] | undefined {
   return fog instanceof THREE.Fog ? [fog.near, fog.far] : undefined
 }
 
-/** Refit the haze to the shot, as the live canvas refits it per paint. The radius is the ground
- *  plane's inscribed reach: the nearest distance at which the world can stop. */
+/** Refit the haze to the shot, as the live canvas refits it per paint, against the world's own
+ *  ground plane. */
 function fitFog(built: BuiltScene, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera): void {
   if (!(built.scene.fog instanceof THREE.Fog)) return
-  const [vx, vy, vw, vh] = built.layout.viewBox.split(' ').map(Number)
-  refitFog(built.scene.fog, camera, {
-    x: vx + vw / 2, z: vy + vh / 2, radius: Math.min(vw, vh) / 2 + GROUND_PAD,
-    metresPerUnit: built.layout.metresPerUnit,
-  })
+  refitFog(built.scene.fog, camera, built.world.ground)
 }
 
 /** The pitched shot: the map's OWN orbit camera, driven by the same `applyOrbitCam` the live canvas
@@ -330,8 +349,10 @@ async function eyeShot() {
   }
   const built = buildScene(id, q.get('mood') ?? 'afternoon', full)
   const cars = Number(q.get('cars') ?? '0')
+  let carsGroup: THREE.Group | null = null
   if (cars > 0) {
     const field = carMeshes(layout, cars, { x: cam.tx, z: cam.tz })
+    carsGroup = field.group
     built.scene.add(field.group)
     // Look AT a car, not at the fraction of the viewBox that happened to be asked for. Cars sit on
     // the racing line at whatever spacing the field gives them, and hunting one down by nudging
@@ -345,14 +366,14 @@ async function eyeShot() {
   const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)
   renderer.setSize(w, h, false)
-  dressSky(built, q.get('mood') ?? 'afternoon')
+  dressSky(built, q.get('mood') ?? 'afternoon', carsGroup)
 
   const camera = new THREE.PerspectiveCamera()
   // `ppu` is the stage's pixels per viewBox unit at zoom 1, exactly as `RaceTrackMap` computes it.
   const frame = applyOrbitCam(camera, cam, { w, h }, w / full.w)
   const half = Math.hypot(frame.halfW, frame.halfH)
-  refitShadow(built.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
-  built.trees.update(camera.position)
+  refitShadow(built.world.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
+  built.world.trees.update(camera.position)
   fitFog(built, camera)
   const post = buildPost(renderer, built.scene, camera)
   post.setSize(w, h, 1)
@@ -368,8 +389,8 @@ async function eyeShot() {
     const vh = size?.h ?? renderer.domElement.height / renderer.getPixelRatio()
     const f = applyOrbitCam(camera, cam, { w: vw, h: vh }, vw / full.w)
     const r = Math.hypot(f.halfW, f.halfH)
-    refitShadow(built.sun, { x: f.cx - r, y: f.cz - r, w: 2 * r, h: 2 * r })
-    built.trees.update(camera.position)
+    refitShadow(built.world.sun, { x: f.cx - r, y: f.cz - r, w: 2 * r, h: 2 * r })
+    built.world.trees.update(camera.position)
     fitFog(built, camera)
   }
   window.__full = full
@@ -408,12 +429,13 @@ async function shotMain() {
   // Built after the crop is known, so the sun's shadow map is fitted to what is in shot.
   const built = buildScene(id, q.get('mood') ?? 'afternoon', vb)
   const cars = Number(q.get('cars') ?? '0')
-  if (cars > 0) built.scene.add(carMeshes(layout, cars).group)
+  const carsGroup = cars > 0 ? carMeshes(layout, cars).group : null
+  if (carsGroup) built.scene.add(carsGroup)
   const camera = frameOrtho(vb, tilt)
   const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)
   renderer.setSize(w, h, false)
-  dressSky(built, q.get('mood') ?? 'afternoon')
+  dressSky(built, q.get('mood') ?? 'afternoon', carsGroup)
   fitFog(built, camera)
   const post = buildPost(renderer, built.scene, camera)
   post.setSize(w, h, 1)
@@ -446,7 +468,7 @@ function viewerMain() {
   renderer.setPixelRatio(window.devicePixelRatio)
 
   let built: BuiltScene | null = null
-  let sky: SkyEnv | null = null
+  let baked: Array<SkyEnv | WorldEnv> = []
   let camera: THREE.OrthographicCamera | null = null
   let controls: OrbitControls | null = null
   const aspect = () => window.innerWidth / window.innerHeight
@@ -488,9 +510,9 @@ function viewerMain() {
     // Yield a frame so the disabled state paints before the synchronous solve blocks the thread.
     requestAnimationFrame(() => setTimeout(() => {
       if (built) disposeScene(built.scene)
-      sky?.dispose()
+      for (const b of baked) b.dispose()
       built = buildScene(id, mood)
-      sky = dressSky(built, mood)
+      baked = dressSky(built, mood)
       window.__scene = built.scene
       document.title = `scene3d ${id}`
       try {

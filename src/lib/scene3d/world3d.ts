@@ -20,6 +20,8 @@ import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M, densifyTrace,
 } from '@/lib/ui/track-path'
 import { parseViewBox, type ViewBox3D } from './camera3d'
+import { probePoint } from './env3d'
+import type { GroundExtent } from './sky3d'
 import { localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
 import { DECAL_PULL, ROUGH, SceneMaterials } from './materials3d'
 import { buildGroundStack3D } from './ground3d'
@@ -94,6 +96,13 @@ export interface World3D {
   /** The wood, held out so a moving camera can repack its detail tiers. `THREE.LOD` cannot compose
    *  with instancing, so the ladder is driven by hand from wherever the shadow map is refitted. */
   trees: Trees3D
+  /** Where this world's ground plane actually stops. The ONE answer, because two things have to
+   *  finish before that edge (the haze and the reflection bake) and three places used to work it
+   *  out for themselves off whichever viewBox they happened to be holding. */
+  ground: GroundExtent
+  /** Where a reflection probe stands in this world: a couple of metres over a plain stretch of the
+   *  lap, which is what a car flank spends its race actually reflecting. */
+  probe: THREE.Vector3
   /** What this scene costs, for the probe's console line. */
   stats: { meshes: number; triangles: number }
 }
@@ -214,5 +223,22 @@ export function buildWorld3D(
       triangles += o instanceof THREE.InstancedMesh ? per * o.count : per
     }
   })
-  return { group, sun, sky, trees, stats: { meshes, triangles: Math.round(triangles) } }
+  return {
+    group,
+    sun,
+    sky,
+    trees,
+    // The plane laid down at the top of this function, described: its centre, and the nearest
+    // distance at which it can stop. Inscribed rather than circumscribed, so no bearing runs off it.
+    ground: {
+      x: vx + vw / 2,
+      z: vy + vh / 2,
+      radius: Math.min(vw, vh) / 2 + GROUND_PAD,
+      metresPerUnit: layout.metresPerUnit,
+    },
+    // Off the densified centreline built above, so the probe stands on the road rather than at
+    // whatever the raw trace's nearest sample happened to be.
+    probe: probePoint(circuit, layout.metresPerUnit),
+    stats: { meshes, triangles: Math.round(triangles) },
+  }
 }

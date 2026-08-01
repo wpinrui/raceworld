@@ -1338,9 +1338,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           lighting={lighting}
           night={mood === 'night'}
           skySeed={skySeed}
-          vb={vb}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
-          metresPerUnit={layout.metresPerUnit}
           camRef={camRef}
           camera={glCamera}
           paintRef={paintRef}

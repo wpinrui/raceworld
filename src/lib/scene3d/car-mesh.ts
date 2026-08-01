@@ -14,7 +14,7 @@ import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
-import { ROUGH, surface } from './materials3d'
+import { LACQUER, ROUGH, surface } from './materials3d'
 import { repairNormals } from './normals3d'
 
 /** Vertical exaggeration for the whole car, wheels excepted: judged too low against its own tyres
@@ -1158,17 +1158,24 @@ function finGeometry(outline: Array<[number, number]>, xCentre: number, thick: n
  *  It could not be before. A metal has no diffuse term at all, so it is nothing but a reflection of
  *  its surroundings, and the rig had no environment to reflect: metalness rendered black, which is
  *  why this used to fake it with a broad Phong lobe off the directional sun. The sky is baked into
- *  an environment map now (`buildSky`), so a metal part reflects the actual sky it is standing
- *  under, and a wheel rim picks up the sun as a moving glint instead of a static specular blob. */
-export type Finish = 'flat' | 'metal'
+ *  an environment map now (`buildSky`), and the WORLD into the one that actually gets mounted
+ *  (`bakeWorldEnv`), so a metal part reflects the pit wall and the tarmac it is standing among, and
+ *  a wheel rim picks up the sun as a moving glint instead of a static specular blob.
+ *
+ *  `rubber` is the same single-lobe finish `flat` used to be, kept for the tyres. Everything else on
+ *  this car is lacquered and a tyre is not: rubber has no clear coat over it, and giving it one puts
+ *  a hard reflected sun on a sidewall that should be swallowing the light. */
+export type Finish = 'flat' | 'metal' | 'rubber'
 
 function mesh(geo: THREE.BufferGeometry, colour: string, finish: Finish = 'flat'): THREE.Mesh {
   // DoubleSide: the sink's quads are wound by hand and a culled wing is a missing wing.
   const material = finish === 'metal'
     ? surface(colour, { roughness: ROUGH.gloss, metalness: 1 })
-    // Race bodywork is clearcoated, so it is glossier than the world around it but nowhere near a
-    // mirror: the liveries have to stay readable as their authored colours.
-    : surface(colour, { roughness: ROUGH.paint })
+    : finish === 'rubber'
+      ? surface(colour, { roughness: ROUGH.paint })
+      // Race bodywork is a colour coat under a clear one, so it gets both lobes: the livery stays
+      // readable at its authored roughness while the lacquer carries the sharp moving highlight.
+      : surface(colour, { roughness: ROUGH.paint, ...LACQUER })
   const m = new THREE.Mesh(geo, material)
   m.castShadow = true
   m.receiveShadow = true
@@ -1490,7 +1497,7 @@ function buildProxyCar(paint: CarPaint): THREE.Group {
     box(sink, x0, x1, y0, y1, z0, z1)
     sinks.set(tint, sink)
   }
-  for (const [tint, sink] of sinks) group.add(mesh(sink.build(), tint))
+  for (const [tint, sink] of sinks) group.add(mesh(sink.build(), tint, tint === TYRE ? 'rubber' : 'flat'))
   return group
 }
 
@@ -1898,7 +1905,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
     // Everything that ROLLS goes in here; the duct below stays on the steering pivot outside it.
     const roll = new THREE.Group()
     pivot.add(roll)
-    roll.add(mesh(tyreGeometry(w.r, w.w), TYRE))
+    roll.add(mesh(tyreGeometry(w.r, w.w), TYRE, 'rubber'))
     // Barrel and flanges are OPEN ENDED. A capped cylinder puts a solid disc across the wheel's
     // face and every spoke behind it disappears; what fills the middle is the brake disc, which is
     // what fills it on the car.
@@ -1925,7 +1932,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
         // The COMPOUND band, on the flat of the sidewall and a hair proud of it. Casts no shadow:
         // it is a marking, and a marking that shadows reads as a raised ring. BOTH walls carry it,
         // so it is added before the outboard-only work below.
-        const ring = mesh(new THREE.RingGeometry(w.r * 0.70, w.r * 0.80, 32), band)
+        const ring = mesh(new THREE.RingGeometry(w.r * 0.70, w.r * 0.80, 32), band, 'rubber')
         ring.geometry.rotateY(Math.PI / 2)
         ring.position.x = side * (w.w / 2 + 0.25)
         ring.castShadow = false
