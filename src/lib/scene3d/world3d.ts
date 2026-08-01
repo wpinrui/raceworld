@@ -172,7 +172,9 @@ export function buildWorld3D(
 
   // Kerbs, the one thing on this ground that is not paint: lofted solids standing on the road
   // surface, red and white blocks alike, wearing their own corrugation (kerb3d).
-  group.add(buildKerbs3D(scenery.kerbs, u, lift(LAYER.kerbs), materials, detail?.kerb ?? null))
+  group.add(buildKerbs3D(
+    scenery.kerbs, u, { base: lift(LAYER.kerbs), layer: LAYER.kerbs }, materials, detail?.kerb ?? null,
+  ))
 
   add(localRectsGeometry(
     startPose(layout.start, layout.metresPerUnit), startLineRects(u), lift(LAYER.marks),

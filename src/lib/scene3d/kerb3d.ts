@@ -168,11 +168,27 @@ export function loftKerb(
   return repairNormals(geometry)
 }
 
+/** Where the kerb sits in the ground stack: the height it stands on, and the painter layer whose
+ *  depth bias it takes.
+ *
+ *  It needs the bias even though it is a SOLID, which is the opposite of the obvious. Every sheet
+ *  down there carries a slope-scaled `polygonOffset` to hold the coplanar stack apart, and
+ *  slope-scaled means it grows with the depth gradient per pixel: zoom out or tilt the camera and a
+ *  run-off sheet's bias outgrows the 14 mm of real height between it and the kerb standing on it,
+ *  and the gravel draws over the kerb. Measured, before this was passed: between 29% and 95% of one
+ *  kerb's crown survived, depending purely on where the camera was. Physical height does not settle
+ *  a fight fought in biased depth; the kerb has to out-pull what it stands on. */
+export interface KerbStack {
+  base: number
+  layer: number
+}
+
 /** Every kerb on the circuit, as solids standing on the road surface. */
 export function buildKerbs3D(
-  kerbs: readonly SceneryKerb[], u: (m: number) => number, base: number,
+  kerbs: readonly SceneryKerb[], u: (m: number) => number, stack: KerbStack,
   materials: SceneMaterials, detail: SurfaceDetail | null = null,
 ): THREE.Group {
+  const { base, layer } = stack
   const group = new THREE.Group()
   // Absent a generated grain the UVs still have to mean something, so they fall back to one tile per
   // kerb width: no map samples them, and a later one gets a sane scale for nothing.
@@ -186,7 +202,9 @@ export function buildKerbs3D(
       if (!geometry) continue
       // `matte`, not `paint`: a kerb is painted CONCRETE, cast rough for grip, and at the sheen of
       // painted metal the sky's broad specular sat over the red hard enough to wash it out pink.
-      const mesh = new THREE.Mesh(geometry, materials.get(colour, { roughness: ROUGH.matte, detail }))
+      const mesh = new THREE.Mesh(
+        geometry, materials.get(colour, { roughness: ROUGH.matte, detail, layer }),
+      )
       // A solid, so it casts as well as receives. A low sun raking across a corrugated kerb is most
       // of what says the thing is not paint.
       mesh.castShadow = true

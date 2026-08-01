@@ -162,7 +162,7 @@ describe('buildKerbs3D', () => {
   }
 
   it('gives every kerb its two paints, as shadow-casting solids', () => {
-    const group = buildKerbs3D([kerb], u, BASE, new SceneMaterials())
+    const group = buildKerbs3D([kerb], u, { base: BASE, layer: 11 }, new SceneMaterials())
     const meshes = group.children.filter((o): o is THREE.Mesh => o instanceof THREE.Mesh)
     expect(meshes).toHaveLength(2)
     const colours = meshes.map((m) => (m.material as THREE.MeshStandardMaterial).color.getHexString())
@@ -170,9 +170,20 @@ describe('buildKerbs3D', () => {
     for (const mesh of meshes) {
       expect(mesh.castShadow).toBe(true)
       expect(mesh.receiveShadow).toBe(true)
-      // No polygonOffset: the depth buffer separates a solid from the road honestly, and a
-      // slope-scaled bias on a near-vertical face would pull the kerb through whatever parks beside it.
-      expect((mesh.material as THREE.MeshStandardMaterial).polygonOffset).toBe(false)
+    }
+  })
+
+  it('out-biases every sheet it stands on, or the ground draws over it', () => {
+    // Real height does not settle this: the ground's polygonOffset is SLOPE-SCALED, so it grows with
+    // the depth gradient per pixel and a zoomed-out or tilted camera walks a run-off sheet straight
+    // over the kerb standing 14 mm above it. Measured at between 29% and 95% of one kerb's crown
+    // visible, by camera alone, when the kerb went out unbiased.
+    const group = buildKerbs3D([kerb], u, { base: BASE, layer: 11 }, new SceneMaterials())
+    for (const mesh of group.children as THREE.Mesh[]) {
+      const material = mesh.material as THREE.MeshStandardMaterial
+      expect(material.polygonOffset).toBe(true)
+      // Under the run-off (4), the casing (7), the tarmac (8) and the ink (9): more negative wins.
+      expect(material.polygonOffsetFactor).toBeLessThan(-9)
     }
   })
 })
