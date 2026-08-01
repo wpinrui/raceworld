@@ -31,8 +31,9 @@ import { buildOpsDecals } from './ops3d'
 import { buildPitComplex3D, buildPitPaint3D } from './pit3d'
 import type { WorldTextures } from './textures3d'
 
-/** Ground reach beyond the viewBox, in units: the same margin the 2D preview clears to the wash. */
-const GROUND_PAD = 4000
+/** Ground reach beyond the viewBox, in units: the same margin the 2D preview clears to the wash.
+ *  Exported because it is where the world STOPS, and the fog has to have finished by then. */
+export const GROUND_PAD = 4000
 
 /** One painter's layer sits this far above the one below, in metres. MILLIMETRES, deliberately: the
  *  camera can lie nearly flat now, and a stack tall enough to read as height floats every car that

@@ -105,12 +105,19 @@ async function main() {
         process.exitCode = 1
         continue
       }
-      const stats = await page.evaluate('window.__stats') as { meshes: number; triangles: number; w: number; h: number }
+      const stats = await page.evaluate('window.__stats') as {
+        meshes: number; triangles: number; w: number; h: number
+        horizon?: [number, number, number]; fogSpan?: [number, number]
+      }
       await page.setViewportSize({ width: stats.w, height: stats.h })
       const file = `${OUT}/${id}${tag}.png`
       await page.locator('#gl').screenshot({ path: file })
+      const haze = stats.horizon
+        ? `, haze ${stats.horizon.map((c) => c.toFixed(2)).join('/')}`
+          + ` over ${stats.fogSpan?.map((v) => Math.round(v)).join('..')}u`
+        : ', no sky'
       console.log(`${(id + tag).padEnd(20)} ${note.padStart(9)} -> ${file}   `
-        + `(${stats.meshes} meshes, ${stats.triangles} triangles)`)
+        + `(${stats.meshes} meshes, ${stats.triangles} triangles${haze})`)
     }
   }
   await browser.close()

@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import { Scene3DCanvas } from './Scene3DCanvas'
 import { groundPoint, type OrbitCam } from '@/lib/scene3d/camera3d'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
+import { skySeedFor } from '@/lib/scene3d/sky3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
 import { PitCrew3D } from '@/lib/scene3d/crew3d'
@@ -209,6 +210,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     () => ({ ...MOODS[mood], azimuth: pitViewAzimuth(layout) ?? MOODS[mood].azimuth }),
     [layout, mood],
   )
+  // The circuit's own cloud field: the sky shader drifts its noise with `time`, so freezing it at a
+  // number derived from the id gives every venue its own weather instead of one pattern everywhere.
+  const skySeed = useMemo(() => skySeedFor(layout.circuitId), [layout.circuitId])
   // The cars read the SAME light. One stable object, so the memoised sprites do not re-render for it.
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
@@ -1313,8 +1317,12 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           carsGroup={carField3d?.group ?? null}
           crewGroup={crew3d?.group ?? null}
           base={scenery.base}
+          lighting={lighting}
+          night={mood === 'night'}
+          skySeed={skySeed}
           vb={vb}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
+          metresPerUnit={layout.metresPerUnit}
           camRef={camRef}
           camera={glCamera}
           paintRef={paintRef}

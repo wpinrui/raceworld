@@ -23,14 +23,24 @@ import {
   applyOrbitCam, frameOrtho, parseViewBox, type OrbitCam, type ViewBox3D,
 } from '../src/lib/scene3d/camera3d'
 import { refitShadow } from '../src/lib/scene3d/lighting3d'
+import {
+  applyToneMapping, buildSky, refitFog, skySeedFor, SKY_INTENSITY, type SkyEnv,
+} from '../src/lib/scene3d/sky3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
-import { buildWorld3D } from '../src/lib/scene3d/world3d'
+import { buildWorld3D, GROUND_PAD } from '../src/lib/scene3d/world3d'
 
 declare global {
   interface Window {
     __done?: boolean
     __error?: string
-    __stats?: { meshes: number; triangles: number; w: number; h: number }
+    __stats?: {
+      meshes: number; triangles: number; w: number; h: number
+      /** The baked sky's horizon radiance, already scaled: the number to tune `SKY_INTENSITY` on,
+       *  because a sky that clips to white and a sky that is genuinely bright look identical. */
+      horizon?: [number, number, number]
+      /** The haze's near and far, in world units. */
+      fogSpan?: [number, number]
+    }
     /** Debug handles: the scene is data, and being able to poke it from the console or a probe's
      *  `evaluate` is the whole reason the viewer exists. */
     __scene?: THREE.Scene
@@ -146,9 +156,56 @@ function makeRenderer(preserve = false): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: preserve })
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  applyToneMapping(renderer)
   window.__renderer = renderer
   window.__THREE = THREE
   return renderer
+}
+
+/** Hang the mood's sky behind a built scene, with the haze that joins it to the ground. Called after
+ *  the renderer exists, because baking one is a render. Mirrors `Scene3DCanvas` exactly, including
+ *  the fallback: no sky bakeable, flat ground colour, still a picture. */
+function dressSky(built: BuiltScene, moodName: string): SkyEnv | null {
+  const lighting = MOODS[moodName as Mood] ?? MOODS.afternoon
+  let env: SkyEnv | null = null
+  try {
+    env = buildSky(window.__renderer!, lighting, {
+      night: moodName === 'night', seed: skySeedFor(built.layout.circuitId),
+    })
+  } catch (err) {
+    console.warn(`sky bake failed, falling back to the flat clear: ${String(err)}`)
+  }
+  if (env) {
+    built.scene.background = env.texture
+    built.scene.backgroundIntensity = SKY_INTENSITY
+    built.scene.fog = new THREE.Fog(env.horizon, 1, 2)
+  }
+  return env
+}
+
+/** The haze actually in force, for the probe's console line. */
+function horizonOf(built: BuiltScene): [number, number, number] | undefined {
+  const { fog } = built.scene
+  return fog instanceof THREE.Fog ? [fog.color.r, fog.color.g, fog.color.b] : undefined
+}
+
+/** Where the haze ramps, for the probe's console line: the numbers to read when the horizon still
+ *  has a seam on it, because a fog that is present and a fog that is fitted past the world look the
+ *  same from here. */
+function fogSpanOf(built: BuiltScene): [number, number] | undefined {
+  const { fog } = built.scene
+  return fog instanceof THREE.Fog ? [fog.near, fog.far] : undefined
+}
+
+/** Refit the haze to the shot, as the live canvas refits it per paint. The radius is the ground
+ *  plane's inscribed reach: the nearest distance at which the world can stop. */
+function fitFog(built: BuiltScene, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera): void {
+  if (!(built.scene.fog instanceof THREE.Fog)) return
+  const [vx, vy, vw, vh] = built.layout.viewBox.split(' ').map(Number)
+  refitFog(built.scene.fog, camera, {
+    x: vx + vw / 2, z: vy + vh / 2, radius: Math.min(vw, vh) / 2 + GROUND_PAD,
+    metresPerUnit: built.layout.metresPerUnit,
+  })
 }
 
 /** The pitched shot: the map's OWN orbit camera, driven by the same `applyOrbitCam` the live canvas
@@ -174,18 +231,20 @@ async function eyeShot() {
   const cars = Number(q.get('cars') ?? '0')
   if (cars > 0) built.scene.add(carMeshes(layout, cars))
 
+  const renderer = makeRenderer(true)
+  renderer.setPixelRatio(1)
+  renderer.setSize(w, h, false)
+  dressSky(built, q.get('mood') ?? 'afternoon')
+
   const camera = new THREE.PerspectiveCamera()
   // `ppu` is the stage's pixels per viewBox unit at zoom 1, exactly as `RaceTrackMap` computes it.
   const frame = applyOrbitCam(camera, cam, { w, h }, w / full.w)
   const half = Math.hypot(frame.halfW, frame.halfH)
   refitShadow(built.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
-
-  const renderer = makeRenderer(true)
-  renderer.setPixelRatio(1)
-  renderer.setSize(w, h, false)
+  fitFog(built, camera)
   renderer.render(built.scene, camera)
 
-  window.__stats = { ...built.stats, w, h }
+  window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
   window.__scene = built.scene
   window.__camera = camera
 }
@@ -218,9 +277,11 @@ async function shotMain() {
   const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)
   renderer.setSize(w, h, false)
+  dressSky(built, q.get('mood') ?? 'afternoon')
+  fitFog(built, camera)
   renderer.render(built.scene, camera)
 
-  window.__stats = { ...built.stats, w, h }
+  window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
   window.__scene = built.scene
   window.__camera = camera
 }
@@ -246,11 +307,14 @@ function viewerMain() {
   renderer.setPixelRatio(window.devicePixelRatio)
 
   let built: BuiltScene | null = null
+  let sky: SkyEnv | null = null
   let camera: THREE.OrthographicCamera | null = null
   let controls: OrbitControls | null = null
   const aspect = () => window.innerWidth / window.innerHeight
   const render = () => {
-    if (built && camera) renderer.render(built.scene, camera)
+    if (!built || !camera) return
+    fitFog(built, camera)
+    renderer.render(built.scene, camera)
   }
 
   const setCamera = (tiltDeg: number) => {
@@ -285,7 +349,9 @@ function viewerMain() {
     // Yield a frame so the disabled state paints before the synchronous solve blocks the thread.
     requestAnimationFrame(() => setTimeout(() => {
       if (built) disposeScene(built.scene)
+      sky?.dispose()
       built = buildScene(id, mood)
+      sky = dressSky(built, mood)
       window.__scene = built.scene
       document.title = `scene3d ${id}`
       try {
