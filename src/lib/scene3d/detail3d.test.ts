@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { faceUV, planarUV, rubberDetail, scaleUV } from './detail3d'
+import { detune, faceUV, planarUV, rubberDetail, scaleUV } from './detail3d'
 
 /** A one-triangle geometry at the given world positions. */
 function tri(...points: Array<[number, number, number]>): THREE.BufferGeometry {
@@ -122,6 +122,27 @@ describe('scaleUV', () => {
     const g = tri([0, 0, 0], [1, 0, 0], [0, 0, 1])
     expect(() => scaleUV(g, 4, 4)).not.toThrow()
     expect(g.getAttribute('uv')).toBeUndefined()
+  })
+})
+
+describe('detune', () => {
+  it('makes a map cover MORE world, never less', () => {
+    // THE thing to get right, and the reciprocal is easy to write backwards. A factor above 1 has to
+    // stretch the map over a longer stretch of road; inverted it would squeeze the grain below the
+    // texel it was authored for, which is where aliasing lives, and the surface would still tile.
+    const tex = new THREE.Texture()
+    detune(tex, 1.31)
+    expect(tex.repeat.x).toBeCloseTo(1 / 1.31, 10)
+    expect(tex.repeat.y).toBeCloseTo(1 / 1.31, 10)
+    expect(tex.repeat.x).toBeLessThan(1)
+  })
+
+  it('leaves a map alone at 1, and hands the same texture back either way', () => {
+    // Returned rather than mutated-in-place-and-discarded so it reads as a wrapper at the call
+    // sites, where the point is which maps got it and which deliberately did not.
+    const tex = new THREE.Texture()
+    expect(detune(tex, 1)).toBe(tex)
+    expect(tex.repeat.x).toBe(1)
   })
 })
 
