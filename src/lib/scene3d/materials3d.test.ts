@@ -58,3 +58,25 @@ describe('the clear coat', () => {
     expect(materials.get('#C81400', { roughness: ROUGH.paint, ...LACQUER })).toBe(coated)
   })
 })
+
+describe('the dielectric specular', () => {
+  it('costs a physical material only where the reflection is turned down', () => {
+    // Same bargain the clear coat strikes: the longer shader is compiled for surfaces that asked
+    // for something the standard one cannot express, and for nothing else.
+    expect(surface('#7C7166')).toBeInstanceOf(THREE.MeshStandardMaterial)
+    expect(surface('#7C7166', { specular: 1 })).not.toBeInstanceOf(THREE.MeshPhysicalMaterial)
+    const damped = surface('#7C7166', { specular: 0.25 })
+    expect(damped).toBeInstanceOf(THREE.MeshPhysicalMaterial)
+    expect((damped as THREE.MeshPhysicalMaterial).specularIntensity).toBe(0.25)
+  })
+
+  it('caches a damped surface apart from a full one of the same colour and finish', () => {
+    // The tarmac and its white lines differ in exactly this and nothing else the key was reading:
+    // a shared entry paints the boundary line with the road's damped reflection or the reverse.
+    const materials = new SceneMaterials()
+    const full = materials.get('#7C7166', { roughness: ROUGH.matte })
+    const damped = materials.get('#7C7166', { roughness: ROUGH.matte, specular: 0.25 })
+    expect(damped).not.toBe(full)
+    expect(materials.get('#7C7166', { roughness: ROUGH.matte, specular: 0.25 })).toBe(damped)
+  })
+})

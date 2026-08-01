@@ -53,6 +53,29 @@ const LAYER = {
 /** The stack's top, in metres: what anything RIDING the road (the cars) must clear. */
 export const STACK_TOP_M = LIFT_M * LAYER.marks
 
+/** How much of the standard 4% dielectric reflection the tarmac returns.
+ *
+ *  A quarter, where every other surface out here returns the whole thing. This is the fix for the
+ *  road reading blue, and the number is worth its reasoning because the obvious levers all failed.
+ *
+ *  MEASURED on Britain, as the ratio of a surface's rendered blue-over-red to its authored
+ *  blue-over-red in linear light. The grass came out at x1.62 and the white lines at x1.53: that is
+ *  the cast of the light itself, which is mostly skylight, and everything standing under it carries
+ *  it. The tarmac came out at x3.44, more than twice as far. Turning its specular off collapsed
+ *  that to x1.31, i.e. the whole excess is one term: the reflection a dielectric returns whatever
+ *  colour it is painted. It is the sky's colour, not the road's, and it was doing about four fifths
+ *  of the road's brightness at a racing camera angle.
+ *
+ *  Roughness was tried first and made it WORSE (x3.98). The sharp lobe was reflecting the horizon,
+ *  which is tarmac and grass and pit wall; blurring it out swapped that for the open sky above.
+ *  Warming `ROAD_TARMAC` cannot fix it either, because the sky term is added rather than multiplied:
+ *  no albedo, not even a pure red one, gets past the floor it sets.
+ *
+ *  So the road returns less of it, and `ROAD_TARMAC` was lightened to carry the surface on its own
+ *  diffuse instead. A quarter rather than none: asphalt is porous and sooty and a poor mirror, but
+ *  it is not a void, and at zero the road loses the sun's own sheen along with the sky's. */
+const TARMAC_SPECULAR = 0.25
+
 export interface World3DInput {
   layout: TrackLayout
   scenery: Scenery
@@ -123,9 +146,12 @@ export function buildWorld3D(
   const add = (
     geometry: THREE.BufferGeometry, colour: string, layer = 0,
     grain: SurfaceDetail | null = detail?.ground ?? null, roughness: number = ROUGH.chalk,
+    specular = 1,
   ) => {
     if (grain) planarUV(geometry, u(grain.tileM))
-    const mesh = new THREE.Mesh(geometry, materials.get(colour, { layer, roughness, detail: grain }))
+    const mesh = new THREE.Mesh(
+      geometry, materials.get(colour, { layer, roughness, detail: grain, specular }),
+    )
     mesh.receiveShadow = true
     group.add(mesh)
   }
@@ -143,21 +169,21 @@ export function buildWorld3D(
   const roadOpts: RoadOpts = {
     layout, u, pitZone, pitSlots, lap, ground: scenery.base, shadow: shadowFill(lighting),
   }
+  // The ink IS the road, so it takes the road's grain and the road's finish alike.
+  const inkSurface = {
+    detail: detail?.tarmac ?? null,
+    metresPerUnit: layout.metresPerUnit,
+    specular: TARMAC_SPECULAR,
+  }
   const under = buildOpsDecals(
     roadInkUnder(roadOpts),
-    {
-      y: lift(LAYER.inkUnder), order: 1, bias: LAYER.inkUnder,
-      detail: detail?.tarmac ?? null, metresPerUnit: layout.metresPerUnit,
-    },
+    { y: lift(LAYER.inkUnder), order: 1, bias: LAYER.inkUnder, ...inkSurface },
     materials,
   )
   group.add(under.group)
   const over = buildOpsDecals(
     roadInkOver(roadOpts),
-    {
-      y: lift(LAYER.inkOver), order: under.nextOrder, bias: LAYER.inkOver,
-      detail: detail?.tarmac ?? null, metresPerUnit: layout.metresPerUnit,
-    },
+    { y: lift(LAYER.inkOver), order: under.nextOrder, bias: LAYER.inkOver, ...inkSurface },
     materials,
   )
   group.add(over.group)
@@ -170,21 +196,25 @@ export function buildWorld3D(
     [ROAD_CASING, LAYER.casing, TRACK_WIDTH_M, LANE_WIDTH_M],
     [ROAD_TARMAC, LAYER.tarmac, TARMAC_WIDTH_M, LANE_TARMAC_M],
   ] as const) {
-    // The tarmac wears the aggregate grain, and `matte` rather than `chalk`: it is the one big
+    // The tarmac wears the aggregate grain, at `matte` rather than `chalk`: it is the one big
     // surface out here that returns a coherent sheen, and the roughness map breaks that sheen up
-    // across the ribbon instead of sliding it along as one sheet.
+    // across the ribbon instead of sliding it along as one sheet. What it does NOT do is return the
+    // sky at full dielectric strength, which is what had it rendering blue (`TARMAC_SPECULAR`).
     //
-    // The CASING is the boundary line, so it wears the paint grain instead. Handing it the road's
-    // maps mottled it from a fifth brightness to full and corrugated it with chippings, which is a
-    // strip of aggregate where the circuit's edge is supposed to be.
-    const road = (colour === ROAD_CASING ? detail?.paint : detail?.tarmac) ?? null
-    add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte)
-    add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer, road, ROUGH.matte)
+    // The CASING is the boundary line, so it wears the paint grain and a full specular instead.
+    // Handing it the road's maps mottled it from a fifth brightness to full and corrugated it with
+    // chippings, which is a strip of aggregate where the circuit's edge is supposed to be; and paint
+    // really is the smooth sealed surface the road around it is not.
+    const isPaint = colour === ROAD_CASING
+    const road = (isPaint ? detail?.paint : detail?.tarmac) ?? null
+    const spec = isPaint ? 1 : TARMAC_SPECULAR
+    add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte, spec)
+    add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer, road, ROUGH.matte, spec)
     if (pitZone) {
-      add(ringGeometry(pitZone.work, lift(layer)), colour, layer, road, ROUGH.matte)
+      add(ringGeometry(pitZone.work, lift(layer)), colour, layer, road, ROUGH.matte, spec)
       // The apron carries the same white edge line: a stroke round the ring in 2D, a ribbon here.
-      if (colour === ROAD_CASING) {
-        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte)
+      if (isPaint) {
+        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte, spec)
       }
     }
   }

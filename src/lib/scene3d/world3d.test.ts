@@ -201,6 +201,34 @@ describe('buildWorld3D', () => {
     expect(white.has(detail.ground.normalMap)).toBe(false)
   })
 
+  it('damps the tarmac reflection and only the tarmac, ink included', () => {
+    // The road returns a quarter of the dielectric reflection every other surface returns, because
+    // at full strength the sky it reflects was doing four fifths of its brightness and the road
+    // rendered blue. The white lines beside it keep the full one: paint IS a sealed surface.
+    const specular = new Map<string, Set<number>>()
+    world.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || Array.isArray(o.material)) return
+      const mat = o.material as THREE.MeshPhysicalMaterial
+      if (!mat.color) return
+      const key = mat.color.getHexString()
+      if (!specular.has(key)) specular.set(key, new Set())
+      // A standard material has no such field at all, which IS the full-strength answer.
+      specular.get(key)!.add(mat.specularIntensity ?? 1)
+    })
+    expect([...specular.get(new THREE.Color(ROAD_TARMAC).getHexString())!]).toEqual([0.25])
+    expect([...specular.get(new THREE.Color(ROAD_CASING).getHexString())!]).toEqual([1])
+    // The ink is the road wearing a lap's worth of rubber, and it is a separate stack of materials
+    // built through `buildOpsDecals`: left at full it would be a glossier, bluer racing line drawn
+    // down the middle of the surface it belongs to.
+    let inkMeshes = 0
+    world.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || o.renderOrder === 0 || o.renderOrder >= 1000) return
+      inkMeshes++
+      expect((o.material as THREE.MeshPhysicalMaterial).specularIntensity).toBe(0.25)
+    })
+    expect(inkMeshes).toBeGreaterThan(10)
+  })
+
   it('lays the driven-in ink as ordered decals that never write depth', () => {
     let decals = 0
     let maxOrder = 0

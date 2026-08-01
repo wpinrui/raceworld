@@ -22,11 +22,23 @@ export const ROAD_CASING = '#D8D8D2'
 // The STONE colour, not the surface's average: the aggregate map multiplies this down to the
 // bitumen between the chippings, so it has to sit where the brightest chips do.
 //
-// Warm, too. It was '#33383E', which is blue-grey before any light touches it, and the sky's own
-// ambient then adds more: measured on a render, the tarmac came out with blue 22 above red where a
-// photograph of a real circuit has blue BELOW red. Authoring it warm leaves it near neutral once
-// the sky has had its say.
-export const ROAD_TARMAC = '#4E463A'
+// Lightened from '#4E463A', and by a lot. That value put the road's effective albedo at 2.5% once
+// the grain map's own 0.34 average had multiplied it down, where real asphalt runs 5 to 15%. A
+// surface that dark cannot carry itself: the road took nearly all its rendered brightness from the
+// blue sky reflecting off it rather than from its own colour, which is why it read as slate.
+// MEASURED on Britain, bare tarmac at racing zoom, blue-over-red in linear light:
+//
+//                                    rendered B/R
+//     '#4E463A'                          1.42        blue well over red
+//     '#4E463A', specular off            0.73        correct, and nearly black: byte 8 of 255
+//     '#7C7166', specular 0.25           1.16
+//
+// This sits at 9% effective albedo, so the road's own colour is what lights it. Still warm, because
+// the light is not: the grass and the white lines render 1.5 times bluer than they are authored,
+// and the road has to be authored under that same cast to come out neutral. Less warm than it was,
+// though, since it is no longer alone in fighting the sky (`TARMAC_SPECULAR`): lifted at the old
+// saturation the road came out brown, like dirt.
+export const ROAD_TARMAC = '#7C7166'
 
 export interface RoadOpts {
   layout: TrackLayout

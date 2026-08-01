@@ -34,6 +34,10 @@ export interface OpsDecalOpts {
   detail?: SurfaceDetail | null
   /** Metres per world unit, to turn the grain's tile size into UV scale. */
   metresPerUnit?: number
+  /** How much dielectric reflection this stack's paint returns, 1 by default. The road's ink IS the
+   *  road, so it takes the road's own specular or the racing line renders as a bluer, glossier
+   *  stripe down the middle of the surface it belongs to. Overlay paint keeps the default. */
+  specular?: number
 }
 
 /** One op's geometry: the fill, then the stroke, as flat sheets. */
@@ -94,7 +98,12 @@ export function buildOpsDecals(
       flush()
       runKey = key
       runMaterial = materials.get(colour, {
-        alpha: op.alpha ?? 1, decal: true, layer: o.bias, roughness: ROUGH.matte, detail: o.detail,
+        alpha: op.alpha ?? 1,
+        decal: true,
+        layer: o.bias,
+        roughness: ROUGH.matte,
+        detail: o.detail,
+        specular: o.specular,
       })
     }
     runGeometries.push(...opGeometries(op, o.y))
