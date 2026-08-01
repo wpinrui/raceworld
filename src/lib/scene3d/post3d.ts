@@ -50,15 +50,28 @@ const QUAD = /* glsl */`
 `
 
 /** Keep only what is over the threshold, and keep its colour: dividing by the original luminance
- *  means a barely-over-threshold red stays red instead of turning white as it brightens. */
+ *  means a barely-over-threshold red stays red instead of turning white as it brightens.
+ *
+ *  This is also the chain's ONE quarantine point, and it has to be, because everything downstream
+ *  of it spreads. A blur tap that reads NaN returns NaN for the whole tap, so a single bad texel
+ *  entering here leaves as a solid block the width of the kernel: a ~17px square through the two
+ *  nine-tap passes below, and a rectangle hundreds of pixels wide through a mip chain, which is
+ *  exactly what both bloom attempts put on the screen. The scene should never hand this pass a
+ *  non-finite texel (`repairNormals` is why), and if it ever does again the damage stops here
+ *  rather than being magnified by the kernel.
+ *
+ *  Both guards work by COMPARISON, which is what makes them NaN-proof without `isnan`: every
+ *  comparison against NaN is false in either direction, so `min` leaves NaN alone and `l > threshold`
+ *  then sends it down the branch that spills nothing. Infinity is caught by the same `min`, since
+ *  the scene target is half-float and cannot hold more than this anyway. */
 const BRIGHT = /* glsl */`
   uniform sampler2D tScene;
   uniform float threshold;
   varying vec2 vUv;
   void main() {
-    vec3 c = texture2D(tScene, vUv).rgb;
+    vec3 c = min(texture2D(tScene, vUv).rgb, vec3(65504.0));
     float l = max(max(c.r, c.g), c.b);
-    gl_FragColor = vec4(c * (max(0.0, l - threshold) / max(l, 1e-5)), 1.0);
+    gl_FragColor = vec4(l > threshold ? c * ((l - threshold) / l) : vec3(0.0), 1.0);
   }
 `
 
@@ -180,8 +193,12 @@ export function buildPost(
       draw(composite, null)
     },
     setSize: (width, height, pixelRatio) => {
-      const w = Math.max(1, Math.round(width * pixelRatio))
-      const h = Math.max(1, Math.round(height * pixelRatio))
+      // FLOOR, matching `WebGLRenderer.setSize` exactly (`_canvas.width = Math.floor( w * dpr )`).
+      // Rounding instead costs a pixel of height at any fractional device ratio (1400 CSS px at
+      // 1.5 -> a 1399px canvas against a 1400px target), and the composite then samples the whole
+      // scene off by a fraction of a texel, which speckles every hard edge in the frame.
+      const w = Math.max(1, Math.floor(width * pixelRatio))
+      const h = Math.max(1, Math.floor(height * pixelRatio))
       sceneTarget.setSize(w, h)
       blurWidth = Math.max(1, Math.round(w / DOWNSCALE))
       blurHeight = Math.max(1, Math.round(h / DOWNSCALE))

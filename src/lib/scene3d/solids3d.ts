@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Vec } from '@/lib/ui/geom'
 import type { SceneryPart } from '@/lib/ui/scenery-shapes'
+import { repairNormals } from './normals3d'
 
 /** Edges turning less than this shade as one continuous surface; sharper ones keep their crease.
  *  What lets a loft read as a curve instead of a count of flat facets, without blunting a box. */
@@ -38,8 +39,10 @@ export class GeometrySink {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3))
     // Creased rather than per-face normals: consecutive shallow facets smooth into one surface,
-    // right angles stay sharp.
-    return toCreasedNormals(g, CREASE)
+    // right angles stay sharp. Repaired after, because a sink fed a zero-area triangle (a loft
+    // station that pinches, a ring with a repeated point) gets a zero normal back for all three of
+    // its vertices, and a shader cannot normalize that.
+    return repairNormals(toCreasedNormals(g, CREASE))
   }
 }
 

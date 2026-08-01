@@ -15,6 +15,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
 import { ROUGH, surface } from './materials3d'
+import { repairNormals } from './normals3d'
 
 /** Vertical exaggeration for the whole car, wheels excepted: judged too low against its own tyres
  *  at true height, the same diorama-bold call every structure height already makes. */
@@ -809,6 +810,9 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
       if (name !== 'position' && name !== 'normal') geo.deleteAttribute(name)
     }
     if (!geo.attributes.normal) geo.computeVertexNormals()
+    // Whichever source it came from: a sink's own normals and three's primitives alike come back
+    // zero on a zero-area triangle, and a zero normal is a NaN pixel once a shader normalizes it.
+    repairNormals(geo)
     geo.applyMatrix4(matrix)
     return geo
   }

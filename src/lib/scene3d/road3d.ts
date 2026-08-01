@@ -7,6 +7,7 @@
 
 import * as THREE from 'three'
 import type { Vec } from '@/lib/ui/geom'
+import { repairNormals } from './normals3d'
 
 /** Segments in a rounded stroke cap. Matches nothing in 2D exactly: a canvas round cap is a true
  *  semicircle, and at road widths ten chords are within a pixel of one at every zoom the map has. */
@@ -37,9 +38,10 @@ function toGeometry(positions: number[], indices: number[]): THREE.BufferGeometr
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   g.setIndex(indices)
   // Flat sheets still need real normals: a lit material reads the attribute, and an absent one is
-  // whatever the driver defaults, not "up".
+  // whatever the driver defaults, not "up". Repaired straight after, because a dashed kerb or a
+  // ribbon through a repeated sample leaves zero-area triangles whose normals come back zero.
   g.computeVertexNormals()
-  return g
+  return repairNormals(g)
 }
 
 export interface RibbonOpts {

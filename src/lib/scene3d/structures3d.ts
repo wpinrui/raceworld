@@ -14,6 +14,7 @@ import { ribbonGeometry } from './road3d'
 import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGeometry } from './solids3d'
 import { ROUGH, surface, type SceneMaterials } from './materials3d'
 import { faceUV, type SurfaceDetail } from './detail3d'
+import { repairNormals } from './normals3d'
 import type { WorldTextures } from './textures3d'
 
 /** Glazing ink, from the 2D's window fill. */
@@ -93,7 +94,7 @@ function deckGeometry(
     0, 0, wM, dM, 0, dM,
   ], 2))
   g.computeVertexNormals()
-  return g
+  return repairNormals(g)
 }
 
 /** A grandstand raked like real seating: low front wall trackside, tall rear, a sloped deck between,
