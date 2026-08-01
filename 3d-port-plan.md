@@ -13,7 +13,7 @@
 | **2** — the world stands up: structures, trees, light | **Done.** `5f59773` |
 | **3** — the surface keeps its story: ink as decal geometry | **Done.** Compiled, not baked: the ops were already polyline strokes, and merged static ribbons are exact at every zoom with no bake pass and no texel budget. `roadInkUnder`/`roadInkOver` + `ops3d.ts` |
 | **4** — cars: impostor, then the parametric loft | **In progress.** Impostors landed (`--cars` on the probe); the loft's first draft renders via `scripts/car-preview-3d.ts`, height profile now iterating on turntable stills |
-| **5** — the live view swaps | **In progress.** The orthographic swap is in: `Scene3DCanvas` replaces `SceneryCanvas`, `applyLiveCam` reproduces the map transform (pixel-aligned by test), shadows refit per camera move. The CARS are in-scene too: `CarField3D` poses the lofted solids from the loop's own numbers, wheels roll and hide for the crew swap, the DOM keeps only an invisible hit box for hover and click. Remaining: crews and signs in-scene, then perspective and the follow camera |
+| **5** — the live view swaps | **In progress.** The orthographic swap is in: `Scene3DCanvas` replaces `SceneryCanvas`, `applyLiveCam` reproduces the map transform (pixel-aligned by test), shadows refit per camera move. Cars, garage boards AND pit crews are in-scene: `CarField3D` poses the lofted solids, `signs3d` letters the fascias, `crew3d` takes the same choreography writes the SVG crew took, with tyre props cut from the car's own wheel table. Nothing re-leans on rotate; the settle machinery is deleted. Remaining: box markings and gantry into the world, then perspective and the follow camera |
 | **6** — moods and night, with real lights | Not started |
 
 ## Why straight to 3D
