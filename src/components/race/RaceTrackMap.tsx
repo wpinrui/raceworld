@@ -67,8 +67,6 @@ const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
 const ZOOM_MIN = 0.6 // full-track view
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
-/** Quiet period after the last rotation input before the world is rebuilt on the new bearing. */
-const ROT_SETTLE_MS = 120
 
 /** Show or hide an element.
  *
@@ -196,20 +194,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // the pan is owned by the follow logic; dragging breaks the lock and pans freely.
   const defaultRot = useMemo(() => pitCameraRotation(layout) ?? 0, [layout])
   const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot })
-  // Mirrored into state so the SCENERY can follow the camera. The map's whole sense of depth is one
-  // bearing, and that bearing lives in world space, so rotating the camera would otherwise tip every
-  // solid over sideways. Every path that carries height is rebuilt from it, which is why this is
-  // state and not just a ref.
-  const [camRot, setCamRot] = useState(defaultRot)
-  // TWO bearings. The sun is fixed to the circuit, standardised against the pit complex so the light
+  // The sun is fixed to the circuit, standardised against the pit complex so the light
   // falls the same way on every track; it must NOT move with the camera, or shadows would sit still
-  // on screen while the world turned under them, which reads as the sun following the player. The
-  // view bearing is the camera's, and keeps every solid leaning up the screen however far it turns.
+  // on screen while the world turned under them, which reads as the sun following the player.
   const lighting = useMemo(
     () => ({ ...MOODS.afternoon, azimuth: pitViewAzimuth(layout) ?? MOODS.afternoon.azimuth }),
     [layout],
   )
-  const viewAz = screenUpAzimuth(camRot)
   const ldir = useMemo(() => lightDir(lighting), [lighting])
   // The cars read the SAME light. One stable object, so the memoised sprites do not re-render for it.
   const followRef = useRef<string | null>(followId)
@@ -225,17 +216,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Painting the canvas is defined further down, once the scene exists; `applyCam` reaches it through
   // this ref so the two can be declared in whichever order they need to be.
   const paintRef = useRef<() => void>(() => {})
-
-  // Rebuilding the world on a new bearing means regenerating every path that carries height, which is
-  // a full re-render of a few thousand nodes. Far too slow to do on each frame of a rotate, so the
-  // camera turns on its own (the transform is imperative and cheap) and the SOLIDS catch up once the
-  // gesture settles. The wheel has no end event, so it gets a short quiet period instead.
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const settleRot = () => {
-    if (settleTimerRef.current) clearTimeout(settleTimerRef.current)
-    settleTimerRef.current = setTimeout(() => setCamRot(camRef.current.rot), ROT_SETTLE_MS)
-  }
-  useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current) }, [])
 
   const applyCam = useCallback(() => {
     const world = worldRef.current
@@ -305,12 +285,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // it; the pit building runs behind the garages so no team works off a grass verge.
   const pitZone = useMemo(() => buildPitZone(layout, pitSlots), [layout, pitSlots])
 
-  // Gantry placement, kept off the layout pass because it changes with the CAMERA: the booms lift
-  // against the view bearing, their shadow falls along the sun, and only the first of those moves
-  // when the player rotates. Both live inside the slot's mirrored group, so each displacement is
-  // pre-flipped in y or it would land on the wrong side for half the grid.
+  // Gantry placement. The booms are the LAST fake-3D lean on the map: still SVG until the crew port
+  // takes the pit furniture into the scene, their oblique is authored once at the circuit's opening
+  // bearing and then turns rigidly with the world, exactly as a real solid would. Nothing on this
+  // map re-leans when the player rotates any more. The shadow half falls along the sun, which was
+  // always fixed. Both live inside the slot's mirrored group, so each displacement is pre-flipped
+  // in y or it would land on the wrong side for half the grid.
   useEffect(() => {
-    const vdir = dirAt(viewAz)
+    const vdir = dirAt(screenUpAzimuth(defaultRot))
     const lift = -(GANTRY_H_M * EXTRUDE) / layout.metresPerUnit
     const cast = (GANTRY_H_M * shadowReach(lighting)) / layout.metresPerUnit
     pitSlots.forEach((slot, si) => {
@@ -324,7 +306,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       gantryRefs.current.get(si)?.setAttribute('transform', `translate(${v.x * lift} ${v.y * lift * flip})`)
       gantryShRefs.current.get(si)?.setAttribute('transform', `translate(${l.x * cast} ${l.y * cast * flip})`)
     })
-  }, [pitSlots, layout.metresPerUnit, viewAz, ldir, lighting])
+  }, [pitSlots, layout.metresPerUnit, defaultRot, ldir, lighting])
 
   // What the garage allocation and the garage signage are ACTUALLY functions of, as strings.
   //
@@ -414,7 +396,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         const { x, y } = cam
         cam.x = x * cos - y * sin
         cam.y = x * sin + y * cos
-        settleRot()
       } else {
         const stageEl = stageRef.current
         if (!stageEl) return
@@ -478,8 +459,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const drag = dragRef.current
     suppressClickRef.current = !!drag?.moved
     dragRef.current = null
-    // A rotate gesture ends here, which is when the scene is rebuilt on the new bearing.
-    if (drag?.moved && drag.mode === 'rotate') settleRot()
   }
 
   // One ref callback per car, built once and then handed back unchanged.
@@ -552,7 +531,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     camRef.current = view === 'map'
       ? { x: 0, y: 0, z: 1, rot: 0 }
       : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
-    setCamRot(camRef.current.rot)
     applyCam()
   }, [view, defaultRot, applyCam])
 
