@@ -184,7 +184,10 @@ function scalarTexture(
 export function buildWorldDetail(): WorldDetail {
   // Tarmac: high-frequency aggregate over a slow undulation, so it reads as chippings laid on a
   // surface that is not quite flat rather than as uniform sandpaper.
-  const grit = octaves(32, 3, 1201)
+  // Base 64 over a 2.4m tile puts the dominant feature at 3.7cm and the finest at 0.9cm, which is
+  // the size real aggregate actually is. At base 32 the loudest octave was a 7.5cm lump, and a
+  // surface of fist-sized lumps is not asphalt, it is scree.
+  const grit = octaves(64, 3, 1201)
   const swell = octaves(4, 2, 7717)
   const tarmacHeight = (x: number, y: number) => fbm(grit, x, y) * 0.8 + fbm(swell, x, y) * 0.2
   // Roughness varies with the aggregate: the tops of the chippings polish under traffic, the
@@ -198,12 +201,12 @@ export function buildWorldDetail(): WorldDetail {
 
   const tarmac: SurfaceDetail = {
     normalMap: normalTexture(tarmacHeight, 2.6),
-    albedoMap: scalarTexture(tarmacHeight, 0.9, 1),
+    albedoMap: scalarTexture(tarmacHeight, 0.94, 1),
     // A NARROW band, 0.68 to 0.9. The first attempt ran 0.5 to 0.98, and half a unit of roughness
     // between one chipping and the next is not aggregate, it is wet patches: the glossy end caught
     // the sky hard enough to read as puddles scattered over the circuit.
     roughnessMap: scalarTexture((x, y) => fbm(tarmacWear, x, y), 0.68, 0.9),
-    normalScale: 0.45,
+    normalScale: 0.28,
     tileM: 2.4,
   }
   const ground: SurfaceDetail = {
