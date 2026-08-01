@@ -28,6 +28,15 @@ const MAP_SIZE = 256
 /** A generated surface grain, and the world distance one repeat of it covers. */
 export interface SurfaceDetail {
   normalMap: THREE.Texture
+  /** A near-white multiplier over the surface's authored colour.
+   *
+   *  The reason the grain reads at all across a whole road. A normal map only bends the SPECULAR
+   *  response, so it shows where the sun's reflection lobe happens to land and is invisible
+   *  everywhere else: the aggregate appeared in a band across the tarmac and nowhere outside it,
+   *  which reads as a defect rather than as a surface. Albedo variation has no such dependence on
+   *  where the light or the eye is, so it grains the road evenly and the normals then sharpen
+   *  whatever the sun does catch. */
+  albedoMap: THREE.Texture
   roughnessMap: THREE.Texture | null
   /** How hard the normals push. */
   normalScale: number
@@ -136,8 +145,12 @@ function normalTexture(
   return tex
 }
 
-/** A greyscale map for roughness, spanning `lo`..`hi`. Also linear: three reads the green channel
- *  as a number, not as a colour. */
+/** A greyscale map spanning `lo`..`hi`, for roughness or for multiplying a colour.
+ *
+ *  NoColorSpace in both uses. For roughness that is obvious, three reads the green channel as a
+ *  number. For albedo it is deliberate: three would otherwise sRGB-decode the map before
+ *  multiplying, turning a gentle 0.82 into a 0.65 and dropping the road half a stop. As a straight
+ *  linear multiplier the authored range IS the range. */
 function scalarTexture(
   value: (x: number, y: number) => number, lo: number, hi: number,
 ): THREE.CanvasTexture {
@@ -185,12 +198,17 @@ export function buildWorldDetail(): WorldDetail {
 
   const tarmac: SurfaceDetail = {
     normalMap: normalTexture(tarmacHeight, 2.6),
-    roughnessMap: scalarTexture((x, y) => fbm(tarmacWear, x, y), 0.5, 0.98),
+    albedoMap: scalarTexture(tarmacHeight, 0.82, 1),
+    // A NARROW band, 0.68 to 0.9. The first attempt ran 0.5 to 0.98, and half a unit of roughness
+    // between one chipping and the next is not aggregate, it is wet patches: the glossy end caught
+    // the sky hard enough to read as puddles scattered over the circuit.
+    roughnessMap: scalarTexture((x, y) => fbm(tarmacWear, x, y), 0.68, 0.9),
     normalScale: 1.15,
     tileM: 2.4,
   }
   const ground: SurfaceDetail = {
     normalMap: normalTexture((x, y) => fbm(clumps, x, y), 1.8),
+    albedoMap: scalarTexture((x, y) => fbm(clumps, x, y), 0.86, 1),
     roughnessMap: null,
     normalScale: 0.6,
     tileM: 5.5,
@@ -199,9 +217,11 @@ export function buildWorldDetail(): WorldDetail {
     tarmac,
     ground,
     dispose: () => {
-      tarmac.normalMap.dispose()
-      tarmac.roughnessMap?.dispose()
-      ground.normalMap.dispose()
+      for (const d of [tarmac, ground]) {
+        d.normalMap.dispose()
+        d.albedoMap.dispose()
+        d.roughnessMap?.dispose()
+      }
     },
   }
 }

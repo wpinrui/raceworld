@@ -125,12 +125,24 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
 
 /** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
  *  this probe shoots is what the race view renders. The impostor stopgap retired with the loft. */
-function carMeshes(layout: TrackLayout, n: number): THREE.Group {
+function carMeshes(
+  layout: TrackLayout, n: number, near?: { x: number; z: number },
+): THREE.Group {
   const field = new CarField3D(
     CAR_LENGTH_M * CAR_SCALE / layout.metresPerUnit / SPRITE.len,
     CAR_RIDE_M / layout.metresPerUnit,
   )
-  carField(layout, n).forEach((car, i) => {
+  // `carField` strings its cars at even fractions of the lap, so at any useful zoom the odds of one
+  // landing in shot are poor: twenty cars round Silverstone sit 300m apart. Given a point to look
+  // near, oversample the lap and keep the cars closest to it, which puts a field under the camera
+  // wherever it is pointed. This is a probe: what matters is being able to SEE the thing.
+  const placed = near
+    ? carField(layout, 400)
+      .sort((a, b) => (a.x - near.x) ** 2 + (a.y - near.z) ** 2
+        - ((b.x - near.x) ** 2 + (b.y - near.z) ** 2))
+      .slice(0, n)
+    : carField(layout, n)
+  placed.forEach((car, i) => {
     const id = `p${i}`
     field.ensure(id, PREVIEW_LIVERIES[i % PREVIEW_LIVERIES.length])
     field.pose(id, {
@@ -236,7 +248,7 @@ async function eyeShot() {
   }
   const built = buildScene(id, q.get('mood') ?? 'afternoon', full)
   const cars = Number(q.get('cars') ?? '0')
-  if (cars > 0) built.scene.add(carMeshes(layout, cars))
+  if (cars > 0) built.scene.add(carMeshes(layout, cars, { x: cam.tx, z: cam.tz }))
 
   const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)

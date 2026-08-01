@@ -127,11 +127,21 @@ export function buildWorld3D(
     layout, u, pitZone, pitSlots, lap, ground: scenery.base, shadow: shadowFill(lighting),
   }
   const under = buildOpsDecals(
-    roadInkUnder(roadOpts), { y: lift(LAYER.inkUnder), order: 1, bias: LAYER.inkUnder }, materials,
+    roadInkUnder(roadOpts),
+    {
+      y: lift(LAYER.inkUnder), order: 1, bias: LAYER.inkUnder,
+      detail: detail?.tarmac ?? null, metresPerUnit: layout.metresPerUnit,
+    },
+    materials,
   )
   group.add(under.group)
   const over = buildOpsDecals(
-    roadInkOver(roadOpts), { y: lift(LAYER.inkOver), order: under.nextOrder, bias: LAYER.inkOver }, materials,
+    roadInkOver(roadOpts),
+    {
+      y: lift(LAYER.inkOver), order: under.nextOrder, bias: LAYER.inkOver,
+      detail: detail?.tarmac ?? null, metresPerUnit: layout.metresPerUnit,
+    },
+    materials,
   )
   group.add(over.group)
 

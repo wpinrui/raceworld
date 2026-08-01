@@ -14,7 +14,8 @@ import { refName, type DrawOp } from '@/lib/ui/scenery-draw'
 import { samplePathPolys } from './paths3d'
 import { pathFillGeometry } from './ground3d'
 import { dashGeometry, ribbonGeometry } from './road3d'
-import type { SceneMaterials } from './materials3d'
+import { ROUGH, type SceneMaterials } from './materials3d'
+import { planarUV, type SurfaceDetail } from './detail3d'
 
 export interface OpsDecalOpts {
   /** The one height the whole stack renders at. */
@@ -24,6 +25,15 @@ export interface OpsDecalOpts {
   /** The painter layer this stack lives at, as a depth bias: the ink must beat the tarmac it lies
    *  on at a tilted camera without also beating the kerbs and marks painted above it. */
   bias: number
+  /** The road's grain, and the scale to project it at.
+   *
+   *  The ink has to carry it. These decals ARE the road surface, just a driven-in, rubbered-in,
+   *  brake-marked version of it, and they cover most of its width: leaving them smooth put the
+   *  aggregate on the strips of bare tarmac between them and nowhere else, so the grain read as
+   *  patches rather than as a surface. */
+  detail?: SurfaceDetail | null
+  /** Metres per world unit, to turn the grain's tile size into UV scale. */
+  metresPerUnit?: number
 }
 
 /** One op's geometry: the fill, then the stroke, as flat sheets. */
@@ -62,6 +72,7 @@ export function buildOpsDecals(
   const flush = () => {
     if (runMaterial && runGeometries.length > 0) {
       const merged = runGeometries.length === 1 ? runGeometries[0] : mergeGeometries(runGeometries)
+      if (o.detail) planarUV(merged, o.detail.tileM / (o.metresPerUnit ?? 1))
       const mesh = new THREE.Mesh(merged, runMaterial)
       mesh.receiveShadow = true
       mesh.renderOrder = order++
@@ -82,7 +93,9 @@ export function buildOpsDecals(
     if (key !== runKey) {
       flush()
       runKey = key
-      runMaterial = materials.get(colour, { alpha: op.alpha ?? 1, decal: true, layer: o.bias })
+      runMaterial = materials.get(colour, {
+        alpha: op.alpha ?? 1, decal: true, layer: o.bias, roughness: ROUGH.matte, detail: o.detail,
+      })
     }
     runGeometries.push(...opGeometries(op, o.y))
   }

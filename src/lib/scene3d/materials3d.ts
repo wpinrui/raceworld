@@ -81,7 +81,9 @@ export function surface(colour: string, opts: SurfaceOpts = {}): THREE.MeshStand
     side: THREE.DoubleSide,
     roughness,
     metalness,
-    ...(map ? { map } : {}),
+    // An explicit tile wins: the grandstand's seats are its surface, and graining them would be
+    // painting one texture over another.
+    ...(map ? { map } : detail ? { map: detail.albedoMap } : {}),
     ...(detail ? {
       normalMap: detail.normalMap,
       normalScale: new THREE.Vector2(detail.normalScale, detail.normalScale),
