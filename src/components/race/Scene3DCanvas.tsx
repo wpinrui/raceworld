@@ -18,10 +18,12 @@ import { applyLiveCam } from '@/lib/scene3d/camera3d'
 import { refitShadow } from '@/lib/scene3d/lighting3d'
 import type { World3D } from '@/lib/scene3d/world3d'
 
-export function Scene3DCanvas({ world, carsGroup, base, vb, ppu, camRef, paintRef, className }: {
+export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camRef, paintRef, className }: {
   world: World3D | null
   /** The live car field, mounted beside the world so a circuit rebuild never drops the cars. */
   carsGroup?: THREE.Group | null
+  /** The pit crews, likewise. */
+  crewGroup?: THREE.Group | null
   /** The ground's own colour: the GL clear, exactly as the 2D filled before painting. */
   base: string
   vb: ViewBox
@@ -92,8 +94,9 @@ export function Scene3DCanvas({ world, carsGroup, base, vb, ppu, camRef, paintRe
     gl.scene.clear()
     if (world) gl.scene.add(world.group)
     if (carsGroup) gl.scene.add(carsGroup)
+    if (crewGroup) gl.scene.add(crewGroup)
     paint()
-  }, [world, carsGroup, paint])
+  }, [world, carsGroup, crewGroup, paint])
 
   useEffect(() => {
     paintRef.current = paint

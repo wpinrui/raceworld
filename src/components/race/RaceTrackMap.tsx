@@ -11,6 +11,7 @@ import { Scene3DCanvas } from './Scene3DCanvas'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
+import { PitCrew3D } from '@/lib/scene3d/crew3d'
 import type { CarLivery } from '@/lib/scene3d/car-mesh'
 import { EXTRUDE } from '@/lib/ui/scenery-draw'
 import { buildGarageSigns3D } from '@/lib/scene3d/signs3d'
@@ -152,16 +153,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const pathBlendRef = useRef(new Map<string, { dx: number; dy: number; start: number }>()) // path-switch offset decay
   const pitAnchorRef = useRef(new Map<string, { residual: number; t0: number }>()) // service-position pin
   const slotDistsRef = useRef<number[]>([]) // arc position of each pit box along the lane path
-  const crewRefs = useRef(new Map<number, SVGGElement>()) // per-slot pit crew overlays (root visibility)
-  const crewPartsRef = useRef(new Map<string, SVGGElement>()) // `slot:role` -> member/prop group
   const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
   const gantryShRefs = useRef(new Map<number, SVGGElement>()) // gantry shadow, offset against that flip
   const gantryRefs = useRef(new Map<number, SVGGElement>()) // gantry booms, lifted off the box floor
-  // The five of them as one object, built once. `PitBoxes` is memoised on its props, so a fresh bundle
-  // per render would defeat the memo and put its thousand elements back in every commit.
+  // The three of them as one object, built once. `PitBoxes` is memoised on its props, so a fresh
+  // bundle per render would defeat the memo and put its elements back in every commit.
   const pitBoxRefs = useRef<PitBoxRefs>({
     inner: slotInnerRefs, gantry: gantryRefs, gantryShadow: gantryShRefs,
-    crew: crewRefs, parts: crewPartsRef,
   }).current
   const slotFlipRef = useRef<number[]>([]) // which way each box was mirrored, measured in the layout pass
   const crewAnimRef = useRef(new Map<number, {
@@ -607,6 +605,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const flip = yLocal > 0 ? -1 : 1
             slotInnerRefs.current.get(si)?.setAttribute('transform', `scale(1 ${flip})`)
             slotFlipRef.current[si] = flip
+            crew3dRef.current?.setFlip(si, flip)
             return bestS
           })
         }
@@ -919,7 +918,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         //   hubs, the sprite's wheels return and the new props vanish in the same frame -> jacks
         //   step aside, the car leaves -> everyone walks straight into the garage from wherever
         //   they stand (carrier A per corner takes the old tyre) and all vanish together.
-        if (crewRefs.current.size > 0) {
+        const crew3d = crew3dRef.current
+        if (crew3d) {
           const pitBySlot = new Map<number, { id: string; dist: number; phase?: string; stopFrac?: number; newCompound?: TyreCompound }>()
           for (const d of draws) {
             if (d.f.kind !== 'pit') continue
@@ -938,7 +938,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           const setCarWheels = (carId: string | undefined, visible: boolean) => {
             if (carId) carField3dRef.current?.setWheelsVisible(carId, visible)
           }
-          crewRefs.current.forEach((root, idx) => {
+          for (let idx = 0; idx < crew3d.slotCount; idx++) {
             const boxDist = slotDistsRef.current[idx]
             const info = pitBySlot.get(idx)
             // Crew stays out from the pit CALL through the whole in-lane visit, until the car is
@@ -946,14 +946,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const wantCrew = calledSlots.has(idx) ||
               (info != null && boxDist != null && info.dist < boxDist + uu(12))
             let anim = crewAnimRef.current.get(idx)
-            if (!anim && !wantCrew) { setVis(root, false); return }
+            if (!anim && !wantCrew) { crew3d.setRootVisible(idx, false); continue }
             if (!anim) {
               anim = { mode: 'hidden', pos: {}, oldOut: [false, false, false, false], newIn: [false, false, false, false], swapped: false, restored: false, retreatT0: 0 }
               crewAnimRef.current.set(idx, anim)
             }
-            if (wantCrew && anim.mode !== 'active') { anim.mode = 'active'; setVis(root, true) }
+            if (wantCrew && anim.mode !== 'active') { anim.mode = 'active'; crew3d.setRootVisible(idx, true) }
             else if (!wantCrew && anim.mode === 'active') { anim.mode = 'retreat'; anim.retreatT0 = wallT }
-            if (anim.mode === 'hidden') { setVis(root, false); return }
+            if (anim.mode === 'hidden') { crew3d.setRootVisible(idx, false); continue }
             if (anim.mode === 'retreat' && wallT - anim.retreatT0 > 3000) {
               // Teardown: everything vanishes TOGETHER; the departed car always has its wheels.
               setCarWheels(anim.carId, true)
@@ -964,8 +964,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               anim.swapped = false
               anim.restored = false
               anim.carId = undefined
-              setVis(root, false)
-              return
+              crew3d.setRootVisible(idx, false)
+              continue
             }
 
             if (info) anim.carId = info.id
@@ -999,8 +999,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               return [nx, ny]
             }
             const place = (role: string, x: number, y: number, jx = 0, jy = 0) => {
-              const el = crewPartsRef.current.get(`${idx}:${role}`)
-              if (el) el.setAttribute('transform', `translate(${uu(x + jx)} ${uu(y + jy)})`)
+              crew3d.setPart(idx, role, x + jx, y + jy)
             }
 
             // (1) The invisible swap OUT, on the first stopped frame.
@@ -1014,8 +1013,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               const newBand = info?.newCompound ? COMPOUND_COLORS[info.newCompound] : oldBand
               for (let c = 0; c < 4; c++) {
                 anim.pos[`oldT${c}`] = [WHEELS[c][0], WHEELS[c][1]]
-                crewPartsRef.current.get(`${idx}:oldTline${c}`)?.setAttribute('fill', oldBand)
-                crewPartsRef.current.get(`${idx}:newTline${c}`)?.setAttribute('fill', newBand)
+                crew3d.setBands(idx, c, oldBand, newBand)
               }
             }
             // Corner schedule: old off through the first half, new on through the second.
@@ -1054,23 +1052,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               const drop = dropOf(c)
 
               // Old tyre: on the car until its moment, then carried by A to the drop; to the garage on retreat.
-              const oldEl = crewPartsRef.current.get(`${idx}:oldT${c}`)
               const oldTarget: [number, number] = !anim.oldOut[c]
                 ? [wx, wy]
                 : retreating ? intoGarage(anim.pos[`oldT${c}`] ?? drop) : drop
               const [ox, oy] = move(`oldT${c}`, oldTarget[0], oldTarget[1], 2.6)
-              if (oldEl) {
-                setVis(oldEl, anim.swapped)
-                oldEl.setAttribute('transform', `translate(${uu(ox)} ${uu(oy)})`)
-              }
+              crew3d.setPartVisible(idx, `oldT${c}`, anim.swapped)
+              crew3d.setPart(idx, `oldT${c}`, ox, oy)
               // New tyre: pre-staged from deploy, carried by B to the hub, gone the frame the car is whole.
-              const newEl = crewPartsRef.current.get(`${idx}:newT${c}`)
               const newTarget: [number, number] = anim.newIn[c] && !anim.restored ? [wx, wy] : stage
               const [nx2, ny2] = move(`newT${c}`, newTarget[0], newTarget[1], 2.6)
-              if (newEl) {
-                setVis(newEl, anim.mode === 'active' && !anim.restored)
-                newEl.setAttribute('transform', `translate(${uu(nx2)} ${uu(ny2)})`)
-              }
+              crew3d.setPartVisible(idx, `newT${c}`, anim.mode === 'active' && !anim.restored)
+              crew3d.setPart(idx, `newT${c}`, nx2, ny2)
 
               // Gunner works the hub; carrier A owns the old tyre, carrier B the new one.
               const jit = stopped && !anim.restored ? Math.sin(wallT / 90 + c * 1.7) * 0.07 : 0
@@ -1093,7 +1085,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const lT: [number, number] = retreating ? intoGarage(anim.pos['lolli'] ?? [4.35, 0]) : [4.35, 0]
             const [lx, ly] = move('lolli', lT[0], lT[1])
             place('lolli', lx, ly, 0, stopped ? Math.sin(wallT / 400) * 0.05 : 0)
-          })
+          }
         }
       }
       // Follow camera: keep the followed car pinned to the stage centre (rotation and zoom untouched).
@@ -1220,6 +1212,25 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       carField3d?.dispose()
     }
   }, [carField3d])
+  // The pit crew, in-scene (#3d-port): people and props the choreography drives through the same
+  // slot-local metres it always computed. Tyre props are cut from the car's own wheel table.
+  const crew3d = useMemo(
+    () => (view === 'live'
+      ? new PitCrew3D({
+        slots: pitSlots, u, colors: slotOf.colors,
+        carScale: u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len, rideY: u(CAR_RIDE_M),
+      })
+      : null),
+    [view, pitSlots, u, slotOf],
+  )
+  const crew3dRef = useRef<PitCrew3D | null>(null)
+  useEffect(() => {
+    crew3dRef.current = crew3d
+    return () => {
+      crew3dRef.current = null
+      crew3d?.dispose()
+    }
+  }, [crew3d])
   // Liveries, compounds and retirements arrive through React; `ensure` is a no-op until one changes.
   useEffect(() => {
     if (!carField3d) return
@@ -1276,6 +1287,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         <Scene3DCanvas
           world={world3d}
           carsGroup={carField3d?.group ?? null}
+          crewGroup={crew3d?.group ?? null}
           base={scenery.base}
           vb={vb}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
@@ -1304,7 +1316,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             />
             {/* Measured, never drawn: the lane the pitting cars are placed along. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
-            <PitBoxes slots={pitSlots} u={u} colors={slotOf.colors} lighting={lighting} refs={pitBoxRefs} />
+            <PitBoxes slots={pitSlots} u={u} lighting={lighting} refs={pitBoxRefs} />
             {/* The start/finish chequer, off the same description every renderer takes. */}
             {view === 'map' && mapMarkOps.map((op, i) => (
               <path key={`rm${i}`} d={op.d} fill={op.fill} />

@@ -729,8 +729,10 @@ const PLANK_WOOD = '#9A7B4F'
  *  of any colour. */
 const RAIN_LENS = '#E4161F'
 
-/** Wheel geometry off the artwork: the drawn tyre footprints ARE the diameters and widths. */
-const WHEELS = [
+/** Wheel geometry off the artwork: the drawn tyre footprints ARE the diameters and widths.
+ *  Exported for the pit crew's tyre props, which must be the same tyre or the invisible swap at the
+ *  hub stops being invisible (#3d-port). */
+export const WHEELS = [
   // Front axle at z106: halfway between the floor's leading edge (190) and the wing's trailing
   // edge (20), where the drawn car put it. Radii at 0.81 of the drawn tyre (0.9 twice), widths at
   // 0.9; pivots sit at radius height so every tyre still touches. Full drawn size was tried

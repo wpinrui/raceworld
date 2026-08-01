@@ -15,7 +15,6 @@
 // skipped, and the refs stay attached to the elements the choreography is already holding.
 
 import { memo } from 'react'
-import { CAR_SCALE } from '@/lib/ui/car-sprite'
 import { type Lighting, shadowFill, shadowOpacity } from '@/lib/ui/lighting'
 import type { PitSlot } from '@/lib/ui/pit-zone'
 
@@ -35,18 +34,12 @@ export interface PitBoxRefs {
   gantry: React.MutableRefObject<Map<number, SVGGElement>>
   /** The gantry's shadow, cast along the sun instead. */
   gantryShadow: React.MutableRefObject<Map<number, SVGGElement>>
-  /** Each crew's root, shown from the pit call and hidden again after the retreat. */
-  crew: React.MutableRefObject<Map<number, SVGGElement>>
-  /** `slot:role` -> the member or prop the choreography moves. */
-  parts: React.MutableRefObject<Map<string, SVGGElement>>
 }
 
-export const PitBoxes = memo(function PitBoxes({ slots, u, colors, lighting, refs }: {
+export const PitBoxes = memo(function PitBoxes({ slots, u, lighting, refs }: {
   slots: PitSlot[]
   /** Metres to viewBox units. */
   u: (m: number) => number
-  /** Team colour per garage index. */
-  colors: string[]
   lighting: Lighting
   refs: PitBoxRefs
 }) {
@@ -99,60 +92,9 @@ export const PitBoxes = memo(function PitBoxes({ slots, u, colors, lighting, ref
             </g>
           ))}
           </g>
-          {/* Crew: static parts registered by role; the rAF choreography drives every
-              transform (deploy from the garage, jacks on stop, tyre swaps, retreat). */}
-          <g
-            ref={(el) => { if (el) refs.crew.current.set(i, el); else refs.crew.current.delete(i) }}
-            style={{ visibility: 'hidden' }}
-          >
-            {(['jack0', 'jack1'] as const).map((role, ji) => (
-              <g key={role} ref={(el) => { if (el) refs.parts.current.set(`${i}:${role}`, el); else refs.parts.current.delete(`${i}:${role}`) }}>
-                <rect x={0} y={-u(0.1)} width={u(0.85) * (ji === 0 ? 1 : -1)} height={u(0.2)} rx={u(0.08)} fill="#8B929E" />
-                <circle r={u(0.38)} fill={colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.09)} />
-              </g>
-            ))}
-            {[0, 1, 2, 3].map((c) => (
-              <g key={`corner${c}`}>
-                <g ref={(el) => { if (el) refs.parts.current.set(`${i}:gun${c}`, el); else refs.parts.current.delete(`${i}:gun${c}`) }}>
-                  <rect x={-u(0.09)} y={-u(0.5)} width={u(0.18)} height={u(0.34)} rx={u(0.05)} fill="#5E6673" />
-                  <circle r={u(0.36)} fill={colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.09)} />
-                </g>
-                <g ref={(el) => { if (el) refs.parts.current.set(`${i}:handA${c}`, el); else refs.parts.current.delete(`${i}:handA${c}`) }}>
-                  <circle r={u(0.34)} fill={colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.08)} />
-                </g>
-                <g ref={(el) => { if (el) refs.parts.current.set(`${i}:handB${c}`, el); else refs.parts.current.delete(`${i}:handB${c}`) }}>
-                  <circle r={u(0.34)} fill={colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.08)} />
-                </g>
-                {(['oldT', 'newT'] as const).map((tk) => {
-                  // Pixel-matched to the car sprite's wheels (long axis = travel = local x).
-                  // The sprite's REAR wheels are larger than the fronts: 96x52 vs 88x48
-                  // sprite-units at scale 5.63/520 â€” a single prop size shrank the rears
-                  // visibly at the swap. Corners 0/2 are the front axle, 1/3 the rear.
-                  const front = c === 0 || c === 2
-                  const tw = (front ? 0.9528 : 1.0394) * CAR_SCALE
-                  const th = (front ? 0.5197 : 0.563) * CAR_SCALE
-                  const rw = (front ? 0.563 : 0.6063) * CAR_SCALE
-                  const rh = (front ? 0.3032 : 0.3248) * CAR_SCALE
-                  const outer = c <= 1 ? 1 : -1 // garage corners face out +y, lane corners -y
-                  return (
-                    <g key={tk} ref={(el) => { if (el) refs.parts.current.set(`${i}:${tk}${c}`, el); else refs.parts.current.delete(`${i}:${tk}${c}`) }} style={{ visibility: 'hidden' }}>
-                      <rect x={-u(tw / 2)} y={-u(th / 2)} width={u(tw)} height={u(th)} rx={u((front ? 0.195 : 0.206) * CAR_SCALE)} fill="#16181D" />
-                      <rect x={-u(rw / 2)} y={-u(rh / 2)} width={u(rw)} height={u(rh)} rx={u(0.12)} fill="#2E3138" />
-                      <rect
-                        ref={(el) => { if (el) refs.parts.current.set(`${i}:${tk}line${c}`, el as unknown as SVGGElement); else refs.parts.current.delete(`${i}:${tk}line${c}`) }}
-                        x={-u(rw * 0.3)} y={outer > 0 ? u(th / 2) - u(0.065) : -u(th / 2)} width={u(rw * 0.6)} height={u(0.065)} rx={u(0.03)} fill="#FFD700"
-                      />
-                    </g>
-                  )
-                })}
-              </g>
-            ))}
-            <g ref={(el) => { if (el) refs.parts.current.set(`${i}:lolli`, el); else refs.parts.current.delete(`${i}:lolli`) }}>
-              <rect x={-u(0.055)} y={-u(1.05)} width={u(0.11)} height={u(1.05)} fill="#8B929E" />
-              <circle cy={-u(1.2)} r={u(0.27)} fill="#E8C33A" />
-              <circle r={u(0.38)} fill={colors[i] ?? '#9AA3B2'} stroke="#FFFFFF" strokeWidth={u(0.09)} />
-            </g>
-          </g>
+          {/* The crew itself lives in the GL scene now (#3d-port, lib/scene3d/crew3d.ts): the same
+              choreography drives capsule people and real tyre props through the same slot-local
+              metres these groups used to take. */}
           </g>
         </g>
       ))}
