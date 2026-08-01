@@ -193,8 +193,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // The padded viewBox, mirrored for the imperative camera code declared above its memo.
   const vbRef = useRef({ x: 0, y: 0, w: 1, h: 1 })
 
-  // Camera (#3d-port increment 5): an orbit around a ground target. Left-drag tilts and turns it,
-  // keeping any follow lock (you orbit the car you are chasing); middle-drag pans the free camera,
+  // Camera (#3d-port increment 5): an orbit around a ground target. Middle-drag tilts and turns it,
+  // keeping any follow lock (you orbit the car you are chasing); left-drag pans the free camera,
   // which is what breaks the lock; a plain click on empty ground breaks it too. The one
   // PerspectiveCamera below is shared with the GL canvas, so the loop projects the DOM overlay
   // through exactly the camera the world was drawn with.
@@ -408,9 +408,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (view === 'map') return
     if (e.button === 1) e.preventDefault() // no middle-click autoscroll
     if (e.button !== 0 && e.button !== 1) return
-    // Left-drag ORBITS (tilt and turn, keeping any follow lock: you pivot around the car you are
-    // chasing); middle-drag pans the free camera, which is what breaks the lock.
-    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, mode: e.button === 1 ? 'pan' : 'orbit' }
+    // Middle-drag ORBITS (tilt and turn, keeping any follow lock: you pivot around the car you are
+    // chasing); left-drag pans the free camera, which is what breaks the lock.
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, mode: e.button === 1 ? 'orbit' : 'pan' }
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current
@@ -429,7 +429,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const cam = camRef.current
     if (drag.mode === 'orbit') {
       cam.rot += dx * 0.005
-      cam.pitch = Math.max(0, Math.min(PITCH_MAX, cam.pitch + dy * 0.005))
+      // Drag up to lean the camera down toward the horizon, drag down to come back overhead.
+      cam.pitch = Math.max(0, Math.min(PITCH_MAX, cam.pitch - dy * 0.005))
     } else {
       // The world follows the finger: the target moves against the drag, foreshortening included.
       const scale = cam.z * (stageDimsRef.current.w / vbRef.current.w)
