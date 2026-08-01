@@ -8,12 +8,10 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { TRACK_LAYOUTS, type TrackLayout } from '../src/data/tracks'
-import { CarSprite } from '../src/components/race/CarSprite'
-import { CAR_LENGTH_M, CAR_SCALE, SPRITE, carLight } from '../src/lib/ui/car-sprite'
+import { CAR_LENGTH_M, CAR_SCALE, SPRITE } from '../src/lib/ui/car-sprite'
 import { PREVIEW_LIVERIES, carField } from '../src/lib/ui/car-field'
+import { CarField3D } from '../src/lib/scene3d/car-field3d'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
@@ -79,57 +77,20 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   return { scene, layout, full, stats: world.stats }
 }
 
-/** Sprite padding for the impostor bake, in sprite units: the contact shadow's soft tail reaches
- *  past the artwork's own viewBox and clipping it is exactly the bug the 2D preview un-wraps its
- *  sprites to avoid. */
-const IMPOSTOR_PAD = 40
-
-/** The existing 2D sprites, baked to textures on flat quads: increment 4's stopgap so the world is
- *  raceable before the real car mesh lands. Identical pixels to the map's own cars at top-down. */
-async function carImpostors(
-  layout: TrackLayout, moodName: string, n: number,
-): Promise<THREE.Group> {
-  const lighting = MOODS[moodName as Mood] ?? MOODS.afternoon
-  const light = carLight(lighting)
-  const u = (m: number) => m / layout.metresPerUnit
-  const scale = u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len
-  const [vx, vy, vw, vh] = SPRITE.viewBox.split(' ').map(Number)
-  const box = { x: vx - IMPOSTOR_PAD, y: vy - IMPOSTOR_PAD, w: vw + 2 * IMPOSTOR_PAD, h: vh + 2 * IMPOSTOR_PAD }
-  const group = new THREE.Group()
-  await Promise.all(carField(layout, n).map(async (car, i) => {
-    const sprite = renderToStaticMarkup(createElement(CarSprite, {
-      id: `p${i}`, color: PREVIEW_LIVERIES[i % PREVIEW_LIVERIES.length], length: SPRITE.len, light,
-      spriteRot: car.rot, attitude: car.attitude, steer: car.steer,
-    }))
-    const body = sprite.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box.x} ${box.y} ${box.w} ${box.h}" `
-      + `width="${box.w}" height="${box.h}">${body}</svg>`
-    const image = new Image()
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve()
-      image.onerror = () => reject(new Error('impostor rasterise failed'))
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+/** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
+ *  this probe shoots is what the race view renders. The impostor stopgap retired with the loft. */
+function carMeshes(layout: TrackLayout, n: number): THREE.Group {
+  const field = new CarField3D(CAR_LENGTH_M * CAR_SCALE / layout.metresPerUnit / SPRITE.len)
+  carField(layout, n).forEach((car, i) => {
+    const id = `p${i}`
+    field.ensure(id, PREVIEW_LIVERIES[i % PREVIEW_LIVERIES.length])
+    field.pose(id, {
+      x: car.x, y: car.y, rot: car.rot,
+      steerLeft: car.steer.left, steerRight: car.steer.right,
+      lat: car.lat, long: car.long, ds: 0,
     })
-    const bake = document.createElement('canvas')
-    bake.width = box.w
-    bake.height = box.h
-    bake.getContext('2d')!.drawImage(image, 0, 0)
-    const texture = new THREE.CanvasTexture(bake)
-    texture.colorSpace = THREE.SRGBColorSpace
-    const geo = new THREE.PlaneGeometry(box.w * scale, box.h * scale)
-    geo.rotateX(-Math.PI / 2)
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-      map: texture, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-    }))
-    // The padded box is centred on the sprite's own pivot, so placing the quad's centre at the car
-    // places the car. The lift clears the WHOLE painter stack: the marks layer tops out at 0.52m of
-    // lift, and an impostor a hair below any layer loses the depth test to it and vanishes.
-    mesh.position.set(car.x, u(0.6), car.y)
-    mesh.rotation.y = -car.rot
-    mesh.renderOrder = 2000
-    group.add(mesh)
-  }))
-  return group
+  })
+  return field.group
 }
 
 function disposeScene(scene: THREE.Scene) {
@@ -167,7 +128,7 @@ async function shotMain() {
   // Built after the crop is known, so the sun's shadow map is fitted to what is in shot.
   const built = buildScene(id, q.get('mood') ?? 'afternoon', vb)
   const cars = Number(q.get('cars') ?? '0')
-  if (cars > 0) built.scene.add(await carImpostors(layout, q.get('mood') ?? 'afternoon', cars))
+  if (cars > 0) built.scene.add(carMeshes(layout, cars))
   const camera = frameOrtho(vb, tilt)
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })
   renderer.shadowMap.enabled = true

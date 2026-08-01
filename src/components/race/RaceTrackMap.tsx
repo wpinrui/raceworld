@@ -10,16 +10,13 @@ import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '
 import { Scene3DCanvas } from './Scene3DCanvas'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
+import { CarField3D } from '@/lib/scene3d/car-field3d'
 import { EXTRUDE } from '@/lib/ui/scenery-draw'
 import { PitGarageSigns } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
-import { CarSprite } from './CarSprite'
 import { GANTRY_H_M, PitBoxes, type PitBoxRefs } from './PitBoxes'
-import {
-  CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, LEVEL, SPRITE, STRAIGHT, bodyTransform, carAttitude, carLight,
-  shadowTransform, sheenTransform, steerAngles, steerTransform,
-} from '@/lib/ui/car-sprite'
+import { CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, STRAIGHT, steerAngles } from '@/lib/ui/car-sprite'
 import {
   PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics, type LapDynamics,
 } from '@/lib/ui/lap-dynamics'
@@ -212,11 +209,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const viewAz = screenUpAzimuth(camRot)
   const ldir = useMemo(() => lightDir(lighting), [lighting])
   // The cars read the SAME light. One stable object, so the memoised sprites do not re-render for it.
-  const carLit = useMemo(() => carLight(lighting), [lighting])
-  const shadowRefs = useRef(new Map<string, SVGGElement>())
-  const bodyRefs = useRef(new Map<string, SVGGElement>())
-  const sheenRefs = useRef(new Map<string, SVGGElement>())
-  const steerRefs = useRef(new Map<string, [SVGGElement, SVGGElement]>()) // front wheels, left then right
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
   const viewRef = useRef(view)
@@ -523,26 +515,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const cb = (el: HTMLDivElement | null) => {
       if (!el) {
         sprRefs.current.delete(id)
-        shadowRefs.current.delete(id)
-        bodyRefs.current.delete(id)
-        sheenRefs.current.delete(id)
-        steerRefs.current.delete(id)
         return
       }
+      // The rotated hit box the tooltip and click ride on; the car itself is GL (#3d-port).
       sprRefs.current.set(id, el)
-      // The groups the loop drives, found once here rather than queried per frame.
-      const put = (sel: string, into: Map<string, SVGGElement>) => {
-        const g = el.querySelector<SVGGElement>(sel)
-        if (g) into.set(id, g)
-        else into.delete(id)
-      }
-      put('[data-car-shadow]', shadowRefs.current)
-      put('[data-car-body]', bodyRefs.current)
-      put('[data-car-sheen]', sheenRefs.current)
-      const fl = el.querySelector<SVGGElement>('[data-wheel="fl"]')
-      const fr = el.querySelector<SVGGElement>('[data-wheel="fr"]')
-      if (fl && fr) steerRefs.current.set(id, [fl, fr])
-      else steerRefs.current.delete(id)
     }
     spriteCbs.current.set(key, cb)
     return cb
@@ -919,39 +895,36 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           const spr = sprRefs.current.get(f.id)
           const spriteRot = heading + Math.PI / 2
           if (spr) spr.style.transform = viewRef.current === 'map' ? '' : `rotate(${spriteRot}rad)`
-          // The sprite turns whole, so anything painted on it turns with it -- which is exactly what
-          // reads as flat. Three groups inside it are held against the WORLD instead (#sim-2d): the
-          // contact shadow keeps pointing away from the sun, the sheen keeps facing it, and the body
-          // leans and dips over both. Map view draws numbered dots, which have none of them.
-          if (viewRef.current !== 'map') {
-            shadowRefs.current.get(f.id)?.setAttribute('transform', shadowTransform(carLit, spriteRot))
-            // Load comes from the LAP, not from how fast the sprite happens to be crossing the screen:
-            // a race played at 4x speed corners no harder than the same race at 1x. Cars crawling the
-            // pit lane or sat on the grid sit level.
+          // The real car, posed in world units off the lap's own dynamics (#3d-port). Load comes
+          // from the LAP, not from how fast the car happens to be crossing the screen: a race played
+          // at 4x speed corners no harder than the same race at 1x. Cars crawling the pit lane or
+          // sat on the grid sit level with their wheels straight -- the crew's tyre props must match
+          // the wheels in the box. The sprite's fakes (world-locked sheen, displaced contact shadow,
+          // body slide) retired with the 2D canvas: the sun does those jobs now.
+          const field3d = carField3dRef.current
+          if (viewRef.current !== 'map' && field3d) {
             const frac = f.dist / raceLenRef.current
-            const att = f.kind === 'race'
-              ? carAttitude(sampleLap(dyn.lat, frac), sampleLap(dyn.long, frac))
-              : LEVEL
-            bodyRefs.current.get(f.id)?.setAttribute('transform', bodyTransform(att))
-            sheenRefs.current.get(f.id)?.setAttribute('transform', sheenTransform(spriteRot, att))
-            // Front wheels point where the corner AHEAD of them needs them to: sampled a front-axle's
-            // lead up the road, and converted to real metres, because the steering angle a radius
-            // demands depends on the car's actual wheelbase. Pit-lane and grid cars keep their wheels
-            // straight -- the crew's tyre props pixel-match the wheels in the box, and a steered wheel
-            // would break that match on the one car anyone is looking closely at.
-            const fronts = steerRefs.current.get(f.id)
-            if (fronts) {
-              const steer = f.kind === 'race'
-                ? steerAngles(
-                  sampleLap(dyn.curvature, frac + uu(FRONT_LEAD_M) / raceLenRef.current)
-                    / layout.metresPerUnit,
-                  // Load is read at the CAR, not at the front axle: it is the whole car's corner.
-                  lateralG(dyn, frac, layout.metresPerUnit),
-                )
-                : STRAIGHT
-              fronts[0].setAttribute('transform', steerTransform(steer.left, SPRITE.wheels[0]))
-              fronts[1].setAttribute('transform', steerTransform(steer.right, SPRITE.wheels[1]))
-            }
+            const racing = f.kind === 'race'
+            // Front wheels point where the corner AHEAD of them needs them to: sampled a front
+            // axle's lead up the road, in real metres, because the lock a radius demands depends on
+            // the car's actual wheelbase. Load is read at the CAR: it is the whole car's corner.
+            const steer = racing
+              ? steerAngles(
+                sampleLap(dyn.curvature, frac + uu(FRONT_LEAD_M) / raceLenRef.current)
+                  / layout.metresPerUnit,
+                lateralG(dyn, frac, layout.metresPerUnit),
+              )
+              : STRAIGHT
+            const sameLeg = prevDraw && prevDraw.kind === f.kind
+            const raw = sameLeg ? f.dist - prevDraw.dist : 0
+            field3d.pose(f.id, {
+              x, y, rot: spriteRot,
+              steerLeft: steer.left, steerRight: steer.right,
+              lat: racing ? sampleLap(dyn.lat, frac) : 0,
+              long: racing ? sampleLap(dyn.long, frac) : 0,
+              // Wrapping the S/F line reads as a huge negative step; roll it over the lap length.
+              ds: raw >= 0 ? raw : racing ? raw + raceLenRef.current : 0,
+            })
           }
         }
 
@@ -982,8 +955,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           }
           const wallT = performance.now()
           const setCarWheels = (carId: string | undefined, visible: boolean) => {
-            const spr = carId ? sprRefs.current.get(carId) : undefined
-            if (spr) spr.querySelectorAll('[data-wheel]').forEach((w) => { (w as SVGGElement).style.visibility = visible ? '' : 'hidden' })
+            if (carId) carField3dRef.current?.setWheelsVisible(carId, visible)
           }
           crewRefs.current.forEach((root, idx) => {
             const boxDist = slotDistsRef.current[idx]
@@ -1189,6 +1161,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           tipPosRef.current = null
         }
       }
+      // The cars moved, so the GL frame is stale even with the camera still. Following, `applyCam`
+      // above already painted this tick with the poses in; free-camera ticks paint here.
+      if (viewRef.current !== 'map' && !followRef.current) paintRef.current()
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -1197,7 +1172,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // the whole loop down and rebuilt it every time the array got a fresh identity, which the 1Hz
     // tooltip tick does on its own. The loop's own state lives in refs, so it wants to run undisturbed
     // for the length of the race.
-  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, ldir, lighting, carLit, applyCam])
+  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, ldir, lighting, applyCam])
 
   // Road paint that belongs to the START rather than to the circuit: the chequered band and the grid
   // boxes. Three fills between them, so as ops they are three draw calls; as elements they were a
@@ -1239,6 +1214,32 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
   // The tile textures the stands' decks wear, built once per mount: a document is guaranteed here.
   const worldTextures = useMemo(() => buildWorldTextures(), [])
+  // The car field: one lofted solid per entrant, posed by the loop, mounted beside the world in the
+  // GL scene. Keyed on the circuit's own car scale, which is `u`'s only input.
+  const carField3d = useMemo(
+    () => (view === 'live' ? new CarField3D(u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len) : null),
+    [view, u],
+  )
+  const carField3dRef = useRef<CarField3D | null>(null)
+  useEffect(() => {
+    carField3dRef.current = carField3d
+    return () => {
+      carField3dRef.current = null
+      carField3d?.dispose()
+    }
+  }, [carField3d])
+  // Liveries, compounds and retirements arrive through React; `ensure` is a no-op until one changes.
+  useEffect(() => {
+    if (!carField3d) return
+    const live = new Set<string>()
+    for (const c of cars) {
+      live.add(c.id)
+      carField3d.ensure(c.id, c.color, c.compound)
+      carField3d.setOpacity(c.id, c.retired ? 0.35 : 1)
+    }
+    carField3d.sweep(live)
+    applyCam()
+  }, [carField3d, cars, applyCam])
   // The whole static world as real geometry, built off React's render because it only changes when
   // the WORLD does: a new circuit, the lap's ink arriving, the grid being painted, a team claiming
   // its garage. The camera never touches it — a camera move is a matrix on the same buffers, which
@@ -1296,6 +1297,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       {view === 'live' && (
         <Scene3DCanvas
           world={world3d}
+          carsGroup={carField3d?.group ?? null}
           base={scenery.base}
           vb={vb}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
@@ -1364,7 +1366,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                         <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
                       </div>
                     ) : (
-                      <CarSprite id={car.id} color={car.color} length={carL} compound={car.compound} light={carLit} />
+                      // The car itself is GL (#3d-port); this transparent box is its exact rendered
+                      // footprint, kept in the DOM as the hover and click target so the tooltip and
+                      // the follow click behave as they always did.
+                      <div style={{ width: carL * SPRITE.aspect, height: carL }} />
                     )}
                   </div>
                 )

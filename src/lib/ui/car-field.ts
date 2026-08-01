@@ -21,6 +21,9 @@ export interface FieldCar {
   rot: number
   attitude: Attitude
   steer: Steer
+  /** The raw normalised lap accelerations behind the attitude, for the 3D field's real rotations. */
+  lat: number
+  long: number
   /** Lap fraction, for anything that wants to label or colour by position. */
   frac: number
 }
@@ -58,12 +61,14 @@ export function carField(layout: TrackLayout, n: number): FieldCar[] {
     const here = pts[st]
     const ahead = pts[(st + 2) % PROFILE_N]
     const rot = Math.atan2(ahead.y - here.y, ahead.x - here.x) + Math.PI / 2
-    const attitude = carAttitude(sampleLap(dyn.lat, frac), sampleLap(dyn.long, frac))
+    const lat = sampleLap(dyn.lat, frac)
+    const long = sampleLap(dyn.long, frac)
+    const attitude = carAttitude(lat, long)
     // Wheels turned for the corner a front axle's lead up the road, as the live map does it.
     const steer = steerAngles(
       sampleLap(dyn.curvature, frac + FRONT_LEAD_M / layout.metresPerUnit / len) / layout.metresPerUnit,
       lateralG(dyn, frac, layout.metresPerUnit),
     )
-    return { x: here.x, y: here.y, rot, attitude, steer, frac }
+    return { x: here.x, y: here.y, rot, attitude, steer, lat, long, frac }
   })
 }
