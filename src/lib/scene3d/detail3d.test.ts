@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { planarUV } from './detail3d'
+import { faceUV, planarUV } from './detail3d'
 
 /** A one-triangle geometry at the given world positions. */
 function tri(...points: Array<[number, number, number]>): THREE.BufferGeometry {
@@ -50,5 +50,55 @@ describe('planarUV', () => {
     planarUV(g, 3)
     expect(g.getAttribute('uv').getX(0)).toBe(2)
     expect(g.getAttribute('uv').count).toBe(1)
+  })
+})
+
+describe('faceUV', () => {
+  /** A single triangle, non-indexed, as every wall builder here produces. */
+  function face(...points: Array<[number, number, number]>): THREE.BufferGeometry {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(points.flat(), 3))
+    return g
+  }
+
+  it('reads a floor from above', () => {
+    const g = face([0, 5, 0], [4, 5, 0], [0, 5, 4])
+    faceUV(g, 2)
+    const uv = g.getAttribute('uv')
+    // Y dominant, so the height is dropped and the two ground axes survive.
+    expect([uv.getX(0), uv.getY(0)]).toEqual([0, 0])
+    expect([uv.getX(1), uv.getY(1)]).toEqual([2, 0])
+    expect([uv.getX(2), uv.getY(2)]).toEqual([0, 2])
+  })
+
+  it('reads a wall from the side, keeping its height', () => {
+    // A wall facing +x. Projected down Y this would collapse to a line and smear vertically; the
+    // whole point of the per-face axis is that its height survives.
+    const g = face([3, 0, 0], [3, 0, 6], [3, 6, 0])
+    faceUV(g, 2)
+    const uv = g.getAttribute('uv')
+    expect([uv.getX(0), uv.getY(0)]).toEqual([0, 0])
+    expect([uv.getX(1), uv.getY(1)]).toEqual([3, 0])
+    expect([uv.getX(2), uv.getY(2)]).toEqual([0, 3])
+    // No two vertices share a UV: nothing has been collapsed.
+    expect(new Set([0, 1, 2].map((i) => `${uv.getX(i)},${uv.getY(i)}`)).size).toBe(3)
+  })
+
+  it('keeps adjacent coplanar faces continuous', () => {
+    // Two triangles of one wall quad. They must agree at the shared edge or the grain shows a seam
+    // straight down the middle of a flat surface.
+    const g = face([0, 0, 0], [4, 0, 0], [4, 4, 0], [0, 0, 0], [4, 4, 0], [0, 4, 0])
+    faceUV(g, 2)
+    const uv = g.getAttribute('uv')
+    expect([uv.getX(0), uv.getY(0)]).toEqual([uv.getX(3), uv.getY(3)])
+    expect([uv.getX(2), uv.getY(2)]).toEqual([uv.getX(4), uv.getY(4)])
+  })
+
+  it('leaves indexed geometry alone', () => {
+    // Sharing a vertex between faces that want different projections has no correct answer.
+    const g = face([0, 0, 0], [1, 0, 0], [0, 1, 0])
+    g.setIndex([0, 1, 2])
+    faceUV(g, 1)
+    expect(g.getAttribute('uv')).toBeUndefined()
   })
 })

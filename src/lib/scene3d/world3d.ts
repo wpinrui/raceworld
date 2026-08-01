@@ -191,7 +191,7 @@ export function buildWorld3D(
 
   // The standing world, and the light it all agrees under.
   group.add(buildTrees3D(scenery.trees, u))
-  group.add(buildStructures3D(scenery, u, materials, textures, night))
+  group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null))
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
   if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
   for (const extra of extras?.() ?? []) group.add(extra)

@@ -13,6 +13,7 @@ import type { SceneryFence, SceneryMarshal } from '@/lib/ui/scenery-props'
 import { ribbonGeometry } from './road3d'
 import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGeometry } from './solids3d'
 import { ROUGH, surface, type SceneMaterials } from './materials3d'
+import { faceUV, type SurfaceDetail } from './detail3d'
 import type { WorldTextures } from './textures3d'
 
 /** Glazing ink, from the 2D's window fill. */
@@ -28,6 +29,13 @@ const FENCE_STEEL = '#79808C'
 
 /** A mesh placed the way a `DrawGroup` places its ops: geometry in the footprint's local frame,
  *  position and yaw on the object. Local (lx, ly) maps to world exactly as `toLocal`'s inverse. */
+/** Grain a standing geometry, once. `placed` is called repeatedly with the SAME geometry (every
+ *  marshal hut shares one), so the projection is idempotent by being keyed on the attribute already
+ *  being there: doing it per placement would redo the same work for every copy. */
+function grain(geo: THREE.BufferGeometry, detail: SurfaceDetail | null, u: (m: number) => number): void {
+  if (detail && !geo.getAttribute('uv')) faceUV(geo, u(detail.tileM))
+}
+
 function placed(geo: THREE.BufferGeometry, mat: THREE.Material, at: { x: number; y: number; rot: number }): THREE.Mesh {
   const mesh = new THREE.Mesh(geo, mat)
   mesh.position.set(at.x, 0, at.y)
@@ -39,7 +47,7 @@ function placed(geo: THREE.BufferGeometry, mat: THREE.Material, at: { x: number;
 
 export function buildBuildings3D(
   buildings: readonly SceneryRect[], u: (m: number) => number, materials: SceneMaterials,
-  night = false,
+  night = false, detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
   // At night the same glazing grid turns to warm lit windows: emissive, unlit-by-design, the one
@@ -50,7 +58,9 @@ export function buildBuildings3D(
   for (const b of buildings) {
     const parts = partsOf(b)
     const h = u((b.storeys ?? 1) * STOREY_M)
-    group.add(placed(partsSolidGeometry(parts, 0, h), materials.get(b.fill), b))
+    const shell = partsSolidGeometry(parts, 0, h)
+    grain(shell, detail, u)
+    group.add(placed(shell, materials.get(b.fill, { roughness: ROUGH.matte, detail }), b))
     const windows = partsWindowsGeometry(
       parts, 0, h, u(WINDOW_BAY_M), Math.max(1, b.storeys ?? 1), u(0.12),
     )
@@ -88,7 +98,7 @@ function deckGeometry(
  *  seat rows and the crowd are the same tiles the 2D patterns with, when a document is on hand. */
 export function buildStands3D(
   stands: readonly SceneryStand[], u: (m: number) => number, materials: SceneMaterials,
-  textures?: WorldTextures,
+  textures?: WorldTextures, detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
   const hF = u(STAND_FRONT_M)
@@ -112,7 +122,9 @@ export function buildStands3D(
     for (const x of [x0, x1]) {
       hull.quad(v3(x, 0, zF), v3(x, 0, zR), v3(x, hR, zR), v3(x, hF, zF))
     }
-    group.add(placed(hull.build(), materials.get(s.fill), s))
+    const hullGeo = hull.build()
+    grain(hullGeo, detail, u)
+    group.add(placed(hullGeo, materials.get(s.fill, { roughness: ROUGH.paint, detail }), s))
 
     const deck = deckGeometry(x0, x1, zF, zR, hF, hR, mpu)
     group.add(placed(deck, seatsMat, s))
@@ -131,19 +143,23 @@ export function buildStands3D(
       v3(x0, hR + lift, zR), v3(x1, hR + lift, zR),
       v3(x1, hEdge + lift, zEdge), v3(x0, hEdge + lift, zEdge),
     )
-    group.add(placed(roof.build(), materials.get(ROOF), s))
+    const roofGeo = roof.build()
+    grain(roofGeo, detail, u)
+    group.add(placed(roofGeo, materials.get(ROOF, { roughness: ROUGH.paint, detail }), s))
   }
   return group
 }
 
 export function buildMarshals3D(
   marshals: readonly SceneryMarshal[], u: (m: number) => number, materials: SceneMaterials,
+  detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
   const w = u(MARSHAL_W_M)
   const d = u(MARSHAL_D_M)
   const h = u(MARSHAL_H_M)
   const hutGeo = partsSolidGeometry([{ dx: 0, dy: 0, w, h: d }], 0, h)
+  grain(hutGeo, detail, u)
   const panel = new GeometrySink()
   // The observation panel: the orange strip the 2D lays along the roof's front edge.
   panel.quad(
@@ -152,7 +168,7 @@ export function buildMarshals3D(
   )
   const panelGeo = panel.build()
   for (const m of marshals) {
-    group.add(placed(hutGeo, materials.get(HUT), m))
+    group.add(placed(hutGeo, materials.get(HUT, { roughness: ROUGH.paint, detail }), m))
     const p = placed(panelGeo, materials.get(HUT_PANEL), m)
     p.castShadow = false
     group.add(p)
@@ -203,11 +219,12 @@ export function buildFences3D(
 export function buildStructures3D(
   scenery: Pick<Scenery, 'buildings' | 'stands' | 'marshals' | 'fences'>,
   u: (m: number) => number, materials: SceneMaterials, textures?: WorldTextures, night = false,
+  detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
-  group.add(buildBuildings3D(scenery.buildings, u, materials, night))
-  group.add(buildStands3D(scenery.stands, u, materials, textures))
-  group.add(buildMarshals3D(scenery.marshals, u, materials))
+  group.add(buildBuildings3D(scenery.buildings, u, materials, night, detail))
+  group.add(buildStands3D(scenery.stands, u, materials, textures, detail))
+  group.add(buildMarshals3D(scenery.marshals, u, materials, detail))
   group.add(buildFences3D(scenery.fences, u, materials))
   return group
 }

@@ -25,6 +25,13 @@ import * as THREE from 'three'
  *  tiles every couple of metres. */
 const MAP_SIZE = 256
 
+/** Anisotropic filtering on every generated map, and it earns its keep here more than in most
+ *  scenes: the camera can lie ten degrees off the horizon with the road running away to a haze
+ *  three kilometres out, which is the exact case trilinear filtering handles worst. Without it the
+ *  grain mips into flat grey a short way up the straight. three clamps this to whatever the device
+ *  actually supports, so asking for 16 is safe anywhere. */
+const ANISOTROPY = 16
+
 /** A generated surface grain, and the world distance one repeat of it covers. */
 export interface SurfaceDetail {
   normalMap: THREE.Texture
@@ -49,6 +56,8 @@ export interface WorldDetail {
   tarmac: SurfaceDetail
   /** Coarser and softer: grass, terrain, run-off, everything off the road. */
   ground: SurfaceDetail
+  /** Rendered concrete and painted panel: everything that STANDS UP. */
+  wall: SurfaceDetail
   dispose(): void
 }
 
@@ -139,6 +148,7 @@ function normalTexture(
   const tex = new THREE.CanvasTexture(canvas)
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.RepeatWrapping
+  tex.anisotropy = ANISOTROPY
   // NoColorSpace, emphatically: a normal map is a vector field, and sRGB-decoding it bends every
   // normal toward flat.
   tex.colorSpace = THREE.NoColorSpace
@@ -175,6 +185,7 @@ function scalarTexture(
   const tex = new THREE.CanvasTexture(canvas)
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.RepeatWrapping
+  tex.anisotropy = ANISOTROPY
   tex.colorSpace = THREE.NoColorSpace
   return tex
 }
@@ -220,11 +231,29 @@ export function buildWorldDetail(): WorldDetail {
     normalScale: 0.3,
     tileM: 9,
   }
+  // Walls want COARSER detail than the ground, which is the opposite of the first guess. Aggregate
+  // works underfoot because the camera gets within a metre of it; a building is twenty metres away
+  // at its closest and usually much further, so 4cm render texture is sub-pixel before it is ever
+  // seen and mips straight back to the flat fill it was meant to replace. Panel and staining scale,
+  // 30cm and up, is what actually survives the distance a building is viewed from.
+  //
+  // The anti-tiling rule relaxes here too: a wall is a few tiles across, not a few hundred like a
+  // straight, so there is no long run for the eye to find the repeat in.
+  const render = octaves(12, 3, 8837)
+  const wall: SurfaceDetail = {
+    normalMap: normalTexture((x, y) => fbm(render, x, y), 1.4),
+    albedoMap: scalarTexture((x, y) => fbm(render, x, y), 0.84, 1),
+    roughnessMap: null,
+    normalScale: 0.5,
+    tileM: 4.5,
+  }
+
   return {
     tarmac,
     ground,
+    wall,
     dispose: () => {
-      for (const d of [tarmac, ground]) {
+      for (const d of [tarmac, ground, wall]) {
         d.normalMap.dispose()
         d.albedoMap.dispose()
         d.roughnessMap?.dispose()
@@ -243,6 +272,53 @@ export function planarUV(geometry: THREE.BufferGeometry, unitsPerTile: number): 
   for (let i = 0; i < position.count; i++) {
     uv[i * 2] = position.getX(i) / unitsPerTile
     uv[i * 2 + 1] = position.getZ(i) / unitsPerTile
+  }
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+}
+
+/** Project planar UVs per TRIANGLE, off whichever axis that triangle most faces.
+ *
+ *  The vertical counterpart to `planarUV`. A top-down projection is useless on anything standing up:
+ *  a wall parallel to the view axis gets its whole height crushed into one line of texels and reads
+ *  as vertical smearing. Triplanar blending in the shader is the usual answer, but it is not needed
+ *  here. `GeometrySink` and `toCreasedNormals` both leave geometry NON-INDEXED, so every triangle
+ *  owns its three vertices outright and can be given its own projection with no risk of fighting a
+ *  neighbour over a shared vertex. Adjacent coplanar faces pick the same axis and stay continuous;
+ *  the projection only switches where a surface turns past 45 degrees, which is a corner, where a
+ *  texture seam is invisible anyway.
+ *
+ *  Reads LOCAL coordinates, unlike `planarUV`. Structures are built at the origin and then placed
+ *  and rotated, and a wall's grain should be fixed to the wall rather than sliding across it as the
+ *  building turns.
+ *
+ *  Indexed geometry is left alone: sharing a vertex between two faces that want different
+ *  projections has no correct answer, and nothing in this scene builds walls that way. */
+export function faceUV(geometry: THREE.BufferGeometry, unitsPerTile: number): void {
+  if (geometry.index) return
+  const position = geometry.getAttribute('position')
+  const uv = new Float32Array(position.count * 2)
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const ab = new THREE.Vector3()
+  const ac = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+  for (let t = 0; t + 2 < position.count; t += 3) {
+    a.fromBufferAttribute(position, t)
+    b.fromBufferAttribute(position, t + 1)
+    c.fromBufferAttribute(position, t + 2)
+    normal.copy(ab.subVectors(b, a)).cross(ac.subVectors(c, a))
+    const nx = Math.abs(normal.x)
+    const ny = Math.abs(normal.y)
+    const nz = Math.abs(normal.z)
+    for (let v = 0; v < 3; v++) {
+      const p = v === 0 ? a : v === 1 ? b : c
+      // Drop the dominant axis and keep the other two: a floor is read from above, a wall from
+      // whichever side it faces.
+      const [s, u] = ny >= nx && ny >= nz ? [p.x, p.z] : nx >= nz ? [p.z, p.y] : [p.x, p.y]
+      uv[(t + v) * 2] = s / unitsPerTile
+      uv[(t + v) * 2 + 1] = u / unitsPerTile
+    }
   }
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
 }
