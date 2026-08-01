@@ -104,9 +104,7 @@ export function ringGeometry(ring: readonly Vec[], y: number): THREE.BufferGeome
   return toGeometry(positions, tris.flat())
 }
 
-export interface DashOpts {
-  halfW: number
-  y: number
+export interface DashPattern {
   /** Painted and gap lengths along the arc, in world units. Butt-ended, phase 0 at the first point,
    *  exactly as the 2D dashed stroke lays them. */
   on: number
@@ -115,49 +113,98 @@ export interface DashOpts {
   shift?: number
 }
 
-/** The painted blocks of a dashed stroke (a kerb's red) as flat quads along an open polyline. Block
- *  edges are cut exactly at their arc positions, so the 3D blocks land where the 2D dashes do. */
-export function dashGeometry(pts: readonly Vec[], o: DashOpts): THREE.BufferGeometry {
+export interface DashOpts extends DashPattern {
+  halfW: number
+  y: number
+}
+
+/** One sample along a dashed polyline: where it is, which way across it points, how far along it
+ *  sits, and whether the span STARTING here is painted (the last station's flag is never read). */
+export interface DashStation {
+  x: number
+  y: number
+  nx: number
+  ny: number
+  /** Arc length from the polyline's first point, in world units. */
+  s: number
+  painted: boolean
+}
+
+/** Arc slack, in world units, for deciding that a boundary has landed ON a polyline point rather
+ *  than a hair either side of it. Coordinates out here run to the thousands, so this is still far
+ *  beyond the double precision the walk carries and far below anything with a size. */
+const ARC_EPS = 1e-9
+
+/** Walk an open polyline, cutting it at every paint/gap boundary the pattern crosses.
+ *
+ *  Held apart from `dashGeometry` because the kerb needs the same walk without the flat quads: its
+ *  red and white are two lofted solids that have to meet exactly, which they only do if both are
+ *  cut at one set of stations, off one set of across-normals (`kerb3d`).
+ *
+ *  Boundaries are ADDRESSED, not accumulated: boundary k sits at a known arc, and the walk asks
+ *  which ones a segment spans. The obvious alternative, carrying a running phase and subtracting the
+ *  distance to the next boundary, cannot land on one exactly — the subtraction leaves a femtometre
+ *  of residue, the next step reads it as "a boundary is a femtometre away", and every block emits a
+ *  second station on top of its first. Harmless-looking (the quad between them has no area) and
+ *  measured at a third of every dashed geometry in the world, which the kerb turned into a third of
+ *  its triangles. */
+export function dashStations(pts: readonly Vec[], o: DashPattern): DashStation[] {
   const n = pts.length
   const { nx, ny } = frames(pts, false)
   const period = o.on + o.off
-  const positions: number[] = []
-  const indices: number[] = []
-  let s = ((o.shift ?? 0) % period + period) % period
-  let open = false
-  const pair = (x: number, y2: number, fx: number, fy: number) => {
-    const at = positions.length / 3
-    positions.push(x + fx * o.halfW, o.y, y2 + fy * o.halfW, x - fx * o.halfW, o.y, y2 - fy * o.halfW)
-    return at
+  const shift = ((o.shift ?? 0) % period + period) % period
+  // Even boundaries open a painted block, odd ones close it. So the span running from a station is
+  // painted exactly when the boundary it is heading for closes one.
+  const boundary = (k: number) => Math.floor(k / 2) * period + (k % 2 ? o.on : 0) - shift
+  let k = 0
+  while (boundary(k) <= ARC_EPS) k++
+  const out: DashStation[] = []
+  const emit = (x: number, y: number, fx: number, fy: number, s: number) => {
+    out.push({ x, y, nx: fx, ny: fy, s, painted: k % 2 === 1 })
   }
-  let prev = -1
-  const emit = (x: number, y2: number, fx: number, fy: number, painted: boolean) => {
-    const at = pair(x, y2, fx, fy)
-    if (open && prev >= 0) indices.push(prev, prev + 1, at, prev + 1, at + 1, at)
-    open = painted
-    prev = at
-  }
-  emit(pts[0].x, pts[0].y, nx[0], ny[0], s % period < o.on)
+  emit(pts[0].x, pts[0].y, nx[0], ny[0], 0)
+  let arc = 0
   for (let i = 1; i < n; i++) {
     const a = pts[i - 1]
     const b = pts[i]
     const seg = Math.hypot(b.x - a.x, b.y - a.y)
     if (seg === 0) continue
-    // Cut the segment at every paint/gap boundary it crosses before emitting its far vertex.
-    let done = 0
-    for (;;) {
-      const phase = (s + done) % period
-      const next = phase < o.on ? o.on - phase : period - phase
-      if (done + next >= seg) break
-      done += next
-      const f = done / seg
+    const end = arc + seg
+    // Cut the segment at every boundary strictly inside it, before emitting its far vertex.
+    while (boundary(k) < end - ARC_EPS) {
+      const cut = boundary(k)
+      const f = (cut - arc) / seg
       const fx = nx[i - 1] + (nx[i] - nx[i - 1]) * f
       const fy = ny[i - 1] + (ny[i] - ny[i - 1]) * f
       const fl = Math.hypot(fx, fy) || 1
-      emit(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, fx / fl, fy / fl, ((s + done) % period) < o.on)
+      k++
+      emit(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, fx / fl, fy / fl, cut)
     }
-    s += seg
-    emit(b.x, b.y, nx[i], ny[i], s % period < o.on)
+    arc = end
+    // A boundary landing on the far vertex is that station's, not a cut of its own.
+    if (boundary(k) <= end + ARC_EPS) k++
+    emit(b.x, b.y, nx[i], ny[i], arc)
+  }
+  return out
+}
+
+/** The painted blocks of a dashed stroke as flat quads along an open polyline. Block edges are cut
+ *  exactly at their arc positions, so the 3D blocks land where the 2D dashes do. */
+export function dashGeometry(pts: readonly Vec[], o: DashOpts): THREE.BufferGeometry {
+  const stations = dashStations(pts, o)
+  const positions: number[] = []
+  const indices: number[] = []
+  for (const st of stations) {
+    positions.push(
+      st.x + st.nx * o.halfW, o.y, st.y + st.ny * o.halfW,
+      st.x - st.nx * o.halfW, o.y, st.y - st.ny * o.halfW,
+    )
+  }
+  for (let i = 0; i + 1 < stations.length; i++) {
+    if (!stations[i].painted) continue
+    const a = 2 * i
+    const b = 2 * (i + 1)
+    indices.push(a, a + 1, b, a + 1, b + 1, b)
   }
   return toGeometry(positions, indices)
 }

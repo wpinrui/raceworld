@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type * as THREE from 'three'
-import { dashGeometry, localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
+import { dashGeometry, dashStations, localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
 
 const pos = (g: THREE.BufferGeometry, i: number) => ({
   x: g.attributes.position.getX(i), y: g.attributes.position.getY(i), z: g.attributes.position.getZ(i),
@@ -54,6 +54,42 @@ describe('dashGeometry', () => {
     for (let i = 0; i < indexCount(g); i++) used.add(g.index!.getX(i))
     const maxX = Math.max(...[...used].map((i) => pos(g, i).x))
     expect(maxX).toBe(9)
+  })
+})
+
+describe('dashStations', () => {
+  it('cuts at every boundary, carrying the arc and whether the span starting there is painted', () => {
+    const st = dashStations([{ x: 0, y: 0 }, { x: 10, y: 0 }], { on: 1, off: 1 })
+    expect(st.map((s) => s.s)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    // Phase 0 is painted, exactly as the 2D dashed stroke starts.
+    expect(st.map((s) => s.painted)).toEqual(
+      [true, false, true, false, true, false, true, false, true, false, true],
+    )
+    // The across-normal is the ribbon's: unit, and square to the line.
+    expect(st[0].nx).toBeCloseTo(0, 10)
+    expect(st[0].ny).toBeCloseTo(1, 10)
+  })
+
+  it('lands every boundary once, however awkwardly the blocks divide the segments', () => {
+    // A walk that carries a running phase and subtracts its way to the next boundary leaves residue
+    // there, reads it as "another boundary, a femtometre away", and stations the polyline twice at
+    // every block edge. Invisible in the picture (the quad between the pair has no area) and a third
+    // of every dashed geometry in the world.
+    const pts = Array.from({ length: 40 }, (_, i) => ({ x: i * 0.37, y: 0 }))
+    const st = dashStations(pts, { on: 0.768, off: 0.768 })
+    const steps = st.slice(1).map((s, i) => s.s - st[i].s)
+    expect(Math.min(...steps)).toBeGreaterThan(1e-6)
+    // And the blocks still land where the pattern says: every boundary is present, exactly once.
+    const cuts = st.map((s) => s.s)
+      .filter((s) => s > 0 && Math.abs((s / 0.768) - Math.round(s / 0.768)) < 1e-9)
+    expect(cuts).toHaveLength(Math.floor((39 * 0.37) / 0.768))
+  })
+
+  it('offsets the pattern by the shift, so stacked bands lay their blocks out of phase', () => {
+    const st = dashStations([{ x: 0, y: 0 }, { x: 4, y: 0 }], { on: 1, off: 1, shift: 1 })
+    expect(st[0].painted).toBe(false)
+    expect(st[1].s).toBe(1)
+    expect(st[1].painted).toBe(true)
   })
 })
 
