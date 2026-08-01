@@ -6,6 +6,7 @@ import { MOODS } from '@/lib/ui/lighting'
 import { KERB_RED, buildScenery } from '@/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
 import { roadLap, solveLap } from '@/lib/ui/lap-solve'
+import type { SurfaceDetail, WorldDetail } from './detail3d'
 import { buildWorld3D } from './world3d'
 
 const layout = TRACK_LAYOUTS.britain
@@ -22,6 +23,23 @@ const pitZone = buildPitZone(layout, pitSlots)
 const world = buildWorld3D({
   layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting: MOODS.afternoon,
 })
+
+/** A stand-in for the generated grain. `buildWorldDetail` rasterises canvases and cannot run here,
+ *  and the question this file asks of it is only WHICH grain a surface was handed, which the map's
+ *  identity answers on its own. */
+function stubDetail(): WorldDetail {
+  const grain = (tileM: number): SurfaceDetail => ({
+    normalMap: new THREE.Texture(),
+    albedoMap: new THREE.Texture(),
+    roughnessMap: null,
+    normalScale: 1,
+    tileM,
+  })
+  return {
+    tarmac: grain(0.8), paint: grain(0.8), ground: grain(9), wall: grain(4.5), kerb: grain(1.2),
+    dispose: () => {},
+  }
+}
 
 describe('buildWorld3D', () => {
   it('keeps the painter order as lifts: ground, casing, tarmac, marks', () => {
@@ -152,6 +170,35 @@ describe('buildWorld3D', () => {
     })
     expect(built).toHaveLength(2)
     expect(built[0].parent).toBe(first.group)
+  })
+
+  it('grains the road paint as paint, never as the aggregate or the grass around it', () => {
+    const detail = stubDetail()
+    const grained = buildWorld3D({
+      layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)),
+      lighting: MOODS.afternoon, detail,
+    })
+    const maps = new Map<string, Set<THREE.Texture | null>>()
+    grained.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || Array.isArray(o.material)) return
+      const mat = o.material as THREE.MeshStandardMaterial
+      if (!mat.color) return
+      const key = mat.color.getHexString()
+      if (!maps.has(key)) maps.set(key, new Set())
+      maps.get(key)!.add(mat.normalMap)
+    })
+    // The boundary line and the tarmac each take their own grain. Handed the road's maps, the line
+    // came out mottled from a fifth brightness to full and corrugated with chippings, which is a
+    // strip of aggregate where the circuit's edge is meant to be.
+    expect([...maps.get(new THREE.Color(ROAD_CASING).getHexString())!])
+      .toEqual([detail.paint.normalMap])
+    expect([...maps.get(new THREE.Color(ROAD_TARMAC).getHexString())!])
+      .toEqual([detail.tarmac.normalMap])
+    // The start line is paint too, and it used to take `add`'s default: the GROUND's clump grain,
+    // at a nine metre tile, on the white blocks the grid forms up against.
+    const white = maps.get('f2f2f2')!
+    expect(white.has(detail.paint.normalMap)).toBe(true)
+    expect(white.has(detail.ground.normalMap)).toBe(false)
   })
 
   it('lays the driven-in ink as ordered decals that never write depth', () => {

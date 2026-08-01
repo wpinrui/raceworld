@@ -170,10 +170,14 @@ export function buildWorld3D(
     [ROAD_CASING, LAYER.casing, TRACK_WIDTH_M, LANE_WIDTH_M],
     [ROAD_TARMAC, LAYER.tarmac, TARMAC_WIDTH_M, LANE_TARMAC_M],
   ] as const) {
-    // The road wears the aggregate grain, and `matte` rather than `chalk`: tarmac is the one big
+    // The tarmac wears the aggregate grain, and `matte` rather than `chalk`: it is the one big
     // surface out here that returns a coherent sheen, and the roughness map breaks that sheen up
     // across the ribbon instead of sliding it along as one sheet.
-    const road = detail?.tarmac ?? null
+    //
+    // The CASING is the boundary line, so it wears the paint grain instead. Handing it the road's
+    // maps mottled it from a fifth brightness to full and corrugated it with chippings, which is a
+    // strip of aggregate where the circuit's edge is supposed to be.
+    const road = (colour === ROAD_CASING ? detail?.paint : detail?.tarmac) ?? null
     add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte)
     add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer, road, ROUGH.matte)
     if (pitZone) {
@@ -192,9 +196,11 @@ export function buildWorld3D(
     scenery.kerbs, u, { base: lift(LAYER.kerbs), layer: LAYER.kerbs }, materials, detail?.kerb ?? null,
   ))
 
+  // The start line is paint on the road, so it takes the road's paint grain. `add` defaults to the
+  // GROUND's, which had the grid's white blocks wearing grass clump at a nine metre tile.
   add(localRectsGeometry(
     startPose(layout.start, layout.metresPerUnit), startLineRects(u), lift(LAYER.marks),
-  ), MARK_WHITE, LAYER.marks)
+  ), MARK_WHITE, LAYER.marks, detail?.paint ?? null, ROUGH.matte)
   if (overlay && overlay.length > 0) {
     group.add(buildOpsDecals(
       overlay, { y: lift(LAYER.marks), order: over.nextOrder, bias: DECAL_PULL }, materials,

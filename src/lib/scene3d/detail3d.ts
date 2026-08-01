@@ -54,6 +54,9 @@ export interface SurfaceDetail {
 export interface WorldDetail {
   /** Fine aggregate: the circuit, the pit lane, the aprons. */
   tarmac: SurfaceDetail
+  /** Road PAINT: the white boundary lines, the apron edge, the start line. The aggregate registered
+   *  through a coat of paint, which is a whisper of what the bare surface beside it shows. */
+  paint: SurfaceDetail
   /** Coarser and softer: grass, terrain, run-off, everything off the road. */
   ground: SurfaceDetail
   /** Rendered concrete and painted panel: everything that STANDS UP. */
@@ -265,7 +268,18 @@ export function buildWorldDetail(): WorldDetail {
   //
   // So the undulation is gone, the roughness field moved from 15cm blobs to aggregate scale, and
   // the grass clumps went the same way. Anything a player could match to its copy is the enemy.
-  const grit = octaves(64, 4, 1201)
+  //
+  // The tile is 0.8 m, and every octave here is sized off that ONE number: 256 texels across it is a
+  // 3.1 mm texel, the base lattice's 64 cells are 12.5 mm apart and the second octave's 128 are
+  // 6.3 mm. That band, 6 to 13 mm, is the size real chippings are, and the coarse end carries the
+  // amplitude because the coarse end IS the stone.
+  //
+  // It used to be a 3.6 m tile with four octaves, which put the dominant grain at 56 mm — gravel,
+  // not asphalt — and then ran the last two octaves at 14 mm and 7 mm against a 14 mm texel. Content
+  // finer than a texel cannot be resolved, so those two never rendered as anything but uncorrelated
+  // per-texel hash on top: the road read as television static laid over a bed of pebbles. Two
+  // octaves is the most this map size can carry without one of them landing under Nyquist.
+  const grit = octaves(64, 2, 1201)
   // Sharpened, and with most of the field pushed down into the bitumen: the stones are the minority
   // of the surface, which is what a real one looks like.
   // Built, then SHAPED and re-stretched, so the grain ramp yields real contrast rather than
@@ -281,8 +295,18 @@ export function buildWorldDetail(): WorldDetail {
   const clump = octaves(32, 3, 3313)
   const clumpField = buildField((x, y) => fbm(clump, x, y))
 
+  // Metres of world one tile of the road's grain spans. Shared by the tarmac and the paint laid on
+  // it, so the two are projected at the same scale and a white line's faint texture lines up with
+  // the aggregate it runs beside instead of drifting against it.
+  const ROAD_TILE_M = 0.8
+
   const tarmac: SurfaceDetail = {
-    normalMap: normalTexture(gritField, 2.6),
+    // Relief 1.6 against the 2.6 it was, because the SAME relief is a much steeper surface once the
+    // features are a few texels wide rather than a few dozen: `normalTexture` differences over two
+    // texels, so the slope it reads scales with how fast the field moves per texel, and the field
+    // now crosses a whole stone in four of them. 1.6 through a 0.1 normalScale lands the flanks near
+    // 9 degrees, which is a millimetre of chipping standing proud of a twelve millimetre stone.
+    normalMap: normalTexture(gritField, 1.6),
     // A WIDE albedo range, and this is the change that matters most. Aggregate is bright stone
     // against near-black bitumen: measured against a photograph, a real surface runs most of the
     // way from black to mid-grey, while this map ran 0.94 to 1.0, a six percent wobble. All the
@@ -295,8 +319,28 @@ export function buildWorldDetail(): WorldDetail {
     // between one chipping and the next is not aggregate, it is wet patches: the glossy end caught
     // the sky hard enough to read as puddles scattered over the circuit.
     roughnessMap: scalarTexture(wearField, 0.68, 0.9),
-    normalScale: 0.16,
-    tileM: 3.6,
+    normalScale: 0.1,
+    tileM: ROAD_TILE_M,
+  }
+  // Paint is a SURFACE, not a window onto the one underneath. A track's boundary line, the apron's
+  // edge and the start line were all being handed the tarmac's own maps, so a white line came out
+  // mottled from a fifth brightness to full and corrugated with aggregate: the one thing on the
+  // ground that is meant to read as a clean painted edge was the noisiest thing in the frame.
+  //
+  // Not flat either. Line paint is rolled onto a rough road and takes some of it, so this keeps the
+  // grit field and almost none of its strength: a tenth of the albedo swing and a thirtieth of the
+  // relief. Built from the same field at the same tile, so what little shows registers with the
+  // aggregate on either side of the line rather than reading as a second, unrelated surface.
+  //
+  // Its own normal texture rather than the tarmac's, even at the same relief. `SceneMaterials`
+  // keys on the normal map's identity alone, so two details sharing one map but differing in
+  // albedo or strength are indistinguishable to the cache.
+  const paint: SurfaceDetail = {
+    normalMap: normalTexture(gritField, 1.6),
+    albedoMap: scalarTexture(gritField, 0.93, 1),
+    roughnessMap: null,
+    normalScale: 0.03,
+    tileM: ROAD_TILE_M,
   }
   const ground: SurfaceDetail = {
     normalMap: normalTexture(clumpField, 1.8),
@@ -361,11 +405,12 @@ export function buildWorldDetail(): WorldDetail {
 
   return {
     tarmac,
+    paint,
     ground,
     wall,
     kerb,
     dispose: () => {
-      for (const d of [tarmac, ground, wall, kerb]) {
+      for (const d of [tarmac, paint, ground, wall, kerb]) {
         d.normalMap.dispose()
         d.albedoMap.dispose()
         d.roughnessMap?.dispose()
