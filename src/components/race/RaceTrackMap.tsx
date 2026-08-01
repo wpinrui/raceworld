@@ -68,7 +68,9 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 
 const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
-const ZOOM_MIN = 0.6 // full-track view
+/** The zoom floor, in the readout's own terms, matching the ceiling above: the camera never pulls
+ *  back past this, so the world stays a place rather than a diagram. */
+const ZOOM_MIN_PXM = 10
 /** The zoom ceiling, in the readout's own terms: the same closeness on every circuit, whatever its
  *  metres-per-unit or stage fit. */
 const ZOOM_MAX_PXM = 200
@@ -392,7 +394,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         )
         const pxPerZ = (stageDimsRef.current.w / vbRef.current.w) / layout.metresPerUnit
         const zMax = pxPerZ > 0 ? ZOOM_MAX_PXM / pxPerZ : ZOOM_DEFAULT
-        const nz = Math.min(zMax, Math.max(ZOOM_MIN, cam.z * (e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP)))
+        const zMin = pxPerZ > 0 ? ZOOM_MIN_PXM / pxPerZ : ZOOM_DEFAULT
+        const nz = Math.min(zMax, Math.max(zMin, cam.z * (e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP)))
         if (q) {
           const k = cam.z / nz
           cam.tx = q.x + (cam.tx - q.x) * k
