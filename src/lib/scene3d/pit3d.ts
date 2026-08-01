@@ -106,7 +106,7 @@ export function buildPitPaint3D(
     if (pts.length < 2) return
     const mesh = new THREE.Mesh(
       ribbonGeometry(pts, { halfW, y: y + lift, roundCaps: caps }),
-      materials.get(colour, 1, false, layer + sub),
+      materials.get(colour, { layer: layer + sub }),
     )
     mesh.receiveShadow = true
     group.add(mesh)

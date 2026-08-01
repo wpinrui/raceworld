@@ -55,7 +55,7 @@ export function buildBuildings3D(
       parts, 0, h, u(WINDOW_BAY_M), Math.max(1, b.storeys ?? 1), u(0.12),
     )
     if (windows) {
-      const glass = placed(windows, nightGlass ?? materials.get(GLASS, GLASS_ALPHA), b)
+      const glass = placed(windows, nightGlass ?? materials.get(GLASS, { alpha: GLASS_ALPHA }), b)
       glass.castShadow = false
       group.add(glass)
     }
@@ -169,18 +169,18 @@ export function buildFences3D(
   const group = new THREE.Group()
   const h = u(FENCE_H_M)
   const postGeo = new THREE.CylinderGeometry(1, 1, 1, 4)
-  const postMat = materials.get(FENCE_STEEL, 0.5)
+  const postMat = materials.get(FENCE_STEEL, { alpha: 0.5 })
   const posts: THREE.Vector3[] = []
   // Fencing composites AFTER the road's ink decals (which own the low renderOrders): a cage face
   // blended before the ink underneath it would be stamped over by the ink's later draw.
   const FENCE_ORDER = 1000
   for (const f of fences) {
-    const face = new THREE.Mesh(wallStripGeometry(f.pts, 0, h), materials.get(FENCE_FACE, 0.13))
+    const face = new THREE.Mesh(wallStripGeometry(f.pts, 0, h), materials.get(FENCE_FACE, { alpha: 0.13 }))
     face.receiveShadow = true
     face.renderOrder = FENCE_ORDER
     group.add(face)
     const rail = new THREE.Mesh(
-      ribbonGeometry(f.pts, { halfW: u(0.2), y: h }), materials.get(FENCE_STEEL, 0.6),
+      ribbonGeometry(f.pts, { halfW: u(0.2), y: h }), materials.get(FENCE_STEEL, { alpha: 0.6 }),
     )
     rail.renderOrder = FENCE_ORDER
     group.add(rail)

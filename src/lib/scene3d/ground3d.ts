@@ -10,6 +10,7 @@ import { SOFT_BAND_ALPHA } from '@/lib/ui/terrain-field'
 import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
 import type { SceneMaterials } from './materials3d'
+import { planarUV, type SurfaceDetail } from './detail3d'
 
 /** Hedgerow width, matching the 2D's stroke. */
 const HEDGEROW_HALF_M = 1.1
@@ -51,11 +52,14 @@ export function buildGroundStack3D(
   layers: { bands: number; fields: number; terrain: number; runoffs: number; floors: number },
   /** A team's colour lands on its own garage floor, exactly as `pitFloorOps` paints it. */
   garageColors?: (i: number) => string | undefined,
+  /** The ground's generated grain, projected per fill. Null leaves every patch smooth. */
+  detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
   const add = (geo: THREE.BufferGeometry | null, colour: string, layer: number, alpha = 1) => {
     if (!geo) return
-    const mesh = new THREE.Mesh(geo, materials.get(colour, alpha, false, layer))
+    if (detail) planarUV(geo, u(detail.tileM))
+    const mesh = new THREE.Mesh(geo, materials.get(colour, { alpha, layer, detail }))
     mesh.receiveShadow = true
     group.add(mesh)
   }

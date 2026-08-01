@@ -21,7 +21,7 @@ import {
 } from '@/lib/ui/track-path'
 import { parseViewBox, type ViewBox3D } from './camera3d'
 import { dashGeometry, localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
-import { DECAL_PULL, SceneMaterials } from './materials3d'
+import { DECAL_PULL, ROUGH, SceneMaterials } from './materials3d'
 import { buildGroundStack3D } from './ground3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
@@ -30,6 +30,7 @@ import { buildNightLights3D } from './night3d'
 import { buildOpsDecals } from './ops3d'
 import { buildPitComplex3D, buildPitPaint3D } from './pit3d'
 import type { WorldTextures } from './textures3d'
+import { planarUV, type SurfaceDetail, type WorldDetail } from './detail3d'
 
 /** Ground reach beyond the viewBox, in units: the same margin the 2D preview clears to the wash.
  *  Exported because it is where the world STOPS, and the fog has to have finished by then. */
@@ -59,6 +60,8 @@ export interface World3DInput {
   lighting: Lighting
   /** Tile textures, browser-built; absent (in tests) the patterned surfaces fall back to flat. */
   textures?: WorldTextures
+  /** Generated surface grain, browser-built; absent, every surface stays smooth. */
+  detail?: WorldDetail
   /** The extent actually in shot, for fitting the sun's shadow map. Defaults to the whole viewBox,
    *  which is only the right answer for a whole-circuit framing. */
   frame?: ViewBox3D
@@ -88,7 +91,7 @@ export interface World3D {
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame, overlay, garageColors, extras, night }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, detail, frame, overlay, garageColors, extras, night }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -96,8 +99,16 @@ export function buildWorld3D(
   const materials = new SceneMaterials()
   // Flat layers receive shadow and never cast: they ARE the ground. Each carries its painter layer
   // as a depth bias, so millimetre lifts never fight.
-  const add = (geometry: THREE.BufferGeometry, colour: string, layer = 0) => {
-    const mesh = new THREE.Mesh(geometry, materials.get(colour, 1, false, layer))
+  //
+  // `grain` picks which generated detail the surface wears, and projects the UVs it needs down the
+  // Y axis. Projected in WORLD space, so the road and the grass it runs through share one continuous
+  // grain and their join carries no seam.
+  const add = (
+    geometry: THREE.BufferGeometry, colour: string, layer = 0,
+    grain: SurfaceDetail | null = detail?.ground ?? null, roughness: number = ROUGH.chalk,
+  ) => {
+    if (grain) planarUV(geometry, u(grain.tileM))
+    const mesh = new THREE.Mesh(geometry, materials.get(colour, { layer, roughness, detail: grain }))
     mesh.receiveShadow = true
     group.add(mesh)
   }
@@ -108,7 +119,7 @@ export function buildWorld3D(
   ground.translate(vx + vw / 2, 0, vy + vh / 2)
   add(ground, scenery.base)
 
-  group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors))
+  group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors, detail?.ground ?? null))
 
   // The ink, compiled from the same ops the 2D strokes: the edge fades under the road, the driven-in
   // surface over it, each stack at one lift with renderOrder carrying the painter.
@@ -132,13 +143,17 @@ export function buildWorld3D(
     [ROAD_CASING, LAYER.casing, TRACK_WIDTH_M, LANE_WIDTH_M],
     [ROAD_TARMAC, LAYER.tarmac, TARMAC_WIDTH_M, LANE_TARMAC_M],
   ] as const) {
-    add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer)
-    add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer)
+    // The road wears the aggregate grain, and `matte` rather than `chalk`: tarmac is the one big
+    // surface out here that returns a coherent sheen, and the roughness map breaks that sheen up
+    // across the ribbon instead of sliding it along as one sheet.
+    const road = detail?.tarmac ?? null
+    add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte)
+    add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer, road, ROUGH.matte)
     if (pitZone) {
-      add(ringGeometry(pitZone.work, lift(layer)), colour, layer)
+      add(ringGeometry(pitZone.work, lift(layer)), colour, layer, road, ROUGH.matte)
       // The apron carries the same white edge line: a stroke round the ring in 2D, a ribbon here.
       if (colour === ROAD_CASING) {
-        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer)
+        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte)
       }
     }
   }
@@ -147,10 +162,12 @@ export function buildWorld3D(
   // Kerbs: the white base under the red blocks, sampled off the same smoothed curve the 2D strokes.
   for (const kerb of scenery.kerbs) {
     const pts = densifyOpen(kerb.pts)
-    add(ribbonGeometry(pts, { halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbWhite), roundCaps: true }), KERB_WHITE, LAYER.kerbWhite)
+    // Painted concrete, so the aggregate grain at a lower roughness than the tarmac beside it.
+    const kerbGrain = detail?.tarmac ?? null
+    add(ribbonGeometry(pts, { halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbWhite), roundCaps: true }), KERB_WHITE, LAYER.kerbWhite, kerbGrain, ROUGH.paint)
     add(dashGeometry(pts, {
       halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbRed), on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M),
-    }), KERB_RED, LAYER.kerbRed)
+    }), KERB_RED, LAYER.kerbRed, kerbGrain, ROUGH.paint)
   }
 
   add(localRectsGeometry(

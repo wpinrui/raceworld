@@ -9,6 +9,7 @@
 // the rest. Every mesh in the scene comes through here or through `surface` below.
 
 import * as THREE from 'three'
+import type { SurfaceDetail } from './detail3d'
 
 /** The depth pull for paint that tops the whole road stack (grid boxes, the pit work pad and its
  *  markings, night glow pools): past the deepest opaque layer (marks, 13). The stack's
@@ -65,17 +66,27 @@ export interface SurfaceOpts {
   layer?: number
   /** A repeating tile, where the surface has one. */
   map?: THREE.Texture | null
+  /** Generated grain: normal and roughness maps, projected by `planarUV` on the geometry side.
+   *  Where the surface's roughness comes from a map, the scalar `roughness` still multiplies it. */
+  detail?: SurfaceDetail | null
 }
 
 /** Build one surface. The single place in the codebase that decides what a lit material IS. */
 export function surface(colour: string, opts: SurfaceOpts = {}): THREE.MeshStandardMaterial {
-  const { alpha = 1, roughness = ROUGH.matte, metalness = 0, decal = false, layer = 0, map } = opts
+  const {
+    alpha = 1, roughness = ROUGH.matte, metalness = 0, decal = false, layer = 0, map, detail,
+  } = opts
   return new THREE.MeshStandardMaterial({
     color: colour,
     side: THREE.DoubleSide,
     roughness,
     metalness,
     ...(map ? { map } : {}),
+    ...(detail ? {
+      normalMap: detail.normalMap,
+      normalScale: new THREE.Vector2(detail.normalScale, detail.normalScale),
+      ...(detail.roughnessMap ? { roughnessMap: detail.roughnessMap } : {}),
+    } : {}),
     ...(alpha < 1 || decal ? { transparent: true, opacity: alpha, depthWrite: false } : {}),
     ...(layer > 0 ? {
       polygonOffset: true, polygonOffsetFactor: -layer, polygonOffsetUnits: -2 * layer,
@@ -87,12 +98,17 @@ export class SceneMaterials {
   private cache = new Map<string, THREE.MeshStandardMaterial>()
 
   /** Cached by everything that distinguishes one material from another, so a circuit's thousand
-   *  road sheets share a handful of them. */
-  get(colour: string, alpha = 1, decal = false, layer = 0, roughness = ROUGH.chalk): THREE.MeshStandardMaterial {
-    const key = `${colour}@${alpha}${decal ? '#decal' : ''}#${layer}#${roughness}`
+   *  road sheets share a handful of them. An options object rather than a row of positional flags:
+   *  the fifth unlabelled argument in a row of five was already unreadable at the call sites. */
+  get(colour: string, opts: SurfaceOpts = {}): THREE.MeshStandardMaterial {
+    const {
+      alpha = 1, roughness = ROUGH.chalk, metalness = 0, decal = false, layer = 0, detail,
+    } = opts
+    const key = `${colour}@${alpha}#${roughness}#${metalness}${decal ? '#decal' : ''}#${layer}`
+      + `#${detail ? detail.tileM : 'flat'}`
     let mat = this.cache.get(key)
     if (!mat) {
-      mat = surface(colour, { alpha, decal, layer, roughness })
+      mat = surface(colour, { alpha, roughness, metalness, decal, layer, detail })
       this.cache.set(key, mat)
     }
     return mat

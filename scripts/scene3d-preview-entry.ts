@@ -27,6 +27,7 @@ import {
   applyToneMapping, buildSky, refitFog, skySeedFor, type SkyEnv,
 } from '../src/lib/scene3d/sky3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
+import { buildWorldDetail } from '../src/lib/scene3d/detail3d'
 import { buildWorld3D, GROUND_PAD } from '../src/lib/scene3d/world3d'
 
 declare global {
@@ -51,8 +52,9 @@ declare global {
 }
 
 const q = new URLSearchParams(location.search)
-// The tiles are static; one set serves every rebuild.
+// The tiles and the surface grain are static; one set serves every rebuild.
 const textures = buildWorldTextures()
+const detail = buildWorldDetail()
 
 interface BuiltScene {
   scene: THREE.Scene
@@ -88,7 +90,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   const full = parseViewBox(layout.viewBox, TRACK_WIDTH_M / mpu / 2 + 8)
   const world = buildWorld3D({
     layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting,
-    textures, frame: frame ?? full,
+    textures, detail, frame: frame ?? full,
     night: moodName === 'night',
     // The same stand-in names the 2D preview letters its boards with.
     extras: () => (pitZone

@@ -82,7 +82,7 @@ export function buildOpsDecals(
     if (key !== runKey) {
       flush()
       runKey = key
-      runMaterial = materials.get(colour, op.alpha ?? 1, true, o.bias)
+      runMaterial = materials.get(colour, { alpha: op.alpha ?? 1, decal: true, layer: o.bias })
     }
     runGeometries.push(...opGeometries(op, o.y))
   }
