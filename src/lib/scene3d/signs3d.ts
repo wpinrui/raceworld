@@ -15,8 +15,26 @@ const BOARD = shade(PIT_WHITE, 0.78)
 const TEXT = '#14181F'
 /** How far the board stands proud of the bay mouth, in metres. */
 const PROUD_M = 0.12
+/** The board's lean out over the lane, from vertical. Dead vertical it faces only track level, and
+ *  the game's elevated camera sees it edge-on; leaned like a marquee it reads from the top-down
+ *  default and from the lane both. */
+const LEAN_RAD = (50 * Math.PI) / 180
 
 interface BoardDriver { name: string; nationality?: string }
+
+interface Pt { x: number; y: number }
+
+/** Which way the text runs: left to right AS SEEN FROM THE LANE. The 2D board ordered its ends by
+ *  screen-x, which says nothing about a pit straight running north-south; the lane side is the
+ *  bay's own out direction, and reading order follows that viewer's screen-right, viewDir x up. */
+export function boardFrame(r: Pt[]): { a: Pt; b: Pt; out: Pt } | null {
+  if (r.length < 4) return null
+  const oL = Math.hypot(r[0].x - r[3].x, r[0].y - r[3].y)
+  if (oL < 1e-6) return null
+  const out = { x: (r[0].x - r[3].x) / oL, y: (r[0].y - r[3].y) / oL }
+  const flip = (r[1].x - r[0].x) * out.y - (r[1].y - r[0].y) * out.x <= 0
+  return { a: flip ? r[1] : r[0], b: flip ? r[0] : r[1], out }
+}
 
 function drawBoard(
   canvas: HTMLCanvasElement, crew: BoardDriver[], texture: THREE.Texture,
@@ -63,19 +81,22 @@ export function buildGarageSigns3D(
 ): THREE.Group {
   const group = new THREE.Group()
   const y0 = u(GARAGE_H_M)
-  const y1 = y0 + u(SIGN_H_M)
+  const y1 = y0 + u(SIGN_H_M) * Math.cos(LEAN_RAD)
   zone.garageFloors.forEach((r, i) => {
     const crew = drivers(i)
-    if (crew.length === 0 || r.length < 4) return
-    // The bay's FRONT edge, run so the text reads left to right from the lane, as the SVG board did.
-    const rev = r[1].x < r[0].x
-    const a = rev ? r[1] : r[0]
-    const b = rev ? r[0] : r[1]
+    if (crew.length === 0) return
+    const frame = boardFrame(r)
+    if (!frame) return
+    const { a, b, out } = frame
     const len = Math.hypot(b.x - a.x, b.y - a.y)
     if (len < 1e-6) return
-    // Proud of the mouth, along the out-of-bay direction the doors offset against.
-    const outX = ((r[0].x - r[3].x) / (Math.hypot(r[0].x - r[3].x, r[0].y - r[3].y) || 1)) * u(PROUD_M)
-    const outY = ((r[0].y - r[3].y) / (Math.hypot(r[0].x - r[3].x, r[0].y - r[3].y) || 1)) * u(PROUD_M)
+    // Proud of the mouth, along the out-of-bay direction the doors offset against; the top edge
+    // then leans out over the lane so the elevated camera reads the face, not the edge.
+    const outX = out.x * u(PROUD_M)
+    const outY = out.y * u(PROUD_M)
+    const h = u(SIGN_H_M)
+    const leanX = out.x * h * Math.sin(LEAN_RAD)
+    const leanY = out.y * h * Math.sin(LEAN_RAD)
 
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round((len / u(1)) * PX_PER_M))
@@ -86,7 +107,7 @@ export function buildGarageSigns3D(
 
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute([
-      a.x + outX, y1, a.y + outY, b.x + outX, y1, b.y + outY,
+      a.x + outX + leanX, y1, a.y + outY + leanY, b.x + outX + leanX, y1, b.y + outY + leanY,
       b.x + outX, y0, b.y + outY, a.x + outX, y0, a.y + outY,
     ], 3))
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2))
