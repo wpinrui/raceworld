@@ -10,8 +10,8 @@ import type { Vec } from './geom'
 import type { PitSlot, PitZone } from './pit-zone'
 import type { DrawOp } from './scenery-draw'
 import { LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M } from './track-path'
-import { edgeOps, surfaceOps } from './track-surface'
-import { pitEdgeOps, pitSurfaceOps } from './pit-surface'
+import { edgeOpsByLayer, surfaceOps } from './track-surface'
+import { pitEdgeOpsByLayer, pitSurfaceOps } from './pit-surface'
 import type { LapDynamics } from './lap-dynamics'
 
 /** Half-width of the racing line the surface ink is hung off, in metres. */
@@ -60,19 +60,25 @@ function inkArgs(o: RoadOpts) {
  *  world can lay the same ink at its own lifts (#3d-port). */
 export function roadInkUnder(o: RoadOpts): DrawOp[] {
   const { ink, pitInk } = inkArgs(o)
-  // The pit lane's ink first, the circuit's over it: where the two roads meet (the exit's fade
-  // running across the track edge, the entry's grime under a braking zone) the MAIN ROAD's story
-  // wins, because the racing surface is the one the eye follows through the junction.
-  const ops: DrawOp[] = [...pitEdgeOps(pitInk)]
-  if (ink) {
-    ops.push(...edgeOps({
+  // LAYER-MAJOR across the circuit and the lane, exactly as the casing merges: every wide faint
+  // fade layer of BOTH roads goes down before either's next, and all the asphalt goes down after
+  // all the fade. The layers share their per-layer colours, so at a junction the two falloffs read
+  // as ONE band round the union, and no fade ever crosses the other road's asphalt.
+  const pit = pitEdgeOpsByLayer(pitInk)
+  const track = ink
+    ? edgeOpsByLayer({
       ...ink,
       ground: o.ground,
       shadow: o.shadow,
       ribbonHalfM: TRACK_WIDTH_M / 2,
       lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
-    }))
+    })
+    : { fades: [], asphalt: [] }
+  const ops: DrawOp[] = []
+  for (let k = 0; k < Math.max(pit.fades.length, track.fades.length); k++) {
+    ops.push(...(pit.fades[k] ?? []), ...(track.fades[k] ?? []))
   }
+  ops.push(...pit.asphalt, ...track.asphalt)
   return ops
 }
 

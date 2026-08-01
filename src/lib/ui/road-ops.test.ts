@@ -80,6 +80,23 @@ describe('roadOps', () => {
     }
   })
 
+  it('merges the two roads into one falloff: layer-major fades, then all asphalt', () => {
+    // The circuit's fade and the lane's must interleave wide-to-narrow and finish before EITHER
+    // road's asphalt goes down, or the junctions wear two crossing falloff bands and one road's
+    // fade paints over the other's tarmac. Same discipline the casing test above pins.
+    for (const id of IDS) {
+      const { layout, ops } = build(id)
+      const firstRibbon = ops.findIndex((op) => op.d === layout.d)
+      const under = ops.slice(0, firstRibbon)
+      const asphalt = under.flatMap((op, i) => (op.stroke === TARMAC || op.fill === TARMAC ? [i] : []))
+      const fade = under.flatMap((op, i) =>
+        (op.stroke ?? op.fill) !== TARMAC && (op.stroke ?? op.fill) !== CASING ? [i] : [])
+      expect(asphalt.length, `${id}: no under-ink asphalt`).toBeGreaterThan(0)
+      expect(fade.length, `${id}: no falloff`).toBeGreaterThan(0)
+      expect(Math.max(...fade), `${id}: a fade lands over an asphalt band`).toBeLessThan(Math.min(...asphalt))
+    }
+  })
+
   it('wears the racing line, its marbles and its brake marks into the tarmac', () => {
     // The circuit's driven-in detail. Each mark is pre-blended opaquely against the tarmac, so it is
     // identified by the colour it resolves to rather than by an alpha.

@@ -118,9 +118,11 @@ function strokeRuns(
  *  Drawn UNDER everything else in the pit complex, which is what lets the fringe run toward the garages
  *  unclamped: the garage floors and then the building itself paint over whatever reaches in there, and
  *  what is left is asphalt around the ends of the box row, which is where a real complex has it. */
-export function pitEdgeOps(s: PitSurface): DrawOp[] {
+/** The lane's edge falloff, grouped by soft layer for the same layer-major zip the circuit's fade
+ *  exposes (edgeOpsByLayer): interleaved, the two roads wear one merged falloff at the junctions. */
+export function pitEdgeOpsByLayer(s: PitSurface): { fades: DrawOp[][]; asphalt: DrawOp[] } {
   const { u, fast } = s
-  if (fast.length < 3) return []
+  if (fast.length < 3) return { fades: [], asphalt: [] }
   const layers = SOFT_LAYERS
   // `halfM` is how far the asphalt reaches EITHER SIDE of the line: for the lane that is its apron's
   // half-width off the centreline, for the working apron how far its asphalt is dilated past its edge.
@@ -129,18 +131,21 @@ export function pitEdgeOps(s: PitSurface): DrawOp[] {
     ...(s.apron && s.apron.outer.length >= 3 ? [{ pts: s.apron.outer, halfM: WORK_APRON_M }] : []),
   ].map((e) => ({ ...e, runs: chunk(allOf(e.pts.length), stationsPer(e.pts, u, ARC_M)) }))
 
-  const ops: DrawOp[] = []
   // Widest and faintest first, and layer-major across the lane AND its apron together: the two meet
   // along the whole box row, so a wide pale layer of one landing after the other's core would scrub a
   // pale notch down the join between them.
-  for (let k = 0; k < layers; k++) {
+  const fades = Array.from({ length: layers }, (_, k) => {
     const { reachM, colour } = edgeLayer(k, layers, s.ground, s.tarmac)
-    for (const e of edges) ops.push(...strokeRuns(e.pts, e.runs, 2 * u(e.halfM + reachM), colour))
-  }
+    return edges.flatMap((e) => strokeRuns(e.pts, e.runs, 2 * u(e.halfM + reachM), colour))
+  })
   // The asphalt itself, over the fade and under the white line, so what the fade falls away FROM is
   // asphalt rather than paint.
-  for (const e of edges) ops.push(...strokeRuns(e.pts, e.runs, 2 * u(e.halfM), s.tarmac))
-  return ops
+  return { fades, asphalt: edges.flatMap((e) => strokeRuns(e.pts, e.runs, 2 * u(e.halfM), s.tarmac)) }
+}
+
+export function pitEdgeOps(s: PitSurface): DrawOp[] {
+  const { fades, asphalt } = pitEdgeOpsByLayer(s)
+  return [...fades.flat(), ...asphalt]
 }
 
 /** How used the lane is at a fraction along it, 0 at the entry and 1 at the exit.

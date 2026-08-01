@@ -316,25 +316,31 @@ const RIM_SAFE = 0.8
  *
  *  Both sides of a band go in ONE op as two subpaths: same colour, same width, and a stroke can carry any
  *  number of subpaths. */
-export function edgeOps(s: Surface): DrawOp[] {
+/** The circuit's edge falloff, grouped by soft layer so the caller can interleave it layer-major
+ *  with the pit lane's (road-ops): the two roads' fades share their per-layer colours, so zipped
+ *  wide-to-narrow they read as ONE falloff round the union, exactly as the casing already merges. */
+export function edgeOpsByLayer(s: Surface): { fades: DrawOp[][]; asphalt: DrawOp[] } {
   const { u, centre, ground, shadow, ribbonHalfM, lineWidthM } = s
-  if (!centre || centre.length < 3 || !ground || !shadow || !ribbonHalfM || !lineWidthM) return []
+  if (!centre || centre.length < 3 || !ground || !shadow || !ribbonHalfM || !lineWidthM) {
+    return { fades: [], asphalt: [] }
+  }
   const layers = SOFT_LAYERS
   // The asphalt's true outer edge: past the white line by twice the line's own width.
   const apronHalf = u(ribbonHalfM + APRON_LINES * lineWidthM)
   const bleed = u(RIM_BLEED_M)
   const lap = arcs(centre, ARCS)
   const limits = curveLimits(centre)
-  const ops: DrawOp[] = []
-  const rim = (inner: number, outer: number, colour: string) => {
+  const rim = (inner: number, outer: number, colour: string): DrawOp[] => {
     const width = outer - inner
-    if (width <= 0) return
+    if (width <= 0) return []
     const off = (inner + outer) / 2
+    const ops: DrawOp[] = []
     for (const { idx } of lap) {
       const left = stripe(centre, idx, noFold(off, limits, RIM_SAFE))
       const right = stripe(centre, idx, noFold(-off, limits, RIM_SAFE))
       ops.push({ d: `${left} ${right}`, stroke: colour, width, cap: 'round' })
     }
+    return ops
   }
   // Widest and faintest first, exactly as the stripes above, and layer-major for the same reason. The
   // innermost layer's band closes on the apron, which is why the reach list runs one past the layers.
@@ -342,14 +348,18 @@ export function edgeOps(s: Surface): DrawOp[] {
     { length: layers + 1 },
     (_, k) => (k < layers ? u(edgeLayer(k, layers, ground, s.tarmac).reachM) : 0),
   )
-  for (let k = 0; k < layers; k++) {
+  const fades = Array.from({ length: layers }, (_, k) => {
     const { colour } = edgeLayer(k, layers, ground, s.tarmac)
-    rim(apronHalf + reach[k + 1] - bleed, apronHalf + reach[k], colour)
-  }
+    return rim(apronHalf + reach[k + 1] - bleed, apronHalf + reach[k], colour)
+  })
   // The apron itself, over the falloff and under the white line, so what the falloff falls away FROM is
   // asphalt rather than paint. Its inner edge meets the road's own casing.
-  rim(u(ribbonHalfM) - bleed, apronHalf, s.tarmac)
-  return ops
+  return { fades, asphalt: rim(u(ribbonHalfM) - bleed, apronHalf, s.tarmac) }
+}
+
+export function edgeOps(s: Surface): DrawOp[] {
+  const { fades, asphalt } = edgeOpsByLayer(s)
+  return [...fades.flat(), ...asphalt]
 }
 
 /** Surface grain: the same patchy treatment as the marbles, spread over the WHOLE road rather than one
@@ -399,9 +409,10 @@ export function grainOps(s: Surface): DrawOp[] {
   return ops
 }
 
-/** Everything worn into the tarmac, in the order it was laid down: the road's own grain first, then the
- *  line, then what it threw off, then the marks braking scrubbed into it. Drawn OVER the road surface;
- *  `edgeOps` goes under it. */
+/** Everything worn into the tarmac: the road's own grain, then the marbles, then the line's rubber
+ *  and the braking marks OVER them, because the cars sweep the line clean: debris never sits on the
+ *  driven surface, and marbles painting later cut the rubber band off at their edge. Drawn OVER the
+ *  road surface; `edgeOps` goes under it. */
 export function surfaceOps(s: Surface): DrawOp[] {
-  return [...grainOps(s), ...rubberOps(s), ...marbleOps(s), ...skidOps(s)]
+  return [...grainOps(s), ...marbleOps(s), ...rubberOps(s), ...skidOps(s)]
 }
