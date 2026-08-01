@@ -10,6 +10,12 @@ const slots = [
 ]
 const crew = new PitCrew3D({ slots, u, colors: ['#E8442E', '#2F7BE8'], carScale: 0.005, rideY: 0.1 })
 
+/** The slot's inner (flipped) group, and the crew group inside it: the crew is the inner's one
+ *  GROUP child, everything else is the box's static furniture. */
+const innerOf = (si: number) => (crew.group.children[si] as THREE.Group).children[0] as THREE.Group
+const crewOf = (si: number) =>
+  innerOf(si).children.find((o): o is THREE.Group => o instanceof THREE.Group)!
+
 describe('PitCrew3D', () => {
   it('builds every role the choreography addresses, per slot', () => {
     expect(crew.slotCount).toBe(2)
@@ -26,9 +32,7 @@ describe('PitCrew3D', () => {
 
   it('takes the choreography numbers in slot-local metres and lands them in units', () => {
     crew.setPart(0, 'lolli', 4.35, 0)
-    const inner = (crew.group.children[0] as THREE.Group).children[0] as THREE.Group
-    const crewGroup = inner.children[0] as THREE.Group
-    const lolli = crewGroup.children.find((o) =>
+    const lolli = crewOf(0).children.find((o) =>
       o.children.some((c2) => c2 instanceof THREE.Mesh
         && (c2.geometry as THREE.BufferGeometry).type === 'CapsuleGeometry')
       && o.children.length === 3)!
@@ -38,18 +42,27 @@ describe('PitCrew3D', () => {
 
   it('mirrors a flipped box across the lane exactly as the SVG inner did', () => {
     crew.setFlip(0, -1)
-    const inner = (crew.group.children[0] as THREE.Group).children[0] as THREE.Group
-    expect(inner.scale.z).toBe(-1)
+    expect(innerOf(0).scale.z).toBe(-1)
     crew.setFlip(0, 1)
+  })
+
+  it('builds the box furniture beside the crew: pad, markings, and shadow-casting booms', () => {
+    const furniture = innerOf(0).children.filter((o) => o instanceof THREE.Mesh)
+    // Pad + markings + two gantry booms.
+    expect(furniture).toHaveLength(4)
+    const booms = furniture.filter((o) => o.castShadow)
+    expect(booms).toHaveLength(2)
+    expect(booms[0].position.y).toBeGreaterThan(u(2.2))
+    const pad = furniture.find((o) => (
+      (o as THREE.Mesh).material as THREE.MeshLambertMaterial).opacity === 0.45)!
+    expect(((pad as THREE.Mesh).material as THREE.MeshLambertMaterial).transparent).toBe(true)
   })
 
   it('cuts the tyre props from the car wheel table and seats them at hub height', () => {
     // Fronts on corners 0/2, rears on 1/3; centre height = ride + radius, the ridden hub.
     crew.setPart(0, 'oldT0', 0, 0)
     crew.setPartVisible(0, 'oldT0', true)
-    const inner = (crew.group.children[0] as THREE.Group).children[0] as THREE.Group
-    const crewGroup = inner.children[0] as THREE.Group
-    const props = crewGroup.children.filter((o) => o.visible
+    const props = crewOf(0).children.filter((o) => o.visible
       && o.children.some((c2) => c2 instanceof THREE.Mesh
         && (c2.geometry as THREE.BufferGeometry).type === 'CylinderGeometry'))
     expect(props.length).toBeGreaterThan(0)
@@ -69,11 +82,11 @@ describe('PitCrew3D', () => {
     expect(colours).toContain('#222222')
   })
 
-  it('shows and hides a crew whole', () => {
+  it('shows and hides a crew whole, leaving the box furniture standing', () => {
     crew.setRootVisible(1, true)
-    const inner = (crew.group.children[1] as THREE.Group).children[0] as THREE.Group
-    expect((inner.children[0] as THREE.Group).visible).toBe(true)
+    expect(crewOf(1).visible).toBe(true)
     crew.setRootVisible(1, false)
-    expect((inner.children[0] as THREE.Group).visible).toBe(false)
+    expect(crewOf(1).visible).toBe(false)
+    expect(innerOf(1).children.filter((o) => o instanceof THREE.Mesh).every((o) => o.visible)).toBe(true)
   })
 })

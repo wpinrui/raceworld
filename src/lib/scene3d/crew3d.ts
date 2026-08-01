@@ -1,18 +1,32 @@
-// The pit crew in-scene (#3d-port increment 5): the same choreography, real people and props. The
-// rAF state machine in RaceTrackMap is untouched — it computes slot-local METRES exactly as it did
-// for the SVG crew, and this manager is the surface those numbers land on now. What changes is only
-// what the numbers move: capsule people in team colours, a lollipop with a real pole, and tyre props
-// cut from the car's own wheel table, so the invisible swap at the hub matches by construction.
+// The pit boxes and their crews in-scene (#3d-port increment 5): the same choreography, real people
+// and props. The rAF state machine in RaceTrackMap is untouched — it computes slot-local METRES
+// exactly as it did for the SVG crew, and this manager is the surface those numbers land on now.
+// What changes is only what the numbers move: capsule people in team colours, a lollipop with a real
+// pole, and tyre props cut from the car's own wheel table, so the invisible swap at the hub matches
+// by construction. The box's static furniture (work pad, markings, gantry) lives here too: as DOM it
+// floated ABOVE the GL cars, a translucent film the car drove under.
 
 import * as THREE from 'three'
 import type { PitSlot } from '@/lib/ui/pit-zone'
 import { WHEELS } from './car-mesh'
+import { GeometrySink, v3 } from './solids3d'
+
+/** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more. */
+export const GANTRY_H_M = 2.2
+/** Boom length: back to the building's front face, with a few centimetres of overlap. */
+export const GANTRY_REACH_M = 4.75
 
 const STEEL = '#8B929E'
 const GUN = '#5E6673'
 const LOLLI_DISC = '#E8C33A'
 const TYRE = '#16181D'
 const RIM = '#2E3138'
+const PAD = '#3C434F'
+const MARK = '#E8C33A'
+const BOOM = '#2E333C'
+/** The pad and markings ride just under the cars' clearance, over every road layer. */
+const PAD_M = 0.185
+const MARK_M = 0.19
 /** A crew member, bold like everything at map scale: radius off the SVG's drawn discs. */
 const PERSON_R_M = 0.34
 const PERSON_H_M = 1.6
@@ -64,6 +78,51 @@ export class PitCrew3D {
       root.rotation.y = -s.rot
       const inner = new THREE.Group()
       root.add(inner)
+
+      // The static furniture: work pad, broadcast markings, and the overhead gantry, which now
+      // throws its shadow from the actual sun instead of carrying a painted one.
+      const pad = new THREE.Mesh(
+        new THREE.PlaneGeometry(u(6.9), u(3.8)).rotateX(-Math.PI / 2),
+        new THREE.MeshLambertMaterial({
+          color: PAD, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
+        }),
+      )
+      pad.position.set(u(0.25), u(PAD_M), 0)
+      pad.renderOrder = 40
+      pad.receiveShadow = true
+      inner.add(pad)
+      const marks = new GeometrySink()
+      const flat = (x0: number, z0: number, w: number, d: number) => marks.quad(
+        v3(u(x0), u(MARK_M), u(z0)), v3(u(x0 + w), u(MARK_M), u(z0)),
+        v3(u(x0 + w), u(MARK_M), u(z0 + d)), v3(u(x0), u(MARK_M), u(z0 + d)),
+      )
+      for (const sy of [1, -1]) {
+        flat(-3, sy * 1.62 - 0.07, 6, 0.14)
+        for (const tx of [-3, 0, 3]) flat(tx - 0.07, sy > 0 ? 1.62 : -1.62 - 0.55, 0.14, 0.55)
+      }
+      for (const ax of [-4.7, 3.2]) {
+        flat(ax, -0.07, 1.5, 0.14)
+        marks.tri(
+          v3(u(ax + 1.15), u(MARK_M), u(-0.35)), v3(u(ax + 1.55), u(MARK_M), 0),
+          v3(u(ax + 1.15), u(MARK_M), u(0.35)),
+        )
+      }
+      const marksMesh = new THREE.Mesh(marks.build(), new THREE.MeshLambertMaterial({
+        color: MARK, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide,
+      }))
+      marksMesh.renderOrder = 41
+      inner.add(marksMesh)
+      for (const bx of [1.5, -1.5]) {
+        const boom = new THREE.Mesh(
+          new THREE.BoxGeometry(u(0.6), u(0.25), u(GANTRY_REACH_M)),
+          new THREE.MeshLambertMaterial({ color: BOOM }),
+        )
+        boom.position.set(u(bx), u(GANTRY_H_M + 0.125), u(-1.5 + GANTRY_REACH_M / 2))
+        boom.castShadow = true
+        boom.receiveShadow = true
+        inner.add(boom)
+      }
+
       const crew = new THREE.Group()
       crew.visible = false
       inner.add(crew)

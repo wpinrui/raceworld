@@ -5,7 +5,7 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { gridBoxOps, startLineOps, startPose } from '@/lib/ui/road-marks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { MOODS, dirAt, lightDir, screenUpAzimuth, shadowReach } from '@/lib/ui/lighting'
+import { MOODS } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
 import { Scene3DCanvas } from './Scene3DCanvas'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
@@ -13,11 +13,9 @@ import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
 import { PitCrew3D } from '@/lib/scene3d/crew3d'
 import type { CarLivery } from '@/lib/scene3d/car-mesh'
-import { EXTRUDE } from '@/lib/ui/scenery-draw'
 import { buildGarageSigns3D } from '@/lib/scene3d/signs3d'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
-import { GANTRY_H_M, PitBoxes, type PitBoxRefs } from './PitBoxes'
 import { CAR_LENGTH_M, CAR_SCALE, FRONT_LEAD_M, SPRITE, STRAIGHT, steerAngles } from '@/lib/ui/car-sprite'
 import {
   PROFILE_N, lapDynamics, lateralG, sampleLap, trackPhysics, type LapDynamics,
@@ -153,14 +151,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const pathBlendRef = useRef(new Map<string, { dx: number; dy: number; start: number }>()) // path-switch offset decay
   const pitAnchorRef = useRef(new Map<string, { residual: number; t0: number }>()) // service-position pin
   const slotDistsRef = useRef<number[]>([]) // arc position of each pit box along the lane path
-  const slotInnerRefs = useRef(new Map<number, SVGGElement>()) // flipped so the garage faces away from the lane
-  const gantryShRefs = useRef(new Map<number, SVGGElement>()) // gantry shadow, offset against that flip
-  const gantryRefs = useRef(new Map<number, SVGGElement>()) // gantry booms, lifted off the box floor
-  // The three of them as one object, built once. `PitBoxes` is memoised on its props, so a fresh
-  // bundle per render would defeat the memo and put its elements back in every commit.
-  const pitBoxRefs = useRef<PitBoxRefs>({
-    inner: slotInnerRefs, gantry: gantryRefs, gantryShadow: gantryShRefs,
-  }).current
   const slotFlipRef = useRef<number[]>([]) // which way each box was mirrored, measured in the layout pass
   const crewAnimRef = useRef(new Map<number, {
     mode: 'hidden' | 'active' | 'retreat'
@@ -199,7 +189,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     () => ({ ...MOODS.afternoon, azimuth: pitViewAzimuth(layout) ?? MOODS.afternoon.azimuth }),
     [layout],
   )
-  const ldir = useMemo(() => lightDir(lighting), [lighting])
   // The cars read the SAME light. One stable object, so the memoised sprites do not re-render for it.
   const followRef = useRef<string | null>(followId)
   useEffect(() => { followRef.current = followId }, [followId])
@@ -282,29 +271,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // Zone furniture: the working-lane stripe exists ONLY along the box cluster; limiter lines bound
   // it; the pit building runs behind the garages so no team works off a grass verge.
   const pitZone = useMemo(() => buildPitZone(layout, pitSlots), [layout, pitSlots])
-
-  // Gantry placement. The booms are the LAST fake-3D lean on the map: still SVG until the crew port
-  // takes the pit furniture into the scene, their oblique is authored once at the circuit's opening
-  // bearing and then turns rigidly with the world, exactly as a real solid would. Nothing on this
-  // map re-leans when the player rotates any more. The shadow half falls along the sun, which was
-  // always fixed. Both live inside the slot's mirrored group, so each displacement is pre-flipped
-  // in y or it would land on the wrong side for half the grid.
-  useEffect(() => {
-    const vdir = dirAt(screenUpAzimuth(defaultRot))
-    const lift = -(GANTRY_H_M * EXTRUDE) / layout.metresPerUnit
-    const cast = (GANTRY_H_M * shadowReach(lighting)) / layout.metresPerUnit
-    pitSlots.forEach((slot, si) => {
-      const flip = slotFlipRef.current[si] ?? 1
-      const local = (d: { x: number; y: number }) => ({
-        x: Math.cos(slot.rot) * d.x + Math.sin(slot.rot) * d.y,
-        y: -Math.sin(slot.rot) * d.x + Math.cos(slot.rot) * d.y,
-      })
-      const v = local(vdir)
-      const l = local(ldir)
-      gantryRefs.current.get(si)?.setAttribute('transform', `translate(${v.x * lift} ${v.y * lift * flip})`)
-      gantryShRefs.current.get(si)?.setAttribute('transform', `translate(${l.x * cast} ${l.y * cast * flip})`)
-    })
-  }, [pitSlots, layout.metresPerUnit, defaultRot, ldir, lighting])
 
   // What the garage allocation and the garage signage are ACTUALLY functions of, as strings.
   //
@@ -603,7 +569,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             const lane = pitPath.getPointAtLength(bestS)
             const yLocal = -Math.sin(slot.rot) * (lane.x - slot.x) + Math.cos(slot.rot) * (lane.y - slot.y)
             const flip = yLocal > 0 ? -1 : 1
-            slotInnerRefs.current.get(si)?.setAttribute('transform', `scale(1 ${flip})`)
             slotFlipRef.current[si] = flip
             crew3dRef.current?.setFlip(si, flip)
             return bestS
@@ -1145,7 +1110,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // the whole loop down and rebuilt it every time the array got a fresh identity, which the 1Hz
     // tooltip tick does on its own. The loop's own state lives in refs, so it wants to run undisturbed
     // for the length of the race.
-  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, ldir, lighting, applyCam])
+  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, lighting, applyCam])
 
   // Road paint that belongs to the START rather than to the circuit: the chequered band and the grid
   // boxes. Three fills between them, so as ops they are three draw calls; as elements they were a
@@ -1316,7 +1281,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             />
             {/* Measured, never drawn: the lane the pitting cars are placed along. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
-            <PitBoxes slots={pitSlots} u={u} lighting={lighting} refs={pitBoxRefs} />
             {/* The start/finish chequer, off the same description every renderer takes. */}
             {view === 'map' && mapMarkOps.map((op, i) => (
               <path key={`rm${i}`} d={op.d} fill={op.fill} />
