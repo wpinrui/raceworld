@@ -17,6 +17,10 @@ export interface Lighting {
   warmth: number
   /** 0..1. Overcast fills shadows in: high ambient = faint, soft, low contrast. */
   ambient: number
+  /** Overall light level, default 1. The 3D rig multiplies both its lights by it: night is not a
+   *  cool overcast day, it is DARK, and no mix of the four scalars above can say that. The 2D
+   *  helpers ignore it. */
+  level?: number
 }
 
 export type Mood = 'midday' | 'afternoon' | 'dusk' | 'overcast' | 'night'
@@ -34,7 +38,7 @@ export const MOODS: Record<Mood, Lighting> = {
   afternoon: { azimuth: NW, elevation: 0.75, warmth: 0.32, ambient: 0.25 },
   dusk: { azimuth: NW + 0.5, elevation: 0.18, warmth: 0.75, ambient: 0.3 },
   overcast: { azimuth: NW, elevation: 0.6, warmth: -0.2, ambient: 0.75 },
-  night: { azimuth: NW, elevation: 0.5, warmth: -0.5, ambient: 0.55 },
+  night: { azimuth: NW, elevation: 0.5, warmth: -0.5, ambient: 0.55, level: 0.3 },
 }
 
 /** How far a shadow reaches per metre of height: cot(altitude), the real relationship. `elevation`

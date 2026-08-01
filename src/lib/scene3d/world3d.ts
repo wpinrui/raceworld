@@ -26,6 +26,7 @@ import { buildGroundStack3D } from './ground3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
 import { buildTrees3D } from './trees3d'
+import { buildNightLights3D } from './night3d'
 import { buildOpsDecals } from './ops3d'
 import { buildPitComplex3D, buildPitPaint3D } from './pit3d'
 import type { WorldTextures } from './textures3d'
@@ -66,6 +67,8 @@ export interface World3DInput {
   garageColors?: (i: number) => string | undefined
   /** Prebuilt browser-side pieces mounted with the world: the garage boards. */
   extras?: THREE.Object3D[]
+  /** Night dressing: floodlight towers with their pooled light, and the town's windows lit. */
+  night?: boolean
 }
 
 export interface World3D {
@@ -77,7 +80,7 @@ export interface World3D {
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame, overlay, garageColors, extras }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame, overlay, garageColors, extras, night }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -147,8 +150,9 @@ export function buildWorld3D(
 
   // The standing world, and the light it all agrees under.
   group.add(buildTrees3D(scenery.trees, u))
-  group.add(buildStructures3D(scenery, u, materials, textures))
+  group.add(buildStructures3D(scenery, u, materials, textures, night))
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
+  if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
   for (const extra of extras ?? []) group.add(extra)
   const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
   group.add(rig)

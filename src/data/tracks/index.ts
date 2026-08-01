@@ -64,6 +64,8 @@ export interface TrackLayout {
   pitOutside: boolean
   /** Landscape character, driving the scenery palette and densities. */
   biome: Biome
+  /** True where the real calendar races under floodlights: the race-day mood turns night. */
+  night?: boolean
 }
 
 function traceLength(trace: TrackTrace): number {
@@ -81,6 +83,9 @@ function traceLength(trace: TrackTrace): number {
 // tracks whose seam lands elsewhere get hand-authored values in their own file.
 type ImportedTrack = { viewBox: string; trace: TrackTrace; lengthM: number; pitEntry?: number; pitExit?: number; pitStraighten?: boolean; pitSide?: 'inside' | 'outside' }
 
+/** The venues that race under floodlights, as the real calendar has raced them. */
+const NIGHT_VENUES = new Set(['singapore', 'bahrain', 'abu-dhabi', 'qatar', 'las-vegas', 'saudi-arabia'])
+
 function traceLayout(circuitId: string, track: ImportedTrack): TrackLayout {
   const { d, start } = buildTracePath(track.trace)
   const metresPerUnit = track.lengthM / traceLength(track.trace)
@@ -94,6 +99,7 @@ function traceLayout(circuitId: string, track: ImportedTrack): TrackLayout {
     trace: track.trace,
     pitOutside: track.pitSide === 'outside',
     biome: CIRCUIT_BIOMES[circuitId] ?? 'temperate',
+    night: NIGHT_VENUES.has(circuitId),
   }
 }
 

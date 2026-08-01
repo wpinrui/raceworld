@@ -39,8 +39,14 @@ function placed(geo: THREE.BufferGeometry, mat: THREE.Material, at: { x: number;
 
 export function buildBuildings3D(
   buildings: readonly SceneryRect[], u: (m: number) => number, materials: SceneMaterials,
+  night = false,
 ): THREE.Group {
   const group = new THREE.Group()
+  // At night the same glazing grid turns to warm lit windows: emissive, unlit-by-design, the one
+  // thing a dark town supplies its own light for.
+  const nightGlass = night
+    ? new THREE.MeshBasicMaterial({ color: '#E8C976', side: THREE.DoubleSide })
+    : null
   for (const b of buildings) {
     const parts = partsOf(b)
     const h = u((b.storeys ?? 1) * STOREY_M)
@@ -49,7 +55,7 @@ export function buildBuildings3D(
       parts, 0, h, u(WINDOW_BAY_M), Math.max(1, b.storeys ?? 1), u(0.12),
     )
     if (windows) {
-      const glass = placed(windows, materials.get(GLASS, GLASS_ALPHA), b)
+      const glass = placed(windows, nightGlass ?? materials.get(GLASS, GLASS_ALPHA), b)
       glass.castShadow = false
       group.add(glass)
     }
@@ -198,10 +204,10 @@ export function buildFences3D(
 
 export function buildStructures3D(
   scenery: Pick<Scenery, 'buildings' | 'stands' | 'marshals' | 'fences'>,
-  u: (m: number) => number, materials: SceneMaterials, textures?: WorldTextures,
+  u: (m: number) => number, materials: SceneMaterials, textures?: WorldTextures, night = false,
 ): THREE.Group {
   const group = new THREE.Group()
-  group.add(buildBuildings3D(scenery.buildings, u, materials))
+  group.add(buildBuildings3D(scenery.buildings, u, materials, night))
   group.add(buildStands3D(scenery.stands, u, materials, textures))
   group.add(buildMarshals3D(scenery.marshals, u, materials))
   group.add(buildFences3D(scenery.fences, u, materials))

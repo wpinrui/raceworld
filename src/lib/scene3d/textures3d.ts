@@ -31,8 +31,28 @@ export function tileTexture(name: string): THREE.Texture | null {
 export interface WorldTextures {
   seats: THREE.Texture | null
   crowd: THREE.Texture | null
+  /** A soft radial falloff, white centre to nothing: the floodlight pools at night. */
+  glowPool: THREE.Texture | null
+}
+
+function glowTexture(): THREE.Texture | null {
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  g.addColorStop(0, 'rgba(255, 244, 214, 1)')
+  g.addColorStop(0.55, 'rgba(255, 244, 214, 0.35)')
+  g.addColorStop(1, 'rgba(255, 244, 214, 0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
 }
 
 export function buildWorldTextures(): WorldTextures {
-  return { seats: tileTexture('tm-seats'), crowd: tileTexture('tm-crowd') }
+  return { seats: tileTexture('tm-seats'), crowd: tileTexture('tm-crowd'), glowPool: glowTexture() }
 }

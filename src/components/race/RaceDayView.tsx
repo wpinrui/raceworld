@@ -10,6 +10,7 @@ import type { ConstructorStanding, DriverStanding } from '@/lib/sim/types'
 import type { TrackLayout } from '@/data/tracks'
 import { RaceTrackMap, type TrackCarMeta, type TrackSample } from './RaceTrackMap'
 import { liveryFor } from '@/data/history/liveries'
+import type { Mood } from '@/lib/ui/lighting'
 import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from './RaceTable'
 import CommentaryFeed from './CommentaryFeed'
 import { LiveChampionship } from './LiveChampionship'
@@ -128,6 +129,13 @@ export function RaceDayView({
     () => baselineConstructors.map((c) => teamOf.get(c.teamId)?.name).filter((n): n is string => !!n),
     [baselineConstructors, teamOf],
   )
+
+  // The race's mood, picked once: night where the venue races under floodlights, overcast when the
+  // weather brings rain at any point, the standard afternoon otherwise.
+  const mood: Mood = useMemo(() => {
+    if (layout.night) return 'night'
+    return raceState.weather.some((w) => w.moisture >= 0.5) ? 'overcast' : 'afternoon'
+  }, [layout.night, raceState.weather])
 
   const cars: TrackCarMeta[] = useMemo(
     () =>
@@ -249,6 +257,7 @@ export function RaceDayView({
             followId={effectiveFollow}
             onFollow={setFollowId}
             view={mapView ? 'map' : 'live'}
+            mood={mood}
             pinnedCard={(() => {
               if (!effectiveFollow || !pinnedTip || mapView) return undefined
               const ds = raceState.drivers.find((s) => s.driverId === effectiveFollow)

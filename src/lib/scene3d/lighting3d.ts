@@ -73,8 +73,11 @@ export function buildLightRig(l: Lighting, vb: ViewBox3D): THREE.Group {
   // renders its albedo" takes pi times the share. Measured against the 2D stills, not assumed: the
   // first render came out at a quarter of the reference's linear luminance, which is exactly pi off
   // an intended 0.78.
-  const hemi = new THREE.HemisphereLight(skyColor(l), new THREE.Color('#8A8677'), skyShare(l) * Math.PI)
-  const sun = new THREE.DirectionalLight(sunColor(l), sunIntensity(l) * Math.PI)
+  const level = l.level ?? 1
+  const hemi = new THREE.HemisphereLight(
+    skyColor(l), new THREE.Color('#8A8677'), skyShare(l) * Math.PI * level,
+  )
+  const sun = new THREE.DirectionalLight(sunColor(l), sunIntensity(l) * Math.PI * level)
   const cx = vb.x + vb.w / 2
   const cz = vb.y + vb.h / 2
   const reach = Math.max(vb.w, vb.h)

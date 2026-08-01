@@ -72,6 +72,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   const world = buildWorld3D({
     layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting,
     textures, frame: frame ?? full,
+    night: moodName === 'night',
     // The same stand-in names the 2D preview letters its boards with.
     extras: pitZone
       ? [buildGarageSigns3D(pitZone, (m) => m / mpu, () => [

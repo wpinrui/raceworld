@@ -12,9 +12,11 @@
 | **1** — ground truth: the road on the ground, previewable | **Done.** `8066744` |
 | **2** — the world stands up: structures, trees, light | **Done.** `5f59773` |
 | **3** — the surface keeps its story: ink as decal geometry | **Done.** Compiled, not baked: the ops were already polyline strokes, and merged static ribbons are exact at every zoom with no bake pass and no texel budget. `roadInkUnder`/`roadInkOver` + `ops3d.ts` |
-| **4** — cars: impostor, then the parametric loft | **In progress.** Impostors landed (`--cars` on the probe); the loft's first draft renders via `scripts/car-preview-3d.ts`, height profile now iterating on turntable stills |
-| **5** — the live view swaps | **Done.** Everything visual is in-scene (world, ink, cars, boards, crews, pit furniture) and the camera is a free perspective orbit: left-drag tilts and turns (keeping the follow lock), middle-drag pans the free camera, wheel zooms at the pointer, ground clicks release the lock, and a px/m readout sits by the reset. At pitch 0 the projection matches the old orthographic transform exactly (pinned by test), so the DOM overlay (hit boxes, labels, cards) rides per-frame projection through the same camera the frame is drawn with. Loose end: `SceneryCanvas`/`drawScene` are unmounted but not yet deleted; retire with increment 6 |
-| **6** — moods and night, with real lights | Not started |
+| **4** — cars: impostor, then the parametric loft | **Done.** The loft is the live model: era liveries (five-slot team paint from 1996), modelled rims, compound-banded tyres, sprung chassis over planted wheels. `fb2a5a3` / `681b5f7` |
+| **5** — the live view swaps | **Done.** Everything visual is in-scene (world, ink, cars, boards, crews, pit furniture) and the camera is a free perspective orbit: left-drag tilts and turns (keeping the follow lock), middle-drag pans the free camera, wheel zooms at the pointer, ground clicks release the lock, and a px/m readout sits by the reset. At pitch 0 the projection matches the old orthographic transform exactly (pinned by test), so the DOM overlay (hit boxes, labels, cards) rides per-frame projection through the same camera the frame is drawn with |
+| **6** — moods and night, with real lights | **Done.** The session picks the mood: night venues run under floodlights (masted towers striding the circuit, additive light pools on the tarmac, buildings lit window by window, world dimmed to 0.3), a wet race runs overcast, everything else afternoon. `SceneryCanvas` is deleted; the scene is the only renderer. |
+
+**The port is complete.** One three.js scene draws everything; the 2D canvas is gone.
 
 ## Why straight to 3D
 
