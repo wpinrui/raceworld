@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
 import { CAR_HEIGHT_SCALE, TYRE_BANDS, asPaint, buildCarMesh } from './car-mesh'
+import { RUBBER } from './rubber3d'
 
 const car = buildCarMesh('#E8442E')
 car.group.updateMatrixWorld(true)
@@ -85,6 +86,62 @@ describe('buildCarMesh', () => {
     const painted = coloursOf(buildCarMesh('#E8442E', 'soft'))
     expect(painted).toContain(TYRE_BANDS.soft.toLowerCase())
     expect(painted).not.toContain(TYRE_BANDS.wet.toLowerCase())
+  })
+})
+
+describe('the tyre\'s two rubbers', () => {
+  /** The baked meshes of one rolling wheel, after `collapseByPaint` has been over them. */
+  const rolling = (tag: 'fl' | 'rr'): THREE.Mesh[] =>
+    car.spin[tag].children.filter((o): o is THREE.Mesh => o instanceof THREE.Mesh)
+  const rubbers = (tag: 'fl' | 'rr') => rolling(tag)
+    .map((m) => m.material as THREE.MeshStandardMaterial)
+    .filter((m) => m.roughness === RUBBER.treadRough || m.roughness === RUBBER.wallRough)
+
+  it('keeps the polished band and the matte wall APART through the bake', () => {
+    // The bake batches a car down from ~270 parts to ten buffers, and every part in a batch renders
+    // as ONE of the materials that fell into it. Batched on colour alone the tread and the sidewall
+    // land together and one of them silently takes the other's finish, which is exactly the single
+    // averaged rubber this split exists to get rid of.
+    for (const tag of ['fl', 'rr'] as const) {
+      const found = rubbers(tag)
+      expect(found.filter((m) => m.roughness === RUBBER.treadRough)).toHaveLength(1)
+      expect(found.filter((m) => m.roughness === RUBBER.wallRough)).toHaveLength(1)
+    }
+  })
+
+  it('merges the two sidewalls together, though: they are the same rubber', () => {
+    // The other half of the same bar. A key that splits what it should merge costs draw calls on
+    // every wheel of every car in the field.
+    expect(rolling('fl').filter((m) =>
+      (m.material as THREE.MeshStandardMaterial).roughness === RUBBER.wallRough)).toHaveLength(1)
+  })
+
+  it('carries the wall\'s radial shade through a bake that strips what it is not told to keep', () => {
+    const wall = rolling('fl').find((m) =>
+      (m.material as THREE.MeshStandardMaterial).vertexColors)!
+    const colour = wall.geometry.getAttribute('color')
+    expect(colour).toBeDefined()
+    const shades = Array.from({ length: colour.count }, (_, i) => colour.getX(i))
+    // Both ends of the ramp survived: the bead in the rim's shadow, the shoulder in full light.
+    expect(Math.min(...shades)).toBeCloseTo(RUBBER.beadShade, 4)
+    expect(Math.max(...shades)).toBeCloseTo(1, 4)
+  })
+
+  it('leaves no crack at the shoulder: the three lathes share their seam rings exactly', () => {
+    // One profile, sliced. Were the pieces lathed from tables of their own, a seam a fraction of a
+    // unit wide would open at the split and catch the light all the way round the tyre.
+    const box = (m: THREE.Mesh) => new THREE.Box3().setFromBufferAttribute(
+      m.geometry.getAttribute('position') as THREE.BufferAttribute)
+    const parts = rolling('fl')
+    const tread = box(parts.find((m) =>
+      (m.material as THREE.MeshStandardMaterial).roughness === RUBBER.treadRough)!)
+    const wall = box(parts.find((m) =>
+      (m.material as THREE.MeshStandardMaterial).roughness === RUBBER.wallRough)!)
+    // The walls reach outboard of the tread's own span and stop short of its radius: a filleted
+    // shoulder, with the seam partway round the curve rather than on an edge.
+    expect(wall.max.x).toBeGreaterThan(tread.max.x)
+    expect(wall.max.y).toBeLessThan(tread.max.y)
+    expect(wall.max.y).toBeGreaterThan(tread.max.y * 0.9)
   })
 })
 

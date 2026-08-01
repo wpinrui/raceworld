@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { faceUV, planarUV } from './detail3d'
+import { faceUV, planarUV, rubberDetail, scaleUV } from './detail3d'
 
 /** A one-triangle geometry at the given world positions. */
 function tri(...points: Array<[number, number, number]>): THREE.BufferGeometry {
@@ -100,5 +100,39 @@ describe('faceUV', () => {
     g.setIndex([0, 1, 2])
     faceUV(g, 1)
     expect(g.getAttribute('uv')).toBeUndefined()
+  })
+})
+
+describe('scaleUV', () => {
+  it('turns a 0..1 parameterisation into a tile count, each axis on its own', () => {
+    // For the surfaces that DO author their own UVs. A lathe already runs U round the axis and V
+    // along it, seam included; all it lacks is the scale that makes one repeat cover a fixed
+    // distance of surface rather than the whole part.
+    const g = new THREE.CylinderGeometry(4, 4, 2, 8)
+    const before = Array.from((g.getAttribute('uv') as THREE.BufferAttribute).array)
+    scaleUV(g, 30, 6)
+    const uv = g.getAttribute('uv')
+    for (let i = 0; i < uv.count; i++) {
+      expect(uv.getX(i)).toBeCloseTo(before[i * 2] * 30, 5)
+      expect(uv.getY(i)).toBeCloseTo(before[i * 2 + 1] * 6, 5)
+    }
+  })
+
+  it('leaves a geometry with no UVs alone rather than inventing any', () => {
+    const g = tri([0, 0, 0], [1, 0, 0], [0, 0, 1])
+    expect(() => scaleUV(g, 4, 4)).not.toThrow()
+    expect(g.getAttribute('uv')).toBeUndefined()
+  })
+})
+
+describe('rubberDetail', () => {
+  it('falls back to no grain where there is no 2D canvas to rasterise it on', () => {
+    // jsdom HAS a document and returns null for the context, so the presence of `document` alone is
+    // not the question worth asking. Every consumer wants back the flat material it had before.
+    expect(rubberDetail()).toBeNull()
+  })
+
+  it('answers the same way twice: one pair of maps serves the whole field', () => {
+    expect(rubberDetail()).toBe(rubberDetail())
   })
 })

@@ -94,13 +94,20 @@ export interface SurfaceOpts {
   clearcoat?: number
   /** How sharp that lacquer is, 0 mirror to 1 chalk. Ignored without `clearcoat`. */
   clearcoatRoughness?: number
+  /** Multiply the colour by a per-vertex one: shading baked into the mesh, for a gradient that
+   *  wants no texture and no extra triangles (the tyre sidewall's fall into the rim).
+   *
+   *  The geometry MUST carry a `color` attribute. A material that opts in without one does not
+   *  render unshaded, it renders BLACK: WebGL hands the shader a zero for an attribute it cannot
+   *  find, and zero times the colour is nothing. */
+  vertexColors?: boolean
 }
 
 /** Build one surface. The single place in the codebase that decides what a lit material IS. */
 export function surface(colour: string, opts: SurfaceOpts = {}): THREE.MeshStandardMaterial {
   const {
     alpha = 1, roughness = ROUGH.matte, metalness = 0, decal = false, layer = 0, map, detail,
-    clearcoat = 0, clearcoatRoughness = 0,
+    clearcoat = 0, clearcoatRoughness = 0, vertexColors = false,
   } = opts
   // Physical only where a second lobe was ASKED for: it compiles a longer shader and every surface
   // out here that is not car paint wants exactly one lobe.
@@ -111,6 +118,7 @@ export function surface(colour: string, opts: SurfaceOpts = {}): THREE.MeshStand
     side: THREE.DoubleSide,
     roughness,
     metalness,
+    vertexColors,
     // An explicit tile wins: the grandstand's seats are its surface, and graining them would be
     // painting one texture over another.
     ...(map ? { map } : detail ? { map: detail.albedoMap } : {}),
@@ -135,17 +143,19 @@ export class SceneMaterials {
   get(colour: string, opts: SurfaceOpts = {}): THREE.MeshStandardMaterial {
     const {
       alpha = 1, roughness = ROUGH.chalk, metalness = 0, decal = false, layer = 0, detail,
-      clearcoat = 0, clearcoatRoughness = 0,
+      clearcoat = 0, clearcoatRoughness = 0, vertexColors = false,
     } = opts
     // Keyed on the grain's IDENTITY, not its tile size: the kerb's corrugation and the tarmac's
     // aggregate are different surfaces that could perfectly well be authored at the same scale, and
     // a size-keyed cache would hand the second one the first one's maps.
     const key = `${colour}@${alpha}#${roughness}#${metalness}${decal ? '#decal' : ''}#${layer}`
       + `#${detail ? detail.normalMap.uuid : 'flat'}#${clearcoat}/${clearcoatRoughness}`
+      + `${vertexColors ? '#vc' : ''}`
     let mat = this.cache.get(key)
     if (!mat) {
       mat = surface(colour, {
         alpha, roughness, metalness, decal, layer, detail, clearcoat, clearcoatRoughness,
+        vertexColors,
       })
       this.cache.set(key, mat)
     }

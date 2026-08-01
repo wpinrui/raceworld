@@ -35,6 +35,12 @@ const ANGLES: Record<string, { az: number; elev: number; ortho?: boolean; dist?:
   cockrear: { az: 148, elev: 30, dist: 0.38, at: [0, 62, -32] },
   cockside: { az: 86, elev: 14, dist: 0.34, at: [0, 62, -32] },
   cockfront: { az: 8, elev: 20, dist: 0.38, at: [0, 62, -32] },
+  // POINT BLANK on the front-right tyre (sprite x90, z106, so local z -154). The quarter view puts
+  // tread, shoulder and sidewall in one frame, which is the only way to judge a split that is about
+  // how two zones differ; the flat one is nearly side-on and low, where the wall's own shading and
+  // the shoulder's highlight have nothing else to hide behind.
+  tyre: { az: 50, elev: 14, dist: 0.25, at: [90, 34, -154] },
+  tyreflat: { az: 84, elev: 4, dist: 0.22, at: [90, 34, -154] },
   oside: { az: 90, elev: 0, ortho: true },
   ofront: { az: 0, elev: 0, ortho: true },
   otop: { az: 90, elev: 89.9, ortho: true },

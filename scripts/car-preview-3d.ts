@@ -144,7 +144,10 @@ async function main() {
       console.log(`${angle.padEnd(6)} -> ${out || 'UNWRITABLE: close some image viewers'}`)
     }
   } else {
-    for (const angle of ['front', 'side', 'rear', 'top', 'under', 'cockpit', 'cockrear', 'cockside', 'cockfront']) {
+    for (const angle of [
+      'front', 'side', 'rear', 'top', 'under',
+      'cockpit', 'cockrear', 'cockside', 'cockfront', 'tyre', 'tyreflat',
+    ]) {
       const file = await shoot(`angle=${angle}&colour=${colour}${steer}${model}`, `car-3d-${angle}`)
       if (file) console.log(`${angle.padEnd(6)} -> ${file}`)
     }

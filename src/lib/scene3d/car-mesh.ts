@@ -16,6 +16,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
 import { LACQUER, ROUGH, surface } from './materials3d'
 import { repairNormals } from './normals3d'
+import { scaleUV } from './detail3d'
+import { RUBBER, grainTile, radialShade, treadSurface, wallSurface } from './rubber3d'
 
 /** Vertical exaggeration for the whole car, wheels excepted: judged too low against its own tyres
  *  at true height, the same diorama-bold call every structure height already makes. */
@@ -721,7 +723,6 @@ function smoothPairs(pairs: Array<[number, number]>, per = steps(2)): Array<[num
 
 const CARBON = '#0B0D10'
 const STRUCTURE = '#2E3138'
-const TYRE = '#16181D'
 const HUB = '#2E3138'
 const FLOOR = '#14171E'
 const TERTIARY = '#969CA6'
@@ -744,6 +745,36 @@ export const WHEELS = [
   { tag: 'rl', x: -90, z: 398, r: 38.9, w: 46.8 },
   { tag: 'rr', x: 90, z: 398, r: 38.9, w: 46.8 },
 ] as const
+
+/** Fillet steps per shoulder, where the tread rolls into the sidewall. */
+const SHOULDER_STEPS = 6
+/** Where along the tyre's profile the sidewall stops and the tread starts, and where it starts
+ *  again: HALFWAY round each shoulder fillet, at the point the surface has turned 45 degrees off the
+ *  wall. That is about as far round as the road scrubs a slick, and it puts the material change on a
+ *  curve rather than on an edge, where nothing can read as a painted line. */
+const TREAD_FROM = 1 + SHOULDER_STEPS / 2
+const TREAD_TO = 2 + SHOULDER_STEPS + SHOULDER_STEPS / 2
+
+const polylineLength = (pts: readonly THREE.Vector2[]): number =>
+  pts.reduce((sum, p, i) => (i === 0 ? 0 : sum + p.distanceTo(pts[i - 1])), 0)
+
+/** Re-space a lathe's V by ARC LENGTH along the profile it was turned from.
+ *
+ *  `LatheGeometry` hands out V as the point's index over the point count, which is only the same
+ *  thing as distance along the surface when every segment of the profile is the same length. Read
+ *  the index back out of the V it wrote, and swap in the fraction of the profile actually walked to
+ *  get there. */
+function arcLengthV(geometry: THREE.BufferGeometry, profile: readonly THREE.Vector2[]): void {
+  const walked = [0]
+  for (let i = 1; i < profile.length; i++) {
+    walked.push(walked[i - 1] + profile[i].distanceTo(profile[i - 1]))
+  }
+  const total = walked[walked.length - 1] || 1
+  const uv = geometry.getAttribute('uv')
+  const last = profile.length - 1
+  for (let i = 0; i < uv.count; i++) uv.setY(i, walked[Math.round(uv.getY(i) * last)] / total)
+  uv.needsUpdate = true
+}
 
 /** Sidewall band colours, Pirelli's own set. The game passes a compound and the tyres wear it. */
 export const TYRE_BANDS = {
@@ -803,11 +834,28 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
   const toLocal = new THREE.Matrix4().copy(node.matrixWorld).invert()
   // Merging is all-or-nothing on attribute layout, and this car mixes two sources: the sinks build
   // non-indexed position+normal, three's own primitives arrive indexed and carrying UVs. Everything
-  // is flattened to the sinks' layout first, or the merge quietly refuses and parts vanish.
-  const bakeable = (source: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry => {
+  // is flattened to ONE layout first, or the merge quietly refuses and parts vanish.
+  //
+  // Which layout is decided by the batch's MATERIAL, not by what happens to be on the geometry. Two
+  // attributes beyond position and normal are load-bearing now (the tread samples its grain through
+  // `uv`, the sidewall carries its shade in `color`), and both would be thrown away by a rule that
+  // only kept the first two. Anything a material reads is kept and, where a part in that batch does
+  // not have it, synthesised at its neutral value: zero UVs sample one texel, white vertex colours
+  // multiply to nothing. The alternative is a refused merge, and a refused merge on the car's main
+  // carbon batch is a hundred and fifty draw calls.
+  const bakeable = (
+    source: THREE.BufferGeometry, matrix: THREE.Matrix4, needs: ReadonlySet<string>,
+  ): THREE.BufferGeometry => {
     const geo = source.index ? source.toNonIndexed() : source.clone()
     for (const name of Object.keys(geo.attributes)) {
-      if (name !== 'position' && name !== 'normal') geo.deleteAttribute(name)
+      if (name !== 'position' && name !== 'normal' && !needs.has(name)) geo.deleteAttribute(name)
+    }
+    for (const name of needs) {
+      if (geo.attributes[name]) continue
+      const size = name === 'uv' ? 2 : 3
+      const fill = new Float32Array(geo.attributes.position.count * size)
+      if (name === 'color') fill.fill(1)
+      geo.setAttribute(name, new THREE.Float32BufferAttribute(fill, size))
     }
     if (!geo.attributes.normal) geo.computeVertexNormals()
     // Whichever source it came from: a sink's own normals and three's primitives alike come back
@@ -823,9 +871,24 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
     }
     if (!(o instanceof THREE.Mesh)) return
     const material = o.material as THREE.MeshStandardMaterial
-    const key = `${material.type}|${material.color.getHexString()}|${o.castShadow ? 1 : 0}`
+    // Keyed on everything that makes one material LOOK different from another, not on its colour
+    // alone. A batch keeps ONE of the materials that fell into it and every part in it then renders
+    // as that: colour-only was enough while the whole car was painted and rubber was one flat
+    // black, and it stopped being enough the moment the tyre put two rubbers on the same wheel that
+    // differ in polish and in what they sample. The tread would have been merged into the sidewall
+    // and both would have rendered as whichever the walk reached first.
+    const key = [
+      material.type, material.color.getHexString(), material.roughness, material.metalness,
+      material.map?.uuid ?? '', material.normalMap?.uuid ?? '', material.vertexColors ? 'vc' : '',
+      o.castShadow ? 'cast' : '',
+    ].join('|')
+    const needs = new Set<string>()
+    if (material.map || material.normalMap || material.roughnessMap) needs.add('uv')
+    if (material.vertexColors) needs.add('color')
     const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow }
-    batch.geos.push(bakeable(o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld)))
+    batch.geos.push(bakeable(
+      o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld), needs,
+    ))
     batch.sources.push(o)
     batches.set(key, batch)
   }
@@ -1162,20 +1225,32 @@ function finGeometry(outline: Array<[number, number]>, xCentre: number, thick: n
  *  (`bakeWorldEnv`), so a metal part reflects the pit wall and the tarmac it is standing among, and
  *  a wheel rim picks up the sun as a moving glint instead of a static specular blob.
  *
- *  `rubber` is the same single-lobe finish `flat` used to be, kept for the tyres. Everything else on
- *  this car is lacquered and a tyre is not: rubber has no clear coat over it, and giving it one puts
- *  a hard reflected sun on a sidewall that should be swallowing the light. */
-export type Finish = 'flat' | 'metal' | 'rubber'
+ *  The three RUBBER finishes are all single-lobe, and that is the point of them: everything else on
+ *  this car is lacquered and a tyre is not. Rubber has no clear coat over it, and giving it one puts
+ *  a hard reflected sun on a sidewall that should be swallowing the light.
+ *
+ *  `tread` and `sidewall` are the two halves of a real tyre and differ in every way a material can
+ *  (`rubber3d`), colour included: they bring their own, and the colour argument alongside them is
+ *  the same constant restated so the call site still says what it paints. `rubber` is the plain
+ *  middle of the two, for the things that are made of rubber without being a tyre: the compound band
+ *  painted on the wall, and the slab wheels of the proxy car, which are pure silhouette at the size
+ *  they exist for. */
+export type Finish = 'flat' | 'metal' | 'rubber' | 'tread' | 'sidewall'
 
 function mesh(geo: THREE.BufferGeometry, colour: string, finish: Finish = 'flat'): THREE.Mesh {
   // DoubleSide: the sink's quads are wound by hand and a culled wing is a missing wing.
   const material = finish === 'metal'
     ? surface(colour, { roughness: ROUGH.gloss, metalness: 1 })
-    : finish === 'rubber'
-      ? surface(colour, { roughness: ROUGH.paint })
-      // Race bodywork is a colour coat under a clear one, so it gets both lobes: the livery stays
-      // readable at its authored roughness while the lacquer carries the sharp moving highlight.
-      : surface(colour, { roughness: ROUGH.paint, ...LACQUER })
+    : finish === 'tread'
+      ? treadSurface()
+      : finish === 'sidewall'
+        ? wallSurface()
+        : finish === 'rubber'
+          ? surface(colour, { roughness: ROUGH.paint })
+          // Race bodywork is a colour coat under a clear one, so it gets both lobes: the livery
+          // stays readable at its authored roughness while the lacquer carries the sharp moving
+          // highlight.
+          : surface(colour, { roughness: ROUGH.paint, ...LACQUER })
   const m = new THREE.Mesh(geo, material)
   m.castShadow = true
   m.receiveShadow = true
@@ -1488,7 +1563,7 @@ function buildProxyCar(paint: CarPaint): THREE.Group {
     const halfW = w.w / 2
     slabs.push([
       SPRITE.cx + w.x - halfW, SPRITE.cx + w.x + halfW,
-      0, (w.r * 2) / (UNITS_PER_M * CAR_HEIGHT_SCALE), w.z - w.r, w.z + w.r, TYRE,
+      0, (w.r * 2) / (UNITS_PER_M * CAR_HEIGHT_SCALE), w.z - w.r, w.z + w.r, RUBBER.wall,
     ])
   }
   const sinks = new Map<string, GeometrySink>()
@@ -1497,7 +1572,11 @@ function buildProxyCar(paint: CarPaint): THREE.Group {
     box(sink, x0, x1, y0, y1, z0, z1)
     sinks.set(tint, sink)
   }
-  for (const [tint, sink] of sinks) group.add(mesh(sink.build(), tint, tint === TYRE ? 'rubber' : 'flat'))
+  // A slab wheel is all silhouette at this size, so it wears the sidewall's colour and finish: the
+  // tread's polish has nothing to catch when the whole tyre is two pixels of edge.
+  for (const [tint, sink] of sinks) {
+    group.add(mesh(sink.build(), tint, tint === RUBBER.wall ? 'rubber' : 'flat'))
+  }
   return group
 }
 
@@ -1876,22 +1955,54 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
 
   // Wheels last, each in its own pivot group so steering and spin are plain rotations. The tyre is
   // a lathe with FILLETED shoulders: tread rolling into sidewall, not a sharp-edged cylinder.
-  const tyreGeometry = (r: number, w: number): THREE.BufferGeometry => {
+  //
+  // Lathed in THREE pieces off ONE profile, because tread and sidewall are not the same material
+  // (`rubber3d`) and one mesh cannot be two. The pieces SHARE their end points, so at the same
+  // segment count their seam rings are the same vertices to the bit and the tyre stays one
+  // watertight surface with no crack to catch the light.
+  const tyreProfile = (r: number, w: number): THREE.Vector2[] => {
     const f = r * 0.16
     const pts: THREE.Vector2[] = [new THREE.Vector2(r * 0.58, -w / 2), new THREE.Vector2(r - f, -w / 2)]
-    for (let k = 1; k <= 6; k++) {
-      const a = (k / 6) * (Math.PI / 2)
+    for (let k = 1; k <= SHOULDER_STEPS; k++) {
+      const a = (k / SHOULDER_STEPS) * (Math.PI / 2)
       pts.push(new THREE.Vector2(r - f + Math.sin(a) * f, -w / 2 + f - Math.cos(a) * f))
     }
     pts.push(new THREE.Vector2(r, w / 2 - f))
-    for (let k = 1; k <= 6; k++) {
-      const a = (k / 6) * (Math.PI / 2)
+    for (let k = 1; k <= SHOULDER_STEPS; k++) {
+      const a = (k / SHOULDER_STEPS) * (Math.PI / 2)
       pts.push(new THREE.Vector2(r - f + Math.cos(a) * f, w / 2 - f + Math.sin(a) * f))
     }
     pts.push(new THREE.Vector2(r * 0.58, w / 2))
-    const g = new THREE.LatheGeometry(pts, seg(36))
-    g.rotateZ(Math.PI / 2)
-    return g
+    return pts
+  }
+
+  /** Tread and both walls, ready to hang on a hub. */
+  const tyreParts = (r: number, w: number): THREE.Mesh[] => {
+    const pts = tyreProfile(r, w)
+    const segments = seg(36)
+    const band = pts.slice(TREAD_FROM, TREAD_TO + 1)
+    const tread = new THREE.LatheGeometry(band, segments)
+    const tile = grainTile(UNITS_PER_M)
+    if (tile > 0) {
+      // The grain has to come out the same size in both directions, and the lathe's own V will not
+      // do it: three runs V uniform in POINT INDEX, and this profile's crown is three quarters of
+      // the rubber sitting in one segment out of seven. Left alone the grain would be squeezed to a
+      // seventh of its width at the shoulders and stretched five and a half times across the middle.
+      arcLengthV(tread, band)
+      scaleUV(tread, (2 * Math.PI * r) / tile, polylineLength(band) / tile)
+    }
+    tread.rotateZ(Math.PI / 2)
+    const walls = [pts.slice(0, TREAD_FROM + 1), pts.slice(TREAD_TO)]
+      .map((slice) => new THREE.LatheGeometry(slice, segments))
+    for (const wall of walls) {
+      // Before the turn onto the axle, while the lathe is still standing on Y.
+      radialShade(wall, r * 0.58)
+      wall.rotateZ(Math.PI / 2)
+    }
+    return [
+      mesh(tread, RUBBER.tread, 'tread'),
+      ...walls.map((wall) => mesh(wall, RUBBER.wall, 'sidewall')),
+    ]
   }
   // The RIM is an assembly, not a filled disc: a barrel at the bead seat, a flange lipping over it
   // at each face, ten spokes standing off both faces and a centre lock nut through the middle.
@@ -1905,7 +2016,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
     // Everything that ROLLS goes in here; the duct below stays on the steering pivot outside it.
     const roll = new THREE.Group()
     pivot.add(roll)
-    roll.add(mesh(tyreGeometry(w.r, w.w), TYRE, 'rubber'))
+    for (const part of tyreParts(w.r, w.w)) roll.add(part)
     // Barrel and flanges are OPEN ENDED. A capped cylinder puts a solid disc across the wheel's
     // face and every spoke behind it disappears; what fills the middle is the brake disc, which is
     // what fills it on the car.

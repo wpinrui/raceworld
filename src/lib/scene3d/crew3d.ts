@@ -9,7 +9,9 @@
 import * as THREE from 'three'
 import type { PitSlot } from '@/lib/ui/pit-zone'
 import { WHEELS } from './car-mesh'
+import { scaleUV } from './detail3d'
 import { DECAL_PULL, ROUGH, surface } from './materials3d'
+import { grainTile, radialShade, treadSurface, wallSurface } from './rubber3d'
 import { GeometrySink, v3 } from './solids3d'
 
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more. */
@@ -20,7 +22,6 @@ export const GANTRY_REACH_M = 4.75
 const STEEL = '#8B929E'
 const GUN = '#5E6673'
 const LOLLI_DISC = '#E8C33A'
-const TYRE = '#16181D'
 const RIM = '#2E3138'
 const PAD = '#3C434F'
 const MARK = '#E8C33A'
@@ -177,8 +178,16 @@ export class PitCrew3D {
         for (const kind of ['oldT', 'newT'] as const) {
           const prop = new THREE.Group()
           const tyreGeo = new THREE.CylinderGeometry(r, r, w, 14)
+          // The same two rubbers the car's own wheels wear (`rubber3d`), and a cylinder splits them
+          // for free: its own material groups are the barrel, then the two end caps, which is
+          // exactly tread and sidewalls. A prop is handled at arm's length in front of the camera
+          // for the length of a stop, so a wheel that is one averaged black here undoes the split on
+          // the car it is about to be bolted to.
+          const tile = grainTile(this.u(1))
+          if (tile > 0) scaleUV(tyreGeo, (2 * Math.PI * r) / tile, w / tile)
+          radialShade(tyreGeo, r * 0.58)
           tyreGeo.rotateX(Math.PI / 2)
-          const tyre = new THREE.Mesh(tyreGeo, surface(TYRE, { roughness: ROUGH.matte }))
+          const tyre = new THREE.Mesh(tyreGeo, [treadSurface(), wallSurface(), wallSurface()])
           tyre.castShadow = true
           prop.add(tyre)
           const rimGeo = new THREE.CylinderGeometry(r * 0.58, r * 0.58, w + this.u(0.02), 10)

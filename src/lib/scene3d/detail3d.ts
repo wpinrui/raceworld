@@ -374,6 +374,64 @@ export function buildWorldDetail(): WorldDetail {
   }
 }
 
+/** The TREAD's grain, and the only generated map on the car.
+ *
+ *  A moulded slick is not a polished surface. It carries the mould's own texture plus a lap's worth
+ *  of graining, and that is what stops the shoulder throwing one unbroken highlight the whole way
+ *  round the tyre: a perfect silhouette streak is the single loudest thing left saying "this is a
+ *  surface of revolution in a renderer".
+ *
+ *  Much finer than anything in the world, and pushed much less hard. A tile is five centimetres
+ *  against the tarmac's three and a half metres, and the normals are a fifth of the strength: this
+ *  is meant to disturb the specular sweep, not to be looked at.
+ *
+ *  Memoised at module scope rather than hung off `WorldDetail`, and deliberately NEVER disposed. One
+ *  pair of 256px maps serves every tyre in the field, and a scene teardown that disposed them would
+ *  leave the next scene's tyres sampling a dead texture. */
+let rubber: SurfaceDetail | null | undefined
+
+export function rubberDetail(): SurfaceDetail | null {
+  if (rubber !== undefined) return rubber
+  // No 2D canvas, no maps: node and jsdom both land here, and every consumer falls back to the flat
+  // material it had before. jsdom in particular HAS a document and returns null for the context,
+  // so the presence of `document` alone is not the question worth asking.
+  if (typeof document === 'undefined' || !document.createElement('canvas').getContext('2d')) {
+    rubber = null
+    return rubber
+  }
+  // Three octaves topping out at 128 cells across 256 texels, so the finest feature is still two
+  // texels wide: at a 5cm tile that is grain from a fifth of a millimetre up to two, which is the
+  // scale rubber actually grains at.
+  const pores = octaves(32, 3, 5077)
+  const poreField = buildField((x, y) => fbm(pores, x, y))
+  rubber = {
+    normalMap: normalTexture(poreField, 1.8),
+    // Barely there, against the tarmac's 0.2..1. Rubber's colour is uniform and the work here is
+    // being done by the normals; a wide range would read as a dirty tyre rather than a grained one.
+    albedoMap: scalarTexture(poreField, 0.88, 1),
+    // None. The tread's polish is one number for the whole band (`rubber3d`), because that is what
+    // a scrubbed slick is: evenly polished, and glossier than everything around it.
+    roughnessMap: null,
+    normalScale: 0.22,
+    tileM: 0.05,
+  }
+  return rubber
+}
+
+/** Multiply a geometry's existing UVs, turning a 0..1 parameterisation into a tile count.
+ *
+ *  For the surfaces that DO author their own UVs, where `planarUV` and `faceUV` would be wrong: a
+ *  lathe and a cylinder already run U round the axis and V along it, seam included, and all they
+ *  lack is the scale that makes one repeat cover a fixed distance of surface rather than the whole
+ *  part. Scaling the attribute rather than the texture's `repeat` keeps a big tyre and a small one
+ *  grained at the same size while sharing one map. */
+export function scaleUV(geometry: THREE.BufferGeometry, u: number, v: number): void {
+  const uv = geometry.getAttribute('uv')
+  if (!uv) return
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * u, uv.getY(i) * v)
+  uv.needsUpdate = true
+}
+
 /** Project planar UVs down the Y axis onto a geometry whose positions are already in world space.
  *
  *  Mutates in place and is safe to call once per geometry. Never call it on the grandstand deck or

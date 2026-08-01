@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { WHEELS } from './car-mesh'
 import { PitCrew3D } from './crew3d'
+import { RUBBER } from './rubber3d'
 
 const u = (m: number) => m / 2 // a 2 metres-per-unit circuit
 const slots = [
@@ -71,6 +72,25 @@ describe('PitCrew3D', () => {
     expect(props.length).toBeGreaterThan(0)
     expect(props[0].position.y).toBeCloseTo(0.1 + WHEELS[0].r * 0.005, 10)
     crew.setPartVisible(0, 'oldT0', false)
+  })
+
+  it('cuts them from the car\'s own rubber too, tread split from sidewall', () => {
+    // A prop is handled at arm's length in front of the camera for the length of a stop, and it is
+    // about to be bolted onto a wheel that HAS the split. One averaged black here undoes it.
+    const props: THREE.Mesh[] = []
+    crew.group.traverse((o) => {
+      if (o instanceof THREE.Mesh && Array.isArray(o.material)) props.push(o)
+    })
+    // Two slots, four corners, an old tyre and a new one.
+    expect(props).toHaveLength(2 * 4 * 2)
+    // A cylinder's own material groups are the barrel then the two caps, which is exactly tread
+    // then sidewalls: the split costs no second mesh.
+    const [tread, ...walls] = props[0].material as THREE.MeshStandardMaterial[]
+    expect(tread.roughness).toBe(RUBBER.treadRough)
+    expect(walls).toHaveLength(2)
+    for (const wall of walls) expect(wall.roughness).toBe(RUBBER.wallRough)
+    // And the caps carry the shade their material reads, or they render black rather than matte.
+    expect(props[0].geometry.getAttribute('color')).toBeDefined()
   })
 
   it('recolours a corner pair of sidewall bands for the stop', () => {
