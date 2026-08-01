@@ -237,22 +237,6 @@ export default function TrackPreviewPage() {
                 />
               )
             })()}
-            tooltipFor={(id) => {
-              const ds = states.find((s) => s.driverId === id)
-              const d = driverOf.get(id)
-              if (!ds || !d) return null
-              return (
-                <DriverTrackTip
-                  ds={ds}
-                  driver={d}
-                  team={teamOf.get(d.teamId)}
-                  states={states}
-                  drivers={MOCK_DRIVERS}
-                  currentLap={lap}
-                  isPlayer={id === 'car-7'}
-                />
-              )
-            }}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
             {followId && !mapView && (

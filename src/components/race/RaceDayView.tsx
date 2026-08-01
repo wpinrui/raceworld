@@ -275,22 +275,6 @@ export function RaceDayView({
                 />
               )
             })()}
-            tooltipFor={(id) => {
-              const ds = raceState.drivers.find((s) => s.driverId === id)
-              const d = driverOf.get(id)
-              if (!ds || !d) return null
-              return (
-                <DriverTrackTip
-                  ds={ds}
-                  driver={d}
-                  team={teamOf.get(d.teamId)}
-                  states={raceState.drivers}
-                  drivers={drivers}
-                  currentLap={raceState.currentLap}
-                  isPlayer={isPlayerCar(ds)}
-                />
-              )
-            }}
           />
           <div className="absolute top-3 right-3 flex gap-1.5">
             {effectiveFollow && !mapView && (

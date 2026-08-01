@@ -129,8 +129,6 @@ interface Props {
   showLabels?: boolean
   /** Per-track scenery density multipliers (trees/buildings). */
   sceneryDensity?: SceneryDensity
-  /** Rich hover card per car; falls back to a simple name/team tip. */
-  tooltipFor?: (id: string) => React.ReactNode
   /** 'live' = sprites + camera; 'map' = the classic static full-track view with numbered dots. */
   view?: 'live' | 'map'
   /** The race's light: night venues, wet-race overcast, or the standard afternoon. */
@@ -145,7 +143,7 @@ interface Props {
   teamOrder?: string[]
 }
 
-function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, tooltipFor, view = 'live', mood = 'afternoon', pinnedCard, teamOrder }: Props) {
+function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, view = 'live', mood = 'afternoon', pinnedCard, teamOrder }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -497,15 +495,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     spriteCbs.current.set(key, cb)
     return cb
-  }
-
-  const clickCar = (id: string) => {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false
-      return
-    }
-    // Clicking the followed car does nothing â€” the only way to unfollow is to pan away.
-    if (followRef.current !== id) onFollow(id)
   }
 
   // Reset the VIEW: default zoom, top-down, opening bearing; keep the target (and any follow lock).
@@ -1113,13 +1102,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         }
       }
       // Follow camera: the orbit target IS the followed car; pitch, rotation and zoom stay the
-      // player's own, so the drag-to-tilt keeps orbiting the car it is locked to.
+      // player's own, so the drag-to-tilt keeps orbiting the car it is locked to. The MOVE only;
+      // the frame is painted once, below.
       if (followRef.current && viewRef.current !== 'map') {
         const p = prevDrawRef.current.get(followRef.current)
         if (p) {
           camRef.current.tx = p.x
           camRef.current.tz = p.y
-          applyCam()
         }
       }
 
@@ -1153,9 +1142,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           tipPosRef.current = null
         }
       }
-      // The cars moved, so the GL frame is stale even with the camera still. Following, `applyCam`
-      // above already painted this tick with the poses in; free-camera ticks paint here.
-      if (viewRef.current !== 'map' && !followRef.current) paintRef.current()
+      // ONE paint per frame, for every live frame, and always from inside the rAF callback. Two
+      // rules in that sentence, both load-bearing:
+      //
+      // ONE, because following used to paint here AND from the camera move above, and the cars
+      // effect below painted again on top of that.
+      //
+      // INSIDE, because a WebGL context without `preserveDrawingBuffer` has its drawing buffer
+      // cleared once the compositor has taken it. Painting from a React effect instead puts the
+      // render in whatever task the commit lands in, and a frame composited between that clear and
+      // the next render shows an empty buffer.
+      if (viewRef.current !== 'map') paintRef.current()
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -1260,8 +1257,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       carField3d.setOpacity(c.id, c.retired ? 0.35 : 1)
     }
     carField3d.sweep(live)
-    applyCam()
-  }, [carField3d, cars, applyCam])
+    // Deliberately no paint: `cars` gets a fresh identity on every sim tick, and the rAF loop is
+    // already painting every frame. Repainting here only added a second render per tick, taken
+    // outside the frame callback.
+  }, [carField3d, cars])
   // The whole static world as real geometry, built off React's render because it only changes when
   // the WORLD does: a new circuit, the lap's ink arriving, the grid being painted, a team claiming
   // its garage. The camera never touches it — a camera move is a matrix on the same buffers, which
@@ -1363,59 +1362,34 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               className="absolute left-0 top-0"
               style={{ opacity: car.retired ? 0.35 : 1 }}
             >
-              {(() => {
-                {/* Tooltip + click on the sprite ONLY â€” its exact rendered footprint, no hover halo. */}
-                const sprite = (
+              {/* The car is scenery, not a control: no tooltip, no hover, no click. Following is
+                  driven from the timing table, and a car that swallowed clicks also swallowed the
+                  ground click that stops following. `pointer-events-none` all the way down. */}
+              <div
+                ref={spriteRef(car.id, view)}
+                className="pointer-events-none"
+                // Live sprites carry a real contact shadow (#sim-2d), which a filter that turns
+                // with the car cannot be. The map view's numbered dot still wants one.
+                style={view === 'map' ? { filter: 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))' } : undefined}
+              >
+                {view === 'map' ? (
                   <div
-                    ref={spriteRef(car.id, view)}
-                    onClick={(e) => {
-                      // The outer box takes a plain ground click as "stop following".
-                      e.stopPropagation()
-                      clickCar(car.id)
+                    className="flex items-center justify-center rounded-full font-bold text-[#FFFFFF]"
+                    style={{
+                      width: 20, height: 20, fontSize: 10,
+                      backgroundColor: car.color,
+                      border: '1.5px solid rgba(0,0,0,0.5)',
+                      boxShadow: car.isPlayer ? '0 0 0 2px #FFFFFF' : undefined,
                     }}
-                    className="cursor-pointer"
-                    // Live sprites carry a real contact shadow (#sim-2d), which a filter that turns
-                    // with the car cannot be. The map view's numbered dot still wants one.
-                    style={view === 'map' ? { filter: 'drop-shadow(0.5px 0.8px 0.5px rgba(0,0,0,0.5))' } : undefined}
                   >
-                    {view === 'map' ? (
-                      <div
-                        className="flex items-center justify-center rounded-full font-bold text-[#FFFFFF]"
-                        style={{
-                          width: 20, height: 20, fontSize: 10,
-                          backgroundColor: car.color,
-                          border: '1.5px solid rgba(0,0,0,0.5)',
-                          boxShadow: car.isPlayer ? '0 0 0 2px #FFFFFF' : undefined,
-                        }}
-                      >
-                        <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
-                      </div>
-                    ) : (
-                      // The car itself is GL (#3d-port); this transparent box is its exact rendered
-                      // footprint, kept in the DOM as the hover and click target so the tooltip and
-                      // the follow click behave as they always did.
-                      <div style={{ width: carL * SPRITE.aspect, height: carL }} />
-                    )}
+                    <span style={{ WebkitTextStroke: '0.7px rgba(0,0,0,0.9)', paintOrder: 'stroke' }}>{car.pos}</span>
                   </div>
-                )
-                // The followed car's pinned card IS its tooltip â€” no double card on hover.
-                if (pinnedCard && view === 'live' && car.id === followId) return sprite
-                return (
-                  <Tooltip
-                    bare={!!tooltipFor}
-                    content={
-                      tooltipFor?.(car.id) ?? (
-                        <div>
-                          <div className="font-semibold">P{car.pos} {car.name}</div>
-                          {car.team && <div className="text-[#9CA3AF]">{car.team}</div>}
-                        </div>
-                      )
-                    }
-                  >
-                    {sprite}
-                  </Tooltip>
-                )
-              })()}
+                ) : (
+                  // The car itself is GL (#3d-port); this transparent box is its exact rendered
+                  // footprint, still measured by `spriteRef` to place the labels and the pinned card.
+                  <div style={{ width: carL * SPRITE.aspect, height: carL }} />
+                )}
+              </div>
                 {showLabels && (
                   <div
                     className="absolute left-full top-1/2 flex items-center gap-1 whitespace-nowrap pointer-events-none"
