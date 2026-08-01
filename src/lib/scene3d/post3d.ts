@@ -38,6 +38,25 @@ const STRENGTH = 0.55
 /** The blur runs at half resolution. Bloom is the one effect with nothing to lose from it. */
 const DOWNSCALE = 2
 
+/** How many progressively halved blur levels feed the glow, and what each contributes.
+ *
+ *  ONE level is not bloom, it is a halo. A single blur has a single radius, so a light gets a tight
+ *  ring at that radius and nothing beyond it: the wide, soft falloff that reads as glare has no
+ *  scale to live at. Chaining halved levels gives every scale at once, each one blurred from the
+ *  last so the widest is genuinely wide without a huge kernel, and the descending weights are what
+ *  make it a falloff rather than five stacked rings.
+ *
+ *  Five and this ramp are `UnrealBloomPass`'s own numbers, kept deliberately: the chain here is
+ *  hand-written because of how the addon left the renderer, not because its bloom was wrong, and
+ *  matching it is how the look comes back. */
+const LEVELS = 5
+const WEIGHTS = [1, 0.8, 0.6, 0.4, 0.2]
+
+/** Width of the ramp either side of the threshold. A hard cut makes a light pop into bloom as it
+ *  crosses, and edges of a bright surface flicker in and out between frames; easing across a
+ *  narrow band costs nothing and removes both. */
+const KNEE = 0.06
+
 /** Multisampling on the scene target, replacing what `antialias: true` gave the canvas. */
 const SAMPLES = 4
 
@@ -67,11 +86,15 @@ const QUAD = /* glsl */`
 const BRIGHT = /* glsl */`
   uniform sampler2D tScene;
   uniform float threshold;
+  uniform float knee;
   varying vec2 vUv;
   void main() {
     vec3 c = min(texture2D(tScene, vUv).rgb, vec3(65504.0));
     float l = max(max(c.r, c.g), c.b);
-    gl_FragColor = vec4(l > threshold ? c * ((l - threshold) / l) : vec3(0.0), 1.0);
+    // smoothstep eases the cut; the l > 0.0 guard keeps the divide away from black. Both still
+    // fail closed on NaN, because every comparison against it is false in either direction.
+    float keep = smoothstep(threshold - knee, threshold + knee, l);
+    gl_FragColor = vec4(l > 0.0 ? c * (keep * (l - threshold) / l) : vec3(0.0), 1.0);
   }
 `
 
@@ -94,19 +117,24 @@ const BLUR = /* glsl */`
   }
 `
 
+/** One tap per blur level, UNROLLED. GLSL will not take a loop counter as a sampler array index
+ *  ("array index for samplers must be constant integral expressions"), so the levels are named
+ *  individually and summed in a straight line. Generated from `LEVELS` so the two cannot disagree. */
+const TAPS = Array.from({ length: LEVELS }, (_, i) => i)
+
 /** Scene plus spill, then three's OWN curve and colour space. The chunks are included rather than
  *  reimplemented so `applyToneMapping` stays the single place that decides the curve: three injects
  *  the function and the exposure uniform whenever a material is tone-mapped and the destination is
  *  the canvas, which is exactly this draw and no other. */
 const COMPOSITE = /* glsl */`
   uniform sampler2D tScene;
-  uniform sampler2D tBloom;
+${TAPS.map((i) => `  uniform sampler2D tBloom${i};`).join('\n')}
+  uniform float weights[${LEVELS}];
   uniform float strength;
   varying vec2 vUv;
   void main() {
-    gl_FragColor = vec4(
-      texture2D(tScene, vUv).rgb + texture2D(tBloom, vUv).rgb * strength, 1.0
-    );
+    vec3 spill = ${TAPS.map((i) => `texture2D(tBloom${i}, vUv).rgb * weights[${i}]`).join('\n      + ')};
+    gl_FragColor = vec4(texture2D(tScene, vUv).rgb + spill * strength, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -128,10 +156,19 @@ export function buildPost(
 ): Post {
   const sceneTarget = hdrTarget(SAMPLES)
   const brightTarget = hdrTarget()
-  const blurTarget = hdrTarget()
+  // Two targets per level: the horizontal blur lands in the first, the vertical in the second, and
+  // the second is both what the composite reads and what the NEXT level blurs from. Each level is
+  // half the size of the one above, so the same nine taps cover twice the screen each time.
+  const levels = Array.from({ length: LEVELS }, () => ({
+    across: hdrTarget(), down: hdrTarget(), width: 1, height: 1,
+  }))
 
   const bright = new THREE.ShaderMaterial({
-    uniforms: { tScene: { value: sceneTarget.texture }, threshold: { value: THRESHOLD } },
+    uniforms: {
+      tScene: { value: sceneTarget.texture },
+      threshold: { value: THRESHOLD },
+      knee: { value: KNEE },
+    },
     vertexShader: QUAD,
     fragmentShader: BRIGHT,
     depthTest: false,
@@ -147,7 +184,8 @@ export function buildPost(
   const composite = new THREE.ShaderMaterial({
     uniforms: {
       tScene: { value: sceneTarget.texture },
-      tBloom: { value: blurTarget.texture },
+      ...Object.fromEntries(TAPS.map((i) => [`tBloom${i}`, { value: levels[i].down.texture }])),
+      weights: { value: WEIGHTS },
       strength: { value: STRENGTH },
     },
     vertexShader: QUAD,
@@ -170,9 +208,6 @@ export function buildPost(
     renderer.render(quadScene, quadCamera)
   }
 
-  let blurWidth = 1
-  let blurHeight = 1
-
   return {
     render: () => {
       renderer.setRenderTarget(sceneTarget)
@@ -180,15 +215,20 @@ export function buildPost(
 
       draw(bright, brightTarget)
 
-      blur.uniforms.tSrc.value = brightTarget.texture
-      blur.uniforms.direction.value.set(1 / blurWidth, 0)
-      draw(blur, blurTarget)
+      // Each level blurs from the level above, so the widest one reaches far across the screen
+      // without ever needing a kernel wider than nine taps.
+      let source = brightTarget.texture
+      for (const level of levels) {
+        blur.uniforms.tSrc.value = source
+        blur.uniforms.direction.value.set(1 / level.width, 0)
+        draw(blur, level.across)
 
-      blur.uniforms.tSrc.value = blurTarget.texture
-      blur.uniforms.direction.value.set(0, 1 / blurHeight)
-      draw(blur, brightTarget)
+        blur.uniforms.tSrc.value = level.across.texture
+        blur.uniforms.direction.value.set(0, 1 / level.height)
+        draw(blur, level.down)
+        source = level.down.texture
+      }
 
-      composite.uniforms.tBloom.value = brightTarget.texture
       // Back to the canvas, which is what makes three apply the tone curve to this draw alone.
       draw(composite, null)
     },
@@ -200,15 +240,25 @@ export function buildPost(
       const w = Math.max(1, Math.floor(width * pixelRatio))
       const h = Math.max(1, Math.floor(height * pixelRatio))
       sceneTarget.setSize(w, h)
-      blurWidth = Math.max(1, Math.round(w / DOWNSCALE))
-      blurHeight = Math.max(1, Math.round(h / DOWNSCALE))
-      brightTarget.setSize(blurWidth, blurHeight)
-      blurTarget.setSize(blurWidth, blurHeight)
+      let levelWidth = Math.max(1, Math.round(w / DOWNSCALE))
+      let levelHeight = Math.max(1, Math.round(h / DOWNSCALE))
+      brightTarget.setSize(levelWidth, levelHeight)
+      for (const level of levels) {
+        level.width = levelWidth
+        level.height = levelHeight
+        level.across.setSize(levelWidth, levelHeight)
+        level.down.setSize(levelWidth, levelHeight)
+        levelWidth = Math.max(1, levelWidth >> 1)
+        levelHeight = Math.max(1, levelHeight >> 1)
+      }
     },
     dispose: () => {
       sceneTarget.dispose()
       brightTarget.dispose()
-      blurTarget.dispose()
+      for (const level of levels) {
+        level.across.dispose()
+        level.down.dispose()
+      }
       bright.dispose()
       blur.dispose()
       composite.dispose()

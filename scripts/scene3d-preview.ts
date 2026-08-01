@@ -84,6 +84,11 @@ async function main() {
 
   const page = await browser.newPage()
   page.on('pageerror', (err) => console.error(`page error: ${err.message}`))
+  // Shader compile failures arrive on the CONSOLE, not as page errors: three logs them and carries
+  // on, so the frame comes out black with nothing thrown and the probe reports success. Forwarded.
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') console.error(`page ${m.type()}: ${m.text()}`)
+  })
   for (const id of ids) {
     const z = `${mood === 'afternoon' ? '' : `-${mood}`}${zoom > 1 ? `-z${zoom}` : ''}${cars > 0 ? '-cars' : ''}`
     const common = `id=${id}&zoom=${zoom}&at=${at}&mood=${mood}&cars=${cars}`
