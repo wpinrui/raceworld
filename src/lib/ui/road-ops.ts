@@ -10,7 +10,7 @@ import type { Vec } from './geom'
 import type { PitSlot, PitZone } from './pit-zone'
 import type { DrawOp } from './scenery-draw'
 import { LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M } from './track-path'
-import { edgeOpsByLayer, surfaceOps } from './track-surface'
+import { surfaceOps } from './track-surface'
 import { pitEdgeOpsByLayer, pitSurfaceOps } from './pit-surface'
 import type { LapDynamics } from './lap-dynamics'
 
