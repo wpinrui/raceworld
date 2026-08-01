@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import type { TrackLayout } from '@/data/tracks'
 import { TRACK_WIDTH_M, densifyTrace } from '@/lib/ui/track-path'
 import { GeometrySink, v3 } from './solids3d'
-import { DECAL_PULL } from './materials3d'
+import { DECAL_PULL, ROUGH, surface } from './materials3d'
 
 /** One tower roughly every this many metres, alternating sides. */
 const TOWER_SPACING_M = 130
@@ -63,9 +63,7 @@ export function buildNightLights3D(
     // The pool falls between the tower and the ribbon's middle.
     pools.push({ x: p.x + nx * offset * 0.25, y: p.y + nz * offset * 0.25 })
   }
-  const mastMesh = new THREE.Mesh(masts.build(), new THREE.MeshLambertMaterial({
-    color: MAST, side: THREE.DoubleSide,
-  }))
+  const mastMesh = new THREE.Mesh(masts.build(), surface(MAST, { roughness: ROUGH.paint }))
   mastMesh.castShadow = true
   group.add(mastMesh)
   // The heads are LIT, not lit-upon: flat emissive white, the one thing night leaves at full level.

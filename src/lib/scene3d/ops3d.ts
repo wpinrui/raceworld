@@ -57,7 +57,7 @@ export function buildOpsDecals(
   const group = new THREE.Group()
   let order = o.order
   let runKey: string | null = null
-  let runMaterial: THREE.MeshLambertMaterial | null = null
+  let runMaterial: THREE.MeshStandardMaterial | null = null
   let runGeometries: THREE.BufferGeometry[] = []
   const flush = () => {
     if (runMaterial && runGeometries.length > 0) {

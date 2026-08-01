@@ -22,7 +22,7 @@ import { MOODS, type Mood } from '../src/lib/ui/lighting'
 import {
   applyOrbitCam, frameOrtho, parseViewBox, type OrbitCam, type ViewBox3D,
 } from '../src/lib/scene3d/camera3d'
-import { refitShadow } from '../src/lib/scene3d/lighting3d'
+import { balanceAmbient, refitShadow } from '../src/lib/scene3d/lighting3d'
 import {
   applyToneMapping, buildSky, refitFog, skySeedFor, type SkyEnv,
 } from '../src/lib/scene3d/sky3d'
@@ -61,6 +61,8 @@ interface BuiltScene {
   full: ViewBox3D
   /** The rig's sun, so a pitched shot can refit its shadow box the way the live canvas does. */
   sun: THREE.DirectionalLight
+  /** The rig's hemisphere, so a mounted environment map can stand it down. */
+  sky: THREE.HemisphereLight
   stats: { meshes: number; triangles: number }
 }
 
@@ -116,7 +118,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     crew.setFlip(si, yLocal > 0 ? -1 : 1)
   })
   scene.add(crew.group)
-  return { scene, layout, full, sun: world.sun, stats: world.stats }
+  return { scene, layout, full, sun: world.sun, sky: world.sky, stats: world.stats }
 }
 
 /** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
@@ -178,8 +180,11 @@ function dressSky(built: BuiltScene, moodName: string): SkyEnv | null {
   if (env) {
     built.scene.background = env.texture
     built.scene.backgroundIntensity = env.intensity
+    built.scene.environment = env.environment
+    built.scene.environmentIntensity = env.lightIntensity
     built.scene.fog = new THREE.Fog(env.horizon, 1, 2)
   }
+  balanceAmbient(built.sky, !!env?.lightsScene)
   return env
 }
 

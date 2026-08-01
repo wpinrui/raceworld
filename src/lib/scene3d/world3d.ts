@@ -79,6 +79,10 @@ export interface World3D {
   group: THREE.Group
   /** The rig's one shadow-casting sun, held out so a live camera can refit its map per move. */
   sun: THREE.DirectionalLight
+  /** The rig's hemisphere, held out so a mounted environment map can turn it down. The two are the
+   *  SAME quantity by two routes (sky light arriving on a surface), and running both at full is a
+   *  straight double count that flattens every shadow. */
+  sky: THREE.HemisphereLight
   /** What this scene costs, for the probe's console line. */
   stats: { meshes: number; triangles: number }
 }
@@ -167,6 +171,7 @@ export function buildWorld3D(
   const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
   group.add(rig)
   const sun = rig.children.find((o): o is THREE.DirectionalLight => o instanceof THREE.DirectionalLight)!
+  const sky = rig.children.find((o): o is THREE.HemisphereLight => o instanceof THREE.HemisphereLight)!
 
   let meshes = 0
   let triangles = 0
@@ -178,5 +183,5 @@ export function buildWorld3D(
       triangles += o instanceof THREE.InstancedMesh ? per * o.count : per
     }
   })
-  return { group, sun, stats: { meshes, triangles: Math.round(triangles) } }
+  return { group, sun, sky, stats: { meshes, triangles: Math.round(triangles) } }
 }

@@ -12,7 +12,7 @@ import type { Scenery, SceneryRect, SceneryStand } from '@/lib/ui/track-scenery'
 import type { SceneryFence, SceneryMarshal } from '@/lib/ui/scenery-props'
 import { ribbonGeometry } from './road3d'
 import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGeometry } from './solids3d'
-import type { SceneMaterials } from './materials3d'
+import { ROUGH, surface, type SceneMaterials } from './materials3d'
 import type { WorldTextures } from './textures3d'
 
 /** Glazing ink, from the 2D's window fill. */
@@ -95,12 +95,10 @@ export function buildStands3D(
   const hR = u(STAND_REAR_M)
   const mpu = 1 / u(1)
   const seatsMat = textures?.seats
-    ? new THREE.MeshLambertMaterial({ map: textures.seats, side: THREE.DoubleSide })
+    ? surface('#FFFFFF', { map: textures.seats, roughness: ROUGH.paint })
     : materials.get(DECK)
   const crowdMat = textures?.crowd
-    ? new THREE.MeshLambertMaterial({
-      map: textures.crowd, side: THREE.DoubleSide, transparent: true, depthWrite: false,
-    })
+    ? surface('#FFFFFF', { map: textures.crowd, alpha: 1, decal: true, roughness: ROUGH.chalk })
     : null
   for (const s of stands) {
     const zF = s.facing ? s.h / 2 : -s.h / 2

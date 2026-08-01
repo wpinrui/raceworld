@@ -125,3 +125,23 @@ export function refitShadow(sun: THREE.DirectionalLight, vb: ViewBox3D): void {
   sun.shadow.camera.updateProjectionMatrix()
   sun.shadow.normalBias = (2 * half) / 4096
 }
+
+/** What fraction of the rig's hemisphere survives once an environment map is mounted.
+ *
+ *  The two are the SAME physical quantity by two routes: sky light arriving on a surface. The
+ *  hemisphere is the cheap analytic version the rig used when there was nothing else; the
+ *  environment is the real one, with the sky's own gradient and its clouds in it. Running both at
+ *  full counts that light twice, which lifts every shadow toward its lit value and flattens the
+ *  scene. Zero, then: the environment does the whole job, and this exists only so the number is
+ *  written down with its reason rather than hidden in a deleted line. */
+const AMBIENT_KEPT_WITH_ENV = 0
+
+/** Balance the rig's hemisphere against a mounted environment map. `lighting` is the environment's
+ *  own claim to carry the sky's share (`SkyEnv.lightsScene`); a backdrop that merely gives metal
+ *  something to reflect does not qualify. Idempotent: the rig's own intensity is stashed on first
+ *  call, so re-running this never compounds. */
+export function balanceAmbient(sky: THREE.HemisphereLight, lighting: boolean): void {
+  const data = sky.userData as { rigIntensity?: number }
+  data.rigIntensity ??= sky.intensity
+  sky.intensity = data.rigIntensity * (lighting ? AMBIENT_KEPT_WITH_ENV : 1)
+}

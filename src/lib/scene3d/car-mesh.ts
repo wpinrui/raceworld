@@ -14,6 +14,7 @@ import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
+import { ROUGH, surface } from './materials3d'
 
 /** Vertical exaggeration for the whole car, wheels excepted: judged too low against its own tyres
  *  at true height, the same diorama-bold call every structure height already makes. */
@@ -817,7 +818,7 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
       walk(child)
     }
     if (!(o instanceof THREE.Mesh)) return
-    const material = o.material as THREE.MeshLambertMaterial
+    const material = o.material as THREE.MeshStandardMaterial
     const key = `${material.type}|${material.color.getHexString()}|${o.castShadow ? 1 : 0}`
     const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow }
     batch.geos.push(bakeable(o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld)))
@@ -1148,21 +1149,22 @@ function finGeometry(outline: Array<[number, number]>, xCentre: number, thick: n
   return s.build()
 }
 
-/** Surface finish. `flat` is the diorama's matte default; `metal` adds a specular highlight, which
- *  the existing rig gives for free off its directional sun. Deliberately NOT `MeshStandardMaterial`
- *  with metalness: a metal is pure reflection, so with no environment map in the rig it renders
- *  black. An env map is a rig-wide look decision, not a per-part one. */
+/** Surface finish. `flat` is the car's painted default; `metal` is real metalness now.
+ *
+ *  It could not be before. A metal has no diffuse term at all, so it is nothing but a reflection of
+ *  its surroundings, and the rig had no environment to reflect: metalness rendered black, which is
+ *  why this used to fake it with a broad Phong lobe off the directional sun. The sky is baked into
+ *  an environment map now (`buildSky`), so a metal part reflects the actual sky it is standing
+ *  under, and a wheel rim picks up the sun as a moving glint instead of a static specular blob. */
 export type Finish = 'flat' | 'metal'
 
 function mesh(geo: THREE.BufferGeometry, colour: string, finish: Finish = 'flat'): THREE.Mesh {
   // DoubleSide: the sink's quads are wound by hand and a culled wing is a missing wing.
   const material = finish === 'metal'
-    ? new THREE.MeshPhongMaterial({
-      // A BROAD lobe, not a tight one: spoke faces are flat and small, and a hard highlight only
-      // lands on the one spoke whose normal happens to bisect sun and eye. Wide catches several.
-      color: colour, side: THREE.DoubleSide, shininess: 34, specular: new THREE.Color('#CBD4DE'),
-    })
-    : new THREE.MeshLambertMaterial({ color: colour, side: THREE.DoubleSide })
+    ? surface(colour, { roughness: ROUGH.gloss, metalness: 1 })
+    // Race bodywork is clearcoated, so it is glossier than the world around it but nowhere near a
+    // mirror: the liveries have to stay readable as their authored colours.
+    : surface(colour, { roughness: ROUGH.paint })
   const m = new THREE.Mesh(geo, material)
   m.castShadow = true
   m.receiveShadow = true

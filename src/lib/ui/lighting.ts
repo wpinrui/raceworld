@@ -38,7 +38,11 @@ export const MOODS: Record<Mood, Lighting> = {
   afternoon: { azimuth: NW, elevation: 0.75, warmth: 0.32, ambient: 0.25 },
   dusk: { azimuth: NW + 0.5, elevation: 0.18, warmth: 0.75, ambient: 0.3 },
   overcast: { azimuth: NW, elevation: 0.6, warmth: -0.2, ambient: 0.75 },
-  night: { azimuth: NW, elevation: 0.5, warmth: -0.5, ambient: 0.55, level: 0.3 },
+  // `level` 0.5, not the 0.3 it sat at under the old tone curve. ACES divides by 0.6 before its
+  // fit and so lifted the bottom of the range by about two thirds; the Neutral curve that replaced
+  // it does not, and night is the one mood that lives entirely down there. At 0.3 the circuit
+  // rendered as black ground with lit windows floating over it.
+  night: { azimuth: NW, elevation: 0.5, warmth: -0.5, ambient: 0.55, level: 0.5 },
 }
 
 /** How far a shadow reaches per metre of height: cot(altitude), the real relationship. `elevation`

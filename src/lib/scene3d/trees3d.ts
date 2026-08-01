@@ -4,6 +4,7 @@
 
 import * as THREE from 'three'
 import type { SceneryTree } from '@/lib/ui/track-scenery'
+import { ROUGH, surface } from './materials3d'
 
 /** Canopy albedo per variant: the 2D's radial gradient blended mid-to-rim, because the sun lights
  *  the crown's top back up to the gradient's mid tone and the albedo has to leave it room. Judged
@@ -26,13 +27,13 @@ export function buildTrees3D(trees: readonly SceneryTree[], u: (m: number) => nu
   const trunkGeo = new THREE.CylinderGeometry(1, 1, 1, 5)
   const m = new THREE.Matrix4()
 
-  const trunkMat = new THREE.MeshLambertMaterial({ color: TRUNK })
+  const trunkMat = surface(TRUNK, { roughness: ROUGH.chalk })
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, trees.length)
   let ti = 0
 
   byVariant.forEach((set, variant) => {
     if (set.length === 0) return
-    const mat = new THREE.MeshLambertMaterial({ color: CANOPY[variant] })
+    const mat = surface(CANOPY[variant], { roughness: ROUGH.chalk })
     const canopies = new THREE.InstancedMesh(canopyGeo, mat, set.length)
     set.forEach((t, i) => {
       const r = t.r * CANOPY_OF_R

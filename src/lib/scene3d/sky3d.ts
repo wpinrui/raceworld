@@ -45,13 +45,31 @@ export interface SkyParams {
  *  leaves the red. A real night is the opposite of both, so it is written down instead: deep blue
  *  overhead, and a low warm band at the horizon where a floodlit venue throws its own light back
  *  off the air. That band is the only part the map's 80-degree pitch limit ever shows. */
-const NIGHT_RAMP: Array<[elevation: number, rgb: [number, number, number]]> = [
+type Ramp = Array<[elevation: number, rgb: [number, number, number]]>
+
+const NIGHT_RAMP: Ramp = [
   [-90, [16, 17, 23]],
   [-2, [30, 30, 36]],
   [0, [48, 45, 52]],
   [6, [34, 36, 52]],
   [20, [20, 26, 46]],
   [90, [9, 13, 30]],
+]
+
+/** The daylight fallback, for a machine that cannot bake a Preetham sky at all (the model needs a
+ *  float render target to read its own horizon back out of).
+ *
+ *  It exists because of METAL. A metal surface has no diffuse term, so it is nothing but a
+ *  reflection of its environment, and with no environment at all a wheel rim renders pure black.
+ *  Falling back to no sky was survivable while every material was Lambert; it is not now. A plain
+ *  gradient is a poor sky and a perfectly adequate thing to reflect. */
+const DAY_RAMP: Ramp = [
+  [-90, [92, 96, 92]],
+  [-2, [150, 156, 156]],
+  [0, [198, 210, 214]],
+  [12, [150, 184, 214]],
+  [40, [104, 150, 200]],
+  [90, [86, 134, 192]],
 ]
 
 /** What `scene.backgroundIntensity` scales a DAYLIT bake by, and the fog colour with it.
@@ -78,6 +96,27 @@ const NIGHT_RAMP: Array<[elevation: number, rgb: [number, number, number]]> = [
  *
  *  0.08: a horizon still pale enough to read as distance, and real blue by four degrees up. */
 const DAY_INTENSITY = 0.08
+
+/** ...and what the same sky is worth as LIGHT, which is a separate question with its own answer.
+ *
+ *  The background's scale is chosen on how the sky LOOKS. This one is chosen on how much the sky
+ *  ILLUMINATES, and nothing says the two agree: an environment map delivers whatever irradiance its
+ *  own pixels add up to, while the rig is calibrated so that sky plus sun on a horizontal surface
+ *  lands near 1.05, of which the sky owes 0.625.
+ *
+ *  Solved off the SHADOW RATIO, which is the one measurement that needs no assumption about what a
+ *  surface's albedo is: a shadowed patch is lit by sky alone and a lit one by sky plus sun, so their
+ *  ratio is `A / (A + S)` with the rig's sun fixed at S = 0.425. The target ratio is therefore 0.60,
+ *  and the measurement reads it straight off two pixels of the same grass.
+ *
+ *      env = 0.080   ratio 0.588   ->  sky delivering 0.607
+ *      env = 0.039   ratio 0.434   ->  sky delivering 0.326, shadows far too deep
+ *
+ *  So the two scales very nearly do coincide here, and the correction is a few percent rather than
+ *  the halving an earlier reading suggested. That reading compared rendered pixels against authored
+ *  albedo directly, which cannot work: it takes the tone curve for an identity and assumes the
+ *  grass renders one flat colour. The ratio method is immune to both. */
+const ENV_INTENSITY = DAY_INTENSITY * 0.98
 
 /** The line in three's cloud composite that this module rewrites, and the uniform it rewrites it
  *  into. Kept as an exact string so a three upgrade that moves it is caught, by unit test rather
@@ -204,31 +243,42 @@ export function skyParams(l: Lighting): SkyParams {
   }
 }
 
-/** Night's sky as an equirectangular strip: one column, because `NIGHT_RAMP` varies only with
- *  elevation. Cheap, exact and needs no GPU readback, so the haze colour is simply the band the
- *  horizon is painted in rather than something sampled back out of a render. */
-function buildNightSky(): SkyEnv {
+/** A ramp sky as an equirectangular strip: one column, because a ramp varies only with elevation.
+ *  Cheap, exact and needs no GPU readback, so the haze colour is simply the band the horizon is
+ *  painted in rather than something sampled back out of a render. Serves as its own environment
+ *  without a prefilter, since there is nothing in it sharper than a gradient. */
+function buildRampSky(ramp: Ramp): SkyEnv {
   const height = 256
+  // WIDE, though the ramp varies only with elevation and one column would draw it. A background
+  // samples the texture directly and would not care, but the same texture goes into
+  // `scene.environment`, and three converts an equirect environment to its cubeUV form before any
+  // material reads irradiance out of it. That conversion cannot do anything sensible with a
+  // one-pixel-wide source: measured, night grass rendered 27/27/33 against a correct 31/63/9, its
+  // green more than halved, because the diffuse it was reading back was garbage rather than sky.
+  const width = 64
   const canvas = document.createElement('canvas')
-  canvas.width = 1
+  canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('no 2d context for the night sky')
   const gradient = ctx.createLinearGradient(0, 0, 0, height)
-  for (const [elevation, [r, g, b]] of NIGHT_RAMP) {
+  for (const [elevation, [r, g, b]] of ramp) {
     // Equirectangular v runs zenith (0) to nadir (1), so the ramp is read top-down.
     gradient.addColorStop(clamp(0.5 - elevation / 180, 0, 1), `rgb(${r}, ${g}, ${b})`)
   }
   ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 1, height)
+  ctx.fillRect(0, 0, width, height)
   const texture = new THREE.CanvasTexture(canvas)
   texture.mapping = THREE.EquirectangularReflectionMapping
   texture.colorSpace = THREE.SRGBColorSpace
-  const [, horizonRgb] = NIGHT_RAMP.find(([elevation]) => elevation === 0)!
+  const [, horizonRgb] = ramp.find(([elevation]) => elevation === 0)!
   const horizon = new THREE.Color().setRGB(
     horizonRgb[0] / 255, horizonRgb[1] / 255, horizonRgb[2] / 255, THREE.SRGBColorSpace,
   )
-  return { texture, intensity: 1, horizon, dispose: () => texture.dispose() }
+  return {
+    texture, environment: texture, intensity: 1, lightsScene: false, lightIntensity: 1, horizon,
+    dispose: () => texture.dispose(),
+  }
 }
 
 /** The output curve, applied to every renderer that draws this world. The old pipeline had no curve
@@ -265,6 +315,23 @@ export interface SkyEnv {
    *  magnitude apart in raw radiance, so it travels with the sky rather than sitting in the caller
    *  where the two could be paired up wrongly. */
   intensity: number
+  /** Whether this environment carries enough light to REPLACE the rig's hemisphere.
+   *
+   *  True only for a real Preetham bake, whose scale was solved against the rig's own ambient share.
+   *  A ramp sky (night, and the daylight fallback) is a backdrop and a thing for metal to reflect,
+   *  not a light: measured, the night ramp delivers about 0.02 where the night rig owes 0.674, so
+   *  standing the hemisphere down for it renders a floodlit circuit as black ground with windows
+   *  floating over it. */
+  lightsScene: boolean
+  /** What `scene.environmentIntensity` must be, which is NOT the same number. See `ENV_INTENSITY`:
+   *  how bright the sky should look and how much it should light the world are separate questions,
+   *  and answering them with one scalar overlit the whole scene by two thirds. */
+  lightIntensity: number
+  /** The same sky prefiltered for image-based lighting, for `scene.environment`. This is what puts
+   *  sky IN the world rather than only behind it: a roughness-mipped cube that every standard
+   *  material reads its ambient and its reflections out of. Scale it with the same `intensity`,
+   *  through `scene.environmentIntensity`. */
+  environment: THREE.Texture
   /** The sky's own radiance just above the horizon, averaged round the ring and already scaled by
    *  `intensity`: what the fog fades the world into, so ground and sky meet at one colour. */
   horizon: THREE.Color
@@ -324,7 +391,7 @@ function sampleHorizon(
 export function buildSky(
   renderer: THREE.WebGLRenderer, lighting: Lighting, { night = false, seed = 0 } = {},
 ): SkyEnv {
-  if (night) return buildNightSky()
+  if (night) return buildRampSky(NIGHT_RAMP)
   const p = skyParams(lighting)
   const sky = new Sky()
   sky.scale.setScalar(1000)
@@ -346,19 +413,40 @@ export function buildSky(
 
   const target = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType })
   const previous = renderer.getRenderTarget()
+  let pmrem: THREE.PMREMGenerator | null = null
+  let irradiance: THREE.WebGLRenderTarget | null = null
   try {
     new THREE.CubeCamera(1, 1e4, target).update(renderer, skyScene)
     const horizon = sampleHorizon(renderer, skyScene, DAY_INTENSITY)
+    // Prefiltered off the SAME cube, so the sky a surface reflects is the sky behind it. The sun
+    // disc is left in deliberately: three's docs suggest hiding it when baking an environment, but
+    // a disc is exactly what puts a moving glint down a car's flank, and prefiltering spreads it
+    // across the roughness chain rather than leaving it a hard dot.
+    pmrem = new THREE.PMREMGenerator(renderer)
+    irradiance = pmrem.fromCubemap(target.texture)
     return {
-      texture: target.texture, intensity: DAY_INTENSITY, horizon, dispose: () => target.dispose(),
+      texture: target.texture,
+      environment: irradiance.texture,
+      intensity: DAY_INTENSITY,
+      lightsScene: true,
+      lightIntensity: ENV_INTENSITY,
+      horizon,
+      dispose: () => {
+        target.dispose()
+        irradiance?.dispose()
+      },
     }
   } catch (err) {
     // A machine without float render targets fails inside `sampleHorizon`, AFTER the cube is
-    // allocated. Callers treat a throw as "no sky" and hold no handle to free, so the cube would
-    // sit on the GPU for the life of the context. Freed here, where it is still reachable.
+    // allocated, so it is freed here while it is still reachable. The scene then gets the plain
+    // gradient rather than nothing: something has to be in `scene.environment` or every metal in
+    // the world renders black.
+    irradiance?.dispose()
     target.dispose()
-    throw err
+    console.warn(`sky bake failed, falling back to a plain gradient: ${String(err)}`)
+    return buildRampSky(DAY_RAMP)
   } finally {
+    pmrem?.dispose()
     renderer.setRenderTarget(previous)
     sky.geometry.dispose()
     sky.material.dispose()

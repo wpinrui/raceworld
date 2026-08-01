@@ -9,6 +9,7 @@ import { GARAGE_H_M, PIT_WHITE, SIGN_H_M, shortName } from '@/components/race/Pi
 import { flagSvgUrl } from '@/components/world/NationalityFlag'
 import { shade } from '@/lib/color'
 import type { PitZone } from '@/lib/ui/pit-zone'
+import { ROUGH, surface } from './materials3d'
 
 /** Texels per metre of board: a name stays crisp at pit-stop zoom. */
 const PX_PER_M = 56
@@ -81,7 +82,7 @@ export function buildGarageSigns3D(
   zone: PitZone, u: (m: number) => number, drivers: (i: number) => BoardDriver[],
 ): THREE.Group {
   const group = new THREE.Group()
-  const plate = new THREE.MeshLambertMaterial({ color: PLATE })
+  const plate = surface(PLATE, { roughness: ROUGH.paint })
   zone.garageFloors.forEach((r, i) => {
     const crew = drivers(i)
     if (crew.length === 0) return
@@ -103,7 +104,7 @@ export function buildGarageSigns3D(
     // bay. Front-side materials throughout: the back shows plate, never mirrored letters.
     const h = u(SIGN_H_M)
     const t = u(THICK_M)
-    const face = new THREE.MeshLambertMaterial({ map: texture })
+    const face = surface('#FFFFFF', { map: texture, roughness: ROUGH.paint })
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(len, h, t), [plate, plate, plate, plate, face, plate])
     const ex = (b.x - a.x) / len
     const ez = (b.y - a.y) / len

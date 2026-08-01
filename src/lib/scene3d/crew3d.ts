@@ -9,7 +9,7 @@
 import * as THREE from 'three'
 import type { PitSlot } from '@/lib/ui/pit-zone'
 import { WHEELS } from './car-mesh'
-import { DECAL_PULL } from './materials3d'
+import { DECAL_PULL, ROUGH, surface } from './materials3d'
 import { GeometrySink, v3 } from './solids3d'
 
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more. */
@@ -41,7 +41,7 @@ interface Slot3D {
   crew: THREE.Group
   parts: Map<string, THREE.Object3D>
   /** Sidewall band materials per tyre prop role (`oldT0`...), for the compound recolour. */
-  bands: Map<string, THREE.MeshLambertMaterial>
+  bands: Map<string, THREE.MeshStandardMaterial>
 }
 
 export interface PitCrew3DInput {
@@ -64,14 +64,14 @@ export class PitCrew3D {
     this.u = u
     const personGeo = new THREE.CapsuleGeometry(u(PERSON_R_M), u(PERSON_H_M - 2 * PERSON_R_M), 3, 8)
     const person = (colour: string): THREE.Mesh => {
-      const m = new THREE.Mesh(personGeo, new THREE.MeshLambertMaterial({ color: colour }))
+      const m = new THREE.Mesh(personGeo, surface(colour, { roughness: ROUGH.chalk }))
       m.position.y = u(PERSON_H_M) / 2
       m.castShadow = true
       return m
     }
     const box = (w: number, h: number, d: number, colour: string): THREE.Mesh => {
       const m = new THREE.Mesh(
-        new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: colour }),
+        new THREE.BoxGeometry(w, h, d), surface(colour, { roughness: ROUGH.chalk }),
       )
       m.castShadow = true
       return m
@@ -88,10 +88,7 @@ export class PitCrew3D {
       // throws its shadow from the actual sun instead of carrying a painted one.
       const pad = new THREE.Mesh(
         new THREE.PlaneGeometry(u(6.9), u(3.8)).rotateX(-Math.PI / 2),
-        new THREE.MeshLambertMaterial({
-          color: PAD, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
-          polygonOffset: true, polygonOffsetFactor: -DECAL_PULL, polygonOffsetUnits: -2 * DECAL_PULL,
-        }),
+        surface(PAD, { alpha: 0.45, layer: DECAL_PULL, roughness: ROUGH.matte }),
       )
       // Above every road decal's renderOrder (the ink stack numbers into the low hundreds on a busy
       // circuit and a LATER decal paints over an EARLIER one regardless of height, since none of
@@ -116,16 +113,15 @@ export class PitCrew3D {
           v3(u(ax + 1.15), u(MARK_M), u(0.35)),
         )
       }
-      const marksMesh = new THREE.Mesh(marks.build(), new THREE.MeshLambertMaterial({
-        color: MARK, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide,
-        polygonOffset: true, polygonOffsetFactor: -DECAL_PULL, polygonOffsetUnits: -2 * DECAL_PULL,
-      }))
+      const marksMesh = new THREE.Mesh(
+        marks.build(), surface(MARK, { alpha: 0.95, layer: DECAL_PULL, roughness: ROUGH.matte }),
+      )
       marksMesh.renderOrder = 901
       inner.add(marksMesh)
       for (const bx of [1.5, -1.5]) {
         const boom = new THREE.Mesh(
           new THREE.BoxGeometry(u(0.6), u(0.25), u(GANTRY_REACH_M)),
-          new THREE.MeshLambertMaterial({ color: BOOM }),
+          surface(BOOM, { roughness: ROUGH.paint }),
         )
         boom.position.set(u(bx), u(GANTRY_H_M + 0.125), u(-1.5 + GANTRY_REACH_M / 2))
         boom.castShadow = true
@@ -133,7 +129,7 @@ export class PitCrew3D {
         inner.add(boom)
         const cap = new THREE.Mesh(
           new THREE.BoxGeometry(u(0.24), u(0.05), u(GANTRY_REACH_M)),
-          new THREE.MeshLambertMaterial({ color: BOOM_CAP }),
+          surface(BOOM_CAP, { roughness: ROUGH.paint }),
         )
         cap.position.set(u(bx), u(GANTRY_H_M + 0.275), u(-1.5 + GANTRY_REACH_M / 2))
         inner.add(cap)
@@ -143,7 +139,7 @@ export class PitCrew3D {
       crew.visible = false
       inner.add(crew)
       const parts = new Map<string, THREE.Object3D>()
-      const bands = new Map<string, THREE.MeshLambertMaterial>()
+      const bands = new Map<string, THREE.MeshStandardMaterial>()
       const colour = colors[i] ?? '#9AA3B2'
       const add = (role: string, part: THREE.Group) => {
         parts.set(role, part)
@@ -182,14 +178,14 @@ export class PitCrew3D {
           const prop = new THREE.Group()
           const tyreGeo = new THREE.CylinderGeometry(r, r, w, 14)
           tyreGeo.rotateX(Math.PI / 2)
-          const tyre = new THREE.Mesh(tyreGeo, new THREE.MeshLambertMaterial({ color: TYRE }))
+          const tyre = new THREE.Mesh(tyreGeo, surface(TYRE, { roughness: ROUGH.matte }))
           tyre.castShadow = true
           prop.add(tyre)
           const rimGeo = new THREE.CylinderGeometry(r * 0.58, r * 0.58, w + this.u(0.02), 10)
           rimGeo.rotateX(Math.PI / 2)
-          prop.add(new THREE.Mesh(rimGeo, new THREE.MeshLambertMaterial({ color: RIM })))
+          prop.add(new THREE.Mesh(rimGeo, surface(RIM, { roughness: ROUGH.gloss, metalness: 1 })))
           // The compound band, one ring per sidewall, recoloured when the stop's tyres are known.
-          const bandMat = new THREE.MeshLambertMaterial({ color: '#FFD700', side: THREE.DoubleSide })
+          const bandMat = surface('#FFD700', { roughness: ROUGH.paint })
           for (const sign of [-1, 1]) {
             const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.72, r * 0.9, 14), bandMat)
             ring.position.z = (sign * (w + this.u(0.03))) / 2
@@ -209,7 +205,7 @@ export class PitCrew3D {
       pole.position.set(this.u(0.3), this.u(0.95), 0)
       lolli.add(pole)
       const discGeo = new THREE.CylinderGeometry(this.u(0.27), this.u(0.27), this.u(0.04), 12)
-      const disc = new THREE.Mesh(discGeo, new THREE.MeshLambertMaterial({ color: LOLLI_DISC }))
+      const disc = new THREE.Mesh(discGeo, surface(LOLLI_DISC, { roughness: ROUGH.paint }))
       disc.position.set(this.u(0.3), this.u(1.92), 0)
       lolli.add(disc)
       add('lolli', lolli)

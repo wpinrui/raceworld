@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import type { ViewBox } from '@/lib/ui/geom'
 import type { Lighting } from '@/lib/ui/lighting'
 import { applyOrbitCam, type OrbitCam } from '@/lib/scene3d/camera3d'
-import { refitShadow } from '@/lib/scene3d/lighting3d'
+import { balanceAmbient, refitShadow } from '@/lib/scene3d/lighting3d'
 import {
   applyToneMapping, buildSky, refitFog, type SkyEnv,
 } from '@/lib/scene3d/sky3d'
@@ -58,6 +58,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   // closure's snapshot of them. Synced by the dependency-less effect below, which commits before
   // any later effect (here or in the parent) can call the painter.
   const stateRef = useRef({ world, base, vb, ppu, metresPerUnit })
+  // Whether the mounted environment carries the sky's share of the light, read by the scene-swap
+  // effect below. A ref, because the world and the sky are swapped by two independent effects and
+  // whichever runs second has to see the other's answer.
+  const envRef = useRef(false)
 
   const paint = useCallback(() => {
     const gl = glRef.current
@@ -120,6 +124,14 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     }
     gl.scene.background = env ? env.texture : new THREE.Color(base)
     gl.scene.backgroundIntensity = env ? env.intensity : 1
+    // The sky LIGHTS the world, not just backs it: every standard material reads its ambient and
+    // its reflections out of this. Same intensity as the background, because it is the same sky.
+    gl.scene.environment = env?.environment ?? null
+    gl.scene.environmentIntensity = env ? env.lightIntensity : 1
+    envRef.current = !!env?.lightsScene
+    // The world may already be mounted (a mood change swaps only the sky), so re-balance it here
+    // too rather than waiting for a world that is not going to be rebuilt.
+    if (world) balanceAmbient(world.sky, envRef.current)
     // Near and far are placeholders: every paint refits them to what the camera can see.
     gl.scene.fog = env ? new THREE.Fog(env.horizon, 1, 2) : null
     paint()
@@ -133,10 +145,12 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // mood change, re-runs this with the renderer alive and frees normally.
       if (!glRef.current) return
       env?.dispose()
+      envRef.current = false
       gl.scene.background = null
+      gl.scene.environment = null
       gl.scene.fog = null
     }
-  }, [lighting, night, skySeed, base, paint])
+  }, [lighting, night, skySeed, base, world, paint])
 
   useEffect(() => {
     stateRef.current = { world, base, vb, ppu, metresPerUnit }
@@ -148,6 +162,8 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     const gl = glRef.current
     if (!gl) return
     gl.scene.clear()
+    // The environment map IS the sky light, so the rig's own hemisphere stands down to it.
+    if (world) balanceAmbient(world.sky, envRef.current)
     if (world) gl.scene.add(world.group)
     if (carsGroup) gl.scene.add(carsGroup)
     if (crewGroup) gl.scene.add(crewGroup)
