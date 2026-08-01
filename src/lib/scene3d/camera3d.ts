@@ -81,7 +81,14 @@ export function applyOrbitCam(
   camera.fov = LIVE_FOV
   camera.aspect = size.w / size.h
   camera.near = Math.max(0.05, distance * 0.02)
-  camera.far = distance * 60
+  // Looking down, the ground in shot is a bounded patch and sixty distances of reach is plenty.
+  // Leaning toward the horizon the world runs away to its own edge instead, and the far plane has
+  // to follow: at racing zoom a fixed 60 cuts the ground off at 3km, well inside the plane's own
+  // 16km, and everything past the cut has to be buried under haze thick enough to fog the middle
+  // distance too. Depth precision barely notices the change. For a standard projection it is set by
+  // the NEAR plane, and going from 60 distances to two thousand moves `1/near - 1/far` by three
+  // hundredths of a percent.
+  camera.far = distance * 60 / Math.max(0.03, Math.cos(cam.pitch) ** 2)
   camera.position.set(cam.tx + lean * sin, Math.cos(cam.pitch) * distance, cam.tz + lean * cos)
   camera.up.set(-sin, 0, -cos)
   camera.lookAt(cam.tx, 0, cam.tz)

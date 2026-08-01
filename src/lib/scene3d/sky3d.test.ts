@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { MOODS } from '@/lib/ui/lighting'
 import { sunTravel } from './lighting3d'
-import { refitFog, skyParams, skySeedFor, sunDirection } from './sky3d'
+import { Sky } from 'three/addons/objects/Sky.js'
+import { CLOUD_SCALE_LINE, refitFog, skyParams, skySeedFor, sunDirection } from './sky3d'
 
 describe('sunDirection', () => {
   it('is exactly the reverse of the shadow sun for every daylight mood', () => {
@@ -78,9 +79,12 @@ describe('refitFog', () => {
   const ground = { x: 0, z: 0, radius: 4132, metresPerUnit: 3.906 }
 
   /** A camera looking down at the origin from `distance` away, leant `pitch` radians off vertical,
-   *  with the far plane `applyOrbitCam` would give it. */
+   *  with the near and far planes `applyOrbitCam` would give it, INCLUDING the way its reach opens
+   *  out as the camera leans toward the horizon. Mirrored here on purpose: the whole job of
+   *  `refitFog` is to fit inside those planes, so a helper that lags them tests nothing. */
   function eye(distance: number, pitch: number): THREE.PerspectiveCamera {
-    const camera = new THREE.PerspectiveCamera(35, 16 / 9, distance * 0.02, distance * 60)
+    const far = distance * 60 / Math.max(0.03, Math.cos(pitch) ** 2)
+    const camera = new THREE.PerspectiveCamera(35, 16 / 9, distance * 0.02, far)
     camera.position.set(0, Math.cos(pitch) * distance, Math.sin(pitch) * distance)
     camera.up.set(0, 0, -1)
     camera.lookAt(0, 0, 0)
@@ -119,25 +123,58 @@ describe('refitFog', () => {
 
   it('holds one visibility in metres across framings and across circuits', () => {
     // The whole point of an absolute clear distance: zooming must not thicken the air. Both play
-    // framings land on the same 400m, and Monaco's finer scale lands on the same 400m in units.
+    // framings land on the same 1.5km, and Monaco's finer scale lands on the same 1.5km in units.
     const racing = new THREE.Fog(0x000000, 1, 2)
     refitFog(racing, eye(31, 1.2), ground)
     const eyeLevel = new THREE.Fog(0x000000, 1, 2)
     refitFog(eyeLevel, eye(12, 1.4), ground)
-    expect(racing.near * ground.metresPerUnit).toBeCloseTo(400, 0)
-    expect(eyeLevel.near * ground.metresPerUnit).toBeCloseTo(400, 0)
+    expect(racing.near * ground.metresPerUnit).toBeCloseTo(1500, 0)
+    expect(eyeLevel.near * ground.metresPerUnit).toBeCloseTo(1500, 0)
 
     const monaco = new THREE.Fog(0x000000, 1, 2)
     refitFog(monaco, eye(31, 1.2), { ...ground, metresPerUnit: 2.22 })
-    expect(monaco.near * 2.22).toBeCloseTo(400, 0)
+    expect(monaco.near * 2.22).toBeCloseTo(1500, 0)
   })
 
-  it('shortens its ramp rather than overrun a close-up far plane', () => {
-    // The one framing where 400m of clear air will not fit: the far plane is only 585m out.
-    const camera = eye(2.5, 1.4)
+  it('keeps a townful of scenery out of the haze entirely at racing zoom', () => {
+    // The complaint this pins: buildings a few hundred metres away were fading. Nothing inside a
+    // kilometre may be touched, at any lean.
+    for (const pitch of [0.7, 1.2, 1.4]) {
+      const fog = new THREE.Fog(0x000000, 1, 2)
+      refitFog(fog, eye(31, pitch), ground)
+      expect(fog.near * ground.metresPerUnit, `pitch ${pitch}`).toBeGreaterThan(1000)
+    }
+  })
+
+  it('shortens its ramp rather than overrun a far plane that really is close', () => {
+    // Leaning toward the horizon opens the far plane out, so the cap no longer binds there. Looking
+    // straight DOWN at a close-up it still does: 60 distances from 2.5 units is 585m of reach.
+    const camera = eye(2.5, 0)
     const fog = new THREE.Fog(0x000000, 1, 2)
     refitFog(fog, camera, ground)
-    expect(fog.near * ground.metresPerUnit).toBeLessThan(400)
+    expect(fog.near * ground.metresPerUnit).toBeLessThan(1500)
     expect(fog.near).toBeGreaterThan(0)
+    expect(fog.far).toBeLessThan(camera.far)
+  })
+})
+
+describe("three's Sky shader", () => {
+  // `@types/three` declares `SkyShader` as a bare `object`, so its shape has to be asserted here.
+  // That is exactly why these two tests exist: nothing in the type system is watching this seam.
+  const shader = Sky.SkyShader as { fragmentShader: string; uniforms: Record<string, unknown> }
+
+  it('still contains the cloud line the module rewrites', () => {
+    // `buildSky` patches this constant into a uniform, because at its shipped value a cloud renders
+    // two hundred times darker than the sky behind it. The patch is a string replacement, so an
+    // upgrade that reworded the line would silently leave the sky cloudless. Fail here instead.
+    const source = shader.fragmentShader
+    expect(source).toContain(CLOUD_SCALE_LINE)
+    expect(source).toContain('uniform float cloudScale;')
+  })
+
+  it('still exposes every cloud uniform the mood mapping drives', () => {
+    for (const name of ['cloudCoverage', 'cloudDensity', 'cloudScale', 'cloudElevation']) {
+      expect(shader.uniforms, name).toHaveProperty(name)
+    }
   })
 })

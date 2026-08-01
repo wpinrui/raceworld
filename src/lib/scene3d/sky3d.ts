@@ -27,6 +27,11 @@ export interface SkyParams {
   mieDirectionalG: number
   cloudCoverage: number
   cloudDensity: number
+  /** Noise frequency of the cloud field. Higher packs more, smaller clouds into the same sky. */
+  cloudScale: number
+  /** How low the cloud layer hangs. Drives the shader's own horizon fade, which is the whole reason
+   *  it is here rather than left at its default. */
+  cloudElevation: number
   /** Direction TO the sun: `sunTravel` reversed, so sky and shadows cannot disagree. */
   sun: THREE.Vector3
 }
@@ -56,11 +61,52 @@ const NIGHT_RAMP: Array<[elevation: number, rgb: [number, number, number]]> = [
  *  therefore needs the sky brought down to the world rather than the world up to the sky: the
  *  alternative re-tunes every mood, every material and every shadow to suit the background.
  *
- *  MEASURED at 0.16, not chosen: Britain's afternoon horizon bakes at a raw 7.95, and ACES is within
- *  a few percent of white by an input of 3, so anything above about a fifth renders the sky as a
- *  flat white ceiling with the gradient clipped out of it. 0.16 lands the horizon at 1.3, which is
- *  the top of the curve's shoulder: bright, still coloured, still rolling off. */
-const DAY_INTENSITY = 0.16
+ *  MEASURED by reading the rendered CANVAS bytes across a sweep, which is the only honest way to set
+ *  it: three's ACES divides by 0.6 before its fit, so reasoning about the curve on paper lands far
+ *  too bright, and the first attempt shipped a white ceiling at 0.16.
+ *
+ *  The band under 8 degrees is the ONLY sky the map's pitch limit ever shows, and it has to carry
+ *  the whole gradient from pale horizon to blue. Two knobs that look like they should help do not:
+ *  raising rayleigh makes that band LESS blue, not more (a horizon path is long, and the long path
+ *  is exactly what extinguishes blue), and turbidity and mie move it by a couple of bytes. The wash
+ *  is in the tone curve, not the atmosphere, which is why `applyToneMapping` picks the curve it
+ *  does. Under that curve, bytes at 0 / 4 / 8 degrees:
+ *
+ *      0.110    226,237,241   156,200,213    95,148,177
+ *      0.080    205,216,219   132,172,183    76,125,151
+ *      0.055    171,180,184   107,142,152    54,100,123
+ *
+ *  0.08: a horizon still pale enough to read as distance, and real blue by four degrees up. */
+const DAY_INTENSITY = 0.08
+
+/** The line in three's cloud composite that this module rewrites, and the uniform it rewrites it
+ *  into. Kept as an exact string so a three upgrade that moves it is caught, by unit test rather
+ *  than by someone noticing the sky went cloudless. */
+export const CLOUD_SCALE_LINE = 'cloudColor *= vSunE * 0.00002;'
+
+/** How far up that constant has to come.
+ *
+ *  MEASURED against the sky it sits in. The shader's cloud radiance works out at about 0.022, while
+ *  the sky behind it renders between 3.4 and 10.4, so a cloud is two hundred times DARKER than the
+ *  sky it is drawn on: the layer reads as faint dirty smudges, and turning `cloudDensity` up drives
+ *  it toward black rather than toward white. The constant is simply calibrated for a far dimmer sky
+ *  than this one. Multiplying by `vSunE` keeps it tracking the sun across moods. */
+const CLOUD_BRIGHTNESS = 450
+
+/** Rewrite that constant into a uniform. Warns rather than throws: a sky with dark clouds is worse
+ *  than a sky without them, but either beats no sky at all, and the caller treats a throw as no
+ *  sky. The unit test is what makes this loud. */
+function patchCloudBrightness(material: THREE.ShaderMaterial): void {
+  if (!material.fragmentShader.includes(CLOUD_SCALE_LINE)) {
+    console.warn('three Sky shader changed: clouds cannot be brightened, rendering without them')
+    material.uniforms.cloudCoverage.value = 0
+    return
+  }
+  material.uniforms.cloudBrightness = { value: CLOUD_BRIGHTNESS }
+  material.fragmentShader = material.fragmentShader
+    .replace('uniform float cloudScale;', 'uniform float cloudScale;\nuniform float cloudBrightness;')
+    .replace(CLOUD_SCALE_LINE, 'cloudColor *= vSunE * 0.00002 * cloudBrightness;')
+}
 
 /** Bearings sampled round the horizon for the fog colour. The sky is brighter toward the sun and
  *  duller away from it; fog is ONE colour, so it has to be the ring's average. */
@@ -76,8 +122,14 @@ const FOG_FAR = 0.8
 
 /** Metres of perfectly clear air before any haze at all: the day's own visibility, and the reason
  *  the same scene hazes the same way whatever the zoom. Without an absolute here the haze is purely
- *  framing-relative, and zooming in visibly thickens the air, which no weather does. */
-const FOG_CLEAR_M = 400
+ *  framing-relative, and zooming in visibly thickens the air, which no weather does.
+ *
+ *  1500, not the 400 this started at. 400m of clear air is a misty morning, and it was chosen only
+ *  because the far plane used to cut the ground off at 3km, leaving no room for a longer ramp that
+ *  still finished before the cut. `applyOrbitCam` now opens the far plane out when the camera leans
+ *  toward the horizon, so the ramp can run to the ground plane's real edge and everything a player
+ *  would call "not that far" stays crisp. */
+const FOG_CLEAR_M = 1500
 
 /** ...but never nearer than this many camera distances, which is what keeps the whole-circuit
  *  framing crisp. From 1.6km up, every point of the circuit is past any fixed clear distance, and a
@@ -129,8 +181,25 @@ export function skyParams(l: Lighting): SkyParams {
     rayleigh: clamp(1.4 + warmth * 1.6, 0.35, 3.2) * (1 - 0.55 * thick),
     mieCoefficient: clamp(0.003 + ambient * 0.007, 0.002, 0.02) * (1 + 5 * thick),
     mieDirectionalG: clamp(0.86 - ambient * 0.22, 0.62, 0.9),
-    cloudCoverage: clamp(0.12 + thick * 0.68, 0.08, 0.8),
-    cloudDensity: clamp(0.35 + thick * 0.6, 0.3, 0.95),
+    // Coverage is how much of the sky is under cloud, and it has to stay LOW for a clear day, or
+    // there is no blue left between them. Low reads as sparse only because the clouds are visible
+    // now: at the shader's own brightness they were 200x darker than the sky, so this used to be
+    // the difference between no clouds and no clouds.
+    cloudCoverage: clamp(0.14 + thick * 0.5, 0.1, 0.7),
+    cloudDensity: clamp(0.7 + thick * 0.25, 0.65, 0.95),
+    // Hung LOW, against the shader's default of 0.5. It fades cloud out toward the horizon over
+    // `smoothstep(0, 0.1 + 0.2 * cloudElevation, dir.y)`, and at the default that fade only finishes
+    // at 11.5 degrees of elevation, which is ABOVE the 7.7 the map's pitch limit can reach. Measured
+    // there: 0.00 of a cloud at the horizon, 0.28 at 4 degrees. The layer was masked out of the only
+    // band anyone can see. At 0.05 the fade finishes at 6.3 degrees instead.
+    cloudElevation: 0.05,
+    // Five times the shader's 0.0002 default. It needs to be up here at all because hanging the
+    // layer low (above) pushes `elevation` toward 1, which DIVIDES the sampling frequency by about
+    // 0.58 and blows the clouds up on its own, and because the band under 8 degrees is steeply
+    // foreshortened: a field coarse enough to look right overhead arrives down there as a few vast
+    // smears. It should not go much past this, though. At 0.003 the same field breaks up into
+    // speckle, which reads as noise on the sky rather than as weather.
+    cloudScale: 0.0011,
     sun: sunDirection(l.azimuth, sunAltitude(l)),
   }
 }
@@ -162,12 +231,18 @@ function buildNightSky(): SkyEnv {
   return { texture, intensity: 1, horizon, dispose: () => texture.dispose() }
 }
 
-/** The output curve, applied to every renderer that draws this world. The sky is high dynamic range
- *  and the old pipeline had no curve at all, so its bright half simply clipped to white; ACES rolls
- *  that off into highlight instead. It belongs on the renderer, which is why it is a function and
- *  not a constant: the live canvas and the probe must never drift apart on it. */
+/** The output curve, applied to every renderer that draws this world. The old pipeline had no curve
+ *  at all, so everything above 1 simply clipped to white, the sky worst of all.
+ *
+ *  Khronos PBR Neutral rather than the obvious ACES. ACES desaturates hard in its shoulder, and the
+ *  sky lives entirely in that shoulder: measured against each other at matched horizon brightness,
+ *  Neutral is both brighter and bluer across the whole visible band, and it holds authored colour
+ *  instead of shifting it, which the team liveries will want too.
+ *
+ *  It belongs on the renderer, which is why it is a function and not a constant: the live canvas and
+ *  the probe must never drift apart on it. */
 export function applyToneMapping(renderer: THREE.WebGLRenderer): void {
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMapping = THREE.NeutralToneMapping
   renderer.toneMappingExposure = 1
 }
 
@@ -253,6 +328,7 @@ export function buildSky(
   const p = skyParams(lighting)
   const sky = new Sky()
   sky.scale.setScalar(1000)
+  patchCloudBrightness(sky.material)
   const u = sky.material.uniforms
   u.turbidity.value = p.turbidity
   u.rayleigh.value = p.rayleigh
@@ -260,6 +336,8 @@ export function buildSky(
   u.mieDirectionalG.value = p.mieDirectionalG
   u.cloudCoverage.value = p.cloudCoverage
   u.cloudDensity.value = p.cloudDensity
+  u.cloudElevation.value = p.cloudElevation
+  u.cloudScale.value = p.cloudScale
   u.sunPosition.value.copy(p.sun)
   u.time.value = seed
 
