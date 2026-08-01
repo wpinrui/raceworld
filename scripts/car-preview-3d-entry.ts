@@ -10,7 +10,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { MOODS } from '../src/lib/ui/lighting'
 import { SPRITE } from '../src/lib/ui/car-sprite'
-import { buildCarMesh } from '../src/lib/scene3d/car-mesh'
+import { buildCarLod, buildCarMesh, CAR_TIERS, type CarLod } from '../src/lib/scene3d/car-mesh'
 import { historicalGrids } from '../src/data/history/grids'
 import { liveryFor } from '../src/data/history/liveries'
 import { buildLightRig } from '../src/lib/scene3d/lighting3d'
@@ -230,7 +230,7 @@ function viewerMain() {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color('#33383E')
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: '#33383E' }),
+    new THREE.PlaneGeometry(300_000, 300_000), new THREE.MeshLambertMaterial({ color: '#33383E' }),
   )
   ground.rotateX(-Math.PI / 2)
   ground.receiveShadow = true
@@ -246,11 +246,17 @@ function viewerMain() {
   renderer.setPixelRatio(window.devicePixelRatio)
   renderer.setSize(window.innerWidth, window.innerHeight, true)
 
-  const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 1, SPRITE.len * 12)
+  // The far plane has to clear a WHOLE-TRACK zoom, not a turntable. Getting a car down to the eight
+  // pixels where the block tier takes over needs the camera about 95,000 units out; the old
+  // SPRITE.len * 12 put the far plane at 5,760, which clipped the world away at roughly 145 px per
+  // car and made every tier below L1 unreachable. Ground grows with it or it ends in mid-air.
+  const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerHeight, 1, 400_000)
   camera.position.set(SPRITE.len * 0.55, SPRITE.len * 0.5, -SPRITE.len * 1.25)
   const controls = new OrbitControls(camera, canvas)
   controls.target.set(0, 30, -20)
   controls.autoRotateSpeed = 1.6
+  controls.minDistance = 60
+  controls.maxDistance = 200_000
 
   // Year and team drive the livery; steer is a slider so any lock can be inspected, not just the
   // one hard-coded angle a toggle gave.
@@ -290,6 +296,18 @@ function viewerMain() {
     return liveryFor(team.id, year, team.color)
   }
 
+  // LOD harness. A fleet stands on the grid so the frame cost is the cost of a real field, not of
+  // one hero car, and every metric that decides a tier is on screen while you drag the camera.
+  const fleetSel = document.getElementById('fleet') as HTMLSelectElement
+  const lockSel = document.getElementById('lock') as HTMLSelectElement
+  const tintBtn = document.getElementById('tint') as HTMLButtonElement
+  const hud = document.getElementById('hud') as HTMLDivElement
+  /** One per tier, so a locked or auto-picked level is visible as a colour rather than inferred. */
+  const TIER_TINT = ['#FF4D4D', '#FFA33D', '#FFE24D', '#5BD75B', '#4DA6FF']
+  let tinted = false
+  let lods: CarLod[] = []
+  const liveryPaint = new Map<THREE.MeshLambertMaterial, number>()
+
   const rebuild = () => {
     const paint = currentPaint()
     swatch.replaceChildren(...Object.values(paint).map((c) => {
@@ -299,11 +317,42 @@ function viewerMain() {
     }))
     const lock = Number(steerInput.value)
     steerOut.textContent = `${lock}°`
-    const car = buildCarMesh(paint)
-    car.wheels.fl.rotation.y = (-lock * Math.PI) / 180
-    car.wheels.fr.rotation.y = (-lock * 1.15 * Math.PI) / 180
+
+    const count = Number(fleetSel.value)
     const fresh = new THREE.Group()
-    fresh.add(car.group)
+    // ONE build per livery, then clones: Object3D.clone shares geometry and material, so a field of
+    // sixty costs one car's build time and sixty transforms.
+    const master = buildCarLod(paint)
+    lods = []
+    const cols = Math.ceil(Math.sqrt(count))
+    for (let i = 0; i < count; i++) {
+      const lod: CarLod = i === 0 ? master : { ...master, group: master.group.clone(true), tier: 0 }
+      if (i > 0) {
+        // A clone's children are fresh objects, so its tier switching needs its own handles.
+        const tiers = lod.group.children
+        tiers.forEach((t, k) => { t.visible = k === 0 })
+        lod.show = (px: number) => {
+          let next = CAR_TIERS.length - 1
+          for (let t = 0; t < CAR_TIERS.length; t++) {
+            if (px >= CAR_TIERS[t].minPx) { next = t; break }
+          }
+          if (next !== lod.tier) {
+            tiers[lod.tier].visible = false
+            tiers[next].visible = true
+            lod.tier = next
+          }
+          return next
+        }
+      }
+      lod.steer((-lock * Math.PI) / 180, (-lock * 1.15 * Math.PI) / 180)
+      lod.group.position.set(
+        ((i % cols) - (cols - 1) / 2) * SPRITE.len * 1.35,
+        0,
+        (Math.floor(i / cols) - (cols - 1) / 2) * SPRITE.len * 1.5,
+      )
+      lods.push(lod)
+      fresh.add(lod.group)
+    }
     carRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) {
         ;(o.geometry as THREE.BufferGeometry).dispose()
@@ -315,6 +364,50 @@ function viewerMain() {
     carRoot = fresh
     scene.add(carRoot)
   }
+
+  /** Pixels a car LENGTH covers on screen at a given point: the number every tier switches on.
+   *  Projects two points a car apart at that depth, so it stays honest under both a dolly and a
+   *  field-of-view change, which distance alone does not. */
+  const pxPerLength = (at: THREE.Vector3): number => {
+    const depth = camera.position.distanceTo(at)
+    const worldPerPx = (2 * Math.tan((camera.fov * Math.PI) / 360) * depth) / renderer.domElement.clientHeight
+    return SPRITE.len / worldPerPx
+  }
+
+  // A wheel dolly is multiplicative, so out at whole-track range one notch swallows several tiers
+  // and you can never settle ON a switch. This slider drives the camera to an exact car length in
+  // pixels instead, which is the number the tiers actually switch on: park it at 26 and then 24 and
+  // the L3/L4 pop is a single click apart.
+  const zoomInput = document.getElementById('zoom') as HTMLInputElement
+  const zoomOut = document.getElementById('zoomv') as HTMLSpanElement
+  const ZOOM_MIN = 3
+  const ZOOM_MAX = 900
+  const zoomToPx = (v: number) => ZOOM_MIN * (ZOOM_MAX / ZOOM_MIN) ** (v / 1000)
+  // Applied in the frame loop, AFTER controls.update(), not from the handler: OrbitControls rewrites
+  // the camera every frame, so a one-shot move made here is undone before it is ever drawn.
+  let pendingZoom: number | null = null
+  zoomInput.addEventListener('input', () => { pendingZoom = zoomToPx(Number(zoomInput.value)) })
+  const applyZoom = () => {
+    if (pendingZoom === null) return
+    const height = renderer.domElement.clientHeight
+    const depth = (SPRITE.len * height) / (pendingZoom * 2 * Math.tan((camera.fov * Math.PI) / 360))
+    // Direction FIRST: `copy(target)` mutates position, so reading it afterwards yields a zero
+    // vector and parks the camera exactly on its own target.
+    const dir = camera.position.clone().sub(controls.target).normalize()
+    camera.position.copy(controls.target).addScaledVector(dir, depth)
+    pendingZoom = null
+  }
+  const showZoom = (px: number) => { zoomOut.textContent = `${px.toFixed(0)} px/car` }
+
+  tintBtn.addEventListener('click', () => {
+    tinted = !tinted
+    tintBtn.classList.toggle('on', tinted)
+    if (!tinted) {
+      for (const [mat, hex] of liveryPaint) mat.color.setHex(hex)
+      liveryPaint.clear()
+    }
+  })
+  fleetSel.addEventListener('change', rebuild)
 
   yearSel.addEventListener('change', () => {
     fillTeams()
@@ -330,9 +423,59 @@ function viewerMain() {
 
   fillTeams()
   rebuild()
+
+  const at = new THREE.Vector3()
+  let frames = 0
+  let fps = 0
+  let since = performance.now()
   const tick = () => {
     controls.update()
+    applyZoom()
+    const forced = Number(lockSel.value)
+    const histogram = new Array(CAR_TIERS.length).fill(0)
+    let midPx = 0
+    for (const lod of lods) {
+      lod.group.getWorldPosition(at)
+      const px = pxPerLength(at)
+      midPx += px / lods.length
+      // A lock still runs through `show`, so what you are looking at is always a tier the auto
+      // picker could have chosen, never a fourth thing that only exists while locked.
+      histogram[lod.show(forced < 0 ? px : CAR_TIERS[forced].minPx + 0.01)]++
+      if (tinted) {
+        lod.group.traverse((o) => {
+          if (!(o instanceof THREE.Mesh) || o.parent?.visible === false) return
+          const mat = o.material as THREE.MeshLambertMaterial
+          // Clones share materials with their master, so tinting MUTATES the livery. Keep the paint
+          // it came with, or turning the toggle off leaves a permanently red-and-green field.
+          if (!liveryPaint.has(mat)) liveryPaint.set(mat, mat.color.getHex())
+          mat.color.set(TIER_TINT[lod.tier])
+        })
+      }
+    }
     renderer.render(scene, camera)
+    showZoom(midPx)
+
+    frames++
+    const now = performance.now()
+    if (now - since > 400) {
+      fps = (frames * 1000) / (now - since)
+      frames = 0
+      since = now
+      const info = renderer.info.render
+      const metresPerCar = SPRITE.len / 96
+      hud.innerHTML = [
+        `<b>${fps.toFixed(0).padStart(3)}</b> fps    ${lods.length} cars`,
+        `${(info.triangles / 1000).toFixed(1).padStart(7)}k triangles`,
+        `${String(info.calls).padStart(8)} draw calls`,
+        `${midPx.toFixed(0).padStart(8)} px per car length`,
+        `${(midPx / metresPerCar).toFixed(1).padStart(8)} px per metre`,
+        '',
+        ...CAR_TIERS.map((t, i) => {
+          const n = histogram[i]
+          return `L${i} >=${String(t.minPx).padStart(3)}px  ${String(n).padStart(3)}  ${'#'.repeat(Math.min(40, n))}`
+        }),
+      ].join('\n')
+    }
     requestAnimationFrame(tick)
   }
   tick()

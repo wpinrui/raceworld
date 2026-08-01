@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import { shade } from '@/lib/color'
 import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
 
 /** Vertical exaggeration for the whole car, wheels excepted: judged too low against its own tyres
@@ -20,6 +21,55 @@ export const CAR_HEIGHT_SCALE = 1.75
 
 const M = (metres: number) => metres * UNITS_PER_M
 const H = (metres: number) => M(metres * CAR_HEIGHT_SCALE)
+
+/** LOD. The same car is drawn onboard, where it fills the screen, and from a whole-track zoom where
+ *  it is four pixels long; one build cannot serve both. A tier is picked by the car's LENGTH IN
+ *  PIXELS on screen, which is the only measure that stays honest when the camera changes distance
+ *  AND field of view, as a race-day zoom does.
+ *
+ *  `loft` scales every catmull subdivision and every radial segment count, which is where the
+ *  triangles live. The flags drop whole assemblies once they stop being legible: below a few pixels
+ *  a driver is one shaded pixel and a spoke is none. */
+export interface CarDetail {
+  /** Shortest on-screen car length, in pixels, this tier is good for. */
+  minPx: number
+  loft: number
+  /** Driver, steering wheel, harness, helmet and mirrors. */
+  cockpit: boolean
+  /** Suspension wishbone blades. */
+  linkage: boolean
+  /** Rim spokes, wheel bolts, brake discs and ducts. */
+  wheelParts: boolean
+  /** Wheels keep their own pivots and can steer and roll. Off, they bake into the shell and the
+   *  car becomes a single rigid body. */
+  liveWheels: boolean
+  /** Build the BLOCK car instead of the real one. Subdividing cannot take a 56,000-triangle sculpt
+   *  anywhere near a whole-track budget, because section point counts and boxes do not scale with
+   *  it: measured, the most aggressive subdivision setting still left 9,724 triangles. Past a
+   *  certain smallness the answer is a different model, not a coarser one. */
+  proxy: boolean
+}
+
+export const CAR_TIERS: readonly CarDetail[] = [
+  { minPx: 400, loft: 1.0, cockpit: true, linkage: true, wheelParts: true, liveWheels: true, proxy: false },
+  { minPx: 150, loft: 0.7, cockpit: true, linkage: true, wheelParts: true, liveWheels: true, proxy: false },
+  { minPx: 60, loft: 0.45, cockpit: false, linkage: true, wheelParts: true, liveWheels: true, proxy: false },
+  { minPx: 25, loft: 0.30, cockpit: false, linkage: false, wheelParts: false, liveWheels: true, proxy: false },
+  { minPx: 0, loft: 0.18, cockpit: false, linkage: false, wheelParts: false, liveWheels: false, proxy: true },
+]
+
+/** The tier the current build runs at. Module state on purpose: threading a detail argument through
+ *  forty geometry builders would bury the sculpting under plumbing, and a build is one synchronous
+ *  call that sets this first and never yields. */
+let detail: CarDetail = CAR_TIERS[0]
+
+/** Catmull steps across a station gap at the current tier. Never below one: at zero a table stops
+ *  being a curve and starts being a polygon with holes in it. */
+const steps = (full: number) => Math.max(1, Math.round(full * detail.loft))
+
+/** Radial segments for a lathed or cylindrical part. Three is the floor, since a cylinder with two
+ *  sides is a pair of back-to-back quads and reads as a crack. */
+const seg = (full: number) => Math.max(3, Math.round(full * detail.loft))
 
 interface Station { z: number; half: number; top: number; bottom?: number; dip?: number }
 
@@ -178,7 +228,7 @@ function spineGeometry(): THREE.BufferGeometry {
   const rim = smoothPairs(TRI_RIM)
   // Front cap OFF: the snorkel's face is the intake's own rolled rim, and the mouth behind it is a
   // real hole. A cap here would seal the airbox and leave the mouth as paint on a lid.
-  skinRings(s, densifyBy(SPINE, 5).map((st) => rim.map(([fx, fy]) =>
+  skinRings(s, densifyBy(SPINE, steps(5)).map((st) => rim.map(([fx, fy]) =>
     v3((fx / 9) * st.half, H(st.yBase + (st.yApex - st.yBase) * fy), st.z - SPRITE.cy))), false)
   return s.build()
 }
@@ -276,7 +326,7 @@ const REAR_WING: WingStation[][] = [
  *  centreline: the neutral section's two halves butt at x0 and need no wall between them. */
 function wingElementGeometry(stations: WingStation[], sign: number): THREE.BufferGeometry {
   const s = new GeometrySink()
-  const rings = densifyBy(stations, 4).map((st) => {
+  const rings = densifyBy(stations, steps(4)).map((st) => {
     const ca = Math.cos(st.angle)
     const sa = Math.sin(st.angle)
     return FOIL.map(([u, n]) => v3(
@@ -307,7 +357,7 @@ const PLANK = { half: 15, z0: 202, z1: 396, bottom: 0.0205 }
 
 function floorGeometry(): THREE.BufferGeometry {
   const s = new GeometrySink()
-  skinRings(s, densifyBy(FLOOR_PLAN, 4).map((st) => {
+  skinRings(s, densifyBy(FLOOR_PLAN, steps(4)).map((st) => {
     const z = st.z - SPRITE.cy
     // The underside is not a flat plate: a VENTURI TUNNEL is recessed either side of the plank's
     // land, so from below the floor reads as two channels rather than one black sheet.
@@ -447,7 +497,7 @@ function diffuserGeometry(): THREE.BufferGeometry {
   // other. A diffuser has no bottom. Closing the ring laid a slab across the underside at floor
   // height, and that slab was coplanar with the floor plate's own underside AND with the bottom
   // edge of every strake standing on it, which is three surfaces sharing one plane.
-  const rows = densifyBy(DIFFUSER_ROOF, 4).map((st) => {
+  const rows = densifyBy(DIFFUSER_ROOF, steps(4)).map((st) => {
     const z = st.z - SPRITE.cy
     const y = (frac: number) => H(floor + (st.crown - floor) * frac)
     // Each terrace contributes its tread and the riser that lifts onto the next one inboard.
@@ -496,7 +546,7 @@ function diffuserStrakeGeometry(): THREE.BufferGeometry {
  *  a ring, which is all a tab is. */
 function gurneyGeometry(stations: WingStation[], sign: number, height: number, thick = 0.9): THREE.BufferGeometry {
   const s = new GeometrySink()
-  skinRings(s, densifyBy(stations, 4).map((st) => {
+  skinRings(s, densifyBy(stations, steps(4)).map((st) => {
     const ca = Math.cos(st.angle)
     const sa = Math.sin(st.angle)
     // The trailing edge itself: the foil's last chord fraction, on its mean line.
@@ -651,7 +701,7 @@ function bodyMount(zSprite: number, f: number, inset: number, sign: number): V3 
 }
 
 /** Closed catmull through (x, y) pairs: the ring densifier every curved rim shares. */
-function smoothPairs(pairs: Array<[number, number]>, per = 2): Array<[number, number]> {
+function smoothPairs(pairs: Array<[number, number]>, per = steps(2)): Array<[number, number]> {
   const out: Array<[number, number]> = []
   const n = pairs.length
   for (let i = 0; i < n; i++) {
@@ -727,6 +777,69 @@ export const asPaint = (livery: CarLivery): CarPaint => typeof livery !== 'strin
   body: livery, cover: shade(livery, 0.62), wing: TERTIARY, accent: livery, trim: TERTIARY,
 }
 
+/** ONE DRAW CALL PER PAINT, not per part. The car is authored as ~270 separate solids because that
+ *  is how you sculpt it, but it must not SHIP that way: measured on the built car, a grid of twenty
+ *  is 5,400 draw calls against 1.1M triangles, and it is the draw calls that cost the frame. Baking
+ *  every part that shares a paint into one buffer takes a car from 270 calls to ten and changes not
+ *  one pixel.
+ *
+ *  Anything that has to move on its own is a BOUNDARY and is baked separately inside itself: the
+ *  four steering pivots and the four rolling hubs within them. Shadow-casting is part of the key,
+ *  so the handful of parts that deliberately cast nothing keep their own buffer instead of being
+ *  merged into one that does. */
+function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Object3D>): void {
+  interface Batch {
+    geos: THREE.BufferGeometry[]
+    sources: THREE.Mesh[]
+    material: THREE.Material
+    cast: boolean
+  }
+  const batches = new Map<string, Batch>()
+  node.updateMatrixWorld(true)
+  const toLocal = new THREE.Matrix4().copy(node.matrixWorld).invert()
+  // Merging is all-or-nothing on attribute layout, and this car mixes two sources: the sinks build
+  // non-indexed position+normal, three's own primitives arrive indexed and carrying UVs. Everything
+  // is flattened to the sinks' layout first, or the merge quietly refuses and parts vanish.
+  const bakeable = (source: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry => {
+    const geo = source.index ? source.toNonIndexed() : source.clone()
+    for (const name of Object.keys(geo.attributes)) {
+      if (name !== 'position' && name !== 'normal') geo.deleteAttribute(name)
+    }
+    if (!geo.attributes.normal) geo.computeVertexNormals()
+    geo.applyMatrix4(matrix)
+    return geo
+  }
+  const walk = (o: THREE.Object3D) => {
+    for (const child of o.children) {
+      if (boundaries.has(child)) continue
+      walk(child)
+    }
+    if (!(o instanceof THREE.Mesh)) return
+    const material = o.material as THREE.MeshLambertMaterial
+    const key = `${material.type}|${material.color.getHexString()}|${o.castShadow ? 1 : 0}`
+    const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow }
+    batch.geos.push(bakeable(o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld)))
+    batch.sources.push(o)
+    batches.set(key, batch)
+  }
+  walk(node)
+  for (const batch of batches.values()) {
+    const merged = mergeGeometries(batch.geos, false)
+    for (const g of batch.geos) g.dispose()
+    // A refused merge keeps its parts rather than losing them: a silently missing wing is a far
+    // worse outcome than a car that is briefly a few draw calls fatter than it should be.
+    if (!merged) continue
+    for (const source of batch.sources) {
+      source.removeFromParent()
+      ;(source.geometry as THREE.BufferGeometry).dispose()
+    }
+    const m = new THREE.Mesh(merged, batch.material)
+    m.castShadow = batch.cast
+    m.receiveShadow = true
+    node.add(m)
+  }
+}
+
 export interface CarMesh {
   group: THREE.Group
   /** STEERING pivots, keyed the way the sprite tags them. The brake duct hangs off these, because
@@ -788,7 +901,7 @@ function skinRings(s: GeometrySink, rings: V3[][], capFirst = true, capLast = tr
   if (capLast) cap(rings[rings.length - 1], true)
 }
 
-function densify(stations: Required<Station>[], per = LOFT_SUBDIV): Required<Station>[] {
+function densify(stations: Required<Station>[], per = steps(LOFT_SUBDIV)): Required<Station>[] {
   // Half-width and dip carry clamps the plain catmull cannot: an overshoot must not invert the
   // section or push the cockpit channel above its own crown.
   return densifyBy(stations, per).map((st) => ({
@@ -866,7 +979,7 @@ function podGeometry(sign: number): { body: THREE.BufferGeometry; mouth: THREE.B
     ]
   }
   // Catmull between stations: the plan outline sweeps rather than cornering station to station.
-  const dense = densifyBy(POD, 8).map((st) => ({ ...st, chan: Math.max(0, st.chan) }))
+  const dense = densifyBy(POD, steps(8)).map((st) => ({ ...st, chan: Math.max(0, st.chan) }))
   // The ring is smoothed through its control points: at seven flat facets the collar's sides could
   // be counted one shading break at a time.
   const smoothRing = (pts: V3[], per = 4): V3[] => {
@@ -1055,7 +1168,7 @@ function mesh(geo: THREE.BufferGeometry, colour: string, finish: Finish = 'flat'
 function strut(a: V3, b: V3, radius: number, colour: string): THREE.Mesh {
   const from = new THREE.Vector3(a.x, a.y, a.z)
   const to = new THREE.Vector3(b.x, b.y, b.z)
-  const geo = new THREE.CylinderGeometry(radius, radius, from.distanceTo(to), 6)
+  const geo = new THREE.CylinderGeometry(radius, radius, from.distanceTo(to), seg(6))
   const m = mesh(geo, colour)
   m.position.copy(from.clone().add(to).multiplyScalar(0.5))
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.sub(from).normalize())
@@ -1203,7 +1316,7 @@ function buildHelmet(sec: string): THREE.Group {
     }
     return out
   }
-  const rings = densifyBy(P, 3).map(ringOf)
+  const rings = densifyBy(P, steps(3)).map(ringOf)
   for (let i = 0; i + 1 < rings.length; i++) {
     for (let k = 0; k < SEG; k++) {
       const k2 = (k + 1) % SEG
@@ -1263,7 +1376,114 @@ function buildHelmet(sec: string): THREE.Group {
   return g
 }
 
-export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium'): CarMesh {
+/** A car at every tier at once, one of them visible. Built once per livery and CLONED per car on
+ *  the grid: `Object3D.clone` shares geometry and material, so twenty cars in a livery cost one
+ *  build and twenty transforms.
+ *
+ *  Switching is driven by the car's on-screen LENGTH IN PIXELS, which the caller measures, because
+ *  only the caller knows the camera. Pose goes to every tier rather than the visible one, so a
+ *  switch can never reveal a wheel that stopped turning three seconds ago. */
+export interface CarLod {
+  group: THREE.Group
+  /** Index of the tier currently shown. */
+  tier: number
+  /** Steering lock in radians, per front wheel. */
+  steer(fl: number, fr: number): void
+  /** Rolling angle in radians, applied to all four. */
+  roll(angle: number): void
+  /** Choose the tier for a car this many pixels long on screen. Returns the tier now showing. */
+  show(pxLength: number): number
+}
+
+export function buildCarLod(livery: CarLivery, compound: TyreCompound = 'medium'): CarLod {
+  const group = new THREE.Group()
+  const built = CAR_TIERS.map((_, t) => {
+    const car = buildCarMesh(livery, compound, t)
+    car.group.visible = false
+    group.add(car.group)
+    return car
+  })
+  built[0].group.visible = true
+  const lod: CarLod = {
+    group,
+    tier: 0,
+    steer(fl, fr) {
+      for (const car of built) {
+        car.wheels.fl.rotation.y = fl
+        car.wheels.fr.rotation.y = fr
+      }
+    },
+    roll(angle) {
+      for (const car of built) for (const w of Object.values(car.spin)) w.rotation.x = angle
+    },
+    show(pxLength) {
+      let next = CAR_TIERS.length - 1
+      for (let t = 0; t < CAR_TIERS.length; t++) {
+        if (pxLength >= CAR_TIERS[t].minPx) { next = t; break }
+      }
+      if (next !== lod.tier) {
+        built[lod.tier].group.visible = false
+        built[next].group.visible = true
+        lod.tier = next
+      }
+      return next
+    },
+  }
+  return lod
+}
+
+/** The BLOCK car for the far tiers: the same silhouette in slabs, its dimensions read off the very
+ *  tables the real car lofts from, so a switch changes the resolution and not the shape. Wheels are
+ *  boxes on the real hub positions, and nothing moves, because at this size nothing can be seen to.
+ *  Roughly a hundred and seventy triangles against fifty-six thousand. */
+function buildProxyCar(paint: CarPaint): THREE.Group {
+  const group = new THREE.Group()
+  const slabs: Array<[number, number, number, number, number, number, string]> = [
+    // x0, x1, y0, y1, z0, z1, paint
+    [106, 134, 0.10, 0.30, -22, 120, paint.body],
+    [92, 148, 0.06, 0.42, 120, 300, paint.body],
+    [100, 140, 0.06, 0.34, 300, 450, paint.body],
+    [56, 88, 0.08, 0.40, 209, 376, paint.body],
+    [152, 184, 0.08, 0.40, 209, 376, paint.body],
+    [108, 132, 0.42, 0.62, 238, 300, paint.cover],
+    [72, 168, 0.03, 0.06, 190, 458, FLOOR],
+    [24, 216, 0.03, 0.10, -14, 34, paint.wing],
+    [24, 30, 0.03, 0.20, -18, 42, paint.wing],
+    [210, 216, 0.03, 0.20, -18, 42, paint.wing],
+    [37, 203, 0.42, 0.57, 446, 480, paint.cover],
+    [33, 41, 0.25, 0.62, 408, 492, paint.wing],
+    [199, 207, 0.25, 0.62, 408, 492, paint.wing],
+  ]
+  for (const w of WHEELS) {
+    const halfW = w.w / 2
+    slabs.push([
+      SPRITE.cx + w.x - halfW, SPRITE.cx + w.x + halfW,
+      0, (w.r * 2) / (UNITS_PER_M * CAR_HEIGHT_SCALE), w.z - w.r, w.z + w.r, TYRE,
+    ])
+  }
+  const sinks = new Map<string, GeometrySink>()
+  for (const [x0, x1, y0, y1, z0, z1, tint] of slabs) {
+    const sink = sinks.get(tint) ?? new GeometrySink()
+    box(sink, x0, x1, y0, y1, z0, z1)
+    sinks.set(tint, sink)
+  }
+  for (const [tint, sink] of sinks) group.add(mesh(sink.build(), tint))
+  return group
+}
+
+export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium', tier = 0): CarMesh {
+  detail = CAR_TIERS[Math.min(CAR_TIERS.length - 1, Math.max(0, tier))]
+  if (detail.proxy) {
+    const group = buildProxyCar(asPaint(livery))
+    // Dead pivots, so a caller can steer and roll every tier without asking which one it has.
+    const parked = () => {
+      const g = new THREE.Group()
+      group.add(g)
+      return g
+    }
+    const wheels = { fl: parked(), fr: parked(), rl: parked(), rr: parked() }
+    return { group, wheels, spin: { fl: parked(), fr: parked(), rl: parked(), rr: parked() } }
+  }
   const group = new THREE.Group()
   const paint = asPaint(livery)
   const colour = paint.body
@@ -1296,100 +1516,106 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
     box(dash, SPRITE.cx - 9.5, SPRITE.cx + 9.5, 0.302, 0.372, 208.5, 210.5)
     group.add(mesh(dash.build(), STRUCTURE))
 
-    // The wheel is an assembly, not a ring in space: rim, hub disc and crossed spokes in one tilted
-    // group, its column running from the hub into the dash wall at the channel's front.
-    const wheelGroup = new THREE.Group()
-    wheelGroup.position.set(0, H(0.36), 217 - SPRITE.cy)
-    wheelGroup.rotation.x = -1.15
-    // An F1 wheel is a YOKE: carbon body with the display block proud of it, capsule grips
-    // canted inward at the sides, thumb paddles at the top corners. No ring anywhere.
-    const body = mesh(new THREE.BoxGeometry(10, 6, 1.8), CARBON)
-    wheelGroup.add(body)
-    const screen = mesh(new THREE.BoxGeometry(5.8, 3.4, 0.6), STRUCTURE)
-    screen.position.z = 1.05
-    wheelGroup.add(screen)
-    for (const sign of [-1, 1]) {
-      const grip = mesh(new THREE.CapsuleGeometry(1.4, 4.8, 4, 10), STRUCTURE)
-      grip.position.set(sign * 4.3, -0.3, 0)
-      grip.rotation.z = -sign * 0.14
-      wheelGroup.add(grip)
-      const paddle = mesh(new THREE.BoxGeometry(2.3, 1.3, 0.9), CARBON)
-      paddle.position.set(sign * 3.5, 3.3, 0)
-      wheelGroup.add(paddle)
-    }
-    group.add(wheelGroup)
-    // Arms BEND. One strut from shoulder to wheel is a handlebar; an upper arm out to a raised
-    // elbow and a forearm back in to the grip is a person driving.
-    // The grip point is the wheel's OWN grip in world space, so the gloves sit on the rim rather
-    // than hanging a couple of units behind it.
-    for (const sign of [-1, 1]) {
-      const shoulder = v3(sign * 8.2, H(0.314), 237 - SPRITE.cy)
-      const elbow = v3(sign * 9.6, H(0.324), 228 - SPRITE.cy)
-      const grip = v3(sign * 4.3, H(0.3595), 217.4 - SPRITE.cy)
-      group.add(strut(shoulder, elbow, 3.0, CARBON))
-      group.add(strut(elbow, grip, 2.5, CARBON))
-      const glove = mesh(new THREE.SphereGeometry(2.5, 12, 9), CARBON)
-      glove.position.set(grip.x, grip.y, grip.z)
-      group.add(glove)
-    }
+    // Everything from here down is cockpit FURNITURE and the first thing a tier drops: it is the
+    // densest assembly on the car, and below roughly a hundred and fifty pixels of car length there
+    // is not a pixel of driver left to read. The lined tub above stays at every tier, because an
+    // empty red bathtub is worse than a dark one.
+    if (detail.cockpit) {
+      // The wheel is an assembly, not a ring in space: rim, hub disc and crossed spokes in one tilted
+      // group, its column running from the hub into the dash wall at the channel's front.
+      const wheelGroup = new THREE.Group()
+      wheelGroup.position.set(0, H(0.36), 217 - SPRITE.cy)
+      wheelGroup.rotation.x = -1.15
+      // An F1 wheel is a YOKE: carbon body with the display block proud of it, capsule grips
+      // canted inward at the sides, thumb paddles at the top corners. No ring anywhere.
+      const body = mesh(new THREE.BoxGeometry(10, 6, 1.8), CARBON)
+      wheelGroup.add(body)
+      const screen = mesh(new THREE.BoxGeometry(5.8, 3.4, 0.6), STRUCTURE)
+      screen.position.z = 1.05
+      wheelGroup.add(screen)
+      for (const sign of [-1, 1]) {
+        const grip = mesh(new THREE.CapsuleGeometry(1.4, 4.8, 4, 10), STRUCTURE)
+        grip.position.set(sign * 4.3, -0.3, 0)
+        grip.rotation.z = -sign * 0.14
+        wheelGroup.add(grip)
+        const paddle = mesh(new THREE.BoxGeometry(2.3, 1.3, 0.9), CARBON)
+        paddle.position.set(sign * 3.5, 3.3, 0)
+        wheelGroup.add(paddle)
+      }
+      group.add(wheelGroup)
+      // Arms BEND. One strut from shoulder to wheel is a handlebar; an upper arm out to a raised
+      // elbow and a forearm back in to the grip is a person driving.
+      // The grip point is the wheel's OWN grip in world space, so the gloves sit on the rim rather
+      // than hanging a couple of units behind it.
+      for (const sign of [-1, 1]) {
+        const shoulder = v3(sign * 8.2, H(0.314), 237 - SPRITE.cy)
+        const elbow = v3(sign * 9.6, H(0.324), 228 - SPRITE.cy)
+        const grip = v3(sign * 4.3, H(0.3595), 217.4 - SPRITE.cy)
+        group.add(strut(shoulder, elbow, 3.0, CARBON))
+        group.add(strut(elbow, grip, 2.5, CARBON))
+        const glove = mesh(new THREE.SphereGeometry(2.5, 12, 9), CARBON)
+        glove.position.set(grip.x, grip.y, grip.z)
+        group.add(glove)
+      }
 
-    // Column runs from INSIDE the dash bulkhead to just BEHIND the wheel's back face. Ending it at
-    // the hub pushed its tip out through the display, which is the overlap you could see.
-    group.add(strut(v3(0, H(0.344), 209.5 - SPRITE.cy), v3(0, H(0.354), 216.4 - SPRITE.cy), 1.5, CARBON))
+      // Column runs from INSIDE the dash bulkhead to just BEHIND the wheel's back face. Ending it at
+      // the hub pushed its tip out through the display, which is the overlap you could see.
+      group.add(strut(v3(0, H(0.344), 209.5 - SPRITE.cy), v3(0, H(0.354), 216.4 - SPRITE.cy), 1.5, CARBON))
 
-    // The torso half a helmet BELOW the rim, with the harness over it: two webbing straps from
-    // behind the shoulders converging on a central buckle, electronics tucked beside the hips.
-    const torso = mesh(new THREE.SphereGeometry(1, 14, 10), CARBON)
-    torso.scale.set(10.6, 6, 10)
-    torso.position.set(0, H(0.304), 238 - SPRITE.cy)
-    group.add(torso)
-    for (const sign of [-1, 1]) {
-      const strap = mesh(new THREE.BoxGeometry(2.3, 0.5, 8.5), STRUCTURE)
-      strap.position.set(sign * 2.9, H(0.318), 236.5 - SPRITE.cy)
-      strap.rotation.x = 0.42
-      strap.rotation.y = -sign * 0.22
-      group.add(strap)
+      // The torso half a helmet BELOW the rim, with the harness over it: two webbing straps from
+      // behind the shoulders converging on a central buckle, electronics tucked beside the hips.
+      const torso = mesh(new THREE.SphereGeometry(1, 14, 10), CARBON)
+      torso.scale.set(10.6, 6, 10)
+      torso.position.set(0, H(0.304), 238 - SPRITE.cy)
+      group.add(torso)
+      for (const sign of [-1, 1]) {
+        const strap = mesh(new THREE.BoxGeometry(2.3, 0.5, 8.5), STRUCTURE)
+        strap.position.set(sign * 2.9, H(0.318), 236.5 - SPRITE.cy)
+        strap.rotation.x = 0.42
+        strap.rotation.y = -sign * 0.22
+        group.add(strap)
+      }
+      const buckle = mesh(new THREE.BoxGeometry(2.4, 0.8, 1.8), TERTIARY)
+      buckle.position.set(0, H(0.308), 233 - SPRITE.cy)
+      buckle.rotation.x = 0.42
+      group.add(buckle)
+      for (const [gx, gz] of [[6.8, 244], [-6.4, 246]]) {
+        const gear = mesh(new THREE.BoxGeometry(2.6, 1.6, 3.2), STRUCTURE)
+        gear.position.set(gx, H(0.312), gz - SPRITE.cy)
+        group.add(gear)
+      }
+
+      // The helmet, reclined the way the driver actually lies, neck rooted in the torso. The head
+      // surround is a PILLOWED horseshoe: one smooth tube wrapping the helmet's sides and rear, its
+      // lower half buried in the deck edge so it sits proud without floating.
+      // Scaled UP: at its drawn size the head measured about two thirds of a real one against this
+      // car's track, and a driver you can barely see over the rim reads as a toy in the seat.
+      const helmet = buildHelmet(sec)
+      helmet.scale.setScalar(1.25)
+      helmet.position.set(0, H(0.372), 229 - SPRITE.cy)
+      helmet.rotation.x = 0.22
+      group.add(helmet)
+      const neck = mesh(new THREE.CylinderGeometry(4.2, 4.8, 7.5, 12), CARBON)
+      neck.position.set(0, H(0.372) - 2.6, 231.5 - SPRITE.cy)
+      group.add(neck)
+      // Tips dive into the deck so the tube's open ends are buried, never showing their mouths. The
+      // section is SQUASHED and the run sits lower: at full round it stood proud of the rim like a
+      // set of handlebars instead of reading as padding let into the edge.
+      const padY = H(0.398)
+      const horseshoe: Array<[number, number, number]> = [
+        [-9.6, padY - 3.5, 219], [-10.8, padY, 223], [-11.4, padY, 230], [-9.8, padY, 237.5],
+        [-5.5, padY, 242], [0, padY, 243.5], [5.5, padY, 242], [9.8, padY, 237.5],
+        [11.4, padY, 230], [10.8, padY, 223], [9.6, padY - 3.5, 219],
+      ]
+      const pad = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(
+        horseshoe.map(([x, y, zw]) => new THREE.Vector3(x, y, zw - SPRITE.cy)),
+      ), 36, 2.4, 10), CARBON)
+      // Widened with the head: at its old span the bigger helmet fouled the padding's inner face.
+      pad.scale.set(1.12, 0.58, 1)
+      pad.position.y = padY * 0.42
+      group.add(pad)
+
     }
-    const buckle = mesh(new THREE.BoxGeometry(2.4, 0.8, 1.8), TERTIARY)
-    buckle.position.set(0, H(0.308), 233 - SPRITE.cy)
-    buckle.rotation.x = 0.42
-    group.add(buckle)
-    for (const [gx, gz] of [[6.8, 244], [-6.4, 246]]) {
-      const gear = mesh(new THREE.BoxGeometry(2.6, 1.6, 3.2), STRUCTURE)
-      gear.position.set(gx, H(0.312), gz - SPRITE.cy)
-      group.add(gear)
-    }
-
-    // The helmet, reclined the way the driver actually lies, neck rooted in the torso. The head
-    // surround is a PILLOWED horseshoe: one smooth tube wrapping the helmet's sides and rear, its
-    // lower half buried in the deck edge so it sits proud without floating.
-    // Scaled UP: at its drawn size the head measured about two thirds of a real one against this
-    // car's track, and a driver you can barely see over the rim reads as a toy in the seat.
-    const helmet = buildHelmet(sec)
-    helmet.scale.setScalar(1.25)
-    helmet.position.set(0, H(0.372), 229 - SPRITE.cy)
-    helmet.rotation.x = 0.22
-    group.add(helmet)
-    const neck = mesh(new THREE.CylinderGeometry(4.2, 4.8, 7.5, 12), CARBON)
-    neck.position.set(0, H(0.372) - 2.6, 231.5 - SPRITE.cy)
-    group.add(neck)
-    // Tips dive into the deck so the tube's open ends are buried, never showing their mouths. The
-    // section is SQUASHED and the run sits lower: at full round it stood proud of the rim like a
-    // set of handlebars instead of reading as padding let into the edge.
-    const padY = H(0.398)
-    const horseshoe: Array<[number, number, number]> = [
-      [-9.6, padY - 3.5, 219], [-10.8, padY, 223], [-11.4, padY, 230], [-9.8, padY, 237.5],
-      [-5.5, padY, 242], [0, padY, 243.5], [5.5, padY, 242], [9.8, padY, 237.5],
-      [11.4, padY, 230], [10.8, padY, 223], [9.6, padY - 3.5, 219],
-    ]
-    const pad = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(
-      horseshoe.map(([x, y, zw]) => new THREE.Vector3(x, y, zw - SPRITE.cy)),
-    ), 36, 2.4, 10), CARBON)
-    // Widened with the head: at its old span the bigger helmet fouled the padding's inner face.
-    pad.scale.set(1.12, 0.58, 1)
-    pad.position.y = padY * 0.42
-    group.add(pad)
-
   }
 
   // The airbox mouth gets the pod intake's treatment: a rim standing PROUD of the snorkel's face
@@ -1566,7 +1792,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
 
   // Mirrors: rounded-rectangle housings in the LIVERY colour, glass on the driver's side, their
   // stalks rooted INSIDE the deck flank so nothing floats.
-  for (const sign of [-1, 1]) {
+  for (const sign of detail.cockpit ? [-1, 1] : []) {
     const rot = -sign * 0.32
     // Mounted where the sprite draws them: on the chassis shoulder BESIDE the cockpit, ahead of
     // the pad. The stalk starts inside the shoulder and ends inside the head.
@@ -1589,7 +1815,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
   // blades, wide in plan and thin edge-on. Their inboard ends sit INSIDE the body so they stay
   // attached at any steering lock, and their outboard ends run PAST the tyre's inner wall so they
   // vanish into the wheel instead of stopping short of it in mid-air.
-  for (const w of WHEELS) {
+  for (const w of detail.linkage ? WHEELS : []) {
     const front = w.z < SPRITE.cy
     const sign = Math.sign(w.x)
     const z = w.z - cz
@@ -1628,7 +1854,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
       pts.push(new THREE.Vector2(r - f + Math.cos(a) * f, w / 2 - f + Math.sin(a) * f))
     }
     pts.push(new THREE.Vector2(r * 0.58, w / 2))
-    const g = new THREE.LatheGeometry(pts, 36)
+    const g = new THREE.LatheGeometry(pts, seg(36))
     g.rotateZ(Math.PI / 2)
     return g
   }
@@ -1648,95 +1874,115 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
     // Barrel and flanges are OPEN ENDED. A capped cylinder puts a solid disc across the wheel's
     // face and every spoke behind it disappears; what fills the middle is the brake disc, which is
     // what fills it on the car.
-    const barrel = mesh(new THREE.CylinderGeometry(w.r * 0.60, w.r * 0.60, w.w - 1, 26, 1, true), CARBON)
+    const barrel = mesh(new THREE.CylinderGeometry(w.r * 0.60, w.r * 0.60, w.w - 1, seg(26), 1, true), CARBON)
     barrel.geometry.rotateZ(Math.PI / 2)
     roll.add(barrel)
-    const brake = mesh(new THREE.CylinderGeometry(w.r * 0.42, w.r * 0.42, 2.6, 22), STRUCTURE)
-    brake.geometry.rotateZ(Math.PI / 2)
-    roll.add(brake)
-    for (const side of [-1, 1]) {
-      const flange = mesh(new THREE.CylinderGeometry(w.r * 0.645, w.r * 0.60, 2.2, 26, 1, true), HUB, 'metal')
-      flange.geometry.rotateZ(Math.PI / 2)
-      flange.position.x = side * (w.w / 2 - 1.4)
-      roll.add(flange)
-      // The rim's EDGE: a flat annulus standing PROUD of the spoke web. It is most of what you see
-      // of a wheel's rim, and without it the spokes appear to run straight into the tyre.
-      const rimFace = mesh(new THREE.RingGeometry(w.r * 0.50, w.r * 0.632, 34), HUB, 'metal')
-      rimFace.geometry.rotateY(Math.PI / 2)
-      rimFace.position.x = side * (w.w / 2 - 1.0)
-      roll.add(rimFace)
-      // The COMPOUND band, on the flat of the sidewall and a hair proud of it. Casts no shadow:
-      // it is a marking, and a marking that shadows reads as a raised ring. BOTH walls carry it,
-      // so it is added before the outboard-only work below.
-      const ring = mesh(new THREE.RingGeometry(w.r * 0.70, w.r * 0.80, 32), band)
-      ring.geometry.rotateY(Math.PI / 2)
-      ring.position.x = side * (w.w / 2 + 0.25)
-      ring.castShadow = false
-      roll.add(ring)
-      // Spokes on the OUTBOARD face only. The inboard face of an F1 wheel is not a mirror of it:
-      // that side is taken up by the brake duct and the upright, and nobody sees a spoke there.
-      if (side !== Math.sign(w.x)) continue
-      const web = mesh(new THREE.CylinderGeometry(w.r * 0.21, w.r * 0.21, 1.8, 22), HUB, 'metal')
-      web.geometry.rotateZ(Math.PI / 2)
-      web.position.x = side * (w.w / 2 - 2.2)
-      roll.add(web)
-      // Set BACK from the rim face and stopping just inside it, so the web reads as recessed. The
-      // spokes are the one part of the car that should CATCH the light as the wheel turns.
-      for (let k = 0; k < 10; k++) {
-        const spoke = mesh(new THREE.BoxGeometry(1.1, w.r * 0.36, 2.8), HUB, 'metal')
-        spoke.position.set(side * (w.w / 2 - 2.4), 0, 0)
-        spoke.rotation.x = (k / 10) * Math.PI * 2
-        spoke.translateY(w.r * 0.35)
-        roll.add(spoke)
+    // Rim furniture, brake and duct: all of it is inside the tyre's silhouette or smaller than
+    // a few pixels once the car is under about twenty-five, so the whole lot drops together.
+    if (detail.wheelParts) {
+      const brake = mesh(new THREE.CylinderGeometry(w.r * 0.42, w.r * 0.42, 2.6, seg(22)), STRUCTURE)
+      brake.geometry.rotateZ(Math.PI / 2)
+      roll.add(brake)
+      for (const side of [-1, 1]) {
+        const flange = mesh(new THREE.CylinderGeometry(w.r * 0.645, w.r * 0.60, 2.2, seg(26), 1, true), HUB, 'metal')
+        flange.geometry.rotateZ(Math.PI / 2)
+        flange.position.x = side * (w.w / 2 - 1.4)
+        roll.add(flange)
+        // The rim's EDGE: a flat annulus standing PROUD of the spoke web. It is most of what you see
+        // of a wheel's rim, and without it the spokes appear to run straight into the tyre.
+        const rimFace = mesh(new THREE.RingGeometry(w.r * 0.50, w.r * 0.632, 34), HUB, 'metal')
+        rimFace.geometry.rotateY(Math.PI / 2)
+        rimFace.position.x = side * (w.w / 2 - 1.0)
+        roll.add(rimFace)
+        // The COMPOUND band, on the flat of the sidewall and a hair proud of it. Casts no shadow:
+        // it is a marking, and a marking that shadows reads as a raised ring. BOTH walls carry it,
+        // so it is added before the outboard-only work below.
+        const ring = mesh(new THREE.RingGeometry(w.r * 0.70, w.r * 0.80, 32), band)
+        ring.geometry.rotateY(Math.PI / 2)
+        ring.position.x = side * (w.w / 2 + 0.25)
+        ring.castShadow = false
+        roll.add(ring)
+        // Spokes on the OUTBOARD face only. The inboard face of an F1 wheel is not a mirror of it:
+        // that side is taken up by the brake duct and the upright, and nobody sees a spoke there.
+        if (side !== Math.sign(w.x)) continue
+        const web = mesh(new THREE.CylinderGeometry(w.r * 0.21, w.r * 0.21, 1.8, seg(22)), HUB, 'metal')
+        web.geometry.rotateZ(Math.PI / 2)
+        web.position.x = side * (w.w / 2 - 2.2)
+        roll.add(web)
+        // Set BACK from the rim face and stopping just inside it, so the web reads as recessed. The
+        // spokes are the one part of the car that should CATCH the light as the wheel turns.
+        for (let k = 0; k < 10; k++) {
+          const spoke = mesh(new THREE.BoxGeometry(1.1, w.r * 0.36, 2.8), HUB, 'metal')
+          spoke.position.set(side * (w.w / 2 - 2.4), 0, 0)
+          spoke.rotation.x = (k / 10) * Math.PI * 2
+          spoke.translateY(w.r * 0.35)
+          roll.add(spoke)
+        }
+        // Bolt circle on the web, then the centre lock: retaining collar, hex nut, coloured cap.
+        for (let k = 0; k < 8; k++) {
+          const bolt = mesh(new THREE.CylinderGeometry(w.r * 0.022, w.r * 0.022, 1.4, seg(8)), STRUCTURE)
+          bolt.geometry.rotateZ(Math.PI / 2)
+          bolt.position.set(side * (w.w / 2 - 1.6), 0, 0)
+          bolt.rotation.x = (k / 8) * Math.PI * 2
+          bolt.translateY(w.r * 0.155)
+          roll.add(bolt)
+        }
+        for (const [rad, len, off, segs, tint] of [
+          [0.135, 2.6, 0.6, 24, STRUCTURE], [0.098, 4.4, 1.9, 6, HUB], [0.055, 5.6, 2.6, 16, paint.trim],
+        ] as const) {
+          const part = mesh(new THREE.CylinderGeometry(w.r * rad, w.r * rad, len, seg(segs)), tint, 'metal')
+          part.geometry.rotateZ(Math.PI / 2)
+          part.position.x = side * (w.w / 2 + off)
+          roll.add(part)
+        }
       }
-      // Bolt circle on the web, then the centre lock: retaining collar, hex nut, coloured cap.
-      for (let k = 0; k < 8; k++) {
-        const bolt = mesh(new THREE.CylinderGeometry(w.r * 0.022, w.r * 0.022, 1.4, 8), STRUCTURE)
-        bolt.geometry.rotateZ(Math.PI / 2)
-        bolt.position.set(side * (w.w / 2 - 1.6), 0, 0)
-        bolt.rotation.x = (k / 8) * Math.PI * 2
-        bolt.translateY(w.r * 0.155)
-        roll.add(bolt)
-      }
-      for (const [rad, len, off, seg, tint] of [
-        [0.135, 2.6, 0.6, 24, STRUCTURE], [0.098, 4.4, 1.9, 6, HUB], [0.055, 5.6, 2.6, 16, paint.trim],
-      ] as const) {
-        const part = mesh(new THREE.CylinderGeometry(w.r * rad, w.r * rad, len, seg), tint, 'metal')
-        part.geometry.rotateZ(Math.PI / 2)
-        part.position.x = side * (w.w / 2 + off)
-        roll.add(part)
-      }
-    }
-    const axle = mesh(new THREE.CylinderGeometry(w.r * 0.075, w.r * 0.075, w.w + 1, 12), STRUCTURE)
-    axle.geometry.rotateZ(Math.PI / 2)
-    roll.add(axle)
+      const axle = mesh(new THREE.CylinderGeometry(w.r * 0.075, w.r * 0.075, w.w + 1, seg(12)), STRUCTURE)
+      axle.geometry.rotateZ(Math.PI / 2)
+      roll.add(axle)
 
-    // BRAKE DUCT: a drum wrapping the disc on the wheel's inboard face, with a scoop under its
-    // leading edge feeding it. On the STEERING pivot rather than inside the rolling group, because
-    // a duct turns with the wheel and stays put while the wheel goes round.
-    const inb = -Math.sign(w.x)
-    const drum = mesh(new THREE.CylinderGeometry(w.r * 0.55, w.r * 0.50, 13, 20, 1, true), CARBON)
-    drum.geometry.rotateZ(Math.PI / 2)
-    drum.position.x = inb * (w.w / 2 - 2)
-    pivot.add(drum)
-    // The duct's BACKPLATE is solid, and has to be. The old wheel filled its centre with a hub
-    // disc; the open rim that replaced it left a clear line of sight into the middle of the wheel,
-    // and the suspension's outboard ends sit in there. At lock they swung into view.
-    const back = mesh(new THREE.CylinderGeometry(w.r * 0.52, w.r * 0.52, 2.2, 22), CARBON)
-    back.geometry.rotateZ(Math.PI / 2)
-    back.position.x = inb * (w.w / 2 + 4)
-    pivot.add(back)
-    const scoop = mesh(new RoundedBoxGeometry(9, 12, 10, 3, 1.8), CARBON)
-    scoop.position.set(inb * (w.w / 2 - 2), -w.r * 0.33, -w.r * 0.42)
-    pivot.add(scoop)
-    const mouth = mesh(new THREE.BoxGeometry(6.4, 8.4, 1.4), STRUCTURE)
-    mouth.position.set(inb * (w.w / 2 - 2), -w.r * 0.33, -w.r * 0.42 - 4.9)
-    pivot.add(mouth)
+      // BRAKE DUCT: a drum wrapping the disc on the wheel's inboard face, with a scoop under its
+      // leading edge feeding it. On the STEERING pivot rather than inside the rolling group, because
+      // a duct turns with the wheel and stays put while the wheel goes round.
+      const inb = -Math.sign(w.x)
+      const drum = mesh(new THREE.CylinderGeometry(w.r * 0.55, w.r * 0.50, 13, seg(20), 1, true), CARBON)
+      drum.geometry.rotateZ(Math.PI / 2)
+      drum.position.x = inb * (w.w / 2 - 2)
+      pivot.add(drum)
+      // The duct's BACKPLATE is solid, and has to be. The old wheel filled its centre with a hub
+      // disc; the open rim that replaced it left a clear line of sight into the middle of the wheel,
+      // and the suspension's outboard ends sit in there. At lock they swung into view.
+      const back = mesh(new THREE.CylinderGeometry(w.r * 0.52, w.r * 0.52, 2.2, seg(22)), CARBON)
+      back.geometry.rotateZ(Math.PI / 2)
+      back.position.x = inb * (w.w / 2 + 4)
+      pivot.add(back)
+      const scoop = mesh(new RoundedBoxGeometry(9, 12, 10, 3, 1.8), CARBON)
+      scoop.position.set(inb * (w.w / 2 - 2), -w.r * 0.33, -w.r * 0.42)
+      pivot.add(scoop)
+      const mouth = mesh(new THREE.BoxGeometry(6.4, 8.4, 1.4), STRUCTURE)
+      mouth.position.set(inb * (w.w / 2 - 2), -w.r * 0.33, -w.r * 0.42 - 4.9)
+      pivot.add(mouth)
+    }
 
     wheels[w.tag] = pivot
     spin[w.tag] = roll
     group.add(pivot)
   }
 
+  // Sculpting done: bake it down. Each rolling hub collapses inside itself, then each steering
+  // pivot around it, then the shell around all four, so every part that has to move still can.
+  // At the far tiers nothing has to move: a wheel is under a pixel across and its rotation is not
+  // observable, so the boundaries come down and the whole car bakes into one buffer per paint.
+  if (detail.liveWheels) {
+    for (const tag of Object.keys(wheels) as Array<keyof CarMesh['wheels']>) {
+      collapseByPaint(spin[tag], EMPTY_BOUNDARY)
+      collapseByPaint(wheels[tag], new Set([spin[tag]]))
+    }
+    collapseByPaint(group, new Set(Object.values(wheels)))
+  } else {
+    collapseByPaint(group, EMPTY_BOUNDARY)
+  }
+
   return { group, wheels, spin }
 }
+
+const EMPTY_BOUNDARY: ReadonlySet<THREE.Object3D> = new Set()
