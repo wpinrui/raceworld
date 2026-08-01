@@ -70,7 +70,7 @@ const ZOOM_STEP = 1.18 // per wheel notch
 const ZOOM_MIN = 0.6 // full-track view
 /** The zoom ceiling, in the readout's own terms: the same closeness on every circuit, whatever its
  *  metres-per-unit or stage fit. */
-const ZOOM_MAX_PXM = 100
+const ZOOM_MAX_PXM = 200
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
 /** How far the camera can lie down, radians off vertical: ~80 degrees, almost eye level with the
  *  cars, stopped just short of the horizon where an endless ground plane starts showing its edge. */
