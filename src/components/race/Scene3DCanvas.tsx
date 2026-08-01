@@ -18,7 +18,7 @@ import type { Lighting } from '@/lib/ui/lighting'
 import { applyOrbitCam, type OrbitCam } from '@/lib/scene3d/camera3d'
 import { refitShadow } from '@/lib/scene3d/lighting3d'
 import {
-  applyToneMapping, buildSky, refitFog, SKY_INTENSITY, type SkyEnv,
+  applyToneMapping, buildSky, refitFog, type SkyEnv,
 } from '@/lib/scene3d/sky3d'
 import { GROUND_PAD, type World3D } from '@/lib/scene3d/world3d'
 
@@ -119,7 +119,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // before. Nothing else in the scene depends on the sky existing.
     }
     gl.scene.background = env ? env.texture : new THREE.Color(base)
-    gl.scene.backgroundIntensity = env ? SKY_INTENSITY : 1
+    gl.scene.backgroundIntensity = env ? env.intensity : 1
     // Near and far are placeholders: every paint refits them to what the camera can see.
     gl.scene.fog = env ? new THREE.Fog(env.horizon, 1, 2) : null
     paint()

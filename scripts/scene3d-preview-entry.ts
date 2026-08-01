@@ -24,7 +24,7 @@ import {
 } from '../src/lib/scene3d/camera3d'
 import { refitShadow } from '../src/lib/scene3d/lighting3d'
 import {
-  applyToneMapping, buildSky, refitFog, skySeedFor, SKY_INTENSITY, type SkyEnv,
+  applyToneMapping, buildSky, refitFog, skySeedFor, type SkyEnv,
 } from '../src/lib/scene3d/sky3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { buildWorld3D, GROUND_PAD } from '../src/lib/scene3d/world3d'
@@ -177,7 +177,7 @@ function dressSky(built: BuiltScene, moodName: string): SkyEnv | null {
   }
   if (env) {
     built.scene.background = env.texture
-    built.scene.backgroundIntensity = SKY_INTENSITY
+    built.scene.backgroundIntensity = env.intensity
     built.scene.fog = new THREE.Fog(env.horizon, 1, 2)
   }
   return env

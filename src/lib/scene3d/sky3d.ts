@@ -31,13 +31,25 @@ export interface SkyParams {
   sun: THREE.Vector3
 }
 
-/** Where night puts its sun, in radians above the horizon. The night MOOD carries a high sun (its
- *  shadows still have to fall somewhere sensible on a floodlit circuit) and handing that elevation
- *  to Preetham renders a bright blue afternoon behind the floodlights. Under the horizon is where
- *  the sun actually is, and it is what makes the sky read as night rather than as a cool day. */
-const NIGHT_SUN_RAD = -0.14
+/** Night's sky, bottom (nadir) to top (zenith), as sRGB bytes at their elevation in degrees.
+ *
+ *  AUTHORED, where every other mood is analytic, because Preetham is a daylight model and neither
+ *  side of its sun cutoff is a night sky. Measured both: parked just inside the cutoff it bakes a
+ *  sunset (0.24/0.13/0.03, warm), and past it the model falls back to a bare extinction term that
+ *  reads BROWN (21/16/10 at the zenith), since a long atmospheric path scatters the blue out and
+ *  leaves the red. A real night is the opposite of both, so it is written down instead: deep blue
+ *  overhead, and a low warm band at the horizon where a floodlit venue throws its own light back
+ *  off the air. That band is the only part the map's 80-degree pitch limit ever shows. */
+const NIGHT_RAMP: Array<[elevation: number, rgb: [number, number, number]]> = [
+  [-90, [16, 17, 23]],
+  [-2, [30, 30, 36]],
+  [0, [48, 45, 52]],
+  [6, [34, 36, 52]],
+  [20, [20, 26, 46]],
+  [90, [9, 13, 30]],
+]
 
-/** What `scene.backgroundIntensity` scales the baked radiance by, and the fog colour with it.
+/** What `scene.backgroundIntensity` scales a DAYLIT bake by, and the fog colour with it.
  *
  *  Preetham's output is authored against its own exposure, while the light rig is calibrated at 1 (a
  *  horizontal surface renders close to its authored albedo). Rendering both under one exposure
@@ -48,7 +60,7 @@ const NIGHT_SUN_RAD = -0.14
  *  a few percent of white by an input of 3, so anything above about a fifth renders the sky as a
  *  flat white ceiling with the gradient clipped out of it. 0.16 lands the horizon at 1.3, which is
  *  the top of the curve's shoulder: bright, still coloured, still rolling off. */
-export const SKY_INTENSITY = 0.16
+const DAY_INTENSITY = 0.16
 
 /** Bearings sampled round the horizon for the fog colour. The sky is brighter toward the sun and
  *  duller away from it; fog is ONE colour, so it has to be the ring's average. */
@@ -89,34 +101,65 @@ export function sunDirection(azimuth: number, altitude: number): THREE.Vector3 {
   )
 }
 
+/** How thick the day is, 0 clear to 1 socked in. `ambient` is the overcast knob in the 2D model, so
+ *  it is the one scalar that says whether there is a lid on the sky. */
+function overcastness(ambient: number): number {
+  return clamp((ambient - 0.3) / 0.45, 0, 1)
+}
+
 /** The mood, as Preetham reads it.
  *
- *  `ambient` is the overcast knob in the 2D model, so it drives everything about a thick sky here:
- *  aerosol turbidity, the sun's mie glow, and how far the cloud layer closes over. `warmth` drives
- *  rayleigh, which is what deepens a dusk into red rather than merely dimming it. */
-export function skyParams(l: Lighting, night = false): SkyParams {
+ *  Preetham is a CLEAR-sky model and cannot render an overcast one, which is the trap in the obvious
+ *  mapping: turbidity is aerosol, and winding it up to say "thick day" renders a DEEPER blue away
+ *  from the sun, not a grey lid. Measured, that made overcast the bluest sky of the five.
+ *
+ *  What greys a sky is the balance of its two scatterings, not its thickness. Rayleigh is the blue
+ *  one and mie is the white one, so overcastness leans off the first and hard onto the second: a
+ *  bright neutral haze, which is what a lid of cloud actually is. Taking rayleigh out ALONE only
+ *  darkens it, since rayleigh is also most of a clear sky's brightness.
+ *
+ *  `warmth` sets rayleigh's clear-day level, which is what deepens a dusk into red rather than
+ *  merely dimming it. */
+export function skyParams(l: Lighting): SkyParams {
   const ambient = clamp(l.ambient, 0, 1)
   const warmth = clamp(l.warmth, -1, 1)
-  const p: SkyParams = {
+  const thick = overcastness(ambient)
+  return {
     turbidity: clamp(2 + (ambient - 0.25) * 22, 1.6, 16),
-    rayleigh: clamp(1.4 + warmth * 1.6, 0.35, 3.2),
-    mieCoefficient: clamp(0.003 + ambient * 0.007, 0.002, 0.02),
+    rayleigh: clamp(1.4 + warmth * 1.6, 0.35, 3.2) * (1 - 0.55 * thick),
+    mieCoefficient: clamp(0.003 + ambient * 0.007, 0.002, 0.02) * (1 + 5 * thick),
     mieDirectionalG: clamp(0.86 - ambient * 0.22, 0.62, 0.9),
-    cloudCoverage: clamp(0.12 + (ambient - 0.25) * 1.1, 0.08, 0.8),
-    cloudDensity: clamp(0.35 + (ambient - 0.25) * 0.8, 0.3, 0.95),
+    cloudCoverage: clamp(0.12 + thick * 0.68, 0.08, 0.8),
+    cloudDensity: clamp(0.35 + thick * 0.6, 0.3, 0.95),
     sun: sunDirection(l.azimuth, sunAltitude(l)),
   }
-  if (!night) return p
-  // Night is not the mood's scalars dimmed: its elevation and ambient are both 2D-shading artifacts
-  // (shadows must still fall; shade must still fill), and read literally they make a hazy afternoon.
-  return {
-    ...p,
-    turbidity: 2.4,
-    rayleigh: 0.9,
-    cloudCoverage: 0.25,
-    cloudDensity: 0.5,
-    sun: sunDirection(l.azimuth, NIGHT_SUN_RAD),
+}
+
+/** Night's sky as an equirectangular strip: one column, because `NIGHT_RAMP` varies only with
+ *  elevation. Cheap, exact and needs no GPU readback, so the haze colour is simply the band the
+ *  horizon is painted in rather than something sampled back out of a render. */
+function buildNightSky(): SkyEnv {
+  const height = 256
+  const canvas = document.createElement('canvas')
+  canvas.width = 1
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('no 2d context for the night sky')
+  const gradient = ctx.createLinearGradient(0, 0, 0, height)
+  for (const [elevation, [r, g, b]] of NIGHT_RAMP) {
+    // Equirectangular v runs zenith (0) to nadir (1), so the ramp is read top-down.
+    gradient.addColorStop(clamp(0.5 - elevation / 180, 0, 1), `rgb(${r}, ${g}, ${b})`)
   }
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, 1, height)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.mapping = THREE.EquirectangularReflectionMapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  const [, horizonRgb] = NIGHT_RAMP.find(([elevation]) => elevation === 0)!
+  const horizon = new THREE.Color().setRGB(
+    horizonRgb[0] / 255, horizonRgb[1] / 255, horizonRgb[2] / 255, THREE.SRGBColorSpace,
+  )
+  return { texture, intensity: 1, horizon, dispose: () => texture.dispose() }
 }
 
 /** The output curve, applied to every renderer that draws this world. The sky is high dynamic range
@@ -141,10 +184,14 @@ export function skySeedFor(circuitId: string): number {
 
 /** A baked sky and the haze colour that matches it. */
 export interface SkyEnv {
-  /** The cube, for `scene.background`. Scale it with `SKY_INTENSITY`. */
+  /** The cube, for `scene.background`. */
   texture: THREE.Texture
+  /** What `scene.backgroundIntensity` must be for THIS bake: day and night are three orders of
+   *  magnitude apart in raw radiance, so it travels with the sky rather than sitting in the caller
+   *  where the two could be paired up wrongly. */
+  intensity: number
   /** The sky's own radiance just above the horizon, averaged round the ring and already scaled by
-   *  `SKY_INTENSITY`: what the fog fades the world into, so ground and sky meet at one colour. */
+   *  `intensity`: what the fog fades the world into, so ground and sky meet at one colour. */
   horizon: THREE.Color
   dispose(): void
 }
@@ -160,7 +207,9 @@ const CUBE_SIZE = 512
  *  putting a visible seam back on the horizon. Rendering to a target skips tone mapping (three only
  *  applies the curve on the way to the canvas), so this is raw radiance, which is the space fog
  *  mixes in. */
-function sampleHorizon(renderer: THREE.WebGLRenderer, skyScene: THREE.Scene): THREE.Color {
+function sampleHorizon(
+  renderer: THREE.WebGLRenderer, skyScene: THREE.Scene, intensity: number,
+): THREE.Color {
   const target = new THREE.WebGLRenderTarget(1, 1, {
     type: THREE.FloatType, colorSpace: THREE.LinearSRGBColorSpace,
   })
@@ -185,7 +234,7 @@ function sampleHorizon(renderer: THREE.WebGLRenderer, skyScene: THREE.Scene): TH
   }
   renderer.setRenderTarget(previous)
   target.dispose()
-  return sum.multiplyScalar(SKY_INTENSITY)
+  return sum.multiplyScalar(intensity)
 }
 
 /** Bake the mood's sky. Browser-only (it renders), and called once per mood, not per frame.
@@ -195,7 +244,8 @@ function sampleHorizon(renderer: THREE.WebGLRenderer, skyScene: THREE.Scene): TH
 export function buildSky(
   renderer: THREE.WebGLRenderer, lighting: Lighting, { night = false, seed = 0 } = {},
 ): SkyEnv {
-  const p = skyParams(lighting, night)
+  if (night) return buildNightSky()
+  const p = skyParams(lighting)
   const sky = new Sky()
   sky.scale.setScalar(1000)
   const u = sky.material.uniforms
@@ -214,12 +264,14 @@ export function buildSky(
   const target = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType })
   const previous = renderer.getRenderTarget()
   new THREE.CubeCamera(1, 1e4, target).update(renderer, skyScene)
-  const horizon = sampleHorizon(renderer, skyScene)
+  const horizon = sampleHorizon(renderer, skyScene, DAY_INTENSITY)
   renderer.setRenderTarget(previous)
 
   sky.geometry.dispose()
   sky.material.dispose()
-  return { texture: target.texture, horizon, dispose: () => target.dispose() }
+  return {
+    texture: target.texture, intensity: DAY_INTENSITY, horizon, dispose: () => target.dispose(),
+  }
 }
 
 /** How far the camera is from the ground it is pointed at: the orbit's own distance, recovered from
