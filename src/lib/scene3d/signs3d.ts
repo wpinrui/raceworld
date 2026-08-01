@@ -1,7 +1,8 @@
 // Garage name boards in-scene (#3d-port increment 5): the one piece of the world that carries real
-// text and real flag artwork, which is why it outlived every other SVG layer. Each board is a
-// canvas-drawn texture on a quad standing in its bay's mouth plane, proud of the fascia like a
-// mounted signboard; the text lands immediately and the flags redraw in as their SVGs arrive.
+// text and real flag artwork, which is why it outlived every other SVG layer. Each board is a thin
+// SOLID nameplate mounted flat on the fascia over its bay's mouth: the canvas-drawn face reads from
+// the lane, the back and edges are plain plate, so there is no reversed text and no floating sheet.
+// The text lands immediately and the flags redraw in as their SVGs arrive.
 
 import * as THREE from 'three'
 import { GARAGE_H_M, PIT_WHITE, SIGN_H_M, shortName } from '@/components/race/PitBuilding'
@@ -13,12 +14,12 @@ import type { PitZone } from '@/lib/ui/pit-zone'
 const PX_PER_M = 56
 const BOARD = shade(PIT_WHITE, 0.78)
 const TEXT = '#14181F'
-/** How far the board stands proud of the bay mouth, in metres. */
+/** How far the board's FACE stands proud of the bay mouth, in metres. */
 const PROUD_M = 0.12
-/** The board's lean out over the lane, from vertical. Dead vertical it faces only track level, and
- *  the game's elevated camera sees it edge-on; leaned like a marquee it reads from the top-down
- *  default and from the lane both. */
-const LEAN_RAD = (50 * Math.PI) / 180
+/** The plate's thickness: a mounted board, not a floating sheet of paint. */
+const THICK_M = 0.06
+/** The plate's back and edges: a shade darker than the face, like painted board. */
+const PLATE = shade(PIT_WHITE, 0.6)
 
 interface BoardDriver { name: string; nationality?: string }
 
@@ -80,8 +81,7 @@ export function buildGarageSigns3D(
   zone: PitZone, u: (m: number) => number, drivers: (i: number) => BoardDriver[],
 ): THREE.Group {
   const group = new THREE.Group()
-  const y0 = u(GARAGE_H_M)
-  const y1 = y0 + u(SIGN_H_M) * Math.cos(LEAN_RAD)
+  const plate = new THREE.MeshLambertMaterial({ color: PLATE })
   zone.garageFloors.forEach((r, i) => {
     const crew = drivers(i)
     if (crew.length === 0) return
@@ -90,13 +90,6 @@ export function buildGarageSigns3D(
     const { a, b, out } = frame
     const len = Math.hypot(b.x - a.x, b.y - a.y)
     if (len < 1e-6) return
-    // Proud of the mouth, along the out-of-bay direction the doors offset against; the top edge
-    // then leans out over the lane so the elevated camera reads the face, not the edge.
-    const outX = out.x * u(PROUD_M)
-    const outY = out.y * u(PROUD_M)
-    const h = u(SIGN_H_M)
-    const leanX = out.x * h * Math.sin(LEAN_RAD)
-    const leanY = out.y * h * Math.sin(LEAN_RAD)
 
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round((len / u(1)) * PX_PER_M))
@@ -105,17 +98,24 @@ export function buildGarageSigns3D(
     texture.colorSpace = THREE.SRGBColorSpace
     drawBoard(canvas, crew, texture)
 
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([
-      a.x + outX + leanX, y1, a.y + outY + leanY, b.x + outX + leanX, y1, b.y + outY + leanY,
-      b.x + outX, y0, b.y + outY, a.x + outX, y0, a.y + outY,
-    ], 3))
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2))
-    geometry.setIndex([0, 1, 2, 0, 2, 3])
-    geometry.computeVertexNormals()
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
-      map: texture, side: THREE.DoubleSide,
-    }))
+    // A thin box whose +z face carries the texture: local x runs a->b (the lane viewer's
+    // screen-right, so the box's own UVs put the text upright and forward), z points out of the
+    // bay. Front-side materials throughout: the back shows plate, never mirrored letters.
+    const h = u(SIGN_H_M)
+    const t = u(THICK_M)
+    const face = new THREE.MeshLambertMaterial({ map: texture })
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(len, h, t), [plate, plate, plate, plate, face, plate])
+    const ex = (b.x - a.x) / len
+    const ez = (b.y - a.y) / len
+    mesh.matrix.makeBasis(
+      new THREE.Vector3(ex, 0, ez), new THREE.Vector3(0, 1, 0), new THREE.Vector3(out.x, 0, out.y),
+    )
+    mesh.matrix.setPosition(
+      (a.x + b.x) / 2 + out.x * (u(PROUD_M) - t / 2),
+      u(GARAGE_H_M) + h / 2,
+      (a.y + b.y) / 2 + out.y * (u(PROUD_M) - t / 2),
+    )
+    mesh.matrixAutoUpdate = false
     mesh.receiveShadow = true
     group.add(mesh)
   })
