@@ -22,6 +22,10 @@ export interface CarPose {
   long: number
   /** Arc travelled since the last pose, world units, for wheel spin. */
   ds: number
+  /** Ground height under the car in world units, for the day the track gains elevation: sample the
+   *  same profile the road is built from (`gradeToTrack` already computes it) at the car's arc
+   *  position and hand it here. Absent, the world is flat. */
+  ground?: number
 }
 
 /** Body angles at the limit. Bolder than a real car's degree-or-two for the same reason every cue
@@ -98,7 +102,7 @@ export class CarField3D {
   pose(id: string, p: CarPose): void {
     const e = this.entries.get(id)
     if (!e) return
-    e.wrap.position.set(p.x, this.rideY, p.y)
+    e.wrap.position.set(p.x, (p.ground ?? 0) + this.rideY, p.y)
     e.wrap.rotation.y = -p.rot
     // A car leans AWAY from the corner and dips its nose under the brakes, the same signs the
     // sprite's slide encoded.
