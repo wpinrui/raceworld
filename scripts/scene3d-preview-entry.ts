@@ -127,7 +127,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
  *  this probe shoots is what the race view renders. The impostor stopgap retired with the loft. */
 function carMeshes(
   layout: TrackLayout, n: number, near?: { x: number; z: number },
-): THREE.Group {
+): { group: THREE.Group; focus: { x: number; z: number } | null } {
   const field = new CarField3D(
     CAR_LENGTH_M * CAR_SCALE / layout.metresPerUnit / SPRITE.len,
     CAR_RIDE_M / layout.metresPerUnit,
@@ -151,7 +151,10 @@ function carMeshes(
       lat: car.lat, long: car.long, ds: 0,
     })
   })
-  return field.group
+  return {
+    group: field.group,
+    focus: placed.length ? { x: placed[0].x, z: placed[0].y } : null,
+  }
 }
 
 function disposeScene(scene: THREE.Scene) {
@@ -248,7 +251,17 @@ async function eyeShot() {
   }
   const built = buildScene(id, q.get('mood') ?? 'afternoon', full)
   const cars = Number(q.get('cars') ?? '0')
-  if (cars > 0) built.scene.add(carMeshes(layout, cars, { x: cam.tx, z: cam.tz }))
+  if (cars > 0) {
+    const field = carMeshes(layout, cars, { x: cam.tx, z: cam.tz })
+    built.scene.add(field.group)
+    // Look AT a car, not at the fraction of the viewBox that happened to be asked for. Cars sit on
+    // the racing line at whatever spacing the field gives them, and hunting one down by nudging
+    // `--at` is a waste of a probe: if the shot was asked for with cars in it, centre one.
+    if (field.focus) {
+      cam.tx = field.focus.x
+      cam.tz = field.focus.z
+    }
+  }
 
   const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)
@@ -291,7 +304,7 @@ async function shotMain() {
   // Built after the crop is known, so the sun's shadow map is fitted to what is in shot.
   const built = buildScene(id, q.get('mood') ?? 'afternoon', vb)
   const cars = Number(q.get('cars') ?? '0')
-  if (cars > 0) built.scene.add(carMeshes(layout, cars))
+  if (cars > 0) built.scene.add(carMeshes(layout, cars).group)
   const camera = frameOrtho(vb, tilt)
   const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)

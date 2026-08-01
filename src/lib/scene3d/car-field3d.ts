@@ -7,6 +7,7 @@
 import * as THREE from 'three'
 import { SPRITE } from '@/lib/ui/car-sprite'
 import { buildCarMesh, type CarLivery, type CarMesh, type TyreCompound } from './car-mesh'
+import { ContactShadows } from './contact3d'
 
 export interface CarPose {
   /** World position, viewBox units. */
@@ -48,6 +49,9 @@ interface Entry {
   key: string
   mesh: CarMesh
   wrap: THREE.Group
+  /** The car's contact occlusion, absent where no canvas could generate one. Held out of the
+   *  wrap's material walk: see `setOpacity`. */
+  contact: THREE.Mesh | null
   /** Accumulated spin per wheel, radians. */
   spun: Record<(typeof WHEEL_TAGS)[number], number>
 }
@@ -65,6 +69,8 @@ function disposeDeep(root: THREE.Object3D): void {
 export class CarField3D {
   readonly group = new THREE.Group()
   private entries = new Map<string, Entry>()
+  /** One texture and geometry for the whole field, one material per car. */
+  private shadows = new ContactShadows()
 
   /** `scaleUnits`: world units per sprite unit, the circuit's own car scale. `rideY`: the ride
    *  height in WORLD units, `CAR_RIDE_M` through the circuit's metres-per-unit. */
@@ -80,8 +86,12 @@ export class CarField3D {
     const wrap = new THREE.Group()
     wrap.scale.setScalar(this.scaleUnits)
     wrap.add(mesh.group)
+    // On the WRAP, so it takes the car's position and heading but none of its roll or dive: the
+    // patch lies on the road, and the road does not lean into the corner with the bodywork.
+    const contact = this.shadows.create()
+    if (contact) wrap.add(contact)
     this.group.add(wrap)
-    this.entries.set(id, { key, mesh, wrap, spun: { fl: 0, fr: 0, rl: 0, rr: 0 } })
+    this.entries.set(id, { key, mesh, wrap, contact, spun: { fl: 0, fr: 0, rl: 0, rr: 0 } })
   }
 
   drop(id: string): void {
@@ -133,16 +143,21 @@ export class CarField3D {
     const e = this.entries.get(id)
     if (!e) return
     e.wrap.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
+      // The contact patch is skipped deliberately. This walk turns `transparent` OFF at full
+      // opacity, which for a patch that is nothing BUT its alpha would draw a solid black rectangle
+      // under every car on the grid. It fades below, on its own terms.
+      if (o instanceof THREE.Mesh && o !== e.contact) {
         const m = o.material as THREE.Material
         m.transparent = opacity < 1
         m.opacity = opacity
       }
     })
+    if (e.contact) (e.contact.material as THREE.Material).opacity = opacity
   }
 
   dispose(): void {
     this.sweep(new Set())
+    this.shadows.dispose()
   }
 }
 
