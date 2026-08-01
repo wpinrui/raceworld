@@ -20,6 +20,7 @@ import { balanceAmbient, refitShadow } from '@/lib/scene3d/lighting3d'
 import {
   applyToneMapping, buildSky, refitFog, type SkyEnv,
 } from '@/lib/scene3d/sky3d'
+import { buildPost, type Post } from '@/lib/scene3d/post3d'
 import { GROUND_PAD, type World3D } from '@/lib/scene3d/world3d'
 
 export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, vb, ppu, metresPerUnit, camRef, camera, paintRef, className }: {
@@ -53,6 +54,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   const glRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
+    post: Post
   } | null>(null)
   // Read by the painter, which runs outside React: always the last committed props, never a
   // closure's snapshot of them. Synced by the dependency-less effect below, which commits before
@@ -89,7 +91,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
           radius: Math.min(vb.w, vb.h) / 2 + GROUND_PAD, metresPerUnit,
         })
       }
-      gl.renderer.render(gl.scene, camera)
+      gl.post.render()
     }
   }, [camRef, camera])
 
@@ -101,14 +103,17 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     applyToneMapping(renderer)
     const scene = new THREE.Scene()
-    glRef.current = { renderer, scene }
+    // MSAA moves to the composer's target: `antialias` above applies to the default framebuffer,
+    // which the composer no longer draws to.
+    glRef.current = { renderer, scene, post: buildPost(renderer, scene, camera) }
     // The same console handle the probe viewer exposes, on the live map.
     ;(window as unknown as { __scene3d?: THREE.Scene }).__scene3d = scene
     return () => {
+      glRef.current?.post.dispose()
       renderer.dispose()
       glRef.current = null
     }
-  }, [])
+  }, [camera])
 
   // The sky is baked, not drawn: it changes when the MOOD changes and never on a camera move. The
   // fog is born with it, carrying the sky's own measured horizon colour, and is refitted per paint.
@@ -188,6 +193,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       const { width, height } = box.getBoundingClientRect()
       gl.renderer.setPixelRatio(dpr)
       gl.renderer.setSize(Math.round(width), Math.round(height), true)
+      gl.post.setSize(Math.round(width), Math.round(height), dpr)
       paint()
     }
     fit()

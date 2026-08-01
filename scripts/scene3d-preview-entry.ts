@@ -28,6 +28,7 @@ import {
 } from '../src/lib/scene3d/sky3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { buildWorldDetail } from '../src/lib/scene3d/detail3d'
+import { buildPost } from '../src/lib/scene3d/post3d'
 import { buildWorld3D, GROUND_PAD } from '../src/lib/scene3d/world3d'
 
 declare global {
@@ -274,7 +275,9 @@ async function eyeShot() {
   const half = Math.hypot(frame.halfW, frame.halfH)
   refitShadow(built.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
   fitFog(built, camera)
-  renderer.render(built.scene, camera)
+  const post = buildPost(renderer, built.scene, camera)
+  post.setSize(w, h, 1)
+  post.render()
 
   window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
   window.__scene = built.scene
@@ -311,7 +314,9 @@ async function shotMain() {
   renderer.setSize(w, h, false)
   dressSky(built, q.get('mood') ?? 'afternoon')
   fitFog(built, camera)
-  renderer.render(built.scene, camera)
+  const post = buildPost(renderer, built.scene, camera)
+  post.setSize(w, h, 1)
+  post.render()
 
   window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
   window.__scene = built.scene
