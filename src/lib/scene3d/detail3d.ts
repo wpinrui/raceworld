@@ -198,19 +198,19 @@ export function buildWorldDetail(): WorldDetail {
 
   const tarmac: SurfaceDetail = {
     normalMap: normalTexture(tarmacHeight, 2.6),
-    albedoMap: scalarTexture(tarmacHeight, 0.82, 1),
+    albedoMap: scalarTexture(tarmacHeight, 0.9, 1),
     // A NARROW band, 0.68 to 0.9. The first attempt ran 0.5 to 0.98, and half a unit of roughness
     // between one chipping and the next is not aggregate, it is wet patches: the glossy end caught
     // the sky hard enough to read as puddles scattered over the circuit.
     roughnessMap: scalarTexture((x, y) => fbm(tarmacWear, x, y), 0.68, 0.9),
-    normalScale: 1.15,
+    normalScale: 0.45,
     tileM: 2.4,
   }
   const ground: SurfaceDetail = {
     normalMap: normalTexture((x, y) => fbm(clumps, x, y), 1.8),
-    albedoMap: scalarTexture((x, y) => fbm(clumps, x, y), 0.86, 1),
+    albedoMap: scalarTexture((x, y) => fbm(clumps, x, y), 0.92, 1),
     roughnessMap: null,
-    normalScale: 0.6,
+    normalScale: 0.3,
     tileM: 5.5,
   }
   return {
