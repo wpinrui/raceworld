@@ -60,7 +60,10 @@ function inkArgs(o: RoadOpts) {
  *  world can lay the same ink at its own lifts (#3d-port). */
 export function roadInkUnder(o: RoadOpts): DrawOp[] {
   const { ink, pitInk } = inkArgs(o)
-  const ops: DrawOp[] = []
+  // The pit lane's ink first, the circuit's over it: where the two roads meet (the exit's fade
+  // running across the track edge, the entry's grime under a braking zone) the MAIN ROAD's story
+  // wins, because the racing surface is the one the eye follows through the junction.
+  const ops: DrawOp[] = [...pitEdgeOps(pitInk)]
   if (ink) {
     ops.push(...edgeOps({
       ...ink,
@@ -70,16 +73,15 @@ export function roadInkUnder(o: RoadOpts): DrawOp[] {
       lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
     }))
   }
-  ops.push(...pitEdgeOps(pitInk))
   return ops
 }
 
-/** Worn into the tarmac, on top of the road and under the kerbs. */
+/** Worn into the tarmac, on top of the road and under the kerbs. Pit first here too: the lane's
+ *  wear never paints over the circuit's brake marks and marbles where the roads join. */
 export function roadInkOver(o: RoadOpts): DrawOp[] {
   const { ink, pitInk } = inkArgs(o)
-  const ops: DrawOp[] = []
+  const ops: DrawOp[] = [...pitSurfaceOps(pitInk)]
   if (ink) ops.push(...surfaceOps(ink))
-  ops.push(...pitSurfaceOps(pitInk))
   return ops
 }
 
