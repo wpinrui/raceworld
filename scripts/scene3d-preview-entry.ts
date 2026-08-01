@@ -15,6 +15,8 @@ import { CAR_RIDE_M, CarField3D } from '../src/lib/scene3d/car-field3d'
 import { PitCrew3D } from '../src/lib/scene3d/crew3d'
 import { buildGarageSigns3D } from '../src/lib/scene3d/signs3d'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
+import { gridBoxOps } from '../src/lib/ui/road-marks'
+import type { DrawOp } from '../src/lib/ui/scenery-draw'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
 import { roadLap, solveLap } from '../src/lib/ui/lap-solve'
@@ -49,6 +51,16 @@ declare global {
     __camera?: THREE.Camera
     __THREE?: typeof THREE
     __renderer?: THREE.WebGLRenderer
+    /** The output chain the shot was composited through, so a probe can re-run it after poking the
+     *  scene and compare it against a straight `renderer.render`. */
+    __post?: { render(): void }
+    /** Re-drive the eye shot's orbit camera: the live `paint`'s camera, shadow and fog work, so a
+     *  probe can sweep viewpoints over one built circuit. */
+    __orbit?: (next: Partial<OrbitCam>, size?: { w: number; h: number }) => void
+    /** The padded whole-circuit box the orbit's target is addressed in. */
+    __full?: ViewBox3D
+    /** Where the front row parks, so a probe can point at the grid without hunting for it. */
+    __gridAt?: { x: number; z: number } | null
   }
 }
 
@@ -67,6 +79,42 @@ interface BuiltScene {
   /** The rig's hemisphere, so a mounted environment map can stand it down. */
   sky: THREE.HemisphereLight
   stats: { meshes: number; triangles: number }
+}
+
+/** The START's road paint, exactly as `RaceTrackMap` derives it: boxes read off the SAME path
+ *  element and the same arc formula the car frames use. Handed to the world as its `overlay`, which
+ *  is the one input the probe's scene was missing against the live one. */
+function gridOverlayOps(layout: TrackLayout, n: number): DrawOp[] {
+  if (n <= 0) return []
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', layout.d)
+  const total = path.getTotalLength()
+  const uw = (m: number) => m / layout.metresPerUnit
+  const boxes = Array.from({ length: n }, (_, i) => {
+    const back = uw(3 + i * 8)
+    const dist = (((total - back) % total) + total) % total
+    const pt = path.getPointAtLength(dist)
+    const ahead = path.getPointAtLength((dist + uw(8)) % total)
+    const rot = Math.atan2(ahead.y - pt.y, ahead.x - pt.x)
+    const lat = uw(1.7) * (i % 2 === 0 ? 1 : -1)
+    return {
+      x: pt.x - Math.sin(rot) * lat,
+      y: pt.y + Math.cos(rot) * lat,
+      deg: (rot * 180) / Math.PI,
+    }
+  })
+  return gridBoxOps(boxes, uw)
+}
+
+/** Where the pole box sits, for a probe that wants to look at the grid. */
+function gridAt(layout: TrackLayout, n: number): { x: number; z: number } | null {
+  if (n <= 0) return null
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', layout.d)
+  const total = path.getTotalLength()
+  const back = 3 / layout.metresPerUnit
+  const pt = path.getPointAtLength((((total - back) % total) + total) % total)
+  return { x: pt.x, z: pt.y }
 }
 
 function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene {
@@ -92,6 +140,9 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   const world = buildWorld3D({
     layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting,
     textures, detail, frame: frame ?? full,
+    // The live view's grid paint. Absent from this probe until it turned out to be the one thing
+    // the live scene builds and this one did not.
+    overlay: gridOverlayOps(layout, Number(q.get('grid') ?? '0')),
     night: moodName === 'night',
     // The same stand-in names the 2D preview letters its boards with.
     extras: () => (pitZone
@@ -278,6 +329,22 @@ async function eyeShot() {
   const post = buildPost(renderer, built.scene, camera)
   post.setSize(w, h, 1)
   post.render()
+  window.__post = post
+
+  // The whole orbit, re-drivable from a probe: same `applyOrbitCam`, same shadow refit, same fog
+  // refit, i.e. everything `Scene3DCanvas.paint` does per camera move. A probe hunting an artifact
+  // has to sweep viewpoints, and rebuilding the circuit for each one costs seconds apiece.
+  window.__orbit = (next, size) => {
+    Object.assign(cam, next)
+    const vw = size?.w ?? renderer.domElement.width / renderer.getPixelRatio()
+    const vh = size?.h ?? renderer.domElement.height / renderer.getPixelRatio()
+    const f = applyOrbitCam(camera, cam, { w: vw, h: vh }, vw / full.w)
+    const r = Math.hypot(f.halfW, f.halfH)
+    refitShadow(built.sun, { x: f.cx - r, y: f.cz - r, w: 2 * r, h: 2 * r })
+    fitFog(built, camera)
+  }
+  window.__full = full
+  window.__gridAt = gridAt(layout, Number(q.get('grid') ?? '0'))
 
   window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
   window.__scene = built.scene
@@ -317,6 +384,7 @@ async function shotMain() {
   const post = buildPost(renderer, built.scene, camera)
   post.setSize(w, h, 1)
   post.render()
+  window.__post = post
 
   window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
   window.__scene = built.scene
