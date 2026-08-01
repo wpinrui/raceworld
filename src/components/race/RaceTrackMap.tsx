@@ -1202,15 +1202,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
   // The tile textures the stands' decks wear, built once per mount: a document is guaranteed here.
   const worldTextures = useMemo(() => buildWorldTextures(), [])
-  // The garage name boards, in-scene (#3d-port increment 5): the last real TEXT and flag artwork on
-  // the map, drawn to board textures standing in each bay's mouth. Memoised because nothing about
-  // who is signed above a garage changes during a race.
-  const signs3d = useMemo(
-    () => (view === 'live' && pitZone
-      ? buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [])
-      : null),
-    [view, pitZone, u, garageCars],
-  )
+  // The garage name boards build INSIDE the world (below), per invocation: a memo-held group here
+  // got silently stolen by StrictMode's double-invoked world build re-parenting it.
   // The car field and the pit crew are GL RESOURCES with a StrictMode trap: dev mounts every effect
   // twice, and a cleanup that disposes the memo-held instance guts the very object the remount then
   // reuses. That is exactly how the whole pit lane (pad, markings, booms, crew) silently vanished
@@ -1284,10 +1277,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       frame: vb,
       overlay: gridOverlay,
       garageColors: (gi) => slotOf.colors[gi],
-      extras: signs3d ? [signs3d] : [],
+      extras: () => (pitZone ? [buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [])] : []),
       night: mood === 'night',
     })
-  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, vb, gridOverlay, slotOf, signs3d, mood])
+  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, vb, gridOverlay, slotOf, u, garageCars, mood])
   // The painter repaints when the CAMERA moves; anything that changes the picture WITHOUT one has to
   // ask: a freshly built world, or the STAGE being measured or resized (it is half of
   // pixels-per-metre).

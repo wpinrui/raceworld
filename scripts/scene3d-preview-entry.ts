@@ -74,12 +74,12 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     textures, frame: frame ?? full,
     night: moodName === 'night',
     // The same stand-in names the 2D preview letters its boards with.
-    extras: pitZone
+    extras: () => (pitZone
       ? [buildGarageSigns3D(pitZone, (m) => m / mpu, () => [
         { name: 'Kimi Raikkonen', nationality: 'FI' },
         { name: 'Felipe Massa', nationality: 'BR' },
       ])]
-      : [],
+      : []),
   })
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(scenery.base)

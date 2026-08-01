@@ -65,8 +65,11 @@ export interface World3DInput {
   overlay?: DrawOp[]
   /** A team's colour on its own garage floor and lintel, as the 2D pit complex wears it. */
   garageColors?: (i: number) => string | undefined
-  /** Prebuilt browser-side pieces mounted with the world: the garage boards. */
-  extras?: THREE.Object3D[]
+  /** Browser-side pieces mounted with the world (the garage boards), BUILT PER CALL. A prebuilt
+   *  shared instance is a StrictMode trap: dev double-invokes the memoised build and keeps the
+   *  FIRST world, but `add()` re-parents a shared object into the SECOND, discarded one, and the
+   *  boards silently leave the scene. A builder gives every invocation its own copy. */
+  extras?: () => THREE.Object3D[]
   /** Night dressing: floodlight towers with their pooled light, and the town's windows lit. */
   night?: boolean
 }
@@ -159,7 +162,7 @@ export function buildWorld3D(
   group.add(buildStructures3D(scenery, u, materials, textures, night))
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
   if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
-  for (const extra of extras ?? []) group.add(extra)
+  for (const extra of extras?.() ?? []) group.add(extra)
   const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
   group.add(rig)
   const sun = rig.children.find((o): o is THREE.DirectionalLight => o instanceof THREE.DirectionalLight)!

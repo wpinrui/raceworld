@@ -76,7 +76,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camR
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
-    glRef.current = { renderer, scene: new THREE.Scene() }
+    const scene = new THREE.Scene()
+    glRef.current = { renderer, scene }
+    // The same console handle the probe viewer exposes, on the live map.
+    ;(window as unknown as { __scene3d?: THREE.Scene }).__scene3d = scene
     return () => {
       renderer.dispose()
       glRef.current = null

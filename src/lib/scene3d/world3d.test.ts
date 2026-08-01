@@ -108,6 +108,26 @@ describe('buildWorld3D', () => {
     expect(colours).not.toContain('2a2f38')
   })
 
+  it('gives every invocation its own extras, so a double-invoked build cannot steal them', () => {
+    // StrictMode double-invokes memo factories and keeps the FIRST result; extras must therefore
+    // be built per call, or the discarded second world re-parents the shared group out of the
+    // kept one. The regression that emptied the garage boards from every dev session.
+    const built: THREE.Group[] = []
+    const extras = () => {
+      const g = new THREE.Group()
+      built.push(g)
+      return [g]
+    }
+    const first = buildWorld3D({
+      layout, scenery, pitZone, pitSlots, lap: null, lighting: MOODS.afternoon, extras,
+    })
+    buildWorld3D({
+      layout, scenery, pitZone, pitSlots, lap: null, lighting: MOODS.afternoon, extras,
+    })
+    expect(built).toHaveLength(2)
+    expect(built[0].parent).toBe(first.group)
+  })
+
   it('lays the driven-in ink as ordered decals that never write depth', () => {
     let decals = 0
     let maxOrder = 0
