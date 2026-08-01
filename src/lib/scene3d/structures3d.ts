@@ -52,12 +52,9 @@ export function buildBuildings3D(
   const group = new THREE.Group()
   // At night the same glazing grid turns to warm lit windows: emissive, unlit-by-design, the one
   // thing a dark town supplies its own light for.
-  const nightGlass = night ? new THREE.MeshBasicMaterial({
-    color: '#E8C976', side: THREE.DoubleSide,
-  }) : null
-  // Over white, so a lit window spills a little the way a real one does through glass. Gentler than
-  // the floodlights: this is a room behind a pane, not a lamp pointed at a circuit.
-  nightGlass?.color.multiplyScalar(1.3)
+  const nightGlass = night
+    ? new THREE.MeshBasicMaterial({ color: '#E8C976', side: THREE.DoubleSide })
+    : null
   for (const b of buildings) {
     const parts = partsOf(b)
     const h = u((b.storeys ?? 1) * STOREY_M)

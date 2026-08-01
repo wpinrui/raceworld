@@ -20,9 +20,6 @@ const POOL_R_M = 16
 const MAST = '#3A4049'
 const HEAD_GLOW = '#F2EBD4'
 
-/** How far past white a floodlight head sits, for the bloom to have something to catch. */
-const HEAD_OVERDRIVE = 2.4
-
 export function buildNightLights3D(
   layout: TrackLayout, glowPool: THREE.Texture | null,
 ): THREE.Group {
@@ -69,13 +66,10 @@ export function buildNightLights3D(
   const mastMesh = new THREE.Mesh(masts.build(), surface(MAST, { roughness: ROUGH.paint }))
   mastMesh.castShadow = true
   group.add(mastMesh)
-  // The heads are LIT, not lit-upon, and lit HARDER than white. A colour is capped at 1 per channel
-  // by the notation, but a floodlight is not: pushed past 1 it clears the bloom threshold and spills
-  // a halo, which is the difference between a lamp and a bright rectangle. Nothing else in a night
-  // scene is over 1, so this is the only thing that blooms.
-  const headMat = new THREE.MeshBasicMaterial({ color: HEAD_GLOW, side: THREE.DoubleSide })
-  headMat.color.multiplyScalar(HEAD_OVERDRIVE)
-  group.add(new THREE.Mesh(heads.build(), headMat))
+  // The heads are LIT, not lit-upon: flat emissive white, the one thing night leaves at full level.
+  group.add(new THREE.Mesh(heads.build(), new THREE.MeshBasicMaterial({
+    color: HEAD_GLOW, side: THREE.DoubleSide,
+  })))
   if (glowPool) {
     const poolGeo = new THREE.PlaneGeometry(2 * u(POOL_R_M), 2 * u(POOL_R_M)).rotateX(-Math.PI / 2)
     const poolMat = new THREE.MeshBasicMaterial({
