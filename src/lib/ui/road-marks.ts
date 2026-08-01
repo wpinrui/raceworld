@@ -93,10 +93,13 @@ export function gridBoxOps(
   for (const b of boxes) {
     const rad = (b.deg * Math.PI) / 180
     const o = { x: b.x, y: b.y, cos: Math.cos(rad), sin: Math.sin(rad) }
+    // The crossbars stop a hair short of the leg instead of running under it: the 3D fill
+    // triangulates subpaths even-odd, and rects overlapping corner-on-edge flip between contour
+    // and hole by rotation noise, which filled SOME boxes' U solid. 5mm reads as one paint.
     white.push(
       rectPath(o, u(2.49), -u(1.7), u(0.25), u(3.4)),
-      rectPath(o, u(0.35), -u(1.7), u(2.39), u(0.25)),
-      rectPath(o, u(0.35), u(1.45), u(2.39), u(0.25)),
+      rectPath(o, u(0.35), -u(1.7), u(2.135), u(0.25)),
+      rectPath(o, u(0.35), u(1.45), u(2.135), u(0.25)),
     )
     yellow.push(rectPath(o, u(1.31), u(1.2), u(0.18), u(1.6)))
   }

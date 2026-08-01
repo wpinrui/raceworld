@@ -63,4 +63,21 @@ describe('ringsToPolys', () => {
     const outer = polys.find((p) => p.contour.length && p.contour[0].x === 0)!
     expect(outer.holes).toHaveLength(1)
   })
+
+  it('never turns a starting-box U into a hole, whatever the box rotation', () => {
+    // A grid box is a leg and two crossbars whose corners land ON each other's edges; the old
+    // vertex-probe ray cast classified those by float noise, filling SOME boxes' U solid.
+    for (const deg of [0, 17, 45, 63, 90, 131, 200, 287]) {
+      const rad = (deg * Math.PI) / 180
+      const o = { x: 40, y: 25, cos: Math.cos(rad), sin: Math.sin(rad) }
+      const rect = (x: number, y: number, w: number, h: number) => [
+        { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h },
+      ].map((p) => ({ x: o.x + p.x * o.cos - p.y * o.sin, y: o.y + p.x * o.sin + p.y * o.cos }))
+      const polys = ringsToPolys([
+        rect(2.49, -1.7, 0.25, 3.4), rect(0.35, -1.7, 2.135, 0.25), rect(0.35, 1.45, 2.135, 0.25),
+      ])
+      expect(polys, `rotation ${deg}`).toHaveLength(3)
+      expect(polys.every((p) => p.holes.length === 0), `rotation ${deg}`).toBe(true)
+    }
+  })
 })

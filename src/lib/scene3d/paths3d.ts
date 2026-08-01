@@ -99,9 +99,10 @@ export function samplePathRings(d: string, quadSegs = QUAD_SEGS): Vec[][] {
   return samplePathPolys(d, quadSegs).filter((p) => p.pts.length >= 3).map((p) => p.pts)
 }
 
-/** Is the point inside the ring, by ray cast? On-edge behaviour is unspecified, which is fine for
- *  containment-depth grouping: representative points are taken from ring vertices, never on another
- *  ring's edge. */
+/** Is the point inside the ring, by ray cast? On-edge behaviour is unspecified, so containment
+ *  probes must come from a ring's INTERIOR, never its vertices: subpaths are allowed to overlap
+ *  (a grid box is three overlapping rects) and a vertex ON another ring's edge classifies by
+ *  float noise. */
 export function pointInRing(p: Vec, ring: Vec[]): boolean {
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -128,8 +129,25 @@ export function ringsToPolys(rings: Vec[][]): PolyWithHoles[] {
     }
     return Math.abs(a / 2)
   }
+  // A ring's representative point, just INSIDE it: the first edge's midpoint stepped a hair off
+  // the boundary, to whichever side the ring itself claims. A vertex will not do: grid boxes are
+  // overlapping rects whose corners land exactly on each other's edges, and the on-edge ray cast
+  // flips by rotation, which is how SOME starting boxes filled their U solid.
+  const probe = (ring: Vec[]): Vec => {
+    const a = ring[0]
+    const b = ring[1]
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    const eps = Math.max(len, 1) * 1e-4
+    const mx = (a.x + b.x) / 2
+    const my = (a.y + b.y) / 2
+    const nx = (-(b.y - a.y) / len) * eps
+    const ny = ((b.x - a.x) / len) * eps
+    const side = { x: mx + nx, y: my + ny }
+    return pointInRing(side, ring) ? side : { x: mx - nx, y: my - ny }
+  }
   const meta = rings.map((ring) => {
-    const parents = rings.filter((other) => other !== ring && pointInRing(ring[0], other))
+    const p = probe(ring)
+    const parents = rings.filter((other) => other !== ring && pointInRing(p, other))
     return { ring, area: area(ring), depth: parents.length, parents }
   })
   const polys = new Map<Vec[], PolyWithHoles>()
