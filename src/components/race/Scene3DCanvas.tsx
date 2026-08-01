@@ -13,12 +13,12 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import type { Camera, ViewBox } from '@/lib/ui/geom'
-import { applyLiveCam } from '@/lib/scene3d/camera3d'
+import type { ViewBox } from '@/lib/ui/geom'
+import { applyOrbitCam, type OrbitCam } from '@/lib/scene3d/camera3d'
 import { refitShadow } from '@/lib/scene3d/lighting3d'
 import type { World3D } from '@/lib/scene3d/world3d'
 
-export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camRef, paintRef, className }: {
+export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camRef, camera, paintRef, className }: {
   world: World3D | null
   /** The live car field, mounted beside the world so a circuit rebuild never drops the cars. */
   carsGroup?: THREE.Group | null
@@ -29,8 +29,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camR
   vb: ViewBox
   /** Stage pixels per viewBox unit at zoom 1: half of the camera's scale, the stage's letterbox fit. */
   ppu: number
-  /** The map's camera, read imperatively on every paint. */
-  camRef: React.RefObject<Camera>
+  /** The map's orbit state, read imperatively on every paint. */
+  camRef: React.RefObject<OrbitCam>
+  /** The one perspective camera, owned by the map so its loop can project the DOM overlay with it. */
+  camera: THREE.PerspectiveCamera
   /** The map's painter slot: assigned here, called from `applyCam` outside React. */
   paintRef: React.MutableRefObject<() => void>
   className?: string
@@ -40,7 +42,6 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camR
   const glRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
-    camera: THREE.OrthographicCamera
   } | null>(null)
   // Read by the painter, which runs outside React: always the last committed props, never a
   // closure's snapshot of them. Synced by the dependency-less effect below, which commits before
@@ -51,23 +52,23 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camR
     const gl = glRef.current
     const cam = camRef.current
     const canvas = canvasRef.current
-    const { world, base, vb, ppu } = stateRef.current
+    const { world, base, ppu } = stateRef.current
     if (!gl || !cam || !canvas) return
     const w = canvas.clientWidth
     const h = canvas.clientHeight
     if (w === 0 || h === 0) return
     gl.scene.background = new THREE.Color(base)
     if (world) {
-      const frame = applyLiveCam(gl.camera, cam, vb, { w, h }, ppu)
+      const frame = applyOrbitCam(camera, cam, { w, h }, ppu)
       // The shadow box wraps the framed extent with roll slack: a rotated viewport's world
       // footprint is its diagonal, and a box fitted to the unrotated frame clips corner shadows.
       const half = Math.hypot(frame.halfW, frame.halfH)
       refitShadow(world.sun, {
         x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half,
       })
-      gl.renderer.render(gl.scene, gl.camera)
+      gl.renderer.render(gl.scene, camera)
     }
-  }, [camRef])
+  }, [camRef, camera])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -75,7 +76,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, vb, ppu, camR
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
-    glRef.current = { renderer, scene: new THREE.Scene(), camera: new THREE.OrthographicCamera() }
+    glRef.current = { renderer, scene: new THREE.Scene() }
     return () => {
       renderer.dispose()
       glRef.current = null

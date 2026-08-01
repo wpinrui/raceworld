@@ -10,6 +10,21 @@ export interface ViewBox3D { x: number; y: number; w: number; h: number }
 /** The map's camera, as `RaceTrackMap` holds it: viewport-pixel pan, zoom, radians of roll. */
 export interface LiveCam { x: number; y: number; z: number; rot: number }
 
+/** The live view's free camera (#3d-port increment 5): a target on the ground, orbited. `rot` keeps
+ *  the old roll's meaning exactly; `pitch` is new, 0 = straight down. `z` keeps the old zoom's
+ *  meaning: stage pixels per world unit at the target, through the stage's own ppu. */
+export interface OrbitCam {
+  tx: number
+  tz: number
+  rot: number
+  /** Radians off vertical, 0 = top-down. */
+  pitch: number
+  z: number
+}
+
+/** The perspective's vertical field of view. Narrow-ish: the map is a diorama, not an action cam. */
+const LIVE_FOV = 35
+
 /** Parse an SVG "x y w h" viewBox, padded on every side. */
 export function parseViewBox(s: string, pad = 0): ViewBox3D {
   const [x, y, w, h] = s.split(' ').map(Number)
@@ -46,6 +61,49 @@ export interface LiveFrame {
   /** Frustum half-extents in world units. */
   halfW: number
   halfH: number
+}
+
+/** Drive the live PerspectiveCamera from the orbit state. At pitch 0 it looks straight down from
+ *  the distance that makes ground points project EXACTLY as the old orthographic transform did
+ *  (every ground point sits at the same view depth, so the perspective divide is one uniform
+ *  scale), which is what lets the DOM overlay keep riding the same numbers. Pitching leans the
+ *  camera in from screen-south of the target, orbiting it. */
+export function applyOrbitCam(
+  camera: THREE.PerspectiveCamera, cam: OrbitCam, size: { w: number; h: number }, ppu: number,
+): LiveFrame {
+  const scale = cam.z * ppu
+  const halfW = size.w / 2 / scale
+  const halfH = size.h / 2 / scale
+  const distance = halfH / Math.tan(((LIVE_FOV / 2) * Math.PI) / 180)
+  const sin = Math.sin(cam.rot)
+  const cos = Math.cos(cam.rot)
+  const lean = Math.sin(cam.pitch) * distance
+  camera.fov = LIVE_FOV
+  camera.aspect = size.w / size.h
+  camera.near = Math.max(0.05, distance * 0.02)
+  camera.far = distance * 60
+  camera.position.set(cam.tx + lean * sin, Math.cos(cam.pitch) * distance, cam.tz + lean * cos)
+  camera.up.set(-sin, 0, -cos)
+  camera.lookAt(cam.tx, 0, cam.tz)
+  camera.updateProjectionMatrix()
+  camera.updateMatrixWorld(true)
+  // The ground rect in shot, generously: pitching stretches the far half of the view across more
+  // world than the frustum's target-plane cut, and the shadow box must cover what is seen.
+  const reach = 1 / Math.max(0.35, Math.cos(cam.pitch))
+  return { cx: cam.tx, cz: cam.tz, halfW: halfW * reach, halfH: halfH * reach }
+}
+
+/** Where a viewport pixel's ray meets the ground, for zoom-at-pointer and any picking to come. */
+export function groundPoint(
+  camera: THREE.PerspectiveCamera, size: { w: number; h: number }, px: number, py: number,
+): { x: number; z: number } | null {
+  const ndc = new THREE.Vector3((px / size.w) * 2 - 1, 1 - (py / size.h) * 2, 0.5)
+  ndc.unproject(camera)
+  const dir = ndc.sub(camera.position).normalize()
+  if (Math.abs(dir.y) < 1e-9) return null
+  const t = -camera.position.y / dir.y
+  if (t <= 0) return null
+  return { x: camera.position.x + dir.x * t, z: camera.position.z + dir.z * t }
 }
 
 /** Drive an orthographic camera from the map's own transform. The 2D pipeline is

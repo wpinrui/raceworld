@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { applyLiveCam, frameOrtho, parseViewBox, type LiveCam } from './camera3d'
+import {
+  applyLiveCam, applyOrbitCam, frameOrtho, groundPoint, parseViewBox,
+  type LiveCam, type OrbitCam,
+} from './camera3d'
 
 describe('parseViewBox', () => {
   it('pads every side', () => {
@@ -85,6 +88,51 @@ describe('applyLiveCam', () => {
         expect(b.y).toBeCloseTo(a.y, 3)
       }
     }
+  })
+
+  it('projects ground points at pitch 0 exactly as the orthographic transform did', () => {
+    // Straight down, every ground point sits at the same view depth, so the perspective divide is
+    // one uniform scale: the DOM overlay keeps riding the very same numbers through the tilt-less
+    // default. This is the continuity proof for the perspective swap.
+    const vb = { x: -10, y: -18, w: 282, h: 460 }
+    const size = { w: 1280, h: 720 }
+    const ppu = 3.1
+    const ortho = new THREE.OrthographicCamera()
+    const persp = new THREE.PerspectiveCamera()
+    const cams: Array<[LiveCam, OrbitCam]> = [
+      [{ x: 0, y: 0, z: 2, rot: 0.7 }, { tx: 0, tz: 0, rot: 0.7, pitch: 0, z: 2 }],
+      [{ x: 0, y: 0, z: 9, rot: -1.9 }, { tx: 0, tz: 0, rot: -1.9, pitch: 0, z: 9 }],
+    ]
+    const points = [{ x: 40, y: 12 }, { x: -3, y: -80 }, { x: 55, y: 61 }]
+    for (const [live, orbit] of cams) {
+      // Same target: the live cam's pan is zero, so its target is the vb centre; aim the orbit there.
+      applyLiveCam(ortho, live, vb, size, ppu)
+      applyOrbitCam(persp, { ...orbit, tx: vb.x + vb.w / 2, tz: vb.y + vb.h / 2 }, size, ppu)
+      for (const p of points) {
+        const a = new THREE.Vector3(p.x, 0, p.y).project(ortho)
+        const b = new THREE.Vector3(p.x, 0, p.y).project(persp)
+        expect(b.x).toBeCloseTo(a.x, 5)
+        expect(b.y).toBeCloseTo(a.y, 5)
+      }
+    }
+  })
+
+  it('pitches in from screen-south of the target and unprojects the centre back to it', () => {
+    const persp = new THREE.PerspectiveCamera()
+    const cam: OrbitCam = { tx: 120, tz: 300, rot: 0, pitch: 0.6, z: 4 }
+    const size = { w: 1000, h: 700 }
+    applyOrbitCam(persp, cam, size, 2)
+    expect(persp.position.z).toBeGreaterThan(300)
+    expect(persp.position.y).toBeGreaterThan(0)
+    const centre = groundPoint(persp, size, 500, 350)!
+    expect(centre.x).toBeCloseTo(120, 4)
+    expect(centre.z).toBeCloseTo(300, 4)
+    // A pixel above centre lands FURTHER up the world than one below by the foreshortening.
+    const upPx = groundPoint(persp, size, 500, 250)!
+    const downPx = groundPoint(persp, size, 500, 450)!
+    const dUp = Math.hypot(upPx.x - 120, upPx.z - 300)
+    const dDown = Math.hypot(downPx.x - 120, downPx.z - 300)
+    expect(dUp).toBeGreaterThan(dDown)
   })
 
   it('reports the framed world rect for the shadow refit', () => {

@@ -7,7 +7,9 @@ import { gridBoxOps, startLineOps, startPose } from '@/lib/ui/road-marks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
 import { MOODS } from '@/lib/ui/lighting'
 import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
+import * as THREE from 'three'
 import { Scene3DCanvas } from './Scene3DCanvas'
+import { groundPoint, type OrbitCam } from '@/lib/scene3d/camera3d'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
@@ -66,6 +68,12 @@ const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
 const ZOOM_MIN = 0.6 // full-track view
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
+/** How far the camera can lie down, radians off vertical: enough for drama, never at the horizon. */
+const PITCH_MAX = 1.05
+
+/** Projection scratch, written and read within one rAF pass. */
+const projA = new THREE.Vector3()
+const projB = new THREE.Vector3()
 
 /** Show or hide an element.
  *
@@ -177,11 +185,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const worldRef = useRef<HTMLDivElement>(null)
   const stageDimsRef = useRef({ w: 0, h: 0 })
   const [stage, setStage] = useState({ w: 0, h: 0 })
+  // The padded viewBox, mirrored for the imperative camera code declared above its memo.
+  const vbRef = useRef({ x: 0, y: 0, w: 1, h: 1 })
 
-  // Camera: pan (px), zoom, rotation â€” applied as one transform on the world layer. While following,
-  // the pan is owned by the follow logic; dragging breaks the lock and pans freely.
+  // Camera (#3d-port increment 5): an orbit around a ground target. Left-drag tilts and turns it,
+  // keeping any follow lock (you orbit the car you are chasing); middle-drag pans the free camera,
+  // which is what breaks the lock; a plain click on empty ground breaks it too. The one
+  // PerspectiveCamera below is shared with the GL canvas, so the loop projects the DOM overlay
+  // through exactly the camera the world was drawn with.
   const defaultRot = useMemo(() => pitCameraRotation(layout) ?? 0, [layout])
-  const camRef = useRef({ x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot })
+  const camRef = useRef<OrbitCam>({ tx: 0, tz: 0, rot: defaultRot, pitch: 0, z: ZOOM_DEFAULT })
+  const glCamera = useMemo(() => new THREE.PerspectiveCamera(), [])
+  const zoomReadRef = useRef<HTMLSpanElement>(null)
   // The sun is fixed to the circuit, standardised against the pit complex so the light
   // falls the same way on every track; it must NOT move with the camera, or shadows would sit still
   // on screen while the world turned under them, which reads as the sun following the player.
@@ -199,20 +214,23 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const [x, y, w, h] = layout.viewBox.split(' ').map(Number)
     return { x: x - m, y: y - m, w: w + 2 * m, h: h + 2 * m }
   }, [layout.viewBox, layout.metresPerUnit])
+  useEffect(() => { vbRef.current = vb }, [vb])
 
   // Painting the canvas is defined further down, once the scene exists; `applyCam` reaches it through
   // this ref so the two can be declared in whichever order they need to be.
   const paintRef = useRef<() => void>(() => {})
 
+  // A camera move never touches the DOM tree any more: the markers are projected by the loop, the
+  // world div carries no transform, and this just repaints the GL frame and the zoom readout.
   const applyCam = useCallback(() => {
-    const world = worldRef.current
-    if (!world) return
-    const { x, y, z, rot } = camRef.current
-    world.style.transform = `translate(${x}px, ${y}px) rotate(${rot}rad) scale(${z})`
-    world.style.setProperty('--cam-rot', `${rot}rad`)
-    world.style.setProperty('--cam-zoom-inv', String(1 / z))
+    const read = zoomReadRef.current
+    if (read && viewRef.current !== 'map') {
+      const pxPerM = (camRef.current.z * (stageDimsRef.current.w / vbRef.current.w))
+        / layout.metresPerUnit
+      read.textContent = `${pxPerM >= 10 ? Math.round(pxPerM) : pxPerM.toFixed(1)} px/m`
+    }
     paintRef.current()
-  }, [])
+  }, [layout.metresPerUnit])
 
   // Real-world metres -> viewBox units for this track.
   // Memoised: the scene and its paints are keyed on it, and a fresh closure every render would
@@ -353,39 +371,39 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (viewRef.current === 'map') return // the map view is static
       const cam = camRef.current
       if (e.shiftKey) {
-        const delta = e.deltaY > 0 ? ROT_STEP : -ROT_STEP
-        cam.rot += delta
-        const cos = Math.cos(delta)
-        const sin = Math.sin(delta)
-        const { x, y } = cam
-        cam.x = x * cos - y * sin
-        cam.y = x * sin + y * cos
+        // Orbiting the target, a rotation is just a rotation.
+        cam.rot += e.deltaY > 0 ? ROT_STEP : -ROT_STEP
       } else {
-        const stageEl = stageRef.current
-        if (!stageEl) return
-        const rect = stageEl.getBoundingClientRect()
-        const { w, h } = stageDimsRef.current
-        const qx = e.clientX - rect.left - (rect.width / 2 - w / 2) - w / 2
-        const qy = e.clientY - rect.top - (rect.height / 2 - h / 2) - h / 2
+        // Zoom about the pointer: the ground point under it stays under it, at any pitch, by
+        // sliding the target along the line joining it to that point.
+        const rect = outer.getBoundingClientRect()
+        const q = groundPoint(
+          glCamera, { w: rect.width, h: rect.height },
+          e.clientX - rect.left, e.clientY - rect.top,
+        )
         const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.z * (e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP)))
-        const k = nz / cam.z
-        cam.x = qx - k * (qx - cam.x)
-        cam.y = qy - k * (qy - cam.y)
+        if (q) {
+          const k = cam.z / nz
+          cam.tx = q.x + (cam.tx - q.x) * k
+          cam.tz = q.z + (cam.tz - q.z) * k
+        }
         cam.z = nz
       }
       applyCam()
     }
     outer.addEventListener('wheel', onWheel, { passive: false })
     return () => outer.removeEventListener('wheel', onWheel)
-  }, [applyCam])
+  }, [applyCam, glCamera])
 
-  const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean; mode: 'pan' | 'rotate' } | null>(null)
+  const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean; mode: 'pan' | 'orbit' } | null>(null)
   const suppressClickRef = useRef(false)
   const onPointerDown = (e: React.PointerEvent) => {
     if (view === 'map') return
     if (e.button === 1) e.preventDefault() // no middle-click autoscroll
     if (e.button !== 0 && e.button !== 1) return
-    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, mode: e.button === 1 ? 'rotate' : 'pan' }
+    // Left-drag ORBITS (tilt and turn, keeping any follow lock: you pivot around the car you are
+    // chasing); middle-drag pans the free camera, which is what breaks the lock.
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false, mode: e.button === 1 ? 'pan' : 'orbit' }
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current
@@ -395,7 +413,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (!drag.moved && Math.hypot(dx, dy) < 3) return
     if (!drag.moved) {
       drag.moved = true
-      // Only PANNING breaks the follow lock; rotation orbits the followed car.
       if (drag.mode === 'pan') {
         followRef.current = null
         onFollow(null)
@@ -403,17 +420,18 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       outerRef.current?.setPointerCapture(e.pointerId)
     }
     const cam = camRef.current
-    if (drag.mode === 'rotate') {
-      const delta = dx * 0.005
-      cam.rot += delta
-      const cos = Math.cos(delta)
-      const sin = Math.sin(delta)
-      const { x, y } = cam
-      cam.x = x * cos - y * sin
-      cam.y = x * sin + y * cos
+    if (drag.mode === 'orbit') {
+      cam.rot += dx * 0.005
+      cam.pitch = Math.max(0, Math.min(PITCH_MAX, cam.pitch + dy * 0.005))
     } else {
-      cam.x += dx
-      cam.y += dy
+      // The world follows the finger: the target moves against the drag, foreshortening included.
+      const scale = cam.z * (stageDimsRef.current.w / vbRef.current.w)
+      const cos = Math.cos(cam.rot)
+      const sin = Math.sin(cam.rot)
+      const gx = dx
+      const gy = dy / Math.max(0.25, Math.cos(cam.pitch))
+      cam.tx -= (gx * cos + gy * sin) / scale
+      cam.tz -= (-gx * sin + gy * cos) / scale
     }
     drag.x = e.clientX
     drag.y = e.clientY
@@ -440,9 +458,8 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (!el) { elRefs.current.delete(id); return }
       elRefs.current.set(id, el)
       const p = posRef.current.get(id) // keep the last spot across re-renders (commit, not render)
-      const { w, h } = stageDimsRef.current
-      el.style.transform = p && w
-        ? `translate(${(p.left / 100) * w}px, ${(p.top / 100) * h}px) translate(-50%, -50%)`
+      el.style.transform = p
+        ? `translate(${p.left}px, ${p.top}px) translate(-50%, -50%)`
         : 'translate(-50%, -50%)'
     }
     markerCbs.current.set(id, cb)
@@ -479,24 +496,26 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     if (followRef.current !== id) onFollow(id)
   }
 
-  // Reset ZOOM only: keep the pan (or the follow lock) and rotation exactly as they are.
+  // Reset the VIEW: default zoom, top-down, opening bearing; keep the target (and any follow lock).
   const resetZoom = () => {
-    camRef.current = { ...camRef.current, z: ZOOM_DEFAULT }
+    camRef.current = { ...camRef.current, z: ZOOM_DEFAULT, pitch: 0, rot: defaultRot }
     applyCam()
   }
 
-  // Camera per view: 'map' is the static full-track fit (the stage IS the whole track at zoom 1).
-  // The LIVE camera (zoom/pan/rotation) is saved on the way out and restored on the way back, so
-  // flipping views never loses where the player was. Also applies the initial camera on mount.
-  const savedCamRef = useRef<{ x: number; y: number; z: number; rot: number } | null>(null)
+  // Camera per view: 'map' is the static full-track fit and mounts no GL. The LIVE camera is saved
+  // on the way out and restored on the way back, so flipping views never loses where the player
+  // was. Also applies the initial camera on mount, aimed at the circuit's centre.
+  const savedCamRef = useRef<OrbitCam | null>(null)
   useEffect(() => {
     if (view === 'map' && viewRef.current === 'live') savedCamRef.current = { ...camRef.current }
     viewRef.current = view
-    camRef.current = view === 'map'
-      ? { x: 0, y: 0, z: 1, rot: 0 }
-      : savedCamRef.current ?? { x: 0, y: 0, z: ZOOM_DEFAULT, rot: defaultRot }
+    if (view !== 'map') {
+      camRef.current = savedCamRef.current ?? {
+        tx: vb.x + vb.w / 2, tz: vb.y + vb.h / 2, rot: defaultRot, pitch: 0, z: ZOOM_DEFAULT,
+      }
+    }
     applyCam()
-  }, [view, defaultRot, applyCam])
+  }, [view, defaultRot, vb, applyCam])
 
   // Geometry caches reset ONLY when the circuit changes â€” resetting per render rebuilt the racing-line
   // solve (tens of millions of ops) at every tick, freezing the frame each time the leader crossed the line.
@@ -829,17 +848,45 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               y += bl.dy * (1 - e)
             }
           }
-          const left = ((x - vb.x) / vb.w) * 100
-          const top = ((y - vb.y) / vb.h) * 100
-          posRef.current.set(f.id, { left, top })
-          // Position via transform, not left/top: layout offsets snap to the pixel grid in world space,
-          // which a zoomed follow camera amplifies into visible jiggle on the pinned car.
           const { w: sw, h: sh } = stageDimsRef.current
           prevDrawRef.current.set(f.id, { x, y, kind: f.kind, dist: f.dist, lat })
-          f.el.style.transform = `translate(${(left / 100) * sw}px, ${(top / 100) * sh}px) translate(-50%, -50%)`
           const spr = sprRefs.current.get(f.id)
           const spriteRot = heading + Math.PI / 2
-          if (spr) spr.style.transform = viewRef.current === 'map' ? '' : `rotate(${spriteRot}rad)`
+          // Position via transform, not left/top: layout offsets snap to the pixel grid, which a
+          // zoomed follow camera amplifies into visible jiggle on the pinned car. The LIVE marker is
+          // PROJECTED through the very camera the GL frame was drawn with, so hit box, label and
+          // tooltip stay glued to the car at any pitch; the map view keeps its flat fit.
+          if (viewRef.current === 'map') {
+            const left = ((x - vb.x) / vb.w) * sw
+            const top = ((y - vb.y) / vb.h) * sh
+            posRef.current.set(f.id, { left, top })
+            f.el.style.transform = `translate(${left}px, ${top}px) translate(-50%, -50%)`
+            if (spr) spr.style.transform = ''
+          } else {
+            const outerEl = outerRef.current
+            const ow = outerEl?.clientWidth ?? sw
+            const oh = outerEl?.clientHeight ?? sh
+            const lift = uu(CAR_RIDE_M)
+            projA.set(x, lift, y).project(glCamera)
+            const sx = (projA.x * 0.5 + 0.5) * ow - (ow - sw) / 2
+            const sy = (1 - (projA.y * 0.5 + 0.5)) * oh - (oh - sh) / 2
+            posRef.current.set(f.id, { left: sx, top: sy })
+            f.el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`
+            if (spr) {
+              // Heading and scale on screen, from a second projected point half a car ahead.
+              const halfCar = uu(CAR_LENGTH_M * CAR_SCALE) / 2
+              projB.set(x + Math.cos(heading) * halfCar, lift, y + Math.sin(heading) * halfCar)
+                .project(glCamera)
+              const ax = (projB.x * 0.5 + 0.5) * ow - (ow - sw) / 2
+              const ay = (1 - (projB.y * 0.5 + 0.5)) * oh - (oh - sh) / 2
+              const screenHalf = Math.hypot(ax - sx, ay - sy)
+              // Against the hit box's own zoom-1 pixel size, freshly derived so a resize never
+              // leaves a stale scale in this closure.
+              const carPx = uu(CAR_LENGTH_M * CAR_SCALE) * (sw / vb.w)
+              const k = carPx > 0 ? (2 * screenHalf) / carPx : 1
+              spr.style.transform = `rotate(${Math.atan2(ay - sy, ax - sx) + Math.PI / 2}rad) scale(${k})`
+            }
+          }
           // The real car, posed in world units off the lap's own dynamics (#3d-port). Load comes
           // from the LAP, not from how fast the car happens to be crossing the screen: a race played
           // at 4x speed corners no harder than the same race at 1x. Cars crawling the pit lane or
@@ -1053,18 +1100,13 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           }
         }
       }
-      // Follow camera: keep the followed car pinned to the stage centre (rotation and zoom untouched).
+      // Follow camera: the orbit target IS the followed car; pitch, rotation and zoom stay the
+      // player's own, so the drag-to-tilt keeps orbiting the car it is locked to.
       if (followRef.current && viewRef.current !== 'map') {
-        const pos = posRef.current.get(followRef.current)
-        if (pos) {
-          const { w, h } = stageDimsRef.current
-          const cam = camRef.current
-          const dx = (pos.left / 100) * w - w / 2
-          const dy = (pos.top / 100) * h - h / 2
-          const cos = Math.cos(cam.rot)
-          const sin = Math.sin(cam.rot)
-          cam.x = -cam.z * (dx * cos - dy * sin)
-          cam.y = -cam.z * (dx * sin + dy * cos)
+        const p = prevDrawRef.current.get(followRef.current)
+        if (p) {
+          camRef.current.tx = p.x
+          camRef.current.tz = p.y
           applyCam()
         }
       }
@@ -1110,7 +1152,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     // the whole loop down and rebuilt it every time the array got a fresh identity, which the 1Hz
     // tooltip tick does on its own. The loop's own state lives in refs, so it wants to run undisturbed
     // for the length of the race.
-  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, lighting, applyCam])
+  }, [slotOf, pitSlots, layout, vb, sampleRef, outSign, lighting, applyCam, glCamera])
 
   // Road paint that belongs to the START rather than to the circuit: the chequered band and the grid
   // boxes. Three fills between them, so as ops they are three draw calls; as elements they were a
@@ -1244,6 +1286,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onClick={() => {
+        // A plain click on empty ground releases the follow lock; drags never land here (they set
+        // the suppress flag), and car clicks stop their own propagation.
+        if (!suppressClickRef.current && viewRef.current !== 'map' && followRef.current) {
+          followRef.current = null
+          onFollow(null)
+        }
+      }}
     >
       {/* On the OUTER box, not the stage: the stage letterboxes to the viewBox's aspect, and a canvas
           clipped to it stops painting at the stage edge — the world visibly ended there under zoom.
@@ -1257,6 +1307,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           vb={vb}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
           camRef={camRef}
+          camera={glCamera}
           paintRef={paintRef}
           className="absolute inset-0"
         />
@@ -1300,7 +1351,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                 const sprite = (
                   <div
                     ref={spriteRef(car.id, view)}
-                    onClick={() => clickCar(car.id)}
+                    onClick={(e) => {
+                      // The outer box takes a plain ground click as "stop following".
+                      e.stopPropagation()
+                      clickCar(car.id)
+                    }}
                     className="cursor-pointer"
                     // Live sprites carry a real contact shadow (#sim-2d), which a filter that turns
                     // with the car cannot be. The map view's numbered dot still wants one.
@@ -1350,8 +1405,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
                     style={{
                       // Counter-rotate AND counter-scale against the camera so labels stay upright and a
                       // constant screen size at any zoom, anchored beside the car.
+                      // Markers are projected into screen space now, so a label is naturally
+                      // upright at a constant size: no counter-transforms left to apply.
                       transformOrigin: 'left center',
-                      transform: 'rotate(calc(-1 * var(--cam-rot, 0rad))) scale(var(--cam-zoom-inv, 1)) translate(8px, -50%)',
+                      transform: 'translate(8px, -50%)',
                     }}
                   >
                     {car.nationality && <NationalityFlag code={car.nationality} />}
@@ -1373,10 +1430,19 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         )}
       </div>
 
-      {/* Camera controls (the map view is static; nothing to reset) */}
+      {/* Camera controls (the map view is static; nothing to reset). Clicks stay in the cluster,
+          or pressing a button would read as a ground click and drop the follow lock. */}
       {view === 'live' && (
-        <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
-          <Tooltip content="Reset zoom">
+        <div
+          className="absolute bottom-3 right-3 flex items-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span
+            ref={zoomReadRef}
+            className="text-xs font-semibold text-[#FFFFFF]"
+            style={{ WebkitTextStroke: '1px #000000', paintOrder: 'stroke' }}
+          />
+          <Tooltip content="Reset view">
             <button
               onClick={resetZoom}
               className="h-9 w-9 flex items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#1E2431] hover:text-[#FFFFFF] cursor-pointer"
