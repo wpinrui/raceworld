@@ -61,6 +61,11 @@ export interface SceneryKerb {
   /** The control points `d` is smoothed through: the 3D renderer samples the same curve back out of
    *  them with `densifyOpen`, so both renderers draw one kerb (#3d-port). */
   pts: Array<{ x: number; y: number }>
+  /** Which side of `pts` the track is on, as the sign of the polyline's left normal `(-dy, dx)`.
+   *  Flat paint did not care; a lofted section does, because a kerb is not symmetric — it starts
+   *  flush at the tarmac and rises away from it. Carried on the data rather than re-derived, since
+   *  this is the one place that knows the offset it was pushed out by. */
+  inward: 1 | -1
   /** Bounding disc, so a kerb far from the camera can be skipped outright. */
   cx: number; cy: number; r: number
 }
@@ -253,6 +258,9 @@ export function buildScenery(
         kerbs.push({
           d: smoothOpenPath(pts),
           pts,
+          // The strip was pushed out along `outSign * side * (-t.y, t.x)`, and it runs the same way
+          // round the lap as the trace, so the track lies back down the negative of that.
+          inward: (outSign * side > 0 ? -1 : 1),
           cx,
           cy,
           r: Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))),

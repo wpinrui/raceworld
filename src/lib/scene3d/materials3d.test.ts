@@ -5,11 +5,11 @@ describe('SceneMaterials depth biases', () => {
   it('grades a decal by its painter layer: over its own surface, under the paint above it', () => {
     const materials = new SceneMaterials()
     // Road ink lives at layer 9: it must beat the tarmac (8) it lies on at a tilted camera
-    // without also beating the kerbs (11, 12) and marks (13) painted over it.
+    // without also beating the lane paint (10) and marks (12) painted over it.
     const ink = materials.get('#FFFFFF', { decal: true, layer: 9 })
     expect(ink.polygonOffset).toBe(true)
     expect(ink.polygonOffsetFactor).toBeLessThan(materials.get('#FFFFFF', { layer: 8 }).polygonOffsetFactor)
-    expect(ink.polygonOffsetFactor).toBeGreaterThan(materials.get('#FFFFFF', { layer: 11 }).polygonOffsetFactor)
+    expect(ink.polygonOffsetFactor).toBeGreaterThan(materials.get('#FFFFFF', { layer: 12 }).polygonOffsetFactor)
     expect(ink.depthWrite).toBe(false)
   })
 

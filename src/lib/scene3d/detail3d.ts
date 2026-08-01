@@ -58,6 +58,8 @@ export interface WorldDetail {
   ground: SurfaceDetail
   /** Rendered concrete and painted panel: everything that STANDS UP. */
   wall: SurfaceDetail
+  /** The kerbs' transverse corrugation. Sampled through LOFTED uvs, not `planarUV`. */
+  kerb: SurfaceDetail
   dispose(): void
 }
 
@@ -160,7 +162,11 @@ function grains(v: number, bias: number): number {
   return t * t * (3 - 2 * t)
 }
 
-/** Sum of octaves, each half the amplitude and twice the frequency of the last. */
+/** Sum of octaves, each half the amplitude and twice the frequency of the last.
+ *
+ *  Build the octaves ONCE and close over them. `octaves()` seeds a fresh lattice per call, and
+ *  `buildField` calls its sampler 65,536 times: a set built inside the sampler is 65,536 lattices,
+ *  billions of rng steps, and a browser tab that never reaches `load`. */
 function fbm(octaves: Array<{ lat: Float32Array; n: number; amp: number }>, x: number, y: number): number {
   let total = 0
   let weight = 0
@@ -267,11 +273,13 @@ export function buildWorldDetail(): WorldDetail {
   const gritField = shape(buildField((x, y) => fbm(grit, x, y)), (v) => grains(v, 0.42))
   // Roughness varies WITH the aggregate: chipping tops polish under traffic, the hollows between
   // them stay dull. At the same frequency, so it never becomes a landmark of its own.
-  const wearField = buildField((x, y) => fbm(octaves(64, 2, 4409), x, y))
+  const wear = octaves(64, 2, 4409)
+  const wearField = buildField((x, y) => fbm(wear, x, y))
 
   // Ground: coarser than tarmac because grass is, but nowhere near as coarse as it was. Grass is a
   // deep scatterer, so its detail is about breaking up the light, not about catching highlights.
-  const clumpField = buildField((x, y) => fbm(octaves(32, 3, 3313), x, y))
+  const clump = octaves(32, 3, 3313)
+  const clumpField = buildField((x, y) => fbm(clump, x, y))
 
   const tarmac: SurfaceDetail = {
     normalMap: normalTexture(gritField, 2.6),
@@ -305,7 +313,8 @@ export function buildWorldDetail(): WorldDetail {
   //
   // The anti-tiling rule relaxes here too: a wall is a few tiles across, not a few hundred like a
   // straight, so there is no long run for the eye to find the repeat in.
-  const renderField = buildField((x, y) => fbm(octaves(12, 3, 8837), x, y))
+  const render = octaves(12, 3, 8837)
+  const renderField = buildField((x, y) => fbm(render, x, y))
   const wall: SurfaceDetail = {
     normalMap: normalTexture(renderField, 1.4),
     albedoMap: scalarTexture(renderField, 0.84, 1),
@@ -314,12 +323,49 @@ export function buildWorldDetail(): WorldDetail {
     tileM: 4.5,
   }
 
+  // The kerb's corrugation, and the one map here that is a FEATURE rather than a grain: the ridges
+  // are what a kerb is to look at, and they live in a map because at 18mm deep and 300mm apart they
+  // would cost more triangles than the rest of the circuit put together.
+  //
+  // Regular on purpose, against the anti-tiling rule above: a kerb's ridges ARE evenly spaced, so
+  // the repeat is the subject rather than the tell. Only the fbm term breaks it up, and only enough
+  // to keep the concrete from reading as extruded plastic.
+  //
+  // The field varies down V ALONE, which is what makes the ridges transverse: `kerb3d` lofts its
+  // UVs along the strip (V the arc, U the width) instead of projecting them from world XZ, so the
+  // corrugation crosses every kerb's own direction of travel rather than pointing one fixed way
+  // across the whole map.
+  const RIDGES_PER_TILE = 4
+  const cast = octaves(48, 3, 6151)
+  const kerbField = buildField((x, y) => (
+    0.5 - 0.5 * Math.cos(2 * Math.PI * RIDGES_PER_TILE * y) + 0.16 * fbm(cast, x, y)
+  ))
+  const kerb: SurfaceDetail = {
+    // Relief 2, and this one is derived rather than dialled in. One tile is 1.2 m across 256 texels,
+    // so a texel is 4.7 mm; the cosine's steepest slope is 0.049 of the field's range per texel, and
+    // `normalTexture` differences over two of them. An 18 mm ridge therefore wants
+    // 0.018 * 0.049 / 0.0047 / 2 ≈ 0.094 rad of tilt per unit of relief, which lands the flanks at
+    // the ~10 degrees a real kerb's are cut to.
+    normalMap: normalTexture(kerbField, 2),
+    // Narrow, and biased bright: this is paint, not aggregate. The dirt collects in the grooves,
+    // which is the one place a kerb's colour honestly varies.
+    albedoMap: scalarTexture(kerbField, 0.78, 1),
+    // Inverted on purpose (`lo` above `hi`): tyres polish the ridge tops and never touch the floor
+    // between them. Multiplied by ROUGH.matte at the call site, so the kerb runs 0.61 to 0.78.
+    roughnessMap: scalarTexture(kerbField, 1, 0.78),
+    // Full strength, where every other map here is a fraction of it. The others are grain, meant to
+    // disturb a surface; this one IS the surface's shape.
+    normalScale: 1,
+    tileM: 1.2,
+  }
+
   return {
     tarmac,
     ground,
     wall,
+    kerb,
     dispose: () => {
-      for (const d of [tarmac, ground, wall]) {
+      for (const d of [tarmac, ground, wall, kerb]) {
         d.normalMap.dispose()
         d.albedoMap.dispose()
         d.roughnessMap?.dispose()

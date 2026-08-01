@@ -106,8 +106,11 @@ export class SceneMaterials {
     const {
       alpha = 1, roughness = ROUGH.chalk, metalness = 0, decal = false, layer = 0, detail,
     } = opts
+    // Keyed on the grain's IDENTITY, not its tile size: the kerb's corrugation and the tarmac's
+    // aggregate are different surfaces that could perfectly well be authored at the same scale, and
+    // a size-keyed cache would hand the second one the first one's maps.
     const key = `${colour}@${alpha}#${roughness}#${metalness}${decal ? '#decal' : ''}#${layer}`
-      + `#${detail ? detail.tileM : 'flat'}`
+      + `#${detail ? detail.normalMap.uuid : 'flat'}`
     let mat = this.cache.get(key)
     if (!mat) {
       mat = surface(colour, { alpha, roughness, metalness, decal, layer, detail })

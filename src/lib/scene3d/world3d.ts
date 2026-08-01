@@ -14,15 +14,16 @@ import {
   ROAD_CASING, ROAD_TARMAC, roadInkOver, roadInkUnder, type RoadOpts,
 } from '@/lib/ui/road-ops'
 import { MARK_WHITE, startLineRects, startPose } from '@/lib/ui/road-marks'
-import { KERB_BLOCK_M, KERB_RED, KERB_WHITE, KERB_WIDTH_M, type Scenery } from '@/lib/ui/track-scenery'
+import type { Scenery } from '@/lib/ui/track-scenery'
 import type { DrawOp } from '@/lib/ui/scenery-draw'
 import {
-  LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M, densifyOpen, densifyTrace,
+  LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M, densifyTrace,
 } from '@/lib/ui/track-path'
 import { parseViewBox, type ViewBox3D } from './camera3d'
-import { dashGeometry, localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
+import { localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
 import { DECAL_PULL, ROUGH, SceneMaterials } from './materials3d'
 import { buildGroundStack3D } from './ground3d'
+import { buildKerbs3D } from './kerb3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
 import { buildTrees3D } from './trees3d'
@@ -43,7 +44,7 @@ export const GROUND_PAD = 4000
 const LIFT_M = 0.002
 const LAYER = {
   bands: 1, fields: 2, terrain: 3, runoffs: 4, floors: 5, inkUnder: 6,
-  casing: 7, tarmac: 8, inkOver: 9, lanePaint: 10, kerbWhite: 11, kerbRed: 12, marks: 13,
+  casing: 7, tarmac: 8, inkOver: 9, lanePaint: 10, kerbs: 11, marks: 12,
 } as const
 
 /** The stack's top, in metres: what anything RIDING the road (the cars) must clear. */
@@ -169,16 +170,9 @@ export function buildWorld3D(
   }
   if (pitZone) group.add(buildPitPaint3D(pitZone, u, lift(LAYER.lanePaint), materials, LAYER.lanePaint))
 
-  // Kerbs: the white base under the red blocks, sampled off the same smoothed curve the 2D strokes.
-  for (const kerb of scenery.kerbs) {
-    const pts = densifyOpen(kerb.pts)
-    // Painted concrete, so the aggregate grain at a lower roughness than the tarmac beside it.
-    const kerbGrain = detail?.tarmac ?? null
-    add(ribbonGeometry(pts, { halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbWhite), roundCaps: true }), KERB_WHITE, LAYER.kerbWhite, kerbGrain, ROUGH.paint)
-    add(dashGeometry(pts, {
-      halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbRed), on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M),
-    }), KERB_RED, LAYER.kerbRed, kerbGrain, ROUGH.paint)
-  }
+  // Kerbs, the one thing on this ground that is not paint: lofted solids standing on the road
+  // surface, red and white blocks alike, wearing their own corrugation (kerb3d).
+  group.add(buildKerbs3D(scenery.kerbs, u, lift(LAYER.kerbs), materials, detail?.kerb ?? null))
 
   add(localRectsGeometry(
     startPose(layout.start, layout.metresPerUnit), startLineRects(u), lift(LAYER.marks),

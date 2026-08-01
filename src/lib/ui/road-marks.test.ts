@@ -122,7 +122,9 @@ describe('startLineRects', () => {
 })
 
 describe('kerbOps', () => {
-  const kerb: SceneryKerb = { d: 'M 0 0 L 20 0', pts: [{ x: 0, y: 0 }, { x: 20, y: 0 }], cx: 10, cy: 0, r: 10 }
+  const kerb: SceneryKerb = {
+    d: 'M 0 0 L 20 0', pts: [{ x: 0, y: 0 }, { x: 20, y: 0 }], inward: 1, cx: 10, cy: 0, r: 10,
+  }
 
   it('lays the white base round-capped under the red blocks, butt-cut at the 3m pitch', () => {
     const [white, red] = kerbOps([kerb], u)

@@ -3,7 +3,7 @@ import { ROAD_CASING, ROAD_TARMAC } from '@/lib/ui/road-ops'
 import * as THREE from 'three'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { MOODS } from '@/lib/ui/lighting'
-import { buildScenery } from '@/lib/ui/track-scenery'
+import { KERB_RED, buildScenery } from '@/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
 import { roadLap, solveLap } from '@/lib/ui/lap-solve'
 import { buildWorld3D } from './world3d'
@@ -88,6 +88,28 @@ describe('buildWorld3D', () => {
     })
     expect(standing).toBeGreaterThan(scenery.buildings.length)
     expect(world.stats.triangles).toBeGreaterThan(50_000)
+  })
+
+  it('stands the kerbs up as solids, one pair of paints each, casting their own shadow', () => {
+    const red = new THREE.Color(KERB_RED).getHexString()
+    const kerbs: THREE.Mesh[] = []
+    world.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      if ((o.material as THREE.MeshStandardMaterial).color.getHexString() === red) kerbs.push(o)
+    })
+    expect(kerbs).toHaveLength(scenery.kerbs.length)
+    for (const mesh of kerbs) {
+      expect(mesh.castShadow).toBe(true)
+      const g = mesh.geometry as THREE.BufferGeometry
+      let low = Infinity
+      let high = -Infinity
+      for (let i = 0; i < g.attributes.position.count; i++) {
+        low = Math.min(low, g.attributes.position.getY(i))
+        high = Math.max(high, g.attributes.position.getY(i))
+      }
+      // Paint has one height. A kerb has a section: a skirt under the road and a crown over it.
+      expect(high - low).toBeGreaterThan(0.09 / layout.metresPerUnit)
+    }
   })
 
   it('hands the rig sun out for live shadow refits', () => {
