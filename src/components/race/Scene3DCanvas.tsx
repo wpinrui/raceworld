@@ -124,6 +124,14 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     gl.scene.fog = env ? new THREE.Fog(env.horizon, 1, 2) : null
     paint()
     return () => {
+      // Only while the context is still alive. React runs effect cleanups in DECLARATION order, so
+      // on unmount the renderer effect above has already called `renderer.dispose()` by the time
+      // this runs, and three then tries to free the cube's six framebuffers out of the per-target
+      // property map that `dispose()` just emptied: `__webglFramebuffer[0]` of undefined, a hard
+      // throw on every StrictMode remount. Nothing leaks by skipping it, because disposing the
+      // renderer released the whole context the cube lived in. The path that DOES need freeing, a
+      // mood change, re-runs this with the renderer alive and frees normally.
+      if (!glRef.current) return
       env?.dispose()
       gl.scene.background = null
       gl.scene.fog = null

@@ -193,6 +193,11 @@ export interface SkyEnv {
   /** The sky's own radiance just above the horizon, averaged round the ring and already scaled by
    *  `intensity`: what the fog fades the world into, so ground and sky meet at one colour. */
   horizon: THREE.Color
+  /** Free the bake. MUST be called while the renderer that made it is still alive, the same
+   *  ownership contract every three resource carries. Disposing a renderer empties the per-target
+   *  property map, and freeing a cube after that reads six framebuffer handles out of nothing and
+   *  throws. There is no need to call it in that case anyway: the context took the cube with it.
+   *  `scene3d-lifecycle-check` holds both orders against a real GL context. */
   dispose(): void
 }
 
@@ -263,14 +268,22 @@ export function buildSky(
 
   const target = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType })
   const previous = renderer.getRenderTarget()
-  new THREE.CubeCamera(1, 1e4, target).update(renderer, skyScene)
-  const horizon = sampleHorizon(renderer, skyScene, DAY_INTENSITY)
-  renderer.setRenderTarget(previous)
-
-  sky.geometry.dispose()
-  sky.material.dispose()
-  return {
-    texture: target.texture, intensity: DAY_INTENSITY, horizon, dispose: () => target.dispose(),
+  try {
+    new THREE.CubeCamera(1, 1e4, target).update(renderer, skyScene)
+    const horizon = sampleHorizon(renderer, skyScene, DAY_INTENSITY)
+    return {
+      texture: target.texture, intensity: DAY_INTENSITY, horizon, dispose: () => target.dispose(),
+    }
+  } catch (err) {
+    // A machine without float render targets fails inside `sampleHorizon`, AFTER the cube is
+    // allocated. Callers treat a throw as "no sky" and hold no handle to free, so the cube would
+    // sit on the GPU for the life of the context. Freed here, where it is still reachable.
+    target.dispose()
+    throw err
+  } finally {
+    renderer.setRenderTarget(previous)
+    sky.geometry.dispose()
+    sky.material.dispose()
   }
 }
 
