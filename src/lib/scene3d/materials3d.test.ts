@@ -2,21 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { DECAL_PULL, SceneMaterials } from './materials3d'
 
 describe('SceneMaterials depth biases', () => {
-  it('pulls every decal harder than the deepest opaque road layer, at any tilt', () => {
+  it('grades a decal by its painter layer: over its own surface, under the paint above it', () => {
     const materials = new SceneMaterials()
-    const decal = materials.get('#FFFFFF', 1, true)
-    expect(decal.polygonOffset).toBe(true)
-    // The opaque painter stack tops out at layer 13 (road marks); a decal that loses this race
-    // vanishes from every camera angle but top-down, because the offset is slope-scaled.
-    for (let layer = 1; layer <= 13; layer++) {
-      const opaque = materials.get('#FFFFFF', 1, false, layer)
-      expect(decal.polygonOffsetFactor).toBeLessThan(opaque.polygonOffsetFactor)
-    }
-    expect(decal.polygonOffsetFactor).toBe(-DECAL_PULL)
-    expect(decal.depthWrite).toBe(false)
+    // Road ink lives at layer 9: it must beat the tarmac (8) it lies on at a tilted camera
+    // without also beating the kerbs (11, 12) and marks (13) painted over it.
+    const ink = materials.get('#FFFFFF', 1, true, 9)
+    expect(ink.polygonOffset).toBe(true)
+    expect(ink.polygonOffsetFactor).toBeLessThan(materials.get('#FFFFFF', 1, false, 8).polygonOffsetFactor)
+    expect(ink.polygonOffsetFactor).toBeGreaterThan(materials.get('#FFFFFF', 1, false, 11).polygonOffsetFactor)
+    expect(ink.depthWrite).toBe(false)
   })
 
-  it('keeps the opaque layers graded and un-decaled paint untouched', () => {
+  it('pulls top-of-stack paint past the deepest opaque layer', () => {
+    const materials = new SceneMaterials()
+    const top = materials.get('#FFFFFF', 1, true, DECAL_PULL)
+    for (let layer = 1; layer <= 13; layer++) {
+      expect(top.polygonOffsetFactor).toBeLessThan(materials.get('#FFFFFF', 1, false, layer).polygonOffsetFactor)
+    }
+  })
+
+  it('keeps the opaque layers graded and un-layered paint untouched', () => {
     const materials = new SceneMaterials()
     expect(materials.get('#33383E', 1, false, 8).polygonOffsetFactor).toBe(-8)
     expect(materials.get('#33383E').polygonOffset).toBe(false)

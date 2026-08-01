@@ -21,7 +21,7 @@ import {
 } from '@/lib/ui/track-path'
 import { parseViewBox, type ViewBox3D } from './camera3d'
 import { dashGeometry, localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
-import { SceneMaterials } from './materials3d'
+import { DECAL_PULL, SceneMaterials } from './materials3d'
 import { buildGroundStack3D } from './ground3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
@@ -107,9 +107,13 @@ export function buildWorld3D(
   const roadOpts: RoadOpts = {
     layout, u, pitZone, pitSlots, lap, ground: scenery.base, shadow: shadowFill(lighting),
   }
-  const under = buildOpsDecals(roadInkUnder(roadOpts), { y: lift(LAYER.inkUnder), order: 1 }, materials)
+  const under = buildOpsDecals(
+    roadInkUnder(roadOpts), { y: lift(LAYER.inkUnder), order: 1, bias: LAYER.inkUnder }, materials,
+  )
   group.add(under.group)
-  const over = buildOpsDecals(roadInkOver(roadOpts), { y: lift(LAYER.inkOver), order: under.nextOrder }, materials)
+  const over = buildOpsDecals(
+    roadInkOver(roadOpts), { y: lift(LAYER.inkOver), order: under.nextOrder, bias: LAYER.inkOver }, materials,
+  )
   group.add(over.group)
 
   // The roads, layer-major exactly as `roadOps` strokes them: every white casing goes down before
@@ -145,7 +149,9 @@ export function buildWorld3D(
     startPose(layout.start, layout.metresPerUnit), startLineRects(u), lift(LAYER.marks),
   ), MARK_WHITE, LAYER.marks)
   if (overlay && overlay.length > 0) {
-    group.add(buildOpsDecals(overlay, { y: lift(LAYER.marks), order: over.nextOrder }, materials).group)
+    group.add(buildOpsDecals(
+      overlay, { y: lift(LAYER.marks), order: over.nextOrder, bias: DECAL_PULL }, materials,
+    ).group)
   }
 
   // The standing world, and the light it all agrees under.

@@ -15,7 +15,7 @@ describe('buildOpsDecals', () => {
 
   it('merges consecutive same-paint ops and breaks the run when the paint changes', () => {
     const { group, nextOrder } = buildOpsDecals(
-      [line('#111111'), line('#111111'), line('#222222')], { y: 0.1, order: 5 }, materials,
+      [line('#111111'), line('#111111'), line('#222222')], { y: 0.1, order: 5, bias: 9 }, materials,
     )
     expect(meshes(group)).toHaveLength(2)
     expect(meshes(group).map((m) => m.renderOrder)).toEqual([5, 6])
@@ -27,7 +27,7 @@ describe('buildOpsDecals', () => {
 
   it('keeps alpha apart from opaque runs of the same colour, as decal materials', () => {
     const { group } = buildOpsDecals(
-      [line('#333333'), line('#333333', 0.4)], { y: 0, order: 1 }, materials,
+      [line('#333333'), line('#333333', 0.4)], { y: 0, order: 1, bias: 9 }, materials,
     )
     expect(meshes(group)).toHaveLength(2)
     const soft = meshes(group)[1].material as THREE.MeshLambertMaterial
@@ -38,7 +38,7 @@ describe('buildOpsDecals', () => {
 
   it('lays every sheet at the one lift', () => {
     const { group } = buildOpsDecals(
-      [line('#444444'), { d: 'M 0 0 L 4 0 L 4 4 Z', fill: '#444444' }], { y: 0.25, order: 1 }, materials,
+      [line('#444444'), { d: 'M 0 0 L 4 0 L 4 4 Z', fill: '#444444' }], { y: 0.25, order: 1, bias: 9 }, materials,
     )
     for (const mesh of meshes(group)) {
       const pos = mesh.geometry.attributes.position
@@ -51,7 +51,7 @@ describe('buildOpsDecals', () => {
     const { group } = buildOpsDecals([
       line('#555555', undefined, { dash: { ...dash, shift: 0 } }),
       line('#666666', undefined, { dash: { ...dash, shift: 1 } }),
-    ], { y: 0, order: 1 }, materials)
+    ], { y: 0, order: 1, bias: 9 }, materials)
     const xs = (m: THREE.Mesh) => {
       const pos = m.geometry.attributes.position
       const out: number[] = []
@@ -67,7 +67,7 @@ describe('buildOpsDecals', () => {
 
   it('skips ref paints rather than guessing a colour for them', () => {
     const { group, nextOrder } = buildOpsDecals(
-      [{ d: 'M 0 0 L 4 0 L 4 4 Z', fill: 'ref:tm-crowd' }], { y: 0, order: 3 }, materials,
+      [{ d: 'M 0 0 L 4 0 L 4 4 Z', fill: 'ref:tm-crowd' }], { y: 0, order: 3, bias: 9 }, materials,
     )
     expect(meshes(group)).toHaveLength(0)
     expect(nextOrder).toBe(3)

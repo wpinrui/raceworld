@@ -21,6 +21,9 @@ export interface OpsDecalOpts {
   y: number
   /** First renderOrder; each material run takes the next, and `nextOrder` reports where it ended. */
   order: number
+  /** The painter layer this stack lives at, as a depth bias: the ink must beat the tarmac it lies
+   *  on at a tilted camera without also beating the kerbs and marks painted above it. */
+  bias: number
 }
 
 /** One op's geometry: the fill, then the stroke, as flat sheets. */
@@ -79,7 +82,7 @@ export function buildOpsDecals(
     if (key !== runKey) {
       flush()
       runKey = key
-      runMaterial = materials.get(colour, op.alpha ?? 1, true)
+      runMaterial = materials.get(colour, op.alpha ?? 1, true, o.bias)
     }
     runGeometries.push(...opGeometries(op, o.y))
   }
