@@ -19,7 +19,10 @@ import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
 import { roadLap, solveLap } from '../src/lib/ui/lap-solve'
 import { MOODS, type Mood } from '../src/lib/ui/lighting'
-import { frameOrtho, parseViewBox, type ViewBox3D } from '../src/lib/scene3d/camera3d'
+import {
+  applyOrbitCam, frameOrtho, parseViewBox, type OrbitCam, type ViewBox3D,
+} from '../src/lib/scene3d/camera3d'
+import { refitShadow } from '../src/lib/scene3d/lighting3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { buildWorld3D } from '../src/lib/scene3d/world3d'
 
@@ -46,6 +49,8 @@ interface BuiltScene {
   layout: TrackLayout
   /** The padded whole-circuit box, the framing every shot and the viewer's resets share. */
   full: ViewBox3D
+  /** The rig's sun, so a pitched shot can refit its shadow box the way the live canvas does. */
+  sun: THREE.DirectionalLight
   stats: { meshes: number; triangles: number }
 }
 
@@ -101,7 +106,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     crew.setFlip(si, yLocal > 0 ? -1 : 1)
   })
   scene.add(crew.group)
-  return { scene, layout, full, stats: world.stats }
+  return { scene, layout, full, sun: world.sun, stats: world.stats }
 }
 
 /** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
@@ -135,6 +140,56 @@ function disposeScene(scene: THREE.Scene) {
 
 const canvas = document.getElementById('gl') as HTMLCanvasElement
 
+/** The one renderer setup, shared by both shot paths and the viewer, so the probe can never drift
+ *  from itself on a look decision that lives on the renderer rather than in the scene. */
+function makeRenderer(preserve = false): THREE.WebGLRenderer {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: preserve })
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  window.__renderer = renderer
+  window.__THREE = THREE
+  return renderer
+}
+
+/** The pitched shot: the map's OWN orbit camera, driven by the same `applyOrbitCam` the live canvas
+ *  drives, so a horizon shot is the player's horizon and not a projection only the probe can make.
+ *  The ortho shots above cannot show one at all: orthographic ground fills the frame at every tilt. */
+async function eyeShot() {
+  document.body.classList.add('shot')
+  const id = q.get('id') ?? 'britain'
+  const layout = TRACK_LAYOUTS[id]
+  if (!layout) throw new Error(`no such layout: ${id}`)
+  const w = Number(q.get('w') ?? '1600')
+  const h = Number(q.get('h') ?? '900')
+  const full = parseViewBox(layout.viewBox, TRACK_WIDTH_M / layout.metresPerUnit / 2 + 8)
+  const [cxf, cyf] = (q.get('at') ?? '0.5,0.5').split(',').map(Number)
+  const cam: OrbitCam = {
+    tx: full.x + full.w * cxf,
+    tz: full.y + full.h * cyf,
+    rot: (Number(q.get('rot') ?? '0') * Math.PI) / 180,
+    pitch: (Number(q.get('pitch') ?? '0') * Math.PI) / 180,
+    z: Number(q.get('ez') ?? '20'),
+  }
+  const built = buildScene(id, q.get('mood') ?? 'afternoon', full)
+  const cars = Number(q.get('cars') ?? '0')
+  if (cars > 0) built.scene.add(carMeshes(layout, cars))
+
+  const camera = new THREE.PerspectiveCamera()
+  // `ppu` is the stage's pixels per viewBox unit at zoom 1, exactly as `RaceTrackMap` computes it.
+  const frame = applyOrbitCam(camera, cam, { w, h }, w / full.w)
+  const half = Math.hypot(frame.halfW, frame.halfH)
+  refitShadow(built.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
+
+  const renderer = makeRenderer(true)
+  renderer.setPixelRatio(1)
+  renderer.setSize(w, h, false)
+  renderer.render(built.scene, camera)
+
+  window.__stats = { ...built.stats, w, h }
+  window.__scene = built.scene
+  window.__camera = camera
+}
+
 /** The headless path: everything the node probe's screenshots depend on, unchanged. */
 async function shotMain() {
   document.body.classList.add('shot')
@@ -160,9 +215,7 @@ async function shotMain() {
   const cars = Number(q.get('cars') ?? '0')
   if (cars > 0) built.scene.add(carMeshes(layout, cars))
   const camera = frameOrtho(vb, tilt)
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  const renderer = makeRenderer(true)
   renderer.setPixelRatio(1)
   renderer.setSize(w, h, false)
   renderer.render(built.scene, camera)
@@ -170,8 +223,6 @@ async function shotMain() {
   window.__stats = { ...built.stats, w, h }
   window.__scene = built.scene
   window.__camera = camera
-  window.__THREE = THREE
-  window.__renderer = renderer
 }
 
 /** The viewer: the same world, hand-orbitable, rebuilt in place from the bar's pickers. */
@@ -191,12 +242,8 @@ function viewerMain() {
   circuitSel.value = q.get('id') && TRACK_LAYOUTS[q.get('id')!] ? q.get('id')! : 'britain'
   moodSel.value = (q.get('mood') ?? 'afternoon') in MOODS ? q.get('mood') ?? 'afternoon' : 'afternoon'
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  const renderer = makeRenderer()
   renderer.setPixelRatio(window.devicePixelRatio)
-  window.__renderer = renderer
-  window.__THREE = THREE
 
   let built: BuiltScene | null = null
   let camera: THREE.OrthographicCamera | null = null
@@ -265,7 +312,7 @@ function viewerMain() {
 
 ;(async () => {
   try {
-    if (q.has('shot')) await shotMain()
+    if (q.has('shot')) await (q.has('pitch') ? eyeShot() : shotMain())
     else viewerMain()
   } catch (err) {
     window.__error = err instanceof Error ? (err.stack ?? err.message) : String(err)
