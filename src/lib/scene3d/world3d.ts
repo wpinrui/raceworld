@@ -65,6 +65,8 @@ export interface World3DInput {
   overlay?: DrawOp[]
   /** A team's colour on its own garage floor and lintel, as the 2D pit complex wears it. */
   garageColors?: (i: number) => string | undefined
+  /** Prebuilt browser-side pieces mounted with the world: the garage boards. */
+  extras?: THREE.Object3D[]
 }
 
 export interface World3D {
@@ -76,7 +78,7 @@ export interface World3D {
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame, overlay, garageColors }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, frame, overlay, garageColors, extras }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -147,6 +149,7 @@ export function buildWorld3D(
   group.add(buildTrees3D(scenery.trees, u))
   group.add(buildStructures3D(scenery, u, materials, textures))
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
+  for (const extra of extras ?? []) group.add(extra)
   const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
   group.add(rig)
   const sun = rig.children.find((o): o is THREE.DirectionalLight => o instanceof THREE.DirectionalLight)!

@@ -13,7 +13,7 @@ import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
 import type { CarLivery } from '@/lib/scene3d/car-mesh'
 import { EXTRUDE } from '@/lib/ui/scenery-draw'
-import { PitGarageSigns } from './PitBuilding'
+import { buildGarageSigns3D } from '@/lib/scene3d/signs3d'
 import { COMPOUND_COLORS } from './TyreIndicator'
 import type { TyreCompound } from '@/lib/sim/types'
 import { GANTRY_H_M, PitBoxes, type PitBoxRefs } from './PitBoxes'
@@ -1217,6 +1217,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   )
   // The tile textures the stands' decks wear, built once per mount: a document is guaranteed here.
   const worldTextures = useMemo(() => buildWorldTextures(), [])
+  // The garage name boards, in-scene (#3d-port increment 5): the last real TEXT and flag artwork on
+  // the map, drawn to board textures standing in each bay's mouth. Memoised because nothing about
+  // who is signed above a garage changes during a race.
+  const signs3d = useMemo(
+    () => (view === 'live' && pitZone
+      ? buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [])
+      : null),
+    [view, pitZone, u, garageCars],
+  )
   // The car field: one lofted solid per entrant, posed by the loop, mounted beside the world in the
   // GL scene. Keyed on the circuit's own car scale, which is `u`'s only input.
   const carField3d = useMemo(
@@ -1264,28 +1273,14 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       frame: vb,
       overlay: gridOverlay,
       garageColors: (gi) => slotOf.colors[gi],
+      extras: signs3d ? [signs3d] : [],
     })
-  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, vb, gridOverlay, slotOf])
+  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, vb, gridOverlay, slotOf, signs3d])
   // The painter repaints when the CAMERA moves; anything that changes the picture WITHOUT one has to
   // ask: a freshly built world, or the STAGE being measured or resized (it is half of
   // pixels-per-metre).
   useEffect(() => { applyCam() }, [applyCam, world3d, stage.w, stage.h])
 
-  // The garage name boards are the only real TEXT on the map and the only remote artwork on it (the
-  // flags), so they stay in the document while the canvas owns everything else: neither degrades
-  // through a `DrawOp`. Memoised for the same reason the pit boxes are: nothing about who is signed
-  // above a garage changes during a race, and the map commits at least once a second regardless.
-  const signsNode = useMemo(
-    () => (pitZone
-      ? (
-        <PitGarageSigns
-          zone={pitZone} u={u} lighting={lighting} view={viewAz}
-          drivers={(gi) => garageCars[gi] ?? []}
-        />
-      )
-      : null),
-    [pitZone, u, lighting, viewAz, garageCars],
-  )
 
   return (
     <div
@@ -1331,7 +1326,6 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
             />
             {/* Measured, never drawn: the lane the pitting cars are placed along. */}
             <path ref={pitPathRef} d={layout.pit.d} fill="none" stroke="none" />
-            {view === 'live' && signsNode}
             <PitBoxes slots={pitSlots} u={u} colors={slotOf.colors} lighting={lighting} refs={pitBoxRefs} />
             {/* The start/finish chequer, off the same description every renderer takes. */}
             {view === 'map' && mapMarkOps.map((op, i) => (

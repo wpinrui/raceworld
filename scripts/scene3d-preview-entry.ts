@@ -12,6 +12,7 @@ import { TRACK_LAYOUTS, type TrackLayout } from '../src/data/tracks'
 import { CAR_LENGTH_M, CAR_SCALE, SPRITE } from '../src/lib/ui/car-sprite'
 import { PREVIEW_LIVERIES, carField } from '../src/lib/ui/car-field'
 import { CAR_RIDE_M, CarField3D } from '../src/lib/scene3d/car-field3d'
+import { buildGarageSigns3D } from '../src/lib/scene3d/signs3d'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
@@ -70,6 +71,13 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   const world = buildWorld3D({
     layout, scenery, pitZone, pitSlots, lap: roadLap(solveLap(layout)), lighting,
     textures, frame: frame ?? full,
+    // The same stand-in names the 2D preview letters its boards with.
+    extras: pitZone
+      ? [buildGarageSigns3D(pitZone, (m) => m / mpu, () => [
+        { name: 'Kimi Raikkonen', nationality: 'FI' },
+        { name: 'Felipe Massa', nationality: 'BR' },
+      ])]
+      : [],
   })
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(scenery.base)

@@ -115,8 +115,9 @@ export function PitGarageSigns({ zone, u, lighting, view, drivers }: {
   )
 }
 
-/** "Kimi Raikkonen" -> "K Raikkonen", the form a garage board actually carries. */
-function shortName(name: string): string {
+/** "Kimi Raikkonen" -> "K Raikkonen", the form a garage board actually carries. Exported for the
+ *  3D boards, which write the same label (#3d-port). */
+export function shortName(name: string): string {
   const parts = name.trim().split(/\s+/)
   return parts.length < 2 ? name : `${parts[0][0]} ${parts.slice(1).join(' ')}`
 }
