@@ -23,7 +23,11 @@ const TYRE = '#16181D'
 const RIM = '#2E3138'
 const PAD = '#3C434F'
 const MARK = '#E8C33A'
-const BOOM = '#2E333C'
+/** Gantry steel. NOT the SVG's near-tarmac dark: from straight above a boom is a strip lying on the
+ *  grimed apron, and at 6 counts off the asphalt it read as three stains splitting the box. Lit
+ *  steel with a bright cap reads as a beam standing over it. */
+const BOOM = '#5E6673'
+const BOOM_CAP = '#8B929E'
 /** The pad and markings ride just under the cars' clearance, over every road layer. */
 const PAD_M = 0.185
 const MARK_M = 0.19
@@ -87,8 +91,11 @@ export class PitCrew3D {
           color: PAD, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
         }),
       )
+      // Above every road decal's renderOrder (the ink stack numbers into the low hundreds on a busy
+      // circuit and a LATER decal paints over an EARLIER one regardless of height, since none of
+      // them writes depth), below the fences at 1000.
       pad.position.set(u(0.25), u(PAD_M), 0)
-      pad.renderOrder = 40
+      pad.renderOrder = 900
       pad.receiveShadow = true
       inner.add(pad)
       const marks = new GeometrySink()
@@ -110,7 +117,7 @@ export class PitCrew3D {
       const marksMesh = new THREE.Mesh(marks.build(), new THREE.MeshLambertMaterial({
         color: MARK, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide,
       }))
-      marksMesh.renderOrder = 41
+      marksMesh.renderOrder = 901
       inner.add(marksMesh)
       for (const bx of [1.5, -1.5]) {
         const boom = new THREE.Mesh(
@@ -121,6 +128,12 @@ export class PitCrew3D {
         boom.castShadow = true
         boom.receiveShadow = true
         inner.add(boom)
+        const cap = new THREE.Mesh(
+          new THREE.BoxGeometry(u(0.24), u(0.05), u(GANTRY_REACH_M)),
+          new THREE.MeshLambertMaterial({ color: BOOM_CAP }),
+        )
+        cap.position.set(u(bx), u(GANTRY_H_M + 0.275), u(-1.5 + GANTRY_REACH_M / 2))
+        inner.add(cap)
       }
 
       const crew = new THREE.Group()

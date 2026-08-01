@@ -122,5 +122,8 @@ describe('buildWorld3D', () => {
     // The surface story is hundreds of ops but only dozens of paints: runs merged, order kept.
     expect(decals).toBeGreaterThan(10)
     expect(maxOrder).toBe(decals)
+    // The pit box pad and markings paint at 900, over the whole ink range: an ink stack that grew
+    // past it would silently paint the grime over the pad again. The regression that hid them.
+    expect(maxOrder).toBeLessThan(900)
   })
 })

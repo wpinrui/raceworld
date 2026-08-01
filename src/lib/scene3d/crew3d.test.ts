@@ -48,14 +48,17 @@ describe('PitCrew3D', () => {
 
   it('builds the box furniture beside the crew: pad, markings, and shadow-casting booms', () => {
     const furniture = innerOf(0).children.filter((o) => o instanceof THREE.Mesh)
-    // Pad + markings + two gantry booms.
-    expect(furniture).toHaveLength(4)
+    // Pad + markings + two gantry booms with their bright caps.
+    expect(furniture).toHaveLength(6)
     const booms = furniture.filter((o) => o.castShadow)
     expect(booms).toHaveLength(2)
     expect(booms[0].position.y).toBeGreaterThan(u(2.2))
     const pad = furniture.find((o) => (
       (o as THREE.Mesh).material as THREE.MeshLambertMaterial).opacity === 0.45)!
     expect(((pad as THREE.Mesh).material as THREE.MeshLambertMaterial).transparent).toBe(true)
+    // Over the whole ink decal range, under the fences: later-ordered depthless decals paint over
+    // earlier ones whatever their height, and the road's grime sits in the same square metres.
+    expect(pad.renderOrder).toBe(900)
   })
 
   it('cuts the tyre props from the car wheel table and seats them at hub height', () => {

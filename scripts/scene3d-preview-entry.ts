@@ -12,6 +12,7 @@ import { TRACK_LAYOUTS, type TrackLayout } from '../src/data/tracks'
 import { CAR_LENGTH_M, CAR_SCALE, SPRITE } from '../src/lib/ui/car-sprite'
 import { PREVIEW_LIVERIES, carField } from '../src/lib/ui/car-field'
 import { CAR_RIDE_M, CarField3D } from '../src/lib/scene3d/car-field3d'
+import { PitCrew3D } from '../src/lib/scene3d/crew3d'
 import { buildGarageSigns3D } from '../src/lib/scene3d/signs3d'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { buildScenery } from '../src/lib/ui/track-scenery'
@@ -82,6 +83,23 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(scenery.base)
   scene.add(world.group)
+  // The pit boxes and their (hidden) crews, exactly as the live map mounts them, so the furniture
+  // is inspectable here. Flips derived from the drawn lane the same way the map measures them.
+  const crew = new PitCrew3D({
+    slots: pitSlots, u: (m) => m / mpu, colors: pitSlots.map(() => '#9AA3B2'),
+    carScale: CAR_LENGTH_M * CAR_SCALE / mpu / SPRITE.len, rideY: CAR_RIDE_M / mpu,
+  })
+  pitSlots.forEach((slot, si) => {
+    let best = layout.pit.fastPts[0]
+    let bestD = Infinity
+    for (const p of layout.pit.fastPts) {
+      const d = (p.x - slot.x) ** 2 + (p.y - slot.y) ** 2
+      if (d < bestD) { bestD = d; best = p }
+    }
+    const yLocal = -Math.sin(slot.rot) * (best.x - slot.x) + Math.cos(slot.rot) * (best.y - slot.y)
+    crew.setFlip(si, yLocal > 0 ? -1 : 1)
+  })
+  scene.add(crew.group)
   return { scene, layout, full, stats: world.stats }
 }
 
