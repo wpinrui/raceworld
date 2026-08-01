@@ -63,13 +63,16 @@ export type TrackSample = { prog: number; pit?: boolean; pitPhase?: 'in' | 'box'
 // CAR_LENGTH_M and CAR_SCALE now live with the sprite's own geometry in lib/ui/car-sprite.ts, which
 // needs them to size the light it casts; everything car-locked here still multiplies by them.
 
-const ZOOM_MAX = 60
 const ZOOM_DEFAULT = 20
 const ZOOM_STEP = 1.18 // per wheel notch
 const ZOOM_MIN = 0.6 // full-track view
+/** The zoom ceiling, in the readout's own terms: the same closeness on every circuit, whatever its
+ *  metres-per-unit or stage fit. */
+const ZOOM_MAX_PXM = 100
 const ROT_STEP = Math.PI / 36 // 5° per shift+wheel notch
-/** How far the camera can lie down, radians off vertical: enough for drama, never at the horizon. */
-const PITCH_MAX = 1.05
+/** How far the camera can lie down, radians off vertical: ~80 degrees, almost eye level with the
+ *  cars, stopped just short of the horizon where an endless ground plane starts showing its edge. */
+const PITCH_MAX = 1.4
 
 /** Projection scratch, written and read within one rAF pass. */
 const projA = new THREE.Vector3()
@@ -381,7 +384,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           glCamera, { w: rect.width, h: rect.height },
           e.clientX - rect.left, e.clientY - rect.top,
         )
-        const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, cam.z * (e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP)))
+        const pxPerZ = (stageDimsRef.current.w / vbRef.current.w) / layout.metresPerUnit
+        const zMax = pxPerZ > 0 ? ZOOM_MAX_PXM / pxPerZ : ZOOM_DEFAULT
+        const nz = Math.min(zMax, Math.max(ZOOM_MIN, cam.z * (e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP)))
         if (q) {
           const k = cam.z / nz
           cam.tx = q.x + (cam.tx - q.x) * k
@@ -393,7 +398,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     }
     outer.addEventListener('wheel', onWheel, { passive: false })
     return () => outer.removeEventListener('wheel', onWheel)
-  }, [applyCam, glCamera])
+  }, [applyCam, glCamera, layout.metresPerUnit])
 
   const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean; mode: 'pan' | 'orbit' } | null>(null)
   const suppressClickRef = useRef(false)
@@ -1203,8 +1208,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       : null),
     [view, pitZone, u, garageCars],
   )
-  // The car field: one lofted solid per entrant, posed by the loop, mounted beside the world in the
-  // GL scene. Keyed on the circuit's own car scale, which is `u`'s only input.
+  // The car field and the pit crew are GL RESOURCES with a StrictMode trap: dev mounts every effect
+  // twice, and a cleanup that disposes the memo-held instance guts the very object the remount then
+  // reuses. That is exactly how the whole pit lane (pad, markings, booms, crew) silently vanished
+  // from a dev session: `dispose()` emptied the group and nothing ever rebuilt it. So disposal is
+  // DEFERRED AND GUARDED: it only fires if the instance was not re-adopted by the next tick.
   const carField3d = useMemo(
     () => (view === 'live'
       ? new CarField3D(u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len, u(CAR_RIDE_M))
@@ -1214,13 +1222,15 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const carField3dRef = useRef<CarField3D | null>(null)
   useEffect(() => {
     carField3dRef.current = carField3d
+    const victim = carField3d
     return () => {
       carField3dRef.current = null
-      carField3d?.dispose()
+      if (victim) setTimeout(() => { if (carField3dRef.current !== victim) victim.dispose() }, 0)
     }
   }, [carField3d])
   // The pit crew, in-scene (#3d-port): people and props the choreography drives through the same
-  // slot-local metres it always computed. Tyre props are cut from the car's own wheel table.
+  // slot-local metres it always computed. Tyre props are cut from the car's own wheel table. The
+  // measured lane-side flips outlive any rebuild in `slotFlipRef`, so a fresh crew inherits them.
   const crew3d = useMemo(
     () => (view === 'live'
       ? new PitCrew3D({
@@ -1233,9 +1243,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const crew3dRef = useRef<PitCrew3D | null>(null)
   useEffect(() => {
     crew3dRef.current = crew3d
+    slotFlipRef.current.forEach((flip, si) => crew3d?.setFlip(si, flip))
+    const victim = crew3d
     return () => {
       crew3dRef.current = null
-      crew3d?.dispose()
+      if (victim) setTimeout(() => { if (crew3dRef.current !== victim) victim.dispose() }, 0)
     }
   }, [crew3d])
   // Liveries, compounds and retirements arrive through React; `ensure` is a no-op until one changes.

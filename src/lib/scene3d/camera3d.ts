@@ -89,7 +89,7 @@ export function applyOrbitCam(
   camera.updateMatrixWorld(true)
   // The ground rect in shot, generously: pitching stretches the far half of the view across more
   // world than the frustum's target-plane cut, and the shadow box must cover what is seen.
-  const reach = 1 / Math.max(0.35, Math.cos(cam.pitch))
+  const reach = 1 / Math.max(0.2, Math.cos(cam.pitch))
   return { cx: cam.tx, cz: cam.tz, halfW: halfW * reach, halfH: halfH * reach }
 }
 
