@@ -18,8 +18,8 @@ import { DECAL_PULL } from './materials3d'
 
 /** The patch's half-extents in SPRITE UNITS, the frame the car mesh is built in (x across, z along,
  *  nose at low z). Wider and longer than the car so the penumbra has somewhere to fade out. */
-const HALF_W = 150
-const HALF_L = 292
+const HALF_W = 265
+const HALF_L = 390
 
 /** Where the tyres touch, from `SPRITE.wheels` recentred on the sprite's middle: the front axle
  *  108 units ahead of centre, the rear 138 behind, each 90 out from the centreline. */
@@ -29,7 +29,7 @@ const HALF_TRACK = SPRITE.cx - SPRITE.wheels[0][0]
 
 /** How dark the patch goes at its very darkest, before the material's own opacity scales it. Not
  *  black: this is occluded AMBIENT, and a car does not seal the road off from the sky. */
-const MAX_OCCLUSION = 0.62
+const MAX_OCCLUSION = 0.55
 
 /** Resolution of the generated patch. Small on purpose: every edge in it is a penumbra, so there is
  *  no detail to lose and a big texture would only cost memory per circuit. */
@@ -49,16 +49,29 @@ interface Blob {
 /** What occludes what. The floor is a long soft shadow down the car's spine; each tyre is a tight
  *  dark ring where rubber meets road, which is the cue that actually reads as CONTACT. */
 const BLOBS: Blob[] = [
-  { x: 0, z: -6, ax: 74, az: 196, strength: 0.72 },
+  // These have to reach PAST the car, and by a good margin. The bodywork is 136 units to each side
+  // and it stands over its own shadow, so anything narrower than that is drawn entirely underneath
+  // the thing casting it and never reaches a pixel the player can see. At 190 the darkening lands
+  // about 0.6m out onto open road, which is where a car's occlusion actually shows.
+  { x: 0, z: -6, ax: 168, az: 268, strength: 0.44 },
   ...[AXLE_FRONT, AXLE_REAR].flatMap((z) => [-HALF_TRACK, HALF_TRACK].map((x) => ({
-    x, z, ax: 42, az: 54, strength: 1,
+    x, z, ax: 74, az: 90, strength: 1,
   }))),
 ]
 
-/** Smooth 1-at-centre, 0-at-edge falloff over a normalised radius. */
+/** How much of a blob is at FULL strength before it starts fading. A plain smooth peak puts all its
+ *  darkness in a spike at the exact centre, which for a car is the one place the bodywork is
+ *  standing over: what reaches the road a player can see is only the tail of the falloff, and the
+ *  whole patch reads as far weaker than its numbers say. A flat core spends the darkness across the
+ *  contact instead of at a point in the middle of it. */
+const CORE = 0.28
+
+/** Full strength across the core, smoothly to nothing at the edge. */
 function falloff(t: number): number {
   if (t >= 1) return 0
-  return 1 - t * t * (3 - 2 * t)
+  if (t <= CORE) return 1
+  const u = (t - CORE) / (1 - CORE)
+  return 1 - u * u * (3 - 2 * u)
 }
 
 /** The occlusion alpha at a point in the car's own frame. */
