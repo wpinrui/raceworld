@@ -9,6 +9,7 @@ import type { Circuit, Driver, DriverRaceState, GodModeAction, RaceResult, RaceS
 import type { ConstructorStanding, DriverStanding } from '@/lib/sim/types'
 import type { TrackLayout } from '@/data/tracks'
 import { RaceTrackMap, type TrackCarMeta, type TrackSample } from './RaceTrackMap'
+import { liveryFor } from '@/data/history/liveries'
 import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from './RaceTable'
 import CommentaryFeed from './CommentaryFeed'
 import { LiveChampionship } from './LiveChampionship'
@@ -133,11 +134,15 @@ export function RaceDayView({
       raceState.drivers.map((s) => {
         const driver = driverOf.get(s.driverId)
         const team = driver ? teamOf.get(driver.teamId) : undefined
+        const color = team?.color ?? '#888'
         return {
           id: s.driverId,
           pos: s.position,
           compound: s.currentTyre.compound,
-          color: team?.color ?? '#888',
+          color,
+          // The era's five-slot palette for this constructor and season; a team without a livery
+          // entry (a custom or expansion team) paints from its single colour instead.
+          livery: driver ? liveryFor(driver.teamId, year, color) : undefined,
           name: driver?.name ?? s.driverId,
           team: team?.name,
           nationality: driver?.nationality,
@@ -146,7 +151,7 @@ export function RaceDayView({
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [raceState.drivers, driverOf, teamOf],
+    [raceState.drivers, driverOf, teamOf, year],
   )
 
   const myDrivers = driverMode

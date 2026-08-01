@@ -11,6 +11,7 @@ import { Scene3DCanvas } from './Scene3DCanvas'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
+import type { CarLivery } from '@/lib/scene3d/car-mesh'
 import { EXTRUDE } from '@/lib/ui/scenery-draw'
 import { PitGarageSigns } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
@@ -40,6 +41,8 @@ export interface TrackCarMeta {
   /** Current tyre compound â€” drives the rim-edge colour band on the sprite's wheels. */
   compound?: TyreCompound
   color: string
+  /** The constructor's era livery for this season (#3d-port); absent, the car paints from `color`. */
+  livery?: CarLivery
   name: string
   team?: string
   nationality?: string
@@ -1236,7 +1239,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
     const live = new Set<string>()
     for (const c of cars) {
       live.add(c.id)
-      carField3d.ensure(c.id, c.color, c.compound)
+      carField3d.ensure(c.id, c.livery ?? c.color, c.compound)
       carField3d.setOpacity(c.id, c.retired ? 0.35 : 1)
     }
     carField3d.sweep(live)
