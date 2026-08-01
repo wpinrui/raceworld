@@ -34,12 +34,18 @@ import type { WorldTextures } from './textures3d'
 const GROUND_PAD = 4000
 
 /** One painter's layer sits this far above the one below, in metres: comfortably separated in a
- *  24-bit depth buffer at any framing, far too little for any camera to read as height. */
-const LIFT_M = 0.04
+ *  24-bit depth buffer at any framing, far too little for any camera to read as height. Kept SMALL
+ *  for the cars' sake: a car stands on the ground plane and everything on it below the stack's top
+ *  loses the depth test to the road sheets. At 15mm the whole stack tops out under 0.2m, which the
+ *  car's ride height clears with its front wing on full brake dive. */
+const LIFT_M = 0.015
 const LAYER = {
   bands: 1, fields: 2, terrain: 3, runoffs: 4, floors: 5, inkUnder: 6,
   casing: 7, tarmac: 8, inkOver: 9, lanePaint: 10, kerbWhite: 11, kerbRed: 12, marks: 13,
 } as const
+
+/** The stack's top, in metres: what anything RIDING the road (the cars) must clear. */
+export const STACK_TOP_M = LIFT_M * LAYER.marks
 
 export interface World3DInput {
   layout: TrackLayout

@@ -32,6 +32,12 @@ const DIVE_MAX_RAD = (2.4 * Math.PI) / 180
 
 const WHEEL_TAGS = ['fl', 'fr', 'rl', 'rr'] as const
 
+/** How far above the GROUND PLANE the cars ride, in metres: just over the painter stack's top, so
+ *  no part of the car (the front wing under brake dive, the tyres' lower halves) is ever below the
+ *  road sheets and silently depth-buried by them. The float above the drawn tarmac surface is a few
+ *  centimetres, unreadable from any camera the map has. */
+export const CAR_RIDE_M = 0.2
+
 interface Entry {
   key: string
   mesh: CarMesh
@@ -54,8 +60,9 @@ export class CarField3D {
   readonly group = new THREE.Group()
   private entries = new Map<string, Entry>()
 
-  /** `scaleUnits`: world units per sprite unit, the circuit's own car scale. */
-  constructor(private scaleUnits: number) {}
+  /** `scaleUnits`: world units per sprite unit, the circuit's own car scale. `rideY`: the ride
+   *  height in WORLD units, `CAR_RIDE_M` through the circuit's metres-per-unit. */
+  constructor(private scaleUnits: number, private rideY = 0) {}
 
   /** Build (or rebuild, on a livery or compound change) the car for an entrant. */
   ensure(id: string, livery: CarLivery, compound: TyreCompound = 'medium'): void {
@@ -91,7 +98,7 @@ export class CarField3D {
   pose(id: string, p: CarPose): void {
     const e = this.entries.get(id)
     if (!e) return
-    e.wrap.position.set(p.x, 0, p.y)
+    e.wrap.position.set(p.x, this.rideY, p.y)
     e.wrap.rotation.y = -p.rot
     // A car leans AWAY from the corner and dips its nose under the brakes, the same signs the
     // sprite's slide encoded.

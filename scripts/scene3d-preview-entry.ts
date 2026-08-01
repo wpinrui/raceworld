@@ -11,7 +11,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TRACK_LAYOUTS, type TrackLayout } from '../src/data/tracks'
 import { CAR_LENGTH_M, CAR_SCALE, SPRITE } from '../src/lib/ui/car-sprite'
 import { PREVIEW_LIVERIES, carField } from '../src/lib/ui/car-field'
-import { CarField3D } from '../src/lib/scene3d/car-field3d'
+import { CAR_RIDE_M, CarField3D } from '../src/lib/scene3d/car-field3d'
 import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
@@ -80,7 +80,10 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
 /** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
  *  this probe shoots is what the race view renders. The impostor stopgap retired with the loft. */
 function carMeshes(layout: TrackLayout, n: number): THREE.Group {
-  const field = new CarField3D(CAR_LENGTH_M * CAR_SCALE / layout.metresPerUnit / SPRITE.len)
+  const field = new CarField3D(
+    CAR_LENGTH_M * CAR_SCALE / layout.metresPerUnit / SPRITE.len,
+    CAR_RIDE_M / layout.metresPerUnit,
+  )
   carField(layout, n).forEach((car, i) => {
     const id = `p${i}`
     field.ensure(id, PREVIEW_LIVERIES[i % PREVIEW_LIVERIES.length])

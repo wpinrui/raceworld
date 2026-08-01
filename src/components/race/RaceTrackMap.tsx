@@ -10,7 +10,7 @@ import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '
 import { Scene3DCanvas } from './Scene3DCanvas'
 import { buildWorld3D } from '@/lib/scene3d/world3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
-import { CarField3D } from '@/lib/scene3d/car-field3d'
+import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
 import { EXTRUDE } from '@/lib/ui/scenery-draw'
 import { PitGarageSigns } from './PitBuilding'
 import { COMPOUND_COLORS } from './TyreIndicator'
@@ -1217,7 +1217,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   // The car field: one lofted solid per entrant, posed by the loop, mounted beside the world in the
   // GL scene. Keyed on the circuit's own car scale, which is `u`'s only input.
   const carField3d = useMemo(
-    () => (view === 'live' ? new CarField3D(u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len) : null),
+    () => (view === 'live'
+      ? new CarField3D(u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len, u(CAR_RIDE_M))
+      : null),
     [view, u],
   )
   const carField3dRef = useRef<CarField3D | null>(null)

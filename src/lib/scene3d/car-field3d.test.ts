@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { CarField3D } from './car-field3d'
+import { STACK_TOP_M } from './world3d'
+import { CAR_RIDE_M, CarField3D } from './car-field3d'
 
 describe('CarField3D', () => {
+  it('rides above the whole painter stack, or the road sheets depth-bury the wing and tyres', () => {
+    // The regression: the front wing and the tyres' lower halves vanished wherever the car was on
+    // tarmac, because the road's lift layers sat above them and won the depth test.
+    expect(CAR_RIDE_M).toBeGreaterThan(STACK_TOP_M)
+    const field = new CarField3D(0.01, 0.05)
+    field.ensure('a', '#E8442E')
+    field.pose('a', { x: 3, y: 4, rot: 0, steerLeft: 0, steerRight: 0, lat: 0, long: 0, ds: 0 })
+    expect((field.group.children[0] as THREE.Group).position.y).toBe(0.05)
+    field.dispose()
+  })
+
   it('builds a car per entrant at the circuit scale and rebuilds only on a livery or compound change', () => {
     const field = new CarField3D(0.01)
     field.ensure('a', '#E8442E', 'soft')
