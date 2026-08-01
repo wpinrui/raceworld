@@ -358,8 +358,8 @@ export function buildWorldDetail(): WorldDetail {
     // Relief 1.6 against the 2.6 it was, because the SAME relief is a much steeper surface once the
     // features are a few texels wide rather than a few dozen: `normalTexture` differences over two
     // texels, so the slope it reads scales with how fast the field moves per texel, and the field
-    // now crosses a whole stone in four of them. 1.6 through a 0.1 normalScale lands the flanks near
-    // 9 degrees, which is a millimetre of chipping standing proud of a twelve millimetre stone.
+    // now crosses a whole stone in four of them. 1.6 through a 0.092 normalScale lands the flanks
+    // near 8 degrees, which is a millimetre of chipping standing proud of a twelve millimetre stone.
     //
     // Detuned to 1.31 tiles, i.e. a 2.10 m repeat against the albedo's 1.60 m. The relief is read
     // against the FIELD's own texel either way, so stretching it only makes the modelled chippings
@@ -374,7 +374,12 @@ export function buildWorldDetail(): WorldDetail {
     // SHADING, which is smooth and directional and reads as ripples on water rather than as stones.
     // Put the contrast in the albedo and the surface stops being lit and starts being made of
     // something. `ROAD_TARMAC` is lightened to match, since this now averages well below 1.
-    albedoMap: scalarTexture(gritField, 0.2, 1),
+    //
+    // Taken in 8% from the 0.2..1 it was, and taken in AROUND ITS OWN MEAN rather than by lifting
+    // the floor: the field averages 0.17, so raising `lo` alone would have brightened the road half
+    // a stop while quietening it. 0.21..0.95 leaves the mean at 0.338 to three places, which is what
+    // `ROAD_TARMAC` was solved against, and only the swing between stone and bitumen moves.
+    albedoMap: scalarTexture(gritField, 0.21, 0.95),
     // A NARROW band, 0.68 to 0.9. The first attempt ran 0.5 to 0.98, and half a unit of roughness
     // between one chipping and the next is not aggregate, it is wet patches: the glossy end caught
     // the sky hard enough to read as puddles scattered over the circuit.
@@ -383,7 +388,9 @@ export function buildWorldDetail(): WorldDetail {
     // two-octave field with no grain ramp on it), so it is the one whose broad light and dark
     // patches the eye is most able to match against their copy down the road.
     roughnessMap: detune(scalarTexture(wearField, 0.68, 0.9), 1.73),
-    normalScale: 0.1,
+    // Down 8% with the albedo, so the grain quietens as one surface. Dropping the colour swing alone
+    // leaves the same relief lighting a flatter stone, which is the sparkle without the substance.
+    normalScale: 0.092,
     tileM: ROAD_TILE_M,
   }
   // Paint is a SURFACE, not a window onto the one underneath. A track's boundary line, the apron's
