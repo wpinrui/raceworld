@@ -28,7 +28,7 @@ describe('CarField3D', () => {
     field.dispose()
   })
 
-  it('poses in world units: position, heading, lock in degrees, lean and dive as real rotations', () => {
+  it('poses in world units: heading on the wrap, lean and dive on the CHASSIS over planted wheels', () => {
     const field = new CarField3D(0.01)
     field.ensure('a', '#E8442E')
     field.pose('a', {
@@ -38,12 +38,18 @@ describe('CarField3D', () => {
     expect(wrap.position.x).toBe(120)
     expect(wrap.position.z).toBe(340)
     expect(wrap.rotation.y).toBeCloseTo(-1.2, 10)
-    // Full lateral load leans the car its whole authored angle; full braking dips the nose.
-    expect(wrap.rotation.z).toBeLessThan(0)
-    expect(wrap.rotation.x).toBeLessThan(0)
+    // The regression: rolling the whole car about a ground-level axis dipped the outboard tyres
+    // through the tarmac once the ride height became honest. Only the sprung mass leans now.
+    expect(wrap.rotation.z).toBe(0)
+    expect(wrap.rotation.x).toBe(0)
     const mesh = wrap.children[0]
+    const chassis = mesh.children.find((o) => o.position.x === 0 && o.position.y === 0)!
+    expect(chassis.rotation.z).toBeLessThan(0)
+    expect(chassis.rotation.x).toBeLessThan(0)
     const fl = mesh.children.find((o) => o.position.x === -90 && o.position.z < 0)!
     expect(fl.rotation.y).toBeCloseTo(-(10 * Math.PI) / 180, 10)
+    // Planted: a leaning chassis never tilts the wheel pivots.
+    expect(fl.rotation.z).toBe(0)
     field.dispose()
   })
 

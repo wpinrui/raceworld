@@ -844,6 +844,9 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
 
 export interface CarMesh {
   group: THREE.Group
+  /** The SPRUNG MASS: everything roll and dive move. The wheels live outside it, planted on the
+   *  road, so a leaning body can never grind its outboard tyres through the tarmac (#3d-port). */
+  chassis: THREE.Object3D
   /** STEERING pivots, keyed the way the sprite tags them. The brake duct hangs off these, because
    *  a duct turns with the wheel but does not go round with it. */
   wheels: Record<'fl' | 'fr' | 'rl' | 'rr', THREE.Object3D>
@@ -1496,7 +1499,8 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
       return g
     }
     const wheels = { fl: parked(), fr: parked(), rl: parked(), rr: parked() }
-    return { group, wheels, spin: { fl: parked(), fr: parked(), rl: parked(), rr: parked() } }
+    // The proxy tier rolls whole: at the distance it exists for, an unsprung wheel is sub-pixel.
+    return { group, chassis: group, wheels, spin: { fl: parked(), fr: parked(), rl: parked(), rr: parked() } }
   }
   const group = new THREE.Group()
   const paint = asPaint(livery)
@@ -2000,7 +2004,20 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
     collapseByPaint(group, EMPTY_BOUNDARY)
   }
 
-  return { group, wheels, spin }
+  // The sprung mass, split AFTER the collapse so it holds the few merged buffers rather than a
+  // hundred parts: everything but the wheel pivots reparents under one chassis, and roll and dive
+  // lean the body over planted wheels instead of dipping the whole car through the road.
+  const chassis = new THREE.Group()
+  const unsprung = new Set<THREE.Object3D>(Object.values(wheels))
+  for (const child of [...group.children]) {
+    if (!unsprung.has(child)) {
+      group.remove(child)
+      chassis.add(child)
+    }
+  }
+  group.add(chassis)
+
+  return { group, chassis, wheels, spin }
 }
 
 const EMPTY_BOUNDARY: ReadonlySet<THREE.Object3D> = new Set()

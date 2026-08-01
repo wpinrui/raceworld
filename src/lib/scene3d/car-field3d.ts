@@ -29,8 +29,8 @@ export interface CarPose {
 }
 
 /** Body angles at the limit. Bolder than a real car's degree-or-two for the same reason every cue
- *  on this map is: at map scale the honest value does not exist. The whole car leans (the mesh has
- *  no chassis/wheel split yet), so these stay below where wheel float starts to read. */
+ *  on this map is: at map scale the honest value does not exist. Only the CHASSIS takes them: the
+ *  wheels stay planted, and the body's own ground clearance absorbs the outboard dip. */
 const ROLL_MAX_RAD = (3.6 * Math.PI) / 180
 const DIVE_MAX_RAD = (2.4 * Math.PI) / 180
 
@@ -78,8 +78,6 @@ export class CarField3D {
     const mesh = buildCarMesh(livery, compound)
     const wrap = new THREE.Group()
     wrap.scale.setScalar(this.scaleUnits)
-    // Heading about y, then roll about the car's own length, then dive about its axle line.
-    wrap.rotation.order = 'YZX'
     wrap.add(mesh.group)
     this.group.add(wrap)
     this.entries.set(id, { key, mesh, wrap, spun: { fl: 0, fr: 0, rl: 0, rr: 0 } })
@@ -106,9 +104,9 @@ export class CarField3D {
     e.wrap.position.set(p.x, (p.ground ?? 0) + this.rideY, p.y)
     e.wrap.rotation.y = -p.rot
     // A car leans AWAY from the corner and dips its nose under the brakes, the same signs the
-    // sprite's slide encoded.
-    e.wrap.rotation.z = -p.lat * ROLL_MAX_RAD
-    e.wrap.rotation.x = p.long * DIVE_MAX_RAD
+    // sprite's slide encoded: on the CHASSIS only, over wheels that never leave the road.
+    e.mesh.chassis.rotation.z = -p.lat * ROLL_MAX_RAD
+    e.mesh.chassis.rotation.x = p.long * DIVE_MAX_RAD
     e.mesh.wheels.fl.rotation.y = -(p.steerLeft * Math.PI) / 180
     e.mesh.wheels.fr.rotation.y = -(p.steerRight * Math.PI) / 180
     if (p.ds > 0) {
