@@ -12,7 +12,7 @@
 // only way to see the horizon here, because the two ortho shots above cannot contain one. `--eye-zoom`
 // is the map's own zoom scalar (default 20, its ZOOM_DEFAULT) and `--rot` rolls the camera.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
@@ -43,6 +43,9 @@ async function main() {
     alias: { '@': resolve('src') },
     logLevel: 'silent',
   })
+  // The tree pack, beside the page: the viewer runs off file://, where `public/` is not a root and
+  // a fetch up out of the output directory is refused as cross-origin.
+  for (const f of ['trees.glb', 'low_poly_forest_tree_pack.glb']) copyFileSync(`public/models/${f}`, resolve(OUT, f))
   const viewer = resolve(OUT, 'scene3d-viewer.html')
   writeFileSync(viewer, '<!doctype html><html><head><meta charset="utf-8"><title>scene3d preview</title>'
     + '<style>'
@@ -70,7 +73,11 @@ async function main() {
   let browser = null
   for (const channel of ['msedge', 'chrome'] as const) {
     try {
-      browser = await chromium.launch({ channel, headless: true })
+      // The page loads the tree pack off file://, which Chromium treats as an opaque origin and
+      // refuses by default. Safe here: the browser is headless, drives one local page and dies.
+      browser = await chromium.launch({
+        channel, headless: true, args: ['--allow-file-access-from-files'],
+      })
       break
     } catch {
       // Try the next channel: playwright-core downloads nothing, it drives what the machine has.

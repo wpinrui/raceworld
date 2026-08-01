@@ -94,15 +94,22 @@ type Vec = { x: number; y: number }
 const TREE_JITTER_BASE = 0.8
 const TREE_JITTER_SPAN = 0.35
 /** Trees are scaled as a whole rather than having their canopy and height drawn independently, so
- *  proportions hold from sapling to mature tree. The exponent skews the population small: mostly
- *  ordinary trees with the occasional big one, which is what a real treeline looks like. */
-// Not below this: a sapling a metre and a half across costs the same three DOM nodes as a mature
-// tree and reads as a speck of noise on the grass.
-const TREE_MIN_SCALE = 0.8
-const TREE_MAX_SCALE = 2.1
-const TREE_SCALE_SKEW = 1.9
-const TREE_BASE_R_M = 3.3
-const TREE_BASE_H_M = 8.5
+ *  proportions hold from sapling to mature tree. The exponent still skews the population small, but
+ *  only mildly: a real treeline is mature trees with the occasional big one, not saplings.
+ *
+ *  Retuned when the trees stopped being painted blobs and became models. The old spread ran a 9.8 m
+ *  median with two thirds of the wood under 12 m, which read fine as a lollipop and reads as a
+ *  nursery bed once the thing has a trunk and a crown: a mature roadside broadleaf is 15-20 m.
+ *  Now a 16.4 m median, a floor at 11 m, and one tree in seven under 12 m.
+ *
+ *  The base radius moves WITH the base height, on purpose. It is what every clearance test measures
+ *  (track edge, pit, structures, other trunks), so leaving it behind would let canopies half again
+ *  as wide overhang the circuit and grow through each other. */
+const TREE_MIN_SCALE = 0.85
+const TREE_MAX_SCALE = 1.9
+const TREE_SCALE_SKEW = 1.35
+const TREE_BASE_R_M = 5.0
+const TREE_BASE_H_M = 13
 /** Trees per unit of biome density. */
 export const TREE_TARGET_BASE = 520
 

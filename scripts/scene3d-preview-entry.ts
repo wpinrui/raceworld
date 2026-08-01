@@ -32,6 +32,15 @@ import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { buildWorldDetail } from '../src/lib/scene3d/detail3d'
 import { buildPost } from '../src/lib/scene3d/post3d'
 import { buildWorld3D, GROUND_PAD } from '../src/lib/scene3d/world3d'
+import { loadTreePack, type TreePack } from '../src/lib/scene3d/treepack3d'
+import type { Trees3D } from '../src/lib/scene3d/trees3d'
+
+/** The probe runs off file://, where `public/` is not a served root; the .glb is addressed relative
+ *  to the written page instead, and the node half copies it in beside the viewer. */
+const PACK_URLS = { broadleaf: 'trees.glb', conifer: 'low_poly_forest_tree_pack.glb' }
+
+/** Loaded once before any scene is built, and read by every `buildScene`. */
+let treePack: TreePack | null = null
 
 declare global {
   interface Window {
@@ -78,6 +87,8 @@ interface BuiltScene {
   sun: THREE.DirectionalLight
   /** The rig's hemisphere, so a mounted environment map can stand it down. */
   sky: THREE.HemisphereLight
+  /** The wood, so a shot or an orbit can repack its detail tiers the way the live canvas does. */
+  trees: Trees3D
   stats: { meshes: number; triangles: number }
 }
 
@@ -117,6 +128,21 @@ function gridAt(layout: TrackLayout, n: number): { x: number; z: number } | null
   return { x: pt.x, z: pt.y }
 }
 
+/** What a scene is submitting RIGHT NOW: instanced draws are counted at their live `count`, which is
+ *  the whole point here, since the wood's tiers repack as the camera moves. */
+function countScene(scene: THREE.Object3D): { meshes: number; triangles: number } {
+  let meshes = 0
+  let triangles = 0
+  scene.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return
+    meshes++
+    const g = o.geometry as THREE.BufferGeometry
+    const per = (g.index ? g.index.count : g.attributes.position.count) / 3
+    triangles += o instanceof THREE.InstancedMesh ? per * o.count : per
+  })
+  return { meshes, triangles: Math.round(triangles) }
+}
+
 function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene {
   const layout = TRACK_LAYOUTS[id]
   if (!layout) throw new Error(`no such layout: ${id}`)
@@ -144,6 +170,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     // the live scene builds and this one did not.
     overlay: gridOverlayOps(layout, Number(q.get('grid') ?? '0')),
     night: moodName === 'night',
+    treePack,
     // The same stand-in names the 2D preview letters its boards with.
     extras: () => (pitZone
       ? [buildGarageSigns3D(pitZone, (m) => m / mpu, () => [
@@ -172,7 +199,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     crew.setFlip(si, yLocal > 0 ? -1 : 1)
   })
   scene.add(crew.group)
-  return { scene, layout, full, sun: world.sun, sky: world.sky, stats: world.stats }
+  return { scene, layout, full, sun: world.sun, sky: world.sky, trees: world.trees, stats: world.stats }
 }
 
 /** The live car field, strung round the racing line: the SAME `CarField3D` the map mounts, so what
@@ -325,6 +352,7 @@ async function eyeShot() {
   const frame = applyOrbitCam(camera, cam, { w, h }, w / full.w)
   const half = Math.hypot(frame.halfW, frame.halfH)
   refitShadow(built.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
+  built.trees.update(camera.position)
   fitFog(built, camera)
   const post = buildPost(renderer, built.scene, camera)
   post.setSize(w, h, 1)
@@ -341,12 +369,18 @@ async function eyeShot() {
     const f = applyOrbitCam(camera, cam, { w: vw, h: vh }, vw / full.w)
     const r = Math.hypot(f.halfW, f.halfH)
     refitShadow(built.sun, { x: f.cx - r, y: f.cz - r, w: 2 * r, h: 2 * r })
+    built.trees.update(camera.position)
     fitFog(built, camera)
   }
   window.__full = full
   window.__gridAt = gridAt(layout, Number(q.get('grid') ?? '0'))
 
-  window.__stats = { ...built.stats, w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built) }
+  // Re-counted AFTER the orbit has repacked the wood's detail tiers. `built.stats` is taken at build
+  // time, when the tree tiers are still on their placeholder split, so it says nothing about what
+  // this shot actually submits — and the tree band is exactly the knob that number has to answer for.
+  window.__stats = {
+    ...countScene(built.scene), w, h, horizon: horizonOf(built), fogSpan: fogSpanOf(built),
+  }
   window.__scene = built.scene
   window.__camera = camera
 }
@@ -483,6 +517,10 @@ function viewerMain() {
 
 ;(async () => {
   try {
+    // Before ANY scene is built: the pack is what the wood is made of, and a world built without it
+    // falls back to the old spheres. The live canvas can afford to build twice and swap; a probe
+    // shooting one frame cannot.
+    treePack = await loadTreePack(PACK_URLS).catch(() => null)
     if (q.has('shot')) await (q.has('pitch') ? eyeShot() : shotMain())
     else viewerMain()
   } catch (err) {

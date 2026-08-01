@@ -14,6 +14,7 @@ import { buildWorld3D } from '@/lib/scene3d/world3d'
 import { skySeedFor } from '@/lib/scene3d/sky3d'
 import { buildWorldTextures } from '@/lib/scene3d/textures3d'
 import { buildWorldDetail } from '@/lib/scene3d/detail3d'
+import { loadTreePack, type TreePack } from '@/lib/scene3d/treepack3d'
 import { CAR_RIDE_M, CarField3D } from '@/lib/scene3d/car-field3d'
 import { PitCrew3D } from '@/lib/scene3d/crew3d'
 import type { CarLivery } from '@/lib/scene3d/car-mesh'
@@ -1206,6 +1207,16 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const worldTextures = useMemo(() => buildWorldTextures(), [])
   // The generated surface grain: scale-free, so one set serves every circuit and every mood.
   const worldDetail = useMemo(() => buildWorldDetail(), [])
+  // The tree pack, downloaded once per session and cached inside the loader. It arrives after the
+  // first world is already standing (with the fallback spheres on it), and landing in state rebuilds
+  // that world once. Deliberately NOT disposed on unmount: the cache is session-wide, and a second
+  // mount would find a gutted pack. StrictMode's double mount is why the flag exists at all.
+  const [treePack, setTreePack] = useState<TreePack | null>(null)
+  useEffect(() => {
+    let live = true
+    loadTreePack().then((p) => { if (live) setTreePack(p) }).catch(() => {})
+    return () => { live = false }
+  }, [])
   // The garage name boards build INSIDE the world (below), per invocation: a memo-held group here
   // got silently stolen by StrictMode's double-invoked world build re-parenting it.
   // The car field and the pit crew are GL RESOURCES with a StrictMode trap: dev mounts every effect
@@ -1286,8 +1297,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       garageColors: (gi) => slotOf.colors[gi],
       extras: () => (pitZone ? [buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [])] : []),
       night: mood === 'night',
+      treePack,
     })
-  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, worldDetail, vb, gridOverlay, slotOf, u, garageCars, mood])
+  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, worldDetail, vb, gridOverlay, slotOf, u, garageCars, mood, treePack])
   // The painter repaints when the CAMERA moves; anything that changes the picture WITHOUT one has to
   // ask: a freshly built world, or the STAGE being measured or resized (it is half of
   // pixels-per-metre).

@@ -82,6 +82,9 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       refitShadow(world.sun, {
         x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half,
       })
+      // The wood's detail tiers are camera-relative, so they refit exactly where the shadow box and
+      // the haze do: on the camera MOVING, never per frame.
+      world.trees.update(camera.position)
       // Haze follows the camera for the same reason the shadow box does: it is fitted to the shot,
       // not to the circuit. The radius is the ground plane's INSCRIBED reach, the nearest distance
       // at which the world can stop, so the fog is finished before any edge of it can show.

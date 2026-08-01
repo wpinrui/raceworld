@@ -26,7 +26,8 @@ import { buildGroundStack3D } from './ground3d'
 import { buildKerbs3D } from './kerb3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
-import { buildTrees3D } from './trees3d'
+import { buildTrees3D, type Trees3D } from './trees3d'
+import type { TreePack } from './treepack3d'
 import { buildNightLights3D } from './night3d'
 import { buildOpsDecals } from './ops3d'
 import { buildPitComplex3D, buildPitPaint3D } from './pit3d'
@@ -77,6 +78,9 @@ export interface World3DInput {
   extras?: () => THREE.Object3D[]
   /** Night dressing: floodlight towers with their pooled light, and the town's windows lit. */
   night?: boolean
+  /** The imported tree pack, browser-loaded; absent (in tests, and before the download lands) the
+   *  trees fall back to the old spheres so the world is never bare. */
+  treePack?: TreePack | null
 }
 
 export interface World3D {
@@ -87,12 +91,15 @@ export interface World3D {
    *  SAME quantity by two routes (sky light arriving on a surface), and running both at full is a
    *  straight double count that flattens every shadow. */
   sky: THREE.HemisphereLight
+  /** The wood, held out so a moving camera can repack its detail tiers. `THREE.LOD` cannot compose
+   *  with instancing, so the ladder is driven by hand from wherever the shadow map is refitted. */
+  trees: Trees3D
   /** What this scene costs, for the probe's console line. */
   stats: { meshes: number; triangles: number }
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, detail, frame, overlay, garageColors, extras, night }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, detail, frame, overlay, garageColors, extras, night, treePack }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -186,7 +193,8 @@ export function buildWorld3D(
   }
 
   // The standing world, and the light it all agrees under.
-  group.add(buildTrees3D(scenery.trees, u))
+  const trees = buildTrees3D(scenery.trees, u, { pack: treePack, metresPerUnit: layout.metresPerUnit })
+  group.add(trees.group)
   group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null))
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
   if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
@@ -206,5 +214,5 @@ export function buildWorld3D(
       triangles += o instanceof THREE.InstancedMesh ? per * o.count : per
     }
   })
-  return { group, sun, sky, stats: { meshes, triangles: Math.round(triangles) } }
+  return { group, sun, sky, trees, stats: { meshes, triangles: Math.round(triangles) } }
 }
