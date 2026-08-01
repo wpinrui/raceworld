@@ -53,21 +53,21 @@ export function buildGroundStack3D(
   garageColors?: (i: number) => string | undefined,
 ): THREE.Group {
   const group = new THREE.Group()
-  const add = (geo: THREE.BufferGeometry | null, colour: string, alpha = 1) => {
+  const add = (geo: THREE.BufferGeometry | null, colour: string, layer: number, alpha = 1) => {
     if (!geo) return
-    const mesh = new THREE.Mesh(geo, materials.get(colour, alpha))
+    const mesh = new THREE.Mesh(geo, materials.get(colour, alpha, false, layer))
     mesh.receiveShadow = true
     group.add(mesh)
   }
   for (const b of scenery.bands) {
-    add(pathFillGeometry(b.d, lift(layers.bands)), b.fill, b.soft ? SOFT_BAND_ALPHA : 1)
+    add(pathFillGeometry(b.d, lift(layers.bands)), b.fill, layers.bands, b.soft ? SOFT_BAND_ALPHA : 1)
   }
   for (const f of scenery.fields) {
-    add(pathFillGeometry(f.d, lift(layers.fields)), f.fill, 0.75)
-    add(ringStrokeGeometry(f.d, u(HEDGEROW_HALF_M), lift(layers.fields) + 0.005), HEDGE, 0.35)
+    add(pathFillGeometry(f.d, lift(layers.fields)), f.fill, layers.fields, 0.75)
+    add(ringStrokeGeometry(f.d, u(HEDGEROW_HALF_M), lift(layers.fields) + 0.001), HEDGE, layers.fields, 0.35)
   }
-  for (const t of scenery.terrain) add(pathFillGeometry(t.d, lift(layers.terrain)), t.fill)
-  for (const r of scenery.runoffs) add(pathFillGeometry(r.d, lift(layers.runoffs)), r.fill)
+  for (const t of scenery.terrain) add(pathFillGeometry(t.d, lift(layers.terrain)), t.fill, layers.terrain)
+  for (const r of scenery.runoffs) add(pathFillGeometry(r.d, lift(layers.runoffs)), r.fill, layers.runoffs)
   if (pitZone) {
     // A garage floor sits in the building's own shade in the 2D; the albedo carries that darkening
     // because the recess is too shallow for the real shadow map to supply it.
@@ -82,7 +82,7 @@ export function buildGroundStack3D(
       }
       addPolyCap(s, r, [], lift(layers.floors))
     })
-    for (const [colour, s] of byColour) add(s.empty ? null : s.build(), colour)
+    for (const [colour, s] of byColour) add(s.empty ? null : s.build(), colour, layers.floors)
   }
   return group
 }

@@ -28,9 +28,9 @@ const MARK = '#E8C33A'
  *  steel with a bright cap reads as a beam standing over it. */
 const BOOM = '#5E6673'
 const BOOM_CAP = '#8B929E'
-/** The pad and markings ride just under the cars' clearance, over every road layer. */
-const PAD_M = 0.185
-const MARK_M = 0.19
+/** The pad and markings ride just over the whole road stack, just under the cars' clearance. */
+const PAD_M = 0.027
+const MARK_M = 0.028
 /** A crew member, bold like everything at map scale: radius off the SVG's drawn discs. */
 const PERSON_R_M = 0.34
 const PERSON_H_M = 1.6

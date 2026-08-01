@@ -1434,6 +1434,18 @@ export function buildCarLod(livery: CarLivery, compound: TyreCompound = 'medium'
   return lod
 }
 
+/** A wing shrunk IN PLACE. The scale is uniform and taken about the car's centreline and the
+ *  ground, so span, chord and ride height all come down together and the wing stays symmetric and
+ *  stays planted; the z anchor holds its station, or a scale would also slide it toward the middle
+ *  of the car. Pylons are deliberately outside it: they bridge the wing to the car, and shrinking
+ *  them with it would just unbolt the wing from the nose. */
+function wingScale(scale: number, anchorZ: number): THREE.Group {
+  const g = new THREE.Group()
+  g.scale.setScalar(scale)
+  g.position.z = (anchorZ - SPRITE.cy) * (1 - scale)
+  return g
+}
+
 /** The BLOCK car for the far tiers: the same silhouette in slabs, its dimensions read off the very
  *  tables the real car lofts from, so a switch changes the resolution and not the shape. Wheels are
  *  boxes on the real hub positions, and nothing moves, because at this size nothing can be seen to.
@@ -1688,11 +1700,13 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
   // Front wing: three lofted aerofoils per side, the lowest carrying the flat neutral section
   // across the middle, all three running unbroken out to a shaped endplate. Every element is a
   // real section with a rounded nose and a slot of air under the one above it.
+  const frontWing = wingScale(0.95, 12)
+  group.add(frontWing)
   for (const sign of [-1, 1]) {
     FRONT_WING.forEach((element, i) => {
-      group.add(mesh(wingElementGeometry(element, sign), i === 0 ? paint.wing : paint.accent))
+      frontWing.add(mesh(wingElementGeometry(element, sign), i === 0 ? paint.wing : paint.accent))
     })
-    group.add(mesh(frontEndplateGeometry(sign), paint.trim))
+    frontWing.add(mesh(frontEndplateGeometry(sign), paint.trim))
   }
   // The wing hangs off the nose on two pylons: BLADES raked forward as they climb, rooted inside
   // the neutral section and buried in the nose at the top, not square posts standing in the open.
@@ -1706,14 +1720,16 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
   // plate that bows outboard behind the tyre. The whole assembly still sits INTO the car's
   // silhouette (iteration A): the airbox is the tallest point and the wing second.
   const REAR_SKIN = [paint.wing, paint.wing, paint.accent, paint.cover]
+  const rearWing = wingScale(0.90, 450)
+  group.add(rearWing)
   for (const sign of [-1, 1]) {
     REAR_WING.forEach((element, i) => {
-      group.add(mesh(wingElementGeometry(element, sign), REAR_SKIN[i]))
+      rearWing.add(mesh(wingElementGeometry(element, sign), REAR_SKIN[i]))
     })
     // The flap carries a gurney: a real wing's last two centimetres are a square lip, and its
     // shadow line is most of what tells you the flap is a wing and not a plank.
-    group.add(mesh(gurneyGeometry(REAR_WING[3], sign, 1.8), sec))
-    group.add(mesh(endplateGeometry(sign * REAR_PLATE.x, REAR_PLATE.thick), paint.trim))
+    rearWing.add(mesh(gurneyGeometry(REAR_WING[3], sign, 1.8), sec))
+    rearWing.add(mesh(endplateGeometry(sign * REAR_PLATE.x, REAR_PLATE.thick), paint.trim))
     // LOUVRES up the plate's rear quarter: on a real car the panel is slotted and each strip of it
     // rolled outboard, so they read as dark gills lying along the plate rather than as paint.
     for (const y of [0.455, 0.492, 0.529, 0.566]) {
@@ -1736,7 +1752,7 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
       gill.quad(hi[0], hi[1], hi[2], hi[3])
       gill.quad(lo[0], lo[1], lo[2], lo[3])
       for (let k = 0; k < 4; k++) gill.quad(lo[k], lo[(k + 1) % 4], hi[(k + 1) % 4], hi[k])
-      group.add(mesh(gill.build(), STRUCTURE))
+      rearWing.add(mesh(gill.build(), STRUCTURE))
     }
   }
   // The wing rides one central SWAN NECK: a raked arch off the deck, its top buried in the

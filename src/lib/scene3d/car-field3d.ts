@@ -38,9 +38,10 @@ const WHEEL_TAGS = ['fl', 'fr', 'rl', 'rr'] as const
 
 /** How far above the GROUND PLANE the cars ride, in metres: just over the painter stack's top, so
  *  no part of the car (the front wing under brake dive, the tyres' lower halves) is ever below the
- *  road sheets and silently depth-buried by them. The float above the drawn tarmac surface is a few
- *  centimetres, unreadable from any camera the map has. */
-export const CAR_RIDE_M = 0.2
+ *  road sheets and silently depth-buried by them. The stack itself is millimetres now, so the tyres
+ *  sit a centimetre off the drawn tarmac: planted, even from the near-flat camera that exposed the
+ *  old 20cm hover by its tyre-to-shadow gap. */
+export const CAR_RIDE_M = 0.03
 
 interface Entry {
   key: string

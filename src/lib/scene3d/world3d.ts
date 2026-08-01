@@ -33,12 +33,11 @@ import type { WorldTextures } from './textures3d'
 /** Ground reach beyond the viewBox, in units: the same margin the 2D preview clears to the wash. */
 const GROUND_PAD = 4000
 
-/** One painter's layer sits this far above the one below, in metres: comfortably separated in a
- *  24-bit depth buffer at any framing, far too little for any camera to read as height. Kept SMALL
- *  for the cars' sake: a car stands on the ground plane and everything on it below the stack's top
- *  loses the depth test to the road sheets. At 15mm the whole stack tops out under 0.2m, which the
- *  car's ride height clears with its front wing on full brake dive. */
-const LIFT_M = 0.015
+/** One painter's layer sits this far above the one below, in metres. MILLIMETRES, deliberately: the
+ *  camera can lie nearly flat now, and a stack tall enough to read as height floats every car that
+ *  has to clear it. Depth separation does not ride on these lifts: each opaque layer also carries a
+ *  polygonOffset bias (materials3d), which holds at any buffer precision and any glancing angle. */
+const LIFT_M = 0.002
 const LAYER = {
   bands: 1, fields: 2, terrain: 3, runoffs: 4, floors: 5, inkUnder: 6,
   casing: 7, tarmac: 8, inkOver: 9, lanePaint: 10, kerbWhite: 11, kerbRed: 12, marks: 13,
@@ -84,9 +83,10 @@ export function buildWorld3D(
   const lift = (layer: number) => u(LIFT_M) * layer
   const group = new THREE.Group()
   const materials = new SceneMaterials()
-  // Flat layers receive shadow and never cast: they ARE the ground.
-  const add = (geometry: THREE.BufferGeometry, colour: string) => {
-    const mesh = new THREE.Mesh(geometry, materials.get(colour))
+  // Flat layers receive shadow and never cast: they ARE the ground. Each carries its painter layer
+  // as a depth bias, so millimetre lifts never fight.
+  const add = (geometry: THREE.BufferGeometry, colour: string, layer = 0) => {
+    const mesh = new THREE.Mesh(geometry, materials.get(colour, 1, false, layer))
     mesh.receiveShadow = true
     group.add(mesh)
   }
@@ -117,30 +117,30 @@ export function buildWorld3D(
     [ROAD_CASING, LAYER.casing, TRACK_WIDTH_M, LANE_WIDTH_M],
     [ROAD_TARMAC, LAYER.tarmac, TARMAC_WIDTH_M, LANE_TARMAC_M],
   ] as const) {
-    add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour)
-    add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour)
+    add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer)
+    add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer)
     if (pitZone) {
-      add(ringGeometry(pitZone.work, lift(layer)), colour)
+      add(ringGeometry(pitZone.work, lift(layer)), colour, layer)
       // The apron carries the same white edge line: a stroke round the ring in 2D, a ribbon here.
       if (colour === ROAD_CASING) {
-        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour)
+        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer)
       }
     }
   }
-  if (pitZone) group.add(buildPitPaint3D(pitZone, u, lift(LAYER.lanePaint), materials))
+  if (pitZone) group.add(buildPitPaint3D(pitZone, u, lift(LAYER.lanePaint), materials, LAYER.lanePaint))
 
   // Kerbs: the white base under the red blocks, sampled off the same smoothed curve the 2D strokes.
   for (const kerb of scenery.kerbs) {
     const pts = densifyOpen(kerb.pts)
-    add(ribbonGeometry(pts, { halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbWhite), roundCaps: true }), KERB_WHITE)
+    add(ribbonGeometry(pts, { halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbWhite), roundCaps: true }), KERB_WHITE, LAYER.kerbWhite)
     add(dashGeometry(pts, {
       halfW: u(KERB_WIDTH_M / 2), y: lift(LAYER.kerbRed), on: u(KERB_BLOCK_M), off: u(KERB_BLOCK_M),
-    }), KERB_RED)
+    }), KERB_RED, LAYER.kerbRed)
   }
 
   add(localRectsGeometry(
     startPose(layout.start, layout.metresPerUnit), startLineRects(u), lift(LAYER.marks),
-  ), MARK_WHITE)
+  ), MARK_WHITE, LAYER.marks)
   if (overlay && overlay.length > 0) {
     group.add(buildOpsDecals(overlay, { y: lift(LAYER.marks), order: over.nextOrder }, materials).group)
   }

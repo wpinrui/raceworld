@@ -94,22 +94,26 @@ export function buildPitComplex3D(
 }
 
 /** The lane's own paint: the separator stripe down the box row and its two limiter lines, laid at
- *  the ground stack's lane-paint lift. */
+ *  the ground stack's lane-paint lift with its depth bias. */
 export function buildPitPaint3D(
-  zone: PitZone, u: (m: number) => number, y: number, materials: SceneMaterials,
+  zone: PitZone, u: (m: number) => number, y: number, materials: SceneMaterials, layer: number,
 ): THREE.Group {
   const group = new THREE.Group()
-  const lay = (pts: readonly { x: number; y: number }[], halfW: number, colour: string, lift: number, caps: boolean) => {
+  const lay = (
+    pts: readonly { x: number; y: number }[], halfW: number, colour: string,
+    lift: number, caps: boolean, sub: number,
+  ) => {
     if (pts.length < 2) return
     const mesh = new THREE.Mesh(
-      ribbonGeometry(pts, { halfW, y: y + lift, roundCaps: caps }), materials.get(colour),
+      ribbonGeometry(pts, { halfW, y: y + lift, roundCaps: caps }),
+      materials.get(colour, 1, false, layer + sub),
     )
     mesh.receiveShadow = true
     group.add(mesh)
   }
-  lay(zone.sep, u(0.3), '#F2F2F2', 0, true)
-  lay(zone.sep, u(0.17), '#2E62C9', 0.01, true)
-  lay(zone.limiterIn, u(0.175), '#F2F2F2', 0, false)
-  lay(zone.limiterOut, u(0.175), '#F2F2F2', 0, false)
+  lay(zone.sep, u(0.3), '#F2F2F2', 0, true, 0)
+  lay(zone.sep, u(0.17), '#2E62C9', 0.001, true, 1)
+  lay(zone.limiterIn, u(0.175), '#F2F2F2', 0, false, 0)
+  lay(zone.limiterOut, u(0.175), '#F2F2F2', 0, false, 0)
   return group
 }
