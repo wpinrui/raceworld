@@ -30,17 +30,24 @@ const TRUNK = '#6B5138'
 const CANOPY_OF_R = 1.0
 const SQUASH = 0.68
 
-/** Canopy tints, multiplied over the canopy map, and the two families need opposite palettes.
+/** Canopy tints, multiplied over the canopy map. Both families take a near-white palette, for the
+ *  same reason by two routes.
  *
  *  The broadleaf leaf map is a PHOTOGRAPH, already exactly the right green, so its tints sit near
  *  white: a couple of steps cooler, warmer, darker and lighter. Anything stronger fights the photo
  *  and the wood starts reading as painted plastic.
  *
- *  The conifer needle map is a near-monochrome MASK, grey-green until something colours it, so its
- *  tints ARE the colour, and they run darker and cooler than any broadleaf beside them. */
+ *  The conifer needle map is near-monochrome, and this palette used to read that as "grey until
+ *  something colours it" and hand it a set of mid-dark greens to BE the colour. A multiply cannot do
+ *  that. Measured, the needle map's alpha-weighted mean is sRGB (0.235, 0.267, 0.227), which is not
+ *  a grey mask waiting for a hue but an already-dark grey-green: multiplying it by #6B8449 took its
+ *  linear luminance from 0.054 to 0.011, so a conifer stood eleven times darker than the broadleaf
+ *  next to it and read as a black cutout. The tints keep the family's cooler, greener cast, but at a
+ *  value that colours the needles instead of crushing them. Conifers still come out the darker tree,
+ *  because their map is darker: that difference is now the map's to make, not the palette's. */
 const TINTS: Record<TreeFamily, string[]> = {
   broadleaf: ['#FFFFFF', '#EAF2DC', '#D8E4C4', '#F2ECD6', '#C9D8B4', '#E2E8CE'],
-  conifer: ['#7E9A5C', '#6B8449', '#8CA366', '#5F7A42', '#748F50'],
+  conifer: ['#DDEBC4', '#CBDCAE', '#EAF2D8', '#BCD09C', '#D3E4BA'],
 }
 /** One broadleaf in this many is caught turning. Warm and desaturating rather than orange:
  *  multiplying a green photograph by orange gives mud, and this is as far as a multiply can honestly

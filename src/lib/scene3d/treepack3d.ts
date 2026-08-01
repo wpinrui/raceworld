@@ -24,6 +24,7 @@
 
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { bulgeNormals } from './normals3d'
 
 /** Served from `public/`, so these are plain URLs and Next does not process them. */
 const BROADLEAF_URL = '/models/trees.glb'
@@ -53,6 +54,9 @@ const ALPHA_TEST = 0.45
  *  tree is far enough to be wearing one, so 256 is already generous; it exists to survive the
  *  moment of the tier change, not to be read. */
 const IMPOSTOR_PX = 256
+
+/** How far an impostor card's normals bend out of the card towards the crown they stand for. */
+const IMPOSTOR_BULGE = 0.5
 
 /** How far up the trunk to look when finding the foot, as a fraction of the bark mesh's height.
  *  The bottom slice of the bark IS the bole where it meets the ground, and its centroid is the point
@@ -102,6 +106,12 @@ export interface TreePack {
   dispose(): void
 }
 
+/** Roughness floor on a canopy. The broadleaf pack ships its leaves at 0.5, and a half-rough
+ *  dielectric under a baked sky environment carries a broad specular lobe: every leaf catching the
+ *  sun blew out toward white while the crown behind it stayed near-black. Foliage is matte, and the
+ *  conifer needles already arrive at 1, so this is a floor and not an assignment. */
+const FOLIAGE_ROUGHNESS = 0.9
+
 /** Leaves arrive BLEND. Alpha TEST puts them back in the opaque pass: hard-edged foliage, correct
  *  depth against itself, and a shadow worth casting. Bark is opaque already. */
 function conform(material: THREE.Material, foliage: boolean): void {
@@ -110,6 +120,7 @@ function conform(material: THREE.Material, foliage: boolean): void {
     m.transparent = false
     m.alphaTest = ALPHA_TEST
     m.depthWrite = true
+    m.roughness = Math.max(m.roughness, FOLIAGE_ROUGHNESS)
     // Leaf cards have no back: both faces have to light, or half the canopy goes black.
     m.side = THREE.DoubleSide
     // The shadow pass needs the cutout too, else every tree casts its bounding cards as solid.
@@ -148,47 +159,52 @@ function trunkFoot(bark: THREE.BufferGeometry): { x: number; z: number } {
 
 /** How dark the deepest interior of a canopy goes, and how fast the shading falls off from the
  *  outer shell towards the core. */
-const AO_CORE = 0.42
+const AO_CORE = 0.55
 const AO_FALLOFF = 1.6
-/** How dark the underside of a canopy goes relative to its top. Sky light arrives from above, so a
- *  crown is genuinely darker underneath, and this is the single strongest cue that a canopy is a
- *  VOLUME rather than a flat green cloud. */
-const AO_UNDER = 0.55
+/** How dark the underside of a canopy goes relative to its top. A light touch, no more: the crown
+ *  normal below darkens an underside by pointing it at the ground, which is the same shading arrived
+ *  at honestly, and at this gradient's old strength the two multiplied and the crown went black. */
+const AO_UNDER = 0.9
 
-/** Ambient occlusion baked into the canopy's vertex colours.
+/** Occlusion and crown normals, baked into the canopy over its own ellipsoid.
  *
- *  The one thing the pack does NOT ship. Bark comes with a real AO map; the leaves come with a base
- *  colour texture and nothing else, so every leaf card in a crown lights identically and the whole
- *  canopy reads flat. Screen-space AO is the wrong instrument here: alpha-tested foliage is a field
- *  of depth discontinuities, which is precisely the input SSAO turns into noise, and it would cost
- *  frame time on every pixel of the scene to fix one kind of object.
+ *  Both are things the pack does NOT ship, and the normals are the half that was making the wood
+ *  look unlit. A leaf card's normal describes the CARD, and the cards face every direction at once:
+ *  over a whole canopy they average to nothing. Measured on this pack, the mean leaf normal has a Y
+ *  of -0.07 and agrees with the outward direction of its own crown by -0.10, which is to say not at
+ *  all. Half of every crown faced away from the sun and took no diffuse light. Measured on the
+ *  Silverstone eye shot, turning the sun OFF ENTIRELY moved the canopy's mean luminance by 6%: the
+ *  wood was lit almost wholly by ambient, which is exactly why it read as a flat dark mass with no
+ *  sunward side at any hour of any mood.
  *
- *  This is free instead. Two gradients, evaluated once at load:
+ *  So the crown lends each leaf its normal, weighted by how far out of the crown the leaf sits. The
+ *  outer shell shades like the surface of the volume it is; the interior keeps its own card facing,
+ *  where "outward" is noise anyway. The sun then models a tree the way it models everything else in
+ *  the world, and an underside is dark because it faces the ground.
+ *
+ *  The occlusion rides along in the vertex colours, off the same ellipsoid:
  *   - RADIAL: how far out of the crown's core a leaf sits. The outer shell catches the sky, the
  *     interior is shadowed by every leaf outside it.
- *   - VERTICAL: how high up the crown a leaf sits, because the light comes from above.
+ *   - VERTICAL: how high up the crown a leaf sits. Now a trim rather than the whole volume cue,
+ *     because the normals carry that.
  *
- *  It multiplies with the material colour and the per-instance tint, so all three compose. */
-function bakeCanopyAO(geometry: THREE.BufferGeometry): void {
+ *  Screen-space AO is the wrong instrument for the occlusion half: alpha-tested foliage is a field
+ *  of depth discontinuities, precisely the input SSAO turns into noise, and it would cost frame time
+ *  on every pixel of the scene to fix one kind of object. This is free, and evaluated once at load.
+ *
+ *  The colours multiply with the material colour and the per-instance tint, so all three compose. */
+function shapeCanopy(geometry: THREE.BufferGeometry): void {
+  // The weight is the radius itself: the shell shades fully as the crown, the core keeps its own
+  // card facing, and most leaves land between the two, which keeps a crown from going billiard-ball
+  // smooth. The radii come back for the occlusion below, off the same ellipsoid.
+  const radius = bulgeNormals(geometry, (r) => r)
   geometry.computeBoundingBox()
   const box = geometry.boundingBox!
   const pos = geometry.attributes.position
-  const cx = (box.min.x + box.max.x) / 2
-  const cz = (box.min.z + box.max.z) / 2
-  const cy = (box.min.y + box.max.y) / 2
-  const rx = Math.max(box.max.x - cx, 1e-6)
-  const rz = Math.max(box.max.z - cz, 1e-6)
-  const ry = Math.max(box.max.y - cy, 1e-6)
   const height = Math.max(box.max.y - box.min.y, 1e-6)
   const colours = new Float32Array(pos.count * 3)
   for (let i = 0; i < pos.count; i++) {
-    // Normalised radius inside the crown's own ellipsoid, so a tall narrow conifer and a broad oak
-    // are both shaded by their own proportions rather than by a shared sphere.
-    const dx = (pos.getX(i) - cx) / rx
-    const dy = (pos.getY(i) - cy) / ry
-    const dz = (pos.getZ(i) - cz) / rz
-    const r = Math.min(1, Math.sqrt(dx * dx + dy * dy + dz * dz))
-    const shell = AO_CORE + (1 - AO_CORE) * Math.pow(r, AO_FALLOFF)
+    const shell = AO_CORE + (1 - AO_CORE) * Math.pow(radius[i], AO_FALLOFF)
     const up = AO_UNDER + (1 - AO_UNDER) * ((pos.getY(i) - box.min.y) / height)
     const ao = shell * up
     colours[i * 3] = ao
@@ -218,7 +234,7 @@ function assemble(name: string, parts: RawPart[]): PackKind {
     box.union(geometry.boundingBox!)
     const idx = geometry.index
     tris += (idx ? idx.count : geometry.attributes.position.count) / 3
-    if (foliage) bakeCanopyAO(geometry)
+    if (foliage) shapeCanopy(geometry)
     return { geometry, material, tinted: foliage }
   })
   // Sit the tree on the ground by its BARK, not by the union of its parts.
@@ -255,7 +271,14 @@ function assemble(name: string, parts: RawPart[]): PackKind {
  *  Foliage is identified HERE, in one pass over the source materials, before anything is conformed.
  *  The test is `transparent`, and `conform` clears it: with the check inline in the collect loop,
  *  the first tree to use a shared leaf material classified correctly and every tree after it read
- *  the already-corrected material and called its canopy bark. */
+ *  the already-corrected material and called its canopy bark.
+ *
+ *  The test is the material's own CUTOUT, never its name. A name test read the broadleaf pack's bark
+ *  as foliage — its bark material is called `branches` — and every one of the ten broadleaf trunks
+ *  then took the canopy's occlusion bake and the canopy's green per-instance tint on top of an
+ *  already dark bark map. That is what turned the trunks black. Both packs mark every cutout canopy
+ *  `transparent` and every trunk opaque, so the flag alone separates them; `alphaTest` covers a pack
+ *  that authors its canopy glTF `MASK` instead of `BLEND`. */
 function flatten(root: THREE.Object3D): { name: string; parent: THREE.Object3D; part: RawPart }[] {
   root.updateWorldMatrix(true, true)
   const meshes: THREE.Mesh[] = []
@@ -263,10 +286,8 @@ function flatten(root: THREE.Object3D): { name: string; parent: THREE.Object3D; 
   const materialOf = (m: THREE.Mesh) => (Array.isArray(m.material) ? m.material[0] : m.material)
   const foliage = new Set<THREE.Material>()
   for (const m of meshes) {
-    const mat = materialOf(m)
-    if ((mat as THREE.MeshStandardMaterial).transparent || /leaf|leaves|foliage|branch/i.test(mat.name)) {
-      foliage.add(mat)
-    }
+    const mat = materialOf(m) as THREE.MeshStandardMaterial
+    if (mat.transparent || mat.alphaTest > 0) foliage.add(mat)
   }
   const conformed = new Set<THREE.Material>()
   return meshes.map((m) => {
@@ -444,6 +465,14 @@ function impostorGeometry(kind: PackKind): THREE.BufferGeometry {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  // The far tier's share of `shapeCanopy`. A quad is born with one flat normal, so three cards take
+  // the sun as three flat plates: the two vertical ones face sideways, catch a grazing sun and a
+  // grazing sky, and a distant treeline goes dark and stays dark whichever way the light comes from.
+  // Bulging them makes the cards shade like the round thing they stand in for, so the far wood
+  // lights the way the near wood does and the tier change does not announce itself. Half and half
+  // rather than the near tier's ramp: a card that keeps some of its own facing still turns to the
+  // light as the tree yaws, and with only six triangles there is no core to protect.
+  bulgeNormals(geo, () => IMPOSTOR_BULGE)
   geo.computeBoundingBox()
   return geo
 }

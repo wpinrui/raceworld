@@ -48,3 +48,66 @@ export function repairNormals(geometry: THREE.BufferGeometry): THREE.BufferGeome
   }
   return geometry
 }
+
+/** Bulge a mesh's vertex normals outward from its own centre, in place.
+ *
+ *  For geometry that stands in for a VOLUME while being built out of flat pieces: a canopy of leaf
+ *  cards, an impostor's crossed quads. A card's own normal describes the CARD, and a pile of cards
+ *  facing every direction at once averages to nothing, so the object as a whole takes almost no
+ *  directional light. It goes flat and dark and stays flat and dark whichever way the sun moves,
+ *  because half of it always faces away. Lending each vertex the direction out of the object's own
+ *  centre makes the pile shade like the round thing it stands for: a lit side, a shaded side, and an
+ *  underside that is dark because it points at the ground.
+ *
+ *  `weight` says how much of that outward direction a vertex takes, given how far out of the
+ *  object's own ellipsoid it sits (0 at the centre, 1 at the extreme). Returning the radius itself
+ *  hands the shell fully to the volume and leaves the core its own facing, where "outward" is noise
+ *  anyway; returning a constant treats every vertex alike, which is what a handful of quads wants.
+ *
+ *  The ellipsoid is the geometry's own bounding box, so a tall narrow conifer and a broad oak are
+ *  each measured by their own proportions instead of against a shared sphere. The outward DIRECTION
+ *  is taken unsquashed, in world proportions: light does not care that the crown is taller than it
+ *  is wide.
+ *
+ *  Returns the normalised ellipsoid radius per vertex, which is the same quantity an occlusion bake
+ *  over the same shape needs, so a caller doing both walks the geometry once. */
+export function bulgeNormals(
+  geometry: THREE.BufferGeometry, weight: (radius: number) => number,
+): Float32Array {
+  const pos = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+  const radii = new Float32Array(pos ? pos.count : 0)
+  if (!pos) return radii
+  geometry.computeBoundingBox()
+  const box = geometry.boundingBox!
+  const cx = (box.min.x + box.max.x) / 2
+  const cy = (box.min.y + box.max.y) / 2
+  const cz = (box.min.z + box.max.z) / 2
+  const rx = Math.max(box.max.x - cx, 1e-6)
+  const ry = Math.max(box.max.y - cy, 1e-6)
+  const rz = Math.max(box.max.z - cz, 1e-6)
+  for (let i = 0; i < pos.count; i++) {
+    const dx = pos.getX(i) - cx
+    const dy = pos.getY(i) - cy
+    const dz = pos.getZ(i) - cz
+    const ex = dx / rx
+    const ey = dy / ry
+    const ez = dz / rz
+    const r = Math.min(1, Math.sqrt(ex * ex + ey * ey + ez * ez))
+    radii[i] = r
+    if (!normal) continue
+    const out = Math.hypot(dx, dy, dz)
+    // A vertex sitting exactly on the centre has no outward direction to lend it.
+    if (out < 1e-6) continue
+    const w = weight(r)
+    const nx = normal.getX(i) * (1 - w) + (dx / out) * w
+    const ny = normal.getY(i) * (1 - w) + (dy / out) * w
+    const nz = normal.getZ(i) * (1 - w) + (dz / out) * w
+    const len = Math.hypot(nx, ny, nz)
+    // A card whose own normal points exactly back down its outward direction cancels at w = 0.5.
+    // Rare, and it leaves the vertex its original normal, which is finite and unit length.
+    if (len > 1e-6) normal.setXYZ(i, nx / len, ny / len, nz / len)
+  }
+  if (normal) normal.needsUpdate = true
+  return radii
+}
