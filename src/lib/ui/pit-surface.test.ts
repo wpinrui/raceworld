@@ -6,8 +6,10 @@ import { pitEdgeOps, pitSurfaceOps, type PitSurface } from './pit-surface'
 import { SOFT_LAYERS } from './surface-ink'
 import type { DrawOp } from './scenery-draw'
 
+import { ROAD_TARMAC } from './road-ops'
+
 const GROUND = '#3F602C'
-const TARMAC = '#33383E'
+const TARMAC = ROAD_TARMAC
 
 function surfaceFor(id: string): PitSurface {
   const layout = TRACK_LAYOUTS[id]

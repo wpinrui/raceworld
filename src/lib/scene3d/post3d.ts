@@ -44,7 +44,7 @@ const THRESHOLD = 1
 /** How much of the over-bright is added back. Restrained: the job is a halo around a floodlight,
  *  not a soft-focus filter over the whole race. Matched by eye to the hand-written chain so the
  *  comparison is about artifacts rather than tuning. */
-const STRENGTH = 0.55
+const STRENGTH = 0.46
 
 /** How far it spreads, across the pass's own five mip levels. */
 const RADIUS = 0.4

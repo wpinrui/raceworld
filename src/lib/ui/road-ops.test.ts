@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { buildPitSlots, buildPitZone } from './pit-zone'
-import { roadOps } from './road-ops'
+import { ROAD_TARMAC, roadOps } from './road-ops'
 import { densifyTrace } from './track-path'
 import { buildRacingLine, polylineArc } from './racing-line'
 import { lapDynamics, trackPhysics } from './lap-dynamics'
@@ -32,7 +32,7 @@ const build = (id: string) => {
 }
 
 const CASING = '#D8D8D2'
-const TARMAC = '#33383E'
+const TARMAC = ROAD_TARMAC
 
 /** Hungary with its racing line solved, which is the only state the driven-in ink exists in. */
 const withLap = () => {
@@ -80,20 +80,21 @@ describe('roadOps', () => {
     }
   })
 
-  it('merges the two roads into one falloff: layer-major fades, then all asphalt', () => {
-    // The circuit's fade and the lane's must interleave wide-to-narrow and finish before EITHER
-    // road's asphalt goes down, or the junctions wear two crossing falloff bands and one road's
-    // fade paints over the other's tarmac. Same discipline the casing test above pins.
+  it('lays the pit apron under the ink and gives the circuit no edge treatment at all', () => {
+    // The circuit's falloff bands and its apron are BOTH gone: a white line is the track's boundary,
+    // so nothing of the circuit's own may be laid outside it. What survives under the ink is the pit
+    // lane's apron, which is a real working surface rather than an edge effect, and it still has to
+    // go down before any asphalt the roads themselves lay.
     for (const id of IDS) {
       const { layout, ops } = build(id)
       const firstRibbon = ops.findIndex((op) => op.d === layout.d)
       const under = ops.slice(0, firstRibbon)
-      const asphalt = under.flatMap((op, i) => (op.stroke === TARMAC || op.fill === TARMAC ? [i] : []))
-      const fade = under.flatMap((op, i) =>
-        (op.stroke ?? op.fill) !== TARMAC && (op.stroke ?? op.fill) !== CASING ? [i] : [])
-      expect(asphalt.length, `${id}: no under-ink asphalt`).toBeGreaterThan(0)
-      expect(fade.length, `${id}: no falloff`).toBeGreaterThan(0)
-      expect(Math.max(...fade), `${id}: a fade lands over an asphalt band`).toBeLessThan(Math.min(...asphalt))
+      const outside = under.filter((op) => {
+        const c = op.stroke ?? op.fill
+        return c !== undefined && c !== TARMAC && c !== CASING
+      })
+      expect(outside, `${id}: the circuit still wears an edge treatment`).toEqual([])
+      expect(under.length, `${id}: the pit apron went with it`).toBeGreaterThan(0)
     }
   })
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ROAD_CASING, ROAD_TARMAC } from '@/lib/ui/road-ops'
 import * as THREE from 'three'
 import { TRACK_LAYOUTS } from '@/data/tracks'
 import { MOODS } from '@/lib/ui/lighting'
@@ -40,8 +41,11 @@ describe('buildWorld3D', () => {
       ys.set(mat.color.getHexString(), Math.max(seen ?? -Infinity, y))
     })
     const ground = ys.get(new THREE.Color(scenery.base).getHexString())!
-    const casing = ys.get('d8d8d2')!
-    const tarmac = ys.get('33383e')!
+    // Derived from the constants, not typed out: a literal copy of the road's colour here is what
+    // made a retune of the tarmac fail this test for a reason that had nothing to do with painter
+    // order.
+    const casing = ys.get(new THREE.Color(ROAD_CASING).getHexString())!
+    const tarmac = ys.get(new THREE.Color(ROAD_TARMAC).getHexString())!
     const marks = ys.get('f2f2f2')!
     expect(ground).toBeCloseTo(0, 10)
     expect(casing).toBeGreaterThan(ground)

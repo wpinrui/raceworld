@@ -96,6 +96,70 @@ function sampleLattice(a: Float32Array, n: number, x: number, y: number): number
   return top * (1 - sy) + bottom * sy
 }
 
+/** Sample a noise function over the whole tile, then STRETCH the result to fill 0..1.
+ *
+ *  The normalisation is the point. An fbm sums several octaves and divides by their weight, so like
+ *  any average it piles up near the middle: a nominally 0..1 field actually occupies roughly 0.3 to
+ *  0.7. Any curve applied to it therefore lands on far less contrast than its numbers suggest, which
+ *  is precisely how the tarmac came out flat. Measured: pushing the albedo map's range from 0.94..1
+ *  all the way to 0..1 moved the rendered variation by half a grey level, because the FIELD had no
+ *  variation left to give once the grain ramp had crushed it.
+ *
+ *  Sampling into an array also makes the normal map four times cheaper: it needs four reads per
+ *  texel to difference, and those were four fresh fbm evaluations before. */
+function buildField(sample: (x: number, y: number) => number): Float32Array {
+  const field = new Float32Array(MAP_SIZE * MAP_SIZE)
+  const step = 1 / MAP_SIZE
+  let lo = Infinity
+  let hi = -Infinity
+  for (let y = 0; y < MAP_SIZE; y++) {
+    for (let x = 0; x < MAP_SIZE; x++) {
+      const v = sample((x + 0.5) * step, (y + 0.5) * step)
+      field[y * MAP_SIZE + x] = v
+      if (v < lo) lo = v
+      if (v > hi) hi = v
+    }
+  }
+  const span = hi - lo || 1
+  for (let i = 0; i < field.length; i++) field[i] = (field[i] - lo) / span
+  return field
+}
+
+/** Read a field with wrapping, so everything derived from it tiles as cleanly as it does. */
+function at(field: Float32Array, x: number, y: number): number {
+  const cx = ((x % MAP_SIZE) + MAP_SIZE) % MAP_SIZE
+  const cy = ((y % MAP_SIZE) + MAP_SIZE) % MAP_SIZE
+  return field[cy * MAP_SIZE + cx]
+}
+
+/** Apply a transform across a field in place, and re-stretch: a ramp that crushes most of the range
+ *  leaves the survivors bunched, and they have to be spread back out to be worth anything. */
+function shape(field: Float32Array, curve: (v: number) => number): Float32Array {
+  let lo = Infinity
+  let hi = -Infinity
+  for (let i = 0; i < field.length; i++) {
+    const v = curve(field[i])
+    field[i] = v
+    if (v < lo) lo = v
+    if (v > hi) hi = v
+  }
+  const span = hi - lo || 1
+  for (let i = 0; i < field.length; i++) field[i] = (field[i] - lo) / span
+  return field
+}
+
+/** Sharpen a smooth noise field into distinct grains.
+ *
+ *  Value noise interpolated smoothly gives soft blobs flowing into each other, which is why the road
+ *  read as rippled water rather than as chippings: every light area faded into its neighbour and
+ *  nothing had an edge. Real aggregate is the opposite, hard little stones with dark bitumen between
+ *  them, so the field is pushed through a steep ramp that keeps the top of the range and crushes the
+ *  rest toward the matrix. `bias` sets how much of the field survives as stone. */
+function grains(v: number, bias: number): number {
+  const t = Math.max(0, Math.min(1, (v - bias) / (1 - bias)))
+  return t * t * (3 - 2 * t)
+}
+
 /** Sum of octaves, each half the amplitude and twice the frequency of the last. */
 function fbm(octaves: Array<{ lat: Float32Array; n: number; amp: number }>, x: number, y: number): number {
   let total = 0
@@ -120,22 +184,16 @@ function octaves(base: number, count: number, seed: number) {
  *  Central differences with WRAPPING reads, so the normals tile as cleanly as the heights do. The
  *  blue channel is the flat-facing component, which is why an untouched normal map reads as
  *  128/128/255 rather than black. */
-function normalTexture(
-  height: (x: number, y: number) => number, relief: number,
-): THREE.CanvasTexture {
+function normalTexture(height: Float32Array, relief: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = MAP_SIZE
   canvas.height = MAP_SIZE
   const ctx = canvas.getContext('2d')!
   const image = ctx.createImageData(MAP_SIZE, MAP_SIZE)
-  const step = 1 / MAP_SIZE
-  const wrap = (v: number) => (v + 1) % 1
   for (let y = 0; y < MAP_SIZE; y++) {
     for (let x = 0; x < MAP_SIZE; x++) {
-      const u = x * step
-      const v = y * step
-      const dx = (height(wrap(u + step), v) - height(wrap(u - step), v)) * relief
-      const dy = (height(u, wrap(v + step)) - height(u, wrap(v - step))) * relief
+      const dx = (at(height, x + 1, y) - at(height, x - 1, y)) * relief
+      const dy = (at(height, x, y + 1) - at(height, x, y - 1)) * relief
       const len = Math.hypot(dx, dy, 1)
       const i = (y * MAP_SIZE + x) * 4
       image.data[i] = ((-dx / len) * 0.5 + 0.5) * 255
@@ -161,18 +219,15 @@ function normalTexture(
  *  number. For albedo it is deliberate: three would otherwise sRGB-decode the map before
  *  multiplying, turning a gentle 0.82 into a 0.65 and dropping the road half a stop. As a straight
  *  linear multiplier the authored range IS the range. */
-function scalarTexture(
-  value: (x: number, y: number) => number, lo: number, hi: number,
-): THREE.CanvasTexture {
+function scalarTexture(value: Float32Array, lo: number, hi: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = MAP_SIZE
   canvas.height = MAP_SIZE
   const ctx = canvas.getContext('2d')!
   const image = ctx.createImageData(MAP_SIZE, MAP_SIZE)
-  const step = 1 / MAP_SIZE
   for (let y = 0; y < MAP_SIZE; y++) {
     for (let x = 0; x < MAP_SIZE; x++) {
-      const t = Math.max(0, Math.min(1, value(x * step, y * step)))
+      const t = Math.max(0, Math.min(1, at(value, x, y)))
       const byte = (lo + (hi - lo) * t) * 255
       const i = (y * MAP_SIZE + x) * 4
       image.data[i] = byte
@@ -204,29 +259,40 @@ export function buildWorldDetail(): WorldDetail {
   //
   // So the undulation is gone, the roughness field moved from 15cm blobs to aggregate scale, and
   // the grass clumps went the same way. Anything a player could match to its copy is the enemy.
-  const grit = octaves(64, 3, 1201)
-  const tarmacHeight = (x: number, y: number) => fbm(grit, x, y)
+  const grit = octaves(64, 4, 1201)
+  // Sharpened, and with most of the field pushed down into the bitumen: the stones are the minority
+  // of the surface, which is what a real one looks like.
+  // Built, then SHAPED and re-stretched, so the grain ramp yields real contrast rather than
+  // whatever narrow band fbm's own averaging happened to leave behind.
+  const gritField = shape(buildField((x, y) => fbm(grit, x, y)), (v) => grains(v, 0.42))
   // Roughness varies WITH the aggregate: chipping tops polish under traffic, the hollows between
   // them stay dull. At the same frequency, so it never becomes a landmark of its own.
-  const tarmacWear = octaves(64, 2, 4409)
+  const wearField = buildField((x, y) => fbm(octaves(64, 2, 4409), x, y))
 
   // Ground: coarser than tarmac because grass is, but nowhere near as coarse as it was. Grass is a
   // deep scatterer, so its detail is about breaking up the light, not about catching highlights.
-  const clumps = octaves(32, 3, 3313)
+  const clumpField = buildField((x, y) => fbm(octaves(32, 3, 3313), x, y))
 
   const tarmac: SurfaceDetail = {
-    normalMap: normalTexture(tarmacHeight, 2.6),
-    albedoMap: scalarTexture(tarmacHeight, 0.94, 1),
+    normalMap: normalTexture(gritField, 2.6),
+    // A WIDE albedo range, and this is the change that matters most. Aggregate is bright stone
+    // against near-black bitumen: measured against a photograph, a real surface runs most of the
+    // way from black to mid-grey, while this map ran 0.94 to 1.0, a six percent wobble. All the
+    // visible variation was therefore coming from the normal map, and normal-map variation is
+    // SHADING, which is smooth and directional and reads as ripples on water rather than as stones.
+    // Put the contrast in the albedo and the surface stops being lit and starts being made of
+    // something. `ROAD_TARMAC` is lightened to match, since this now averages well below 1.
+    albedoMap: scalarTexture(gritField, 0.2, 1),
     // A NARROW band, 0.68 to 0.9. The first attempt ran 0.5 to 0.98, and half a unit of roughness
     // between one chipping and the next is not aggregate, it is wet patches: the glossy end caught
     // the sky hard enough to read as puddles scattered over the circuit.
-    roughnessMap: scalarTexture((x, y) => fbm(tarmacWear, x, y), 0.68, 0.9),
-    normalScale: 0.28,
+    roughnessMap: scalarTexture(wearField, 0.68, 0.9),
+    normalScale: 0.16,
     tileM: 3.6,
   }
   const ground: SurfaceDetail = {
-    normalMap: normalTexture((x, y) => fbm(clumps, x, y), 1.8),
-    albedoMap: scalarTexture((x, y) => fbm(clumps, x, y), 0.92, 1),
+    normalMap: normalTexture(clumpField, 1.8),
+    albedoMap: scalarTexture(clumpField, 0.9, 1),
     roughnessMap: null,
     normalScale: 0.3,
     tileM: 9,
@@ -239,10 +305,10 @@ export function buildWorldDetail(): WorldDetail {
   //
   // The anti-tiling rule relaxes here too: a wall is a few tiles across, not a few hundred like a
   // straight, so there is no long run for the eye to find the repeat in.
-  const render = octaves(12, 3, 8837)
+  const renderField = buildField((x, y) => fbm(octaves(12, 3, 8837), x, y))
   const wall: SurfaceDetail = {
-    normalMap: normalTexture((x, y) => fbm(render, x, y), 1.4),
-    albedoMap: scalarTexture((x, y) => fbm(render, x, y), 0.84, 1),
+    normalMap: normalTexture(renderField, 1.4),
+    albedoMap: scalarTexture(renderField, 0.84, 1),
     roughnessMap: null,
     normalScale: 0.5,
     tileM: 4.5,

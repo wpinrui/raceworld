@@ -19,7 +19,14 @@ const TRACK_M = 1.6
 
 /** The road's two paints, exported so the 3D renderer lays the same colours (#3d-port). */
 export const ROAD_CASING = '#D8D8D2'
-export const ROAD_TARMAC = '#33383E'
+// The STONE colour, not the surface's average: the aggregate map multiplies this down to the
+// bitumen between the chippings, so it has to sit where the brightest chips do.
+//
+// Warm, too. It was '#33383E', which is blue-grey before any light touches it, and the sky's own
+// ambient then adds more: measured on a render, the tarmac came out with blue 22 above red where a
+// photograph of a real circuit has blue BELOW red. Authoring it warm leaves it near neutral once
+// the sky has had its say.
+export const ROAD_TARMAC = '#4E463A'
 
 export interface RoadOpts {
   layout: TrackLayout
@@ -74,12 +81,18 @@ export function roadInkUnder(o: RoadOpts): DrawOp[] {
       lineWidthM: (TRACK_WIDTH_M - TARMAC_WIDTH_M) / 2,
     })
     : { fades: [], asphalt: [] }
-  const ops: DrawOp[] = []
-  for (let k = 0; k < Math.max(pit.fades.length, track.fades.length); k++) {
-    ops.push(...(pit.fades[k] ?? []), ...(track.fades[k] ?? []))
-  }
-  ops.push(...pit.asphalt, ...track.asphalt)
-  return ops
+  // NEITHER the circuit's falloff bands NOR its apron are laid any more. Only the pit lane's.
+  //
+  // The falloff was a 2D device: with no real light, a hard tarmac-to-grass edge read as a sticker,
+  // and a gradient was how the flat renderer suggested a shoulder. A lit scene does not need the
+  // suggestion. The apron went with it because a circuit's white line IS its boundary, and asphalt
+  // continuing past the line on both sides makes the line look painted ON something rather than
+  // marking its edge.
+  //
+  // The pit lane keeps its apron: that one is a real working surface, the ground the garages and
+  // the crews stand on, and without it the pit complex sits on grass. `edgeOpsByLayer` still builds
+  // both for the circuit; nothing here asks for them.
+  return [...pit.asphalt]
 }
 
 /** Worn into the tarmac, on top of the road and under the kerbs. Pit first here too: the lane's
