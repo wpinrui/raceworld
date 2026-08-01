@@ -5,6 +5,12 @@
 
 import * as THREE from 'three'
 
+/** The decals' depth pull, past the deepest opaque road layer (marks, 13). The opaque stack's
+ *  polygonOffset is slope-scaled: tilt the camera and the road's bias outgrows any millimetre
+ *  lift, so paint that merely floats above it vanishes at every angle but top-down. Decals must
+ *  out-pull the road they lie on instead of out-climbing it. */
+export const DECAL_PULL = 16
+
 export class SceneMaterials {
   private cache = new Map<string, THREE.MeshLambertMaterial>()
 
@@ -24,7 +30,9 @@ export class SceneMaterials {
         color: colour,
         side: THREE.DoubleSide,
         ...(alpha < 1 || decal ? { transparent: true, opacity: alpha, depthWrite: false } : {}),
-        ...(layer > 0 ? {
+        ...(decal ? {
+          polygonOffset: true, polygonOffsetFactor: -DECAL_PULL, polygonOffsetUnits: -2 * DECAL_PULL,
+        } : layer > 0 ? {
           polygonOffset: true, polygonOffsetFactor: -layer, polygonOffsetUnits: -2 * layer,
         } : {}),
       })

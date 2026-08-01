@@ -9,6 +9,7 @@
 import * as THREE from 'three'
 import type { PitSlot } from '@/lib/ui/pit-zone'
 import { WHEELS } from './car-mesh'
+import { DECAL_PULL } from './materials3d'
 import { GeometrySink, v3 } from './solids3d'
 
 /** Underside of the overhead gantry booms. Low: they clear a crew member's head and no more. */
@@ -89,6 +90,7 @@ export class PitCrew3D {
         new THREE.PlaneGeometry(u(6.9), u(3.8)).rotateX(-Math.PI / 2),
         new THREE.MeshLambertMaterial({
           color: PAD, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
+          polygonOffset: true, polygonOffsetFactor: -DECAL_PULL, polygonOffsetUnits: -2 * DECAL_PULL,
         }),
       )
       // Above every road decal's renderOrder (the ink stack numbers into the low hundreds on a busy
@@ -116,6 +118,7 @@ export class PitCrew3D {
       }
       const marksMesh = new THREE.Mesh(marks.build(), new THREE.MeshLambertMaterial({
         color: MARK, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide,
+        polygonOffset: true, polygonOffsetFactor: -DECAL_PULL, polygonOffsetUnits: -2 * DECAL_PULL,
       }))
       marksMesh.renderOrder = 901
       inner.add(marksMesh)

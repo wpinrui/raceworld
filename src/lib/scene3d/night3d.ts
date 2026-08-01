@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import type { TrackLayout } from '@/data/tracks'
 import { TRACK_WIDTH_M, densifyTrace } from '@/lib/ui/track-path'
 import { GeometrySink, v3 } from './solids3d'
+import { DECAL_PULL } from './materials3d'
 
 /** One tower roughly every this many metres, alternating sides. */
 const TOWER_SPACING_M = 130
@@ -76,6 +77,7 @@ export function buildNightLights3D(
     const poolMat = new THREE.MeshBasicMaterial({
       map: glowPool, transparent: true, opacity: 0.32, depthWrite: false,
       blending: THREE.AdditiveBlending,
+      polygonOffset: true, polygonOffsetFactor: -DECAL_PULL, polygonOffsetUnits: -2 * DECAL_PULL,
     })
     for (const p of pools) {
       const pool = new THREE.Mesh(poolGeo, poolMat)
