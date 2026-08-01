@@ -182,22 +182,26 @@ function scalarTexture(
 /** Build the world's grain. Browser-only (it rasterises canvases); the scene builders take it as
  *  OPTIONAL input and fall back to flat materials, so tests never touch a canvas. */
 export function buildWorldDetail(): WorldDetail {
-  // Tarmac: high-frequency aggregate over a slow undulation, so it reads as chippings laid on a
-  // surface that is not quite flat rather than as uniform sandpaper.
-  // Base 64 over a 2.4m tile puts the dominant feature at 3.7cm and the finest at 0.9cm, which is
-  // the size real aggregate actually is. At base 32 the loudest octave was a 7.5cm lump, and a
-  // surface of fist-sized lumps is not asphalt, it is scree.
+  // HIGH FREQUENCY ONLY, in every map here, and that is the rule that matters.
+  //
+  // A tiled map gives itself away through its LOW frequencies. Fine grain repeating every few
+  // metres is invisible, because the eye has no landmark to match against its neighbour; one broad
+  // blotch per tile is a landmark, and once the eye finds it repeating down a straight the whole
+  // surface reads as wallpaper. This map used to carry a four-cell "swell" at a fifth of its
+  // amplitude for the look of a surface that is not quite flat, and that single term was the
+  // tiling: one soft lump stamped every 2.4 metres, a hundred times down the pit straight.
+  //
+  // So the undulation is gone, the roughness field moved from 15cm blobs to aggregate scale, and
+  // the grass clumps went the same way. Anything a player could match to its copy is the enemy.
   const grit = octaves(64, 3, 1201)
-  const swell = octaves(4, 2, 7717)
-  const tarmacHeight = (x: number, y: number) => fbm(grit, x, y) * 0.8 + fbm(swell, x, y) * 0.2
-  // Roughness varies with the aggregate: the tops of the chippings polish under traffic, the
-  // hollows between them stay dull. This is what makes a wet-looking sheen break up instead of
-  // sliding across the whole ribbon as one sheet.
-  const tarmacWear = octaves(16, 2, 4409)
+  const tarmacHeight = (x: number, y: number) => fbm(grit, x, y)
+  // Roughness varies WITH the aggregate: chipping tops polish under traffic, the hollows between
+  // them stay dull. At the same frequency, so it never becomes a landmark of its own.
+  const tarmacWear = octaves(64, 2, 4409)
 
-  // Ground: coarser clumps, much softer. Grass is a deep scatterer, so its detail is about breaking
-  // up the silhouette of the light, not about catching highlights.
-  const clumps = octaves(8, 3, 3313)
+  // Ground: coarser than tarmac because grass is, but nowhere near as coarse as it was. Grass is a
+  // deep scatterer, so its detail is about breaking up the light, not about catching highlights.
+  const clumps = octaves(32, 3, 3313)
 
   const tarmac: SurfaceDetail = {
     normalMap: normalTexture(tarmacHeight, 2.6),
@@ -207,14 +211,14 @@ export function buildWorldDetail(): WorldDetail {
     // the sky hard enough to read as puddles scattered over the circuit.
     roughnessMap: scalarTexture((x, y) => fbm(tarmacWear, x, y), 0.68, 0.9),
     normalScale: 0.28,
-    tileM: 2.4,
+    tileM: 3.6,
   }
   const ground: SurfaceDetail = {
     normalMap: normalTexture((x, y) => fbm(clumps, x, y), 1.8),
     albedoMap: scalarTexture((x, y) => fbm(clumps, x, y), 0.92, 1),
     roughnessMap: null,
     normalScale: 0.3,
-    tileM: 5.5,
+    tileM: 9,
   }
   return {
     tarmac,
