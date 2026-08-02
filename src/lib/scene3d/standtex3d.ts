@@ -174,8 +174,15 @@ const SPEC: Record<keyof StandSkin, SkinSpec> = {
   // its own little shadow. At full strength the shading speckle sat on top of the albedo's own and
   // the two together read as noise rather than as grass. The generated ground grain this replaced
   // ran at 0.3 for the same reason.
+  //
+  // `grass008` rather than `grass004`, and the scan was the right thing to change. Narrowing 004's
+  // spread in the converter was treating a symptom: it is a macro shot of rough meadow, and no
+  // amount of pulling it toward its mean turns tussock into the mown verge a circuit actually has.
+  // Measured raw, 008 carries 16/14/33% against 004's 24/22/39%, so it arrives about as even as 004
+  // was after a 40% pull, with its structure intact rather than compressed. It is also the greener
+  // and brighter of the two (luma 119 against 101), which is what a watered verge looks like.
   grass: {
-    set: 'grass004', tileM: 2, normalScale: 0.4, albedo: true, maxPx: 512, sampling: 'stochastic',
+    set: 'grass008', tileM: 2, normalScale: 0.4, albedo: true, maxPx: 512, sampling: 'stochastic',
     blend: { set: 'ground037', tileM: 2.3, maskM: 20, coverage: 0.33 },
   },
 }

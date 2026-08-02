@@ -24,7 +24,7 @@ const WEB = 'public/materials/web'
  *  bark and the like, and that STRUCTURED textures are outside it. A brick wall Gaussianised and
  *  reblended stops being brickwork. Concrete is borderline (it has faint form lines), which is why it
  *  is not on this list and gets per-tile randomisation instead. */
-const SETS = ['grass004', 'ground037']
+const SETS = ['grass004', 'grass008', 'ground037']
 const LUT_W = 256
 /** How many standard deviations the Gaussianised range covers. The paper's choice; wide enough that
  *  clipping the tails costs nothing and narrow enough to keep 8-bit precision usable. */

@@ -87,12 +87,17 @@ const CHANNELS: Record<string, { name: string; png: boolean }> = {
 
 async function main() {
   mkdirSync(OUT, { recursive: true })
+  // Named sets only, when any are named. Converting one scan is seconds where the whole library is
+  // minutes of PNG decode, and re-emitting maps nothing has asked for is the kind of churn that
+  // rewrites a texture out from under whatever else happens to be rendering.
+  const only = process.argv.slice(2).map((a) => a.toLowerCase())
   const sets = readdirSync(SRC).filter((d) => {
     const p = join(SRC, d)
-    return d !== 'web' && statSync(p).isDirectory()
+    if (d === 'web' || !statSync(p).isDirectory()) return false
+    return only.length === 0 || only.includes(d.toLowerCase())
   })
   if (sets.length === 0) {
-    console.error(`no material folders under ${SRC}`)
+    console.error(only.length ? `no set matching ${only.join(', ')} under ${SRC}` : `no material folders under ${SRC}`)
     process.exitCode = 1
     return
   }
