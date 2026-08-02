@@ -4,7 +4,10 @@
 //
 // Run: npx tsx scripts/grandstand-preview.ts [--shot]
 //   -> scripts/.preview/grandstand-viewer.html   (open this)
-//   -> scripts/.preview/stand-<massing>-<angle>.png
+//   -> scripts/.preview/stand-<seat>-<angle>.png
+//
+// Which stills get shot is all flags: --angles=rear,crest --roof=canopy --seat=shell
+// --massing=plinth --no-crowd
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -19,11 +22,19 @@ const wantShots = argv.includes('--shot')
 // Empties the stand. Colour-matching a surface is impossible with four thousand people in tan shirts
 // standing on it: every measurement of the timber picks up their clothing too.
 const fill = argv.includes('--no-crowd') ? 0 : 90
-// The stills sweep whichever axis is under review; the massing is settled, so it is roofs now.
-const MASSINGS = ['twoTier']
-const ROOFS = ['cantilever']
-const SEATS = ['bucket']
-const ANGLES = ['three', 'seat']
+/** A comma-separated flag, or the default when it is absent.
+ *
+ *  The stills sweep whichever axis is under review, and for a long time that meant editing these
+ *  four lists in the file every time the question changed. Which put a scratch edit in the working
+ *  tree on every look, and eventually committed one. Choosing a view is not a source control event. */
+const list = (flag: string, fallback: string[]): string[] => {
+  const arg = argv.find((a) => a.startsWith(`--${flag}=`))
+  return arg ? arg.split('=')[1].split(',').filter(Boolean) : fallback
+}
+const MASSINGS = list('massing', ['twoTier'])
+const ROOFS = list('roof', ['cantilever'])
+const SEATS = list('seat', ['bucket'])
+const ANGLES = list('angles', ['three', 'seat'])
 
 const CSS = `
 html,body{margin:0;background:#101318;height:100%;overflow:hidden;color-scheme:dark}
