@@ -114,8 +114,27 @@ const FOLIAGE_ROUGHNESS = 0.9
 
 /** Leaves arrive BLEND. Alpha TEST puts them back in the opaque pass: hard-edged foliage, correct
  *  depth against itself, and a shadow worth casting. Bark is opaque already. */
-function conform(material: THREE.Material, foliage: boolean): void {
+export function conform(material: THREE.Material, foliage: boolean): void {
   const m = material as THREE.MeshStandardMaterial
+  // The pack's authored base colour is not ours to keep. It arrives as a `baseColorFactor` MULTIPLY
+  // over the map, and the broadleaf bark ships (0.617, 0.604, 0.515): a 0.60 darkening laid over an
+  // already dark photograph.
+  //
+  // MEASURED, on the maps themselves. The bark map's mean is sRGB (0.372, 0.337, 0.250), a linear
+  // luminance of 0.1065, which is at the bottom of what real bark is (0.10 to 0.15). The factor took
+  // it to 0.064, half of anything real, and rendered in its own canopy's shade that came out at 0.041
+  // against lit grass at 0.147: 28%, which is the near-black trunk. The shading was right and the
+  // surface was wrong.
+  //
+  // Blanket rather than aimed at the one material, and the conifer pack is the reason it can be:
+  // every material in it authors (1,1,1,1) already, as does the broadleaf canopy, so this bites
+  // exactly the one surface that earned it and is a no-op everywhere else. Its own trunk map sits at
+  // 0.0965 untouched, which is where the broadleaf bark lands once the factor is gone: the packs
+  // agree with each other after this and disagreed before it.
+  //
+  // Same standing as the metalness and roughness overrides below, which have always thrown away what
+  // the pack authored because those values only fight this light rig.
+  m.color.setScalar(1)
   if (foliage) {
     m.transparent = false
     m.alphaTest = ALPHA_TEST
