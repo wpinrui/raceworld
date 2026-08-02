@@ -877,18 +877,40 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
     // black, and it stopped being enough the moment the tyre put two rubbers on the same wheel that
     // differ in polish and in what they sample. The tread would have been merged into the sidewall
     // and both would have rendered as whichever the walk reached first.
+    // Keyed on everything that makes one material LOOK different from another EXCEPT its colour,
+    // which is folded onto the vertices below. A livery's five paint slots are one finish in five
+    // colours, and keying on colour split them into five draws apiece; the whole field was 1036
+    // meshes on the grid, forty-five per car, and the frame was spending two thirds of itself
+    // issuing draws. The rest of the finish stays in the key, and more of it than before: two
+    // materials that differ in clearcoat or in what they let through are still two surfaces, and
+    // batching now folds enough together that an unkeyed one would show.
+    const physical = material as THREE.MeshPhysicalMaterial
     const key = [
-      material.type, material.color.getHexString(), material.roughness, material.metalness,
-      material.map?.uuid ?? '', material.normalMap?.uuid ?? '', material.vertexColors ? 'vc' : '',
+      material.type, material.roughness, material.metalness,
+      material.map?.uuid ?? '', material.normalMap?.uuid ?? '', material.roughnessMap?.uuid ?? '',
+      material.emissive?.getHexString() ?? '', material.emissiveIntensity ?? '',
+      physical.clearcoat ?? '', physical.clearcoatRoughness ?? '', physical.specularIntensity ?? '',
+      material.side, material.transparent ? material.opacity : 'opaque',
       o.castShadow ? 'cast' : '',
     ].join('|')
-    const needs = new Set<string>()
+    const needs = new Set<string>(['color'])
     if (material.map || material.normalMap || material.roughnessMap) needs.add('uv')
-    if (material.vertexColors) needs.add('color')
     const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow }
-    batch.geos.push(bakeable(
+    const geo = bakeable(
       o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld), needs,
-    ))
+    )
+    // The paint, onto the vertices. MULTIPLIED rather than written, because a part may already carry
+    // a vertex shade of its own (the tyre sidewall does) and that shade is a modulation of whatever
+    // colour the material is painted, not a replacement for it. Both sides are linear here, which is
+    // the space three consumes vertex colour in, so the product is the colour the part was authored.
+    const tint = geo.attributes.color as THREE.BufferAttribute
+    for (let i = 0; i < tint.count; i++) {
+      tint.setXYZ(
+        i, tint.getX(i) * material.color.r,
+        tint.getY(i) * material.color.g, tint.getZ(i) * material.color.b,
+      )
+    }
+    batch.geos.push(geo)
     batch.sources.push(o)
     batches.set(key, batch)
   }
@@ -903,7 +925,14 @@ function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Obj
       source.removeFromParent()
       ;(source.geometry as THREE.BufferGeometry).dispose()
     }
-    const m = new THREE.Mesh(merged, batch.material)
+    // A CLONE painted white, reading its colour off the vertices. The batch holds parts that were
+    // several different colours, so keeping one of their materials would paint the lot in whichever
+    // the walk happened to reach first. Cloned rather than mutated because the source material is
+    // shared with whatever else on this car wears the same paint.
+    const painted = batch.material.clone() as THREE.MeshStandardMaterial
+    painted.color.setRGB(1, 1, 1)
+    painted.vertexColors = true
+    const m = new THREE.Mesh(merged, painted)
     m.castShadow = batch.cast
     m.receiveShadow = true
     node.add(m)

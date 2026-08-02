@@ -63,12 +63,20 @@ describe('buildCarMesh', () => {
     expect(asPaint(five)).toBe(five)
   })
 
-  /** Every distinct material colour on a built car, lower-cased the way three.js reports them. */
+  /** Every distinct paint on a built car, lower-cased the way three.js reports them.
+   *
+   *  Read off the VERTICES, not off the materials. `collapseByPaint` folds colour onto the vertex
+   *  buffer so that every part sharing a finish batches into one draw whatever it is painted, and the
+   *  materials it leaves behind are all white. */
   const coloursOf = (car: ReturnType<typeof buildCarMesh>): Set<string> => {
     const out = new Set<string>()
+    const seen = new THREE.Color()
     car.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        out.add('#' + (o.material as THREE.MeshLambertMaterial).color.getHexString())
+      if (!(o instanceof THREE.Mesh)) return
+      const tint = (o.geometry as THREE.BufferGeometry).attributes.color
+      if (!tint) return
+      for (let i = 0; i < tint.count; i++) {
+        out.add('#' + seen.fromBufferAttribute(tint as THREE.BufferAttribute, i).getHexString())
       }
     })
     return out
@@ -118,13 +126,17 @@ describe('the tyre\'s two rubbers', () => {
 
   it('carries the wall\'s radial shade through a bake that strips what it is not told to keep', () => {
     const wall = rolling('fl').find((m) =>
-      (m.material as THREE.MeshStandardMaterial).vertexColors)!
+      (m.material as THREE.MeshStandardMaterial).roughness === RUBBER.wallRough)!
     const colour = wall.geometry.getAttribute('color')
     expect(colour).toBeDefined()
     const shades = Array.from({ length: colour.count }, (_, i) => colour.getX(i))
-    // Both ends of the ramp survived: the bead in the rim's shadow, the shoulder in full light.
-    expect(Math.min(...shades)).toBeCloseTo(RUBBER.beadShade, 4)
-    expect(Math.max(...shades)).toBeCloseTo(1, 4)
+    // The vertex now carries the shade MULTIPLIED by the rubber it shades, since the bake folds a
+    // part's paint onto its vertices so that parts of different colours can share a draw. So the
+    // ramp is measured as a ratio of its own top end rather than against 1: what has to survive is
+    // the bead sitting in the rim's shadow and the shoulder standing in full light.
+    const top = Math.max(...shades)
+    expect(top).toBeGreaterThan(0)
+    expect(Math.min(...shades) / top).toBeCloseTo(RUBBER.beadShade, 4)
   })
 
   it('leaves no crack at the shoulder: the three lathes share their seam rings exactly', () => {
@@ -146,13 +158,24 @@ describe('the tyre\'s two rubbers', () => {
 })
 
 describe('the car\'s two-lobe paint', () => {
-  /** Every material on the car, by the colour it wears. */
+  /** Every material on the car, by each paint that appears anywhere in the buffer it draws.
+   *
+   *  The paint is on the VERTICES after the bake, and one merged buffer holds several of them, so a
+   *  material lands under every colour it is asked to draw. That is exactly the question these tests
+   *  ask: whatever draws the bodywork must be lacquered, whatever draws rubber must not be, and a
+   *  batch that folded the two together would show up here as one material under both. */
   const byColour = new Map<string, THREE.Material[]>()
+  const seen = new THREE.Color()
   car.group.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return
     const m = o.material as THREE.MeshStandardMaterial
-    const key = `#${m.color.getHexString().toUpperCase()}`
-    byColour.set(key, [...(byColour.get(key) ?? []), m])
+    const tint = (o.geometry as THREE.BufferGeometry).attributes.color as THREE.BufferAttribute
+    if (!tint) return
+    for (let i = 0; i < tint.count; i++) {
+      const key = `#${seen.fromBufferAttribute(tint, i).getHexString().toUpperCase()}`
+      const at = byColour.get(key) ?? []
+      if (!at.includes(m)) byColour.set(key, [...at, m])
+    }
   })
 
   it('lacquers the bodywork, which is what puts the sun streak down a sidepod', () => {
