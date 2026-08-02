@@ -23,7 +23,7 @@ import { bakeWorldEnv, type WorldEnv } from '@/lib/scene3d/env3d'
 import { buildPost, type Post } from '@/lib/scene3d/post3d'
 import { type World3D } from '@/lib/scene3d/world3d'
 
-export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, ppu, camRef, camera, paintRef, className }: {
+export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, ppu, unitsPerMetre, camRef, camera, paintRef, className }: {
   world: World3D | null
   /** The live car field, mounted beside the world so a circuit rebuild never drops the cars. */
   carsGroup?: THREE.Group | null
@@ -38,6 +38,8 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   skySeed?: number
   /** Stage pixels per viewBox unit at zoom 1: half of the camera's scale, the stage's letterbox fit. */
   ppu: number
+  /** The circuit's own scale, for sizing the occlusion radius in metres rather than in units. */
+  unitsPerMetre: number
   /** The map's orbit state, read imperatively on every paint. */
   camRef: React.RefObject<OrbitCam>
   /** The one perspective camera, owned by the map so its loop can project the DOM overlay with it. */
@@ -100,7 +102,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     const scene = new THREE.Scene()
     // MSAA moves to the composer's target: `antialias` above applies to the default framebuffer,
     // which the composer no longer draws to.
-    glRef.current = { renderer, scene, post: buildPost(renderer, scene, camera) }
+    glRef.current = { renderer, scene, post: buildPost(renderer, scene, camera, unitsPerMetre) }
     // The same console handle the probe viewer exposes, on the live map.
     ;(window as unknown as { __scene3d?: THREE.Scene }).__scene3d = scene
     return () => {
@@ -108,7 +110,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       renderer.dispose()
       glRef.current = null
     }
-  }, [camera])
+  }, [camera, unitsPerMetre])
 
   useEffect(() => {
     stateRef.current = { world, ppu, carsGroup, crewGroup }

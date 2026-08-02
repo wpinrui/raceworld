@@ -1350,6 +1350,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           night={mood === 'night'}
           skySeed={skySeed}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
+          unitsPerMetre={u(1)}
           camRef={camRef}
           camera={glCamera}
           paintRef={paintRef}

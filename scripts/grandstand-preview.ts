@@ -24,7 +24,7 @@ const fill = argv.includes('--no-crowd') ? 0 : 90
 const MASSINGS = ['twoTier']
 const ROOFS = ['cantilever']
 const SEATS = ['bucket']
-const ANGLES = ['seat']
+const ANGLES = ['three', 'seat']
 
 const CSS = `
 html,body{margin:0;background:#101318;height:100%;overflow:hidden;color-scheme:dark}

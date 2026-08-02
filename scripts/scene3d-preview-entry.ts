@@ -378,7 +378,7 @@ async function eyeShot() {
   refitShadow(built.world.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
   built.world.trees.update(camera.position)
   fitFog(built, camera)
-  const post = buildPost(renderer, built.scene, camera)
+  const post = buildPost(renderer, built.scene, camera, 1 / layout.metresPerUnit)
   post.setSize(w, h, 1)
   post.render()
   window.__post = post
@@ -441,7 +441,7 @@ async function shotMain() {
   renderer.setSize(w, h, false)
   dressSky(built, q.get('mood') ?? 'afternoon', carsGroup)
   fitFog(built, camera)
-  const post = buildPost(renderer, built.scene, camera)
+  const post = buildPost(renderer, built.scene, camera, 1 / layout.metresPerUnit)
   post.setSize(w, h, 1)
   post.render()
   window.__post = post

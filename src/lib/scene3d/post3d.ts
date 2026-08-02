@@ -34,6 +34,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 
 /** Above this much linear radiance, a surface starts to spill. At 1 it means literally "brighter
  *  than white", which lands where it should: the daylight sky tops out around 0.64 after
@@ -97,6 +98,30 @@ function patchBloomCeiling(pass: UnrealBloomPass): void {
     )
 }
 
+/** Ground-truth ambient occlusion: the contact shading a shadow map cannot give.
+ *
+ *  A directional light answers one question, "is the sun blocked", and everything else in the scene
+ *  is lit by an unoccluded sky. So a column meets grass with no darkening at its foot, a truss floats
+ *  over the deck it stands on, and a stand's underside is as bright as its roof. Those creases are
+ *  most of what tells you two surfaces are touching.
+ *
+ *  The radius is a PHYSICAL distance, and that matters here: world units are metres divided by a
+ *  circuit's own scale, so a radius in units would be a different size at every track. Half a metre
+ *  is the crease at the foot of a wall, which is what this is for.
+ *
+ *  It costs a second geometry pass, because the effect needs depth and normals and takes them by
+ *  drawing the scene again. That is the price of it being screen-space and applying to everything,
+ *  rather than being baked into one model. */
+const AO_RADIUS_M = 0.5
+const AO_PARAMS = {
+  distanceExponent: 1,
+  thickness: 1,
+  scale: 1,
+  samples: 16,
+  distanceFallOff: 1,
+  screenSpaceRadius: false,
+} as const
+
 export interface Post {
   /** Draw the world through the chain. Replaces `renderer.render(scene, camera)`. */
   render(): void
@@ -106,6 +131,9 @@ export interface Post {
 
 export function buildPost(
   renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera,
+  /** World units per metre, for sizing the occlusion radius. Absent, the AO pass is left out
+   *  entirely rather than run at a guessed scale. */
+  unitsPerMetre?: number,
 ): Post {
   const target = new THREE.WebGLRenderTarget(1, 1, {
     type: THREE.HalfFloatType,
@@ -113,6 +141,31 @@ export function buildPost(
   })
   const composer = new EffectComposer(renderer, target)
   composer.addPass(new RenderPass(scene, camera))
+  // Before the bloom, because occlusion belongs to the scene's own radiance: darkening a crease
+  // after the spill has been taken off it leaves the crease glowing.
+  const ao = unitsPerMetre !== undefined && camera instanceof THREE.PerspectiveCamera
+    ? new GTAOPass(scene, camera, 1, 1)
+    : null
+  if (ao) {
+    ao.updateGtaoMaterial({ ...AO_PARAMS, radius: AO_RADIUS_M * unitsPerMetre! })
+    // Anything marked `noAO` sits out the pass entirely, by being invisible while it runs. Hiding
+    // rather than filtering by layer on purpose: a layer has to be enabled on every camera that ever
+    // looks at the scene, and the failure mode when one is missed is an invisible crowd. The worst a
+    // missed flag can do here is put an object back into the occlusion it should have skipped.
+    const draw = ao.render.bind(ao)
+    ao.render = (r, write, read, delta, mask) => {
+      const hidden: THREE.Object3D[] = []
+      scene.traverse((o) => {
+        if (o.userData.noAO === true && o.visible) {
+          o.visible = false
+          hidden.push(o)
+        }
+      })
+      draw(r, write, read, delta, mask)
+      for (const o of hidden) o.visible = true
+    }
+    composer.addPass(ao)
+  }
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), STRENGTH, RADIUS, THRESHOLD)
   patchBloomCeiling(bloom)
   composer.addPass(bloom)
@@ -122,8 +175,10 @@ export function buildPost(
     setSize: (width, height, pixelRatio) => {
       composer.setPixelRatio(pixelRatio)
       composer.setSize(width, height)
+      ao?.setSize(width * pixelRatio, height * pixelRatio)
     },
     dispose: () => {
+      ao?.dispose()
       composer.dispose()
       target.dispose()
     },

@@ -4,6 +4,7 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { buildPost } from '../src/lib/scene3d/post3d'
 import {
   MAIN_STAND, buildGrandstand, standExtent,
   type GrandstandSpec, type RoofStyle, type SeatForm, type SeatLod, type StandMassing,
@@ -116,6 +117,11 @@ scene.add(road)
 // Near at 0.3 rather than 0.1: the depth buffer's precision is set by the near-far RATIO, and the
 // closest any angle here gets is a person's arm length.
 const camera = new THREE.PerspectiveCamera(38, 1, 0.3, 1500)
+// The same output chain the game runs, so the model is judged under the light it will actually ship
+// under. Ambient occlusion is the reason: a probe that draws straight to the canvas has no contact
+// shading anywhere, so every column meets the grass with a hard bright edge and the model gets
+// blamed for it. This world is built in metres, hence a scale of one.
+const post = buildPost(renderer, scene, camera, 1)
 const controls = new OrbitControls(camera, canvas)
 controls.enableDamping = true
 controls.target.set(0, 6, 8)
@@ -311,6 +317,7 @@ function resize(): void {
   const w = shot ? 1280 : window.innerWidth
   const h = shot ? 800 : window.innerHeight
   renderer.setSize(w, h, !shot)
+  post.setSize(w, h, renderer.getPixelRatio())
   camera.aspect = w / h
   camera.updateProjectionMatrix()
 }
@@ -346,7 +353,7 @@ async function main(): Promise<void> {
   resize()
   if (shot) {
     view(params.get('angle') ?? 'three')
-    renderer.render(scene, camera)
+    post.render()
     tally()
     requestAnimationFrame(() => { window.__done = true })
     return
@@ -375,7 +382,7 @@ async function main(): Promise<void> {
   let frame = 0
   const tick = () => {
     controls.update()
-    renderer.render(scene, camera)
+    post.render()
     if (frame++ % 12 === 0) tally()
     requestAnimationFrame(tick)
   }

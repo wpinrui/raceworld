@@ -552,6 +552,12 @@ export function buildCrowd(
     // instances are metres away and the whole stand would be culled the moment the origin left the
     // frustum. The billboard turn happens in the shader, so three cannot know the real bounds.
     inst.frustumCulled = false
+    // Kept out of the ambient occlusion pass. Screen-space AO builds its depth and normals by
+    // redrawing the scene with an override material, and an override ignores `alphaTest`: every
+    // cutout spectator becomes a SOLID rectangle in that buffer, so a stand full of them occludes
+    // itself into mud. A billboard also carries the wrong depth there anyway, because the override
+    // has none of the turn its own vertex shader applies.
+    inst.userData.noAO = true
     const m = new THREE.Matrix4()
     const tint = new THREE.Color()
     people.forEach((p, k) => {
