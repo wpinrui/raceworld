@@ -58,7 +58,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   // `n` and `since` are the counter's own window, reset twice a second. `total` never resets: it is
   // how anything else can tell whether a paint has happened, which is what keeps a second painter
   // from adding frames to a display refresh that already had one.
-  const frames = useRef({ n: 0, since: 0, total: 0, cpu: 0 })
+  const frames = useRef({ n: 0, since: 0, total: 0, cpu: 0, paint: 0 })
   const glRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
@@ -82,6 +82,12 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     const w = canvas.clientWidth
     const h = canvas.clientHeight
     if (w === 0 || h === 0) return
+    // The WHOLE painter, against the chain alone. Everything between the two is this component's own
+    // per-frame work: the orbit solve, the shadow refit, the haze refit, the wood's repack. Everything
+    // outside the painter is the rest of the app, and the frame interval is the only thing that sees
+    // it. Three numbers rather than two, because "the frame costs 20 ms and the renderer accounts for
+    // 9" is a statement about where to look next, and I had no way to make it.
+    const paintStart = performance.now()
     if (world) {
       const frame = applyOrbitCam(camera, cam, { w, h }, ppu)
       // The shadow box wraps the framed extent with roll slack: a rotated viewport's world
@@ -119,6 +125,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // which is 60 whatever the scene costs.
       const f = frames.current
       const now = performance.now()
+      f.paint += now - paintStart
       f.n++
       f.total++
       if (f.since === 0) {
@@ -129,10 +136,11 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
         if (costRef.current) {
           const { calls, triangles } = gl.renderer.info.render
           costRef.current.textContent = `${calls} draws  ${(triangles / 1e6).toFixed(1)}M tris`
-            + `  ${(f.cpu / f.n).toFixed(1)}/${(span / f.n).toFixed(1)}ms`
+            + `  ${(f.cpu / f.n).toFixed(1)}/${(f.paint / f.n).toFixed(1)}/${(span / f.n).toFixed(1)}ms`
         }
         f.n = 0
         f.cpu = 0
+        f.paint = 0
         f.since = now
       }
     }
