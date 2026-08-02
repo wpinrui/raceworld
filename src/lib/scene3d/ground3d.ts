@@ -10,6 +10,7 @@ import type { Scenery } from '@/lib/ui/track-scenery'
 import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
+import { MeshBatch } from './batch3d'
 import { blendSurfaces, maskWindow, type SkinSurface, type StandSkin } from './standtex3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
 
@@ -149,12 +150,18 @@ export function buildGroundStack3D(
   detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
+  // Every band, field, hedgerow, terrain patch and runoff is a flat fill in the world's own frame,
+  // and there are hundreds of them across a circuit for a few thousand triangles apiece. Gathered per
+  // material they come out as one mesh per colour.
+  //
+  // Nothing about the picture rides on them being separate. The painter's stack is held by the
+  // per-layer polygonOffset each material already carries, not by the order these were added: three
+  // sorts opaque draws by renderOrder and program, and never by position in a group.
+  const batch = new MeshBatch()
   const add = (geo: THREE.BufferGeometry | null, colour: string, layer: number, alpha = 1) => {
     if (!geo) return
     if (detail) planarUV(geo, u(detail.tileM))
-    const mesh = new THREE.Mesh(geo, materials.get(colour, { alpha, layer, detail }))
-    mesh.receiveShadow = true
-    group.add(mesh)
+    batch.add(geo, materials.get(colour, { alpha, layer, detail }))
   }
   for (const b of scenery.bands) {
     add(pathFillGeometry(b.d, lift(layers.bands)), b.fill, layers.bands)
@@ -181,5 +188,8 @@ export function buildGroundStack3D(
     })
     for (const [colour, s] of byColour) add(s.empty ? null : s.build(), colour, layers.floors)
   }
+  batch.into(group, (mesh) => {
+    mesh.receiveShadow = true
+  })
   return group
 }

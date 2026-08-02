@@ -118,14 +118,17 @@ describe('buildWorld3D', () => {
     expect(world.stats.triangles).toBeGreaterThan(50_000)
   })
 
-  it('stands the kerbs up as solids, one pair of paints each, casting their own shadow', () => {
+  it('stands the kerbs up as solids, batched to one draw per paint, casting their own shadow', () => {
     const red = new THREE.Color(KERB_RED).getHexString()
     const kerbs: THREE.Mesh[] = []
     world.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return
       if ((o.material as THREE.MeshStandardMaterial).color.getHexString() === red) kerbs.push(o)
     })
-    expect(kerbs).toHaveLength(scenery.kerbs.length)
+    // ONE mesh for every red kerb on the circuit, not one per kerb: a draw call costs the same
+    // whatever it delivers, and the circuit's kerbing was two of them per kerb.
+    expect(kerbs).toHaveLength(1)
+    expect(scenery.kerbs.length).toBeGreaterThan(1)
     for (const mesh of kerbs) {
       expect(mesh.castShadow).toBe(true)
       const g = mesh.geometry as THREE.BufferGeometry

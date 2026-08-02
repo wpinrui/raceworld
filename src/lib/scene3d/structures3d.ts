@@ -12,6 +12,7 @@ import type { SceneryFence, SceneryMarshal } from '@/lib/ui/scenery-props'
 import { ribbonGeometry } from './road3d'
 import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGeometry } from './solids3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
+import { MeshBatch } from './batch3d'
 import { faceUV, type SurfaceDetail } from './detail3d'
 import type { WorldTextures } from './textures3d'
 import {
@@ -60,21 +61,36 @@ export function buildBuildings3D(
   // Over white, so a lit window spills a little the way a real one does through glass. Gentler than
   // the floodlights: this is a room behind a pane, not a lamp pointed at a circuit.
   nightGlass?.color.multiplyScalar(1.3)
+  // A town is a shell and a window grid per building, each its own draw for a few hundred triangles.
+  // They never move, so the placement bakes into the buffer and a whole town of one colour becomes
+  // one mesh. Shells and glazing batch apart because they are different materials, which is also
+  // what keeps the glazing out of the shadow map.
+  const shells = new MeshBatch()
+  const glazing = new MeshBatch()
+  const at = new THREE.Matrix4()
+  const place = (b: SceneryRect) => at.makeRotationY(-b.rot).setPosition(b.x, 0, b.y)
   for (const b of buildings) {
     const parts = partsOf(b)
     const h = u((b.storeys ?? 1) * STOREY_M)
     const shell = partsSolidGeometry(parts, 0, h)
     grain(shell, detail, u)
-    group.add(placed(shell, materials.get(b.fill, { roughness: ROUGH.matte, detail }), b))
+    shells.add(shell, materials.get(b.fill, { roughness: ROUGH.matte, detail }), place(b))
+    shell.dispose()
     const windows = partsWindowsGeometry(
       parts, 0, h, u(WINDOW_BAY_M), Math.max(1, b.storeys ?? 1), u(0.12),
     )
     if (windows) {
-      const glass = placed(windows, nightGlass ?? materials.get(GLASS, { alpha: GLASS_ALPHA }), b)
-      glass.castShadow = false
-      group.add(glass)
+      glazing.add(windows, nightGlass ?? materials.get(GLASS, { alpha: GLASS_ALPHA }), place(b))
+      windows.dispose()
     }
   }
+  shells.into(group, (mesh) => {
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+  })
+  glazing.into(group, (mesh) => {
+    mesh.receiveShadow = true
+  })
   return group
 }
 

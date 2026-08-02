@@ -24,6 +24,7 @@ import {
 import { dashStations, type DashStation } from './road3d'
 import { repairNormals } from './normals3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
+import { MeshBatch } from './batch3d'
 import type { SurfaceDetail } from './detail3d'
 
 /** The section, walked from the track edge outward: how far across the strip (0 at the tarmac, 1 at
@@ -190,6 +191,10 @@ export function buildKerbs3D(
 ): THREE.Group {
   const { base, layer } = stack
   const group = new THREE.Group()
+  // Every kerb on the circuit arrives as two lofts, white and red, and a circuit has a lot of kerbs.
+  // They are opaque solids resolved by the depth buffer, so nothing about them depends on being
+  // submitted separately: two draws for the whole circuit rather than two per kerb.
+  const batch = new MeshBatch()
   // Absent a generated grain the UVs still have to mean something, so they fall back to one tile per
   // kerb width: no map samples them, and a later one gets a sane scale for nothing.
   const tile = u(detail?.tileM ?? KERB_WIDTH_M)
@@ -202,15 +207,14 @@ export function buildKerbs3D(
       if (!geometry) continue
       // `matte`, not `paint`: a kerb is painted CONCRETE, cast rough for grip, and at the sheen of
       // painted metal the sky's broad specular sat over the red hard enough to wash it out pink.
-      const mesh = new THREE.Mesh(
-        geometry, materials.get(colour, { roughness: ROUGH.matte, detail, layer }),
-      )
-      // A solid, so it casts as well as receives. A low sun raking across a corrugated kerb is most
-      // of what says the thing is not paint.
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      group.add(mesh)
+      batch.add(geometry, materials.get(colour, { roughness: ROUGH.matte, detail, layer }))
     }
   }
+  // A solid, so it casts as well as receives. A low sun raking across a corrugated kerb is most
+  // of what says the thing is not paint.
+  batch.into(group, (mesh) => {
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+  })
   return group
 }
