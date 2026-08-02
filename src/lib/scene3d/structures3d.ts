@@ -12,7 +12,7 @@ import type { SceneryFence, SceneryMarshal } from '@/lib/ui/scenery-props'
 import { ribbonGeometry } from './road3d'
 import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGeometry } from './solids3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
-import { MeshBatch } from './batch3d'
+import { MeshBatch, collapseByFinish } from './batch3d'
 import { faceUV, type SurfaceDetail } from './detail3d'
 import type { WorldTextures } from './textures3d'
 import {
@@ -127,6 +127,14 @@ export function buildStands3D(
     holder.position.set(s.x, 0, s.y)
     holder.rotation.y = -s.rot
     const stand = buildGrandstand(spec, seats, null, skin)
+    // Collapsed PER STAND, before it is placed, so the bake is relative to the stand's own frame.
+    // A stand is a couple of dozen solids (deck, ends, aisles, frontage, barriers, towers, roof) and
+    // there are thirty of them round a circuit; every one that shares a finish shares a draw now.
+    //
+    // Per stand rather than across them on purpose: one buffer for the whole circuit would have one
+    // bounding volume, and a stand on the far side of the lap could never be culled again. The seat
+    // ladder and the pooled crowd stay out of it, being a `LOD` and an instanced draw.
+    collapseByFinish(stand)
     stand.scale.setScalar(perMetre)
     if (s.facing) {
       stand.rotation.y = Math.PI

@@ -12,10 +12,9 @@ import * as THREE from 'three'
 import { shade } from '@/lib/color'
 import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
+import { collapseByFinish } from './batch3d'
 import { LACQUER, ROUGH, surface } from './materials3d'
-import { repairNormals } from './normals3d'
 import { scaleUV } from './detail3d'
 import { RUBBER, grainTile, radialShade, treadSurface, wallSurface } from './rubber3d'
 
@@ -810,133 +809,6 @@ export type CarLivery = string | CarPaint
  *  caller keeps its exact look. */
 export const asPaint = (livery: CarLivery): CarPaint => typeof livery !== 'string' ? livery : {
   body: livery, cover: shade(livery, 0.62), wing: TERTIARY, accent: livery, trim: TERTIARY,
-}
-
-/** ONE DRAW CALL PER PAINT, not per part. The car is authored as ~270 separate solids because that
- *  is how you sculpt it, but it must not SHIP that way: measured on the built car, a grid of twenty
- *  is 5,400 draw calls against 1.1M triangles, and it is the draw calls that cost the frame. Baking
- *  every part that shares a paint into one buffer takes a car from 270 calls to ten and changes not
- *  one pixel.
- *
- *  Anything that has to move on its own is a BOUNDARY and is baked separately inside itself: the
- *  four steering pivots and the four rolling hubs within them. Shadow-casting is part of the key,
- *  so the handful of parts that deliberately cast nothing keep their own buffer instead of being
- *  merged into one that does. */
-function collapseByPaint(node: THREE.Object3D, boundaries: ReadonlySet<THREE.Object3D>): void {
-  interface Batch {
-    geos: THREE.BufferGeometry[]
-    sources: THREE.Mesh[]
-    material: THREE.Material
-    cast: boolean
-  }
-  const batches = new Map<string, Batch>()
-  node.updateMatrixWorld(true)
-  const toLocal = new THREE.Matrix4().copy(node.matrixWorld).invert()
-  // Merging is all-or-nothing on attribute layout, and this car mixes two sources: the sinks build
-  // non-indexed position+normal, three's own primitives arrive indexed and carrying UVs. Everything
-  // is flattened to ONE layout first, or the merge quietly refuses and parts vanish.
-  //
-  // Which layout is decided by the batch's MATERIAL, not by what happens to be on the geometry. Two
-  // attributes beyond position and normal are load-bearing now (the tread samples its grain through
-  // `uv`, the sidewall carries its shade in `color`), and both would be thrown away by a rule that
-  // only kept the first two. Anything a material reads is kept and, where a part in that batch does
-  // not have it, synthesised at its neutral value: zero UVs sample one texel, white vertex colours
-  // multiply to nothing. The alternative is a refused merge, and a refused merge on the car's main
-  // carbon batch is a hundred and fifty draw calls.
-  const bakeable = (
-    source: THREE.BufferGeometry, matrix: THREE.Matrix4, needs: ReadonlySet<string>,
-  ): THREE.BufferGeometry => {
-    const geo = source.index ? source.toNonIndexed() : source.clone()
-    for (const name of Object.keys(geo.attributes)) {
-      if (name !== 'position' && name !== 'normal' && !needs.has(name)) geo.deleteAttribute(name)
-    }
-    for (const name of needs) {
-      if (geo.attributes[name]) continue
-      const size = name === 'uv' ? 2 : 3
-      const fill = new Float32Array(geo.attributes.position.count * size)
-      if (name === 'color') fill.fill(1)
-      geo.setAttribute(name, new THREE.Float32BufferAttribute(fill, size))
-    }
-    if (!geo.attributes.normal) geo.computeVertexNormals()
-    // Whichever source it came from: a sink's own normals and three's primitives alike come back
-    // zero on a zero-area triangle, and a zero normal is a NaN pixel once a shader normalizes it.
-    repairNormals(geo)
-    geo.applyMatrix4(matrix)
-    return geo
-  }
-  const walk = (o: THREE.Object3D) => {
-    for (const child of o.children) {
-      if (boundaries.has(child)) continue
-      walk(child)
-    }
-    if (!(o instanceof THREE.Mesh)) return
-    const material = o.material as THREE.MeshStandardMaterial
-    // Keyed on everything that makes one material LOOK different from another, not on its colour
-    // alone. A batch keeps ONE of the materials that fell into it and every part in it then renders
-    // as that: colour-only was enough while the whole car was painted and rubber was one flat
-    // black, and it stopped being enough the moment the tyre put two rubbers on the same wheel that
-    // differ in polish and in what they sample. The tread would have been merged into the sidewall
-    // and both would have rendered as whichever the walk reached first.
-    // Keyed on everything that makes one material LOOK different from another EXCEPT its colour,
-    // which is folded onto the vertices below. A livery's five paint slots are one finish in five
-    // colours, and keying on colour split them into five draws apiece; the whole field was 1036
-    // meshes on the grid, forty-five per car, and the frame was spending two thirds of itself
-    // issuing draws. The rest of the finish stays in the key, and more of it than before: two
-    // materials that differ in clearcoat or in what they let through are still two surfaces, and
-    // batching now folds enough together that an unkeyed one would show.
-    const physical = material as THREE.MeshPhysicalMaterial
-    const key = [
-      material.type, material.roughness, material.metalness,
-      material.map?.uuid ?? '', material.normalMap?.uuid ?? '', material.roughnessMap?.uuid ?? '',
-      material.emissive?.getHexString() ?? '', material.emissiveIntensity ?? '',
-      physical.clearcoat ?? '', physical.clearcoatRoughness ?? '', physical.specularIntensity ?? '',
-      material.side, material.transparent ? material.opacity : 'opaque',
-      o.castShadow ? 'cast' : '',
-    ].join('|')
-    const needs = new Set<string>(['color'])
-    if (material.map || material.normalMap || material.roughnessMap) needs.add('uv')
-    const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow }
-    const geo = bakeable(
-      o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld), needs,
-    )
-    // The paint, onto the vertices. MULTIPLIED rather than written, because a part may already carry
-    // a vertex shade of its own (the tyre sidewall does) and that shade is a modulation of whatever
-    // colour the material is painted, not a replacement for it. Both sides are linear here, which is
-    // the space three consumes vertex colour in, so the product is the colour the part was authored.
-    const tint = geo.attributes.color as THREE.BufferAttribute
-    for (let i = 0; i < tint.count; i++) {
-      tint.setXYZ(
-        i, tint.getX(i) * material.color.r,
-        tint.getY(i) * material.color.g, tint.getZ(i) * material.color.b,
-      )
-    }
-    batch.geos.push(geo)
-    batch.sources.push(o)
-    batches.set(key, batch)
-  }
-  walk(node)
-  for (const batch of batches.values()) {
-    const merged = mergeGeometries(batch.geos, false)
-    for (const g of batch.geos) g.dispose()
-    // A refused merge keeps its parts rather than losing them: a silently missing wing is a far
-    // worse outcome than a car that is briefly a few draw calls fatter than it should be.
-    if (!merged) continue
-    for (const source of batch.sources) {
-      source.removeFromParent()
-      ;(source.geometry as THREE.BufferGeometry).dispose()
-    }
-    // A CLONE painted white, reading its colour off the vertices. The batch holds parts that were
-    // several different colours, so keeping one of their materials would paint the lot in whichever
-    // the walk happened to reach first. Cloned rather than mutated because the source material is
-    // shared with whatever else on this car wears the same paint.
-    const painted = batch.material.clone() as THREE.MeshStandardMaterial
-    painted.color.setRGB(1, 1, 1)
-    painted.vertexColors = true
-    const m = new THREE.Mesh(merged, painted)
-    m.castShadow = batch.cast
-    m.receiveShadow = true
-    node.add(m)
-  }
 }
 
 export interface CarMesh {
@@ -2149,12 +2021,12 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
   // observable, so the boundaries come down and the whole car bakes into one buffer per paint.
   if (detail.liveWheels) {
     for (const tag of Object.keys(wheels) as Array<keyof CarMesh['wheels']>) {
-      collapseByPaint(spin[tag], EMPTY_BOUNDARY)
-      collapseByPaint(wheels[tag], new Set([spin[tag]]))
+      collapseByFinish(spin[tag], EMPTY_BOUNDARY)
+      collapseByFinish(wheels[tag], new Set([spin[tag]]))
     }
-    collapseByPaint(group, new Set(Object.values(wheels)))
+    collapseByFinish(group, new Set(Object.values(wheels)))
   } else {
-    collapseByPaint(group, EMPTY_BOUNDARY)
+    collapseByFinish(group, EMPTY_BOUNDARY)
   }
 
   // The sprung mass, split AFTER the collapse so it holds the few merged buffers rather than a

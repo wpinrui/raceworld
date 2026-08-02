@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
-import { MeshBatch } from './batch3d'
+import { MeshBatch, collapseByFinish } from './batch3d'
 
 const tri = (x = 0): THREE.BufferGeometry => {
   const g = new THREE.BufferGeometry()
@@ -113,5 +113,102 @@ describe('MeshBatch', () => {
     expect(built).toHaveLength(2)
     expect(built.reduce((n, m) => n + countTriangles(m), 0)).toBe(2)
     quiet.mockRestore()
+  })
+})
+
+describe('collapseByFinish', () => {
+  const part = (colour: string, opts: THREE.MeshStandardMaterialParameters = {}) => {
+    const mesh = new THREE.Mesh(tri(), new THREE.MeshStandardMaterial({ color: colour, ...opts }))
+    mesh.castShadow = true
+    return mesh
+  }
+  const drawsIn = (root: THREE.Object3D) => {
+    let n = 0
+    root.traverse((o) => { if (o instanceof THREE.Mesh) n++ })
+    return n
+  }
+
+  it('folds parts of different colours but one finish into a single draw', () => {
+    const root = new THREE.Group()
+    root.add(part('#FF0000'), part('#00FF00'), part('#0000FF'))
+    collapseByFinish(root)
+    expect(drawsIn(root)).toBe(1)
+  })
+
+  it('carries each part\'s colour onto its vertices, over a white material', () => {
+    const root = new THREE.Group()
+    root.add(part('#FF0000'), part('#0000FF'))
+    collapseByFinish(root)
+    const mesh = root.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh)!
+    const mat = mesh.material as THREE.MeshStandardMaterial
+    expect(mat.color.getHexString()).toBe('ffffff')
+    expect(mat.vertexColors).toBe(true)
+    const tint = mesh.geometry.getAttribute('color')
+    const seen = new Set<string>()
+    for (let i = 0; i < tint.count; i++) {
+      seen.add(new THREE.Color().fromBufferAttribute(tint as THREE.BufferAttribute, i).getHexString())
+    }
+    expect(seen).toEqual(new Set(['ff0000', '0000ff']))
+  })
+
+  it('keeps two finishes apart even where they share a colour', () => {
+    // A property left out of the key is a part silently taking another's finish: a tyre tread
+    // wearing the sidewall's polish, a stand's glazing wearing its concrete.
+    const root = new THREE.Group()
+    root.add(part('#888888', { roughness: 0.1 }), part('#888888', { roughness: 0.9 }))
+    collapseByFinish(root)
+    expect(drawsIn(root)).toBe(2)
+  })
+
+  it('splits casters from non-casters, which is a difference the shadow map can see', () => {
+    const root = new THREE.Group()
+    const quiet = part('#888888')
+    quiet.castShadow = false
+    root.add(part('#888888'), quiet)
+    collapseByFinish(root)
+    expect(drawsIn(root)).toBe(2)
+  })
+
+  it('leaves a detail ladder alone, or every rung would draw at once', () => {
+    const root = new THREE.Group()
+    const ladder = new THREE.LOD()
+    ladder.addLevel(part('#FF0000'), 0)
+    ladder.addLevel(part('#FF0000'), 50)
+    root.add(ladder, part('#FF0000'))
+    collapseByFinish(root)
+    expect(root.children).toContain(ladder)
+    expect(ladder.children).toHaveLength(2)
+  })
+
+  it('leaves an instanced draw alone, since merging it would lose its transforms', () => {
+    const root = new THREE.Group()
+    const crowd = new THREE.InstancedMesh(tri(), new THREE.MeshStandardMaterial(), 4)
+    root.add(crowd, part('#FF0000'), part('#00FF00'))
+    collapseByFinish(root)
+    expect(root.children).toContain(crowd)
+    expect(crowd.count).toBe(4)
+  })
+
+  it('skips a named boundary and everything under it', () => {
+    const root = new THREE.Group()
+    const moving = new THREE.Group()
+    moving.add(part('#FF0000'))
+    root.add(moving, part('#FF0000'), part('#00FF00'))
+    collapseByFinish(root, new Set([moving]))
+    expect(moving.children).toHaveLength(1)
+    expect(drawsIn(root)).toBe(2)
+  })
+
+  it('bakes a part\'s placement, so the merged buffer stands where the parts did', () => {
+    const root = new THREE.Group()
+    const moved = part('#FF0000')
+    moved.position.set(0, 7, 0)
+    root.add(moved, part('#FF0000'))
+    collapseByFinish(root)
+    const mesh = root.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh)!
+    const box = new THREE.Box3().setFromBufferAttribute(
+      mesh.geometry.getAttribute('position') as THREE.BufferAttribute)
+    expect(box.max.y).toBeCloseTo(8)
+    expect(box.min.y).toBeCloseTo(0)
   })
 })
