@@ -71,23 +71,33 @@ describe('buildWorld3D', () => {
     expect(marks).toBeGreaterThan(tarmac)
   })
 
-  it('plants every tree as an instance and lights the world with one shadowed sun and one sky', () => {
-    let canopies = 0
+  it('lights the world with one shadowed sun and one sky', () => {
     let suns = 0
     let skies = 0
     world.group.traverse((o) => {
-      if (o instanceof THREE.InstancedMesh && (o.geometry as THREE.BufferGeometry).type === 'SphereGeometry') {
-        canopies += o.count
-      }
       if (o instanceof THREE.DirectionalLight) {
         suns++
         expect(o.castShadow).toBe(true)
       }
       if (o instanceof THREE.HemisphereLight) skies++
     })
-    expect(canopies).toBe(scenery.trees.length)
     expect(suns).toBe(1)
     expect(skies).toBe(1)
+  })
+
+  it('plants no wood at all without the imported pack', () => {
+    // This used to assert a sphere per tree, from when a pack-less world stood lollipops instead.
+    // Nothing is the right answer now: a circuit that is briefly bare reads as one still loading,
+    // where one full of placeholder greenery reads as the finished thing.
+    let instances = 0
+    world.group.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh
+        && (o.geometry as THREE.BufferGeometry).type === 'SphereGeometry') {
+        instances += o.count
+      }
+    })
+    expect(instances).toBe(0)
+    expect(scenery.trees.length).toBeGreaterThan(0)
   })
 
   it('stands the world up: structures and trees put real triangles above the ground stack', () => {

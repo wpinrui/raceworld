@@ -21,14 +21,7 @@
 
 import * as THREE from 'three'
 import type { SceneryTree } from '@/lib/ui/track-scenery'
-import { ROUGH, surface } from './materials3d'
 import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
-
-/** Fallback canopy albedo per variant, for the spheres. */
-const CANOPY = ['#416830', '#59672C'] as const
-const TRUNK = '#6B5138'
-const CANOPY_OF_R = 1.0
-const SQUASH = 0.68
 
 /** Canopy tints, multiplied over the canopy map. Both families take a near-white palette, for the
  *  same reason by two routes.
@@ -78,46 +71,6 @@ function hash2(x: number, y: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296
 }
 
-/** The old lollipops, kept for the pack-less path. */
-function buildSpheres(trees: readonly SceneryTree[], u: (m: number) => number): THREE.Group {
-  const group = new THREE.Group()
-  const byVariant: SceneryTree[][] = [[], []]
-  for (const t of trees) byVariant[t.variant].push(t)
-
-  const canopyGeo = new THREE.SphereGeometry(1, 8, 6)
-  const trunkGeo = new THREE.CylinderGeometry(1, 1, 1, 5)
-  const m = new THREE.Matrix4()
-
-  const trunkMat = surface(TRUNK, { roughness: ROUGH.chalk })
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, trees.length)
-  let ti = 0
-
-  byVariant.forEach((set, variant) => {
-    if (set.length === 0) return
-    const mat = surface(CANOPY[variant], { roughness: ROUGH.chalk })
-    const canopies = new THREE.InstancedMesh(canopyGeo, mat, set.length)
-    set.forEach((t, i) => {
-      const r = t.r * CANOPY_OF_R
-      const rv = r * SQUASH
-      // The data's height is the whole tree: canopy top at u(h), crown hanging below it.
-      const centreY = Math.max(rv, u(t.h) - rv)
-      m.makeScale(r, rv, r).setPosition(t.x, centreY, t.y)
-      canopies.setMatrixAt(i, m)
-      const rad = Math.max(u(0.4), t.r * 0.17)
-      m.makeScale(rad, centreY, rad).setPosition(t.x, centreY / 2, t.y)
-      trunks.setMatrixAt(ti++, m)
-    })
-    canopies.castShadow = true
-    canopies.receiveShadow = true
-    group.add(canopies)
-  })
-  trunks.count = ti
-  trunks.castShadow = true
-  trunks.receiveShadow = true
-  group.add(trunks)
-  return group
-}
-
 /** One tree, resolved once at build. Its species is fixed here, so each tier's buffers can be sized
  *  exactly and an update never allocates: it only decides which of the two tiers the tree goes into
  *  this frame, and at what slot. */
@@ -157,7 +110,7 @@ export interface Trees3D {
 }
 
 export interface Trees3DInput {
-  /** The imported pack. Absent, the old spheres are built instead. */
+  /** The imported pack. Absent, no wood is built at all: see `buildTrees3D`. */
   pack?: TreePack | null
   /** Metres per world unit, for reading the detail bands in the scenery's own space. */
   metresPerUnit?: number
@@ -167,8 +120,13 @@ export function buildTrees3D(
   trees: readonly SceneryTree[], u: (m: number) => number, input: Trees3DInput = {},
 ): Trees3D {
   const { pack, metresPerUnit = 1 } = input
+  // No pack, no trees. There used to be a fallback here that stood a sphere on a cylinder for every
+  // tree, from before the imported wood existed, and it long outlived being useful: it is the only
+  // thing in the scene that looks like the placeholder it is, and the pack lands within a second of
+  // the map opening. An empty circuit for that second reads as a circuit still loading. A circuit
+  // full of green lollipops reads as the game.
   if (!pack || pack.kinds.length === 0) {
-    return { group: buildSpheres(trees, u), update: () => {} }
+    return { group: new THREE.Group(), update: () => {} }
   }
 
   // Species are drawn by WEIGHT, not uniformly: the conifers ride at a fraction of a broadleaf's
@@ -220,6 +178,21 @@ export function buildTrees3D(
       // three only allocates the colour buffer once something asks for it, and every instance has to
       // carry one after that or the untouched slots multiply by black.
       if (piece.tinted) mesh.setColorAt(0, standing[0].colour)
+      // Foliage sits out the ambient occlusion pass; bark stays in it.
+      //
+      // That pass builds its depth and normals by redrawing the scene under one override material,
+      // and an override carries no `alphaTest`, so every leaf CARD writes into it as a solid quad. A
+      // crown then occludes itself against rectangles that are not there, which comes back as
+      // hard-edged black polygons through the canopy.
+      //
+      // No loss: `shapeCanopy` already bakes a crown's occlusion into its vertex colours, radially
+      // and vertically, once at load. That is the better answer for foliage anyway, which is a field
+      // of depth discontinuities and exactly the input screen-space occlusion turns into noise.
+      //
+      // Keyed off `tinted`, which comes from the material's OWN cutout rather than from a name or a
+      // guess about what a tree is, so the opaque fallback spheres keep their occlusion and any
+      // future pack is classified by the same test.
+      if (piece.tinted) mesh.userData.noAO = true
       group.add(mesh)
       return mesh
     })
