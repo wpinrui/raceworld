@@ -134,48 +134,12 @@ const WOOD_FADE = 0.12
  *  the whole population is a few instanced draws however many of them there are. */
 const PLANTINGS = 70000
 
-/** Size of one urban mass, in metres. Far larger than a wood, and three octaves rather than four:
- *  a town is one thing with a middle and an edge, not a scatter of hamlets. */
-const TOWN_FEATURE_M = 2600
-
-/** How far out the town starts, in metres, and where the wood stops. The SAME line, and that is the
- *  point of it: the near band belongs to the hills alone.
+/** Where the wood stops, in metres.
  *
- *  The town used to start where the built world stopped, which on Britain is 1.38 km, and with the
- *  radius drawn toward the near end a quarter of it landed inside 1.8 km. That is not a skyline, it
- *  is a wall across the circuit, and it stood in front of the very hills it was added to sit behind.
- *  At five kilometres a 180 m block covers two degrees of a 35 degree lens, the aerial ramp is
- *  halfway through it, and a plain box is the right amount of building: no roof line, no window
- *  band, nothing that a fidelity argument could be had about.
- *
- *  The wood stops at the same distance for the same reason in reverse. Past five kilometres a tree
- *  is a couple of pixels and thousands of them buy a faint speckle; the hillside's own wood tint
- *  says forest out there, which is what a far ridge actually reads as. */
-const TOWN_NEAR_M = 5000
+ *  Past five kilometres a tree is a couple of pixels, and thousands of them buy a faint speckle
+ *  rather than a wood. The hillside's own tint says forest from there out, which is what a far ridge
+ *  actually reads as: a dark green mass, not countable trees. */
 const WOOD_FAR_M = 5000
-
-/** Attempted sitings for the distant town, cut down by the urban mask the same way the plantings
- *  are cut by the forest one. */
-const SITINGS = 9000
-
-/** A distant building's plan, in metres, and how tall it stands.
- *
- *  Height is drawn on the mass's own DEPTH, not flat across it: a skyline has a middle. A block at
- *  the edge of the sprawl gets the base height, one at the heart of it gets the multiplier, and what
- *  that produces is the shape a city actually cuts against a hill, low and wide with a cluster
- *  standing up out of it. */
-const TOWN_PLAN_M = 26
-const TOWN_PLAN_SD_M = 9
-const TOWN_H_M = 26
-const TOWN_H_SD_M = 12
-const TOWN_MIN_H_M = 11
-const TOWN_CORE_GAIN = 2
-
-/** What a distant building is made of before the air gets to it: pale, desaturated, and barely
- *  varied. Concrete and glass at range is one value with a little scatter in it, and anything more
- *  colourful reads as a toy town rather than a city. */
-const TOWN_TINT = '#C2C6C9'
-const TOWN_TINT_SPREAD = 0.16
 
 /** Far trees are drawn as cards, so their height is all the size they have. Centred on a mature
  *  broadleaf, the same population the scenery plants, with a floor under it: a sapling on a ridge
@@ -295,7 +259,6 @@ function fieldsFor({ view, metresPerUnit, circuitId, biome }: FarLand3DInput) {
   const nominal = builtR + u(CLEARANCE_M)
   const featureU = u(bio.featureM * FEATURE_GAIN)
   const woodU = u(WOOD_FEATURE_M)
-  const townU = u(TOWN_FEATURE_M)
   const reliefU = u(bio.reliefM * RELIEF_GAIN)
   const rampU = u(RAMP_M)
   const dipU = u(DIP_M)
@@ -324,22 +287,15 @@ function fieldsFor({ view, metresPerUnit, circuitId, biome }: FarLand3DInput) {
   const woodThreshold = 0.5 + (0.5 - cover) * 0.45
   const woodAt = (x: number, z: number): number => fbm(x / woodU, z / woodU, seed ^ 0x1b873593, 4)
 
-  // ...and how much of it is built on, off the biome's building multiplier by the same route: 1.8
-  // in the Ardennes to 5.5 in a city. Three octaves rather than the wood's four, on a much larger
-  // feature: a town is one mass with a middle, not a scatter of hamlets.
-  const townThreshold = 0.5 + (0.5 - clamp01(bio.buildings / 8)) * 0.45
-  const townAt = (x: number, z: number): number => fbm(x / townU, z / townU, seed ^ 0x7feb352d, 3)
-
-  // The air anything at radius `r` is seen through, measured from the FIRST RISE for everything
-  // alike. The town starts far outside that, and letting it ramp from its own near edge instead
-  // would hand a five kilometre block the haze of a rim one, i.e. a hard-edged grey skyline
-  // standing in front of hills already halfway to blue.
+  // The air anything at radius `r` is seen through, measured from the FIRST RISE: the ramp has to
+  // be zero exactly where the belt meets the flat ground plane, since the two share a scan and haze
+  // on one and not the other draws a line across the field at the join.
   const aerialSpan = u(AERIAL_FULL_M)
   const aerialAt = (r: number, out: THREE.Color): THREE.Color => (
     aerialTint(clamp01((r - nominal) / aerialSpan), out)
   )
 
-  return { u, cx, cz, builtR, nominal, heightAt, woodAt, woodThreshold, townAt, townThreshold, aerialAt }
+  return { u, cx, cz, builtR, nominal, heightAt, woodAt, woodThreshold, aerialAt }
 }
 
 /** The hills, as one indexed polar grid. */
@@ -427,73 +383,6 @@ function plantWood(
   return trees
 }
 
-/** The distant town, as one instanced box.
- *
- *  BOXES, where the trees out here are cards, and the difference is which one is cheaper to get
- *  right rather than which is cheaper to draw. A card has to solve facing as the camera orbits, and
- *  it needs a silhouette baked for it; the tree pack already bakes one, and there is no equivalent
- *  for a building. A box needs no texture at all, is correct from every bearing, and at twelve
- *  triangles it costs about two cards. Nine thousand sitings cut by the mask is a few thousand
- *  blocks, which is one draw either way.
- *
- *  Nothing more than a solid: no windows, no roof furniture, no colour. Everything here is at least
- *  a kilometre and a half out and behind the aerial ramp, where a window is a fraction of a pixel
- *  and the whole block is on its way to being one flat value. */
-function buildTown(
-  fields: ReturnType<typeof fieldsFor>, circuitId: string, from: number, to: number,
-): THREE.InstancedMesh | null {
-  const { u, cx, cz, heightAt, townAt, townThreshold, aerialAt } = fields
-  const rng = seededRng(`farland-town:${circuitId}`)
-  const air = new THREE.Color()
-  const base = new THREE.Color(TOWN_TINT)
-  const matrices: THREE.Matrix4[] = []
-  const colours: THREE.Color[] = []
-  for (let i = 0; i < SITINGS; i++) {
-    const r = from * (to / from) ** (rng() ** 2)
-    const theta = rng() * Math.PI * 2
-    const x = cx + Math.cos(theta) * r
-    const z = cz + Math.sin(theta) * r
-    const mask = townAt(x, z)
-    if (mask < townThreshold) continue
-    // How deep into the mass this block sits, which is what decides whether it is a shed on the
-    // edge of town or a tower in the middle of it.
-    const core = clamp01((mask - townThreshold) / 0.14)
-    const h = Math.max(TOWN_MIN_H_M, sampleNormal(TOWN_H_M, TOWN_H_SD_M, rng)) * (1 + TOWN_CORE_GAIN * core)
-    const w = Math.max(8, sampleNormal(TOWN_PLAN_M, TOWN_PLAN_SD_M, rng))
-    const d = Math.max(8, sampleNormal(TOWN_PLAN_M, TOWN_PLAN_SD_M, rng))
-    matrices.push(new THREE.Matrix4().compose(
-      new THREE.Vector3(x, Math.max(0, heightAt(x, z)), z),
-      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng() * Math.PI * 2),
-      new THREE.Vector3(u(w), u(h), u(d)),
-    ))
-    // The same air the ground at this radius is behind, and a little value scatter under it so a
-    // block face is not the identical grey as its neighbour's.
-    aerialAt(r, air)
-    colours.push(new THREE.Color().copy(base)
-      .multiplyScalar(1 - TOWN_TINT_SPREAD / 2 + rng() * TOWN_TINT_SPREAD).multiply(air))
-  }
-  if (matrices.length === 0) return null
-
-  // Unit box with its base on the floor, so an instance's Y scale IS the building's height and it
-  // stands on the ground rather than half sunk into it.
-  const geometry = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)
-  const mesh = new THREE.InstancedMesh(
-    geometry, new THREE.MeshStandardMaterial({ roughness: ROUGH.chalk }), matrices.length,
-  )
-  matrices.forEach((m, i) => {
-    mesh.setMatrixAt(i, m)
-    mesh.setColorAt(i, colours[i])
-  })
-  mesh.castShadow = false
-  mesh.receiveShadow = false
-  mesh.matrixAutoUpdate = false
-  // Instanced bounds cover the whole far world, so the per-object test can only ever keep the lot
-  // or throw it, and it is the skyline: it is never the thing to throw.
-  mesh.frustumCulled = false
-  mesh.userData.noAO = true
-  return mesh
-}
-
 export function buildFarLand3D(input: FarLand3DInput): FarLand3D {
   const { view, pad, skin, base } = input
   const fields = fieldsFor(input)
@@ -522,17 +411,11 @@ export function buildFarLand3D(input: FarLand3DInput): FarLand3D {
 
   const group = new THREE.Group()
   group.add(mesh)
-  // A town on the far land as well as wood on it. Some of what closes a horizon is landform and
-  // some of it is a place: a ridge with a sprawl at its foot reads as somewhere, and a ridge on its
-  // own reads as scenery. It starts well beyond the hills so it sits BEHIND them.
-  const town = buildTown(fields, input.circuitId, Math.min(u(TOWN_NEAR_M), outer * 0.9), outer)
-  if (town) group.add(town)
   return {
     group,
     // Planting starts where the built world stops rather than at the first hill, so the level band
     // between the two is wooded too. That band is most of what a low camera actually sees down the
-    // road, and leaving it bare would just move the empty stretch further out. It finishes where
-    // the town begins: the whole wood is now inside the band the hills own.
+    // road, and leaving it bare would just move the empty stretch further out.
     trees: plantWood(fields, input.circuitId, builtR, Math.max(builtR * 1.2, u(WOOD_FAR_M))),
   }
 }

@@ -24,26 +24,6 @@ const meshOf = (land: { group: THREE.Group }): THREE.Mesh => {
   return mesh
 }
 
-const townOf = (land: { group: THREE.Group }): THREE.InstancedMesh => {
-  const mesh = land.group.children.find((o): o is THREE.InstancedMesh => o instanceof THREE.InstancedMesh)
-  if (!mesh) throw new Error('far land has no town')
-  return mesh
-}
-
-/** Where each of the town's blocks stands, and how tall it is. */
-function blocks(land: { group: THREE.Group }): Array<{ x: number; y: number; z: number; h: number }> {
-  const mesh = townOf(land)
-  const m = new THREE.Matrix4()
-  const pos = new THREE.Vector3()
-  const scale = new THREE.Vector3()
-  return Array.from({ length: mesh.count }, (_, i) => {
-    mesh.getMatrixAt(i, m)
-    pos.setFromMatrixPosition(m)
-    m.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale)
-    return { x: pos.x, y: pos.y, z: pos.z, h: scale.y }
-  })
-}
-
 /** The belt's vertices gathered back into the rings they were laid in, nearest first. */
 function rings(land: { group: THREE.Group }): Array<{ r: number; colour: THREE.Color[] }> {
   const geo = meshOf(land).geometry
@@ -204,89 +184,20 @@ describe('buildFarLand3D', () => {
     expect(mesh.receiveShadow).toBe(false)
   })
 
-  it('keeps the town five kilometres out, behind the hills rather than in front of them', () => {
-    const land = buildFarLand3D(input())
-    const cx = VIEW.x + VIEW.w / 2
-    const cz = VIEW.y + VIEW.h / 2
-    const town = blocks(land)
-    expect(town.length).toBeGreaterThan(0)
-    for (const b of town) {
-      // A block nearer than this is a wall across the circuit rather than a skyline, and it stands
-      // in front of the landform it exists to sit behind. A millimetre of slack: the band's near
-      // edge IS 5000 m and the radius is reconstructed back out of a float32 matrix.
-      expect(Math.hypot(b.x - cx, b.z - cz) * MPU).toBeGreaterThan(4999.999)
-      // Standing ON the ground: the box is modelled with its base at the origin, so the instance's
-      // own Y is the ground height and never below the plane.
-      expect(b.y).toBeGreaterThanOrEqual(0)
-      expect(b.h * MPU).toBeGreaterThanOrEqual(11)
-    }
-  })
-
-  it('leaves the near band to the hills alone, and stops the wood where the town starts', () => {
+  it('stops the wood at five kilometres and leaves the rest to the hillside tint', () => {
     const land = buildFarLand3D(input())
     const cx = VIEW.x + VIEW.w / 2
     const cz = VIEW.y + VIEW.h / 2
     const reach = Math.max(...land.trees.map((t) => Math.hypot(t.x - cx, t.z - cz)))
-    // Past five kilometres a card is a couple of pixels; the hillside's own wood tint carries
-    // forest from there out.
+    // Past five kilometres a card is a couple of pixels, and thousands of them buy a speckle rather
+    // than a wood.
     expect(reach * MPU).toBeLessThanOrEqual(5000)
-    // ...and the wood and the town do not overlap: one band each.
-    const nearest = Math.min(...blocks(land).map((b) => Math.hypot(b.x - cx, b.z - cz)))
-    expect(nearest).toBeGreaterThanOrEqual(reach)
   })
 
-  it('hazes the town by the ground it stands on rather than by its own near edge', () => {
-    const land = buildFarLand3D(input())
-    const town = townOf(land)
-    const colour = new THREE.Color()
-    town.getColorAt(0, colour)
-    // The town starts five kilometres out, well into an aerial ramp measured from the first rise.
-    // Ramped from its own near edge instead, the nearest block would come back unhazed, and a hard
-    // grey skyline would stand in front of hills already halfway to blue.
-    expect(colour.b / colour.r).toBeGreaterThan(1.05)
-  })
-
-  it('gives the town a middle, rather than one height across the sprawl', () => {
-    const heights = blocks(buildFarLand3D(input())).map((b) => b.h * MPU).sort((a, b) => b - a)
-    // The mass's core carries the towers. Without the depth term every block is drawn from one
-    // distribution and the tallest is a couple of standard deviations off the median, not a
-    // multiple of it.
-    expect(heights[0]).toBeGreaterThan(heights[Math.floor(heights.length / 2)] * 2.5)
-  })
-
-  it('builds a city where the biome is urban and a village where it is forest', () => {
-    const urban = townOf(buildFarLand3D(input({ biome: 'urban' }))).count
-    const forest = townOf(buildFarLand3D(input({ biome: 'forest' }))).count
-    expect(urban).toBeGreaterThan(forest * 1.5)
-  })
-
-  it('puts the town behind the same air as the ground it stands on', () => {
-    const land = buildFarLand3D(input())
-    const town = townOf(land)
-    const cx = VIEW.x + VIEW.w / 2
-    const cz = VIEW.y + VIEW.h / 2
-    const m = new THREE.Matrix4()
-    const colour = new THREE.Color()
-    let nearest = { r: Infinity, blueness: 0 }
-    let furthest = { r: 0, blueness: 0 }
-    for (let i = 0; i < town.count; i++) {
-      town.getMatrixAt(i, m)
-      const p = new THREE.Vector3().setFromMatrixPosition(m)
-      const r = Math.hypot(p.x - cx, p.z - cz)
-      town.getColorAt(i, colour)
-      const blueness = colour.b / colour.r
-      if (r < nearest.r) nearest = { r, blueness }
-      if (r > furthest.r) furthest = { r, blueness }
-    }
-    // The far end of the town has gone blue the way the far end of the land has.
-    expect(furthest.blueness).toBeGreaterThan(nearest.blueness)
-  })
-
-  it('keeps the town out of the shadow and occlusion passes', () => {
-    const town = townOf(buildFarLand3D(input()))
-    expect(town.castShadow).toBe(false)
-    expect(town.receiveShadow).toBe(false)
-    expect(town.userData.noAO).toBe(true)
+  it('is the hills and nothing else', () => {
+    // ONE mesh. The distant town that stood out here is gone: at the five kilometres it had to sit
+    // at to be behind the hills, it was too far out to be worth drawing at all.
+    expect(buildFarLand3D(input()).group.children).toHaveLength(1)
   })
 
   it('takes the flat fill when the ground scans have not landed', () => {
