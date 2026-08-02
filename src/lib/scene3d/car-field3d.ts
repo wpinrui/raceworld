@@ -75,7 +75,7 @@ export class CarField3D {
    *  and multiplying an occlusion term into it dulls exactly the surfaces the two-lobe material
    *  exists to make shine. A car's own contact shadow comes from the shadow map, which is the right
    *  tool for it. */
-  readonly group = Object.assign(new THREE.Group(), { userData: { noAO: true } })
+  readonly group = Object.assign(new THREE.Group(), { name: 'cars', userData: { noAO: true } })
   private entries = new Map<string, Entry>()
   /** One texture and geometry for the whole field, one material per car. */
   private shadows = new ContactShadows()

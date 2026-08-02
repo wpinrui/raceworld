@@ -410,6 +410,7 @@ export function buildFarLand3D(input: FarLand3DInput): FarLand3D {
   mesh.userData.noAO = true
 
   const group = new THREE.Group()
+  group.name = 'farland'
   group.add(mesh)
   return {
     group,

@@ -12,7 +12,6 @@
 // shadows real at racing zoom.
 
 import { useCallback, useEffect, useRef } from 'react'
-import { Gauge } from 'lucide-react'
 import * as THREE from 'three'
 import type { Lighting } from '@/lib/ui/lighting'
 import { applyOrbitCam, type OrbitCam } from '@/lib/scene3d/camera3d'
@@ -23,6 +22,7 @@ import {
 import { bakeWorldEnv, type WorldEnv } from '@/lib/scene3d/env3d'
 import { buildPost, type Post } from '@/lib/scene3d/post3d'
 import { type World3D } from '@/lib/scene3d/world3d'
+import { SceneToggles, type SceneParts } from './SceneToggles'
 
 export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, ppu, unitsPerMetre, camRef, camera, paintRef, className }: {
   world: World3D | null
@@ -223,6 +223,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     }
   }, [paintRef, paint])
 
+  // The GL trio, handed to the switch panel as a getter rather than as a value: the renderer effect
+  // above owns it, it is null until that effect has run, and the panel reads it per action.
+  const glParts = useCallback((): SceneParts | null => glRef.current, [])
+
   useEffect(() => {
     const box = boxRef.current
     const canvas = canvasRef.current
@@ -246,11 +250,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   return (
     <div ref={boxRef} className={className}>
       <canvas ref={canvasRef} className="absolute inset-0" />
-      <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5 rounded bg-black/55 px-2 py-1 font-mono text-xs text-white">
-        <Gauge className="h-3.5 w-3.5" />
-        <span ref={fpsRef}>--</span>
-        <span>fps</span>
-      </div>
+      <SceneToggles gl={glParts} repaint={paint} world={world} fpsRef={fpsRef} />
     </div>
   )
 }

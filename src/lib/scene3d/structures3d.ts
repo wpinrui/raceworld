@@ -137,6 +137,7 @@ export function buildStands3D(
   }
   if (crowdFill > 0 && crowd.length > 0) {
     const people = buildCrowd(crowd, crowdFill, 1)
+    people.name = 'crowd'
     people.scale.setScalar(perMetre)
     group.add(people)
   }
@@ -215,9 +216,16 @@ export function buildStructures3D(
   detail: SurfaceDetail | null = null, skin: StandSkin | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
-  group.add(buildBuildings3D(scenery.buildings, u, materials, night, detail))
-  group.add(buildStands3D(scenery.stands, u, skin))
-  group.add(buildMarshals3D(scenery.marshals, u, materials, detail))
-  group.add(buildFences3D(scenery.fences, u, materials))
+  group.name = 'structures'
+  // Named so a probe can address one population at a time. What each of these costs is a separate
+  // question with a separate answer, and an unnamed scene can only be asked about all of them.
+  const named = (name: string, g: THREE.Group) => {
+    g.name = name
+    return g
+  }
+  group.add(named('buildings', buildBuildings3D(scenery.buildings, u, materials, night, detail)))
+  group.add(named('stands', buildStands3D(scenery.stands, u, skin)))
+  group.add(named('marshals', buildMarshals3D(scenery.marshals, u, materials, detail)))
+  group.add(named('fences', buildFences3D(scenery.fences, u, materials)))
   return group
 }

@@ -126,6 +126,10 @@ export interface Post {
   /** Draw the world through the chain. Replaces `renderer.render(scene, camera)`. */
   render(): void
   setSize(width: number, height: number, pixelRatio: number): void
+  /** Switch one pass off. Occlusion is a whole second draw of the scene and bloom is a mip pyramid
+   *  over the frame, so what either costs is a question the chain can only answer by being asked
+   *  without it. Absent on a chain that never built the pass. */
+  setPass(name: 'ao' | 'bloom', on: boolean): void
   dispose(): void
 }
 
@@ -187,6 +191,10 @@ export function buildPost(
       composer.setPixelRatio(pixelRatio)
       composer.setSize(width, height)
       ao?.setSize(width * pixelRatio, height * pixelRatio)
+    },
+    setPass: (name, on) => {
+      const pass = name === 'ao' ? ao : bloom
+      if (pass) pass.enabled = on
     },
     dispose: () => {
       ao?.dispose()

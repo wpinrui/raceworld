@@ -57,7 +57,7 @@ export interface PitCrew3DInput {
 }
 
 export class PitCrew3D {
-  readonly group = new THREE.Group()
+  readonly group = Object.assign(new THREE.Group(), { name: 'crew' })
   private slots3d: Slot3D[] = []
   private u: (m: number) => number
 

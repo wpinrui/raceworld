@@ -146,7 +146,9 @@ export function buildTrees3D(
   // the map opening. An empty circuit for that second reads as a circuit still loading. A circuit
   // full of green lollipops reads as the game.
   if (!pack || pack.kinds.length === 0) {
-    return { group: new THREE.Group(), update: () => {} }
+    const empty = new THREE.Group()
+    empty.name = 'trees'
+    return { group: empty, update: () => {} }
   }
 
   // Species are drawn by WEIGHT, not uniformly: the conifers ride at a fraction of a broadleaf's
@@ -189,10 +191,16 @@ export function buildTrees3D(
   for (const t of far) plant(t, true)
 
   const group = new THREE.Group()
+  group.name = 'trees'
   const meshesOf = new Map<PackKind, THREE.InstancedMesh[]>()
+  // Which of the two tiers a buffer belongs to, by identity: the cost probe attributes the wood to
+  // the tier it is actually spending in, and near and far are answerable by different levers.
+  const impostors = new Set(pack.kinds.map((k) => k.far))
   for (const [kind, count] of capacity) {
+    const tier = impostors.has(kind) ? 'far' : 'near'
     const built = kind.pieces.map((piece) => {
       const mesh = new THREE.InstancedMesh(piece.geometry, piece.material, count)
+      mesh.name = `tree:${tier}`
       mesh.castShadow = true
       mesh.receiveShadow = true
       // The wood never moves, so three can skip the per-frame matrix walk for the whole population.

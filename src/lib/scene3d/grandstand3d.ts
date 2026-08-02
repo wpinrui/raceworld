@@ -583,7 +583,9 @@ export function buildSeats(
       prism(s, rect(zBack - 0.04, row.y + SEAT_H_M + 0.26, zBack - 0.1, row.y + SEAT_H_M + 0.44),
         -spec.widthM / 2, spec.widthM / 2)
     }
-    return mesh(s.build(), mat, grain)
+    const bench = mesh(s.build(), mat, grain)
+    bench.name = 'seats'
+    return bench
   }
   const at = seatPositions(spec, rows)
   const m = new THREE.Matrix4()
@@ -597,6 +599,7 @@ export function buildSeats(
       m.makeTranslation(p.x, p.y, p.z)
       inst.setMatrixAt(i, m)
     })
+    inst.name = `seats:${tier}`
     return inst
   }
   if (lod !== 'auto') return bank(lod)
@@ -604,6 +607,9 @@ export function buildSeats(
   // seat is made of changes. The levels are built up front rather than on demand: a stand that
   // stutters the first time the camera closes in is worse than one that costs a megabyte.
   const ladder = new THREE.LOD()
+  // Named on the LADDER, not on its banks: the levels' own `visible` is rewritten by `LOD.update`
+  // on every render, so anything switching the seats off has to switch off the thing that owns them.
+  ladder.name = 'seats'
   ladder.addLevel(bank('high'), 0)
   ladder.addLevel(bank('mid'), LOD_M.mid)
   ladder.addLevel(bank('low'), LOD_M.low)
