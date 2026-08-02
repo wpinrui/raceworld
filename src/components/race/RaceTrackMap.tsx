@@ -240,6 +240,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       const pxPerM = (camRef.current.z * (stageDimsRef.current.w / vbRef.current.w))
         / layout.metresPerUnit
       read.textContent = `${pxPerM >= 10 ? Math.round(pxPerM) : pxPerM.toFixed(1)} px/m`
+      // The field's detail rung follows the same number. A car is CAR_LENGTH_M long through the
+      // era's scale, so its length on screen is that in metres times the pixels a metre is worth,
+      // and `CAR_TIERS` is authored in exactly those pixels.
+      carField3dRef.current?.setDetail(pxPerM * CAR_LENGTH_M * CAR_SCALE)
     }
     paintRef.current()
   }, [layout.metresPerUnit])

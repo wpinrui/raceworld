@@ -6,7 +6,7 @@
 
 import * as THREE from 'three'
 import { SPRITE } from '@/lib/ui/car-sprite'
-import { buildCarMesh, type CarLivery, type CarMesh, type TyreCompound } from './car-mesh'
+import { CAR_TIERS, buildCarMesh, type CarLivery, type CarMesh, type TyreCompound } from './car-mesh'
 import { ContactShadows } from './contact3d'
 
 export interface CarPose {
@@ -54,6 +54,16 @@ interface Entry {
   contact: THREE.Mesh | null
   /** Accumulated spin per wheel, radians. */
   spun: Record<(typeof WHEEL_TAGS)[number], number>
+  /** What this car was built FROM, so a detail change can rebuild it without the caller re-supplying
+   *  what it already said once. */
+  livery: CarLivery
+  compound: TyreCompound
+  /** The last pose, opacity and wheel state, re-applied over a rebuild. A car that blinked back to
+   *  the origin, fully opaque, with its wheels back on, every time the camera crossed a detail
+   *  threshold would be a worse bug than the draw calls the threshold exists to save. */
+  last: CarPose | null
+  opacity: number
+  wheels: boolean
 }
 
 function disposeDeep(root: THREE.Object3D): void {
@@ -84,13 +94,19 @@ export class CarField3D {
    *  height in WORLD units, `CAR_RIDE_M` through the circuit's metres-per-unit. */
   constructor(private scaleUnits: number, private rideY = 0) {}
 
-  /** Build (or rebuild, on a livery or compound change) the car for an entrant. */
+  /** The detail rung every car in the field is currently built at. */
+  private tier = 0
+
+  /** Build (or rebuild, on a livery, compound or detail change) the car for an entrant. */
   ensure(id: string, livery: CarLivery, compound: TyreCompound = 'medium'): void {
-    const key = `${typeof livery === 'string' ? livery : JSON.stringify(livery)}@${compound}`
+    const key = `${typeof livery === 'string' ? livery : JSON.stringify(livery)}@${compound}@${this.tier}`
     const current = this.entries.get(id)
     if (current?.key === key) return
+    const carry = current
+      ? { last: current.last, opacity: current.opacity, wheels: current.wheels }
+      : { last: null, opacity: 1, wheels: true }
     if (current) this.drop(id)
-    const mesh = buildCarMesh(livery, compound)
+    const mesh = buildCarMesh(livery, compound, this.tier)
     const wrap = new THREE.Group()
     wrap.scale.setScalar(this.scaleUnits)
     wrap.add(mesh.group)
@@ -99,7 +115,34 @@ export class CarField3D {
     const contact = this.shadows.create()
     if (contact) wrap.add(contact)
     this.group.add(wrap)
-    this.entries.set(id, { key, mesh, wrap, contact, spun: { fl: 0, fr: 0, rl: 0, rr: 0 } })
+    this.entries.set(id, {
+      key, mesh, wrap, contact, spun: { fl: 0, fr: 0, rl: 0, rr: 0 },
+      livery, compound, ...carry,
+    })
+    if (carry.last) this.pose(id, carry.last)
+    if (carry.opacity !== 1) this.setOpacity(id, carry.opacity)
+    if (!carry.wheels) this.setWheelsVisible(id, false)
+  }
+
+  /** Pick the detail tier for a car this many PIXELS long on screen, rebuilding the field if that
+   *  moves it (`CAR_TIERS`).
+   *
+   *  The ladder has been in `car-mesh` since the car was modelled, with thresholds authored against
+   *  what each rung still shows, and nothing ever called it: the live field built tier 0 whatever the
+   *  zoom, so a grid of twenty cars four centimetres long on screen was carrying full cockpits and
+   *  suspension linkage. Measured on one car, tier 0 is 56,550 triangles and tier 2 is 28,664.
+   *
+   *  Rebuilds rather than holding every rung: five built tiers per car is five times the build and
+   *  the memory for rungs a given race may never visit. The cost is a hitch when the zoom crosses a
+   *  threshold, which is a deliberate camera move rather than something that happens mid-corner. */
+  setDetail(pxLength: number): void {
+    let next = CAR_TIERS.length - 1
+    for (let t = 0; t < CAR_TIERS.length; t++) {
+      if (pxLength >= CAR_TIERS[t].minPx) { next = t; break }
+    }
+    if (next === this.tier) return
+    this.tier = next
+    for (const [id, e] of [...this.entries]) this.ensure(id, e.livery, e.compound)
   }
 
   drop(id: string): void {
@@ -120,6 +163,7 @@ export class CarField3D {
   pose(id: string, p: CarPose): void {
     const e = this.entries.get(id)
     if (!e) return
+    e.last = p
     e.wrap.position.set(p.x, (p.ground ?? 0) + this.rideY, p.y)
     e.wrap.rotation.y = -p.rot
     // A car leans AWAY from the corner and dips its nose under the brakes, the same signs the
@@ -143,6 +187,7 @@ export class CarField3D {
   setWheelsVisible(id: string, visible: boolean): void {
     const e = this.entries.get(id)
     if (!e) return
+    e.wheels = visible
     for (const tag of WHEEL_TAGS) e.mesh.wheels[tag].visible = visible
   }
 
@@ -150,6 +195,7 @@ export class CarField3D {
   setOpacity(id: string, opacity: number): void {
     const e = this.entries.get(id)
     if (!e) return
+    e.opacity = opacity
     e.wrap.traverse((o) => {
       // The contact patch is skipped deliberately. This walk turns `transparent` OFF at full
       // opacity, which for a patch that is nothing BUT its alpha would draw a solid black rectangle

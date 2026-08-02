@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { STACK_TOP_M } from './world3d'
 import { CAR_RIDE_M, CarField3D } from './car-field3d'
+import { CAR_TIERS } from './car-mesh'
 
 describe('CarField3D', () => {
   it('rides above the whole painter stack, or the road sheets depth-bury the wing and tyres', () => {
@@ -96,5 +97,51 @@ describe('CarField3D', () => {
     expect(field.group.children).toHaveLength(1)
     field.dispose()
     expect(field.group.children).toHaveLength(0)
+  })
+
+  it('follows the detail ladder as the car shrinks on screen, and rebuilds only on a change', () => {
+    // The ladder was written with the car and never called: the live field built tier 0 whatever the
+    // zoom, so twenty cars a few dozen pixels long carried full cockpits and suspension linkage.
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    const at = (px: number) => {
+      field.setDetail(px)
+      let triangles = 0
+      field.group.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return
+        const g = o.geometry as THREE.BufferGeometry
+        triangles += (g.index ? g.index.count : g.attributes.position.count) / 3
+      })
+      return triangles
+    }
+    const near = at(CAR_TIERS[0].minPx + 10)
+    const far = at(CAR_TIERS[CAR_TIERS.length - 1].minPx)
+    expect(far).toBeLessThan(near / 2)
+    // Back up the ladder again, and a second call at the same size changes nothing.
+    expect(at(CAR_TIERS[0].minPx + 10)).toBe(near)
+    const before = field.group.children[0]
+    field.setDetail(CAR_TIERS[0].minPx + 20)
+    expect(field.group.children[0]).toBe(before)
+    field.dispose()
+  })
+
+  it('carries a pose and a faded opacity across a detail rebuild', () => {
+    // A car blinking back to the origin at full opacity every time the camera crossed a threshold
+    // would be a worse bug than the draw calls the threshold saves.
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    field.pose('a', { x: 7, y: 9, rot: 0.5, steerLeft: 0, steerRight: 0, lat: 0, long: 0, ds: 0 })
+    field.setOpacity('a', 0.35)
+    field.setDetail(CAR_TIERS[CAR_TIERS.length - 1].minPx)
+    const wrap = field.group.children[0] as THREE.Group
+    expect(wrap.position.x).toBeCloseTo(7)
+    expect(wrap.position.z).toBeCloseTo(9)
+    expect(wrap.rotation.y).toBeCloseTo(-0.5)
+    let faded = false
+    wrap.traverse((o) => {
+      if (o instanceof THREE.Mesh && (o.material as THREE.Material).opacity === 0.35) faded = true
+    })
+    expect(faded).toBe(true)
+    field.dispose()
   })
 })
