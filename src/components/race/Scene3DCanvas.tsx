@@ -24,6 +24,9 @@ import { buildPost, type Post } from '@/lib/scene3d/post3d'
 import { type World3D } from '@/lib/scene3d/world3d'
 import { SceneToggles, type SceneParts } from './SceneToggles'
 
+/** How far from the camera's target the sun's shadow box may reach, in metres. */
+const SHADOW_REACH_M = 250
+
 export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, night, skySeed, ppu, unitsPerMetre, camRef, camera, paintRef, className }: {
   world: World3D | null
   /** The live car field, mounted beside the world so a circuit rebuild never drops the cars. */
@@ -92,7 +95,19 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       const frame = applyOrbitCam(camera, cam, { w, h }, ppu)
       // The shadow box wraps the framed extent with roll slack: a rotated viewport's world
       // footprint is its diagonal, and a box fitted to the unrotated frame clips corner shadows.
-      const half = Math.hypot(frame.halfW, frame.halfH)
+      //
+      // CAPPED, though. Pitching the camera toward the horizon multiplies the framed extent by
+      // 1/cos(pitch), which at the map's limit is nearly six, so a low camera asks the sun to cover
+      // most of a circuit. That costs twice: every caster inside it is drawn into the map, and the
+      // map's texels are spread over ground the player cannot resolve a shadow on anyway. Capping
+      // buys back both, and the near shadows get SHARPER rather than softer, because the same 4096
+      // texels now cover a quarter of the ground.
+      //
+      // What it costs is shadows past the cap. At this distance a stand's shadow is a few pixels of
+      // haze-washed grey, which is why the cap is where it is.
+      const half = Math.min(
+        Math.hypot(frame.halfW, frame.halfH), SHADOW_REACH_M * unitsPerMetre,
+      )
       refitShadow(world.sun, {
         x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half,
       })
@@ -144,7 +159,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
         f.since = now
       }
     }
-  }, [camRef, camera])
+  }, [camRef, camera, unitsPerMetre])
 
   useEffect(() => {
     const canvas = canvasRef.current
