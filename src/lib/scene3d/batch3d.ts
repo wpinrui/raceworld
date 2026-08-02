@@ -89,6 +89,27 @@ export class MeshBatch {
  *  buffer would cut the draw count further and cost more than it saved: a merged buffer has one
  *  bounding volume, so a stand on the far side of the lap could never be culled again. Per stand is
  *  the unit here, and per car. */
+/** One array from many, in merge order, so it lines up with the merged buffer vertex for vertex. */
+function joinPlain(parts: readonly Float32Array[]): Float32Array {
+  let n = 0
+  for (const p of parts) n += p.length
+  const out = new Float32Array(n)
+  let at = 0
+  for (const p of parts) {
+    out.set(p, at)
+    at += p.length
+  }
+  return out
+}
+
+/** What a collapsed buffer needs to be repainted in another palette without being rebuilt. */
+export interface Repaint {
+  /** Untinted modulation, three floats a vertex, in the merged buffer's own order. */
+  plain: Float32Array
+  /** Runs of vertices and the paint each was folded with, in the same order. */
+  parts: readonly { count: number; paint: string }[]
+}
+
 export function collapseByFinish(
   node: THREE.Object3D, boundaries: ReadonlySet<THREE.Object3D> = new Set(),
   /** Finishes already minted, to reuse across everything that shares this cache.
@@ -110,6 +131,10 @@ export function collapseByFinish(
     cast: boolean
     /** The finish signature, so a shared cache can be keyed on the same thing the batch was. */
     key: string
+    /** Each source part's untinted modulation, in the order they are merged. */
+    plain: Float32Array[]
+    /** Each source part's vertex count and the paint folded into it, same order. */
+    parts: { count: number; paint: string }[]
   }
   const batches = new Map<string, Batch>()
   node.updateMatrixWorld(true)
@@ -166,7 +191,8 @@ export function collapseByFinish(
     ].join('|')
     const needs = new Set<string>(['color'])
     if (material.map || material.normalMap || material.roughnessMap) needs.add('uv')
-    const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow, key }
+    const batch = batches.get(key)
+      ?? { geos: [], sources: [], material, cast: o.castShadow, key, plain: [], parts: [] }
     const geo = bakeable(
       o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld), needs,
     )
@@ -175,12 +201,22 @@ export function collapseByFinish(
     // colour the material is painted, not a replacement for it. Both sides are linear here, which is
     // the space three consumes vertex colour in, so the product is the colour the part was authored.
     const tint = geo.attributes.color as THREE.BufferAttribute
+    // The MODULATION on its own is kept beside the folded result. It is what a part's colour is
+    // multiplied INTO, so holding it lets a caller repaint this buffer later without rebuilding the
+    // geometry: twenty cars are the same solids in different liveries, and one of them is worth
+    // building. See `paintOf` in car-mesh.
+    const plain = new Float32Array(tint.count * 3)
     for (let i = 0; i < tint.count; i++) {
+      plain[i * 3] = tint.getX(i)
+      plain[i * 3 + 1] = tint.getY(i)
+      plain[i * 3 + 2] = tint.getZ(i)
       tint.setXYZ(
         i, tint.getX(i) * material.color.r,
         tint.getY(i) * material.color.g, tint.getZ(i) * material.color.b,
       )
     }
+    batch.plain.push(plain)
+    batch.parts.push({ count: tint.count, paint: `#${material.color.getHexString().toUpperCase()}` })
     batch.geos.push(geo)
     batch.sources.push(o)
     batches.set(key, batch)
@@ -215,6 +251,9 @@ export function collapseByFinish(
       }
     }
     const m = new THREE.Mesh(merged, painted)
+    // The recipe this buffer was painted by, for anything that wants to repaint it: the untinted
+    // modulation vertex by vertex, and which paint each run of vertices took.
+    merged.userData.repaint = { plain: joinPlain(batch.plain), parts: batch.parts }
     m.castShadow = batch.cast
     m.receiveShadow = true
     node.add(m)

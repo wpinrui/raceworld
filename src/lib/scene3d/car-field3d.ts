@@ -6,7 +6,9 @@
 
 import * as THREE from 'three'
 import { SPRITE } from '@/lib/ui/car-sprite'
-import { CAR_TIERS, buildCarMesh, type CarLivery, type CarMesh, type TyreCompound } from './car-mesh'
+import {
+  CAR_TIERS, buildCarFrom, type CarLivery, type CarMesh, type TyreCompound,
+} from './car-mesh'
 import { ContactShadows } from './contact3d'
 
 export interface CarPose {
@@ -81,7 +83,11 @@ interface Entry {
 function disposeDeep(root: THREE.Object3D): void {
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
-      ;(o.geometry as THREE.BufferGeometry).dispose()
+      // Geometry cloned from a blank borrows every attribute but its colour, so freeing it here
+      // would take the shape off every other car cut from the same blank. The blank owns those
+      // buffers and frees them with the field.
+      const geo = o.geometry as THREE.BufferGeometry
+      if (!geo.userData.fromBlank) geo.dispose()
       const m = o.material
       // Shared finishes belong to the FIELD, not to this car: twenty cars bind the same carbon now
       // that colour rides on the vertices, and freeing it here would strip the paint off the other
@@ -115,6 +121,10 @@ export class CarField3D {
   private tier = 0
   /** One finish per (material, tier) across the whole field, shared by every car that wears it. */
   private finishes = new Map<string, THREE.Material>()
+  /** One blank per (compound, rung), which every car in that combination is cloned and repainted
+   *  from. A car's geometry does not depend on its livery, so building it per car was building the
+   *  same solids twenty times: 2021 ms for a field's whole ladder against 186 ms this way. */
+  private blanks = new Map<string, CarMesh>()
 
   /** Build (or rebuild, on a livery or compound change) the car for an entrant. */
   ensure(id: string, livery: CarLivery, compound: TyreCompound = 'medium'): void {
@@ -152,7 +162,7 @@ export class CarField3D {
   private buildTier(e: Entry, tier: number): CarMesh {
     const held = e.tiers.get(tier)
     if (held) return held
-    const made = buildCarMesh(e.livery, e.compound, tier, this.finishes)
+    const made = buildCarFrom(this.blanks, e.livery, e.compound, tier, this.finishes)
     made.group.visible = false
     e.tiers.set(tier, made)
     e.wrap.add(made.group)
@@ -271,6 +281,9 @@ export class CarField3D {
     // The shared finishes, which no car frees because no car owns one.
     for (const mat of this.finishes.values()) mat.dispose()
     this.finishes.clear()
+    // The blanks are never mounted, so nothing else can be holding one.
+    for (const blank of this.blanks.values()) disposeDeep(blank.group)
+    this.blanks.clear()
   }
 }
 

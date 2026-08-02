@@ -41,8 +41,9 @@ describe('CarField3D', () => {
     expect(wrap.rotation.y).toBeCloseTo(-1.2, 10)
     // The regression: rolling the whole car about a ground-level axis dipped the outboard tyres
     // through the tarmac once the ride height became honest. Only the sprung mass leans now.
-    expect(wrap.rotation.z).toBe(0)
-    expect(wrap.rotation.x).toBe(0)
+    // Magnitudes: a clone can hand back a negative zero, which is this angle and not a lean.
+    expect(Math.abs(wrap.rotation.z)).toBeCloseTo(0, 12)
+    expect(Math.abs(wrap.rotation.x)).toBeCloseTo(0, 12)
     const mesh = wrap.children[0]
     const chassis = mesh.children.find((o) => o.position.x === 0 && o.position.y === 0)!
     expect(chassis.rotation.z).toBeLessThan(0)
@@ -50,7 +51,7 @@ describe('CarField3D', () => {
     const fl = mesh.children.find((o) => o.position.x === -90 && o.position.z < 0)!
     expect(fl.rotation.y).toBeCloseTo(-(10 * Math.PI) / 180, 10)
     // Planted: a leaning chassis never tilts the wheel pivots.
-    expect(fl.rotation.z).toBe(0)
+    expect(Math.abs(fl.rotation.z)).toBeCloseTo(0, 12)
     field.dispose()
   })
 
@@ -205,6 +206,50 @@ describe('CarField3D detail swaps', () => {
     const shown = wrap.children.find((o) => o.visible && o.children.length > 0)!
     const wheel = shown.children.find((o) => Math.abs(o.position.x) === 90)
     expect(wheel?.children[0].rotation.x).not.toBe(0)
+    field.dispose()
+  })
+})
+
+describe('CarField3D shared buffers', () => {
+  it('does not strip the shape off the field when one car is dropped', () => {
+    // Cars cut from one blank share every attribute but their colour, so a naive dispose on drop
+    // frees the positions the rest of the grid is still drawing with.
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    field.ensure('b', '#1D5FD6')
+    const survivor = field.group.children[1] as THREE.Group
+    const before: number[] = []
+    survivor.traverse((o) => {
+      if (o instanceof THREE.Mesh) before.push(o.geometry.getAttribute('position')?.count ?? 0)
+    })
+    field.drop('a')
+    const after: number[] = []
+    survivor.traverse((o) => {
+      if (o instanceof THREE.Mesh) after.push(o.geometry.getAttribute('position')?.count ?? 0)
+    })
+    expect(after).toEqual(before)
+    expect(after.some((n) => n > 0)).toBe(true)
+    field.dispose()
+  })
+
+  it('gives each car its own colour while sharing the shape', () => {
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    field.ensure('b', '#1D5FD6')
+    const tints = [0, 1].map((i) => {
+      const seen = new Set<string>()
+      const c = new THREE.Color()
+      field.group.children[i].traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.visible) return
+        const tint = o.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+        if (!tint) return
+        for (let v = 0; v < tint.count; v++) seen.add(c.fromBufferAttribute(tint, v).getHexString())
+      })
+      return seen
+    })
+    expect(tints[0]).toContain('e8442e')
+    expect(tints[1]).toContain('1d5fd6')
+    expect(tints[0]).not.toContain('1d5fd6')
     field.dispose()
   })
 })

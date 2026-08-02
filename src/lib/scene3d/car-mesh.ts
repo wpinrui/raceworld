@@ -13,7 +13,7 @@ import { shade } from '@/lib/color'
 import { SPRITE, UNITS_PER_M } from '@/lib/ui/car-sprite'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { GeometrySink, v3, type V3 } from './solids3d'
-import { collapseByFinish } from './batch3d'
+import { collapseByFinish, type Repaint } from './batch3d'
 import { LACQUER, ROUGH, surface } from './materials3d'
 import { scaleUV } from './detail3d'
 import { RUBBER, grainTile, radialShade, treadSurface, wallSurface } from './rubber3d'
@@ -1479,6 +1479,109 @@ function buildProxyCar(paint: CarPaint): THREE.Group {
     group.add(mesh(sink.build(), tint, tint === RUBBER.wall ? 'rubber' : 'flat'))
   }
   return group
+}
+
+/** Sentinel paints, one per livery slot, used to build the BLANK a real car is cloned from.
+ *
+ *  Chosen to be unmistakable: a blank is collapsed like any car, which folds each part's paint into
+ *  its vertices, and the only way to repaint it later is to know which paint a run of vertices took.
+ *  A real livery cannot serve, because `asPaint` of a single colour hands the same value to `body`
+ *  and `accent`, and two slots sharing a paint are two slots that can never be told apart again. */
+const SLOT_SENTINEL: CarPaint = {
+  body: '#FF0001', cover: '#00FF02', wing: '#0000FF', accent: '#FF00FE', trim: '#00FEFF',
+}
+
+/** Repaint one collapsed buffer in a real palette, off the recipe the collapse left on it. */
+function repaintBuffer(geometry: THREE.BufferGeometry, paint: CarPaint): void {
+  const recipe = geometry.userData.repaint as Repaint | undefined
+  const tint = geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+  if (!recipe || !tint) return
+  const slot = new Map<string, string>()
+  for (const [name, sentinel] of Object.entries(SLOT_SENTINEL)) {
+    slot.set(sentinel, paint[name as keyof CarPaint])
+  }
+  const wash = new THREE.Color()
+  let at = 0
+  for (const part of recipe.parts) {
+    // A part whose paint is not a livery slot keeps the one it was built with: carbon, rubber,
+    // glass and the tyre's compound band are not the team's to choose.
+    wash.set(slot.get(part.paint) ?? part.paint)
+    for (let i = at; i < at + part.count; i++) {
+      tint.setXYZ(
+        i, recipe.plain[i * 3] * wash.r,
+        recipe.plain[i * 3 + 1] * wash.g, recipe.plain[i * 3 + 2] * wash.b,
+      )
+    }
+    at += part.count
+  }
+  tint.needsUpdate = true
+}
+
+/** A car in a livery, off a blank built once for its rung and compound.
+ *
+ *  Measured, a car costs 41 ms to build at rung 0 and 101 ms for the whole ladder, so a twenty-car
+ *  field standing every rung up is two seconds, and a compound change mid-race is a hundred
+ *  milliseconds of stall during a pit stop. None of that geometry depends on the LIVERY: twenty cars
+ *  are the same solids in different colours, and colour has lived on the vertices since the paint
+ *  fold. So one blank is built per (rung, compound) and every car is a clone of it with its colour
+ *  attribute rewritten, which is array copies rather than 270 parts and a merge. */
+export function buildCarFrom(
+  blanks: Map<string, CarMesh>, livery: CarLivery, compound: TyreCompound = 'medium', tier = 0,
+  finishes?: Map<string, THREE.Material>,
+): CarMesh {
+  const key = `${compound}@${tier}`
+  let blank = blanks.get(key)
+  if (!blank) {
+    blank = buildCarMesh(SLOT_SENTINEL, compound, tier, finishes)
+    blanks.set(key, blank)
+  }
+  const paint = asPaint(livery)
+  const group = blank.group.clone(true)
+  // `clone` shares geometry by reference, which is exactly wrong here: every car would repaint the
+  // one buffer and the whole field would wear whichever livery painted last. Positions and normals
+  // are identical though, so only the colour has to be its own.
+  const pairs: [THREE.Mesh, THREE.Mesh][] = []
+  const walk = (a: THREE.Object3D, b: THREE.Object3D) => {
+    if (a instanceof THREE.Mesh && b instanceof THREE.Mesh) pairs.push([a, b])
+    a.children.forEach((child, i) => walk(child, b.children[i]))
+  }
+  walk(blank.group, group)
+  for (const [source, copy] of pairs) {
+    const geo = new THREE.BufferGeometry()
+    const from = source.geometry as THREE.BufferGeometry
+    for (const [name, attr] of Object.entries(from.attributes)) {
+      geo.setAttribute(name, name === 'color' ? (attr as THREE.BufferAttribute).clone() : attr)
+    }
+    if (from.index) geo.setIndex(from.index)
+    geo.userData.repaint = from.userData.repaint
+    // Every attribute but the colour is the BLANK's, by reference: twenty cars at one rung are the
+    // same solids, and a copy each would be hundreds of megabytes. So this geometry does not own
+    // what it draws, and freeing it would take the shape off every other car built from the same
+    // blank. Marked, and `disposeDeep` leaves marked geometry to the blank that owns it.
+    geo.userData.fromBlank = true
+    geo.boundingSphere = from.boundingSphere
+    geo.boundingBox = from.boundingBox
+    repaintBuffer(geo, paint)
+    copy.geometry = geo
+  }
+  // The pivots, by the same walk: a clone keeps the hierarchy, so the copies sit at the same indices.
+  const find = (node: THREE.Object3D): THREE.Object3D => {
+    const path: number[] = []
+    for (let o = node; o.parent && o !== blank.group; o = o.parent) path.unshift(o.parent.children.indexOf(o))
+    return path.reduce<THREE.Object3D>((at, i) => at.children[i], group)
+  }
+  return {
+    group,
+    chassis: find(blank.chassis),
+    wheels: {
+      fl: find(blank.wheels.fl), fr: find(blank.wheels.fr),
+      rl: find(blank.wheels.rl), rr: find(blank.wheels.rr),
+    },
+    spin: {
+      fl: find(blank.spin.fl), fr: find(blank.spin.fr),
+      rl: find(blank.spin.rl), rr: find(blank.spin.rr),
+    },
+  }
 }
 
 export function buildCarMesh(
