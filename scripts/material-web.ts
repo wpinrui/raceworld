@@ -11,6 +11,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import sharp from 'sharp'
+import { skinFiles } from '../src/lib/scene3d/standtex3d'
 
 const SRC = 'public/materials'
 const OUT = join(SRC, 'web')
@@ -85,6 +86,19 @@ const CHANNELS: Record<string, { name: string; png: boolean }> = {
   Metalness: { name: 'metal', png: false },
 }
 
+/** The longest edge each map is worth SHIPPING at, taken from the skin spec itself.
+ *
+ *  `SkinSpec.maxPx` has always carried this number, derived per surface from its tile size and the
+ *  closest the camera gets to it, but only the probe's packer was reading it: the app fetched
+ *  whatever the archive happened to be. That was tolerable while every set was 1K and became a real
+ *  cost the moment the ground moved to a 2K scan, because the ground is the one surface with a
+ *  Gaussianised copy as well, so a single set was arriving as 26 MB of the biggest, least detailed
+ *  surface in the world. Emitting at the spec's own size is what it was always for.
+ *
+ *  Files the spec does not ask for are left at their source size rather than guessed at: an unused
+ *  channel costs nothing because nothing downloads it. */
+const shipAt = new Map(skinFiles().map(({ file, maxPx }) => [file, maxPx]))
+
 async function main() {
   mkdirSync(OUT, { recursive: true })
   // Named sets only, when any are named. Converting one scan is seconds where the whole library is
@@ -141,6 +155,13 @@ async function main() {
         )
         const sd = (v: number[]) => v.map((s) => s.toFixed(0)).join('/')
         note += `  spread ${sd(before)} -> ${sd(before.map((s) => s * keep))} (x${keep})`
+      }
+      // Last, so every measurement above is taken at full resolution: a mean or a spread read off a
+      // downscaled copy is a mean of something slightly different.
+      const ship = shipAt.get(`${slug}-${channel.name}.${channel.png ? 'png' : 'jpg'}`) ?? 0
+      if (ship > 0 && Math.max(width ?? 0, height ?? 0) > ship) {
+        img = img.resize(ship, ship, { fit: 'inside', withoutEnlargement: true })
+        note += `  ${width}px -> ${ship}px`
       }
       await (channel.png
         ? img.png({ compressionLevel: 9 }).toFile(to)
