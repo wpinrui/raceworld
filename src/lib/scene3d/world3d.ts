@@ -25,6 +25,7 @@ import type { GroundExtent } from './sky3d'
 import { localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
 import { DECAL_PULL, ROUGH, SceneMaterials } from './materials3d'
 import { addGround3D, buildGroundStack3D } from './ground3d'
+import { buildFarLand3D } from './farland3d'
 import { buildKerbs3D } from './kerb3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
@@ -168,6 +169,22 @@ export function buildWorld3D(
     skin: standSkin ?? null, biome: layout.biome, u, fallback: () => add(ground, scenery.base),
   })
 
+  // Hills and wood past everything built. The plane above runs kilometres out and everything that
+  // stands on it is scattered inside the viewBox plus 260 m, so from a low camera looking up the
+  // road the far half of the world is empty and ends in a dead-straight line under the haze. This
+  // puts a landform in front of that line. It stays entirely outside the built world, so nothing
+  // below this point has to know it is there.
+  const farLand = buildFarLand3D({
+    view: { x: vx, y: vy, w: vw, h: vh },
+    pad: GROUND_PAD,
+    metresPerUnit: layout.metresPerUnit,
+    circuitId: layout.circuitId,
+    biome: layout.biome,
+    skin: standSkin ?? null,
+    base: scenery.base,
+  })
+  group.add(farLand.group)
+
   group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors, detail?.ground ?? null))
 
   // The ink, compiled from the same ops the 2D strokes: the edge fades under the road, the driven-in
@@ -244,7 +261,9 @@ export function buildWorld3D(
   }
 
   // The standing world, and the light it all agrees under.
-  const trees = buildTrees3D(scenery.trees, u, { pack: treePack, metresPerUnit: layout.metresPerUnit })
+  const trees = buildTrees3D(scenery.trees, u, {
+    pack: treePack, metresPerUnit: layout.metresPerUnit, far: farLand.trees,
+  })
   group.add(trees.group)
   group.add(buildStructures3D(
     scenery, u, materials, textures, night, detail?.wall ?? null, standSkin ?? null,

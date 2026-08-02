@@ -84,6 +84,26 @@ export function addGround3D(
     fallback()
     return
   }
+  const { material, tileM } = groundSurface(skin, biome)
+  // World-projected, exactly as the generated grain is, so the ground and the road running through
+  // it share one continuous surface and their join carries no seam.
+  planarUV(geometry, u(tileM))
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.receiveShadow = true
+  group.add(mesh)
+}
+
+/** The skinned material the ground itself wears, as its own builder so anything that has to be the
+ *  SAME ground can ask for it: the far land beyond the built world is the same field carrying on,
+ *  and a second guess at this mix would show as a colour change at the join.
+ *
+ *  Returns the tile alongside, because the caller owns the UVs: the projection is world-space
+ *  (`planarUV`) and only the caller knows its geometry's units. */
+export function groundSurface(
+  skin: StandSkin, biome?: Biome,
+  /** Extra material flags for a surface that is ground but not the ground plane. */
+  opts: { vertexColors?: boolean } = {},
+): { material: THREE.MeshStandardMaterial; tileM: number } {
   const bio = biomeOf(biome)
   // Which earth this landscape wears. A loaded surface carries everything a blend needs (its maps,
   // its Gaussianised pair, its tile), so the soil can simply stand in for the sand the grass was
@@ -93,9 +113,6 @@ export function addGround3D(
   // window are this circuit's answer rather than the scan pair's: writing them back would put the
   // last-built world's biome on all of them.
   const surface: SkinSurface = { ...skin.grass, blend: earth, ...maskWindow(bio.earth) }
-  // World-projected, exactly as the generated grain is, so the ground and the road running through
-  // it share one continuous surface and their join carries no seam.
-  planarUV(geometry, u(surface.tileM))
   // NO roughness map, and this is the one channel of the scan that is deliberately thrown away.
   //
   // Measured, `grass004-rough` has a mean of 0.263 and reaches 0.0. That is a wet or waxed surface,
@@ -115,11 +132,10 @@ export function addGround3D(
     normalScale: new THREE.Vector2(surface.normalScale, surface.normalScale),
     roughness: ROUGH.chalk,
     side: THREE.DoubleSide,
+    vertexColors: opts.vertexColors ?? false,
   })
   blendSurfaces(material, surface)
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.receiveShadow = true
-  group.add(mesh)
+  return { material, tileM: surface.tileM }
 }
 
 export function buildGroundStack3D(

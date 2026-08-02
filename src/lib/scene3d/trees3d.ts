@@ -84,9 +84,23 @@ interface Standing {
   matrix: THREE.Matrix4
 }
 
+/** A tree's stance: where it stands on the ground, how high that ground is, and how tall it is.
+ *
+ *  The elevation is why this is not just a `SceneryTree`. That type describes a tree on the flat
+ *  plane and carries a 2D blob path and a variant with it; the far land is not flat, and nothing
+ *  out there needs a path. */
+export interface TreeStance {
+  x: number
+  z: number
+  /** Ground height under the tree, in world units. */
+  y: number
+  /** Tree height in metres. */
+  h: number
+}
+
 /** The transform that stands a species on (x, z) at the tree's own height and a stable random yaw. */
 function transformFor(
-  t: SceneryTree, kind: TreeKind, u: (m: number) => number, seed: number,
+  t: TreeStance, kind: TreeKind, u: (m: number) => number, seed: number,
 ): THREE.Matrix4 {
   // The data's `h` is the tree's height in metres; the pack is authored in its own units, so the
   // ratio to the species' natural height is the scale, converted into world units on the way.
@@ -95,7 +109,7 @@ function transformFor(
   // enough to bend a trunk visibly: this is a broad canopy against a narrow one, nothing more.
   const wobble = 0.88 + ((seed * 7919) % 1) * 0.26
   return new THREE.Matrix4().compose(
-    new THREE.Vector3(t.x, 0, t.y),
+    new THREE.Vector3(t.x, t.y, t.z),
     new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), seed * Math.PI * 2),
     new THREE.Vector3(scale * wobble, scale, scale * wobble),
   )
@@ -114,12 +128,18 @@ export interface Trees3DInput {
   pack?: TreePack | null
   /** Metres per world unit, for reading the detail bands in the scenery's own space. */
   metresPerUnit?: number
+  /** The far land's wood (`farland3d`), which is IMPOSTOR-ONLY. It starts past the hero band and
+   *  runs to the edge of the world, so no camera the map allows can bring one close enough to earn
+   *  a full mesh, and pretending otherwise would size a hero buffer per tree for slots that can
+   *  never fill. They also never change tier, so they are written once at build and the per-move
+   *  repack below never touches them again. */
+  far?: readonly TreeStance[]
 }
 
 export function buildTrees3D(
   trees: readonly SceneryTree[], u: (m: number) => number, input: Trees3DInput = {},
 ): Trees3D {
-  const { pack, metresPerUnit = 1 } = input
+  const { pack, metresPerUnit = 1, far = [] } = input
   // No pack, no trees. There used to be a fallback here that stood a sphere on a cylinder for every
   // tree, from before the imported wood existed, and it long outlived being useful: it is the only
   // thing in the scene that looks like the placeholder it is, and the pack lands within a second of
@@ -139,29 +159,34 @@ export function buildTrees3D(
   }
 
   // Every tree's species, and the tally each tier needs to size its buffers by. Both tiers of a
-  // species are sized for its whole population, because at any moment the wood can be entirely in
-  // one of them: parked at the pit wall, or looking down at the circuit from above.
-  const standing: Standing[] = []
+  // SCENERY species are sized for its whole population, because at any moment that wood can be
+  // entirely in one of them: parked at the pit wall, or looking down at the circuit from above.
+  // The far land's wood is sized into the impostor tier alone; it can never be anything else.
+  const movers: Standing[] = []
+  const parked: Standing[] = []
   const capacity = new Map<PackKind, number>()
   const bump = (k: PackKind) => capacity.set(k, (capacity.get(k) ?? 0) + 1)
-  for (const t of trees) {
-    const seed = hash2(t.x, t.y)
+  const plant = (t: TreeStance, farOnly: boolean) => {
+    const seed = hash2(t.x, t.z)
     const roll = seed * total
     let pick = cumulative.findIndex((c) => roll < c)
     if (pick < 0) pick = pack.kinds.length - 1
     const kind = pack.kinds[pick]
     const tints = TINTS[kind.family]
     const turning = kind.family === 'broadleaf' && Math.floor(seed * 1000) % AUTUMN_IN === 0
-    standing.push({
+    ;(farOnly ? parked : movers).push({
       x: t.x,
-      z: t.y,
+      z: t.z,
       colour: new THREE.Color(turning ? AUTUMN_TINT : tints[Math.floor(seed * 997) % tints.length]),
       kind,
       matrix: transformFor(t, kind, u, seed),
     })
-    bump(kind.near)
+    if (!farOnly) bump(kind.near)
     bump(kind.far)
   }
+  // A `SceneryTree`'s `y` is its second GROUND axis, not a height: the scenery is laid flat.
+  for (const t of trees) plant({ x: t.x, z: t.y, y: 0, h: t.h }, false)
+  for (const t of far) plant(t, true)
 
   const group = new THREE.Group()
   const meshesOf = new Map<PackKind, THREE.InstancedMesh[]>()
@@ -177,7 +202,7 @@ export function buildTrees3D(
       mesh.frustumCulled = false
       // three only allocates the colour buffer once something asks for it, and every instance has to
       // carry one after that or the untouched slots multiply by black.
-      if (piece.tinted) mesh.setColorAt(0, standing[0].colour)
+      if (piece.tinted) mesh.setColorAt(0, (movers[0] ?? parked[0]).colour)
       // Anything with a CUTOUT sits out the ambient occlusion pass; solid bark stays in it.
       //
       // That pass builds its depth and normals by redrawing the scene under one override material,
@@ -205,20 +230,37 @@ export function buildTrees3D(
     meshesOf.set(kind, built)
   }
 
+  const write = (tier: PackKind, slot: number, s: Standing): void => {
+    for (const mesh of meshesOf.get(tier)!) {
+      mesh.setMatrixAt(slot, s.matrix)
+      if (mesh.instanceColor) mesh.setColorAt(slot, s.colour)
+    }
+  }
+
+  // The far land's wood, written ONCE into the bottom of each impostor buffer. It cannot change
+  // tier and it cannot move, so re-submitting it on every camera nudge would be the whole cost of
+  // the far wood for none of its benefit; the repack starts its cursors above this mark instead.
+  const baseline = new Map<PackKind, number>()
+  for (const s of parked) {
+    const slot = baseline.get(s.kind.far) ?? 0
+    baseline.set(s.kind.far, slot + 1)
+    write(s.kind.far, slot, s)
+  }
+
   const cursors = new Map<PackKind, number>()
   const lastEye = new THREE.Vector3(Infinity, Infinity, Infinity)
   const inSq = (HERO_IN_M / metresPerUnit) ** 2
   const outSq = (HERO_OUT_M / metresPerUnit) ** 2
   // Which tier each tree is currently in, so the hysteresis has something to be hysteretic about.
-  const isHero = new Uint8Array(standing.length)
+  const isHero = new Uint8Array(movers.length)
 
   const update = (eye: THREE.Vector3): void => {
     if (lastEye.distanceToSquared(eye) < (REPACK_EPS_M / metresPerUnit) ** 2) return
     lastEye.copy(eye)
-    for (const kind of meshesOf.keys()) cursors.set(kind, 0)
+    for (const kind of meshesOf.keys()) cursors.set(kind, baseline.get(kind) ?? 0)
 
-    for (let i = 0; i < standing.length; i++) {
-      const s = standing[i]
+    for (let i = 0; i < movers.length; i++) {
+      const s = movers[i]
       const dx = s.x - eye.x
       const dz = s.z - eye.z
       // The eye's height counts: a camera directly overhead is genuinely far from the ground.
@@ -228,10 +270,7 @@ export function buildTrees3D(
       const tier = hero ? s.kind.near : s.kind.far
       const slot = cursors.get(tier)!
       cursors.set(tier, slot + 1)
-      for (const mesh of meshesOf.get(tier)!) {
-        mesh.setMatrixAt(slot, s.matrix)
-        if (mesh.instanceColor) mesh.setColorAt(slot, s.colour)
-      }
+      write(tier, slot, s)
     }
 
     for (const [kind, meshes] of meshesOf) {
