@@ -7,7 +7,7 @@ import { TRACK_LAYOUTS } from '../src/data/tracks'
 import { buildScenery } from '../src/lib/ui/track-scenery'
 import { buildPitSlots, buildPitZone } from '../src/lib/ui/pit-zone'
 import { buildWorld3D } from '../src/lib/scene3d/world3d'
-import { GROUND_CELL_M, NORMAL_STEP_M, terrainSheet } from '../src/lib/scene3d/terrain3d'
+import { GROUND_CELL_M, terrainSheet } from '../src/lib/scene3d/terrain3d'
 import { CORRIDOR_M } from '../src/lib/ui/track-scenery'
 import { MOODS } from '../src/lib/ui/lighting'
 
