@@ -26,6 +26,7 @@ export function buildPitComplex3D(
   garageColors?: (i: number) => string | undefined,
 ): THREE.Group {
   const group = new THREE.Group()
+  group.name = 'pits'
   const mid = u(GARAGE_H_M)
   const top = u(PIT_BUILDING_H_M)
   const solid = (geo: THREE.BufferGeometry, colour: string) => {

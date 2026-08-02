@@ -82,6 +82,9 @@ export function buildGarageSigns3D(
   zone: PitZone, u: (m: number) => number, drivers: (i: number) => BoardDriver[],
 ): THREE.Group {
   const group = new THREE.Group()
+  // The boards belong to the pit complex, and are switched with it: garages hidden but name boards
+  // still hanging in the air is not a reading of anything.
+  group.name = 'pit-signs'
   const plate = surface(PLATE, { roughness: ROUGH.paint })
   zone.garageFloors.forEach((r, i) => {
     const crew = drivers(i)

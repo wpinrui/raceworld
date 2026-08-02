@@ -13,17 +13,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Aperture, Armchair, Building2, Car, ChevronDown, ChevronUp, Fence, Gauge, HardHat, Mountain,
-  Repeat, Sparkles, Sun, TreePine, Users, Warehouse, Wrench, type LucideIcon,
+  Aperture, Armchair, Building2, Car, ChevronDown, ChevronUp, Container, Fence, Gauge, HardHat,
+  Mountain, Repeat, Sparkles, Sun, TreePine, Users, Warehouse, Wrench, type LucideIcon,
 } from 'lucide-react'
 import * as THREE from 'three'
 import type { Post } from '@/lib/scene3d/post3d'
 
-/** One switchable population, addressed by the `name` its builder stamps on it. */
+/** One switchable population, addressed by the `name`s its builders stamp on it. A list rather than
+ *  one name because a population is not always one subtree: the pit complex and its garage boards
+ *  are built by two hands and mounted side by side, and they are still one thing to switch. */
 interface Part {
   key: string
   label: string
   icon: LucideIcon
+  names: string[]
   /** Held INSIDE the row above it, and counted inside that row's total too. Indented so the
    *  containment reads: switching the parent off takes the child with it. */
   within?: boolean
@@ -32,17 +35,18 @@ interface Part {
 /** Ordered as the question is usually asked: the two big populations first, then what each is made
  *  of, then everything else standing in the world, then the passes over the whole frame. */
 const PARTS: Part[] = [
-  { key: 'tree:near', label: 'Trees near', icon: TreePine },
-  { key: 'tree:far', label: 'Trees far', icon: TreePine },
-  { key: 'stands', label: 'Stands', icon: Warehouse },
-  { key: 'seats', label: 'Seats', icon: Armchair, within: true },
-  { key: 'crowd', label: 'Crowd', icon: Users, within: true },
-  { key: 'buildings', label: 'Buildings', icon: Building2 },
-  { key: 'fences', label: 'Fences', icon: Fence },
-  { key: 'marshals', label: 'Marshals', icon: HardHat },
-  { key: 'farland', label: 'Far land', icon: Mountain },
-  { key: 'cars', label: 'Cars', icon: Car },
-  { key: 'crew', label: 'Crew', icon: Wrench },
+  { key: 'tree:near', label: 'Trees near', icon: TreePine, names: ['tree:near'] },
+  { key: 'tree:far', label: 'Trees far', icon: TreePine, names: ['tree:far'] },
+  { key: 'stands', label: 'Stands', icon: Warehouse, names: ['stands'] },
+  { key: 'seats', label: 'Seats', icon: Armchair, names: ['seats'], within: true },
+  { key: 'crowd', label: 'Crowd', icon: Users, names: ['crowd'], within: true },
+  { key: 'pits', label: 'Pits', icon: Container, names: ['pits', 'pit-signs'] },
+  { key: 'buildings', label: 'Buildings', icon: Building2, names: ['buildings'] },
+  { key: 'fences', label: 'Fences', icon: Fence, names: ['fences'] },
+  { key: 'marshals', label: 'Marshals', icon: HardHat, names: ['marshals'] },
+  { key: 'farland', label: 'Far land', icon: Mountain, names: ['farland'] },
+  { key: 'cars', label: 'Cars', icon: Car, names: ['cars'] },
+  { key: 'crew', label: 'Crew', icon: Wrench, names: ['crew'] },
 ]
 
 /** The whole-frame switches: not populations, so they are held apart and applied differently. */
@@ -60,12 +64,12 @@ export interface SceneParts {
   post: Post
 }
 
-/** Every object carrying this name, wherever it stands. Populations are scattered (a stand per
- *  footprint, a tree buffer per species), so a name is a set and never a single object. */
-function named(scene: THREE.Object3D, key: string): THREE.Object3D[] {
+/** Every object carrying one of these names, wherever it stands. Populations are scattered (a stand
+ *  per footprint, a tree buffer per species), so a name is a set and never a single object. */
+function named(scene: THREE.Object3D, names: readonly string[]): THREE.Object3D[] {
   const found: THREE.Object3D[] = []
   scene.traverse((o) => {
-    if (o.name === key) found.push(o)
+    if (names.includes(o.name)) found.push(o)
   })
   return found
 }
@@ -115,7 +119,7 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
     const parts = gl()
     if (!parts) return
     const counts: Record<string, number> = {}
-    for (const p of PARTS) counts[p.key] = trianglesOf(named(parts.scene, p.key))
+    for (const p of PARTS) counts[p.key] = trianglesOf(named(parts.scene, p.names))
     setTris(counts)
   }, [gl])
 
@@ -138,7 +142,9 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
       // Collected ONCE per key per world: a second pass would find everything already hidden, take
       // an empty set, and lose what it has to put back.
       if (held.current.has(key)) continue
-      const objects = named(parts.scene, key).filter((o) => o.visible)
+      const part = PARTS.find((p) => p.key === key)
+      if (!part) continue
+      const objects = named(parts.scene, part.names).filter((o) => o.visible)
       for (const o of objects) o.visible = false
       held.current.set(key, objects)
     }
