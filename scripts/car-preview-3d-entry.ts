@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { MOODS } from '../src/lib/ui/lighting'
-import { SPRITE } from '../src/lib/ui/car-sprite'
+import { SPRITE, UNITS_PER_M } from '../src/lib/ui/car-sprite'
 import { buildCarLod, buildCarMesh, CAR_TIERS, type CarLod } from '../src/lib/scene3d/car-mesh'
 import { historicalGrids } from '../src/data/history/grids'
 import { liveryFor } from '../src/data/history/liveries'
@@ -199,7 +199,11 @@ async function shotMain() {
     if (silhouette) toSilhouette(model, `#${silhouette}`)
   }
   if (silhouette && ours) toSilhouette(ours, `#${silhouette}`)
-  scene.add(buildLightRig(MOODS.afternoon, { x: -300, y: -300, w: 600, h: 600 }))
+  // Sprite units, and the tallest thing standing in this scene is the car itself: a rig told to
+  // expect the circuit's thirty-metre floodlight towers would pad the box out past the turntable.
+  scene.add(buildLightRig(MOODS.afternoon, { x: -300, y: -300, w: 600, h: 600 }, {
+    unitsPerMetre: UNITS_PER_M, tallestM: 1.5,
+  }))
 
   const az = (view.az * Math.PI) / 180
   const elev = (view.elev * Math.PI) / 180
@@ -225,7 +229,7 @@ async function shotMain() {
   const canvas = document.getElementById('gl') as HTMLCanvasElement
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true })
   renderer.shadowMap.enabled = !silhouette
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.setPixelRatio(1)
   renderer.setSize(1200, 800, false)
   renderer.render(scene, camera)
@@ -241,14 +245,18 @@ function viewerMain() {
   ground.rotateX(-Math.PI / 2)
   ground.receiveShadow = true
   scene.add(ground)
-  scene.add(buildLightRig(MOODS.afternoon, { x: -300, y: -300, w: 600, h: 600 }))
+  // Sprite units, and the tallest thing standing in this scene is the car itself: a rig told to
+  // expect the circuit's thirty-metre floodlight towers would pad the box out past the turntable.
+  scene.add(buildLightRig(MOODS.afternoon, { x: -300, y: -300, w: 600, h: 600 }, {
+    unitsPerMetre: UNITS_PER_M, tallestM: 1.5,
+  }))
   let carRoot = new THREE.Group()
   scene.add(carRoot)
 
   const canvas = document.getElementById('gl') as HTMLCanvasElement
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.setPixelRatio(window.devicePixelRatio)
   renderer.setSize(window.innerWidth, window.innerHeight, true)
 

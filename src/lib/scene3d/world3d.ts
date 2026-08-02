@@ -271,7 +271,9 @@ export function buildWorld3D(
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
   if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
   for (const extra of extras?.() ?? []) group.add(extra)
-  const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
+  const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox), {
+    unitsPerMetre: 1 / layout.metresPerUnit,
+  })
   group.add(rig)
   const sun = rig.children.find((o): o is THREE.DirectionalLight => o instanceof THREE.DirectionalLight)!
   const sky = rig.children.find((o): o is THREE.HemisphereLight => o instanceof THREE.HemisphereLight)!

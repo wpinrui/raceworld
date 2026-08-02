@@ -24,7 +24,7 @@ import { MOODS, type Mood } from '../src/lib/ui/lighting'
 import {
   applyOrbitCam, frameOrtho, parseViewBox, type OrbitCam, type ViewBox3D,
 } from '../src/lib/scene3d/camera3d'
-import { balanceAmbient, refitShadow } from '../src/lib/scene3d/lighting3d'
+import { SHADOW_REACH_M, balanceAmbient, refitShadow } from '../src/lib/scene3d/lighting3d'
 import {
   applyToneMapping, buildSky, refitFog, skySeedFor, type SkyEnv,
 } from '../src/lib/scene3d/sky3d'
@@ -270,7 +270,7 @@ const canvas = document.getElementById('gl') as HTMLCanvasElement
 function makeRenderer(preserve = false): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: preserve })
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.shadowMap.type = THREE.PCFShadowMap
   applyToneMapping(renderer)
   window.__renderer = renderer
   window.__THREE = THREE
@@ -380,10 +380,18 @@ async function eyeShot() {
   dressSky(built, q.get('mood') ?? 'afternoon', carsGroup)
 
   const camera = new THREE.PerspectiveCamera()
+  // The sun's box, fitted exactly as `Scene3DCanvas.paint` fits it: the framed extent with roll
+  // slack for a rotated viewport, capped at the same reach, against the same scale. A probe whose
+  // shadows are fitted differently from the game's is previewing a different picture.
+  const upm = 1 / layout.metresPerUnit
+  const fitShadow = (f: ReturnType<typeof applyOrbitCam>) => {
+    const r = Math.min(Math.hypot(f.halfW, f.halfH), SHADOW_REACH_M * upm)
+    refitShadow(built.world.sun, {
+      x: f.cx - r, y: f.cz - r, w: 2 * r, h: 2 * r,
+    }, { unitsPerMetre: upm })
+  }
   // `ppu` is the stage's pixels per viewBox unit at zoom 1, exactly as `RaceTrackMap` computes it.
-  const frame = applyOrbitCam(camera, cam, { w, h }, w / full.w)
-  const half = Math.hypot(frame.halfW, frame.halfH)
-  refitShadow(built.world.sun, { x: frame.cx - half, y: frame.cz - half, w: 2 * half, h: 2 * half })
+  fitShadow(applyOrbitCam(camera, cam, { w, h }, w / full.w))
   built.world.trees.update(camera.position)
   fitFog(built, camera)
   const post = buildPost(renderer, built.scene, camera, 1 / layout.metresPerUnit)
@@ -398,9 +406,7 @@ async function eyeShot() {
     Object.assign(cam, next)
     const vw = size?.w ?? renderer.domElement.width / renderer.getPixelRatio()
     const vh = size?.h ?? renderer.domElement.height / renderer.getPixelRatio()
-    const f = applyOrbitCam(camera, cam, { w: vw, h: vh }, vw / full.w)
-    const r = Math.hypot(f.halfW, f.halfH)
-    refitShadow(built.world.sun, { x: f.cx - r, y: f.cz - r, w: 2 * r, h: 2 * r })
+    fitShadow(applyOrbitCam(camera, cam, { w: vw, h: vh }, vw / full.w))
     built.world.trees.update(camera.position)
     fitFog(built, camera)
   }
