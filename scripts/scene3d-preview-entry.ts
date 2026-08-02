@@ -68,6 +68,9 @@ declare global {
     __orbit?: (next: Partial<OrbitCam>, size?: { w: number; h: number }) => void
     /** The padded whole-circuit box the orbit's target is addressed in. */
     __full?: ViewBox3D
+    /** The circuit's scale, so a probe can convert the map's zoom scalar into the px/m the live
+     *  view's own readout shows and quote a viewpoint in the numbers the report came with. */
+    __mpu?: number
     /** Where the front row parks, so a probe can point at the grid without hunting for it. */
     __gridAt?: { x: number; z: number } | null
     /** Both baked environments, mountable one against the other: the sky alone, and the world shot
@@ -394,6 +397,7 @@ async function eyeShot() {
     fitFog(built, camera)
   }
   window.__full = full
+  window.__mpu = layout.metresPerUnit
   window.__gridAt = gridAt(layout, Number(q.get('grid') ?? '0'))
 
   // Re-counted AFTER the orbit has repacked the wood's detail tiers. `built.stats` is taken at build
