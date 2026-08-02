@@ -14,7 +14,11 @@ import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGe
 import { ROUGH, type SceneMaterials } from './materials3d'
 import { faceUV, type SurfaceDetail } from './detail3d'
 import type { WorldTextures } from './textures3d'
-import { buildGrandstand, standSpecFor, type SeatForm, type SeatLod } from './grandstand3d'
+import {
+  buildGrandstand, seatPositions, standSection, standSpecFor,
+  type SeatForm, type SeatLod,
+} from './grandstand3d'
+import { buildCrowd, type CrowdSeat } from './standcrowd3d'
 import type { StandSkin } from './standtex3d'
 
 /** Glazing ink, from the 2D's window fill. */
@@ -74,7 +78,7 @@ export function buildBuildings3D(
   return group
 }
 
-/** The circuit's grandstands, and the crowd in them.
+/** The circuit's grandstands, and the whole crowd in them.
  *
  *  Each stand is a `buildGrandstand` fitted to the footprint the scenery reserved, built in METRES in
  *  its own frame and then scaled into world units. Its trackside face sits at z = 0 with the rake
@@ -82,13 +86,11 @@ export function buildBuildings3D(
  *  `facing` says the trackside edge is local +y, which is the model turned about and slid forward,
  *  and its absence is the model as built slid back.
  *
- *  The crowd is built INSIDE each stand, by the same call the probe makes, and that is deliberate.
- *  Pooling every stand's spectators into one set of instanced draws is a big saving (32 draws for a
- *  circuit instead of 32 a stand) and I had it working, but it means transforming seat positions out
- *  of the stand's frame and scaling the pool back into it by hand, and that is a second place for the
- *  units to be got wrong. It is not worth having the crowd right in the probe and arguable in the
- *  game to save draw calls. If this needs winning back, the way is to make `buildCrowd` accept a
- *  parent transform rather than to unpick one here. */
+ *  The CROWD is pooled across the circuit. Thirty stands each building their own thirty-two figure
+ *  banks is around 960 draw calls of spectators; one pool is thirty-two however many stands there
+ *  are. The pool is assembled in metres and scaled once, so a seat's position and a spectator's
+ *  height are in the same units, and each seat carries the direction its stand faces because a pooled
+ *  crowd has no stand transform to inherit and would otherwise lean everyone the same way. */
 export function buildStands3D(
   stands: readonly SceneryStand[], u: (m: number) => number,
   skin: StandSkin | null = null,
@@ -98,16 +100,17 @@ export function buildStands3D(
   const group = new THREE.Group()
   const mpu = 1 / u(1)
   const perMetre = u(1)
-  stands.forEach((s, i) => {
+  const crowd: CrowdSeat[] = []
+  const at = new THREE.Vector3()
+  const face = new THREE.Vector3()
+  for (const s of stands) {
     const spec = standSpecFor(s.w * mpu, s.h * mpu)
     // Placed exactly as every other structure here is: the footprint's local (x, y) is world (x, z),
     // and the yaw is negated because a scenery rotation turns the other way round the up axis.
     const holder = new THREE.Group()
     holder.position.set(s.x, 0, s.y)
     holder.rotation.y = -s.rot
-    const stand = buildGrandstand(
-      spec, seats, crowdFill > 0 ? { fill: crowdFill, seed: i + 1 } : null, skin,
-    )
+    const stand = buildGrandstand(spec, seats, null, skin)
     stand.scale.setScalar(perMetre)
     if (s.facing) {
       stand.rotation.y = Math.PI
@@ -117,7 +120,26 @@ export function buildStands3D(
     }
     holder.add(stand)
     group.add(holder)
-  })
+
+    // Seat positions out to the shared frame, once, off the transforms just set.
+    // `updateMatrixWorld` is explicit because nothing has rendered yet: three refreshes these during
+    // a draw, and reading them first otherwise yields the identity for every stand, stacking a
+    // circuit's entire crowd at the origin.
+    holder.updateMatrixWorld(true)
+    const { rows } = standSection(spec)
+    // Which way this stand looks, in the shared frame: its own -z, rotated. Unit length, so a
+    // spectator's forward offset stays the metres it was authored as.
+    face.set(0, 0, -1).transformDirection(stand.matrixWorld).setY(0).normalize()
+    for (const p of seatPositions(spec, rows)) {
+      at.set(p.x, p.y, p.z).applyMatrix4(stand.matrixWorld).multiplyScalar(mpu)
+      crowd.push({ x: at.x, y: at.y, z: at.z, fx: face.x, fz: face.z })
+    }
+  }
+  if (crowdFill > 0 && crowd.length > 0) {
+    const people = buildCrowd(crowd, crowdFill, 1)
+    people.scale.setScalar(perMetre)
+    group.add(people)
+  }
   return group
 }
 
