@@ -119,6 +119,11 @@ export function buildStands3D(
   const crowd: CrowdSeat[] = []
   const at = new THREE.Vector3()
   const face = new THREE.Vector3()
+  // One finish per surface for the WHOLE circuit's stands, not one per stand. Every stand is built
+  // from the same scans and, with colour on the vertices, thirty of them wear thirty copies of the
+  // same eight materials otherwise. The cache lives and dies with this world, so nothing outside it
+  // can be holding one when it goes.
+  const finishes = new Map<string, THREE.Material>()
   for (const s of stands) {
     const spec = standSpecFor(s.w * mpu, s.h * mpu)
     // Placed exactly as every other structure here is: the footprint's local (x, y) is world (x, z),
@@ -137,7 +142,7 @@ export function buildStands3D(
     // Per stand rather than across them on purpose: one buffer for the whole circuit would have one
     // bounding volume, and a stand on the far side of the lap could never be culled again. The seat
     // ladder and the pooled crowd stay out of it, being a `LOD` and an instanced draw.
-    collapseByFinish(stand)
+    collapseByFinish(stand, undefined, finishes)
     stand.scale.setScalar(perMetre)
     if (s.facing) {
       stand.rotation.y = Math.PI

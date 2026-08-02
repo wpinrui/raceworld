@@ -71,7 +71,12 @@ function disposeDeep(root: THREE.Object3D): void {
     if (o instanceof THREE.Mesh) {
       ;(o.geometry as THREE.BufferGeometry).dispose()
       const m = o.material
-      for (const mat of Array.isArray(m) ? m : [m]) mat.dispose()
+      // Shared finishes belong to the FIELD, not to this car: twenty cars bind the same carbon now
+      // that colour rides on the vertices, and freeing it here would strip the paint off the other
+      // nineteen the moment one retired. The field frees them when the field goes.
+      for (const mat of Array.isArray(m) ? m : [m]) {
+        if (!mat.userData.shared) mat.dispose()
+      }
     }
   })
 }
@@ -96,6 +101,8 @@ export class CarField3D {
 
   /** The detail rung every car in the field is currently built at. */
   private tier = 0
+  /** One finish per (material, tier) across the whole field, shared by every car that wears it. */
+  private finishes = new Map<string, THREE.Material>()
 
   /** Build (or rebuild, on a livery, compound or detail change) the car for an entrant. */
   ensure(id: string, livery: CarLivery, compound: TyreCompound = 'medium'): void {
@@ -106,7 +113,7 @@ export class CarField3D {
       ? { last: current.last, opacity: current.opacity, wheels: current.wheels }
       : { last: null, opacity: 1, wheels: true }
     if (current) this.drop(id)
-    const mesh = buildCarMesh(livery, compound, this.tier)
+    const mesh = buildCarMesh(livery, compound, this.tier, this.finishes)
     const wrap = new THREE.Group()
     wrap.scale.setScalar(this.scaleUnits)
     wrap.add(mesh.group)
@@ -212,6 +219,9 @@ export class CarField3D {
   dispose(): void {
     this.sweep(new Set())
     this.shadows.dispose()
+    // The shared finishes, which no car frees because no car owns one.
+    for (const mat of this.finishes.values()) mat.dispose()
+    this.finishes.clear()
   }
 }
 

@@ -91,12 +91,25 @@ export class MeshBatch {
  *  the unit here, and per car. */
 export function collapseByFinish(
   node: THREE.Object3D, boundaries: ReadonlySet<THREE.Object3D> = new Set(),
+  /** Finishes already minted, to reuse across everything that shares this cache.
+   *
+   *  Folding colour onto the vertices is what makes this possible: two cars' carbon differs only in
+   *  paint, so once the paint is off the material they are the SAME material and three can bind one
+   *  uniform block for both. Without it, twenty cars minted 520 distinct materials for 520 meshes,
+   *  one apiece, and the renderer rebound state on every single draw.
+   *
+   *  The cache OWNS what it holds: anything tearing a car down has to leave shared materials alone
+   *  and let the cache's owner dispose them, or dropping one car takes the paint off the other
+   *  nineteen. Marked `userData.shared` so a disposal walk can tell. */
+  cache?: Map<string, THREE.Material>,
 ): void {
   interface Batch {
     geos: THREE.BufferGeometry[]
     sources: THREE.Mesh[]
     material: THREE.Material
     cast: boolean
+    /** The finish signature, so a shared cache can be keyed on the same thing the batch was. */
+    key: string
   }
   const batches = new Map<string, Batch>()
   node.updateMatrixWorld(true)
@@ -153,7 +166,7 @@ export function collapseByFinish(
     ].join('|')
     const needs = new Set<string>(['color'])
     if (material.map || material.normalMap || material.roughnessMap) needs.add('uv')
-    const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow }
+    const batch = batches.get(key) ?? { geos: [], sources: [], material, cast: o.castShadow, key }
     const geo = bakeable(
       o.geometry as THREE.BufferGeometry, toLocal.clone().multiply(o.matrixWorld), needs,
     )
@@ -187,9 +200,20 @@ export function collapseByFinish(
     // several different colours, so keeping one of their materials would paint the lot in whichever
     // the walk happened to reach first. Cloned rather than mutated because the source material is
     // shared with whatever else wears the same paint.
-    const painted = batch.material.clone() as THREE.MeshStandardMaterial
-    painted.color.setRGB(1, 1, 1)
-    painted.vertexColors = true
+    const mint = () => {
+      const made = batch.material.clone() as THREE.MeshStandardMaterial
+      made.color.setRGB(1, 1, 1)
+      made.vertexColors = true
+      return made
+    }
+    let painted = cache?.get(batch.key)
+    if (!painted) {
+      painted = mint()
+      if (cache) {
+        painted.userData.shared = true
+        cache.set(batch.key, painted)
+      }
+    }
     const m = new THREE.Mesh(merged, painted)
     m.castShadow = batch.cast
     m.receiveShadow = true

@@ -212,3 +212,56 @@ describe('collapseByFinish', () => {
     expect(box.min.y).toBeCloseTo(0)
   })
 })
+
+describe('collapseByFinish with a shared cache', () => {
+  const part = (colour: string, opts: THREE.MeshStandardMaterialParameters = {}) =>
+    new THREE.Mesh(tri(), new THREE.MeshStandardMaterial({ color: colour, ...opts }))
+  const finishOf = (root: THREE.Object3D) =>
+    (root.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh)!).material as THREE.Material
+
+  it('hands the same finish to everything that shares it', () => {
+    // Twenty cars wearing twenty copies of one carbon is twenty program and uniform binds a pass for
+    // a material the renderer could have bound once. Measured: 520 materials for a grid, against 6.
+    const cache = new Map<string, THREE.Material>()
+    const first = new THREE.Group()
+    first.add(part('#FF0000'))
+    const second = new THREE.Group()
+    second.add(part('#0000FF'))
+    collapseByFinish(first, undefined, cache)
+    collapseByFinish(second, undefined, cache)
+    expect(finishOf(first)).toBe(finishOf(second))
+    expect(cache.size).toBe(1)
+  })
+
+  it('still keeps genuinely different finishes apart', () => {
+    const cache = new Map<string, THREE.Material>()
+    const rough = new THREE.Group()
+    rough.add(part('#FF0000', { roughness: 0.9 }))
+    const polished = new THREE.Group()
+    polished.add(part('#FF0000', { roughness: 0.1 }))
+    collapseByFinish(rough, undefined, cache)
+    collapseByFinish(polished, undefined, cache)
+    expect(finishOf(rough)).not.toBe(finishOf(polished))
+    expect(cache.size).toBe(2)
+  })
+
+  it('marks a shared finish, so a disposal walk knows it does not own it', () => {
+    // Without the mark, dropping one car frees a material the other nineteen are still drawing with.
+    const cache = new Map<string, THREE.Material>()
+    const root = new THREE.Group()
+    root.add(part('#FF0000'))
+    collapseByFinish(root, undefined, cache)
+    expect(finishOf(root).userData.shared).toBe(true)
+  })
+
+  it('mints its own and marks nothing when no cache is offered', () => {
+    const first = new THREE.Group()
+    first.add(part('#FF0000'))
+    const second = new THREE.Group()
+    second.add(part('#FF0000'))
+    collapseByFinish(first)
+    collapseByFinish(second)
+    expect(finishOf(first)).not.toBe(finishOf(second))
+    expect(finishOf(first).userData.shared).toBeUndefined()
+  })
+})

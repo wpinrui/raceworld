@@ -1481,7 +1481,12 @@ function buildProxyCar(paint: CarPaint): THREE.Group {
   return group
 }
 
-export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium', tier = 0): CarMesh {
+export function buildCarMesh(
+  livery: CarLivery, compound: TyreCompound = 'medium', tier = 0,
+  /** Finishes shared with the rest of the field. Absent, this car mints its own, which is right for
+   *  a single car in a viewer and wrong for twenty on a grid. */
+  finishes?: Map<string, THREE.Material>,
+): CarMesh {
   detail = CAR_TIERS[Math.min(CAR_TIERS.length - 1, Math.max(0, tier))]
   if (detail.proxy) {
     const group = buildProxyCar(asPaint(livery))
@@ -2021,12 +2026,12 @@ export function buildCarMesh(livery: CarLivery, compound: TyreCompound = 'medium
   // observable, so the boundaries come down and the whole car bakes into one buffer per paint.
   if (detail.liveWheels) {
     for (const tag of Object.keys(wheels) as Array<keyof CarMesh['wheels']>) {
-      collapseByFinish(spin[tag], EMPTY_BOUNDARY)
-      collapseByFinish(wheels[tag], new Set([spin[tag]]))
+      collapseByFinish(spin[tag], EMPTY_BOUNDARY, finishes)
+      collapseByFinish(wheels[tag], new Set([spin[tag]]), finishes)
     }
-    collapseByFinish(group, new Set(Object.values(wheels)))
+    collapseByFinish(group, new Set(Object.values(wheels)), finishes)
   } else {
-    collapseByFinish(group, EMPTY_BOUNDARY)
+    collapseByFinish(group, EMPTY_BOUNDARY, finishes)
   }
 
   // The sprung mass, split AFTER the collapse so it holds the few merged buffers rather than a
