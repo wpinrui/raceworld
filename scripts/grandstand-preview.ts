@@ -6,20 +6,25 @@
 //   -> scripts/.preview/grandstand-viewer.html   (open this)
 //   -> scripts/.preview/stand-<massing>-<angle>.png
 
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 import { chromium } from 'playwright-core'
+import sharp from 'sharp'
+import { skinFiles } from '../src/lib/scene3d/standtex3d'
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
 const wantShots = argv.includes('--shot')
+// Empties the stand. Colour-matching a surface is impossible with four thousand people in tan shirts
+// standing on it: every measurement of the timber picks up their clothing too.
+const fill = argv.includes('--no-crowd') ? 0 : 90
 // The stills sweep whichever axis is under review; the massing is settled, so it is roofs now.
 const MASSINGS = ['twoTier']
-const ROOFS = ['canopy']
+const ROOFS = ['cantilever']
 const SEATS = ['bucket']
-const ANGLES = ['band', 'seat']
+const ANGLES = ['three', 'front']
 
 const CSS = `
 html,body{margin:0;background:#101318;height:100%;overflow:hidden;color-scheme:dark}
@@ -75,6 +80,7 @@ const BAR = `
 <span class="v" id="risev">42</span>
 <label>Run <input id="run" type="range" min="70" max="110" step="1" value="85"></label>
 <span class="v" id="runv">85</span>
+<button id="tex" class="on">Textures</button>
 <button data-view="pair">Old vs new</button><button data-view="three">3/4</button><button data-view="front">Front</button>
 <button data-view="side">Side</button><button data-view="rear">Rear</button>
 <button data-view="seat">Seat</button><button data-view="band">Band</button><button data-view="under">Under</button><button data-view="crest">Crest</button><button data-view="top">Top</button>
@@ -82,6 +88,40 @@ const BAR = `
 
 async function main() {
   mkdirSync(OUT, { recursive: true })
+  const web = 'public/materials/web'
+  if (!existsSync(web)) {
+    console.error(`no converted maps at ${web}: run npx tsx scripts/material-web.ts first`)
+    process.exitCode = 1
+    return
+  }
+  // Packed INTO the page as data: URIs rather than copied beside it. A page opened off file:// is a
+  // unique origin, so a file:// image is cross-origin data that WebGL will not upload: it throws
+  // SecurityError and the sampler reads black, which turns every roughness map into a mirror. Only
+  // the maps that are actually sampled get packed, each no larger than the surface can resolve, so
+  // the page stays a handful of megabytes instead of the 235 MB the downloads are.
+  const inline: Record<string, string> = {}
+  let bytes = 0
+  for (const { file, maxPx, normal } of skinFiles()) {
+    const src = join(web, file)
+    if (!existsSync(src)) {
+      console.error(`missing ${src}: run npx tsx scripts/material-web.ts`)
+      process.exitCode = 1
+      return
+    }
+    // maxPx 0 means "do not touch it": the inverse-histogram lookup is a 256x1 function table and
+    // resizing it would resample the histogram itself.
+    const img = maxPx > 0
+      ? sharp(src).resize(maxPx, maxPx, { fit: 'inside', withoutEnlargement: true })
+      : sharp(src)
+    // Normals stay lossless. JPEG's ringing around an edge becomes a shading ripple in a normal map,
+    // and a deck is exactly the large flat surface where that reads.
+    const buf = normal
+      ? await img.png({ compressionLevel: 9 }).toBuffer()
+      : await img.jpeg({ quality: 90, chromaSubsampling: '4:4:4' }).toBuffer()
+    inline[file] = `data:image/${normal ? 'png' : 'jpeg'};base64,${buf.toString('base64')}`
+    bytes += buf.length
+  }
+  console.log(`packed ${Object.keys(inline).length} maps, ${(bytes / 1048576).toFixed(1)} MB`)
   const bundle = await build({
     entryPoints: ['scripts/grandstand-preview-entry.ts'],
     bundle: true,
@@ -96,6 +136,7 @@ async function main() {
     + '<title>grandstand</title>'
     + `<style>${CSS}</style></head><body>`
     + `<div id="bar">${BAR}</div><div id="hud"></div><canvas id="gl"></canvas>`
+    + `<script>window.__standTex=${JSON.stringify(inline)}</script>`
     + `<script>${bundle.outputFiles[0].text}</script></body></html>`)
   console.log(`viewer -> ${page}`)
   if (!wantShots) return
@@ -103,6 +144,8 @@ async function main() {
   let browser = null
   for (const channel of ['msedge', 'chrome'] as const) {
     try {
+      // No file-access flag: the maps ride inside the page, so the headless run and the page you
+      // open by hand are loading exactly the same thing. A flag here would have hidden the bug.
       browser = await chromium.launch({ channel, headless: true })
       break
     } catch {
@@ -124,8 +167,8 @@ async function main() {
       for (const seat of SEATS) {
         for (const angle of ANGLES) {
           await tab.goto(`${pathToFileURL(page).href}?shot=1&massing=${massing}&roof=${roof}`
-            + `&seat=${seat}&angle=${angle}`)
-          await tab.waitForFunction('window.__done === true', undefined, { timeout: 60_000 })
+            + `&seat=${seat}&angle=${angle}&fill=${fill}`)
+          await tab.waitForFunction('window.__done === true', undefined, { timeout: 120_000 })
           const error = await tab.evaluate('window.__error')
           if (error) {
             console.error(`${seat}/${angle}: ${error}`)

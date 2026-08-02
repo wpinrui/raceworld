@@ -11,6 +11,7 @@ import {
 import { buildStands3D } from '../src/lib/scene3d/structures3d'
 import { SceneMaterials } from '../src/lib/scene3d/materials3d'
 import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
+import { blendSurfaces, loadStandSkin, type StandSkin } from '../src/lib/scene3d/standtex3d'
 
 declare global {
   interface Window {
@@ -18,6 +19,8 @@ declare global {
     __error?: string
     __scene?: THREE.Scene
     __standStats?: { meshes: number; triangles: number }
+    /** The scans, packed into the page by the node half as data: URIs. */
+    __standTex?: Record<string, string>
   }
 }
 
@@ -28,7 +31,9 @@ const canvas = document.getElementById('gl') as HTMLCanvasElement
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(shot ? 1 : Math.min(2, devicePixelRatio))
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFSoftShadowMap
+// PCFSoftShadowMap is deprecated in this three version and silently falls back to PCFShadowMap,
+// so it is asked for by name rather than through a console warning every reload.
+renderer.shadowMap.type = THREE.PCFShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.toneMappingExposure = 1.0
 renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -44,9 +49,14 @@ function buildEnv(): THREE.Texture {
   c.height = 256
   const g = c.getContext('2d')!
   const grad = g.createLinearGradient(0, 0, 0, 256)
-  grad.addColorStop(0, '#2E6BB8')
-  grad.addColorStop(0.44, '#A8CBEA')
-  grad.addColorStop(0.5, '#D6DCE0')
+  // Less saturated than a photograph's sky, on purpose. A real blue sky IS the ambient in shade and
+  // it really does cool everything it lights, but at a scan's own saturation it does more than cool:
+  // it drags every warm material toward grey. Measured on the timber, the light reaching a shaded
+  // face was (0.65, 0.76, 0.86) per channel, which no albedo can compensate for, since correcting it
+  // needs a red above 255.
+  grad.addColorStop(0, '#4E7FBE')
+  grad.addColorStop(0.44, '#BCD5EC')
+  grad.addColorStop(0.5, '#DEE2E2')
   // Desaturated on purpose: bounce off grass IS green, but at the grass's own saturation every
   // shaded concrete face reads as painted green rather than lit by a field.
   grad.addColorStop(0.52, '#7E8078')
@@ -77,7 +87,7 @@ sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
 scene.add(sun)
 scene.add(sun.target)
-scene.add(new THREE.HemisphereLight('#BBD7F5', '#6E6F68', 0.55))
+scene.add(new THREE.HemisphereLight('#D3E2F0', '#7A7A72', 0.42))
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(600, 600),
@@ -115,6 +125,11 @@ controls.target.set(0, 6, 8)
 
 let current: THREE.Group | null = null
 let old: THREE.Group | null = null
+/** The scanned surfaces, once they have decoded. Null until then, and null whenever the Textures
+ *  toggle is off, which is the whole point of the toggle: the flat-colour model is what every
+ *  proportion was judged against and it has to stay reachable. */
+let skin: StandSkin | null = null
+let useSkin = true
 
 /** The stand that is being replaced, stood up beside the new one at the same width and depth, from
  *  the same trackside line. Built straight out of `structures3d`, so what is on screen is the
@@ -207,6 +222,7 @@ function rebuild(): void {
   const fill = Number(pick('fill', '90')) / 100
   current = buildGrandstand(
     s, form === 'off' ? null : { form: form as SeatForm, lod }, fill > 0 ? { fill } : null,
+    useSkin ? skin : null,
   )
   scene.add(current)
   old = pick('old', '1') === '1' ? buildOld(s, 14) : null
@@ -313,8 +329,33 @@ function resize(): void {
   camera.updateProjectionMatrix()
 }
 
-function main(): void {
+async function main(): Promise<void> {
   if (shot) document.body.classList.add('shot')
+  // Loaded before the first build rather than swapped in on arrival: a stand that pops from flat
+  // grey to concrete a second after it appears is worse to judge than one that takes a second
+  // longer, and the shot path cannot screenshot a half-decoded scene at all.
+  if (params.get('tex') !== '0') {
+    try {
+      skin = await loadStandSkin('tex/', window.__standTex)
+      // The ground is a PlaneGeometry, whose UVs already run 0..1 across the whole 600 m sheet, so
+      // it tiles by REPEAT rather than by `faceUV` like every surface of the stand does.
+      const tiles = 600 / skin.grass.tileM
+      for (const map of [skin.grass.albedoMap, skin.grass.normalMap, skin.grass.roughnessMap]) {
+        map?.repeat.set(tiles, tiles)
+      }
+      const grass = new THREE.MeshStandardMaterial({
+        map: skin.grass.albedoMap,
+        normalMap: skin.grass.normalMap,
+        roughnessMap: skin.grass.roughnessMap ?? undefined,
+        roughness: 1,
+      })
+      // 240 repeats across the sheet, so the ground needs breaking up more than the stand does.
+      blendSurfaces(grass, skin.grass)
+      ground.material = grass
+    } catch (err) {
+      console.warn(`textures unavailable, falling back to flat colour: ${err}`)
+    }
+  }
   rebuild()
   resize()
   if (shot) {
@@ -334,6 +375,11 @@ function main(): void {
       rebuild()
     })
   }
+  document.getElementById('tex')?.addEventListener('click', (e) => {
+    useSkin = !useSkin
+    ;(e.currentTarget as HTMLElement).classList.toggle('on', useSkin)
+    rebuild()
+  })
   for (const btn of Array.from(document.querySelectorAll('[data-view]'))) {
     btn.addEventListener('click', () => view((btn as HTMLElement).dataset.view!))
   }
@@ -350,9 +396,7 @@ function main(): void {
   tick()
 }
 
-try {
-  main()
-} catch (err) {
+main().catch((err) => {
   window.__error = err instanceof Error ? err.message : String(err)
   window.__done = true
-}
+})

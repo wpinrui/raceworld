@@ -10,8 +10,41 @@
 
 import * as THREE from 'three'
 import { GeometrySink, v3 } from './solids3d'
-import { ROUGH, surface } from './materials3d'
+import { ROUGH, surface, type SurfaceOpts } from './materials3d'
+import { faceUV, type SurfaceDetail } from './detail3d'
 import { buildCrowd } from './standcrowd3d'
+import { blendSurfaces, type SkinSurface, type StandSkin } from './standtex3d'
+
+/** The scans in use, or nothing at all. Every builder takes one, and every one of them works with
+ *  `null`: the model has to stand up as flat colour, both because the textures load asynchronously
+ *  and because a test has no browser to decode a PNG in. */
+type Skin = StandSkin | null
+const of = (skin: Skin, part: keyof StandSkin): SkinSurface | null => (skin ? skin[part] : null)
+
+/** The colour to multiply a scanned surface by.
+ *
+ *  A material's colour MULTIPLIES its albedo map, so handing a photographed concrete the same grey
+ *  the flat-colour model used darkens it twice: a mid-grey scan times a 0.6 grey lands near black,
+ *  and then tone mapping takes what is left. Where the scan supplies the colour, the tint has to get
+ *  out of its way. `scan` exists for the surfaces that still need to read DARKER than the deck (the
+ *  soffit, the rear wall, the towers), which the flat model expressed with a darker grey and which
+ *  now has to come from a gentle multiply instead. */
+const tinted = (skin: Skin, flat: string, scan = '#FFFFFF'): string => (skin ? scan : flat)
+
+/** A scanned surface: tinted for whether the scan is supplying the colour, and with its tiling
+ *  broken by whatever technique that surface uses.
+ *
+ *  Every textured surface on the stand comes through here. Three separate decisions have to agree for
+ *  one to look right (which scan, what tint, how it is sampled) and they were about to be spelled out
+ *  at every call site. */
+function scanned(
+  skin: Skin, part: keyof StandSkin, flat: string, scan?: string, opts: SurfaceOpts = {},
+): THREE.MeshStandardMaterial {
+  const detail = of(skin, part)
+  const mat = skinned(tinted(skin, flat, scan), detail, { roughness: ROUGH.matte, ...opts })
+  if (detail) blendSurfaces(mat, detail)
+  return mat
+}
 
 /** How the seating deck meets the ground. */
 export type StandMassing =
@@ -115,20 +148,16 @@ const ROOF_SHEET = '#AAB1BA'
 const ROOF_FASCIA = '#DCE0E5'
 const MEMBRANE = '#E6E9EC'
 const RAIL_STEEL = '#C6CBD2'
+/** Timber cladding, for when there is no scan loaded. */
+const WOOD = '#8A6A48'
 const GLASS = '#8CA3B8'
 const MULLION = '#7C838D'
-/** The solid cladding of a curtain wall: the spandrel under each window and the reveal around it. */
-const SPANDREL = '#8B9099'
 /** Handrail height above the tread it stands on. */
 const RAIL_H_M = 0.98
 /** Fall protection at a tier's front edge. A metre and a bit: high enough to stop somebody going
  *  over it, low enough that the front row still sees the apex. */
 const BARRIER_H_M = 1.12
 const BARRIER_GLASS = '#BFD3DE'
-/** Trackside hoarding, cycled panel by panel. Saturated on purpose: advertising is the one thing at
- *  a circuit that IS garish, and muting it here would be the model being tasteful about something
- *  the real world is not. */
-const HOARDING = ['#D8322C', '#1D4E9C', '#E8B21E', '#F2F3F4', '#178A5B', '#20242B']
 
 /** How thick the rear parapet is, so its coping is a surface you could stand a cup on. */
 const PARAPET_THICK_M = 0.3
@@ -267,11 +296,28 @@ function strut(s: GeometrySink, a: Pt3, b: Pt3, r: number): void {
 interface Pt3 { x: number; y: number; z: number }
 const p3 = (x: number, y: number, z: number): Pt3 => ({ x, y, z })
 
-function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
+/** A placed mesh, with the grain's UVs projected onto it.
+ *
+ *  The single place UVs are set, because every geometry in this file is non-indexed and comes out of
+ *  a `GeometrySink`, which is exactly the case `faceUV` exists to handle: it projects each triangle
+ *  off whichever axis it most faces, so a tread reads from above and a riser from the front, with
+ *  seams only where a surface turns a corner. Projected in METRES, since this model is built in
+ *  metres, so a tile is the same size on a 64 m stand and a 20 m one. */
+function mesh(
+  geo: THREE.BufferGeometry, mat: THREE.Material, detail: SurfaceDetail | null = null,
+): THREE.Mesh {
+  if (detail && !geo.getAttribute('uv')) faceUV(geo, detail.tileM)
   const m = new THREE.Mesh(geo, mat)
   m.castShadow = true
   m.receiveShadow = true
   return m
+}
+
+/** A material off a scanned surface, or the flat authored colour when there is no skin loaded. */
+function skinned(
+  colour: string, detail: SurfaceDetail | null, opts: SurfaceOpts = {},
+): THREE.MeshStandardMaterial {
+  return surface(colour, { ...opts, detail })
 }
 
 /** What a single seat IS. The whole stand is one of these repeated some thousands of times, so this
@@ -447,7 +493,9 @@ export function seatPositions(
  *  Lifted a couple of centimetres and pulled the same distance toward the track, so no face of it is
  *  ever coplanar with the deck underneath: the stair and the rake share every tread height and every
  *  riser plane otherwise, and the depth buffer cannot separate them. */
-export function buildAisles(spec: GrandstandSpec, rows: readonly StandRow[]): THREE.Group {
+export function buildAisles(
+  spec: GrandstandSpec, rows: readonly StandRow[], skin: Skin = null,
+): THREE.Group {
   const group = new THREE.Group()
   const lift = 0.025
   const tiers = spec.massing === 'twoTier'
@@ -460,8 +508,12 @@ export function buildAisles(spec: GrandstandSpec, rows: readonly StandRow[]): TH
       const [ax0, ax1] = [cx - AISLE_W_M / 2, cx + AISLE_W_M / 2]
       for (const tier of tiers) {
         if (tier.length === 0) continue
-        // Two half-steps per row, walked as a section and swept across the gangway.
+        // Two half-steps per row, walked as a section and swept across the gangway. `floor` is the
+        // height of the seating deck under each of those points, which is simply that row's own
+        // tread: the gangway climbs at half the rake's pitch, so its second step of every pair
+        // stands 210 mm clear of the deck beside it.
         const prof: Pt[] = []
+        const floor: number[] = []
         for (const row of tier) {
           const [hz, hy] = [spec.runM / 2, spec.riseM / 2]
           prof.push({ z: row.z - lift, y: row.y + lift })
@@ -469,11 +521,27 @@ export function buildAisles(spec: GrandstandSpec, rows: readonly StandRow[]): TH
           prof.push({ z: row.z + hz - lift, y: row.y + hy + lift })
           prof.push({ z: row.z + spec.runM - lift, y: row.y + hy + lift })
           prof.push({ z: row.z + spec.runM - lift, y: row.y + spec.riseM + lift })
+          for (let k = 0; k < 5; k++) floor.push(row.y)
         }
         for (let i = 0; i + 1 < prof.length; i++) {
           const [a, b] = [prof[i], prof[i + 1]]
           steps.quad(v3(ax0, a.y, a.z), v3(ax1, a.y, a.z), v3(ax1, b.y, b.z), v3(ax0, b.y, b.z))
+          // The cheeks. Without them the flight is a ribbon of tread surfaces with nothing holding
+          // them up: every half-step that clears the deck reads as a plate floating in mid air, and
+          // you can see straight under it from the side.
+          steps.quad(
+            v3(ax0, a.y, a.z), v3(ax0, b.y, b.z), v3(ax0, floor[i + 1], b.z), v3(ax0, floor[i], a.z),
+          )
+          steps.quad(
+            v3(ax1, floor[i], a.z), v3(ax1, floor[i + 1], b.z), v3(ax1, b.y, b.z), v3(ax1, a.y, a.z),
+          )
         }
+        // And the riser at the foot of the flight, so it does not start as an open shell.
+        const foot = prof[0]
+        steps.quad(
+          v3(ax0, floor[0], foot.z), v3(ax1, floor[0], foot.z),
+          v3(ax1, foot.y, foot.z), v3(ax0, foot.y, foot.z),
+        )
         // Handrail down both sides, following the nosings a metre up, on posts every few steps.
         const first = tier[0]
         const last = tier[tier.length - 1]
@@ -488,8 +556,12 @@ export function buildAisles(spec: GrandstandSpec, rows: readonly StandRow[]): TH
       }
     }
   }
-  group.add(mesh(steps.build(), surface(CONCRETE, { roughness: ROUGH.matte })))
-  const rails = mesh(rail.build(), surface(RAIL_STEEL, { roughness: ROUGH.paint, metalness: 0.6 }))
+  const deck = of(skin, 'deck')
+  const steel = of(skin, 'steel')
+  group.add(mesh(steps.build(), scanned(skin, 'deck', CONCRETE), deck))
+  const rails = mesh(
+    rail.build(), skinned(RAIL_STEEL, steel, { roughness: ROUGH.paint, metalness: 0.6 }), steel,
+  )
   rails.castShadow = false
   group.add(rails)
   return group
@@ -498,9 +570,10 @@ export function buildAisles(spec: GrandstandSpec, rows: readonly StandRow[]): TH
 /** Every seat in the stand, as one instanced draw. A bench row is not instanced per seat: it is one
  *  run of plank per row, because that is what a bench is. */
 export function buildSeats(
-  spec: GrandstandSpec, rows: readonly StandRow[], form: SeatForm, lod: SeatLod,
+  spec: GrandstandSpec, rows: readonly StandRow[], form: SeatForm, lod: SeatLod, skin: Skin = null,
 ): THREE.Object3D {
-  const mat = surface(SEAT_COLOUR, { roughness: ROUGH.paint })
+  const grain = of(skin, 'seat')
+  const mat = skinned(SEAT_COLOUR, grain, { roughness: ROUGH.paint })
   if (form === 'bench') {
     const s = new GeometrySink()
     for (const row of rows) {
@@ -510,12 +583,14 @@ export function buildSeats(
       prism(s, rect(zBack - 0.04, row.y + SEAT_H_M + 0.26, zBack - 0.1, row.y + SEAT_H_M + 0.44),
         -spec.widthM / 2, spec.widthM / 2)
     }
-    return mesh(s.build(), mat)
+    return mesh(s.build(), mat, grain)
   }
   const at = seatPositions(spec, rows)
   const m = new THREE.Matrix4()
   const bank = (tier: Exclude<SeatLod, 'auto'>): THREE.InstancedMesh => {
-    const inst = new THREE.InstancedMesh(seatGeometry(form, tier), mat, at.length)
+    const geo = seatGeometry(form, tier)
+    if (grain) faceUV(geo, grain.tileM)
+    const inst = new THREE.InstancedMesh(geo, mat, at.length)
     inst.castShadow = true
     inst.receiveShadow = true
     at.forEach((p, i) => {
@@ -541,7 +616,9 @@ export function buildSeats(
  *
  *  The glass is pulled INTO the face rather than laid on it, with the mullions standing proud, so the
  *  band reads as a window with a frame rather than as a decal of one. */
-function buildBand(spec: GrandstandSpec, band: { z: number; y0: number; y1: number }): THREE.Group {
+function buildBand(
+  spec: GrandstandSpec, band: { z: number; y0: number; y1: number }, skin: Skin = null,
+): THREE.Group {
   const group = new THREE.Group()
   const x0 = -spec.widthM / 2
   const x1 = spec.widthM / 2
@@ -603,8 +680,19 @@ function buildBand(spec: GrandstandSpec, band: { z: number; y0: number; y1: numb
     }
   }
 
-  group.add(mesh(piers.build(), surface(CONCRETE, { roughness: ROUGH.matte })))
-  group.add(mesh(returns.build(), surface(SPANDREL, { roughness: ROUGH.paint })))
+  const wall = of(skin, 'wall')
+  const steel = of(skin, 'steel')
+  group.add(mesh(piers.build(), scanned(skin, 'wall', CONCRETE), wall))
+  // The SAME material as the piers, not a variant of it. The seam here was never the join, it was the
+  // tint: one scan at two brightnesses meeting at a hard edge reads as a texture error, because the
+  // staining runs up to the edge and stops. Giving the spandrel its own material was the wrong fix
+  // for that, and left a blank panel beside textured concrete.
+  //
+  // Identical material makes the wall continuous, and it genuinely is: `faceUV` projects any face
+  // whose normal is mostly +/-z off the SAME x-y axes, so the piers standing proud and the spandrel
+  // set behind them share one unbroken UV field despite sitting on different planes. The concrete
+  // flows across the join and the window openings read as holes cut in one wall.
+  group.add(mesh(returns.build(), scanned(skin, 'wall', CONCRETE), wall))
   // Sky-toned and lightly reflective, NOT a dark mirror. Glazing seen from outside in daylight is
   // mostly the sky bounced back at you, so it sits within a shade or two of the concrete around it.
   // Rendering it dark is technically what a window into an unlit room does, and it turned the band
@@ -612,7 +700,9 @@ function buildBand(spec: GrandstandSpec, band: { z: number; y0: number; y1: numb
   const pane = mesh(glass.build(), surface(GLASS, { roughness: 0.16, metalness: 0.35 }))
   pane.castShadow = false
   group.add(pane)
-  group.add(mesh(frame.build(), surface(MULLION, { roughness: ROUGH.paint, metalness: 0.5 })))
+  group.add(mesh(
+    frame.build(), skinned(MULLION, steel, { roughness: ROUGH.paint, metalness: 0.5 }), steel,
+  ))
   return group
 }
 
@@ -626,7 +716,7 @@ function buildBand(spec: GrandstandSpec, band: { z: number; y0: number; y1: numb
  *  Glass on a steel top rail rather than a solid wall, because the person it protects paid to see
  *  the circuit and a metre of concrete at chest height is what they would be looking at instead. */
 function buildBarriers(
-  spec: GrandstandSpec, band: { z: number; y0: number; y1: number } | null,
+  spec: GrandstandSpec, band: { z: number; y0: number; y1: number } | null, skin: Skin = null,
 ): THREE.Group {
   const group = new THREE.Group()
   const x0 = -spec.widthM / 2
@@ -652,46 +742,45 @@ function buildBarriers(
   }))
   pane.castShadow = false
   group.add(pane)
-  const rails = mesh(steel.build(), surface(RAIL_STEEL, { roughness: ROUGH.paint, metalness: 0.6 }))
+  const grain = of(skin, 'steel')
+  const rails = mesh(
+    steel.build(), skinned(RAIL_STEEL, grain, { roughness: ROUGH.paint, metalness: 0.6 }), grain,
+  )
   rails.castShadow = false
   group.add(rails)
   return group
 }
 
-/** Advertising hoarding along the trackside face, panel by panel.
+/** Timber cladding along the trackside face, panel by panel.
  *
  *  This is the one surface of a grandstand that a car goes past at two hundred, and left as bare
- *  concrete it is the flattest thing on the circuit. Boards rather than one painted strip, because
- *  the panel joints are what give the frontage a rhythm as you sweep along it, and because a board is
- *  a place a sponsor's decal can be dropped later without touching geometry.
+ *  concrete it is the flattest thing on the circuit. Panels rather than one continuous board, because
+ *  the joints are what give the frontage a rhythm as you sweep along it.
  *
- *  Held off the wall on its own plane with a shadow gap top and bottom, which is how they are hung. */
-function buildFrontage(spec: GrandstandSpec): THREE.Group {
+ *  Held off the wall on its own plane with a shadow gap top and bottom, which is how cladding hangs.
+ *  Same timber as the stair towers, so the two read as one decision about the building rather than as
+ *  two unrelated finishes. */
+function buildFrontage(spec: GrandstandSpec, skin: Skin): THREE.Group {
   const group = new THREE.Group()
   const y0 = 0.14
   const y1 = spec.frontWallM - 0.12
   const z = -0.07
   const n = Math.max(2, Math.round(spec.widthM / 3))
   const w = spec.widthM / n
-  const boards = new Map<string, GeometrySink>()
+  const boards = new GeometrySink()
   for (let i = 0; i < n; i++) {
-    const colour = HOARDING[i % HOARDING.length]
-    let sink = boards.get(colour)
-    if (!sink) {
-      sink = new GeometrySink()
-      boards.set(colour, sink)
-    }
     const [bx0, bx1] = [-spec.widthM / 2 + i * w + 0.04, -spec.widthM / 2 + (i + 1) * w - 0.04]
-    sink.quad(v3(bx0, y0, z), v3(bx1, y0, z), v3(bx1, y1, z), v3(bx0, y1, z))
-    // The board's own edge, so it reads as a panel standing off a wall rather than as paint on one.
-    sink.quad(v3(bx0, y1, z), v3(bx1, y1, z), v3(bx1, y1, 0), v3(bx0, y1, 0))
-    sink.quad(v3(bx1, y0, z), v3(bx0, y0, z), v3(bx0, y0, 0), v3(bx1, y0, 0))
+    boards.quad(v3(bx0, y0, z), v3(bx1, y0, z), v3(bx1, y1, z), v3(bx0, y1, z))
+    // The panel's own edge, so it reads as cladding standing off a wall rather than as paint on one.
+    boards.quad(v3(bx0, y1, z), v3(bx1, y1, z), v3(bx1, y1, 0), v3(bx0, y1, 0))
+    boards.quad(v3(bx1, y0, z), v3(bx0, y0, z), v3(bx0, y0, 0), v3(bx1, y0, 0))
   }
-  for (const [colour, sink] of boards) {
-    const board = mesh(sink.build(), surface(colour, { roughness: ROUGH.paint }))
-    board.castShadow = false
-    group.add(board)
-  }
+  const board = mesh(
+    boards.build(), scanned(skin, 'wood', WOOD, undefined, { roughness: ROUGH.matte }),
+    of(skin, 'wood'),
+  )
+  board.castShadow = false
+  group.add(board)
   return group
 }
 
@@ -717,20 +806,25 @@ function boxGeometry(
  *
  *  Glazed in a vertical slot up the outer face, which is the stair landing's window and the one thing
  *  that gives the back of a stand a scale you can read a storey off. */
-function buildTowers(spec: GrandstandSpec, pts: readonly Pt[]): THREE.Group {
+function buildTowers(spec: GrandstandSpec, pts: readonly Pt[], skin: Skin = null): THREE.Group {
   const group = new THREE.Group()
   const back = pts[pts.length - 1]
   const walkY = back.y - spec.parapetM
   const h = walkY + 1.4
   const d = 5.2
   const w = 4.2
-  const concrete = surface(CONCRETE_DARK, { roughness: ROUGH.matte })
+  const wall = of(skin, 'wall')
+  const steel = of(skin, 'steel')
+  // Timber-clad box with concrete floor bands showing through the glazed slot: the tower is the one
+  // piece of a stand that is a BUILDING rather than a structure, and cladding is what says so.
+  const shell = scanned(skin, 'wood', WOOD, undefined, { roughness: ROUGH.matte })
+  const band = scanned(skin, 'wall', CONCRETE)
   const glassMat = surface(GLASS, { roughness: ROUGH.gloss, metalness: 0.15 })
   for (const side of [-1, 1]) {
     const xOuter = side * (spec.widthM / 2 + w)
     const xInner = side * spec.widthM / 2
     const [x0, x1] = side < 0 ? [xOuter, xInner] : [xInner, xOuter]
-    group.add(mesh(boxGeometry(x0, x1, 0, h, back.z - d, back.z), concrete))
+    group.add(mesh(boxGeometry(x0, x1, 0, h, back.z - d, back.z), shell, of(skin, 'wood')))
     // The stair window: a slot up the outer face, floated clear of it.
     const gx = xOuter - side * 0.06
     const slot = new GeometrySink()
@@ -746,7 +840,7 @@ function buildTowers(spec: GrandstandSpec, pts: readonly Pt[]): THREE.Group {
     for (let y = 3.2; y < h - 1.4; y += 3.2) {
       strut(bands, p3(gx, y, back.z - d + 1.1), p3(gx, y, back.z - 1.1), 0.11)
     }
-    group.add(mesh(bands.build(), surface(MULLION, { roughness: ROUGH.paint, metalness: 0.5 })))
+    group.add(mesh(bands.build(), band, wall))
   }
   return group
 }
@@ -788,7 +882,9 @@ const lifted = (pts: readonly Pt[], dy: number): Pt[] => pts.map((p) => ({ z: p.
 
 /** Profiled metal decking: matte, barely metallic. Reflective enough to be metal and it mirrors the
  *  sky, at which point a roof deck reads as a pane of blue glass from anywhere above it. */
-const roofDeck = () => surface(ROOF_SHEET, { roughness: ROUGH.matte, metalness: 0.12 })
+const roofDeck = (grain: SurfaceDetail | null) => skinned(ROOF_SHEET, grain, {
+  roughness: ROUGH.matte, metalness: 0.12,
+})
 
 /** Bay lines across the width. Steel comes in bays, and everything structural lands on one. */
 function bayXs(widthM: number, spacingM: number): number[] {
@@ -797,13 +893,16 @@ function bayXs(widthM: number, spacingM: number): number[] {
 }
 
 /** The roof: masts, trusses and covering, in the style asked for. */
-function buildRoof(spec: GrandstandSpec, pts: readonly Pt[]): THREE.Group {
+function buildRoof(spec: GrandstandSpec, pts: readonly Pt[], skin: Skin = null): THREE.Group {
   const group = new THREE.Group()
   if (spec.roof === 'none') return group
   const back = pts[pts.length - 1]
   const x0 = -spec.widthM / 2
   const x1 = spec.widthM / 2
-  const steelMat = surface(STEEL, { roughness: ROUGH.paint, metalness: 0.55 })
+  const grain = of(skin, 'steel')
+  const deckGrain = of(skin, 'roof')
+  const skinMat = of(skin, 'membrane')
+  const steelMat = skinned(STEEL, grain, { roughness: ROUGH.paint, metalness: 0.55 })
   const steel = new GeometrySink()
   const xs = bayXs(spec.widthM, 8)
 
@@ -836,7 +935,7 @@ function buildRoof(spec: GrandstandSpec, pts: readonly Pt[]): THREE.Group {
     strut(steel, p3(x0, yEaveR, back.z), p3(x1, yEaveR, back.z), 0.2)
     group.add(mesh(sheet(lifted([
       { z: zF - 1.2, y: yEaveF - 0.5 }, { z: zRidge, y: yRidge }, { z: back.z + 1.0, y: yEaveR - 0.4 },
-    ], 0.42), x0, x1, 0.35), roofDeck()))
+    ], 0.42), x0, x1, 0.35), roofDeck(deckGrain), deckGrain))
   } else {
     // Both remaining styles hang everything off a rear mast line and reach forward over the crowd,
     // which is the whole point of them: no steel in front of a seat.
@@ -875,14 +974,16 @@ function buildRoof(spec: GrandstandSpec, pts: readonly Pt[]): THREE.Group {
       }
       group.add(mesh(sheet(lifted(
         [{ z: zLead, y: yLead }, { z: zMast + 0.9, y: yMast }], 0.42,
-      ), x0, x1, 0.3), roofDeck()))
+      ), x0, x1, 0.3), roofDeck(deckGrain), deckGrain))
       // The fascia band along the leading edge: the deep painted lip a stand carries its sponsor on.
       const fascia = new GeometrySink()
       fascia.quad(
         v3(x0, yLead - 0.3, zLead), v3(x1, yLead - 0.3, zLead),
         v3(x1, yLead - 1.5, zLead), v3(x0, yLead - 1.5, zLead),
       )
-      group.add(mesh(fascia.build(), surface(ROOF_FASCIA, { roughness: ROUGH.paint })))
+      group.add(mesh(
+        fascia.build(), skinned(ROOF_FASCIA, grain, { roughness: ROUGH.paint }), grain,
+      ))
     } else {
       // A curved rib, sagging forward off the mast head to a front cable: sampled as a quadratic
       // through a control point pulled high and back, so the arc is taut near the mast and falls
@@ -907,36 +1008,38 @@ function buildRoof(spec: GrandstandSpec, pts: readonly Pt[]): THREE.Group {
       }
       const edge = arc[arc.length - 1]
       strut(steel, p3(x0, edge.y, edge.z), p3(x1, edge.y, edge.z), 0.16)
-      group.add(mesh(sheet(lifted(arc, 0.19), x0, x1, 0.12), surface(MEMBRANE, {
+      group.add(mesh(sheet(lifted(arc, 0.19), x0, x1, 0.12), skinned(MEMBRANE, skinMat, {
         roughness: ROUGH.chalk, specular: 0.4,
-      })))
+      }), skinMat))
     }
   }
-  if (!steel.empty) group.add(mesh(steel.build(), steelMat))
+  if (!steel.empty) group.add(mesh(steel.build(), steelMat, grain))
   return group
 }
 
 /** The bowl: seating deck, ends, and whatever holds it up. No seats, no roof, no crowd yet. */
 export function buildGrandstand(
   spec: GrandstandSpec, seats: { form: SeatForm; lod: SeatLod } | null = null,
-  crowd: { fill: number; seed?: number } | null = null,
+  crowd: { fill: number; seed?: number } | null = null, skin: Skin = null,
 ): THREE.Group {
   const group = new THREE.Group()
   const { pts, rows, band } = standSection(spec)
   const x0 = -spec.widthM / 2
   const x1 = spec.widthM / 2
-  const deck = surface(CONCRETE, { roughness: ROUGH.matte })
-  const under = surface(CONCRETE_DARK, { roughness: ROUGH.matte })
+  const deckGrain = of(skin, 'deck')
+  const wallGrain = of(skin, 'wall')
+  const deck = scanned(skin, 'deck', CONCRETE)
+  const under = scanned(skin, 'wall', CONCRETE_DARK, '#D6D9DD')
   const back = pts[pts.length - 1]
 
-  group.add(mesh(sweep(pts, x0, x1), deck))
+  group.add(mesh(sweep(pts, x0, x1), deck, deckGrain))
 
   if (spec.massing === 'columns') {
     const thick = 0.55
     const low = soffit(pts, thick)
     // The slab is a closed solid: top sheet, soffit, and a rim around both ends, so the deck reads
     // as a thing with a thickness when the camera drops under it.
-    group.add(mesh(sweep(low, x0, x1), under))
+    group.add(mesh(sweep(low, x0, x1), under, wallGrain))
     for (const [x, flip] of [[x0, true], [x1, false]] as const) {
       const s = new GeometrySink()
       for (let i = 0; i + 1 < pts.length; i++) {
@@ -944,19 +1047,19 @@ export function buildGrandstand(
         if (flip) s.quad(v3(x, a.y, a.z), v3(x, d.y, d.z), v3(x, c.y, c.z), v3(x, b.y, b.z))
         else s.quad(v3(x, a.y, a.z), v3(x, b.y, b.z), v3(x, c.y, c.z), v3(x, d.y, d.z))
       }
-      group.add(mesh(s.build(), under))
+      group.add(mesh(s.build(), under, wallGrain))
     }
     // A column grid on the bays: one row of legs at the back where the deck is highest, one
     // mid-span. The front sits low enough to land on a plain plinth wall.
     const colW = 0.7
     const bays = Math.max(2, Math.round(spec.widthM / 9))
     const legZ = [back.z * 0.45, back.z * 0.88]
-    const colMat = surface(CONCRETE_DARK, { roughness: ROUGH.matte })
+    const colMat = scanned(skin, 'wall', CONCRETE_DARK, '#D6D9DD')
     for (let i = 0; i <= bays; i++) {
       const x = x0 + (spec.widthM * i) / bays
       for (const z of legZ) {
         const yTop = spec.frontWallM + (z / back.z) * (back.y - spec.frontWallM) - thick
-        const col = mesh(columnGeometry(colW, yTop, colW), colMat)
+        const col = mesh(columnGeometry(colW, yTop, colW), colMat, wallGrain)
         col.position.set(x, 0, z)
         group.add(col)
       }
@@ -964,26 +1067,26 @@ export function buildGrandstand(
     // The front edge still needs closing to the ground, or the crowd's feet float over the barrier.
     const plinth = new GeometrySink()
     plinth.quad(v3(x0, 0, 0), v3(x1, 0, 0), v3(x1, spec.frontWallM, 0), v3(x0, spec.frontWallM, 0))
-    group.add(mesh(plinth.build(), deck))
+    group.add(mesh(plinth.build(), deck, deckGrain))
   } else {
-    group.add(mesh(endWall(pts, x0, true), deck))
-    group.add(mesh(endWall(pts, x1, false), deck))
+    group.add(mesh(endWall(pts, x0, true), deck, wallGrain))
+    group.add(mesh(endWall(pts, x1, false), deck, wallGrain))
     const rear = new GeometrySink()
     rear.quad(v3(x0, 0, back.z), v3(x1, 0, back.z), v3(x1, back.y, back.z), v3(x0, back.y, back.z))
-    group.add(mesh(rear.build(), under))
+    group.add(mesh(rear.build(), under, wallGrain))
     const front = new GeometrySink()
     front.quad(v3(x0, 0, 0), v3(x1, 0, 0), v3(x1, spec.frontWallM, 0), v3(x0, spec.frontWallM, 0))
-    group.add(mesh(front.build(), deck))
+    group.add(mesh(front.build(), deck, wallGrain))
   }
-  group.add(buildAisles(spec, rows))
-  group.add(buildFrontage(spec))
-  group.add(buildBarriers(spec, band))
-  group.add(buildTowers(spec, pts))
-  if (band) group.add(buildBand(spec, band))
-  if (seats) group.add(buildSeats(spec, rows, seats.form, seats.lod))
+  group.add(buildAisles(spec, rows, skin))
+  group.add(buildFrontage(spec, skin))
+  group.add(buildBarriers(spec, band, skin))
+  group.add(buildTowers(spec, pts, skin))
+  if (band) group.add(buildBand(spec, band, skin))
+  if (seats) group.add(buildSeats(spec, rows, seats.form, seats.lod, skin))
   if (crowd) {
     group.add(buildCrowd(seatPositions(spec, rows), crowd.fill, crowd.seed ?? 1))
   }
-  group.add(buildRoof(spec, pts))
+  group.add(buildRoof(spec, pts, skin))
   return group
 }
