@@ -8,7 +8,6 @@ import type { PitZone } from '@/lib/ui/pit-zone'
 import { ribbonGeometry } from './road3d'
 import { GeometrySink, ringSolidGeometry, v3, wallStripGeometry } from './solids3d'
 import type { SceneMaterials } from './materials3d'
-import { FLAT_GROUND, drape, refine, type Ground } from './terrain3d'
 
 const DOOR = '#161A21'
 const LINTEL = '#9AA3B2'
@@ -25,27 +24,10 @@ export function buildPitComplex3D(
   zone: PitZone, u: (m: number) => number, materials: SceneMaterials,
   /** A team's colour bands the lintel over its own garage, as the 2D complex paints it. */
   garageColors?: (i: number) => string | undefined,
-  /** The paddock under it. Absent, the world is flat. */
-  ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
-  // The complex is three hundred metres of building along a lane that grades with the straight it
-  // parallels, so it is the one structure here that gets neither a level footing nor a level roof.
-  // Its WALLS follow the ground and its storeys ride at a constant height above it, which is what a
-  // real pit building does on a slope; dropping it on one pad would bury an end or float one.
-  //
-  // The datum is the paddock at the lane's own midpoint, so every part of the complex that is NOT
-  // built off a ring (the doors, the lintels, the roof furniture) has one height to agree on and the
-  // roof still reads as one straight line down the pit straight.
-  const level = (pts: readonly { x: number; y: number }[]) => {
-    if (pts.length === 0) return 0
-    let total = 0
-    for (const p of pts) total += ground(p.x, p.y)
-    return total / pts.length
-  }
-  const datum = level(zone.buildingPts)
-  const mid = datum + u(GARAGE_H_M)
-  const top = datum + u(PIT_BUILDING_H_M)
+  const mid = u(GARAGE_H_M)
+  const top = u(PIT_BUILDING_H_M)
   const solid = (geo: THREE.BufferGeometry, colour: string) => {
     const mesh = new THREE.Mesh(geo, materials.get(colour))
     mesh.castShadow = true
@@ -56,8 +38,7 @@ export function buildPitComplex3D(
 
   // Ground floor: walls to the garage lintel, capped so the recess ceiling reads as the upper
   // storey's underside. Then the storey above, on the overhanging outline, capped as the roof.
-  // Only the ground floor's footing follows the land; everything above it is level off the datum.
-  solid(ringSolidGeometry(zone.buildingPts, ground, mid, true), PIT_WHITE)
+  solid(ringSolidGeometry(zone.buildingPts, 0, mid, true), PIT_WHITE)
   solid(ringSolidGeometry(zone.upperPts, mid, top, true), PIT_WHITE)
 
   // Each garage door on the back wall of its bay, floated a hair off it: shutter, then lintel band
@@ -73,8 +54,7 @@ export function buildPitComplex3D(
     const off = { x: (inX / inL) * 0.05, y: (inY / inL) * 0.05 }
     const a = { x: r[3].x + off.x, y: r[3].y + off.y }
     const b = { x: r[2].x + off.x, y: r[2].y + off.y }
-    const sill = (ground(a.x, a.y) + ground(b.x, b.y)) / 2
-    doors.quad(v3(a.x, sill, a.y), v3(b.x, sill, b.y), v3(b.x, sill + doorH, b.y), v3(a.x, sill + doorH, a.y))
+    doors.quad(v3(a.x, 0, a.y), v3(b.x, 0, b.y), v3(b.x, doorH, b.y), v3(a.x, doorH, a.y))
     const colour = garageColors?.(i) ?? LINTEL
     let sink = lintels.get(colour)
     if (!sink) {
@@ -82,8 +62,8 @@ export function buildPitComplex3D(
       lintels.set(colour, sink)
     }
     sink.quad(
-      v3(a.x, sill + doorH * 0.82, a.y), v3(b.x, sill + doorH * 0.82, b.y),
-      v3(b.x, sill + doorH, b.y), v3(a.x, sill + doorH, a.y),
+      v3(a.x, doorH * 0.82, a.y), v3(b.x, doorH * 0.82, b.y),
+      v3(b.x, doorH, b.y), v3(a.x, doorH, a.y),
     )
   })
   if (!doors.empty) solid(doors.build(), DOOR).castShadow = false
@@ -117,7 +97,6 @@ export function buildPitComplex3D(
  *  the ground stack's lane-paint lift with its depth bias. */
 export function buildPitPaint3D(
   zone: PitZone, u: (m: number) => number, y: number, materials: SceneMaterials, layer: number,
-  ground: Ground = FLAT_GROUND, cell = Infinity, normalStep = 1,
 ): THREE.Group {
   const group = new THREE.Group()
   const lay = (
@@ -125,9 +104,10 @@ export function buildPitPaint3D(
     lift: number, caps: boolean, sub: number,
   ) => {
     if (pts.length < 2) return
-    const geometry = ribbonGeometry(refine(pts, cell), { halfW, y: y + lift, roundCaps: caps })
-    drape(geometry, ground, normalStep)
-    const mesh = new THREE.Mesh(geometry, materials.get(colour, { layer: layer + sub }))
+    const mesh = new THREE.Mesh(
+      ribbonGeometry(pts, { halfW, y: y + lift, roundCaps: caps }),
+      materials.get(colour, { layer: layer + sub }),
+    )
     mesh.receiveShadow = true
     group.add(mesh)
   }

@@ -70,10 +70,6 @@ export interface LiveFrame {
  *  camera in from screen-south of the target, orbiting it. */
 export function applyOrbitCam(
   camera: THREE.PerspectiveCamera, cam: OrbitCam, size: { w: number; h: number }, ppu: number,
-  /** How high the ground is under the orbit target. The camera orbits the road, and on a circuit
-   *  that climbs a hill the road is not at zero: leave this out and the target sits underground on
-   *  every rise, which tips the whole frame off the circuit it is supposed to be following. */
-  groundY = 0,
 ): LiveFrame {
   const scale = cam.z * ppu
   const halfW = size.w / 2 / scale
@@ -93,11 +89,9 @@ export function applyOrbitCam(
   // the NEAR plane, and going from 60 distances to two thousand moves `1/near - 1/far` by three
   // hundredths of a percent.
   camera.far = distance * 60 / Math.max(0.03, Math.cos(cam.pitch) ** 2)
-  camera.position.set(
-    cam.tx + lean * sin, groundY + Math.cos(cam.pitch) * distance, cam.tz + lean * cos,
-  )
+  camera.position.set(cam.tx + lean * sin, Math.cos(cam.pitch) * distance, cam.tz + lean * cos)
   camera.up.set(-sin, 0, -cos)
-  camera.lookAt(cam.tx, groundY, cam.tz)
+  camera.lookAt(cam.tx, 0, cam.tz)
   camera.updateProjectionMatrix()
   camera.updateMatrixWorld(true)
   // The ground rect in shot, generously: pitching stretches the far half of the view across more
@@ -106,59 +100,17 @@ export function applyOrbitCam(
   return { cx: cam.tx, cz: cam.tz, halfW: halfW * reach, halfH: halfH * reach }
 }
 
-/** Steps the terrain march takes before giving up. Sixty covers the far plane at any pitch the map
- *  allows without ever being a cost worth thinking about: this runs on a click and a wheel notch. */
-const MARCH_STEPS = 60
-
-/** Where a viewport pixel's ray meets the ground, for zoom-at-pointer and any picking to come.
- *
- *  `ground` turns this from a ray-plane intersection into a ray-TERRAIN one. Without it, zooming at
- *  the pointer on a hillside walks the view toward where the hill would be if it were flat, which at
- *  a low camera on a climbing circuit is tens of metres off the thing under the cursor.
- *
- *  Marched rather than solved: the surface is a kernel over the circuit's profile blended into a
- *  fractal, so there is nothing to solve against. A coarse walk to the first step that ends up under
- *  the ground, then a few bisections to land on it. */
+/** Where a viewport pixel's ray meets the ground, for zoom-at-pointer and any picking to come. */
 export function groundPoint(
   camera: THREE.PerspectiveCamera, size: { w: number; h: number }, px: number, py: number,
-  ground?: (x: number, y: number) => number,
 ): { x: number; z: number } | null {
   const ndc = new THREE.Vector3((px / size.w) * 2 - 1, 1 - (py / size.h) * 2, 0.5)
   ndc.unproject(camera)
   const dir = ndc.sub(camera.position).normalize()
   if (Math.abs(dir.y) < 1e-9) return null
-  const flat = -camera.position.y / dir.y
-  if (!ground) {
-    if (flat <= 0) return null
-    return { x: camera.position.x + dir.x * flat, z: camera.position.z + dir.z * flat }
-  }
-  const at = (t: number) => ({
-    x: camera.position.x + dir.x * t,
-    y: camera.position.y + dir.y * t,
-    z: camera.position.z + dir.z * t,
-  })
-  // March out to twice the distance the flat plane would have been, which bounds any hill the
-  // corridor can raise between the eye and it; a downhill ray still finds its ground inside that.
-  const reach = flat > 0 ? flat * 2 : camera.far
-  let previous = 0
-  for (let i = 1; i <= MARCH_STEPS; i++) {
-    const t = (reach * i) / MARCH_STEPS
-    const p = at(t)
-    if (p.y <= ground(p.x, p.z)) {
-      let lo = previous
-      let hi = t
-      for (let k = 0; k < 16; k++) {
-        const mid = (lo + hi) / 2
-        const q = at(mid)
-        if (q.y <= ground(q.x, q.z)) hi = mid
-        else lo = mid
-      }
-      const hit = at(hi)
-      return { x: hit.x, z: hit.z }
-    }
-    previous = t
-  }
-  return null
+  const t = -camera.position.y / dir.y
+  if (t <= 0) return null
+  return { x: camera.position.x + dir.x * t, z: camera.position.z + dir.z * t }
 }
 
 /** Drive an orthographic camera from the map's own transform. The 2D pipeline is

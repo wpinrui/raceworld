@@ -13,8 +13,9 @@ import { closestPointOnPolyline, makeOccupancy, type Obb } from './geom'
 import { makeSceneryFrame, STEP } from './scenery-frame'
 import { blobPath, buildingParts, pickArchetype, type SceneryPart } from './scenery-shapes'
 import { biomeOf, type Biome } from './biomes'
-import { bandsFor, makeHeightField, type TerrainBand } from './terrain-field'
-import { buildElevation, type Elevation } from './elevation'
+import {
+  bandsFor, gradeToTrack, makeHeightField, type TerrainBand,
+} from './terrain-field'
 import {
   FENCE_OFFSET_M, buildFences, buildFields, buildMarshalPosts,
   type SceneryFence, type SceneryField, type SceneryMarshal,
@@ -72,10 +73,6 @@ export interface SceneryKerb {
 export interface SceneryDensity { trees?: number; buildings?: number }
 
 export interface Scenery {
-  /** How high the ground is anywhere in this world. The circuit rides its own smoothed profile and
-   *  the land is graded to meet it; everything drawn on, beside or above the ground samples this and
-   *  nothing else, so nothing can disagree about where the surface is. */
-  elevation: Elevation
   /** Terraced relief bands, lowest first — drawn under everything as the ground itself. */
   bands: TerrainBand[]
   /** Ground plane colour, taken from the biome ramp so the bands read as steps out of it. */
@@ -115,22 +112,6 @@ const TREE_BASE_R_M = 5.0
 const TREE_BASE_H_M = 13
 /** Trees per unit of biome density. */
 export const TREE_TARGET_BASE = 520
-
-/** How far either side of the circuit the ground is dead level across, in metres: the 13.3 m tarmac
- *  and the kerbs at its edge (7 m out, 1.3 m wide), with margin. Everything inside this is exactly
- *  the circuit's profile, which is what makes the racing surface flat across its width. */
-const TRACK_SHELF_M = 10
-/** The same for the pit lane, wide enough to hold the lane, its working apron and the garage bays
- *  on one level cross-section. A paddock that undulates is a paddock the garages sink into. */
-const PIT_SHELF_M = 30
-/** How far out the graded corridor reaches before the land is simply itself again, in metres. This
- *  is the length of the cutting or embankment: the whole difference between the circuit's profile
- *  and the raw land is spent over it, so shortening it steepens every bank on every circuit.
- *
- *  Exported because the ground sheet has to carry its fine grid at least this far past the circuit:
- *  all of the surface's curvature is inside this band, and a coarse cell across it is a cutting
- *  rounded off into a slope. */
-export const CORRIDOR_M = 140
 
 /** FNV-1a over a string — the noise lattice needs a numeric seed, seededRng takes a string. */
 function hashSeed(str: string): number {
@@ -187,30 +168,18 @@ export function buildScenery(
   const rawField = makeHeightField(hashSeed(`terrain:${circuitId}`), {
     metresPerUnit, featureM: bio.featureM, reliefM: bio.reliefM,
   })
-  // The world's height, and the only elevation anything reads. The circuit rides its own smoothed
-  // profile and the land grades to meet it, so the track sits in a corridor of cuttings and
-  // embankments rather than on a shelf laid over the noise.
-  const elevation = buildElevation({
-    field: rawField,
-    centreline,
-    pitPath: pit.fastPts,
-    metresPerUnit,
-    trackShelfM: TRACK_SHELF_M,
-    pitShelfM: PIT_SHELF_M,
-    corridorM: CORRIDOR_M,
-  })
+  // Grade the land to the circuit's own smoothed profile, so the track sits in a corridor of
+  // cuttings and embankments rather than on a shelf laid over the noise.
+  const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
   // Off the flag, NONE. The soft wash that used to stand here was a 2D device: a top-down
   // orthographic view has no light, so the only way to say "this ground is higher" was to paint it
   // a lighter green, and the contour between two levels was the edge of that paint. In a lit scene
   // that device cannot work. The shading says the ground is flat because it IS flat, the colour
   // says it is not, and at a low camera the colour edge stops reading as relief and reads as a
   // seam: a dead-straight line across the grass, eight grey levels deep, sweeping over the field
-  // as the camera tilts (`scripts/scene3d-grass-band.ts`). The ground has real height now, so this
-  // is kept only to compare the two looks, and it keeps reading the RAW field: its contour levels
-  // are cut at fixed fractions of `reliefM`, which the graded elevation no longer spans (that one
-  // is re-zeroed on the circuit and runs either side of nothing). Feeding it the new field would
-  // silently lose every band above the middle.
-  const bands = terrainDetail ? bandsFor(rawField, farBox, bio.ramp, { reliefM: bio.reliefM }) : []
+  // as the camera tilts (`scripts/scene3d-grass-band.ts`). Relief in a lit renderer has to be
+  // geometry or nothing.
+  const bands = terrainDetail ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM }) : []
 
   // ── Water bodies ──
   // Lakes only: the relief bands carry ground tone now, so the old translucent tint patches just
@@ -550,7 +519,7 @@ export function buildScenery(
   }
 
   return {
-    elevation, bands, base: bio.base, fields, fences, marshals,
+    bands, base: bio.base, fields, fences, marshals,
     terrain, runoffs, kerbs, stands, buildings, trees,
   }
 }

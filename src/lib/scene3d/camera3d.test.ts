@@ -135,38 +135,6 @@ describe('applyLiveCam', () => {
     expect(dUp).toBeGreaterThan(dDown)
   })
 
-  it('orbits the ground under the target, not the plane at zero', () => {
-    // A circuit that climbs puts its road well above the datum. The camera has to rise with it or
-    // the target sits underground and the whole frame tips off the thing it is following.
-    const persp = new THREE.PerspectiveCamera()
-    const cam: OrbitCam = { tx: 120, tz: 300, rot: 0, pitch: 0.6, z: 4 }
-    const size = { w: 1000, h: 700 }
-    const hill = 25
-    applyOrbitCam(persp, cam, size, 2)
-    const flatY = persp.position.y
-    applyOrbitCam(persp, cam, size, 2, hill)
-    expect(persp.position.y).toBeCloseTo(flatY + hill, 6)
-    // And it still looks AT the target, which is now on the hill.
-    const centre = groundPoint(persp, size, 500, 350, () => hill)!
-    expect(centre.x).toBeCloseTo(120, 3)
-    expect(centre.z).toBeCloseTo(300, 3)
-  })
-
-  it('picks the point on the TERRAIN under a pixel, not where a flat plane would put it', () => {
-    const persp = new THREE.PerspectiveCamera()
-    const cam: OrbitCam = { tx: 0, tz: 0, rot: 0, pitch: 1.2, z: 4 }
-    const size = { w: 1000, h: 700 }
-    applyOrbitCam(persp, cam, size, 2)
-    // A ridge rising away from the camera: a ray aimed up the frame meets it EARLIER than it would
-    // meet the plane at zero, which is the whole error a flat pick makes on a hillside.
-    const ridge = (_x: number, z: number) => Math.max(0, -z) * 0.3
-    const flat = groundPoint(persp, size, 500, 200)!
-    const hit = groundPoint(persp, size, 500, 200, ridge)!
-    expect(Math.hypot(hit.x, hit.z)).toBeLessThan(Math.hypot(flat.x, flat.z))
-    // And it lands ON the surface: marching it again from the answer changes nothing.
-    expect(ridge(hit.x, hit.z)).toBeGreaterThan(0)
-  })
-
   it('reports the framed world rect for the shadow refit', () => {
     const camera = new THREE.OrthographicCamera()
     const frame = applyLiveCam(

@@ -16,8 +16,6 @@ import { pathFillGeometry } from './ground3d'
 import { dashGeometry, ribbonGeometry } from './road3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
-import { drape, refine, subdivide, type Ground } from './terrain3d'
-
 
 export interface OpsDecalOpts {
   /** The one height the whole stack renders at. */
@@ -40,34 +38,23 @@ export interface OpsDecalOpts {
    *  road, so it takes the road's own specular or the racing line renders as a bluer, glossier
    *  stripe down the middle of the surface it belongs to. Overlay paint keeps the default. */
   specular?: number
-  /** The ground this ink lies on. The ink IS the road surface, so it has to ride exactly what the
-   *  road rides or it floats off the tarmac on every gradient. */
-  ground: Ground
-  /** Grid pitch to cut the ink down to before draping, and the step its normals are differenced
-   *  over, both in world units. */
-  cell: number
-  normalStep: number
 }
 
-/** One op's geometry: the fill, then the stroke, as flat sheets, at the resolution the ground under
- *  them is built at. Every stroke is refined along its length and every fill cut down after
- *  triangulation, for the same reason the road itself is: an unrefined chord across a graded surface
- *  sinks below the tarmac it is painted on. */
-function opGeometries(op: DrawOp, y: number, cell: number): THREE.BufferGeometry[] {
+/** One op's geometry: the fill, then the stroke, as flat sheets. */
+function opGeometries(op: DrawOp, y: number): THREE.BufferGeometry[] {
   const out: THREE.BufferGeometry[] = []
   if (op.fill && !refName(op.fill)) {
     const fill = pathFillGeometry(op.d, y)
-    if (fill) out.push(subdivide(fill, cell))
+    if (fill) out.push(fill)
   }
   if (op.stroke && !refName(op.stroke)) {
     const halfW = (op.width ?? 1) / 2
     for (const poly of samplePathPolys(op.d)) {
-      const pts = refine(poly.pts, cell, poly.closed)
       const g = op.dash
-        ? dashGeometry(pts, {
+        ? dashGeometry(poly.pts, {
           halfW, y, on: op.dash.on, off: op.dash.off, shift: op.dash.shift,
         })
-        : ribbonGeometry(pts, {
+        : ribbonGeometry(poly.pts, {
           halfW, y, closed: poly.closed, roundCaps: op.cap !== 'butt',
         })
       if (g.attributes.position.count > 0) out.push(g.toNonIndexed())
@@ -89,7 +76,6 @@ export function buildOpsDecals(
   const flush = () => {
     if (runMaterial && runGeometries.length > 0) {
       const merged = runGeometries.length === 1 ? runGeometries[0] : mergeGeometries(runGeometries)
-      drape(merged, o.ground, o.normalStep)
       if (o.detail) planarUV(merged, o.detail.tileM / (o.metresPerUnit ?? 1))
       const mesh = new THREE.Mesh(merged, runMaterial)
       mesh.receiveShadow = true
@@ -120,7 +106,7 @@ export function buildOpsDecals(
         specular: o.specular,
       })
     }
-    runGeometries.push(...opGeometries(op, o.y, o.cell))
+    runGeometries.push(...opGeometries(op, o.y))
   }
   flush()
   return { group, nextOrder: order }

@@ -3,7 +3,7 @@
 // filled as regions, so an open contour would paint a smear across the map.
 
 import { describe, it, expect } from 'vitest'
-import { makeHeightField, isoLoops, bandsFor, type Vec } from './terrain-field'
+import { makeHeightField, gradeToTrack, isoLoops, bandsFor, type Vec } from './terrain-field'
 
 const P = (x: number, y: number) => ({ x, y })
 const OPTS = { metresPerUnit: 3, featureM: 900, reliefM: 60 }
@@ -42,8 +42,29 @@ describe('makeHeightField', () => {
   })
 })
 
-// Grading the land to the circuit moved to `elevation.ts`, which is where the whole scene now asks
-// how high the ground is. Its properties are pinned in `elevation.test.ts`.
+describe('gradeToTrack', () => {
+  // A straight run of centreline, with the corridor reaching 20 units either side.
+  const centreline: Vec[] = Array.from({ length: 60 }, (_, i) => P(i * 10, 0))
+  const distTo = (p: Vec) => Math.abs(p.y)
+
+  it('flattens the corridor relative to the raw field', () => {
+    const raw = makeHeightField(11, OPTS)
+    const graded = gradeToTrack(raw, centreline, { corridorU: 40, distTo })
+    // Variation ALONG the track is smoothed out by the corridor; sample the same run in both.
+    const spread = (f: { at: (p: Vec) => number }) => {
+      const hs = centreline.map((p) => f.at(p))
+      return Math.max(...hs) - Math.min(...hs)
+    }
+    expect(spread(graded)).toBeLessThan(spread(raw))
+  })
+
+  it('leaves the field untouched beyond the corridor', () => {
+    const raw = makeHeightField(11, OPTS)
+    const graded = gradeToTrack(raw, centreline, { corridorU: 40, distTo })
+    const far = P(300, 500)
+    expect(graded.at(far)).toBeCloseTo(raw.at(far), 12)
+  })
+})
 
 describe('isoLoops', () => {
   // A single cone peaking in the middle of the grid; its contour must be one closed ring.

@@ -14,7 +14,7 @@ import {
   ROAD_CASING, ROAD_TARMAC, roadInkOver, roadInkUnder, type RoadOpts,
 } from '@/lib/ui/road-ops'
 import { MARK_WHITE, startLineRects, startPose } from '@/lib/ui/road-marks'
-import { CORRIDOR_M, type Scenery } from '@/lib/ui/track-scenery'
+import type { Scenery } from '@/lib/ui/track-scenery'
 import type { DrawOp } from '@/lib/ui/scenery-draw'
 import {
   LANE_LINE_M, LANE_TARMAC_M, LANE_WIDTH_M, TARMAC_WIDTH_M, TRACK_WIDTH_M, densifyTrace,
@@ -25,7 +25,6 @@ import type { GroundExtent } from './sky3d'
 import { localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
 import { DECAL_PULL, ROUGH, SceneMaterials } from './materials3d'
 import { buildGroundStack3D } from './ground3d'
-import { GROUND_CELL_M, GROUND_SINK_M, NORMAL_STEP_M, drape, refine, terrainSheet } from './terrain3d'
 import { buildKerbs3D } from './kerb3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
@@ -138,14 +137,13 @@ export function buildWorld3D(
   const lift = (layer: number) => u(LIFT_M) * layer
   const group = new THREE.Group()
   const materials = new SceneMaterials()
-  const { elevation } = scenery
   // Flat layers receive shadow and never cast: they ARE the ground. Each carries its painter layer
   // as a depth bias, so millimetre lifts never fight.
   //
   // `grain` picks which generated detail the surface wears, and projects the UVs it needs down the
   // Y axis. Projected in WORLD space, so the road and the grass it runs through share one continuous
   // grain and their join carries no seam.
-  const place = (
+  const add = (
     geometry: THREE.BufferGeometry, colour: string, layer = 0,
     grain: SurfaceDetail | null = detail?.ground ?? null, roughness: number = ROUGH.chalk,
     specular = 1,
@@ -157,29 +155,12 @@ export function buildWorld3D(
     mesh.receiveShadow = true
     group.add(mesh)
   }
-  // Everything on the ground is authored FLAT, at its painter layer's lift, and lands on the
-  // landform here. One call, so no builder in the scene has to know the world has height and none of
-  // them can disagree about how much of it there is at a point.
-  const cell = u(GROUND_CELL_M)
-  const normalStep = u(NORMAL_STEP_M)
-  const add: typeof place = (geometry, ...rest) => {
-    drape(geometry, elevation.at, normalStep)
-    place(geometry, ...rest)
-  }
 
   const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
-  // The sheet carries its fine grid across the circuit and its whole graded corridor, which is where
-  // every bit of the surface's curvature lives, and grows its cells out over the open field beyond.
-  const pad = u(CORRIDOR_M)
-  place(terrainSheet(elevation.at, {
-    inner: { x0: vx - pad, y0: vy - pad, x1: vx + vw + pad, y1: vy + vh + pad },
-    outer: {
-      x0: vx - GROUND_PAD, y0: vy - GROUND_PAD,
-      x1: vx + vw + GROUND_PAD, y1: vy + vh + GROUND_PAD,
-    },
-    cell,
-    sink: u(GROUND_SINK_M),
-  }), scenery.base)
+  const ground = new THREE.PlaneGeometry(vw + 2 * GROUND_PAD, vh + 2 * GROUND_PAD)
+  ground.rotateX(-Math.PI / 2)
+  ground.translate(vx + vw / 2, 0, vy + vh / 2)
+  add(ground, scenery.base)
 
   group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors, detail?.ground ?? null))
 
@@ -188,13 +169,11 @@ export function buildWorld3D(
   const roadOpts: RoadOpts = {
     layout, u, pitZone, pitSlots, lap, ground: scenery.base, shadow: shadowFill(lighting),
   }
-  // The ink IS the road, so it takes the road's grain, the road's finish and the road's ground.
-  const onGround = { ground: elevation.at, cell, normalStep }
+  // The ink IS the road, so it takes the road's grain and the road's finish alike.
   const inkSurface = {
     detail: detail?.tarmac ?? null,
     metresPerUnit: layout.metresPerUnit,
     specular: TARMAC_SPECULAR,
-    ...onGround,
   }
   const under = buildOpsDecals(
     roadInkUnder(roadOpts),
@@ -211,13 +190,8 @@ export function buildWorld3D(
 
   // The roads, layer-major exactly as `roadOps` strokes them: every white casing goes down before
   // any dark tarmac, across the circuit, the lane and the apron alike.
-  //
-  // Refined to the ground sheet's own pitch first. A ribbon has exactly the resolution along its
-  // length that its polyline had, and six units of trace is nearly thirty metres on the widest-scaled
-  // circuits: laid across a surface that curves underneath it, that chord dips below the ground and
-  // the grass comes up through the road.
-  const circuit = refine(densifyTrace(layout.trace, 6).map(([x, y]) => ({ x, y })), cell, true)
-  const lane = refine(layout.pit.fastPts, cell)
+  const circuit = densifyTrace(layout.trace, 6).map(([x, y]) => ({ x, y }))
+  const lane = layout.pit.fastPts
   for (const [colour, layer, trackW, laneW] of [
     [ROAD_CASING, LAYER.casing, TRACK_WIDTH_M, LANE_WIDTH_M],
     [ROAD_TARMAC, LAYER.tarmac, TARMAC_WIDTH_M, LANE_TARMAC_M],
@@ -237,25 +211,19 @@ export function buildWorld3D(
     add(ribbonGeometry(circuit, { halfW: u(trackW / 2), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte, spec)
     add(ribbonGeometry(lane, { halfW: u(laneW / 2), y: lift(layer), roundCaps: true }), colour, layer, road, ROUGH.matte, spec)
     if (pitZone) {
-      // The apron is triangulated from its outline alone, so refining the outline is what gives the
-      // fill vertices to be draped by. Its triangles then span the apron's width, which costs
-      // nothing: the paddock sits on the pit shelf, where the ground is level across.
-      add(ringGeometry(refine(pitZone.work, cell, true), lift(layer)), colour, layer, road, ROUGH.matte, spec)
+      add(ringGeometry(pitZone.work, lift(layer)), colour, layer, road, ROUGH.matte, spec)
       // The apron carries the same white edge line: a stroke round the ring in 2D, a ribbon here.
       if (isPaint) {
-        add(ribbonGeometry(refine(pitZone.work, cell, true), { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte, spec)
+        add(ribbonGeometry(pitZone.work, { halfW: u(LANE_LINE_M), y: lift(layer), closed: true }), colour, layer, road, ROUGH.matte, spec)
       }
     }
   }
-  if (pitZone) group.add(buildPitPaint3D(
-      pitZone, u, lift(LAYER.lanePaint), materials, LAYER.lanePaint, elevation.at, cell, normalStep,
-    ))
+  if (pitZone) group.add(buildPitPaint3D(pitZone, u, lift(LAYER.lanePaint), materials, LAYER.lanePaint))
 
   // Kerbs, the one thing on this ground that is not paint: lofted solids standing on the road
   // surface, red and white blocks alike, wearing their own corrugation (kerb3d).
   group.add(buildKerbs3D(
     scenery.kerbs, u, { base: lift(LAYER.kerbs), layer: LAYER.kerbs }, materials, detail?.kerb ?? null,
-    elevation.at,
   ))
 
   // The start line is paint on the road, so it takes the road's paint grain. `add` defaults to the
@@ -265,19 +233,16 @@ export function buildWorld3D(
   ), MARK_WHITE, LAYER.marks, detail?.paint ?? null, ROUGH.matte)
   if (overlay && overlay.length > 0) {
     group.add(buildOpsDecals(
-      overlay, { y: lift(LAYER.marks), order: over.nextOrder, bias: DECAL_PULL, ...onGround },
-      materials,
+      overlay, { y: lift(LAYER.marks), order: over.nextOrder, bias: DECAL_PULL }, materials,
     ).group)
   }
 
   // The standing world, and the light it all agrees under.
-  const trees = buildTrees3D(scenery.trees, u, {
-    pack: treePack, metresPerUnit: layout.metresPerUnit, ground: elevation.at,
-  })
+  const trees = buildTrees3D(scenery.trees, u, { pack: treePack, metresPerUnit: layout.metresPerUnit })
   group.add(trees.group)
-  group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null, elevation.at))
-  if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors, elevation.at))
-  if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null, elevation.at))
+  group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null))
+  if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
+  if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
   for (const extra of extras?.() ?? []) group.add(extra)
   const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
   group.add(rig)
@@ -306,7 +271,6 @@ export function buildWorld3D(
       z: vy + vh / 2,
       radius: Math.min(vw, vh) / 2 + GROUND_PAD,
       metresPerUnit: layout.metresPerUnit,
-      heightAt: elevation.at,
     },
     // Off the densified centreline built above, so the probe stands on the road rather than at
     // whatever the raw trace's nearest sample happened to be.

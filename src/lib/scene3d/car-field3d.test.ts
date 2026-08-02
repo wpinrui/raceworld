@@ -15,21 +15,6 @@ describe('CarField3D', () => {
     field.dispose()
   })
 
-  it('keeps its ride height above the ROAD, wherever the road happens to be', () => {
-    // A circuit that climbs puts its surface tens of metres off the datum. The ride height is a
-    // clearance over the tarmac, not an absolute height, so it has to be measured from the ground
-    // the car is standing on or the field sinks into every rise and floats over every dip.
-    const rideY = 0.05
-    const field = new CarField3D(0.01, rideY)
-    field.ensure('a', '#E8442E')
-    const pose = { x: 3, y: 4, rot: 0, steerLeft: 0, steerRight: 0, lat: 0, long: 0, ds: 0 }
-    for (const ground of [-8.25, 0, 17.5]) {
-      field.pose('a', { ...pose, ground })
-      expect((field.group.children[0] as THREE.Group).position.y).toBeCloseTo(ground + rideY, 10)
-    }
-    field.dispose()
-  })
-
   it('builds a car per entrant at the circuit scale and rebuilds only on a livery or compound change', () => {
     const field = new CarField3D(0.01)
     field.ensure('a', '#E8442E', 'soft')

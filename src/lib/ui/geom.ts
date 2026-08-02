@@ -178,24 +178,14 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
   const stamp = new Int32Array(last)
   let gen = 0
 
-  /** Exact distance from p to the polyline, giving up at `max` and returning it.
-   *
-   *  The cap is worth having because the ring expansion costs O(k^2) cell lookups for a query k
-   *  rings from the polyline: asking "how far is the circuit?" from the middle of an infield is
-   *  hundreds of times dearer than asking it from the trackside. A caller that only cares whether a
-   *  point is within some band — the elevation field, which grades the ground over a fixed corridor
-   *  and leaves everything past it alone — passes that band and pays a fixed handful of lookups for
-   *  every point outside it, which is most of the world. Uncapped by default, so a caller that wants
-   *  the true distance still gets it. */
-  const dist = (p: Vec, max = Infinity): number => {
+  /** Exact distance from p to the polyline. */
+  const dist = (p: Vec): number => {
     // A non-finite query makes every ring bound NaN, so no break condition can ever fire and the
     // expansion spins forever — a silent browser hang on the render path rather than an error.
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return Infinity
     const px = Math.floor(p.x / cell)
     const py = Math.floor(p.y / cell)
-    // Seeded at the cap rather than at infinity: the break condition below then measures rings
-    // against it from the first step, and nothing further away can displace it.
-    let best = max
+    let best = Infinity
     gen++
 
     const scan = (cx: number, cy: number) => {

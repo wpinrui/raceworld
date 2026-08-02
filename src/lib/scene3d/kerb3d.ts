@@ -89,19 +89,8 @@ function sectionBands(u: (m: number) => number): Array<readonly [Rib, Rib]> {
 export interface KerbOpts {
   /** Metres to world units. */
   u: (m: number) => number
-  /** The road surface the kerb stands on, in world units ABOVE the ground under it. */
+  /** The road surface the kerb stands on, in world units. */
   base: number
-  /** The ground itself, sampled per vertex. A kerb is the one thing on this surface that is a solid
-   *  rather than a sheet, so it cannot be draped afterwards: its section is what it is, and it has
-   *  to be built standing on the road already.
-   *
-   *  Sampled at each vertex's OWN position rather than at the station's centre, so the skirt at the
-   *  back stays buried in the ground it is cutting into even where the surface falls away across the
-   *  strip. The section's normals are left alone: the ground under a kerb runs at a percent or two,
-   *  which tilts them by well under a degree, and against a 10-degree ramp face that is nothing.
-   *
-   *  Absent, the world is flat. */
-  ground?: (x: number, y: number) => number
   /** Sign along a station's `(nx, ny)` that points AT the track. */
   inward: 1 | -1
   /** World units one tile of the kerb's grain spans, for the lofted UVs. */
@@ -115,7 +104,6 @@ export function loftKerb(
   stations: readonly DashStation[], painted: boolean, o: KerbOpts,
 ): THREE.BufferGeometry | null {
   const bands = sectionBands(o.u)
-  const groundAt = o.ground ?? (() => 0)
   const half = o.u(KERB_WIDTH_M) / 2
   const taper = o.u(TAPER_M)
   const total = stations[stations.length - 1].s
@@ -131,9 +119,7 @@ export function loftKerb(
   }
   const push = (st: DashStation, rib: Rib, k: number) => {
     const across = rib.a - half
-    const x = st.x + out * st.nx * across
-    const z = st.y + out * st.ny * across
-    positions.push(x, groundAt(x, z) + o.base + rib.h * k, z)
+    positions.push(st.x + out * st.nx * across, o.base + rib.h * k, st.y + out * st.ny * across)
     normals.push(out * st.nx * rib.na, rib.nh, out * st.ny * rib.na)
     // Across the strip, then along it: the ridge pattern is fixed to the kerb rather than to the
     // world, and stays continuous across a block boundary because `s` is measured from the run's
@@ -201,7 +187,6 @@ export interface KerbStack {
 export function buildKerbs3D(
   kerbs: readonly SceneryKerb[], u: (m: number) => number, stack: KerbStack,
   materials: SceneMaterials, detail: SurfaceDetail | null = null,
-  ground: (x: number, y: number) => number = () => 0,
 ): THREE.Group {
   const { base, layer } = stack
   const group = new THREE.Group()
@@ -213,7 +198,7 @@ export function buildKerbs3D(
     const stations = dashStations(densifyOpen(kerb.pts), { on: block, off: block })
     if (stations.length < 2) continue
     for (const [colour, painted] of [[KERB_WHITE, false], [KERB_RED, true]] as const) {
-      const geometry = loftKerb(stations, painted, { u, base, ground, inward: kerb.inward, tile })
+      const geometry = loftKerb(stations, painted, { u, base, inward: kerb.inward, tile })
       if (!geometry) continue
       // `matte`, not `paint`: a kerb is painted CONCRETE, cast rough for grip, and at the sheen of
       // painted metal the sky's broad specular sat over the red hard enough to wash it out pink.

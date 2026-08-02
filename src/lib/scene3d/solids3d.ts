@@ -46,23 +46,12 @@ export class GeometrySink {
   }
 }
 
-/** A base height that may vary along the outline: a number for a level footing, or the ground
- *  itself for anything long enough that the land under it moves.
- *
- *  A short footprint can be dropped on the ground whole and buried a little at its uphill corner. A
- *  fence is a kilometre long and a pit building is three hundred metres, so their footing has to
- *  FOLLOW: level them and one end is underground while the other stands on stilts. */
-export type Base = number | ((x: number, y: number) => number)
-
-const baseAt = (b: Base) => (typeof b === 'function' ? b : () => b)
-
 /** Vertical walls along a closed ring, between two heights. */
-export function addRingWalls(s: GeometrySink, ring: readonly Vec[], y0: Base, y1: number): void {
-  const low = baseAt(y0)
+export function addRingWalls(s: GeometrySink, ring: readonly Vec[], y0: number, y1: number): void {
   for (let i = 0; i < ring.length; i++) {
     const p = ring[i]
     const q = ring[(i + 1) % ring.length]
-    s.quad(v3(p.x, low(p.x, p.y), p.y), v3(q.x, low(q.x, q.y), q.y), v3(q.x, y1, q.y), v3(p.x, y1, p.y))
+    s.quad(v3(p.x, y0, p.y), v3(q.x, y0, q.y), v3(q.x, y1, q.y), v3(p.x, y1, p.y))
   }
 }
 
@@ -76,32 +65,21 @@ export function addPolyCap(s: GeometrySink, contour: readonly Vec[], holes: read
   }
 }
 
-/** Walls of a closed ring plus an optional roof: the pit building's storeys, the plant boxes.
- *
- *  The footing may follow the ground while the roof stays level, which is what a long building on a
- *  slope actually does. */
-export function ringSolidGeometry(ring: readonly Vec[], y0: Base, y1: number, capTop = true): THREE.BufferGeometry {
+/** Walls of a closed ring plus an optional roof: the pit building's storeys, the plant boxes. */
+export function ringSolidGeometry(ring: readonly Vec[], y0: number, y1: number, capTop = true): THREE.BufferGeometry {
   const s = new GeometrySink()
   addRingWalls(s, ring, y0, y1)
   if (capTop) addPolyCap(s, ring, [], y1)
   return s.build()
 }
 
-/** A vertical ribbon along an OPEN run: a debris fence's cage face, a parapet.
- *
- *  Both ends take a base, so a fence can follow the land under it AND rise and fall with it rather
- *  than running as one level barrier over a kilometre of undulating ground. */
-export function wallStripGeometry(pts: readonly Vec[], y0: Base, y1: Base): THREE.BufferGeometry {
+/** A vertical ribbon along an OPEN run: a debris fence's cage face, a parapet. */
+export function wallStripGeometry(pts: readonly Vec[], y0: number, y1: number): THREE.BufferGeometry {
   const s = new GeometrySink()
-  const low = baseAt(y0)
-  const high = baseAt(y1)
   for (let i = 0; i + 1 < pts.length; i++) {
     const p = pts[i]
     const q = pts[i + 1]
-    s.quad(
-      v3(p.x, low(p.x, p.y), p.y), v3(q.x, low(q.x, q.y), q.y),
-      v3(q.x, high(q.x, q.y), q.y), v3(p.x, high(p.x, p.y), p.y),
-    )
+    s.quad(v3(p.x, y0, p.y), v3(q.x, y0, q.y), v3(q.x, y1, q.y), v3(p.x, y1, p.y))
   }
   return s.build()
 }
