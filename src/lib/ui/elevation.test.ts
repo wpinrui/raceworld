@@ -42,16 +42,21 @@ function build(over: Partial<ElevationInput> = {}) {
 }
 
 describe('buildElevation', () => {
-  it('is level ACROSS the track, at every point of the lap', () => {
+  it('holds the racing surface near level across its width', () => {
     const e = build()
     // The bottom edge of the ring runs along y = 0, so its cross-section is the y axis. Sample the
     // full tarmac width plus its kerbs, which is what the shelf is sized to hold.
-    for (let x = 60; x < 840; x += 30) {
-      const centre = e.at(x, 0)
-      for (const off of [-3, -1.5, 1.5, 3]) {
-        expect(e.at(x, off)).toBeCloseTo(centre, 10)
-      }
+    //
+    // A bound rather than an equality: the soft projection buys continuity at the medial axis with
+    // a little cross-fall wherever another stretch of circuit is in reach (see `elevation.ts`). What
+    // has to hold is that it stays well inside the ~2% camber a real road is BUILT with, so the
+    // surface never reads as broken.
+    const halfWidthU = 3
+    let worst = 0
+    for (let x = 60; x < 840; x += 5) {
+      worst = Math.max(worst, Math.abs(e.at(x, halfWidthU) - e.at(x, -halfWidthU)))
     }
+    expect(worst / (2 * halfWidthU)).toBeLessThan(0.02)
   })
 
   it('gives the circuit real gradient along its length', () => {
@@ -68,7 +73,10 @@ describe('buildElevation', () => {
     const e = build()
     const hs = CENTRELINE.map((p) => e.at(p.x, p.y))
     const mean = hs.reduce((a, b) => a + b, 0) / hs.length
-    expect(mean).toBeCloseTo(0, 9)
+    const span = Math.max(...hs) - Math.min(...hs)
+    // Within a hundredth of the lap's own rise and fall. Not to the bit: the datum is subtracted
+    // from the profile's stations, and the surface is read through a kernel over them.
+    expect(Math.abs(mean)).toBeLessThan(span / 100)
     expect(e.trackRange.min).toBeLessThan(0)
     expect(e.trackRange.max).toBeGreaterThan(0)
   })
@@ -116,8 +124,10 @@ describe('buildElevation', () => {
       const errors = pitPath.map((p) => Math.abs(e.at(p.x, p.y - 1) - e.at(p.x, p.y + 1)))
       return Math.max(...errors)
     }
-    expect(spread(anchored)).toBeLessThan(spread(alone))
-    expect(spread(anchored)).toBeCloseTo(0, 10)
+    // Without its own anchor the lane sits a quarter of the way into the raw field and rolls with
+    // it; with one it is on the same graded shelf as the circuit, level across to under a percent.
+    expect(spread(anchored)).toBeLessThan(spread(alone) / 4)
+    expect(spread(anchored) / 2).toBeLessThan(0.01)
   })
 
   it('is deterministic', () => {

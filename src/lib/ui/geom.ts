@@ -20,20 +20,15 @@ export interface Camera { x: number; y: number; z: number; rot: number }
 /** The authored viewBox, padded. The frame every world coordinate is expressed against. */
 export interface ViewBox { x: number; y: number; w: number; h: number }
 
-/** How far along a segment its closest point to `p` lies, 0..1, clamped to the ends. */
-export function closestTOnSegment(p: Vec, a: Vec, b: Vec): number {
+/** Exact distance from a point to a segment, clamped to the segment's ends. */
+export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
   const vx = b.x - a.x
   const vy = b.y - a.y
   const l2 = vx * vx + vy * vy
-  if (l2 === 0) return 0
-  const t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / l2
-  return t < 0 ? 0 : t > 1 ? 1 : t
-}
-
-/** Exact distance from a point to a segment, clamped to the segment's ends. */
-export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
-  const t = closestTOnSegment(p, a, b)
-  return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)))
+  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  let t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / l2
+  t = t < 0 ? 0 : t > 1 ? 1 : t
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy))
 }
 
 /** Exact distance from a point to a polyline. `closed` wraps the last vertex back to the first. */
@@ -183,23 +178,24 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
   const stamp = new Int32Array(last)
   let gen = 0
 
-  // The winning segment of the last walk, held in scratch rather than returned. `dist` runs into the
-  // tens of thousands per build and must not allocate; `nearest` wants the same walk's full answer.
-  // One walk writing here serves both, so there is only ever one copy of the search.
-  let best = Infinity
-  let bestI = 0
-  let bestT = 0
-
-  /** Find the closest segment to p, leaving the answer in the scratch above. */
-  const walk = (p: Vec): void => {
-    best = Infinity
-    bestI = 0
-    bestT = 0
+  /** Exact distance from p to the polyline, giving up at `max` and returning it.
+   *
+   *  The cap is worth having because the ring expansion costs O(k^2) cell lookups for a query k
+   *  rings from the polyline: asking "how far is the circuit?" from the middle of an infield is
+   *  hundreds of times dearer than asking it from the trackside. A caller that only cares whether a
+   *  point is within some band — the elevation field, which grades the ground over a fixed corridor
+   *  and leaves everything past it alone — passes that band and pays a fixed handful of lookups for
+   *  every point outside it, which is most of the world. Uncapped by default, so a caller that wants
+   *  the true distance still gets it. */
+  const dist = (p: Vec, max = Infinity): number => {
     // A non-finite query makes every ring bound NaN, so no break condition can ever fire and the
     // expansion spins forever — a silent browser hang on the render path rather than an error.
-    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return Infinity
     const px = Math.floor(p.x / cell)
     const py = Math.floor(p.y / cell)
+    // Seeded at the cap rather than at infinity: the break condition below then measures rings
+    // against it from the first step, and nothing further away can displace it.
+    let best = max
     gen++
 
     const scan = (cx: number, cy: number) => {
@@ -208,15 +204,8 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
       for (const i of b) {
         if (stamp[i] === gen) continue
         stamp[i] = gen
-        const a = pts[i]
-        const c = pts[(i + 1) % pts.length]
-        const t = closestTOnSegment(p, a, c)
-        const d = Math.hypot(p.x - (a.x + t * (c.x - a.x)), p.y - (a.y + t * (c.y - a.y)))
-        if (d < best) {
-          best = d
-          bestI = i
-          bestT = t
-        }
+        const d = distPointToSegment(p, pts[i], pts[(i + 1) % pts.length])
+        if (d < best) best = d
       }
     }
 
@@ -246,22 +235,10 @@ export function makePolylineIndex(pts: Vec[], cell: number, closed = true) {
       // Once the ring encloses every occupied cell, every segment has been tested.
       if (px - k <= minCx && px + k >= maxCx && py - k <= minCy && py + k >= maxCy) break
     }
+    return best
   }
 
-  return {
-    /** Exact distance from p to the polyline. */
-    dist: (p: Vec): number => {
-      walk(p)
-      return best
-    },
-    /** WHERE on the polyline the closest point is, as the index of its segment and how far along.
-     *  The elevation field needs the station, not only the distance: a point's height comes from the
-     *  circuit's own profile at whichever part of the lap it stands beside. */
-    nearest: (p: Vec): { dist: number; i: number; t: number } => {
-      walk(p)
-      return { dist: best, i: bestI, t: bestT }
-    },
-  }
+  return { dist }
 }
 
 /** Anything that occupies ground: a rotated footprint, or a disc (tree canopy, mast, post). */

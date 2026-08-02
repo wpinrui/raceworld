@@ -8,6 +8,7 @@ import { buildPitSlots, buildPitZone } from '@/lib/ui/pit-zone'
 import { roadLap, solveLap } from '@/lib/ui/lap-solve'
 import type { SurfaceDetail, WorldDetail } from './detail3d'
 import { buildWorld3D } from './world3d'
+import { GROUND_SINK_M } from './terrain3d'
 
 const layout = TRACK_LAYOUTS.britain
 const scenery = buildScenery(layout.trace, layout.pit, {
@@ -42,17 +43,22 @@ function stubDetail(): WorldDetail {
 }
 
 describe('buildWorld3D', () => {
-  it('keeps the painter order as lifts: ground, casing, tarmac, marks', () => {
+  it('keeps the painter order as lifts above the ground: ground, casing, tarmac, marks', () => {
+    // Measured against the ELEVATION, not against zero. The stack used to be a set of flat sheets at
+    // absolute heights; it is now the same set of lifts riding a landform, so what has to hold is
+    // that each sheet sits a constant distance ABOVE the ground under it, in the painter's order.
     const ys = new Map<string, number>()
     world.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh) return
       const mat = o.material as THREE.MeshLambertMaterial
       const g = o.geometry as THREE.BufferGeometry
-      const y = g.attributes.position.getY(0)
-      // Flat layers only: anything with real height reports its lowest vertex, which is not a lift.
+      const p = g.attributes.position
+      const lift = (i: number) => p.getY(i) - scenery.elevation.at(p.getX(i), p.getZ(i))
+      const y = lift(0)
+      // Sheets only: anything with real height (a kerb's section, a building) is not a lift.
       let flat = true
-      for (let i = 1; i < g.attributes.position.count; i++) {
-        if (Math.abs(g.attributes.position.getY(i) - y) > 1e-4) { flat = false; break }
+      for (let i = 1; i < p.count; i++) {
+        if (Math.abs(lift(i) - y) > 1e-4) { flat = false; break }
       }
       if (!flat) return
       const seen = ys.get(mat.color.getHexString())
@@ -65,7 +71,10 @@ describe('buildWorld3D', () => {
     const casing = ys.get(new THREE.Color(ROAD_CASING).getHexString())!
     const tarmac = ys.get(new THREE.Color(ROAD_TARMAC).getHexString())!
     const marks = ys.get('f2f2f2')!
-    expect(ground).toBeCloseTo(0, 10)
+    // The ground sheet sits its sink BELOW the true surface, which is what keeps its chords from
+    // rising through the road laid on it. To a tenth of a millimetre, not to the bit: positions are
+    // stored as Float32 and the heights that went in were Float64.
+    expect(ground * layout.metresPerUnit).toBeCloseTo(-GROUND_SINK_M, 4)
     expect(casing).toBeGreaterThan(ground)
     expect(tarmac).toBeGreaterThan(casing)
     expect(marks).toBeGreaterThan(tarmac)

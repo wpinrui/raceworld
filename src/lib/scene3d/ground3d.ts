@@ -10,6 +10,7 @@ import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
 import type { SceneMaterials } from './materials3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
+import { GROUND_CELL_M, NORMAL_STEP_M, drape, levelTo, lowestOn, subdivide } from './terrain3d'
 
 /** Hedgerow width, matching the 2D's stroke. */
 const HEDGEROW_HALF_M = 1.1
@@ -55,10 +56,18 @@ export function buildGroundStack3D(
   detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
+  const { elevation } = scenery
+  // Every fill is cut down to the ground sheet's own pitch before it is draped: at its authored
+  // resolution a run-off apron is a handful of triangles spanning forty metres, and moving only
+  // their corners leaves a flat plate through the bank it is meant to lie on.
+  const cell = u(GROUND_CELL_M)
+  const normalStep = u(NORMAL_STEP_M)
   const add = (geo: THREE.BufferGeometry | null, colour: string, layer: number, alpha = 1) => {
     if (!geo) return
-    if (detail) planarUV(geo, u(detail.tileM))
-    const mesh = new THREE.Mesh(geo, materials.get(colour, { alpha, layer, detail }))
+    const fitted = subdivide(geo, cell)
+    drape(fitted, elevation, normalStep)
+    if (detail) planarUV(fitted, u(detail.tileM))
+    const mesh = new THREE.Mesh(fitted, materials.get(colour, { alpha, layer, detail }))
     mesh.receiveShadow = true
     group.add(mesh)
   }
@@ -69,7 +78,23 @@ export function buildGroundStack3D(
     add(pathFillGeometry(f.d, lift(layers.fields)), f.fill, layers.fields, 0.75)
     add(ringStrokeGeometry(f.d, u(HEDGEROW_HALF_M), lift(layers.fields) + 0.001), HEDGE, layers.fields, 0.35)
   }
-  for (const t of scenery.terrain) add(pathFillGeometry(t.d, lift(layers.terrain)), t.fill, layers.terrain)
+  // Water is LEVEL, which no other fill on this ground is. A lake draped like grass would climb the
+  // bank it sits against, so it takes ONE height for its whole surface: the lowest ground its own
+  // outline touches, which is where water in a basin actually stands. No subdivision either, since a
+  // flat sheet is exactly flat however few triangles describe it.
+  for (const t of scenery.terrain) {
+    const geo = pathFillGeometry(t.d, lift(layers.terrain))
+    if (!geo) continue
+    if (!t.water) {
+      add(geo, t.fill, layers.terrain)
+      continue
+    }
+    levelTo(geo, lowestOn(geo, elevation))
+    if (detail) planarUV(geo, u(detail.tileM))
+    const mesh = new THREE.Mesh(geo, materials.get(t.fill, { layer: layers.terrain, detail }))
+    mesh.receiveShadow = true
+    group.add(mesh)
+  }
   for (const r of scenery.runoffs) add(pathFillGeometry(r.d, lift(layers.runoffs)), r.fill, layers.runoffs)
   if (pitZone) {
     // A garage floor sits in the building's own shade in the 2D; the albedo carries that darkening

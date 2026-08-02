@@ -125,8 +125,12 @@ const TRACK_SHELF_M = 10
 const PIT_SHELF_M = 30
 /** How far out the graded corridor reaches before the land is simply itself again, in metres. This
  *  is the length of the cutting or embankment: the whole difference between the circuit's profile
- *  and the raw land is spent over it, so shortening it steepens every bank on every circuit. */
-const CORRIDOR_M = 140
+ *  and the raw land is spent over it, so shortening it steepens every bank on every circuit.
+ *
+ *  Exported because the ground sheet has to carry its fine grid at least this far past the circuit:
+ *  all of the surface's curvature is inside this band, and a coarse cell across it is a cutting
+ *  rounded off into a slope. */
+export const CORRIDOR_M = 140
 
 /** FNV-1a over a string — the noise lattice needs a numeric seed, seededRng takes a string. */
 function hashSeed(str: string): number {
