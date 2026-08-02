@@ -178,21 +178,27 @@ export function buildTrees3D(
       // three only allocates the colour buffer once something asks for it, and every instance has to
       // carry one after that or the untouched slots multiply by black.
       if (piece.tinted) mesh.setColorAt(0, standing[0].colour)
-      // Foliage sits out the ambient occlusion pass; bark stays in it.
+      // Anything with a CUTOUT sits out the ambient occlusion pass; solid bark stays in it.
       //
       // That pass builds its depth and normals by redrawing the scene under one override material,
       // and an override carries no `alphaTest`, so every leaf CARD writes into it as a solid quad. A
       // crown then occludes itself against rectangles that are not there, which comes back as
       // hard-edged black polygons through the canopy.
       //
-      // No loss: `shapeCanopy` already bakes a crown's occlusion into its vertex colours, radially
-      // and vertically, once at load. That is the better answer for foliage anyway, which is a field
-      // of depth discontinuities and exactly the input screen-space occlusion turns into noise.
+      // The far tier is the same fault at the other end of the wood, and worse for being clean: an
+      // impostor is three big quads, so it hands the occlusion buffer a flat plate the size of the
+      // whole tree where the picture has a cutout crown. Everything the plate covers, sky included,
+      // is then shaded as one unoccluded surface, and a distant treeline grows pale rectangles
+      // standing over it. Keying off the material's own `alphaTest` rather than off `tinted` catches
+      // both tiers: `tinted` answers "does this take the canopy colour", which the impostor declines
+      // for its own reason (the tint is already baked into the card), and that is a different
+      // question from "is this a cutout".
       //
-      // Keyed off `tinted`, which comes from the material's OWN cutout rather than from a name or a
-      // guess about what a tree is, so the opaque fallback spheres keep their occlusion and any
-      // future pack is classified by the same test.
-      if (piece.tinted) mesh.userData.noAO = true
+      // No loss: `shapeCanopy` already bakes a crown's occlusion into its vertex colours, radially
+      // and vertically, once at load, and the impostor bake carries those colours onto the card. That
+      // is the better answer for foliage anyway, which is a field of depth discontinuities and
+      // exactly the input screen-space occlusion turns into noise.
+      if ((piece.material as THREE.MeshStandardMaterial).alphaTest > 0) mesh.userData.noAO = true
       group.add(mesh)
       return mesh
     })
