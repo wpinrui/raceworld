@@ -189,13 +189,13 @@ function trunkFoot(bark: THREE.BufferGeometry): { x: number; z: number } {
  *  away from the light: the radial darkening was re-stating in albedo what the normals state in
  *  shading. What is left here is a tenth, a trim on top of the shading, which is all it was ever
  *  meant to be. */
-const AO_CORE = 0.92
+const AO_CORE = 1
 /** How fast the shell's shading falls off toward the core. */
 const AO_FALLOFF = 1.6
 /** How dark the underside of a canopy goes relative to its top. A light touch, no more: the crown
  *  normal below darkens an underside by pointing it at the ground, which is the same shading arrived
  *  at honestly, and at this gradient's old strength the two multiplied and the crown went black. */
-const AO_UNDER = 0.9
+const AO_UNDER = 0.96
 
 /** Occlusion and crown normals, baked into the canopy over its own ellipsoid.
  *

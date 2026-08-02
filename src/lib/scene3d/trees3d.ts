@@ -51,8 +51,8 @@ import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
  *  value that colours the needles instead of crushing them. Conifers still come out the darker tree,
  *  because their map is darker: that difference is now the map's to make, not the palette's. */
 const TINTS: Record<TreeFamily, string[]> = {
-  broadleaf: ['#FFFFFF', '#F6FAF1', '#EFF4E8', '#FAF7EE', '#E9EFE2', '#F3F5EB'],
-  conifer: ['#F1F6E8', '#EAF1E0', '#F6FAEF', '#E5ECDB', '#EDF4E4'],
+  broadleaf: ['#FFFFFF', '#FBFDF9', '#F8FAF5', '#FDFBF8', '#F5F8F3', '#FAFBF6'],
+  conifer: ['#F9FBF5', '#F6F9F2', '#FBFDF8', '#F4F7F0', '#F7FAF3'],
 }
 /** One broadleaf in this many is caught turning. Warm and desaturating rather than orange:
  *  multiplying a green photograph by orange gives mud, and this is as far as a multiply can honestly
