@@ -13,9 +13,9 @@ const meshes = (g: THREE.Group) => g.children as THREE.Mesh[]
 describe('buildOpsDecals', () => {
   const materials = new SceneMaterials()
 
-  it('merges consecutive same-paint ops and breaks the run when the paint changes', () => {
+  it('merges consecutive ops and breaks the run when the shade moves band', () => {
     const { group, nextOrder } = buildOpsDecals(
-      [line('#111111'), line('#111111'), line('#222222')], { y: 0.1, order: 5, bias: 9 }, materials,
+      [line('#111111'), line('#111111'), line('#DDDDDD')], { y: 0.1, order: 5, bias: 9 }, materials,
     )
     expect(meshes(group)).toHaveLength(2)
     expect(meshes(group).map((m) => m.renderOrder)).toEqual([5, 6])
@@ -25,9 +25,24 @@ describe('buildOpsDecals', () => {
     expect(both.geometry.attributes.position.count).toBe(2 * one.geometry.attributes.position.count)
   })
 
+  it('merges neighbouring shades, which is what the driven-in ink is made of', () => {
+    // The rubber band and the marbles are a continuum: every arc of every layer is the tarmac blended
+    // a little further toward its mark. Breaking the run on an exact colour was a run per op.
+    const { group } = buildOpsDecals(
+      [line('#303030'), line('#313131'), line('#2F2F2F')], { y: 0.1, order: 1, bias: 9 }, materials,
+    )
+    expect(meshes(group)).toHaveLength(1)
+    const colour = meshes(group)[0].geometry.attributes.color
+    const at = (i: number) => new THREE.Color().fromBufferAttribute(colour, i).getHexString()
+    // Merged, and still three distinct shades: the band decides batching, never the pixel.
+    expect(at(0)).toBe('303030')
+    expect(at(colour.count / 3)).toBe('313131')
+    expect(at((2 * colour.count) / 3)).toBe('2f2f2f')
+  })
+
   it('paints every run through one shared material, colour carried on the vertices', () => {
     const { group } = buildOpsDecals(
-      [line('#111111'), line('#222222')], { y: 0.1, order: 5, bias: 9 }, materials,
+      [line('#111111'), line('#DDDDDD')], { y: 0.1, order: 5, bias: 9 }, materials,
     )
     const [first, second] = meshes(group)
     // ONE material for the whole road surface. The ink is a continuum of blended shades, and a
@@ -39,7 +54,7 @@ describe('buildOpsDecals', () => {
     const at = (m: THREE.Mesh) => new THREE.Color()
       .fromBufferAttribute(m.geometry.attributes.color, 0).getHexString()
     expect(at(first)).toBe('111111')
-    expect(at(second)).toBe('222222')
+    expect(at(second)).toBe('dddddd')
   })
 
   it('keeps alpha apart from opaque runs of the same colour, as decal materials', () => {

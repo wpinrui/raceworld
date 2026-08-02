@@ -63,6 +63,26 @@ function opGeometries(op: DrawOp, y: number): THREE.BufferGeometry[] {
   return out.filter((g) => g.attributes.position.count > 0)
 }
 
+/** Which shade band a channel falls in, for deciding whether two ops may share a buffer.
+ *
+ *  Five bands per channel, in LINEAR light. This is the one number in this file chosen by looking
+ *  rather than by reasoning, and the reasoning it replaced was wrong, so it is worth writing down
+ *  what is actually known:
+ *
+ *  Merging ops that share a colour exactly is safe, and always was: overwriting a colour with itself
+ *  cannot show. Merging EVERY shade into one buffer is not safe, and the failure is visible, the soft
+ *  strokes that build a brake mark coming out with hard blocky edges. Merging within a band is safe,
+ *  measured against a rendered before-and-after of the same shot.
+ *
+ *  What that says is that the fault scales with how far apart the merged shades are, which points at
+ *  an ordering violation between a pale wide layer and the dark narrow core laid over it. It should
+ *  not be possible: these are opaque decals that never write depth, so submission order inside one
+ *  buffer ought to composite exactly as submission order across many. I have not found the mechanism.
+ *  The band is therefore a MEASURED bound and not a derived one, and it should be re-shot rather than
+ *  trusted if the ink's palette or its layering ever changes. */
+const SHADE_BANDS = 4
+const band = (channel: number): number => Math.round(channel * SHADE_BANDS)
+
 /** Paint a whole run's colour onto its vertices, so a hundred shades share one material.
  *
  *  The ink is a CONTINUUM: every arc of the rubber band, every marble patch, every grain stripe is
@@ -91,14 +111,9 @@ function paintVertices(geometry: THREE.BufferGeometry, colour: THREE.Color): voi
  *  continuum of blended shades used to mint, and consecutive draws no longer rebind a program and a
  *  uniform block between them.
  *
- *  THE RUN STILL BREAKS ON COLOUR, though the material no longer depends on it, and that is not an
- *  oversight. Keying the run on alpha alone collapses the whole road surface to a couple of draws,
- *  and it visibly changes the picture: the soft strokes that build a brake mark come out with hard
- *  blocky edges where they were continuous. Measured, not assumed, on a controlled before-and-after
- *  of one shot with only this file differing, and the same shot with the paint on the vertices and
- *  the colour key kept is identical to the original. I do not have the mechanism: the ops are opaque
- *  decals that never write depth, so submission order inside one buffer should composite exactly as
- *  submission order across many. Until that is understood, the break stays. */
+ *  THE RUN STILL BREAKS, but on a shade BAND rather than on an exact colour (`SHADE_BANDS`), which
+ *  is what lets a continuum of blended greys share a buffer without the ordering fault that keying on
+ *  alpha alone produces. */
 export function buildOpsDecals(
   ops: readonly DrawOp[], o: OpsDecalOpts, materials: SceneMaterials,
 ): { group: THREE.Group; nextOrder: number } {
@@ -129,7 +144,8 @@ export function buildOpsDecals(
       throw new Error('buildOpsDecals: an op with distinct fill and stroke colours is not mergeable')
     }
     const alpha = op.alpha ?? 1
-    const key = `${colour}@${alpha}`
+    paint.set(colour)
+    const key = `${band(paint.r)}/${band(paint.g)}/${band(paint.b)}@${alpha}`
     if (key !== runKey) {
       flush()
       runKey = key
