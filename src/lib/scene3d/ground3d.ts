@@ -89,6 +89,7 @@ export function addGround3D(
   // it share one continuous surface and their join carries no seam.
   planarUV(geometry, u(tileM))
   const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = 'ground'
   mesh.receiveShadow = true
   group.add(mesh)
 }

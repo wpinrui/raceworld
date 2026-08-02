@@ -14,7 +14,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Aperture, Armchair, Building2, Car, ChevronDown, ChevronUp, Container, Fence, Gauge, HardHat,
-  Mountain, Repeat, Sparkles, Sun, TreePine, Users, Warehouse, Wrench, type LucideIcon,
+  Image as ImageIcon, Layers, Mountain, Repeat, Sparkles, Sun, TreePine, Users, Warehouse, Wrench,
+  type LucideIcon,
 } from 'lucide-react'
 import * as THREE from 'three'
 import type { Post } from '@/lib/scene3d/post3d'
@@ -44,6 +45,7 @@ const PARTS: Part[] = [
   { key: 'buildings', label: 'Buildings', icon: Building2, names: ['buildings'] },
   { key: 'fences', label: 'Fences', icon: Fence, names: ['fences'] },
   { key: 'marshals', label: 'Marshals', icon: HardHat, names: ['marshals'] },
+  { key: 'ground', label: 'Ground', icon: Layers, names: ['ground'] },
   { key: 'farland', label: 'Far land', icon: Mountain, names: ['farland'] },
   { key: 'cars', label: 'Cars', icon: Car, names: ['cars'] },
   { key: 'crew', label: 'Crew', icon: Wrench, names: ['crew'] },
@@ -51,6 +53,7 @@ const PARTS: Part[] = [
 
 /** The whole-frame switches: not populations, so they are held apart and applied differently. */
 const PASSES = [
+  { key: 'textures', label: 'Textures', icon: ImageIcon },
   { key: 'shadows', label: 'Shadows', icon: Sun },
   { key: 'ao', label: 'Occlusion', icon: Aperture },
   { key: 'bloom', label: 'Bloom', icon: Sparkles },
@@ -62,6 +65,35 @@ export interface SceneParts {
   scene: THREE.Scene
   renderer: THREE.WebGLRenderer
   post: Post
+}
+
+/** The flat stand-in for a skinned material: the same surface with every map taken off it.
+ *
+ *  Swapping the whole material rather than nulling the maps on the one that is there, because the
+ *  skinned surfaces carry hand-written shader patches (the stochastic sampler, the two-scan blend,
+ *  the tiling break) that are wired to uniforms those maps supply. Nulling `map` leaves that code
+ *  compiled against nothing. A different material has none of it.
+ *
+ *  What survives is everything the picture's STRUCTURE depends on: sidedness, blending, the painter
+ *  stack's depth bias, the cutout threshold. What goes is the sampling, which is the question. */
+function flatten(source: THREE.Material): THREE.Material {
+  const flat = new THREE.MeshStandardMaterial()
+  const lit = source as THREE.MeshStandardMaterial
+  if (lit.color) flat.color.copy(lit.color)
+  if (lit.roughness !== undefined) flat.roughness = lit.roughness
+  if (lit.metalness !== undefined) flat.metalness = lit.metalness
+  if (lit.emissive) flat.emissive.copy(lit.emissive)
+  flat.side = source.side
+  flat.transparent = source.transparent
+  flat.opacity = source.opacity
+  flat.alphaTest = source.alphaTest
+  flat.depthWrite = source.depthWrite
+  flat.depthTest = source.depthTest
+  flat.blending = source.blending
+  flat.polygonOffset = source.polygonOffset
+  flat.polygonOffsetFactor = source.polygonOffsetFactor
+  flat.polygonOffsetUnits = source.polygonOffsetUnits
+  return flat
 }
 
 /** Every object carrying one of these names, wherever it stands. Populations are scattered (a stand
@@ -114,6 +146,13 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
   // The world the held objects came out of. A rebuild replaces every one of them, so the record has
   // to be thrown away and taken again rather than restored onto a scene that no longer exists.
   const heldFrom = useRef(world)
+  // The skinned materials this panel swapped out, and the flat stand-ins it made, so both can be put
+  // back and freed rather than leaked one toggle at a time.
+  const skins = useRef(new Map<THREE.Mesh, THREE.Material | THREE.Material[]>())
+  // Its own record of which world the swap was made against. It cannot share the hides' one: that is
+  // updated by the effect above, which runs first, so by the time this reads it the rebuild has
+  // already been marked as handled.
+  const skinsFrom = useRef(world)
 
   const measure = useCallback(() => {
     const parts = gl()
@@ -158,6 +197,26 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
   useEffect(() => {
     const parts = gl()
     if (!parts) return
+    const flatten_ = passOff.has('textures')
+    // Re-taken after a world swap for the same reason the hides are: these meshes are gone.
+    const rebuilt = skinsFrom.current !== world
+    skinsFrom.current = world
+    if (skins.current.size > 0 && (!flatten_ || rebuilt)) {
+      for (const [mesh, original] of skins.current) {
+        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) m.dispose()
+        // A rebuilt world's meshes are detached, so this puts the skins back onto nothing. Harmless,
+        // and the alternative is holding a dead scene's materials alive to be tidy about it.
+        mesh.material = original
+      }
+      skins.current.clear()
+    }
+    if (flatten_ && skins.current.size === 0) {
+      parts.scene.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return
+        skins.current.set(o, o.material)
+        o.material = Array.isArray(o.material) ? o.material.map(flatten) : flatten(o.material)
+      })
+    }
     const shadows = !passOff.has('shadows')
     if (parts.renderer.shadowMap.enabled !== shadows) {
       parts.renderer.shadowMap.enabled = shadows
