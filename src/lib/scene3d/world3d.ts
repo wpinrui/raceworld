@@ -163,7 +163,7 @@ export function buildWorld3D(
   const cell = u(GROUND_CELL_M)
   const normalStep = u(NORMAL_STEP_M)
   const add: typeof place = (geometry, ...rest) => {
-    drape(geometry, elevation, normalStep)
+    drape(geometry, elevation.at, normalStep)
     place(geometry, ...rest)
   }
 
@@ -171,7 +171,7 @@ export function buildWorld3D(
   // The sheet carries its fine grid across the circuit and its whole graded corridor, which is where
   // every bit of the surface's curvature lives, and grows its cells out over the open field beyond.
   const pad = u(CORRIDOR_M)
-  place(terrainSheet(elevation, {
+  place(terrainSheet(elevation.at, {
     inner: { x0: vx - pad, y0: vy - pad, x1: vx + vw + pad, y1: vy + vh + pad },
     outer: {
       x0: vx - GROUND_PAD, y0: vy - GROUND_PAD,
@@ -189,7 +189,7 @@ export function buildWorld3D(
     layout, u, pitZone, pitSlots, lap, ground: scenery.base, shadow: shadowFill(lighting),
   }
   // The ink IS the road, so it takes the road's grain, the road's finish and the road's ground.
-  const onGround = { elevation, cell, normalStep }
+  const onGround = { ground: elevation.at, cell, normalStep }
   const inkSurface = {
     detail: detail?.tarmac ?? null,
     metresPerUnit: layout.metresPerUnit,
@@ -247,7 +247,9 @@ export function buildWorld3D(
       }
     }
   }
-  if (pitZone) group.add(buildPitPaint3D(pitZone, u, lift(LAYER.lanePaint), materials, LAYER.lanePaint))
+  if (pitZone) group.add(buildPitPaint3D(
+      pitZone, u, lift(LAYER.lanePaint), materials, LAYER.lanePaint, elevation.at, cell, normalStep,
+    ))
 
   // Kerbs, the one thing on this ground that is not paint: lofted solids standing on the road
   // surface, red and white blocks alike, wearing their own corrugation (kerb3d).
@@ -269,11 +271,13 @@ export function buildWorld3D(
   }
 
   // The standing world, and the light it all agrees under.
-  const trees = buildTrees3D(scenery.trees, u, { pack: treePack, metresPerUnit: layout.metresPerUnit })
+  const trees = buildTrees3D(scenery.trees, u, {
+    pack: treePack, metresPerUnit: layout.metresPerUnit, ground: elevation.at,
+  })
   group.add(trees.group)
-  group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null))
-  if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
-  if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
+  group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null, elevation.at))
+  if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors, elevation.at))
+  if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null, elevation.at))
   for (const extra of extras?.() ?? []) group.add(extra)
   const rig = buildLightRig(lighting, frame ?? parseViewBox(layout.viewBox))
   group.add(rig)

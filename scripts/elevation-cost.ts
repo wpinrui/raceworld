@@ -35,7 +35,7 @@ for (const id of circuits) {
   const u = (m: number) => m / mpu
   const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
   const pad = u(CORRIDOR_M)
-  const sheet = ms('terrainSheet', () => terrainSheet(scenery.elevation, {
+  const sheet = ms('terrainSheet', () => terrainSheet(scenery.elevation.at, {
     inner: { x0: vx - pad, y0: vy - pad, x1: vx + vw + pad, y1: vy + vh + pad },
     outer: { x0: vx - 4000, y0: vy - 4000, x1: vx + vw + 4000, y1: vy + vh + 4000 },
     cell: u(GROUND_CELL_M), sink: u(0.03),

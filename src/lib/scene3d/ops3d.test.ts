@@ -7,7 +7,7 @@ import { FLAT_ELEVATION } from '@/lib/ui/elevation'
 
 // A flat world with a metre of grid: these tests are about the painter, not the landform, and the
 // draping they all go through has its own pinned behaviour in `terrain3d.test.ts`.
-const GROUND = { elevation: FLAT_ELEVATION, cell: 1, normalStep: 1 }
+const GROUND = { ground: FLAT_ELEVATION.at, cell: 1, normalStep: 1 }
 
 const line = (colour: string, alpha?: number, extra: Partial<DrawOp> = {}): DrawOp => ({
   d: 'M 0 0 L 10 0', stroke: colour, width: 2, cap: 'butt', ...(alpha != null ? { alpha } : {}), ...extra,

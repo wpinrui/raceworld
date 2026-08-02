@@ -10,6 +10,7 @@ import { flagSvgUrl } from '@/components/world/NationalityFlag'
 import { shade } from '@/lib/color'
 import type { PitZone } from '@/lib/ui/pit-zone'
 import { ROUGH, surface } from './materials3d'
+import { FLAT_GROUND, type Ground } from './terrain3d'
 
 /** Texels per metre of board: a name stays crisp at pit-stop zoom. */
 const PX_PER_M = 56
@@ -80,6 +81,7 @@ function drawBoard(
 
 export function buildGarageSigns3D(
   zone: PitZone, u: (m: number) => number, drivers: (i: number) => BoardDriver[],
+  ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
   const plate = surface(PLATE, { roughness: ROUGH.paint })
@@ -113,7 +115,7 @@ export function buildGarageSigns3D(
     )
     mesh.matrix.setPosition(
       (a.x + b.x) / 2 + out.x * (u(PROUD_M) - t / 2),
-      u(GARAGE_H_M) + h / 2,
+      ground((a.x + b.x) / 2, (a.y + b.y) / 2) + u(GARAGE_H_M) + h / 2,
       (a.y + b.y) / 2 + out.y * (u(PROUD_M) - t / 2),
     )
     mesh.matrixAutoUpdate = false

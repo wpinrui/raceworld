@@ -1250,9 +1250,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       ? new PitCrew3D({
         slots: pitSlots, u, colors: slotOf.colors,
         carScale: u(CAR_LENGTH_M * CAR_SCALE) / SPRITE.len, rideY: u(CAR_RIDE_M),
+        ground: scenery.elevation.at,
       })
       : null),
-    [view, pitSlots, u, slotOf],
+    [view, pitSlots, u, slotOf, scenery],
   )
   const crew3dRef = useRef<PitCrew3D | null>(null)
   useEffect(() => {
@@ -1298,7 +1299,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       frame: vb,
       overlay: gridOverlay,
       garageColors: (gi) => slotOf.colors[gi],
-      extras: () => (pitZone ? [buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [])] : []),
+      extras: () => (pitZone
+        ? [buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [], scenery.elevation.at)]
+        : []),
       night: mood === 'night',
       treePack,
     })

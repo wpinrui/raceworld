@@ -22,6 +22,7 @@
 import * as THREE from 'three'
 import type { SceneryTree } from '@/lib/ui/track-scenery'
 import { ROUGH, surface } from './materials3d'
+import { FLAT_GROUND, type Ground } from './terrain3d'
 import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
 
 /** Fallback canopy albedo per variant, for the spheres. */
@@ -79,7 +80,9 @@ function hash2(x: number, y: number): number {
 }
 
 /** The old lollipops, kept for the pack-less path. */
-function buildSpheres(trees: readonly SceneryTree[], u: (m: number) => number): THREE.Group {
+function buildSpheres(
+  trees: readonly SceneryTree[], u: (m: number) => number, ground: Ground,
+): THREE.Group {
   const group = new THREE.Group()
   const byVariant: SceneryTree[][] = [[], []]
   for (const t of trees) byVariant[t.variant].push(t)
@@ -101,10 +104,11 @@ function buildSpheres(trees: readonly SceneryTree[], u: (m: number) => number): 
       const rv = r * SQUASH
       // The data's height is the whole tree: canopy top at u(h), crown hanging below it.
       const centreY = Math.max(rv, u(t.h) - rv)
-      m.makeScale(r, rv, r).setPosition(t.x, centreY, t.y)
+      const soil = ground(t.x, t.y)
+      m.makeScale(r, rv, r).setPosition(t.x, soil + centreY, t.y)
       canopies.setMatrixAt(i, m)
       const rad = Math.max(u(0.4), t.r * 0.17)
-      m.makeScale(rad, centreY, rad).setPosition(t.x, centreY / 2, t.y)
+      m.makeScale(rad, centreY, rad).setPosition(t.x, soil + centreY / 2, t.y)
       trunks.setMatrixAt(ti++, m)
     })
     canopies.castShadow = true
@@ -133,7 +137,7 @@ interface Standing {
 
 /** The transform that stands a species on (x, z) at the tree's own height and a stable random yaw. */
 function transformFor(
-  t: SceneryTree, kind: TreeKind, u: (m: number) => number, seed: number,
+  t: SceneryTree, kind: TreeKind, u: (m: number) => number, seed: number, ground: Ground,
 ): THREE.Matrix4 {
   // The data's `h` is the tree's height in metres; the pack is authored in its own units, so the
   // ratio to the species' natural height is the scale, converted into world units on the way.
@@ -142,7 +146,7 @@ function transformFor(
   // enough to bend a trunk visibly: this is a broad canopy against a narrow one, nothing more.
   const wobble = 0.88 + ((seed * 7919) % 1) * 0.26
   return new THREE.Matrix4().compose(
-    new THREE.Vector3(t.x, 0, t.y),
+    new THREE.Vector3(t.x, ground(t.x, t.y), t.y),
     new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), seed * Math.PI * 2),
     new THREE.Vector3(scale * wobble, scale, scale * wobble),
   )
@@ -161,14 +165,16 @@ export interface Trees3DInput {
   pack?: TreePack | null
   /** Metres per world unit, for reading the detail bands in the scenery's own space. */
   metresPerUnit?: number
+  /** The ground each trunk grows out of. Absent, the world is flat. */
+  ground?: Ground
 }
 
 export function buildTrees3D(
   trees: readonly SceneryTree[], u: (m: number) => number, input: Trees3DInput = {},
 ): Trees3D {
-  const { pack, metresPerUnit = 1 } = input
+  const { pack, metresPerUnit = 1, ground = FLAT_GROUND } = input
   if (!pack || pack.kinds.length === 0) {
-    return { group: buildSpheres(trees, u), update: () => {} }
+    return { group: buildSpheres(trees, u, ground), update: () => {} }
   }
 
   // Species are drawn by WEIGHT, not uniformly: the conifers ride at a fraction of a broadleaf's
@@ -199,7 +205,7 @@ export function buildTrees3D(
       z: t.y,
       colour: new THREE.Color(turning ? AUTUMN_TINT : tints[Math.floor(seed * 997) % tints.length]),
       kind,
-      matrix: transformFor(t, kind, u, seed),
+      matrix: transformFor(t, kind, u, seed, ground),
     })
     bump(kind.near)
     bump(kind.far)

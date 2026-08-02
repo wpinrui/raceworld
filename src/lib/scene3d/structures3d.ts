@@ -16,6 +16,7 @@ import { ROUGH, surface, type SceneMaterials } from './materials3d'
 import { faceUV, type SurfaceDetail } from './detail3d'
 import { repairNormals } from './normals3d'
 import type { WorldTextures } from './textures3d'
+import { FLAT_GROUND, type Ground } from './terrain3d'
 
 /** Glazing ink, from the 2D's window fill. */
 const GLASS = '#0E1319'
@@ -37,9 +38,40 @@ function grain(geo: THREE.BufferGeometry, detail: SurfaceDetail | null, u: (m: n
   if (detail && !geo.getAttribute('uv')) faceUV(geo, u(detail.tileM))
 }
 
-function placed(geo: THREE.BufferGeometry, mat: THREE.Material, at: { x: number; y: number; rot: number }): THREE.Mesh {
+/** Where a footprint's pad sits: the LOWEST ground under it.
+ *
+ *  One height for the whole structure, because the geometry is built once in a local frame and
+ *  placed many times; deforming it per site would cost every building its shared mesh. Which height
+ *  is the question, and the lowest is the only answer that never leaves daylight under a wall. Site
+ *  it at the centre and the downhill corner floats; site it at the lowest and the uphill side is
+ *  buried instead, which is what a pad cut into a slope looks like.
+ *
+ *  Sampled around the footprint's own bounding circle rather than at its corners alone, since a
+ *  95 m grandstand can span a good deal of ground between them. */
+function padOf(
+  at: { x: number; y: number; rot: number; w?: number; h?: number },
+  ground: (x: number, y: number) => number,
+): number {
+  const radius = Math.hypot(at.w ?? 0, at.h ?? 0) / 2
+  let low = ground(at.x, at.y)
+  if (radius === 0) return low
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2
+    for (const r of [radius / 2, radius]) {
+      low = Math.min(low, ground(at.x + Math.cos(a) * r, at.y + Math.sin(a) * r))
+    }
+  }
+  return low
+}
+
+/** `pad` is passed in rather than derived here: a stand is four `placed` calls sharing one site, and
+ *  each would otherwise re-sample the same two dozen ground points to reach the same answer. */
+function placed(
+  geo: THREE.BufferGeometry, mat: THREE.Material,
+  at: { x: number; y: number; rot: number }, pad = 0,
+): THREE.Mesh {
   const mesh = new THREE.Mesh(geo, mat)
-  mesh.position.set(at.x, 0, at.y)
+  mesh.position.set(at.x, pad, at.y)
   mesh.rotation.y = -at.rot
   mesh.castShadow = true
   mesh.receiveShadow = true
@@ -48,7 +80,7 @@ function placed(geo: THREE.BufferGeometry, mat: THREE.Material, at: { x: number;
 
 export function buildBuildings3D(
   buildings: readonly SceneryRect[], u: (m: number) => number, materials: SceneMaterials,
-  night = false, detail: SurfaceDetail | null = null,
+  night = false, detail: SurfaceDetail | null = null, ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
   // At night the same glazing grid turns to warm lit windows: emissive, unlit-by-design, the one
@@ -62,14 +94,15 @@ export function buildBuildings3D(
   for (const b of buildings) {
     const parts = partsOf(b)
     const h = u((b.storeys ?? 1) * STOREY_M)
+    const pad = padOf(b, ground)
     const shell = partsSolidGeometry(parts, 0, h)
     grain(shell, detail, u)
-    group.add(placed(shell, materials.get(b.fill, { roughness: ROUGH.matte, detail }), b))
+    group.add(placed(shell, materials.get(b.fill, { roughness: ROUGH.matte, detail }), b, pad))
     const windows = partsWindowsGeometry(
       parts, 0, h, u(WINDOW_BAY_M), Math.max(1, b.storeys ?? 1), u(0.12),
     )
     if (windows) {
-      const glass = placed(windows, nightGlass ?? materials.get(GLASS, { alpha: GLASS_ALPHA }), b)
+      const glass = placed(windows, nightGlass ?? materials.get(GLASS, { alpha: GLASS_ALPHA }), b, pad)
       glass.castShadow = false
       group.add(glass)
     }
@@ -102,7 +135,7 @@ function deckGeometry(
  *  seat rows and the crowd are the same tiles the 2D patterns with, when a document is on hand. */
 export function buildStands3D(
   stands: readonly SceneryStand[], u: (m: number) => number, materials: SceneMaterials,
-  textures?: WorldTextures, detail: SurfaceDetail | null = null,
+  textures?: WorldTextures, detail: SurfaceDetail | null = null, ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
   const hF = u(STAND_FRONT_M)
@@ -115,6 +148,7 @@ export function buildStands3D(
     ? surface('#FFFFFF', { map: textures.crowd, alpha: 1, decal: true, roughness: ROUGH.chalk })
     : null
   for (const s of stands) {
+    const pad = padOf(s, ground)
     const zF = s.facing ? s.h / 2 : -s.h / 2
     const zR = -zF
     const x0 = -s.w / 2
@@ -128,12 +162,12 @@ export function buildStands3D(
     }
     const hullGeo = hull.build()
     grain(hullGeo, detail, u)
-    group.add(placed(hullGeo, materials.get(s.fill, { roughness: ROUGH.paint, detail }), s))
+    group.add(placed(hullGeo, materials.get(s.fill, { roughness: ROUGH.paint, detail }), s, pad))
 
     const deck = deckGeometry(x0, x1, zF, zR, hF, hR, mpu)
-    group.add(placed(deck, seatsMat, s))
+    group.add(placed(deck, seatsMat, s, pad))
     if (crowdMat) {
-      const crowd = placed(deck, crowdMat, s)
+      const crowd = placed(deck, crowdMat, s, pad)
       crowd.castShadow = false
       group.add(crowd)
     }
@@ -149,14 +183,14 @@ export function buildStands3D(
     )
     const roofGeo = roof.build()
     grain(roofGeo, detail, u)
-    group.add(placed(roofGeo, materials.get(ROOF, { roughness: ROUGH.paint, detail }), s))
+    group.add(placed(roofGeo, materials.get(ROOF, { roughness: ROUGH.paint, detail }), s, pad))
   }
   return group
 }
 
 export function buildMarshals3D(
   marshals: readonly SceneryMarshal[], u: (m: number) => number, materials: SceneMaterials,
-  detail: SurfaceDetail | null = null,
+  detail: SurfaceDetail | null = null, ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
   const w = u(MARSHAL_W_M)
@@ -172,8 +206,9 @@ export function buildMarshals3D(
   )
   const panelGeo = panel.build()
   for (const m of marshals) {
-    group.add(placed(hutGeo, materials.get(HUT, { roughness: ROUGH.paint, detail }), m))
-    const p = placed(panelGeo, materials.get(HUT_PANEL), m)
+    const pad = padOf({ ...m, w, h: d }, ground)
+    group.add(placed(hutGeo, materials.get(HUT, { roughness: ROUGH.paint, detail }), m, pad))
+    const p = placed(panelGeo, materials.get(HUT_PANEL), m, pad)
     p.castShadow = false
     group.add(p)
   }
@@ -185,6 +220,7 @@ export function buildMarshals3D(
  *  kept its fence shadows faint for the same reason. */
 export function buildFences3D(
   fences: readonly SceneryFence[], u: (m: number) => number, materials: SceneMaterials,
+  ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
   const h = u(FENCE_H_M)
@@ -194,24 +230,33 @@ export function buildFences3D(
   // Fencing composites AFTER the road's ink decals (which own the low renderOrders): a cage face
   // blended before the ink underneath it would be stamped over by the ink's later draw.
   const FENCE_ORDER = 1000
+  // A fence FOLLOWS the ground, both edges of it: it is the one structure here long enough that a
+  // level footing would be underground at one end and on stilts at the other. Its top rail rides at
+  // a constant height above the same land, which is how fencing is actually put up.
   for (const f of fences) {
-    const face = new THREE.Mesh(wallStripGeometry(f.pts, 0, h), materials.get(FENCE_FACE, { alpha: 0.13 }))
+    const face = new THREE.Mesh(
+      wallStripGeometry(f.pts, ground, (x, y) => ground(x, y) + h),
+      materials.get(FENCE_FACE, { alpha: 0.13 }),
+    )
     face.receiveShadow = true
     face.renderOrder = FENCE_ORDER
     group.add(face)
-    const rail = new THREE.Mesh(
-      ribbonGeometry(f.pts, { halfW: u(0.2), y: h }), materials.get(FENCE_STEEL, { alpha: 0.6 }),
-    )
+    const railGeo = ribbonGeometry(f.pts, { halfW: u(0.2), y: h })
+    const rp = railGeo.getAttribute('position')
+    for (let i = 0; i < rp.count; i++) rp.setY(i, rp.getY(i) + ground(rp.getX(i), rp.getZ(i)))
+    const rail = new THREE.Mesh(railGeo, materials.get(FENCE_STEEL, { alpha: 0.6 }))
     rail.renderOrder = FENCE_ORDER
     group.add(rail)
-    for (let i = 0; i < f.pts.length; i += 2) posts.push(new THREE.Vector3(f.pts[i].x, 0, f.pts[i].y))
+    for (let i = 0; i < f.pts.length; i += 2) {
+      posts.push(new THREE.Vector3(f.pts[i].x, ground(f.pts[i].x, f.pts[i].y), f.pts[i].y))
+    }
   }
   if (posts.length > 0) {
     const mesh = new THREE.InstancedMesh(postGeo, postMat, posts.length)
     const m = new THREE.Matrix4()
     const rad = u(0.18)
     posts.forEach((p, i) => {
-      m.makeScale(rad, h, rad).setPosition(p.x, h / 2, p.z)
+      m.makeScale(rad, h, rad).setPosition(p.x, p.y + h / 2, p.z)
       mesh.setMatrixAt(i, m)
     })
     mesh.renderOrder = FENCE_ORDER
@@ -223,12 +268,12 @@ export function buildFences3D(
 export function buildStructures3D(
   scenery: Pick<Scenery, 'buildings' | 'stands' | 'marshals' | 'fences'>,
   u: (m: number) => number, materials: SceneMaterials, textures?: WorldTextures, night = false,
-  detail: SurfaceDetail | null = null,
+  detail: SurfaceDetail | null = null, ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
-  group.add(buildBuildings3D(scenery.buildings, u, materials, night, detail))
-  group.add(buildStands3D(scenery.stands, u, materials, textures, detail))
-  group.add(buildMarshals3D(scenery.marshals, u, materials, detail))
-  group.add(buildFences3D(scenery.fences, u, materials))
+  group.add(buildBuildings3D(scenery.buildings, u, materials, night, detail, ground))
+  group.add(buildStands3D(scenery.stands, u, materials, textures, detail, ground))
+  group.add(buildMarshals3D(scenery.marshals, u, materials, detail, ground))
+  group.add(buildFences3D(scenery.fences, u, materials, ground))
   return group
 }

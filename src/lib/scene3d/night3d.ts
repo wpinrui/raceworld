@@ -8,6 +8,7 @@ import type { TrackLayout } from '@/data/tracks'
 import { TRACK_WIDTH_M, densifyTrace } from '@/lib/ui/track-path'
 import { GeometrySink, v3 } from './solids3d'
 import { DECAL_PULL, ROUGH, surface } from './materials3d'
+import { FLAT_GROUND, type Ground } from './terrain3d'
 
 /** One tower roughly every this many metres, alternating sides. */
 const TOWER_SPACING_M = 130
@@ -24,7 +25,7 @@ const HEAD_GLOW = '#F2EBD4'
 const HEAD_OVERDRIVE = 2.4
 
 export function buildNightLights3D(
-  layout: TrackLayout, glowPool: THREE.Texture | null,
+  layout: TrackLayout, glowPool: THREE.Texture | null, ground: Ground = FLAT_GROUND,
 ): THREE.Group {
   const group = new THREE.Group()
   const u = (m: number) => m / layout.metresPerUnit
@@ -50,10 +51,13 @@ export function buildNightLights3D(
     const bx = p.x + nx * offset
     const bz = p.y + nz * offset
     const w = u(0.5)
-    const h = u(TOWER_H_M)
+    // The tower stands ON the ground beside the circuit, and its head therefore rides that height
+    // too: a mast rooted at zero on a graded world is a mast half way up a hillside.
+    const base = ground(bx, bz)
+    const h = base + u(TOWER_H_M)
     // Mast: a slim square post; head: a wide shallow bar cantilevered toward the track, glowing.
-    masts.quad(v3(bx - w, 0, bz - w), v3(bx + w, 0, bz + w), v3(bx + w, h, bz + w), v3(bx - w, h, bz - w))
-    masts.quad(v3(bx - w, 0, bz + w), v3(bx + w, 0, bz - w), v3(bx + w, h, bz - w), v3(bx - w, h, bz + w))
+    masts.quad(v3(bx - w, base, bz - w), v3(bx + w, base, bz + w), v3(bx + w, h, bz + w), v3(bx - w, h, bz - w))
+    masts.quad(v3(bx - w, base, bz + w), v3(bx + w, base, bz - w), v3(bx + w, h, bz - w), v3(bx - w, h, bz + w))
     const hx = bx - nx * u(2.4)
     const hz = bz - nz * u(2.4)
     const across = u(3.4)
@@ -85,7 +89,7 @@ export function buildNightLights3D(
     })
     for (const p of pools) {
       const pool = new THREE.Mesh(poolGeo, poolMat)
-      pool.position.set(p.x, u(0.05), p.y)
+      pool.position.set(p.x, ground(p.x, p.y) + u(0.05), p.y)
       pool.renderOrder = 950
       group.add(pool)
     }

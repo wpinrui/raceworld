@@ -16,8 +16,8 @@ import { pathFillGeometry } from './ground3d'
 import { dashGeometry, ribbonGeometry } from './road3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
-import { drape, refine, subdivide } from './terrain3d'
-import type { Elevation } from '@/lib/ui/elevation'
+import { drape, refine, subdivide, type Ground } from './terrain3d'
+
 
 export interface OpsDecalOpts {
   /** The one height the whole stack renders at. */
@@ -42,7 +42,7 @@ export interface OpsDecalOpts {
   specular?: number
   /** The ground this ink lies on. The ink IS the road surface, so it has to ride exactly what the
    *  road rides or it floats off the tarmac on every gradient. */
-  elevation: Elevation
+  ground: Ground
   /** Grid pitch to cut the ink down to before draping, and the step its normals are differenced
    *  over, both in world units. */
   cell: number
@@ -89,7 +89,7 @@ export function buildOpsDecals(
   const flush = () => {
     if (runMaterial && runGeometries.length > 0) {
       const merged = runGeometries.length === 1 ? runGeometries[0] : mergeGeometries(runGeometries)
-      drape(merged, o.elevation, o.normalStep)
+      drape(merged, o.ground, o.normalStep)
       if (o.detail) planarUV(merged, o.detail.tileM / (o.metresPerUnit ?? 1))
       const mesh = new THREE.Mesh(merged, runMaterial)
       mesh.receiveShadow = true

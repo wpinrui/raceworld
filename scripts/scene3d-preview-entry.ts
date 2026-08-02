@@ -185,7 +185,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
       ? [buildGarageSigns3D(pitZone, (m) => m / mpu, () => [
         { name: 'Kimi Raikkonen', nationality: 'FI' },
         { name: 'Felipe Massa', nationality: 'BR' },
-      ])]
+      ], scenery.elevation.at)]
       : []),
   })
   const scene = new THREE.Scene()
@@ -196,6 +196,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
   const crew = new PitCrew3D({
     slots: pitSlots, u: (m) => m / mpu, colors: pitSlots.map(() => '#9AA3B2'),
     carScale: CAR_LENGTH_M * CAR_SCALE / mpu / SPRITE.len, rideY: CAR_RIDE_M / mpu,
+    ground: scenery.elevation.at,
   })
   pitSlots.forEach((slot, si) => {
     let best = layout.pit.fastPts[0]

@@ -65,7 +65,7 @@ export function buildGroundStack3D(
   const add = (geo: THREE.BufferGeometry | null, colour: string, layer: number, alpha = 1) => {
     if (!geo) return
     const fitted = subdivide(geo, cell)
-    drape(fitted, elevation, normalStep)
+    drape(fitted, elevation.at, normalStep)
     if (detail) planarUV(fitted, u(detail.tileM))
     const mesh = new THREE.Mesh(fitted, materials.get(colour, { alpha, layer, detail }))
     mesh.receiveShadow = true
@@ -89,7 +89,7 @@ export function buildGroundStack3D(
       add(geo, t.fill, layers.terrain)
       continue
     }
-    levelTo(geo, lowestOn(geo, elevation))
+    levelTo(geo, lowestOn(geo, elevation.at))
     if (detail) planarUV(geo, u(detail.tileM))
     const mesh = new THREE.Mesh(geo, materials.get(t.fill, { layer: layers.terrain, detail }))
     mesh.receiveShadow = true

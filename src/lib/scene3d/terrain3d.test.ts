@@ -5,24 +5,18 @@
 
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import type { Elevation } from '@/lib/ui/elevation'
 import {
   GROUND_SINK_M, axisLines, drape, levelTo, lowestOn, refine, subdivide, terrainSheet,
+  type Ground,
 } from './terrain3d'
 
 /** A ground that ramps along x and is level along z: a slope with a known gradient. */
-const SLOPE: Elevation = {
-  at: (x) => x / 10,
-  trackRange: { min: 0, max: 1 },
-}
+const SLOPE: Ground = (x) => x / 10
 
 /** A ground with curvature, so a chord across it is measurably not the surface. */
-const DOME: Elevation = {
-  at: (x, y) => -(x * x + y * y) / 400,
-  trackRange: { min: -1, max: 0 },
-}
+const DOME: Ground = (x, y) => -(x * x + y * y) / 400
 
-const FLAT: Elevation = { at: () => 0, trackRange: { min: 0, max: 0 } }
+const FLAT: Ground = () => 0
 
 /** A flat sheet of one quad, at a lift, non-indexed the way the ground builders emit. */
 function sheet(lift: number, size = 10): THREE.BufferGeometry {
@@ -48,7 +42,7 @@ describe('drape', () => {
     drape(g, SLOPE, 1)
     const p = g.getAttribute('position')
     for (let i = 0; i < p.count; i++) {
-      expect(p.getY(i) - SLOPE.at(p.getX(i), p.getZ(i))).toBeCloseTo(lift, 6)
+      expect(p.getY(i) - SLOPE(p.getX(i), p.getZ(i))).toBeCloseTo(lift, 6)
     }
   })
 
@@ -112,7 +106,7 @@ describe('subdivide', () => {
           cy += p.getY(i + k) / 3
           cz += p.getZ(i + k) / 3
         }
-        worst = Math.max(worst, Math.abs(cy - DOME.at(cx, cz)))
+        worst = Math.max(worst, Math.abs(cy - DOME(cx, cz)))
       }
       return worst
     }
@@ -180,7 +174,7 @@ describe('axisLines', () => {
 })
 
 describe('terrainSheet', () => {
-  const build = (elevation: Elevation) => terrainSheet(elevation, {
+  const build = (ground: Ground) => terrainSheet(ground, {
     inner: { x0: 0, y0: 0, x1: 40, y1: 40 },
     outer: { x0: -200, y0: -200, x1: 240, y1: 240 },
     cell: 5,
@@ -191,7 +185,7 @@ describe('terrainSheet', () => {
     const g = build(SLOPE)
     const p = g.getAttribute('position')
     for (let i = 0; i < p.count; i++) {
-      expect(p.getY(i)).toBeCloseTo(SLOPE.at(p.getX(i), p.getZ(i)) - GROUND_SINK_M, 4)
+      expect(p.getY(i)).toBeCloseTo(SLOPE(p.getX(i), p.getZ(i)) - GROUND_SINK_M, 4)
     }
   })
 

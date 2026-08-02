@@ -7,7 +7,6 @@
 // world has height. `terrainSheet` builds the ground it is being lifted onto.
 
 import * as THREE from 'three'
-import type { Elevation } from '@/lib/ui/elevation'
 import { repairNormals } from './normals3d'
 
 /** How far the ground sheet is set below the true surface, in metres.
@@ -34,6 +33,13 @@ export const GROUND_CELL_M = 6
  *  the fine pitch all the way out would be millions of triangles of empty grass. */
 const GROWTH = 1.25
 
+/** How high the ground is at a point, in world units: `Elevation.at`, as the builders take it. Every
+ *  one of them accepts it OPTIONALLY and defaults to flat, so a test or a probe can build any part
+ *  of this world without a landform and the geometry path stays single. */
+export type Ground = (x: number, y: number) => number
+
+export const FLAT_GROUND: Ground = () => 0
+
 /** The step the surface normal is differenced over, in metres. Small enough to follow a bank, large
  *  enough not to chase the raw field's finest octave into noise. */
 export const NORMAL_STEP_M = 1
@@ -50,15 +56,15 @@ export const NORMAL_STEP_M = 1
  *
  *  `step` is in world units: pass `u(NORMAL_STEP_M)`. */
 function surfaceNormals(
-  geometry: THREE.BufferGeometry, elevation: Elevation, step: number,
+  geometry: THREE.BufferGeometry, ground: Ground, step: number,
 ): void {
   const position = geometry.getAttribute('position')
   const normals = new Float32Array(position.count * 3)
   for (let i = 0; i < position.count; i++) {
     const x = position.getX(i)
     const z = position.getZ(i)
-    const dx = (elevation.at(x + step, z) - elevation.at(x - step, z)) / (2 * step)
-    const dz = (elevation.at(x, z + step) - elevation.at(x, z - step)) / (2 * step)
+    const dx = (ground(x + step, z) - ground(x - step, z)) / (2 * step)
+    const dz = (ground(x, z + step) - ground(x, z - step)) / (2 * step)
     const len = Math.hypot(dx, 1, dz)
     normals[i * 3] = -dx / len
     normals[i * 3 + 1] = 1 / len
@@ -75,13 +81,13 @@ function surfaceNormals(
  *  The normals are not optional. Every one of these builders computed normals for a flat sheet and
  *  got (0, 1, 0) throughout; on a graded surface that is a lie the lighting reads directly, and a
  *  road running down a hill would shade as though it were still level. */
-export function drape(geometry: THREE.BufferGeometry, elevation: Elevation, step: number): void {
+export function drape(geometry: THREE.BufferGeometry, ground: Ground, step: number): void {
   const position = geometry.getAttribute('position')
   for (let i = 0; i < position.count; i++) {
-    position.setY(i, position.getY(i) + elevation.at(position.getX(i), position.getZ(i)))
+    position.setY(i, position.getY(i) + ground(position.getX(i), position.getZ(i)))
   }
   position.needsUpdate = true
-  surfaceNormals(geometry, elevation, step)
+  surfaceNormals(geometry, ground, step)
   repairNormals(geometry)
 }
 
@@ -185,11 +191,11 @@ export function refine<T extends { x: number; y: number }>(
 }
 
 /** The lowest ground any of a fill's vertices stands on. */
-export function lowestOn(geometry: THREE.BufferGeometry, elevation: Elevation): number {
+export function lowestOn(geometry: THREE.BufferGeometry, ground: Ground): number {
   const position = geometry.getAttribute('position')
   let lowest = Infinity
   for (let i = 0; i < position.count; i++) {
-    const h = elevation.at(position.getX(i), position.getZ(i))
+    const h = ground(position.getX(i), position.getZ(i))
     if (h < lowest) lowest = h
   }
   return Number.isFinite(lowest) ? lowest : 0
@@ -243,7 +249,7 @@ export interface TerrainSheetOpts {
 }
 
 /** The ground itself: one graded sheet over the whole world, standing on the elevation. */
-export function terrainSheet(elevation: Elevation, o: TerrainSheetOpts): THREE.BufferGeometry {
+export function terrainSheet(ground: Ground, o: TerrainSheetOpts): THREE.BufferGeometry {
   const xs = axisLines(o.inner.x0, o.inner.x1, o.outer.x0, o.outer.x1, o.cell)
   const zs = axisLines(o.inner.y0, o.inner.y1, o.outer.y0, o.outer.y1, o.cell)
   const w = xs.length
@@ -252,7 +258,7 @@ export function terrainSheet(elevation: Elevation, o: TerrainSheetOpts): THREE.B
   let k = 0
   for (let j = 0; j < zs.length; j++) {
     for (let i = 0; i < w; i++) {
-      const h = elevation.at(xs[i], zs[j])
+      const h = ground(xs[i], zs[j])
       heights[j * w + i] = h
       positions[k++] = xs[i]
       positions[k++] = h - o.sink
