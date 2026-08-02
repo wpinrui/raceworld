@@ -155,6 +155,18 @@ describe('CarField3D', () => {
 })
 
 describe('CarField3D detail swaps', () => {
+  it('has every rung standing before the camera ever asks for one', () => {
+    // On demand is the same stall with a delay on it: it just lands the first time the player
+    // crosses each band instead of every time.
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    const wrap = field.group.children[0] as THREE.Group
+    const rungs = wrap.children.filter((o) => o.children.length > 0)
+    expect(rungs).toHaveLength(CAR_TIERS.length)
+    expect(rungs.filter((o) => o.visible)).toHaveLength(1)
+    field.dispose()
+  })
+
   it('builds a rung once and swaps visibility after, so zooming is not twenty rebuilds', () => {
     // The regression this fixes: crossing a band tore down and rebuilt every car in the field mid
     // gesture, which stalls exactly when the player is moving the camera.

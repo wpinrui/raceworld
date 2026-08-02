@@ -47,12 +47,16 @@ export const CAR_RIDE_M = 0.03
 
 interface Entry {
   key: string
-  /** Every rung this car has been asked for, kept once built.
+  /** EVERY rung, built with the car and kept. Crossing a zoom band is then a visibility swap.
    *
-   *  Rebuilding on every threshold crossing made ZOOMING expensive: one wheel notch across a band
-   *  tore down and rebuilt twenty cars mid-gesture, which is a stall exactly when the player is
-   *  moving the camera. Built lazily, so a race that never leaves one rung never pays for the others,
-   *  and kept, so crossing back is a visibility swap. */
+   *  Built up front rather than on demand, and the difference matters more than it sounds. Rebuilding
+   *  per crossing stalled the zoom outright. Building on FIRST demand only moves that stall to the
+   *  first time the player crosses each band, which is the same bug wearing a delay: the cost still
+   *  lands mid-gesture, just once per rung.
+   *
+   *  Measured, per car: 41 ms at rung 0, then 31, 20, 8.5, 0.3, so 101 ms for the set and about two
+   *  seconds for a twenty-car field. That is paid at race load, beside a world build that is already
+   *  happening, instead of in the middle of a camera move. */
   tiers: Map<number, CarMesh>
   /** The rung currently shown, which is the one `pose` drives. */
   mesh: CarMesh
@@ -136,20 +140,28 @@ export class CarField3D {
       spun: { fl: 0, fr: 0, rl: 0, rr: 0 }, livery, compound, ...carry,
     }
     this.entries.set(id, entry)
+    // Every rung, now, while the field is being assembled. See `Entry.tiers`.
+    for (let t = 0; t < CAR_TIERS.length; t++) this.buildTier(entry, t)
     this.showTier(entry)
     if (carry.last) this.pose(id, carry.last)
     if (carry.opacity !== 1) this.setOpacity(id, carry.opacity)
     if (!carry.wheels) this.setWheelsVisible(id, false)
   }
 
-  /** Put this car on the field's current rung, building that rung the first time it is asked for. */
+  /** Build one rung and park it, hidden, on the car's wrap. */
+  private buildTier(e: Entry, tier: number): CarMesh {
+    const held = e.tiers.get(tier)
+    if (held) return held
+    const made = buildCarMesh(e.livery, e.compound, tier, this.finishes)
+    made.group.visible = false
+    e.tiers.set(tier, made)
+    e.wrap.add(made.group)
+    return made
+  }
+
+  /** Put this car on the field's current rung. Every rung already exists by the time this runs. */
   private showTier(e: Entry): void {
-    let next = e.tiers.get(this.tier)
-    if (!next) {
-      next = buildCarMesh(e.livery, e.compound, this.tier, this.finishes)
-      e.tiers.set(this.tier, next)
-      e.wrap.add(next.group)
-    }
+    const next = this.buildTier(e, this.tier)
     if (e.mesh === next) return
     if (e.mesh) e.mesh.group.visible = false
     next.group.visible = true
