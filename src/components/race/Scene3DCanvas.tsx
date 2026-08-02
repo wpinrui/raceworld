@@ -58,7 +58,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   // `n` and `since` are the counter's own window, reset twice a second. `total` never resets: it is
   // how anything else can tell whether a paint has happened, which is what keeps a second painter
   // from adding frames to a display refresh that already had one.
-  const frames = useRef({ n: 0, since: 0, total: 0 })
+  const frames = useRef({ n: 0, since: 0, total: 0, cpu: 0 })
   const glRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
@@ -102,7 +102,18 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // normals, the beauty draw, the bloom pyramid. That total is what the frame actually submits,
       // and submitting is a per-draw cost that no amount of shrinking the window touches.
       gl.renderer.info.reset()
+      // Wall clock across the whole chain, which on a WebGL context is SUBMISSION time: the driver
+      // queues the work and returns. So this number against the frame interval is the diagnosis.
+      // Close to the interval means the thread is spending the frame issuing draws, and the answer
+      // is fewer objects. Far below it means the work is queued fast and the GPU is the wall, and
+      // the answer is fewer pixels or fewer triangles instead.
+      //
+      // The one confound worth knowing about: once the command queue is full the driver blocks
+      // inside a draw call, and that stall lands in this number too. It shows up as both being high
+      // at once, which is still a useful reading, just not a clean one.
+      const t0 = performance.now()
       gl.post.render()
+      frames.current.cpu += performance.now() - t0
       // Counted HERE rather than off a rAF loop of its own: this is the app's only render, so its
       // rate is the frame rate. A separate loop would report how often the browser offered a frame,
       // which is 60 whatever the scene costs.
@@ -113,12 +124,15 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       if (f.since === 0) {
         f.since = now
       } else if (now - f.since >= 500) {
-        if (fpsRef.current) fpsRef.current.textContent = ((f.n * 1000) / (now - f.since)).toFixed(0)
+        const span = now - f.since
+        if (fpsRef.current) fpsRef.current.textContent = ((f.n * 1000) / span).toFixed(0)
         if (costRef.current) {
           const { calls, triangles } = gl.renderer.info.render
           costRef.current.textContent = `${calls} draws  ${(triangles / 1e6).toFixed(1)}M tris`
+            + `  ${(f.cpu / f.n).toFixed(1)}/${(span / f.n).toFixed(1)}ms`
         }
         f.n = 0
+        f.cpu = 0
         f.since = now
       }
     }
