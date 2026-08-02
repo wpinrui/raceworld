@@ -124,7 +124,7 @@ function trianglesOf(roots: readonly THREE.Object3D[]): number {
   return Math.round(total)
 }
 
-export function SceneToggles({ gl, repaint, world, fpsRef, frames }: {
+export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
   /** The live GL trio, read on demand: the renderer effect owns it and it outlives no world. */
   gl: () => SceneParts | null
   /** Redraw with the switches as they now stand. */
@@ -135,6 +135,8 @@ export function SceneToggles({ gl, repaint, world, fpsRef, frames }: {
   /** The frame counter's node. The painter writes into it directly, outside React, because a
    *  counter that re-renders on every frame it measures is measuring itself. */
   fpsRef: React.RefObject<HTMLSpanElement | null>
+  /** Draw calls and triangles for the whole chain, written the same way and for the same reason. */
+  costRef: React.RefObject<HTMLSpanElement | null>
   /** The painter's running tally, for Spin to tell a frame nobody drew from one already drawn. */
   frames: React.RefObject<{ total: number }>
 }) {
@@ -293,6 +295,12 @@ export function SceneToggles({ gl, repaint, world, fpsRef, frames }: {
         <span>fps</span>
         {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </button>
+      {open && (
+        <span
+          ref={costRef}
+          className="pointer-events-auto self-start whitespace-nowrap rounded bg-black/55 px-2 py-1 text-white"
+        />
+      )}
       {open && (
         <div className="pointer-events-auto flex flex-col rounded bg-black/70 p-1">
           {PARTS.map((p) => row(

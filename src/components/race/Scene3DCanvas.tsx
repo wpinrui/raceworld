@@ -54,6 +54,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   // The frame counter writes straight into its own node. Through React state it would set state on
   // every frame it measures, re-render the canvas host, and be reporting the cost of reporting.
   const fpsRef = useRef<HTMLSpanElement>(null)
+  const costRef = useRef<HTMLSpanElement>(null)
   // `n` and `since` are the counter's own window, reset twice a second. `total` never resets: it is
   // how anything else can tell whether a paint has happened, which is what keeps a second painter
   // from adding frames to a display refresh that already had one.
@@ -96,6 +97,11 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // not to the circuit. It is fitted against the world's OWN ground plane, so the fog is
       // finished before any edge of it can show.
       if (gl.scene.fog instanceof THREE.Fog) refitFog(gl.scene.fog, camera, world.ground)
+      // Counted across the WHOLE chain, not just the beauty pass. `autoReset` is off (set with the
+      // renderer), so every pass adds to one tally: the shadow map, the occlusion buffer's depth and
+      // normals, the beauty draw, the bloom pyramid. That total is what the frame actually submits,
+      // and submitting is a per-draw cost that no amount of shrinking the window touches.
+      gl.renderer.info.reset()
       gl.post.render()
       // Counted HERE rather than off a rAF loop of its own: this is the app's only render, so its
       // rate is the frame rate. A separate loop would report how often the browser offered a frame,
@@ -108,6 +114,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
         f.since = now
       } else if (now - f.since >= 500) {
         if (fpsRef.current) fpsRef.current.textContent = ((f.n * 1000) / (now - f.since)).toFixed(0)
+        if (costRef.current) {
+          const { calls, triangles } = gl.renderer.info.render
+          costRef.current.textContent = `${calls} draws  ${(triangles / 1e6).toFixed(1)}M tris`
+        }
         f.n = 0
         f.since = now
       }
@@ -120,6 +130,8 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    // The painter resets this itself, once per frame, so one tally covers every pass in the chain.
+    renderer.info.autoReset = false
     applyToneMapping(renderer)
     const scene = new THREE.Scene()
     // MSAA moves to the composer's target: `antialias` above applies to the default framebuffer,
@@ -254,7 +266,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   return (
     <div ref={boxRef} className={className}>
       <canvas ref={canvasRef} className="absolute inset-0" />
-      <SceneToggles gl={glParts} repaint={paint} world={world} fpsRef={fpsRef} frames={frames} />
+      <SceneToggles
+        gl={glParts} repaint={paint} world={world}
+        fpsRef={fpsRef} costRef={costRef} frames={frames}
+      />
     </div>
   )
 }
