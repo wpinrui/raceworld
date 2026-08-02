@@ -28,6 +28,7 @@ import { buildGroundStack3D } from './ground3d'
 import { buildKerbs3D } from './kerb3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
+import type { StandSkin } from './standtex3d'
 import { buildTrees3D, type Trees3D } from './trees3d'
 import type { TreePack } from './treepack3d'
 import { buildNightLights3D } from './night3d'
@@ -106,6 +107,9 @@ export interface World3DInput {
   /** The imported tree pack, browser-loaded; absent (in tests, and before the download lands) the
    *  trees fall back to the old spheres so the world is never bare. */
   treePack?: TreePack | null
+  /** Scanned surfaces for the grandstands, browser-loaded; absent (in tests, and until the maps
+   *  decode) they render in their authored flat colours, which is a whole stand either way. */
+  standSkin?: StandSkin | null
 }
 
 export interface World3D {
@@ -131,7 +135,7 @@ export interface World3D {
 }
 
 export function buildWorld3D(
-  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, detail, frame, overlay, garageColors, extras, night, treePack }: World3DInput,
+  { layout, scenery, pitZone, pitSlots, lap, lighting, textures, detail, frame, overlay, garageColors, extras, night, treePack, standSkin }: World3DInput,
 ): World3D {
   const u = (m: number) => m / layout.metresPerUnit
   const lift = (layer: number) => u(LIFT_M) * layer
@@ -240,7 +244,9 @@ export function buildWorld3D(
   // The standing world, and the light it all agrees under.
   const trees = buildTrees3D(scenery.trees, u, { pack: treePack, metresPerUnit: layout.metresPerUnit })
   group.add(trees.group)
-  group.add(buildStructures3D(scenery, u, materials, textures, night, detail?.wall ?? null))
+  group.add(buildStructures3D(
+    scenery, u, materials, textures, night, detail?.wall ?? null, standSkin ?? null,
+  ))
   if (pitZone) group.add(buildPitComplex3D(pitZone, u, materials, garageColors))
   if (night) group.add(buildNightLights3D(layout, textures?.glowPool ?? null))
   for (const extra of extras?.() ?? []) group.add(extra)

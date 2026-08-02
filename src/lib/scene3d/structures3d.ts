@@ -5,24 +5,25 @@
 
 import * as THREE from 'three'
 import {
-  FENCE_H_M, MARSHAL_D_M, MARSHAL_H_M, MARSHAL_W_M, STAND_FRONT_M, STAND_REAR_M, STAND_ROOF_FRAC,
-  STOREY_M, WINDOW_BAY_M, partsOf,
+  FENCE_H_M, MARSHAL_D_M, MARSHAL_H_M, MARSHAL_W_M, STOREY_M, WINDOW_BAY_M, partsOf,
 } from '@/lib/ui/scenery-draw'
 import type { Scenery, SceneryRect, SceneryStand } from '@/lib/ui/track-scenery'
 import type { SceneryFence, SceneryMarshal } from '@/lib/ui/scenery-props'
 import { ribbonGeometry } from './road3d'
 import { GeometrySink, partsSolidGeometry, partsWindowsGeometry, v3, wallStripGeometry } from './solids3d'
-import { ROUGH, surface, type SceneMaterials } from './materials3d'
+import { ROUGH, type SceneMaterials } from './materials3d'
 import { faceUV, type SurfaceDetail } from './detail3d'
-import { repairNormals } from './normals3d'
 import type { WorldTextures } from './textures3d'
+import {
+  buildGrandstand, seatPositions, standSection, standSpecFor,
+  type SeatForm, type SeatLod,
+} from './grandstand3d'
+import { buildCrowd, type CrowdSeat } from './standcrowd3d'
+import type { StandSkin } from './standtex3d'
 
 /** Glazing ink, from the 2D's window fill. */
 const GLASS = '#0E1319'
 const GLASS_ALPHA = 0.42
-/** The flat blend of the 2D's seat tile: base rows with a lighter seat band. */
-const DECK = '#474E5C'
-const ROOF = '#7B8494'
 const HUT = '#3A4049'
 const HUT_PANEL = '#E8952B'
 const FENCE_FACE = '#AEB6C2'
@@ -77,79 +78,68 @@ export function buildBuildings3D(
   return group
 }
 
-/** The seating deck as one sloped quad with UVs in METRES, so the seat and crowd tiles repeat at
- *  their authored sizes whatever the stand's dimensions. */
-function deckGeometry(
-  x0: number, x1: number, zF: number, zR: number, hF: number, hR: number, mpu: number,
-): THREE.BufferGeometry {
-  const wM = (x1 - x0) * mpu
-  const dM = Math.hypot(zR - zF, hR - hF) * mpu
-  const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute([
-    x0, hF, zF, x1, hF, zF, x1, hR, zR,
-    x0, hF, zF, x1, hR, zR, x0, hR, zR,
-  ], 3))
-  g.setAttribute('uv', new THREE.Float32BufferAttribute([
-    0, 0, wM, 0, wM, dM,
-    0, 0, wM, dM, 0, dM,
-  ], 2))
-  g.computeVertexNormals()
-  return repairNormals(g)
-}
-
-/** A grandstand raked like real seating: low front wall trackside, tall rear, a sloped deck between,
- *  and a canopy over the rear rows. The deck's own tilt is what the 2D's rake gradient faked; the
- *  seat rows and the crowd are the same tiles the 2D patterns with, when a document is on hand. */
+/** The circuit's grandstands, and the whole crowd in them.
+ *
+ *  Each stand is a `buildGrandstand` fitted to the footprint the scenery reserved, built in METRES in
+ *  its own frame and then scaled into world units. Its trackside face sits at z = 0 with the rake
+ *  climbing +z, so placing one is a matter of putting that face on the right edge of the footprint:
+ *  `facing` says the trackside edge is local +y, which is the model turned about and slid forward,
+ *  and its absence is the model as built slid back.
+ *
+ *  The CROWD is pooled. Every stand contributes its seat positions to one set of instanced draws
+ *  rather than building its own: thirty stands each carrying thirty-two figure banks is a thousand
+ *  draw calls of spectators, and one pool is thirty-two however many stands a circuit has. The pool
+ *  is assembled in metres and scaled once, so a seat's position and a spectator's height are in the
+ *  same units; and each seat carries the direction its stand faces, because a pooled crowd has no
+ *  stand transform to inherit and would otherwise lean every spectator the same way. */
 export function buildStands3D(
-  stands: readonly SceneryStand[], u: (m: number) => number, materials: SceneMaterials,
-  textures?: WorldTextures, detail: SurfaceDetail | null = null,
+  stands: readonly SceneryStand[], u: (m: number) => number,
+  skin: StandSkin | null = null,
+  seats: { form: SeatForm; lod: SeatLod } | null = { form: 'bucket', lod: 'auto' },
+  crowdFill = 0.9,
 ): THREE.Group {
   const group = new THREE.Group()
-  const hF = u(STAND_FRONT_M)
-  const hR = u(STAND_REAR_M)
   const mpu = 1 / u(1)
-  const seatsMat = textures?.seats
-    ? surface('#FFFFFF', { map: textures.seats, roughness: ROUGH.paint })
-    : materials.get(DECK)
-  const crowdMat = textures?.crowd
-    ? surface('#FFFFFF', { map: textures.crowd, alpha: 1, decal: true, roughness: ROUGH.chalk })
-    : null
+  const perMetre = u(1)
+  const crowd: CrowdSeat[] = []
+  const at = new THREE.Vector3()
+  const face = new THREE.Vector3()
   for (const s of stands) {
-    const zF = s.facing ? s.h / 2 : -s.h / 2
-    const zR = -zF
-    const x0 = -s.w / 2
-    const x1 = s.w / 2
-    const hull = new GeometrySink()
-    // Front wall, rear wall, and the two raked side trapezoids.
-    hull.quad(v3(x0, 0, zF), v3(x1, 0, zF), v3(x1, hF, zF), v3(x0, hF, zF))
-    hull.quad(v3(x0, 0, zR), v3(x1, 0, zR), v3(x1, hR, zR), v3(x0, hR, zR))
-    for (const x of [x0, x1]) {
-      hull.quad(v3(x, 0, zF), v3(x, 0, zR), v3(x, hR, zR), v3(x, hF, zF))
+    const spec = standSpecFor(s.w * mpu, s.h * mpu)
+    // Placed exactly as every other structure here is: the footprint's local (x, y) is world (x, z),
+    // and the yaw is negated because a scenery rotation turns the other way round the up axis.
+    const holder = new THREE.Group()
+    holder.position.set(s.x, 0, s.y)
+    holder.rotation.y = -s.rot
+    const stand = buildGrandstand(spec, seats, null, skin)
+    stand.scale.setScalar(perMetre)
+    if (s.facing) {
+      stand.rotation.y = Math.PI
+      stand.position.z = s.h / 2
+    } else {
+      stand.position.z = -s.h / 2
     }
-    const hullGeo = hull.build()
-    grain(hullGeo, detail, u)
-    group.add(placed(hullGeo, materials.get(s.fill, { roughness: ROUGH.paint, detail }), s))
+    holder.add(stand)
+    group.add(holder)
 
-    const deck = deckGeometry(x0, x1, zF, zR, hF, hR, mpu)
-    group.add(placed(deck, seatsMat, s))
-    if (crowdMat) {
-      const crowd = placed(deck, crowdMat, s)
-      crowd.castShadow = false
-      group.add(crowd)
+    // Seat positions out to the shared frame, once, off the transforms just set.
+    // `updateMatrixWorld` is explicit because nothing has rendered yet: three refreshes these during
+    // a draw, and reading them first otherwise yields the identity for every stand, stacking a
+    // circuit's entire crowd at the origin.
+    holder.updateMatrixWorld(true)
+    const { rows } = standSection(spec)
+    // Which way this stand looks, as a direction in the shared frame: its own -z, rotated. Unit
+    // length, so a spectator's forward offset stays the metres it was authored as.
+    face.set(0, 0, -1).transformDirection(stand.matrixWorld).setY(0).normalize()
+    for (const p of seatPositions(spec, rows)) {
+      at.set(p.x, p.y, p.z).applyMatrix4(stand.matrixWorld).multiplyScalar(mpu)
+      crowd.push({ x: at.x, y: at.y, z: at.z, fx: face.x, fz: face.z })
     }
-
-    // The canopy floats over the rear rows on the deck's own slope, a parasol rather than a box.
-    const roof = new GeometrySink()
-    const lift = u(0.9)
-    const zEdge = zR + (zF - zR) * STAND_ROOF_FRAC
-    const hEdge = hR + (hF - hR) * STAND_ROOF_FRAC
-    roof.quad(
-      v3(x0, hR + lift, zR), v3(x1, hR + lift, zR),
-      v3(x1, hEdge + lift, zEdge), v3(x0, hEdge + lift, zEdge),
-    )
-    const roofGeo = roof.build()
-    grain(roofGeo, detail, u)
-    group.add(placed(roofGeo, materials.get(ROOF, { roughness: ROUGH.paint, detail }), s))
+  }
+  if (crowdFill > 0 && crowd.length > 0) {
+    const people = buildCrowd(crowd, crowdFill, 1)
+    people.scale.setScalar(perMetre)
+    group.add(people)
   }
   return group
 }
@@ -223,11 +213,11 @@ export function buildFences3D(
 export function buildStructures3D(
   scenery: Pick<Scenery, 'buildings' | 'stands' | 'marshals' | 'fences'>,
   u: (m: number) => number, materials: SceneMaterials, textures?: WorldTextures, night = false,
-  detail: SurfaceDetail | null = null,
+  detail: SurfaceDetail | null = null, skin: StandSkin | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
   group.add(buildBuildings3D(scenery.buildings, u, materials, night, detail))
-  group.add(buildStands3D(scenery.stands, u, materials, textures, detail))
+  group.add(buildStands3D(scenery.stands, u, skin))
   group.add(buildMarshals3D(scenery.marshals, u, materials, detail))
   group.add(buildFences3D(scenery.fences, u, materials))
   return group

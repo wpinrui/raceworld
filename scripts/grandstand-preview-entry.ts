@@ -8,9 +8,6 @@ import {
   MAIN_STAND, buildGrandstand, standExtent,
   type GrandstandSpec, type RoofStyle, type SeatForm, type SeatLod, type StandMassing,
 } from '../src/lib/scene3d/grandstand3d'
-import { buildStands3D } from '../src/lib/scene3d/structures3d'
-import { SceneMaterials } from '../src/lib/scene3d/materials3d'
-import { buildWorldTextures } from '../src/lib/scene3d/textures3d'
 import { blendSurfaces, loadStandSkin, type StandSkin } from '../src/lib/scene3d/standtex3d'
 
 declare global {
@@ -124,34 +121,13 @@ controls.enableDamping = true
 controls.target.set(0, 6, 8)
 
 let current: THREE.Group | null = null
-let old: THREE.Group | null = null
 /** The scanned surfaces, once they have decoded. Null until then, and null whenever the Textures
  *  toggle is off, which is the whole point of the toggle: the flat-colour model is what every
  *  proportion was judged against and it has to stay reachable. */
 let skin: StandSkin | null = null
 let useSkin = true
-
-/** The stand that is being replaced, stood up beside the new one at the same width and depth, from
- *  the same trackside line. Built straight out of `structures3d`, so what is on screen is the
- *  shipping model and not a redrawing of it.
- *
- *  With its own seat and crowd tiles on it, which are drawn into a canvas from `TILES` and so cost
- *  this page nothing but a `document`. Without them it falls back to flat colour, and comparing a
- *  textured stand against an untextured one would flatter the new model for the wrong reason. */
-function buildOld(spec: GrandstandSpec, gapM: number): THREE.Group {
-  const ext = standExtent(spec)
-  const materials = new SceneMaterials()
-  const stand = {
-    x: spec.widthM / 2 + gapM + spec.widthM / 2,
-    y: ext.depthM / 2,
-    w: spec.widthM,
-    h: ext.depthM,
-    rot: 0,
-    fill: '#9AA0A8',
-    facing: false,
-  }
-  return buildStands3D([stand], (m) => m, materials, buildWorldTextures())
-}
+/** The crowd's look-scale, as last built. Read by the HUD, which runs in its own pass. */
+let crowdScale = 1
 
 /** Aim the sun's shadow camera at whatever is currently built. A directional light defaults to an
  *  orthographic frustum of ±5 units, which over a 64 m stand maps a ten-metre patch in the middle
@@ -160,7 +136,6 @@ function buildOld(spec: GrandstandSpec, gapM: number): THREE.Group {
 function fitShadow(): void {
   if (!current) return
   const box = new THREE.Box3().setFromObject(current)
-  if (old) box.union(new THREE.Box3().setFromObject(old))
   const sphere = box.getBoundingSphere(new THREE.Sphere())
   const r = sphere.radius * 1.25
   const cam = sun.shadow.camera
@@ -207,12 +182,11 @@ function spec(): GrandstandSpec {
 }
 
 function rebuild(): void {
-  for (const g of [current, old]) {
-    if (!g) continue
-    g.traverse((o) => {
+  if (current) {
+    current.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose()
     })
-    scene.remove(g)
+    scene.remove(current)
   }
   const s = spec()
   const pick = (id: string, fallback: string) => (shot ? params.get(id) : null)
@@ -220,14 +194,26 @@ function rebuild(): void {
   const form = pick('seat', 'bucket')
   const lod = pick('lod', 'auto') as SeatLod
   const fill = Number(pick('fill', '90')) / 100
+  crowdScale = Number(pick('csize', '100')) / 100
   current = buildGrandstand(
-    s, form === 'off' ? null : { form: form as SeatForm, lod }, fill > 0 ? { fill } : null,
+    s, form === 'off' ? null : { form: form as SeatForm, lod }, fill > 0 ? { fill, scale: crowdScale } : null,
     useSkin ? skin : null,
   )
   scene.add(current)
-  old = pick('old', '1') === '1' ? buildOld(s, 14) : null
-  if (old) scene.add(old)
   fitShadow()
+  // A 1.8 m reference post beside the seating, when asked for. The only honest way to judge whether
+  // a spectator is the right size: perspective makes any comparison by eye across a close-up
+  // unreliable, and every other object in shot is one whose size is also in question.
+  if (params.get('ruler') === '1') {
+    const post = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 1.8, 0.12),
+      new THREE.MeshStandardMaterial({ color: '#FF00AA', roughness: 1 }),
+    )
+    // On the seat camera's own target, so it cannot land off frame.
+    const row = s.rows * 0.5
+    post.position.set(0, s.frontWallM + row * s.riseM + 0.9, row * s.runM)
+    current.add(post)
+  }
 }
 
 /** Count what the last frame actually drew, and say so.
@@ -257,6 +243,9 @@ function tally(): void {
   if (!hud) return
   hud.innerHTML = `<b>${s.massing}</b> / <b>${s.roof}</b> roof\n`
     + `${s.widthM} m wide, ${ext.depthM.toFixed(1)} m deep, ${ext.heightM.toFixed(1)} m tall\n`
+    + `crowd x${crowdScale.toFixed(2)} (standing ${(1.74 * crowdScale).toFixed(2)} m, `
+    + `car 4.79 m)
+`
     + `rake ${(Math.atan(s.riseM / s.runM) * 180 / Math.PI).toFixed(0)}°`
     + `  rows ${s.rows}${s.massing === 'twoTier' ? ` + ${s.upperRows}` : ''}\n`
     + `<b>${meshes}</b> meshes  <b>${triangles.toLocaleString()}</b> tris drawn`
@@ -272,8 +261,6 @@ function view(angle: string): void {
   const s = spec()
   const ext = standExtent(s)
   const box = new THREE.Box3().setFromObject(current!)
-  // The side-by-side has to frame BOTH stands; every other angle is about the new one alone.
-  if (angle === 'pair' && old) box.union(new THREE.Box3().setFromObject(old))
   const sphere = box.getBoundingSphere(new THREE.Sphere())
   const fitH = sphere.radius / Math.sin((camera.fov * Math.PI) / 360)
   const fitW = fitH / Math.min(1, camera.aspect)
@@ -286,7 +273,6 @@ function view(angle: string): void {
     side: [-1, 0.3, 0.1],
     rear: [0, 0.45, 1],
     top: [0.01, 1, 0.15],
-    pair: [-0.35, 0.5, -1],
   }
   if (angle === 'under') {
     controls.target.set(0, 2.2, ext.depthM * 0.7)
@@ -367,7 +353,7 @@ async function main(): Promise<void> {
   }
   view('three')
   for (const id of [
-    'massing', 'roof', 'seat', 'lod', 'fill', 'width', 'rows', 'upper', 'rise', 'run',
+    'massing', 'roof', 'seat', 'lod', 'fill', 'csize', 'width', 'rows', 'upper', 'rise', 'run',
   ]) {
     document.getElementById(id)?.addEventListener('input', () => {
       const out = document.getElementById(`${id}v`)

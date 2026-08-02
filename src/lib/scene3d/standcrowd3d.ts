@@ -145,7 +145,14 @@ function drawFigure(
   const ponytail = longHair && rng() < 0.42
   const capped = rng() < (longHair ? 0.14 : 0.32)
   const cx = TEX_W / 2
-  const headR = 17
+  // Every WIDTH in this drawing is divided by how much taller than a seated figure this one is.
+  //
+  // The quad's width follows its height, to keep the texture's aspect; so a standing figure, being
+  // 1.28 times a seated one, was getting a head and a pair of shoulders 1.28 times the size as well.
+  // A person's head is the same head whether they are standing or sitting. Vertical landmarks are
+  // already authored per pose, so only the widths need it.
+  const wide = standing ? FIG_H_M.seated / FIG_H_M.standing : 1
+  const headR = 17 * wide
   const headY = standing ? 22 : 32
   const shoulderY = headY + headR + 12
   // Where the shirt stops and the trousers start, and where the feet are. A person's hip is a bit
@@ -185,11 +192,11 @@ function drawFigure(
   ctx.strokeStyle = trousers
   ctx.lineCap = 'butt'
   if (standing) {
-    ctx.lineWidth = 19
+    ctx.lineWidth = 19 * wide
     for (const side of [-1, 1]) {
       ctx.beginPath()
-      ctx.moveTo(cx + side * 11, hipY)
-      ctx.lineTo(cx + side * 12, footY - 6)
+      ctx.moveTo(cx + side * 11 * wide, hipY)
+      ctx.lineTo(cx + side * 12 * wide, footY - 6)
       ctx.stroke()
     }
   } else {
@@ -228,18 +235,18 @@ function drawFigure(
   // Shoes: a flat sole and a toe, seen end-on.
   ctx.fillStyle = shoes
   for (const side of [-1, 1]) {
-    const fx = cx + side * (standing ? 12 : 14)
+    const fx = cx + side * (standing ? 12 : 14) * wide
     ctx.beginPath()
-    ctx.ellipse(fx, footY - 4, 9, 7, 0, 0, Math.PI * 2)
+    ctx.ellipse(fx, footY - 4, 9 * wide, 7, 0, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillRect(fx - 9, footY - 4, 18, 5)
+    ctx.fillRect(fx - 9 * wide, footY - 4, 18 * wide, 5)
   }
   // Torso: a tapered body, wider at the shoulders, cut off at the bottom of the quad where the seat
   // in front hides everything anyway.
   ctx.fillStyle = shirt
-  const shoulderW = female ? 22 : 26
-  const waistW = female ? 18 : 26
-  const hipW = female ? 26 : 27
+  const shoulderW = (female ? 22 : 26) * wide
+  const waistW = (female ? 18 : 26) * wide
+  const hipW = (female ? 26 : 27) * wide
   ctx.beginPath()
   ctx.moveTo(cx - shoulderW, shoulderY + 4)
   ctx.quadraticCurveTo(cx - waistW, shoulderY + 44, cx - hipW, hipY + 9)
@@ -251,7 +258,7 @@ function drawFigure(
   ctx.strokeStyle = shirt
   ctx.lineWidth = 14
   ctx.lineCap = 'round'
-  ctx.lineWidth = female ? 11 : 14
+  ctx.lineWidth = (female ? 11 : 14) * wide
   for (const side of [-1, 1]) {
     ctx.beginPath()
     ctx.moveTo(cx + side * (shoulderW - 4), shoulderY + 8)
@@ -481,12 +488,19 @@ function billboard(mat: THREE.Material): void {
   mat.customProgramCacheKey = () => 'crowd-billboard'
 }
 
-export interface CrowdSeat { x: number; y: number; z: number }
+/** One seat's place in the world, and which way the person in it faces.
+ *
+ *  The direction is carried per seat rather than taken from a parent transform because the whole
+ *  circuit's crowd is ONE set of instanced draws. Thirty grandstands each building their own
+ *  thirty-two figure banks is a thousand draw calls for spectators; pooling them into one is
+ *  thirty-two, and the price is that the group has no stand's rotation to inherit, so "forward" has
+ *  to travel with the seat. `fx, fz` is a unit vector in world XZ pointing at the track. */
+export interface CrowdSeat { x: number; y: number; z: number; fx: number; fz: number }
 
 /** Every spectator in the stand. `fill` is the fraction of seats occupied: a stand is never quite
  *  full, and the gaps are most of what stops a crowd reading as a printed texture. */
 export function buildCrowd(
-  seats: readonly CrowdSeat[], fill = 0.9, seed = 1,
+  seats: readonly CrowdSeat[], fill = 0.9, seed = 1, scale = 1,
 ): THREE.Group {
   const group = new THREE.Group()
   const rng = mulberry32(seed ^ 0x9E3779B9)
@@ -502,8 +516,12 @@ export function buildCrowd(
     if (people.length === 0) return
     // A quad per figure height, at the texture's own aspect so nobody is stretched, anchored at its
     // bottom edge so the figure stands ON its row rather than being centred on it.
-    const geo = new THREE.PlaneGeometry(heightM * (TEX_W / TEX_H), heightM)
-    geo.translate(0, heightM / 2, 0)
+    // `scale` is a look control, not a unit conversion: the figures measure life-size against a
+    // car and against a ruler, so anything other than 1 here is a deliberate stylisation of how big
+    // a spectator reads, and it moves the forward offset with them so they stay in their seats.
+    const h = heightM * scale
+    const geo = new THREE.PlaneGeometry(h * (TEX_W / TEX_H), h)
+    geo.translate(0, h / 2, 0)
     const mat = new THREE.MeshStandardMaterial({
       map,
       // Cut out rather than blended: a blended crowd needs sorting, and four thousand unsorted
@@ -526,7 +544,7 @@ export function buildCrowd(
     const m = new THREE.Matrix4()
     const tint = new THREE.Color()
     people.forEach((p, k) => {
-      m.makeTranslation(p.x, p.y + FIG_BASE_M, p.z - fwdM)
+      m.makeTranslation(p.x + p.fx * fwdM * scale, p.y + FIG_BASE_M, p.z + p.fz * fwdM * scale)
       inst.setMatrixAt(k, m)
       // A per-person brightness wobble, on top of sixteen figures. Without it a big stand reads as
       // sixteen stamps repeated in a grid, which is exactly what it is; with it the repeat stops

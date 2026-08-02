@@ -1017,10 +1017,28 @@ function buildRoof(spec: GrandstandSpec, pts: readonly Pt[], skin: Skin = null):
   return group
 }
 
+/** Fit a stand to a footprint the circuit's scenery has already reserved for it.
+ *
+ *  The generator places stands 45-95 m wide and 12-17 m deep, and a depth is a ROW COUNT: the rake
+ *  is fixed by sightlines, so the only thing a shallower footprint can do is hold fewer rows. What it
+ *  cannot do is hold two tiers, which need better than 30 m, so every stand a circuit places is a
+ *  single-tier one under a cantilever roof and `PIT_STAND` stays for a footprint big enough to
+ *  deserve it.
+ *
+ *  The back of the house is subtracted first: the top walkway and the parapet are depth the seating
+ *  never gets, and rows counted against the raw footprint would push the parapet out past the
+ *  ground the stand was given. */
+export function standSpecFor(widthM: number, depthM: number): GrandstandSpec {
+  const base = MAJOR_STAND
+  const seating = depthM - base.topWalkM - PARAPET_THICK_M
+  const rows = Math.max(4, Math.floor(seating / base.runM))
+  return { ...base, widthM, rows, upperRows: 0, massing: 'plinth', roof: 'cantilever' }
+}
+
 /** The bowl: seating deck, ends, and whatever holds it up. No seats, no roof, no crowd yet. */
 export function buildGrandstand(
   spec: GrandstandSpec, seats: { form: SeatForm; lod: SeatLod } | null = null,
-  crowd: { fill: number; seed?: number } | null = null, skin: Skin = null,
+  crowd: { fill: number; seed?: number; scale?: number } | null = null, skin: Skin = null,
 ): THREE.Group {
   const group = new THREE.Group()
   const { pts, rows, band } = standSection(spec)
@@ -1085,7 +1103,12 @@ export function buildGrandstand(
   if (band) group.add(buildBand(spec, band, skin))
   if (seats) group.add(buildSeats(spec, rows, seats.form, seats.lod, skin))
   if (crowd) {
-    group.add(buildCrowd(seatPositions(spec, rows), crowd.fill, crowd.seed ?? 1))
+    // A stand built on its own faces -z, so that is where its crowd looks. Placed in a circuit, the
+    // world builder pools every stand's seats into one crowd instead and hands each its own facing.
+    group.add(buildCrowd(
+      seatPositions(spec, rows).map((p) => ({ ...p, fx: 0, fz: -1 })),
+      crowd.fill, crowd.seed ?? 1, crowd.scale ?? 1,
+    ))
   }
   group.add(buildRoof(spec, pts, skin))
   return group

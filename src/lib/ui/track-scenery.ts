@@ -377,7 +377,12 @@ export function buildScenery(
     const outside = rng() < 0.8
     const dir = outside ? nOut : { x: -nOut.x, y: -nOut.y }
     const w = u(45 + rng() * 50)
-    const h = u(12 + rng() * 5)
+    // Depth IS the row count, and a row is 850 mm. Twelve to seventeen metres was the footprint the
+    // old flat-shaded stand needed, and that thing was 5.5 m tall; measured against a real model it
+    // buys fourteen rows and an 8 m building, which is a club stand, not a grand prix one. Twenty-four
+    // to thirty-six gives 26-40 rows and 13-19 m, which is what the stands at a circuit actually are,
+    // and it is what stops a life-size spectator reading as a giant against one.
+    const h = u(24 + rng() * 12)
     // Offer the stand at a distance derived from its own DEPTH and the clearance rule, so its near
     // edge lands just behind the debris fence. Offering a fixed 16-25 m from the centreline while
     // requiring the footprint to clear 19 m is unsatisfiable for a stand 12-17 m deep — every

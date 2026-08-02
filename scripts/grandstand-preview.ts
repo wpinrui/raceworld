@@ -24,7 +24,7 @@ const fill = argv.includes('--no-crowd') ? 0 : 90
 const MASSINGS = ['twoTier']
 const ROOFS = ['cantilever']
 const SEATS = ['bucket']
-const ANGLES = ['three', 'front']
+const ANGLES = ['seat']
 
 const CSS = `
 html,body{margin:0;background:#101318;height:100%;overflow:hidden;color-scheme:dark}
@@ -70,6 +70,8 @@ const BAR = `
 </select></label>
 <label>Crowd <input id="fill" type="range" min="0" max="100" step="5" value="90"></label>
 <span class="v" id="fillv">90</span>
+<label>Crowd size <input id="csize" type="range" min="30" max="130" step="5" value="100"></label>
+<span class="v" id="csizev">100</span>
 <label>Width <input id="width" type="range" min="20" max="140" step="2" value="64"></label>
 <span class="v" id="widthv">64</span>
 <label>Rows <input id="rows" type="range" min="6" max="40" step="1" value="20"></label>
@@ -81,7 +83,7 @@ const BAR = `
 <label>Run <input id="run" type="range" min="70" max="110" step="1" value="85"></label>
 <span class="v" id="runv">85</span>
 <button id="tex" class="on">Textures</button>
-<button data-view="pair">Old vs new</button><button data-view="three">3/4</button><button data-view="front">Front</button>
+<button data-view="three">3/4</button><button data-view="front">Front</button>
 <button data-view="side">Side</button><button data-view="rear">Rear</button>
 <button data-view="seat">Seat</button><button data-view="band">Band</button><button data-view="under">Under</button><button data-view="crest">Crest</button><button data-view="top">Top</button>
 `
@@ -167,7 +169,7 @@ async function main() {
       for (const seat of SEATS) {
         for (const angle of ANGLES) {
           await tab.goto(`${pathToFileURL(page).href}?shot=1&massing=${massing}&roof=${roof}`
-            + `&seat=${seat}&angle=${angle}&fill=${fill}`)
+            + `&seat=${seat}&angle=${angle}&fill=${fill}&ruler=1`)
           await tab.waitForFunction('window.__done === true', undefined, { timeout: 120_000 })
           const error = await tab.evaluate('window.__error')
           if (error) {
