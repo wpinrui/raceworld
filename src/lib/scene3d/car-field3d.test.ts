@@ -106,12 +106,19 @@ describe('CarField3D', () => {
     field.ensure('a', '#E8442E')
     const at = (px: number) => {
       field.setDetail(px)
+      // VISIBLE geometry only. Built rungs are kept so that crossing a threshold is a swap rather
+      // than twenty car rebuilds, so the graph holds every rung the camera has visited and only one
+      // of them is ever drawn.
       let triangles = 0
-      field.group.traverse((o) => {
-        if (!(o instanceof THREE.Mesh)) return
-        const g = o.geometry as THREE.BufferGeometry
-        triangles += (g.index ? g.index.count : g.attributes.position.count) / 3
-      })
+      const walk = (o: THREE.Object3D) => {
+        if (!o.visible) return
+        if (o instanceof THREE.Mesh) {
+          const g = o.geometry as THREE.BufferGeometry
+          triangles += (g.index ? g.index.count : g.attributes.position.count) / 3
+        }
+        for (const child of o.children) walk(child)
+      }
+      walk(field.group)
       return triangles
     }
     const near = at(CAR_TIERS[0].minPx + 10)
@@ -119,9 +126,10 @@ describe('CarField3D', () => {
     expect(far).toBeLessThan(near / 2)
     // Back up the ladder again, and a second call at the same size changes nothing.
     expect(at(CAR_TIERS[0].minPx + 10)).toBe(near)
-    const before = field.group.children[0]
+    // A second call inside the same band is a no-op, and a rung already built is never rebuilt.
+    const built = field.group.children[0].children.length
     field.setDetail(CAR_TIERS[0].minPx + 20)
-    expect(field.group.children[0]).toBe(before)
+    expect(field.group.children[0].children.length).toBe(built)
     field.dispose()
   })
 
@@ -142,6 +150,49 @@ describe('CarField3D', () => {
       if (o instanceof THREE.Mesh && (o.material as THREE.Material).opacity === 0.35) faded = true
     })
     expect(faded).toBe(true)
+    field.dispose()
+  })
+})
+
+describe('CarField3D detail swaps', () => {
+  it('builds a rung once and swaps visibility after, so zooming is not twenty rebuilds', () => {
+    // The regression this fixes: crossing a band tore down and rebuilt every car in the field mid
+    // gesture, which stalls exactly when the player is moving the camera.
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    const wrap = field.group.children[0] as THREE.Group
+    const first = wrap.children.find((o) => o.visible && o.children.length > 0)!
+    field.setDetail(CAR_TIERS[CAR_TIERS.length - 1].minPx)
+    field.setDetail(CAR_TIERS[0].minPx + 10)
+    // Back on the rung it started on, and it is the SAME object: rebuilt would be a new one.
+    expect(first.visible).toBe(true)
+    expect(wrap.children.filter((o) => o.visible && o.children.length > 0)).toHaveLength(1)
+    field.dispose()
+  })
+
+  it('keeps only one rung visible at a time', () => {
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    for (const tier of CAR_TIERS) field.setDetail(tier.minPx + 1)
+    const wrap = field.group.children[0] as THREE.Group
+    const shown = wrap.children.filter((o) => o.visible && o.children.length > 0)
+    expect(shown).toHaveLength(1)
+    expect(wrap.children.length).toBeGreaterThan(2)
+    field.dispose()
+  })
+
+  it('carries wheel spin onto the rung it switches to', () => {
+    // A car that switched rung mid-corner would otherwise snap its wheels back to zero.
+    const field = new CarField3D(0.01)
+    field.ensure('a', '#E8442E')
+    const rolling = { x: 0, y: 0, rot: 0, steerLeft: 0, steerRight: 0, lat: 0, long: 0, ds: 0.5 }
+    field.pose('a', rolling)
+    field.pose('a', rolling)
+    field.setDetail(CAR_TIERS[CAR_TIERS.length - 2].minPx)
+    const wrap = field.group.children[0] as THREE.Group
+    const shown = wrap.children.find((o) => o.visible && o.children.length > 0)!
+    const wheel = shown.children.find((o) => Math.abs(o.position.x) === 90)
+    expect(wheel?.children[0].rotation.x).not.toBe(0)
     field.dispose()
   })
 })

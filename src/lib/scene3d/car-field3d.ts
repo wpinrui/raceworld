@@ -47,6 +47,14 @@ export const CAR_RIDE_M = 0.03
 
 interface Entry {
   key: string
+  /** Every rung this car has been asked for, kept once built.
+   *
+   *  Rebuilding on every threshold crossing made ZOOMING expensive: one wheel notch across a band
+   *  tore down and rebuilt twenty cars mid-gesture, which is a stall exactly when the player is
+   *  moving the camera. Built lazily, so a race that never leaves one rung never pays for the others,
+   *  and kept, so crossing back is a visibility swap. */
+  tiers: Map<number, CarMesh>
+  /** The rung currently shown, which is the one `pose` drives. */
   mesh: CarMesh
   wrap: THREE.Group
   /** The car's contact occlusion, absent where no canvas could generate one. Held out of the
@@ -104,31 +112,60 @@ export class CarField3D {
   /** One finish per (material, tier) across the whole field, shared by every car that wears it. */
   private finishes = new Map<string, THREE.Material>()
 
-  /** Build (or rebuild, on a livery, compound or detail change) the car for an entrant. */
+  /** Build (or rebuild, on a livery or compound change) the car for an entrant. */
   ensure(id: string, livery: CarLivery, compound: TyreCompound = 'medium'): void {
-    const key = `${typeof livery === 'string' ? livery : JSON.stringify(livery)}@${compound}@${this.tier}`
+    const key = `${typeof livery === 'string' ? livery : JSON.stringify(livery)}@${compound}`
     const current = this.entries.get(id)
-    if (current?.key === key) return
+    if (current?.key === key) {
+      this.showTier(current)
+      return
+    }
     const carry = current
       ? { last: current.last, opacity: current.opacity, wheels: current.wheels }
       : { last: null, opacity: 1, wheels: true }
     if (current) this.drop(id)
-    const mesh = buildCarMesh(livery, compound, this.tier, this.finishes)
     const wrap = new THREE.Group()
     wrap.scale.setScalar(this.scaleUnits)
-    wrap.add(mesh.group)
     // On the WRAP, so it takes the car's position and heading but none of its roll or dive: the
     // patch lies on the road, and the road does not lean into the corner with the bodywork.
     const contact = this.shadows.create()
     if (contact) wrap.add(contact)
     this.group.add(wrap)
-    this.entries.set(id, {
-      key, mesh, wrap, contact, spun: { fl: 0, fr: 0, rl: 0, rr: 0 },
-      livery, compound, ...carry,
-    })
+    const entry: Entry = {
+      key, tiers: new Map(), mesh: undefined as unknown as CarMesh, wrap, contact,
+      spun: { fl: 0, fr: 0, rl: 0, rr: 0 }, livery, compound, ...carry,
+    }
+    this.entries.set(id, entry)
+    this.showTier(entry)
     if (carry.last) this.pose(id, carry.last)
     if (carry.opacity !== 1) this.setOpacity(id, carry.opacity)
     if (!carry.wheels) this.setWheelsVisible(id, false)
+  }
+
+  /** Put this car on the field's current rung, building that rung the first time it is asked for. */
+  private showTier(e: Entry): void {
+    let next = e.tiers.get(this.tier)
+    if (!next) {
+      next = buildCarMesh(e.livery, e.compound, this.tier, this.finishes)
+      e.tiers.set(this.tier, next)
+      e.wrap.add(next.group)
+    }
+    if (e.mesh === next) return
+    if (e.mesh) e.mesh.group.visible = false
+    next.group.visible = true
+    e.mesh = next
+    // The new rung is a fresh set of pivots, so everything the old one was holding has to be put on
+    // it: a car that switched rung mid-corner would otherwise snap its wheels straight and its body
+    // level until the next pose arrived.
+    if (e.last) this.pose(this.idOf(e), e.last)
+    for (const tag of WHEEL_TAGS) next.spin[tag].rotation.x = e.spun[tag]
+    this.setWheelsVisible(this.idOf(e), e.wheels)
+    if (e.opacity !== 1) this.setOpacity(this.idOf(e), e.opacity)
+  }
+
+  private idOf(entry: Entry): string {
+    for (const [id, e] of this.entries) if (e === entry) return id
+    return ''
   }
 
   /** Pick the detail tier for a car this many PIXELS long on screen, rebuilding the field if that
@@ -149,7 +186,7 @@ export class CarField3D {
     }
     if (next === this.tier) return
     this.tier = next
-    for (const [id, e] of [...this.entries]) this.ensure(id, e.livery, e.compound)
+    for (const e of this.entries.values()) this.showTier(e)
   }
 
   drop(id: string): void {
