@@ -24,6 +24,46 @@ const meshOf = (land: { group: THREE.Group }): THREE.Mesh => {
   return mesh
 }
 
+const townOf = (land: { group: THREE.Group }): THREE.InstancedMesh => {
+  const mesh = land.group.children.find((o): o is THREE.InstancedMesh => o instanceof THREE.InstancedMesh)
+  if (!mesh) throw new Error('far land has no town')
+  return mesh
+}
+
+/** Where each of the town's blocks stands, and how tall it is. */
+function blocks(land: { group: THREE.Group }): Array<{ x: number; y: number; z: number; h: number }> {
+  const mesh = townOf(land)
+  const m = new THREE.Matrix4()
+  const pos = new THREE.Vector3()
+  const scale = new THREE.Vector3()
+  return Array.from({ length: mesh.count }, (_, i) => {
+    mesh.getMatrixAt(i, m)
+    pos.setFromMatrixPosition(m)
+    m.decompose(new THREE.Vector3(), new THREE.Quaternion(), scale)
+    return { x: pos.x, y: pos.y, z: pos.z, h: scale.y }
+  })
+}
+
+/** The belt's vertices gathered back into the rings they were laid in, nearest first. */
+function rings(land: { group: THREE.Group }): Array<{ r: number; colour: THREE.Color[] }> {
+  const geo = meshOf(land).geometry
+  const pos = geo.getAttribute('position')
+  const col = geo.getAttribute('color')
+  const cx = VIEW.x + VIEW.w / 2
+  const cz = VIEW.y + VIEW.h / 2
+  const byRadius = new Map<string, { r: number; colour: THREE.Color[] }>()
+  for (let i = 0; i < pos.count; i++) {
+    const r = Math.hypot(pos.getX(i) - cx, pos.getZ(i) - cz)
+    const key = r.toFixed(3)
+    const ring = byRadius.get(key) ?? { r, colour: [] }
+    ring.colour.push(new THREE.Color(col.getX(i), col.getY(i), col.getZ(i)))
+    byRadius.set(key, ring)
+  }
+  return [...byRadius.values()].sort((a, b) => a.r - b.r)
+}
+
+const mean = (cs: THREE.Color[], ch: 'r' | 'g' | 'b') => cs.reduce((s, c) => s + c[ch], 0) / cs.length
+
 /** Every belt vertex, as (distance from the circuit's centre, height). */
 function vertices(land: { group: THREE.Group }): Array<{ r: number; y: number }> {
   const pos = meshOf(land).geometry.getAttribute('position')
@@ -65,13 +105,30 @@ describe('buildFarLand3D', () => {
     expect(reach).toBeGreaterThanOrEqual(Math.hypot(VIEW.w + 2 * PAD, VIEW.h + 2 * PAD) / 2 - 1e-6)
   })
 
-  it('raises real hills, at a height the biome asks for', () => {
+  it('raises hills tall enough to close a horizon', () => {
     const land = buildFarLand3D(input())
     const peak = Math.max(...vertices(land).map((v) => v.y))
-    // Temperate relief is 55 m at a gain of 3, so the tallest ground stands well up but not past
-    // the ceiling that sets. In world units at four metres each.
-    expect(peak * MPU).toBeGreaterThan(60)
-    expect(peak * MPU).toBeLessThanOrEqual(55 * 3)
+    // Temperate relief is 55 m at a gain of 9. The floor is what the job needs rather than what the
+    // arithmetic gives: a hill under 250 m at the two kilometres this land starts at subtends about
+    // seven degrees, and anything shallower is a swell on the skyline rather than a landform
+    // closing it.
+    expect(peak * MPU).toBeGreaterThan(250)
+    expect(peak * MPU).toBeLessThanOrEqual(55 * 9)
+  })
+
+  it('takes the land through dirty olive to blue-grey with distance', () => {
+    const all = rings(buildFarLand3D(input()))
+    const rim = all[0]
+    const edge = all[all.length - 1]
+    // Untouched where it meets the flat plane: the two share a scan, and haze on one and not the
+    // other draws a line across the field at the join.
+    expect(rim.colour.some((c) => c.r === 1 && c.g === 1 && c.b === 1)).toBe(true)
+    // The middle stop is warm: land loses its saturation before it goes blue.
+    const knee = all.find((ring) => ring.r > rim.r + (0.35 * 7000) / MPU)!
+    expect(mean(knee.colour, 'r')).toBeGreaterThan(mean(knee.colour, 'b'))
+    // ...and the far edge is cool, and much darker than the rim.
+    expect(mean(edge.colour, 'b')).toBeGreaterThan(mean(edge.colour, 'r'))
+    expect(mean(edge.colour, 'g')).toBeLessThan(mean(rim.colour, 'g') * 0.6)
   })
 
   it('does not begin at the same distance on every bearing', () => {
@@ -82,16 +139,16 @@ describe('buildFarLand3D', () => {
     expect(Math.max(...risen) / Math.min(...risen)).toBeGreaterThan(1.1)
   })
 
-  it('shades the surface it stands wood on, and leaves open ground alone', () => {
-    const colour = meshOf(buildFarLand3D(input())).geometry.getAttribute('color')
-    let tinted = 0
-    let open = 0
-    for (let i = 0; i < colour.count; i++) {
-      if (colour.getX(i) < 0.999) tinted++
-      else open++
-    }
-    expect(tinted).toBeGreaterThan(0)
-    expect(open).toBeGreaterThan(0)
+  it('darkens the hillsides it stands wood on', () => {
+    // Read at the rim, where the aerial ramp is still zero and the only thing moving the colour is
+    // the wood. A wooded slope is greener than the open ground beside it: the tint takes red down
+    // hardest, so the ratio is what separates them rather than the level.
+    const rim = rings(buildFarLand3D(input()))[0].colour
+    const wooded = rim.filter((c) => c.r < 0.999)
+    const open = rim.filter((c) => c.r >= 0.999)
+    expect(wooded.length).toBeGreaterThan(0)
+    expect(open.length).toBeGreaterThan(0)
+    expect(mean(wooded, 'g') / mean(wooded, 'r')).toBeGreaterThan(mean(open, 'g') / mean(open, 'r'))
   })
 
   it('stands every tree on the ground under it, never inside the built world', () => {
@@ -145,6 +202,64 @@ describe('buildFarLand3D', () => {
     const mesh = meshOf(buildFarLand3D(input()))
     expect(mesh.castShadow).toBe(false)
     expect(mesh.receiveShadow).toBe(false)
+  })
+
+  it('stands a town on the far land, clear of everything built', () => {
+    const land = buildFarLand3D(input())
+    const cx = VIEW.x + VIEW.w / 2
+    const cz = VIEW.y + VIEW.h / 2
+    const town = blocks(land)
+    expect(town.length).toBeGreaterThan(0)
+    for (const b of town) {
+      expect(Math.hypot(b.x - cx, b.z - cz)).toBeGreaterThanOrEqual(BUILT_R)
+      // Standing ON the ground: the box is modelled with its base at the origin, so the instance's
+      // own Y is the ground height and never below the plane.
+      expect(b.y).toBeGreaterThanOrEqual(0)
+      expect(b.h * MPU).toBeGreaterThanOrEqual(11)
+    }
+  })
+
+  it('gives the town a middle, rather than one height across the sprawl', () => {
+    const heights = blocks(buildFarLand3D(input())).map((b) => b.h * MPU).sort((a, b) => b - a)
+    // The mass's core carries the towers. Without the depth term every block is drawn from one
+    // distribution and the tallest is a couple of standard deviations off the median, not a
+    // multiple of it.
+    expect(heights[0]).toBeGreaterThan(heights[Math.floor(heights.length / 2)] * 2.5)
+  })
+
+  it('builds a city where the biome is urban and a village where it is forest', () => {
+    const urban = townOf(buildFarLand3D(input({ biome: 'urban' }))).count
+    const forest = townOf(buildFarLand3D(input({ biome: 'forest' }))).count
+    expect(urban).toBeGreaterThan(forest * 1.5)
+  })
+
+  it('puts the town behind the same air as the ground it stands on', () => {
+    const land = buildFarLand3D(input())
+    const town = townOf(land)
+    const cx = VIEW.x + VIEW.w / 2
+    const cz = VIEW.y + VIEW.h / 2
+    const m = new THREE.Matrix4()
+    const colour = new THREE.Color()
+    let nearest = { r: Infinity, blueness: 0 }
+    let furthest = { r: 0, blueness: 0 }
+    for (let i = 0; i < town.count; i++) {
+      town.getMatrixAt(i, m)
+      const p = new THREE.Vector3().setFromMatrixPosition(m)
+      const r = Math.hypot(p.x - cx, p.z - cz)
+      town.getColorAt(i, colour)
+      const blueness = colour.b / colour.r
+      if (r < nearest.r) nearest = { r, blueness }
+      if (r > furthest.r) furthest = { r, blueness }
+    }
+    // The far end of the town has gone blue the way the far end of the land has.
+    expect(furthest.blueness).toBeGreaterThan(nearest.blueness)
+  })
+
+  it('keeps the town out of the shadow and occlusion passes', () => {
+    const town = townOf(buildFarLand3D(input()))
+    expect(town.castShadow).toBe(false)
+    expect(town.receiveShadow).toBe(false)
+    expect(town.userData.noAO).toBe(true)
   })
 
   it('takes the flat fill when the ground scans have not landed', () => {
