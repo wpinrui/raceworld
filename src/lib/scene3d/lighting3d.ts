@@ -35,6 +35,23 @@ export function skyShare(l: Lighting): number {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
+/** The sun's shadow map, per side.
+ *
+ *  WAS 4096, which is 16.8 million texels rasterised every frame regardless of how small the window
+ *  is. That is eight times the pixel count of a 1080p viewport, spent on a buffer nobody looks at
+ *  directly, and it is why shrinking the window did nothing to the frame: the largest single piece of
+ *  GPU work in this renderer does not scale with the window at all. Measured on the grid at Britain,
+ *  the whole shadow pass was 2.5 ms of an 18.8 ms frame.
+ *
+ *  2048 buys most of that back for less quality than it sounds. The box this map covers is fitted per
+ *  camera move (`refitShadow`) and multiplied by `1/cos(pitch)`, so at a pitched racing camera it
+ *  already spans hundreds of metres and 4096 was delivering about 18 cm a texel: coarse enough that
+ *  halving it costs a step of softness rather than a visible edge. At a close camera the box is small
+ *  and 2048 is ample.
+ *
+ *  Both biases below are derived from this, so it is one number and not three. */
+export const SHADOW_MAP = 2048
+
 /** Sunlight's own colour: cream under a warm sun, blue-white under a cool one — `litWhite`'s ramp. */
 export function sunColor(l: Lighting): THREE.Color {
   const w = clamp(l.warmth, -1, 1)
@@ -84,7 +101,7 @@ export function buildLightRig(l: Lighting, vb: ViewBox3D): THREE.Group {
   sun.position.copy(sunTravel(l).multiplyScalar(-reach)).add(new THREE.Vector3(cx, 0, cz))
   sun.target.position.set(cx, 0, cz)
   sun.castShadow = true
-  sun.shadow.mapSize.set(4096, 4096)
+  sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP)
   const half = Math.max(vb.w, vb.h) / 2 + 60
   sun.shadow.camera.left = -half
   sun.shadow.camera.right = half
@@ -100,7 +117,7 @@ export function buildLightRig(l: Lighting, vb: ViewBox3D): THREE.Group {
   // building's whole shadow is two metres, and a normal bias fixed at a third of a unit ATE it on
   // the coarse-scaled circuits while barely registering on the fine ones.
   sun.shadow.bias = -0.0006
-  sun.shadow.normalBias = (2 * half) / 4096
+  sun.shadow.normalBias = (2 * half) / SHADOW_MAP
   rig.add(hemi, sun, sun.target)
   return rig
 }
@@ -123,7 +140,7 @@ export function refitShadow(sun: THREE.DirectionalLight, vb: ViewBox3D): void {
   sun.shadow.camera.near = reach * 0.2
   sun.shadow.camera.far = reach * 2.2
   sun.shadow.camera.updateProjectionMatrix()
-  sun.shadow.normalBias = (2 * half) / 4096
+  sun.shadow.normalBias = (2 * half) / SHADOW_MAP
 }
 
 /** What fraction of the rig's hemisphere survives once an environment map is mounted.

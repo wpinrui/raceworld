@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { MOODS } from '@/lib/ui/lighting'
-import { buildLightRig, refitShadow, skyShare, sunAltitude, sunIntensity, sunTravel } from './lighting3d'
+import {
+  SHADOW_MAP, buildLightRig, refitShadow, skyShare, sunAltitude, sunIntensity, sunTravel,
+} from './lighting3d'
 
 describe('sunTravel', () => {
   it('points straight down under an overhead sun', () => {
@@ -47,7 +49,7 @@ describe('buildLightRig', () => {
   })
 
   it('scales the acne bias to the map texel, so coarse circuits keep their two-metre shadows', () => {
-    expect(sun.shadow.normalBias).toBeCloseTo((2 * 110) / 4096, 10)
+    expect(sun.shadow.normalBias).toBeCloseTo((2 * 110) / SHADOW_MAP, 10)
   })
 
   it('sits the sun against the light travel, aimed at the frame centre', () => {
