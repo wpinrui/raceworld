@@ -34,6 +34,8 @@ const FIG_BASE_M = 0.02
  *  wings framing the body, and that only happens when the body is back in the seat. So a sitter sits
  *  just clear of the backrest, and a stander stands out in the legroom, which is where people stand. */
 const FIG_FWD_M = { standing: 0.34, seated: 0.13 }
+/** How much brighter than lit a spectator is drawn. Above 1 on purpose: see where it is used. */
+const CROWD_GAIN = 1.22
 
 // What a crowd is actually wearing, as a deck dealt one shirt per variant rather than a palette
 // sampled at random. Uniform draws from a list of colours give a rainbow, because every colour is
@@ -563,10 +565,18 @@ export function buildCrowd(
     people.forEach((p, k) => {
       m.makeTranslation(p.x + p.fx * fwdM * scale, p.y + FIG_BASE_M, p.z + p.fz * fwdM * scale)
       inst.setMatrixAt(k, m)
-      // A per-person brightness wobble, on top of sixteen figures. Without it a big stand reads as
-      // sixteen stamps repeated in a grid, which is exactly what it is; with it the repeat stops
-      // being findable long before the variant count would have to go up.
-      const v = 0.82 + rng() * 0.26
+      // A per-person brightness wobble, on top of thirty-two figures. Without it a big stand reads
+      // as thirty-two stamps repeated in a grid, which is exactly what it is; with it the repeat
+      // stops being findable long before the variant count would have to go up.
+      //
+      // Lifted by GAIN on top of that. A billboard's normal is a fiction, and the fiction it uses
+      // (facing the camera, horizontally) is the one that reads darkest: it takes the sky at a
+      // grazing angle and misses the sun outright whenever the sun is not behind the viewer, so a
+      // crowd sits a stop under the seats it is sitting in. Correcting the normal is the principled
+      // fix and it made them darker still, for reasons I have not got to the bottom of. This is the
+      // blunt one, and it is applied where the per-person variation already is rather than as a
+      // second multiplier somewhere else.
+      const v = (0.82 + rng() * 0.26) * CROWD_GAIN
       inst.setColorAt(k, tint.setRGB(v, v, v))
     })
     group.add(inst)
