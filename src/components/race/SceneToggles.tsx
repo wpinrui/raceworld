@@ -207,11 +207,13 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
   )
 
   return (
-    <div className="pointer-events-none absolute right-2 top-2 flex w-40 flex-col items-stretch gap-1 font-mono text-xs">
+    // Top LEFT: the map's own controls own the right-hand side (driver card and map view at the top,
+    // the zoom readout and reset at the bottom), and a debug panel does not get to sit on them.
+    <div className="pointer-events-none absolute left-2 top-2 flex w-40 flex-col items-stretch gap-1 font-mono text-xs">
       <button
         type="button"
         onClick={() => { setOpen(!open); measure() }}
-        className="pointer-events-auto flex items-center gap-1.5 self-end rounded bg-black/55 px-2 py-1 text-white"
+        className="pointer-events-auto flex items-center gap-1.5 self-start rounded bg-black/55 px-2 py-1 text-white"
       >
         <Gauge className="h-3.5 w-3.5" />
         <span ref={fpsRef}>--</span>
