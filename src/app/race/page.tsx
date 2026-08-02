@@ -1,16 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useHydrated } from '@/lib/ui/use-hydrated'
 import { useRaceStore } from '@/lib/store/race-store'
 import { useSeasonStore } from '@/lib/store/season-store'
-import { useSettingsStore } from '@/lib/store/settings-store'
 import type { GodModeAction, RaceResult, SimSpeed } from '@/lib/sim/types'
 import { isOffSeason } from '@/lib/sim/types'
 import { calendarForYear } from '@/data/calendars'
 import { buildRaceResults } from '@/lib/sim/race-results'
-import { recommendPitNow } from '@/lib/sim/race-projector'
 import { actionGetDriverCareers } from '@/lib/news/actions'
 import { foldLiveSeason, type DriverCareer } from '@/lib/news/engine'
 import RaceTable from '@/components/race/RaceTable'
@@ -29,10 +27,10 @@ import { QualifyingPanel } from '@/components/race/QualifyingPanel'
 import { TrackMap } from '@/components/race/TrackMap'
 import { UpgradeRevealModal } from '@/components/race/UpgradeRevealModal'
 import { useQualifyingEngine } from '@/components/race/useQualifyingEngine'
-
-// 1-4 are real-time tick intervals (slow -> fast); 5 (FF) = 0 = instant "sim to the end". Speed 1 is
-// half the old slowest; 2/3/4 are the old 1/2/3.
-const SPEED_INTERVALS: Record<SimSpeed, number> = { 1: 10000, 2: 5000, 3: 2000, 4: 500, 5: 0 }
+import { RaceDayView } from '@/components/race/RaceDayView'
+import { useLiveRace } from '@/components/race/useLiveRace'
+import { liveBridge } from '@/lib/store/live-bridge'
+import { TRACK_LAYOUTS } from '@/data/tracks'
 
 export default function RacePage() {
   const router = useRouter()
@@ -40,7 +38,7 @@ export default function RacePage() {
   const {
     raceState, drivers, teams, forms, godModeDriverId,
     loadFromSeason, updateDriverForm, setGodModeDriver,
-    tickLap, setSpeed, setPaused,
+    setSpeed, setPaused,
   } = useRaceStore()
 
   const phase = raceState?.phase ?? 'pre-qualifying'
@@ -49,29 +47,26 @@ export default function RacePage() {
 
   const qe = useQualifyingEngine(raceState, drivers, teams, season.constructorStandings, season.currentRound)
 
-  const [pendingGodModeActions, setPendingGodModeActions] = useState<GodModeAction[]>([])
-  const [showRaceFFModal, setShowRaceFFModal] = useState(false)
   const [showQualyFFModal, setShowQualyFFModal] = useState(false)
-  const [ffConfirmed, setFFConfirmed] = useState(false)
   const hydrated = useHydrated()
-  const [lapProgress, setLapProgress] = useState(0)
   // Team Manager: the pre-race upgrade reveal shows once per upgrade; dismissing latches this round.
   const [acknowledgedRound, setAcknowledgedRound] = useState<number | null>(null)
-  // Race Engineer auto-pit (lower bar): play at the chosen speed but pause when a car should box.
-  const raceEngineerTalent = useSettingsStore((s) => s.talents['race-engineer'] ?? false)
-  const [autoAdvance, setAutoAdvance] = useState(false)
-  const [pitAlert, setPitAlert] = useState<string | null>(null)
-  const autoAdvanceRef = useRef(false)
 
-  const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const nextTickAtRef = useRef<number>(0)
-  const doTickRef = useRef<() => void>(() => {})
   // Once the race has finished, raceState going null means End Race fired and we're navigating to Home;
   // render nothing instead of flashing the (now-advanced) next round's pre-qualifying for a frame (#113).
   const endedRef = useRef(false)
 
   const currentCircuit = calendarForYear(season.year)[season.currentRound - 1]
   const gridDrivers = season.drivers.filter((d) => d.teamId !== '')
+
+  // The 2D race-day view runs wherever the circuit has an authored track layout; others keep the
+  // classic screen until their traces are imported (#sim-2d).
+  const trackLayout = currentCircuit ? TRACK_LAYOUTS[currentCircuit.id] : undefined
+
+  // The live engine (#live-engine): steps the world in real time, commits the UI projection to the
+  // store, serves the map's per-frame positions. God-mode actions apply to it immediately.
+  const { sampleRef: mapSampleRef, lapProgress } = useLiveRace()
+  const applyGodActions = (actions: GodModeAction[]) => liveBridge.current?.applyGodActions(actions)
 
   // Driver hover card data: career totals (through last season, folded with this season's results) + this
   // year's WDC standing, so a name in the race table opens the same expanded card used around the app.
@@ -84,18 +79,22 @@ export default function RacePage() {
   const wdcPosOf = useMemo(() => new Map(season.driverStandings.map((s, i) => [s.driverId, i + 1])), [season.driverStandings])
   const wdcPtsOf = useMemo(() => new Map(season.driverStandings.map((s) => [s.driverId, s.points])), [season.driverStandings])
 
+  // Weekend bootstrap. On a page REFRESH the in-memory session is gone — set the weekend up fresh
+  // (the automatic "restart weekend"). Must wait for hydrated season data: the old mount-once effect
+  // ran before the drivers arrived, loaded an empty grid, and left the screen stuck. In-session
+  // navigation still resumes: a live raceState is never touched.
   useEffect(() => {
+    if (!hydrated) return
     if (season.phase === 'idle') { router.replace('/setup'); return }
     if (isOffSeason(season.phase)) { router.replace('/home'); return }
-    if (!raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (gridDrivers.length === 0) return
+    if (!useRaceStore.getState().raceState && currentCircuit) loadFromSeason(gridDrivers, season.teams, currentCircuit)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, season.phase, gridDrivers.length])
 
   useEffect(() => { if (phase === 'finished') endedRef.current = true }, [phase])
 
-  const handleSpeedClick = (s: SimSpeed) => {
-    if (s === 5) { setShowRaceFFModal(true); return }
-    setFFConfirmed(false); setSpeed(s)
-  }
+  const handleSpeedClick = (s: SimSpeed) => setSpeed(s)
   // Qualifying FF (speed 5) skips the rest of the session instantly — confirm first, like the race FF.
   const handleQualySpeedClick = (s: SimSpeed) => {
     if (s === 5) { setShowQualyFFModal(true); return }
@@ -112,6 +111,7 @@ export default function RacePage() {
         if (e.key === '2') handleSpeedClick(2)
         if (e.key === '3') handleSpeedClick(3)
         if (e.key === '4') handleSpeedClick(4)
+        if (e.key === '5') handleSpeedClick(5)
       }
       if (phase === 'qualifying') {
         // Keys map to the animated speeds 1-4 (2x..16x); FF (skip) is button-only, behind its confirm.
@@ -126,99 +126,6 @@ export default function RacePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, paused])
 
-  const doTick = useCallback(() => {
-    const actions = pendingGodModeActions.length > 0 ? [...pendingGodModeActions] : undefined
-    if (actions) setPendingGodModeActions([])
-    tickLap(actions)
-  }, [pendingGodModeActions, tickLap])
-
-  useEffect(() => { doTickRef.current = doTick }, [doTick])
-
-  useEffect(() => {
-    if (phase !== 'racing' || paused || speed !== 5 || !ffConfirmed) return
-    if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
-    let cancelled = false
-    const run = async () => {
-      while (!cancelled) {
-        const current = useRaceStore.getState().raceState
-        if (!current || current.phase !== 'racing') break
-        useRaceStore.getState().tickLap()
-        await new Promise((r) => setTimeout(r, 0))
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [phase, paused, speed, ffConfirmed])
-
-  // Normal real-time tick. Stands down while Race Engineer Mode is on (that effect drives the ticking).
-  useEffect(() => {
-    if (phase !== 'racing' || speed === 5 || autoAdvance || paused) {
-      if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null }
-      return
-    }
-    const ms = SPEED_INTERVALS[speed]
-    const remaining = nextTickAtRef.current > Date.now() ? Math.min(nextTickAtRef.current - Date.now(), ms) : ms
-    const schedule = (delay: number) => {
-      nextTickAtRef.current = Date.now() + delay
-      tickTimerRef.current = setTimeout(() => {
-        doTickRef.current()
-        const s = useRaceStore.getState().raceState
-        if (s?.phase === 'racing' && !s.paused && s.speed !== 5 && !autoAdvanceRef.current) schedule(SPEED_INTERVALS[s.speed as SimSpeed])
-      }, delay)
-    }
-    schedule(remaining)
-    return () => { if (tickTimerRef.current) { clearTimeout(tickTimerRef.current); tickTimerRef.current = null } }
-  }, [phase, paused, speed, autoAdvance])
-
-  useEffect(() => { autoAdvanceRef.current = autoAdvance }, [autoAdvance])
-
-  // Race Engineer Mode: drive the race ourselves — project the current lap (instant, deterministic); if a car
-  // should box, pause and hand over, switching the mode off; otherwise step a lap, paced by the chosen speed,
-  // and repeat. setState only happens inside the async loop's callbacks, never synchronously in the effect body.
-  useEffect(() => {
-    if (!autoAdvance || phase !== 'racing' || paused || speed === 5) return
-    let cancelled = false
-    const loop = async () => {
-      while (!cancelled) {
-        const s = useRaceStore.getState().raceState
-        if (!s || s.phase !== 'racing' || s.paused) break
-        const { selectedCircuit, drivers: allDrivers, teams: allTeams } = useRaceStore.getState()
-        const playerIds = allDrivers.filter((d) => d.teamId === useSeasonStore.getState().playerTeamId).map((d) => d.id)
-        if (selectedCircuit && playerIds.length) {
-          const rec = recommendPitNow(s, allDrivers, allTeams, selectedCircuit, s.year, playerIds)
-          if (rec) {
-            useRaceStore.getState().setPaused(true)
-            setPitAlert(`Box ${allDrivers.find((d) => d.id === rec.driverId)?.name ?? 'Car'} → ${rec.compound.toUpperCase()}`)
-            setAutoAdvance(false)
-            return
-          }
-        }
-        doTickRef.current() // advance a lap...
-        await new Promise((r) => setTimeout(r, SPEED_INTERVALS[(useRaceStore.getState().raceState?.speed as SimSpeed) ?? speed])) // ...paced by the chosen speed
-      }
-    }
-    loop()
-    return () => { cancelled = true }
-  }, [autoAdvance, phase, paused, speed])
-
-  // Paused-moment callout; clear it the instant the race is running again. Adjusting state during render
-  // (guarded so it can't loop) is React's sanctioned pattern and keeps it out of effects.
-  if (!paused && pitAlert !== null) setPitAlert(null)
-
-  useEffect(() => {
-    if (phase !== 'racing' || paused || speed === 5) {
-      setLapProgress(paused ? Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / SPEED_INTERVALS[speed]) * 100)) : 0)
-      return
-    }
-    const timer = setInterval(() => {
-      setLapProgress(Math.max(0, Math.min(100, (1 - (nextTickAtRef.current - Date.now()) / SPEED_INTERVALS[speed]) * 100)))
-    }, 50)
-    return () => clearInterval(timer)
-  }, [phase, paused, speed])
-
-  // Confirming FF runs it immediately (unpause), since the race/session starts paused. Held cars go back to
-  // automatic strategy so a standing HOLD doesn't ride dead tyres to the flag while fast-forwarding.
-  const confirmRaceFF = () => { setShowRaceFFModal(false); setFFConfirmed(true); useRaceStore.getState().clearHolds(); setSpeed(5); setPaused(false) }
   const confirmQualyFF = () => { setShowQualyFFModal(false); setSpeed(5); setPaused(false) }
 
   function computeResults(): RaceResult[] {
@@ -246,14 +153,50 @@ export default function RacePage() {
     phase !== 'finished' &&
     acknowledgedRound !== season.currentRound
 
+  const useNewView = !!trackLayout && !!raceState && (phase === 'racing' || phase === 'finished')
+
+  // One clock (#live-engine): the store's raceState IS the live projection — the tower, panels and
+  // the map all read the same instant. No display snapshot, no broadcast delay.
+  const shownRace = raceState
+
   return (
     <div className="h-full bg-[#0F1419] text-[#FFFFFF] flex flex-col overflow-hidden">
-      <RaceHeader
-        phase={phase} raceState={raceState} lapProgress={lapProgress}
-        currentCircuit={currentCircuit}
-      />
+      {!useNewView && (
+        <RaceHeader
+          phase={phase} raceState={shownRace} lapProgress={lapProgress}
+          currentCircuit={currentCircuit}
+        />
+      )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      {useNewView && raceState && trackLayout && currentCircuit && (
+        <RaceDayView
+          raceState={shownRace!}
+          phase={phase as 'racing' | 'finished'}
+          layout={trackLayout}
+          circuit={currentCircuit}
+          drivers={drivers}
+          teams={teams}
+          speed={speed}
+          paused={paused}
+          onSpeedClick={handleSpeedClick}
+          onTogglePause={() => setPaused(!paused)}
+          sampleRef={mapSampleRef}
+          results={resultsForDisplay}
+          baselineDrivers={season.driverStandings}
+          baselineConstructors={season.constructorStandings}
+          year={season.year}
+          driverMode={season.driverMode}
+          teamManagerMode={season.teamManagerMode}
+          playerDriverId={season.playerDriverId ?? null}
+          playerTeamId={season.playerTeamId ?? null}
+          godSelectedId={godModeDriverId}
+          onGodSelect={setGodModeDriver}
+          onGodActions={applyGodActions}
+          onRetire={(driverId) => applyGodActions([{ type: 'force-retire', driverId }])}
+        />
+      )}
+
+      {!useNewView && <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left 60% */}
         <div className="w-[60%] border-r border-[#2A3142] flex flex-col min-h-0 overflow-hidden">
           {phase === 'pre-qualifying' && (
@@ -279,9 +222,9 @@ export default function RacePage() {
           {(phase === 'racing' || phase === 'finished') && raceState && (
             <div className="flex-1 overflow-y-auto min-h-0 px-4 py-2">
               <RaceTable
-                drivers={drivers} teams={teams} states={raceState.drivers}
-                currentLap={raceState.currentLap} totalLaps={raceState.totalLaps}
-                gridPos={Object.fromEntries(raceState.qualifyingResults.map((q) => [q.driverId, q.gridPosition]))}
+                drivers={drivers} teams={teams} states={shownRace!.drivers}
+                currentLap={shownRace!.currentLap} totalLaps={shownRace!.totalLaps}
+                gridPos={Object.fromEntries(shownRace!.qualifyingResults.map((q) => [q.driverId, q.gridPosition]))}
                 year={season.year} careers={careers} wdcPosOf={wdcPosOf} wdcPtsOf={wdcPtsOf}
                 selectedDriverId={selectedDriverId}
                 onSelectDriver={setGodModeDriver}
@@ -300,11 +243,11 @@ export default function RacePage() {
             <>
               <div className="h-1/3 min-h-0 flex border-b border-[#2A3142] overflow-hidden">
                 <div className="w-1/2 min-h-0 p-4 border-r border-[#2A3142] flex flex-col overflow-hidden">
-                  <CommentaryFeed entries={raceState?.commentary ?? []} />
+                  <CommentaryFeed entries={shownRace?.commentary ?? []} />
                 </div>
                 <div className="w-1/2 min-h-0 p-4 flex flex-col overflow-hidden">
                   <LiveChampionship
-                    states={raceState?.drivers ?? []}
+                    states={shownRace?.drivers ?? []}
                     drivers={drivers}
                     teams={teams}
                     baselineDrivers={season.driverStandings}
@@ -317,16 +260,16 @@ export default function RacePage() {
                 {raceState && phase === 'racing' ? (
                   season.teamManagerMode || season.driverMode ? (
                     <PitWallPanel
-                      drivers={drivers} teams={teams} states={raceState.drivers}
-                      raceState={raceState}
-                      onRetire={(driverId) => setPendingGodModeActions((prev) => [...prev, { type: 'force-retire', driverId }])}
+                      drivers={drivers} teams={teams} states={shownRace!.drivers}
+                      raceState={shownRace!}
+                      onRetire={(driverId) => applyGodActions([{ type: 'force-retire', driverId }])}
                     />
                   ) : (
                     <GodModePanel
-                      drivers={drivers} teams={teams} states={raceState.drivers}
-                      raceState={raceState}
+                      drivers={drivers} teams={teams} states={shownRace!.drivers}
+                      raceState={shownRace!}
                       selectedDriverId={selectedDriverId ?? drivers[0]?.id ?? ''}
-                      onAction={(actions) => setPendingGodModeActions((prev) => [...prev, ...actions])}
+                      onAction={applyGodActions}
                     />
                   )
                 ) : raceState && phase === 'pre-race' && (season.teamManagerMode || season.driverMode) ? (
@@ -344,17 +287,13 @@ export default function RacePage() {
             </>
           )}
         </div>
-      </div>
+      </div>}
 
-      {phase === 'racing' && raceState && (
+      {!useNewView && phase === 'racing' && raceState && (
         <SpeedBar
           speed={speed} paused={paused}
           onSpeedClick={handleSpeedClick}
           onTogglePause={() => setPaused(!paused)}
-          showAutoAdvance={(season.teamManagerMode || season.driverMode) && raceEngineerTalent}
-          autoAdvance={autoAdvance}
-          onToggleAutoAdvance={() => setAutoAdvance((v) => !v)}
-          pitAlert={pitAlert}
         />
       )}
 
@@ -363,16 +302,6 @@ export default function RacePage() {
           speed={speed} paused={paused}
           onSpeedClick={handleQualySpeedClick}
           onTogglePause={() => setPaused(!paused)}
-        />
-      )}
-
-      {showRaceFFModal && (
-        <ConfirmModal
-          title="Fast-forward to the end?"
-          body={season.teamManagerMode ? 'The rest of the race will be simulated instantly. Held cars return to automatic strategy.' : 'The rest of the race will be simulated instantly.'}
-          confirmLabel="Fast-forward"
-          onConfirm={confirmRaceFF}
-          onCancel={() => setShowRaceFFModal(false)}
         />
       )}
 

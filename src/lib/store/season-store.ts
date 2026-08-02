@@ -13,10 +13,12 @@ import type {
   EndOfSeasonSummary,
   PendingGridChanges,
   PreSeasonTest,
+  FocusSplit,
 } from '@/lib/sim/types'
 import { composeDefaultSeason, DEFAULT_START_YEAR } from '@/lib/history/compose'
 import { calendarForYear, DEFAULT_CALENDAR_YEAR } from '@/data/calendars'
 import { computeFundingTiers, initDevPlans, applyUpgradeEvents, computeCarReshuffle, rollUpgrade, applyPlayerCycle } from '@/lib/sim/development'
+import { randomiseRatingsByRank } from '@/lib/sim/car-rating'
 import { useSettingsStore } from './settings-store'
 import { applyRaceProgression, ageDrivers, rollSeasonForm } from '@/lib/sim/progression'
 import { applyConfidenceUpdate } from '@/lib/sim/race-results'
@@ -162,7 +164,10 @@ interface SeasonStore {
   addPlayerDriver: (driver: Driver) => void
   // Team Manager: start the player's next car upgrade on the given cycle (3–6 races), recording the chosen
   // package name. cycle null = no development (the plan goes idle until the player picks again).
-  setPlayerUpgrade: (cycle: number | null, packageName?: string) => void
+  setPlayerUpgrade: (cycle: number | null, packageName?: string, focusSplit?: FocusSplit) => void
+  // Team Manager: set how the player team's upgrade gain is allocated across the four ratings (#upgrade-focus).
+  // Applied at delivery, so it can be retuned mid-cycle without restarting the development.
+  setPlayerFocus: (focusSplit: FocusSplit) => void
   // Apply the player-approved subset of a season's real-world team changes to the next-season grid.
   applyRealWorldChanges: (approved: {
     joins: { id: string; name: string; shortName: string; nationality: string; color: string }[]
@@ -243,6 +248,12 @@ export const useSeasonStore = create<SeasonStore>()(
 
       initSeason: (drivers, teams, year) => {
         const { constructorHistory } = get()
+        // Season-init randomisation (#season-init-random): hand each team a randomised overall + a random
+        // four-stat split, by rank (teams arrive best-first; rank by carPace to be safe). One-time at new-game
+        // start, so Math.random is fine — the result is persisted, not recomputed on load.
+        const rankedIds = [...teams].sort((a, b) => b.carPace - a.carPace).map((t) => t.id)
+        const initRatings = randomiseRatingsByRank(rankedIds, Math.random)
+        teams = teams.map((t) => ({ ...t, ...(initRatings.get(t.id) ?? {}) }))
         const fundingTiers = computeFundingTiers(teams, constructorHistory)
         const devPlans = applyPlayerCycle(initDevPlans(teams, fundingTiers, Math.random), teams, get().teamManagerMode ? get().playerTeamId : null, null, get().currentRound, Math.random)
         // Real-world mode: the pool is the real free agents in the composed grid (no fictional drivers).
@@ -323,13 +334,19 @@ export const useSeasonStore = create<SeasonStore>()(
       addPlayerDriver: (driver) =>
         set((s) => (s.drivers.some((d) => d.id === driver.id) ? s : { drivers: [...s.drivers, { ...driver, teamId: '', seasonForm: 0 }] })),
 
-      setPlayerUpgrade: (cycle, packageName) => {
+      setPlayerUpgrade: (cycle, packageName, focusSplit) => {
         const { playerTeamId, devPlans, teams, currentRound } = get()
         // Team Manager talents bend the player's upgrade roll: Chief Engineer guarantees no failure, Chief
         // Aerodynamicist adds 1.25 car pace per race of development. Applied when the upgrade is commissioned.
         const talents = useSettingsStore.getState().talents
         const upgradeOpts = { noFail: !!talents['chief-engineer'], paceBonusPerRace: talents['chief-aero'] ? 1.25 : 0 }
-        set({ devPlans: applyPlayerCycle(devPlans, teams, playerTeamId, cycle, currentRound, Math.random, packageName, upgradeOpts) })
+        set({ devPlans: applyPlayerCycle(devPlans, teams, playerTeamId, cycle, currentRound, Math.random, packageName, focusSplit, upgradeOpts) })
+      },
+
+      setPlayerFocus: (focusSplit) => {
+        const { playerTeamId, devPlans } = get()
+        if (!playerTeamId) return
+        set({ devPlans: devPlans.map((p) => (p.teamId === playerTeamId ? { ...p, focusSplit } : p)) })
       },
 
       // Real-world season-end: apply the approved team changes to the next-season grid (built by

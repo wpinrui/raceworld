@@ -13,6 +13,9 @@ interface Props {
   forecast: WeatherPoint[] // the fallible prediction
   currentLap: number
   totalLaps: number
+  /** Rendered graph size in px (the viewBox scales to fit). Defaults match the race header. */
+  graphWidth?: number
+  graphHeight?: number
 }
 
 // SVG canvas units (rendered responsively via viewBox).
@@ -33,7 +36,7 @@ function path(from: number, to: number, totalLaps: number, value: (lap: number) 
 // Live weather readout for the raceday header: a wetness%-vs-lap graph. The solid line is the actual
 // weather, revealed lap by lap; the dashed line ahead is the (imperfect) forecast, which homes onto
 // reality as each lap nears. The eye toggle is a god-mode cheat that reveals the true future.
-export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props) {
+export function WeatherGraph({ weather, forecast, currentLap, totalLaps, graphWidth = 180, graphHeight = 36 }: Props) {
   const managed = useSeasonStore((s) => s.teamManagerMode || s.driverMode)
   const talentOn = useSettingsStore((s) => s.talents['met-office'] ?? false)
   // In the managed career modes the true-weather reveal is a Met Office talent; without it, only the forecast shows.
@@ -77,7 +80,7 @@ export function WeatherGraph({ weather, forecast, currentLap, totalLaps }: Props
         </span>
       </div>
 
-      <div className="relative h-9 w-[180px]" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <div className="relative" style={{ width: graphWidth, height: graphHeight }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"

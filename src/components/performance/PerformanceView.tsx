@@ -3,10 +3,78 @@
 import { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
 import { useSeasonStore } from '@/lib/store/season-store'
+import { useSettingsStore } from '@/lib/store/settings-store'
 import { buildPerformanceData } from '@/lib/world/performance'
 import { hexToRgb, rgbToHex } from '@/lib/color'
+import type { Team } from '@/lib/sim/types'
 
-type Sub = 'pace' | 'delta'
+type Sub = 'pace' | 'delta' | 'cars'
+
+// God-mode (Data Room) car-ratings table. ratingOf falls back to carPace for legacy teams; avg of the four is
+// the "basic overall" the table sorts on by default.
+type CarCol = 'name' | 'straightLine' | 'cornering' | 'tyreWarming' | 'tyreWear' | 'avg'
+const CAR_COLS: { key: CarCol; label: string }[] = [
+  { key: 'name', label: 'Team' },
+  { key: 'straightLine', label: 'Straight' },
+  { key: 'cornering', label: 'Corner' },
+  { key: 'tyreWarming', label: 'Warming' },
+  { key: 'tyreWear', label: 'Wear' },
+  { key: 'avg', label: 'Avg' },
+]
+const STAT_KEYS = ['straightLine', 'cornering', 'tyreWarming', 'tyreWear'] as const
+const ratingOf = (t: Team, k: (typeof STAT_KEYS)[number]) => Math.round(t[k] ?? t.carPace)
+const avgOf = (t: Team) => Math.round(STAT_KEYS.reduce((s, k) => s + ratingOf(t, k), 0) / STAT_KEYS.length)
+
+function CarRatingsTable({ teams }: { teams: Team[] }) {
+  const [sortKey, setSortKey] = useState<CarCol>('avg')
+  const [dir, setDir] = useState<'asc' | 'desc'>('desc')
+  const rows = useMemo(() => {
+    const val = (t: Team): number | string => (sortKey === 'name' ? t.name : sortKey === 'avg' ? avgOf(t) : ratingOf(t, sortKey))
+    return [...teams].sort((a, b) => {
+      const va = val(a), vb = val(b)
+      const cmp = typeof va === 'string' ? va.localeCompare(vb as string) : (va as number) - (vb as number)
+      return dir === 'asc' ? cmp : -cmp
+    })
+  }, [teams, sortKey, dir])
+  const onSort = (k: CarCol) => {
+    if (k === sortKey) setDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(k); setDir(k === 'name' ? 'asc' : 'desc') }
+  }
+  return (
+    <div className="flex-1 min-h-0 overflow-auto rounded-xl bg-[#1E2431] border border-[#2A3142]">
+      <table className="w-full text-sm text-[#FFFFFF]">
+        <thead className="sticky top-0 bg-[#1E2431]">
+          <tr className="border-b border-[#2A3142]">
+            {CAR_COLS.map((c) => (
+              <th key={c.key} className={c.key === 'name' ? 'text-left' : 'text-right'}>
+                <button
+                  onClick={() => onSort(c.key)}
+                  className={`w-full px-3 py-2 text-[10px] font-semibold uppercase tracking-widest hover:text-[#00D9FF] transition-colors ${c.key === 'name' ? 'text-left' : 'text-right'} ${sortKey === c.key ? 'text-[#00D9FF]' : 'text-[#FFFFFF]'}`}
+                >
+                  {c.label}{sortKey === c.key ? (dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((t) => (
+            <tr key={t.id} className="border-b border-[#2A3142]/60">
+              <td className="px-3 py-1.5">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                  <span className="truncate">{t.name}</span>
+                </span>
+              </td>
+              {STAT_KEYS.map((k) => <td key={k} className="px-3 py-1.5 text-right tabular-nums">{ratingOf(t, k)}</td>)}
+              <td className="px-3 py-1.5 text-right tabular-nums font-bold text-[#00D9FF]">{avgOf(t)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 // Lighten a hex colour by mixing it toward white by `pct`, so a team's drivers read as visibly lighter
 // shades of the team colour (mixing toward white shifts even saturated/bright colours, unlike scaling).
@@ -48,6 +116,7 @@ export function PerformanceView() {
   const raceResults = useSeasonStore((s) => s.raceResults)
   const carPaceHistory = useSeasonStore((s) => s.carPaceHistory)
   const teams = useSeasonStore((s) => s.teams)
+  const dataRoom = useSettingsStore((s) => !!s.talents['data-room']) // god mode: reveals the car-ratings tab
 
   const [sub, setSub] = useState<Sub>('pace')
   const [hidden, setHidden] = useState<Set<string>>(new Set()) // pace view: hidden teams
@@ -98,9 +167,10 @@ export function PerformanceView() {
     setter(next)
   }
 
-  if (rounds === 0) {
-    return <p className="text-sm text-[#FFFFFF]">Run some races and this will fill in.</p>
-  }
+  // The car-ratings tab is god-mode-only; fall back to pace if Data Room is off. Nothing here hides wholesale
+  // pre-season: the car-pace chart and ratings exist from the start; only the race-driven charts wait for round 1.
+  const view: Sub = sub === 'cars' && !dataRoom ? 'pace' : sub
+  const preSeason = rounds === 0
 
   const maxFinish = Math.max(2, ...teamFinishRows.flatMap((r) => teams.map((t) => r[t.id]).filter((v) => v != null)))
   const visibleTeams = orderedTeams.filter((t) => !hidden.has(t.id))
@@ -116,26 +186,30 @@ export function PerformanceView() {
 
   return (
     <div className="h-full flex flex-col gap-3">
-      {/* Sub-tabs, with a select all/none toggle right-aligned. */}
+      {/* Sub-tabs, with a select all/none toggle right-aligned (chart views only). */}
       <div className="shrink-0 flex items-center gap-1.5">
-        {([['pace', 'Pace & results'], ['delta', 'Over / under']] as const).map(([key, label]) => (
+        {([['pace', 'Pace & results'], ['delta', 'Over / under'], ...(dataRoom ? [['cars', 'Car ratings']] : [])] as [Sub, string][]).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSub(key)}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors ${sub === key ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wide transition-colors ${view === key ? 'bg-[#00D9FF] text-[#0F1419]' : 'bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848]'}`}
           >
             {label}
           </button>
         ))}
-        <button
-          onClick={toggleAll}
-          className="ml-auto px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] transition-colors"
-        >
-          {allOn ? 'Select none' : 'Select all'}
-        </button>
+        {(view === 'pace' || (view === 'delta' && !preSeason)) && (
+          <button
+            onClick={toggleAll}
+            className="ml-auto px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wide bg-[#2A3142] text-[#FFFFFF] hover:bg-[#303848] transition-colors"
+          >
+            {allOn ? 'Select none' : 'Select all'}
+          </button>
+        )}
       </div>
 
-      {sub === 'pace' ? (
+      {view === 'cars' ? (
+        <CarRatingsTable teams={teams} />
+      ) : view === 'pace' ? (
         <>
           <div className="shrink-0 flex flex-wrap gap-1.5">
             {orderedTeams.map((t) => <Chip key={t.id} on={!hidden.has(t.id)} color={t.color} label={t.name} onClick={() => toggle(hidden, setHidden, t.id)} />)}
@@ -147,10 +221,11 @@ export function PerformanceView() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={paceRows} margin={{ top: 6, right: 16, bottom: 4, left: -12 }}>
                   <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="round" type="number" domain={[0, rounds]} allowDecimals={false} tickFormatter={(r: number) => (r === 0 ? 'Start' : String(r))} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} />
+                  <XAxis dataKey="round" type="number" domain={[0, Math.max(1, rounds)]} allowDecimals={false} tickFormatter={(r: number) => (r === 0 ? 'Start' : String(r))} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} />
                   <YAxis domain={[(min: number) => Math.floor(min - 2), (max: number) => Math.ceil(max + 2)]} allowDecimals={false} stroke="#6B7280" tick={{ fill: '#FFFFFF', fontSize: 11 }} width={40} />
                   <RTooltip content={<Tip nameOf={nameOf} />} />
-                  {visibleTeams.map((t) => <Line key={t.id} type="monotone" dataKey={t.id} stroke={t.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />)}
+                  {/* Pre-season there's a single 'Start' point per team, so show dots (a lone point draws no line). */}
+                  {visibleTeams.map((t) => <Line key={t.id} type="monotone" dataKey={t.id} stroke={t.color} strokeWidth={2} dot={preSeason} isAnimationActive={false} connectNulls />)}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -159,6 +234,9 @@ export function PerformanceView() {
           <div className="flex-1 min-h-0 flex flex-col rounded-xl bg-[#1E2431] border border-[#2A3142] p-3">
             <p className="shrink-0 text-[10px] uppercase tracking-widest text-[#FFFFFF] mb-1.5">Best finish</p>
             <div className="flex-1 min-h-0">
+              {preSeason ? (
+                <div className="h-full flex items-center justify-center text-xs text-[#FFFFFF]">Fills in once the racing starts.</div>
+              ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={teamFinishRows} margin={{ top: 6, right: 16, bottom: 4, left: -12 }}>
                   <CartesianGrid stroke="#2A3142" strokeDasharray="3 3" vertical={false} />
@@ -168,9 +246,12 @@ export function PerformanceView() {
                   {visibleTeams.map((t) => <Line key={t.id} type="monotone" dataKey={t.id} stroke={t.color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />)}
                 </LineChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
         </>
+      ) : preSeason ? (
+        <p className="text-sm text-[#FFFFFF]">Over / under performance fills in once the racing starts.</p>
       ) : (
         <>
           <div className="shrink-0 max-h-44 overflow-y-auto grid grid-cols-5 gap-x-3 gap-y-2">

@@ -64,7 +64,14 @@ export interface Team {
   shortName: string
   nationality: string    // constructor licence country, ISO 3166-1 alpha-2; '' = rest of world
   color: string          // primary hex
-  carPace: number        // 75/70/65/60/55/50/45/40/35/30
+  carPace: number        // 75/70/65/60/55/50/45/40/35/30 — the derived OVERALL pace (mean of the two below)
+  // Multi-rating car model (#sim-overhaul). 0-100. Absent on legacy saves → fall back to carPace
+  // (see car-rating.ts). straightLine + cornering blend into effective pace per circuit; the two tyre
+  // ratings feed the tyre temperature / wear model.
+  straightLine?: number  // straight-line speed (acceleration + top speed)
+  cornering?: number     // cornering speed
+  tyreWarming?: number   // how easily the car keeps its tyres in the optimal temperature window
+  tyreWear?: number      // resistance to tyre degradation (higher = slower wear)
 }
 
 export interface Circuit {
@@ -77,6 +84,8 @@ export interface Circuit {
   flatModifier: number   // seconds added to base laptime for cosmetic realism
   sundayOfYear: number   // race day = the Nth Sunday of the season year (1-based), so the
                          // calendar self-resolves to a real date for any future year
+  straightness?: number  // 0 (corner-heavy, Monaco) – 1 (straight-heavy, Monza); weights the pace blend
+                         // and overtaking ease. Absent → treated as 0.5. (#sim-overhaul)
 }
 
 export interface TyreState {
@@ -90,7 +99,27 @@ export interface DriverRaceState {
   position: number
   totalTime: number
   lapTimes: number[]
+  sectorTimes?: number[] // played-race sector engine (#sector-engine): this lap's sub-lap splits, appended
+                         // per sector tick. Length 8 ⇔ they describe lapTimes' last entry; <8 ⇔ the lap in
+                         // progress. Absent on headless/legacy states (whole-lap ticks).
+  pendingPit?: { pit: boolean; compound: TyreCompound } // sector engine: the pit call taken on the lap's
+                         // first slice (same decision state as the lap engine), executed in the final
+                         // sector. Absent at frac=1, where decision and execution share the tick.
+  passedThisLap?: boolean // sector engine: this car completed a pass this lap, so it contests no further
+                         // until the next lap — the lap engine structurally allows one contest per car
+                         // per lap, and uncapped sector contests chained multi-pass laps (+14% places
+                         // gained, measured). Cleared on the lap's first slice; never set at frac=1.
+  contestArmed?: boolean // sector engine: within strike range at the LAP BOUNDARY — the lap engine's
+                         // contest gate. Without it a car attacked in the same lap it caught up,
+                         // gaining fractional contest exposure on every catch-up. Set each lap start.
   currentTyre: TyreState
+  tyreTemp?: number      // normalised tyre temperature: window [0,1], <0 cold, >1 hot (#sim-overhaul).
+                         // Absent (legacy/forecast states) → treated as a fresh-tyre temp.
+  push?: PushState       // the driver's SELECTED push (slider or auto-reverting preset) — their intent. Absent → normal.
+  pushAuto?: boolean     // Team Manager: hand push to the AI; `push` then mirrors the AI's live pick each lap (#push-auto).
+  autoDefend?: boolean   // Driver mode: while `push` is normal, auto-push to defend a car behind. The defensive push is
+                         // applied for the lap WITHOUT changing `push` (intent stays normal), so it stays armed (#push-auto).
+  defending?: boolean    // transient: the sim applied a defensive push this lap (drives the "Defending" UI badge).
   stintLap: number
   fuelLaps: number
   form: number           // 0-10
@@ -150,6 +179,8 @@ export interface RaceState {
   year: number                                             // season year, for era-dependent effects (e.g. pit-lane loss)
   totalLaps: number
   currentLap: number
+  currentSector?: number                                    // played-race sector engine (#sector-engine): the sector
+                                                            // in progress, 0..7 within currentLap. Absent on headless states.
   weather: WeatherPoint[]                                   // the true weather (drives the sim)
   weatherForecast: WeatherPoint[]                           // fallible prediction; blended toward truth as laps near (UI only)
   drivers: DriverRaceState[]
@@ -173,10 +204,12 @@ export interface GodModeAction {
   compound?: TyreCompound  // used with force-pit
 }
 
-// Driver mode in-race pace tool, per driver (#driver-mode). 'normal' = race as usual; 'defend' = back off
-// to hold station just outside the car-ahead's dirty air (clean-air pace preserved, so you stay hard to
-// pass); 'backoff' = cruise +2s/lap for roughly half the tyre wear, to nurse a stint longer.
-export type DriverPaceMode = 'normal' | 'defend' | 'backoff'
+// Driver push controls (#sim-overhaul). A persistent 5-step SLIDER (back off…max) or a transient PRESET
+// that auto-reverts to normal once its goal is met. Logic in push.ts; resolves to an intensity for the lap
+// loop's pace/temp/wear model. Per-car race state (DriverRaceState.push).
+export type SliderLevel = -2 | -1 | 0 | 1 | 2
+export type PushPreset = 'overtake' | 'push' | 'conserve'
+export type PushState = { kind: 'manual'; level: SliderLevel } | { kind: 'preset'; preset: PushPreset }
 
 // --- Season / standings types ---
 
@@ -266,9 +299,19 @@ export interface ConstructorStanding {
 
 export type FundingTier = 1 | 2 | 3 | 4
 
+// How a team's upgrade gain is allocated across the four car ratings (#upgrade-focus). Fractions summing to
+// 1; absent → a pace-focused default (the legacy behaviour: all gain on straight-line + cornering).
+export interface FocusSplit {
+  straightLine: number
+  cornering: number
+  tyreWarming: number
+  tyreWear: number
+}
+
 export interface TeamDevPlan {
   teamId: string
   cycleLength: number          // 3–6 races per upgrade
+  focusSplit?: FocusSplit      // how this cycle's gain is split across the four ratings (#upgrade-focus)
   // The round the in-progress upgrade lands. null = no active upgrade — Team Manager player only: after a
   // delivery the player's plan goes idle until they pick the next package (the car stagnates meanwhile).
   // AI plans are never null (they develop continuously).

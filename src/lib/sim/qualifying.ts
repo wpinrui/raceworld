@@ -70,6 +70,7 @@ function simulateQualifyingLap(
     weather, compoundDeltas: DEFAULT_COMPOUND_DELTAS,
     gapToCarAhead: Infinity, carAheadLapTime: null,
     circuitFlatModifier: circuit.flatModifier,
+    circuitStraightness: circuit.straightness,
     noiseOverride: noiseVal,
   })
 

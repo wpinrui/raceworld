@@ -1,0 +1,406 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  ArrowUpDown, Hourglass, Info, Layers, LayoutGrid, LifeBuoy, Map as MapIcon, PanelLeftClose,
+  PanelLeftOpen, Shield, Timer, Wrench, type LucideIcon,
+} from 'lucide-react'
+import type { Circuit, Driver, DriverRaceState, GodModeAction, RaceResult, RaceState, SimSpeed, Team } from '@/lib/sim/types'
+import type { ConstructorStanding, DriverStanding } from '@/lib/sim/types'
+import type { TrackLayout } from '@/data/tracks'
+import { RaceTrackMap, type TrackCarMeta, type TrackSample } from './RaceTrackMap'
+import { liveryFor } from '@/data/history/liveries'
+import { raceLight } from '@/data/tracks/venues'
+import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from './RaceTable'
+import CommentaryFeed from './CommentaryFeed'
+import { LiveChampionship } from './LiveChampionship'
+import { PitWallCard } from './PitWallPanel'
+import { TyreGodModal } from './TyreGodModal'
+import { DriverTrackTip } from './DriverTrackTip'
+import GodModePanel from './GodModePanel'
+import { PostRacePanel } from './PostRacePanel'
+import { CentreConsole, CHIP_BG, consoleChipClass } from './CentreConsole'
+import { Tooltip } from '@/components/ui/Tooltip'
+
+// The 2D race-day screen (#sim-2d): collapsible timing board with subpane toggles, the live track map
+// with the follow camera, commentary + live championship, and pit wall cards flanking the centre
+// console. Composed here so the race page just gates on "does this circuit have a track layout yet".
+
+const COLUMN_TOGGLES: Array<{ col: RaceTableColumn; label: string; icon: LucideIcon }> = [
+  { col: 'grid', label: 'Grid', icon: LayoutGrid },
+  { col: 'team', label: 'Team', icon: Shield },
+  { col: 'gap', label: 'Gap', icon: Hourglass },
+  { col: 'interval', label: 'Interval', icon: ArrowUpDown },
+  { col: 'tyre', label: 'Tyres', icon: LifeBuoy },
+  { col: 'stops', label: 'Stops', icon: Wrench },
+  { col: 'lastLap', label: 'Last lap', icon: Timer },
+  { col: 'stints', label: 'Stints', icon: Layers },
+]
+
+// Pane preferences persist across race days. Safe to read lazily: the race page renders nothing until
+// after hydration, so the first real render is always client-side.
+const UI_KEY = 'raceday-ui'
+interface StoredUi { standingsOpen: boolean; columns: RaceTableColumn[]; pinnedTip: boolean; mapView: boolean }
+function loadUi(): Partial<StoredUi> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem(UI_KEY) ?? '') as Partial<StoredUi>
+    return {
+      ...parsed,
+      columns: parsed.columns?.filter((c) => ALL_RACE_TABLE_COLUMNS.includes(c)),
+    }
+  } catch {
+    return {}
+  }
+}
+
+interface Props {
+  raceState: RaceState
+  phase: 'racing' | 'finished'
+  layout: TrackLayout
+  circuit: Circuit
+  drivers: Driver[]
+  teams: Team[]
+  speed: SimSpeed
+  paused: boolean
+  onSpeedClick: (s: SimSpeed) => void
+  onTogglePause: () => void
+  sampleRef: React.MutableRefObject<(id: string) => TrackSample>
+  results: RaceResult[]
+  baselineDrivers: DriverStanding[]
+  baselineConstructors: ConstructorStanding[]
+  year: number
+  driverMode: boolean
+  teamManagerMode: boolean
+  playerDriverId: string | null
+  playerTeamId: string | null
+  godSelectedId: string | null
+  onGodSelect: (id: string) => void
+  onGodActions: (actions: GodModeAction[]) => void
+  onRetire: (driverId: string) => void
+}
+
+export function RaceDayView({
+  raceState, phase, layout, circuit, drivers, teams, speed, paused, onSpeedClick, onTogglePause,
+  sampleRef, results, baselineDrivers, baselineConstructors, year, driverMode, teamManagerMode,
+  playerDriverId, playerTeamId, godSelectedId, onGodSelect, onGodActions, onRetire,
+}: Props) {
+  const [stored] = useState(loadUi)
+  const [standingsOpen, setStandingsOpen] = useState(stored.standingsOpen ?? true)
+  const [columns, setColumns] = useState<Set<RaceTableColumn>>(new Set(stored.columns ?? ALL_RACE_TABLE_COLUMNS))
+  const [pinnedTip, setPinnedTip] = useState(stored.pinnedTip ?? true)
+  const [mapView, setMapView] = useState(stored.mapView ?? false)
+  const [godOpen, setGodOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(UI_KEY, JSON.stringify({ standingsOpen, columns: [...columns], pinnedTip, mapView }))
+    } catch { /* storage unavailable: preferences just don't persist */ }
+  }, [standingsOpen, columns, pinnedTip, mapView])
+  const [followId, setFollowId] = useState<string | null>(() =>
+    driverMode ? playerDriverId : teamManagerMode ? drivers.find((d) => d.teamId === playerTeamId)?.id ?? null : null,
+  )
+  // God mode: the tyre editor opened from a standings tyre cell.
+  const [tyreModalId, setTyreModalId] = useState<string | null>(null)
+  // Coarse 1Hz freshness tick for the memoised map (tooltip/pinned-card content).
+  const [tipTick, setTipTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTipTick((v) => v + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const driverOf = useMemo(() => new Map(drivers.map((d) => [d.id, d])), [drivers])
+  const teamOf = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams])
+  const gridPos = useMemo(
+    () => Object.fromEntries(raceState.qualifyingResults.map((q) => [q.driverId, q.gridPosition])),
+    [raceState.qualifyingResults],
+  )
+
+  // The follow lock quietly releases if the followed car is out (derived, not stateful).
+  const followedState = raceState.drivers.find((s) => s.driverId === followId)
+  const effectiveFollow = followedState && !followedState.retired ? followId : null
+
+  const isPlayerCar = (ds: DriverRaceState) =>
+    (driverMode && ds.driverId === playerDriverId) ||
+    (teamManagerMode && driverOf.get(ds.driverId)?.teamId === playerTeamId)
+
+  // Garage allocation order: constructor standings best-first (name-keyed for the map).
+  const teamOrder = useMemo(
+    () => baselineConstructors.map((c) => teamOf.get(c.teamId)?.name).filter((n): n is string => !!n),
+    [baselineConstructors, teamOf],
+  )
+
+  // The race's light, worked out from where this circuit is and when it races rather than picked off
+  // a list of moods. `venues.ts` carries the latitude, the date and the start time; `sun.ts` turns
+  // them into an altitude and a bearing, and every scalar the renderers read falls out of those.
+  //
+  // Cloud is a step and not a ramp, deliberately: it is the one input here that changes DURING the
+  // race, and the world rebuilds when the light does. One flip when the race turns wet is exactly
+  // what the mood this replaces already cost.
+  const cloud = raceState.weather.some((w) => w.moisture >= 0.5) ? 1 : 0
+  const { lighting, floodlit } = useMemo(
+    () => raceLight(layout.circuitId, { cloud }),
+    [layout.circuitId, cloud],
+  )
+
+  const cars: TrackCarMeta[] = useMemo(
+    () =>
+      raceState.drivers.map((s) => {
+        const driver = driverOf.get(s.driverId)
+        const team = driver ? teamOf.get(driver.teamId) : undefined
+        const color = team?.color ?? '#888'
+        return {
+          id: s.driverId,
+          pos: s.position,
+          compound: s.currentTyre.compound,
+          color,
+          // The era's five-slot palette for this constructor and season; a team without a livery
+          // entry (a custom or expansion team) paints from its single colour instead.
+          livery: driver ? liveryFor(driver.teamId, year, color) : undefined,
+          name: driver?.name ?? s.driverId,
+          team: team?.name,
+          nationality: driver?.nationality,
+          isPlayer: isPlayerCar(s),
+          retired: s.retired,
+        }
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [raceState.drivers, driverOf, teamOf, year],
+  )
+
+  const myDrivers = driverMode
+    ? drivers.filter((d) => d.id === playerDriverId)
+    : teamManagerMode
+      ? drivers.filter((d) => d.teamId === playerTeamId)
+      : []
+
+  const selectRow = (id: string) => {
+    setFollowId(id)
+    onGodSelect(id)
+  }
+
+  const toggleColumn = (col: RaceTableColumn) =>
+    setColumns((prev) => {
+      const next = new Set(prev)
+      if (next.has(col)) next.delete(col)
+      else next.add(col)
+      return next
+    })
+
+  const pod = (driver: Driver) => (
+    <div key={driver.id} className="shrink-0 self-center">
+      <PitWallCard
+        driver={driver}
+        team={teamOf.get(driver.teamId)}
+        ds={raceState.drivers.find((s) => s.driverId === driver.id)}
+        raceState={raceState}
+        allDrivers={drivers}
+        onRetire={onRetire}
+        mode={driverMode ? 'driver' : 'tm'}
+      />
+    </div>
+  )
+
+  return (
+    <>
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Left: the timing board; subpane toggles pick the data, the panel fits itself to it */}
+        <div className={`shrink-0 border-r border-[#232A38] flex flex-col ${standingsOpen ? 'max-w-[55vw]' : 'w-10'}`}>
+          <div className="flex items-center justify-between px-2 py-2 shrink-0 gap-3">
+            {standingsOpen && <span className="text-xs font-semibold tracking-widest uppercase">Standings</span>}
+            <button
+              className="p-1 rounded hover:bg-[#232A38] cursor-pointer"
+              onClick={() => setStandingsOpen((v) => !v)}
+            >
+              {standingsOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+            </button>
+          </div>
+          {standingsOpen && (
+            <>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <RaceTable
+                  drivers={drivers}
+                  teams={teams}
+                  states={raceState.drivers}
+                  currentLap={raceState.currentLap}
+                  totalLaps={raceState.totalLaps}
+                  gridPos={gridPos}
+                  columns={[...columns]}
+                  selectedDriverId={effectiveFollow}
+                  onSelectDriver={selectRow}
+                  onTyreClick={setTyreModalId}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 px-2 py-2 shrink-0 border-t border-[#232A38]">
+                {COLUMN_TOGGLES.map(({ col, label, icon: Icon }) => {
+                  const on = columns.has(col)
+                  return (
+                    <Tooltip key={col} content={label}>
+                      <button
+                        onClick={() => toggleColumn(col)}
+                        className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
+                          on ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                        }`}
+                      >
+                        <Icon size={21} />
+                      </button>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Center: the track map with its display toggles */}
+        <div className="flex-1 min-w-0 relative">
+          <RaceTrackMap
+            layout={layout}
+            cars={cars}
+            teamOrder={teamOrder}
+            tipTick={tipTick}
+            sampleRef={sampleRef}
+            followId={effectiveFollow}
+            onFollow={setFollowId}
+            view={mapView ? 'map' : 'live'}
+            lighting={lighting}
+            floodlit={floodlit}
+            pinnedCard={(() => {
+              if (!effectiveFollow || !pinnedTip || mapView) return undefined
+              const ds = raceState.drivers.find((s) => s.driverId === effectiveFollow)
+              const d = driverOf.get(effectiveFollow)
+              if (!ds || !d) return undefined
+              return (
+                <DriverTrackTip
+                  ds={ds}
+                  driver={d}
+                  team={teamOf.get(d.teamId)}
+                  states={raceState.drivers}
+                  drivers={drivers}
+                  currentLap={raceState.currentLap}
+                  isPlayer={isPlayerCar(ds)}
+                />
+              )
+            })()}
+          />
+          <div className="absolute top-3 right-3 flex gap-1.5">
+            {effectiveFollow && !mapView && (
+              <Tooltip content="Driver card">
+                <button
+                  onClick={(e) => { e.currentTarget.blur(); setPinnedTip((v) => !v) }}
+                  className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
+                    pinnedTip ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                  }`}
+                >
+                  <Info size={21} />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip content="Map view">
+              <button
+                onClick={(e) => { e.currentTarget.blur(); setMapView((v) => !v) }}
+                className={`flex items-center justify-center w-11 h-11 rounded-lg cursor-pointer transition-colors ${
+                  mapView ? 'bg-[#232A38] text-[#FFFFFF]' : 'text-[#6B7280] hover:bg-[#1E2431]'
+                }`}
+              >
+                <MapIcon size={21} />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* Right: post-race results, the god-mode panel, or commentary + live championship */}
+        <div className="w-80 shrink-0 border-l border-[#232A38] flex flex-col min-h-0 p-3 gap-3">
+          {phase === 'finished' ? (
+            <PostRacePanel results={results} teams={teams} />
+          ) : godOpen && !driverMode && !teamManagerMode ? (
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <GodModePanel
+                drivers={drivers}
+                teams={teams}
+                states={raceState.drivers}
+                raceState={raceState}
+                selectedDriverId={godSelectedId ?? drivers[0]?.id ?? ''}
+                onAction={onGodActions}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 min-h-0">
+                <CommentaryFeed entries={raceState.commentary} />
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <LiveChampionship
+                  states={raceState.drivers}
+                  drivers={drivers}
+                  teams={teams}
+                  baselineDrivers={baselineDrivers}
+                  baselineConstructors={baselineConstructors}
+                  year={year}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom: pit wall cards flanking the centre console (racing only) */}
+      {phase === 'racing' && (
+        <div className="flex items-stretch gap-3 px-4 py-3 shrink-0 border-t border-[#232A38]">
+          {myDrivers[0] && pod(myDrivers[0])}
+          {/* Negative margins cancel the strip's vertical padding so the backdrop runs edge to edge. */}
+          <div className="flex-1 min-w-0 self-stretch -mt-3 -mb-3">
+            <CentreConsole
+              circuitName={circuit.name}
+              countryCode={circuit.country}
+              // The display state's currentLap IS the lap being animated; the console expects completed laps.
+              lap={Math.max(0, raceState.currentLap - 1)}
+              totalLaps={raceState.totalLaps}
+              weather={raceState.weather}
+              forecast={raceState.weatherForecast}
+              speed={speed}
+              paused={paused}
+              onSpeed={onSpeedClick}
+              onTogglePause={onTogglePause}
+              straightness={circuit.straightness}
+              // Monaco stands in for every venue until per-track backdrops are sourced (see README attribution).
+              backdropUrl="/track-backdrops/monaco.png"
+              speedLabels={{ 1: '1×', 2: '2×', 3: '5×', 4: '10×', 5: '25×' }}
+              topRight={
+                !driverMode && !teamManagerMode ? (
+                  <button
+                    onClick={(e) => { e.currentTarget.blur(); setGodOpen((v) => !v) }}
+                    className={consoleChipClass}
+                    style={{ background: CHIP_BG, ...(godOpen ? { color: '#00D9FF', borderColor: '#00D9FF' } : {}) }}
+                  >
+                    GOD MODE
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
+          {myDrivers[1]
+            ? pod(myDrivers[1])
+            : myDrivers[0]
+              // Driver mode has a single card; balance it so the console stays screen-centred.
+              ? <div className="w-[480px] shrink-0" />
+              : null}
+        </div>
+      )}
+      {(() => {
+        if (!tyreModalId) return null
+        const ds = raceState.drivers.find((d) => d.driverId === tyreModalId)
+        if (!ds || ds.retired) return null
+        return (
+          <TyreGodModal
+            driverId={tyreModalId}
+            driverName={driverOf.get(tyreModalId)?.name ?? tyreModalId}
+            compound={ds.currentTyre.compound}
+            condition={ds.currentTyre.condition}
+            onClose={() => setTyreModalId(null)}
+          />
+        )
+      })()}
+    </>
+  )
+}

@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1319;font-family:'Barlow',sans-serif;}
+a{color:#FFFFFF;text-decoration:none;} a:hover{color:#00D9FF;}
+</style>
+</helmet>
+<section id="2a" style="display:flex;flex-direction:column;gap:30px;padding:40px;align-items:flex-start">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="background:#00D9FF;color:#0F1319;font-weight:800;font-size:11px;padding:2px 7px;border-radius:4px;font-family:'JetBrains Mono',monospace">2a</div>
+    <div style="color:#8A93A6;font-size:12px;letter-spacing:1px;font-weight:700">PACE TAB — MODE / LEVEL HIERARCHY</div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+
+    <!-- 2a-1: preset driving -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">MODE drives LEVEL — OVERTAKE selected, slider follows in preset colour (read-only highlight)</div>
+      <div style="width:{{ cardWidth }};background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#2a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">25%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L30</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+1.30s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#8A93A6">RUNNING</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5C6779">PLAN L41</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:28px;font-size:7px;font-weight:800;letter-spacing:1px;color:#5C6779;flex-shrink:0">MODE</span>
+              <div style="flex:1;display:flex;gap:4px">
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#DC143C;border:1px solid #DC143C;color:#FFFFFF">OVERTAKE</div>
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#2ECC71;border-color:#2ECC71">CONSERVE</div>
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">MANUAL</div>
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#00D9FF;border-color:#00D9FF"><span style="width:5px;height:5px;border-radius:50%;background:#5C6779"></span>AUTO</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:28px;font-size:7px;font-weight:800;letter-spacing:1px;color:#5C6779;flex-shrink:0">LEVEL</span>
+              <div style="flex:1;display:flex;gap:2px;opacity:0.85">
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779">BACK</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779">EASE</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779">NORM</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779">PUSH</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:rgba(220,20,60,0.25);border:1px solid #DC143C;color:#FFFFFF">MAX</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2a-2: manual -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">MANUAL mode — slider is the control; touching it deselects any preset (violet = temp in window)</div>
+      <div style="width:{{ cardWidth }};background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#2a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">25%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L30</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+1.30s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#8A93A6">RUNNING</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5C6779">PLAN L41</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:28px;font-size:7px;font-weight:800;letter-spacing:1px;color:#5C6779;flex-shrink:0">MODE</span>
+              <div style="flex:1;display:flex;gap:4px">
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#DC143C;border-color:#DC143C">OVERTAKE</div>
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#2ECC71;border-color:#2ECC71">CONSERVE</div>
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#2A3142;border:1px solid #3A4356;color:#FFFFFF">MANUAL</div>
+                <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#00D9FF;border-color:#00D9FF"><span style="width:5px;height:5px;border-radius:50%;background:#5C6779"></span>AUTO</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="width:28px;font-size:7px;font-weight:800;letter-spacing:1px;color:#5C6779;flex-shrink:0">LEVEL</span>
+              <div style="flex:1;display:flex;gap:2px">
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6">BACK</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6">EASE</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6">NORM</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#8B7CF6;border:1px solid #8B7CF6;color:#FFFFFF">PUSH</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6">MAX</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div style="max-width:760px;color:#5C6779;font-size:11px;line-height:1.6;font-family:'JetBrains Mono',monospace">
+    notes — one control hierarchy: MODE row (OVERTAKE / CONSERVE goals auto-revert, MANUAL, AUTO) drives the LEVEL slider, which becomes a tinted readout while a mode is driving and only lights as a control in MANUAL. touching the slider switches mode to MANUAL. PUSH preset dropped as redundant (= MANUAL at PUSH). AUTO toggle folded into the MODE row.
+  </div>
+</section>
+<section id="1a" style="display:flex;flex-direction:column;gap:30px;padding:40px;align-items:flex-start">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="background:#00D9FF;color:#0F1319;font-weight:800;font-size:11px;padding:2px 7px;border-radius:4px;font-family:'JetBrains Mono',monospace">1a</div>
+    <div style="color:#8A93A6;font-size:12px;letter-spacing:1px;font-weight:700">PIT WALL CARD REDESIGN — ALL VIEWS</div>
+  </div>
+
+  <!-- HERO: in-context bottom strip -->
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">in context — bottom strip, two cards flanking lap counter + speed controls</div>
+    <div style="display:flex;align-items:stretch;gap:14px;background:#0B0E13;border:1px solid #1A2030;border-radius:10px;padding:12px">
+
+      <!-- CARD: strategy tab, AUTO -->
+      <div style="width:{{ cardWidth }};flex-shrink:0;background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#1a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">25%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L30</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+1.30s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px" title="AI strategist: planned pit lap and next compound">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#8A93A6">RUNNING</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5C6779">PLAN L41</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;background:#141924;border:1px solid #2A3142;border-radius:5px;overflow:hidden;height:21px">
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;background:rgba(0,217,255,0.12);color:#00D9FF;box-shadow:inset 0 -2px 0 #00D9FF;cursor:pointer">AUTO</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;color:#8A93A6;border-left:1px solid #2A3142;cursor:pointer" style-hover="color:#FFFFFF">PIT</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;color:#8A93A6;border-left:1px solid #2A3142;cursor:pointer" style-hover="color:#FFFFFF">HOLD</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:8px;font-weight:700;letter-spacing:0.8px;color:#5C6779">STRATEGIST IN CONTROL</div>
+              <div style="font-size:8px;font-weight:800;letter-spacing:1px;color:#DC143C;border:1px solid rgba(220,20,60,0.35);border-radius:4px;padding:2px 7px;cursor:pointer" style-hover="background:rgba(220,20,60,0.15)">RETIRE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER CONSOLE -->
+      <div style="flex:1;min-width:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#FFFFFF">
+        <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:#5C6779">LAP</span><span style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums">30</span><span style="font-size:13px;color:#5C6779;font-weight:700">/ 58</span></div>
+        <div style="width:170px;height:4px;border-radius:2px;background:#1A2030"><div style="width:52%;height:4px;border-radius:2px;background:#00D9FF"></div></div>
+        <div style="display:flex;gap:5px">
+          <div style="width:28px;height:22px;border:1px solid #2A3142;border-radius:4px;background:#141924;display:flex;align-items:center;justify-content:center;color:#8A93A6;font-size:10px;cursor:pointer" style-hover="color:#FFFFFF">❚❚</div>
+          <div style="width:28px;height:22px;border:1px solid #00D9FF;border-radius:4px;background:rgba(0,217,255,0.12);display:flex;align-items:center;justify-content:center;color:#00D9FF;font-size:9px;font-weight:800;cursor:pointer">1×</div>
+          <div style="width:28px;height:22px;border:1px solid #2A3142;border-radius:4px;background:#141924;display:flex;align-items:center;justify-content:center;color:#8A93A6;font-size:9px;font-weight:800;cursor:pointer" style-hover="color:#FFFFFF">2×</div>
+          <div style="width:28px;height:22px;border:1px solid #2A3142;border-radius:4px;background:#141924;display:flex;align-items:center;justify-content:center;color:#8A93A6;font-size:9px;font-weight:800;cursor:pointer" style-hover="color:#FFFFFF">4×</div>
+        </div>
+      </div>
+
+      <!-- CARD 2: M. Duval, pace tab -->
+      <div style="width:{{ cardWidth }};flex-shrink:0;background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#1a" style="font-size:13px;font-weight:600">M. Duval</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P12</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#FFB020;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">M</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">61%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L14</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:44%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+0.84s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L36</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#DC143C;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">S</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#8A93A6">RUNNING</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5C6779">PLAN L36</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P16</span>, 1.8s behind T. Okafor</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;gap:4px">
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">OVERTAKE</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">PUSH</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#2A3142;border:1px solid #3A4356;color:#FFFFFF">NORMAL</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">CONSERVE</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;display:flex;gap:2px">
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">BACK</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">EASE</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#8B7CF6;border:1px solid #8B7CF6;color:#FFFFFF">NORM</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">PUSH</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">MAX</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;height:18px;padding:0 7px;border:1px solid #00D9FF;border-radius:3px;background:rgba(0,217,255,0.12);color:#00D9FF;font-size:8px;font-weight:800;letter-spacing:0.5px;cursor:pointer"><span style="width:5px;height:5px;border-radius:50%;background:#00D9FF"></span>AUTO</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- INDIVIDUAL VIEWS -->
+  <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+
+    <!-- V2: PIT armed -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">strategy tab — PIT armed → compound picker</div>
+      <div style="width:{{ cardWidth }};background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#1a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">25%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L30</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+1.30s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#00D9FF"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#00D9FF">PITTING THIS LAP → MEDIUM</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Rejoin: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;background:#141924;border:1px solid #2A3142;border-radius:5px;overflow:hidden;height:21px">
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">AUTO</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;background:rgba(0,217,255,0.12);color:#00D9FF;box-shadow:inset 0 -2px 0 #00D9FF;border-left:1px solid #2A3142;cursor:pointer">PIT</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;color:#8A93A6;border-left:1px solid #2A3142;cursor:pointer" style-hover="color:#FFFFFF">HOLD</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">BOX FOR</span>
+              <div style="display:flex;gap:4px">
+                <div style="width:18px;height:18px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;cursor:pointer;opacity:0.55" style-hover="opacity:1">S</div>
+                <div style="width:18px;height:18px;border-radius:50%;background:#FFB020;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;cursor:pointer;box-shadow:0 0 0 2px #1E2431,0 0 0 4px #00D9FF">M</div>
+                <div style="width:18px;height:18px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;cursor:pointer;opacity:0.55" style-hover="opacity:1">H</div>
+                <div style="width:18px;height:18px;border-radius:50%;background:#2ECC71;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;cursor:pointer;opacity:0.55" style-hover="opacity:1">I</div>
+                <div style="width:18px;height:18px;border-radius:50%;background:#3B82F6;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;cursor:pointer;opacity:0.55" style-hover="opacity:1">W</div>
+              </div>
+              <div style="margin-left:auto;font-size:8px;font-weight:800;letter-spacing:1px;color:#DC143C;border:1px solid rgba(220,20,60,0.35);border-radius:4px;padding:2px 7px;cursor:pointer" style-hover="background:rgba(220,20,60,0.15)">RETIRE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- V3: HOLD -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">strategy tab — HOLD, staying out</div>
+      <div style="width:{{ cardWidth }};background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#1a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">25%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L30</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+1.30s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#FFB020"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#FFB020">STAYING OUT</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5C6779">AI OVERRIDDEN</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;background:#141924;border:1px solid #2A3142;border-radius:5px;overflow:hidden;height:21px">
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">AUTO</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;color:#8A93A6;border-left:1px solid #2A3142;cursor:pointer" style-hover="color:#FFFFFF">PIT</div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:1px;background:rgba(255,176,32,0.12);color:#FFB020;box-shadow:inset 0 -2px 0 #FFB020;border-left:1px solid #2A3142;cursor:pointer">HOLD</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:8px;font-weight:700;letter-spacing:0.8px;color:#5C6779">HOLDING — STAYS OUT THIS LAP</div>
+              <div style="font-size:8px;font-weight:800;letter-spacing:1px;color:#DC143C;border:1px solid rgba(220,20,60,0.35);border-radius:4px;padding:2px 7px;cursor:pointer" style-hover="background:rgba(220,20,60,0.15)">RETIRE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- V4: PACE tab, OVERTAKE active -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">pace tab — OVERTAKE preset active, slider PUSH (violet = temp in window)</div>
+      <div style="width:{{ cardWidth }};background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#1a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">25%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L30</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+1.30s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#8A93A6">RUNNING</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:1px;color:#5C6779">PLAN L41</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;gap:4px">
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#DC143C;border:1px solid #DC143C;color:#FFFFFF">OVERTAKE</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFB020;border-color:#FFB020">PUSH</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">NORMAL</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#2ECC71;border-color:#2ECC71">CONSERVE</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;display:flex;gap:2px">
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">BACK</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">EASE</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">NORM</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#8B7CF6;border:1px solid #8B7CF6;color:#FFFFFF">PUSH</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">MAX</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;height:18px;padding:0 7px;border:1px solid #2A3142;border-radius:3px;background:#141924;color:#5C6779;font-size:8px;font-weight:800;letter-spacing:0.5px;cursor:pointer" style-hover="color:#8A93A6"><span style="width:5px;height:5px;border-radius:50%;background:#5C6779"></span>AUTO</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- V5: PACE tab, driver mode + warnings -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">pace tab — driver mode: AUTO-DEFEND on + defending, tyre critical, slider MAX (red = too hot)</div>
+      <div style="width:{{ cardWidth }};background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF">
+        <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 13px;border-bottom:1px solid #2A3142;position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <a href="#1a" style="font-size:13px;font-weight:600">C. Andersen</a>
+          <div style="display:flex;align-items:center;gap:4px;background:rgba(220,20,60,0.15);border:1px solid rgba(220,20,60,0.4);border-radius:3px;padding:1px 6px"><span style="width:5px;height:5px;border-radius:50%;background:#DC143C"></span><span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#DC143C">DEFENDING</span></div>
+          <div style="margin-left:auto;color:#00D9FF;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums">P8</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:7px 10px 4px 13px">
+          <div style="width:20px;height:20px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">S</div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:#DC143C">12%</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">TYRE</div></div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">L34</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">STINT</div></div>
+          <div style="display:flex;flex-direction:column;gap:4px;padding-top:2px">
+            <div style="position:relative;width:54px;height:5px;border-radius:3px;background:linear-gradient(90deg,#3B82F6 0 26%,#2ECC71 26% 72%,#DC143C 72% 100%)">
+              <div style="position:absolute;left:90%;top:50%;transform:translate(-50%,-50%);width:9px;height:9px;border-radius:50%;background:#FFFFFF;border:2px solid #1E2431;box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#DC143C">TEMP</div>
+          </div>
+          <div><div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums">+0.42s</div><div style="font-size:7.5px;font-weight:700;letter-spacing:1px;color:#5C6779">GAP</div></div>
+          <div style="margin-left:auto;display:{{ aiChipDisplay }};align-items:center;gap:5px;background:#141924;border:1px solid #2A3142;border-radius:5px;padding:3px 7px">
+            <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5C6779">AI</span>
+            <span style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums">L41</span>
+            <span style="font-size:9px;color:#5C6779">→</span>
+            <span style="width:14px;height:14px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800">H</span>
+          </div>
+        </div>
+        <div style="padding:2px 10px 7px 13px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="width:5px;height:5px;border-radius:50%;background:#DC143C"></span><span style="font-size:9.5px;font-weight:700;letter-spacing:1px;color:#DC143C">STOP IMMINENT (9%)</span></div>
+          <div style="font-size:10.5px;color:#8A93A6">Pit now: <span style="color:#FFFFFF;font-weight:700">P18</span>, 3.1s behind W. Kowalski</div>
+        </div>
+        <div style="display:flex;border-top:1px solid #2A3142;height:56px">
+          <div style="width:54px;border-right:1px solid #2A3142;display:flex;flex-direction:column;flex-shrink:0">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;cursor:pointer" style-hover="color:#8A93A6;background:#232B3B">STRAT</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:800;letter-spacing:1px;background:#232B3B;color:#00D9FF;box-shadow:inset 2px 0 0 #00D9FF;cursor:pointer">PACE</div>
+          </div>
+          <div style="flex:1;padding:7px 9px;display:flex;flex-direction:column;gap:5px;justify-content:center">
+            <div style="display:flex;gap:4px">
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#DC143C;border-color:#DC143C">OVERTAKE</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#FFB020;border:1px solid #FFB020;color:#0F1319">PUSH</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#FFFFFF">NORMAL</div>
+              <div style="flex:1;height:19px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;letter-spacing:0.5px;border-radius:4px;background:#141924;border:1px solid #2A3142;color:#8A93A6;cursor:pointer" style-hover="color:#2ECC71;border-color:#2ECC71">CONSERVE</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;display:flex;gap:2px">
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">BACK</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">EASE</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">NORM</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#141924;border:1px solid #2A3142;color:#5C6779;cursor:pointer">PUSH</div>
+                <div style="flex:1;height:18px;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:700;border-radius:3px;background:#DC143C;border:1px solid #DC143C;color:#FFFFFF">MAX</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;height:18px;padding:0 7px;border:1px solid #00D9FF;border-radius:3px;background:rgba(0,217,255,0.12);color:#00D9FF;font-size:8px;font-weight:800;letter-spacing:0.5px;cursor:pointer;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:#00D9FF"></span>A-DEF</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="max-width:760px;color:#5C6779;font-size:11px;line-height:1.6;font-family:'JetBrains Mono',monospace">
+    notes — fixed 360×~176px card; telemetry (compound/tyre/stint/temp/gap/AI plan) + status always visible; controls split into STRAT / PACE tabs on a left rail. temp arc → linear gradient bar with dot marker. compound picker appears inline when PIT is armed. slider active-step colour doubles as temp warning (violet in window / blue cold / red hot). retire demoted to a small ghost button on the strategy tab.
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;teamColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#F97316&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#F97316&quot;,&quot;#DC143C&quot;,&quot;#00D9FF&quot;,&quot;#2ECC71&quot;],&quot;section&quot;:&quot;Card&quot;},&quot;cardWidth&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:360,&quot;min&quot;:320,&quot;max&quot;:420,&quot;step&quot;:10,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Card&quot;},&quot;showAiPlan&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Card&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      teamColor: this.props.teamColor ?? '#F97316',
+      cardWidth: (this.props.cardWidth ?? 360) + 'px',
+      aiChipDisplay: (this.props.showAiPlan ?? true) ? 'flex' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
-import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeasonRecord } from './types'
+import type { Team, TeamDevPlan, DevUpgradeEvent, FundingTier, ConstructorSeasonRecord, FocusSplit } from './types'
 import { sampleNormal, seededRng } from './rng-utils'
+import { overallCarPace, addUpgradeFocused, aiFocusSplit, DEFAULT_FOCUS, randomiseRatingsByRank } from './car-rating'
 
 // Team Manager: the pool of upgrade-package names the player picks from. Each pick maps to a cycle length
 // (3–6 races) with NO connection to the name — a longer name isn't a longer cycle; the mapping is a seeded
@@ -94,7 +95,7 @@ export function computeFundingTiers(
   // pace, i.e. "best-paced team won the last five years" — GDD §Funding tier).
   const paceRank = new Map<string, number>()
   ;[...teams]
-    .sort((a, b) => b.carPace - a.carPace)
+    .sort((a, b) => overallCarPace(b) - overallCarPace(a))
     .forEach((t, i) => paceRank.set(t.id, i + 1))
 
   // Count each team's archived seasons (within the recent window) and its average
@@ -150,14 +151,15 @@ export function initDevPlans(
 ): TeamDevPlan[] {
   // Counter starts in Australia (round 1); the first upgrade lands cycleLength races later. The catch-up
   // bonus is measured against the fastest car, so the cars further back pre-roll bigger gains.
-  const leaderPace = Math.max(...teams.map((t) => t.carPace))
+  const leaderPace = Math.max(...teams.map((t) => overallCarPace(t)))
   return teams.map((team) => {
     const cycleLength = randomCycleLength(rng)
     const fundingTier = tiers.get(team.id) ?? 2
-    const pending = rollUpgrade(cycleLength, leaderPace - team.carPace, rng)
+    const pending = rollUpgrade(cycleLength, leaderPace - overallCarPace(team), rng)
     return {
       teamId: team.id,
       cycleLength,
+      focusSplit: aiFocusSplit(rng),
       nextUpgradeRound: cycleLength,
       fundingTier,
       cumulativePenalty: 0,
@@ -173,18 +175,20 @@ export function initDevPlans(
 // (no pending upgrade, no delivery) until they pick again. No-op outside Team Manager mode (no playerTeamId).
 export function applyPlayerCycle(
   devPlans: TeamDevPlan[], teams: Team[], playerTeamId: string | null, cycle: number | null, fromRound: number, rng: () => number, packageName?: string,
+  focusSplit?: FocusSplit,
   upgradeOpts?: { noFail?: boolean; paceBonusPerRace?: number },
 ): TeamDevPlan[] {
   if (!playerTeamId) return devPlans
-  const leaderPace = Math.max(...teams.map((t) => t.carPace))
-  const myPace = teams.find((t) => t.id === playerTeamId)?.carPace ?? 75
+  const leaderPace = Math.max(...teams.map((t) => overallCarPace(t)))
+  const myTeam = teams.find((t) => t.id === playerTeamId)
+  const myPace = myTeam ? overallCarPace(myTeam) : 75
   return devPlans.map((p) => {
     if (p.teamId !== playerTeamId) return p
     if (cycle == null) {
       return { ...p, playerControlled: true, nextUpgradeRound: null, pendingPaceDelta: undefined, pendingFailed: undefined, pendingPackageName: undefined }
     }
     const pending = rollUpgrade(cycle, leaderPace - myPace, rng, upgradeOpts)
-    return { ...p, playerControlled: true, cycleLength: cycle, nextUpgradeRound: fromRound + cycle, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed, pendingPackageName: packageName }
+    return { ...p, playerControlled: true, cycleLength: cycle, focusSplit: focusSplit ?? p.focusSplit ?? DEFAULT_FOCUS, nextUpgradeRound: fromRound + cycle, pendingPaceDelta: pending.paceDelta, pendingFailed: pending.failed, pendingPackageName: packageName }
   })
 }
 
@@ -198,7 +202,7 @@ export function applyUpgradeEvents(
 ): { upgradeEvents: DevUpgradeEvent[]; updatedTeams: Team[]; updatedDevPlans: TeamDevPlan[] } {
   const upgradeEvents: DevUpgradeEvent[] = []
   const teamMap = new Map(teams.map((t) => [t.id, { ...t }]))
-  const leaderPace = () => Math.max(...[...teamMap.values()].map((t) => t.carPace))
+  const leaderPace = () => Math.max(...[...teamMap.values()].map((t) => overallCarPace(t)))
 
   const updatedDevPlans = devPlans.map((plan) => {
     // An idle player plan (nextUpgradeRound null) has nothing to deliver. The `!= null` also narrows the
@@ -210,7 +214,7 @@ export function applyUpgradeEvents(
     // Deliver the upgrade rolled ahead of time (and possibly god-mode edited). Saves from before
     // pre-rolling won't have it — roll lazily as a fallback, against the current pace deficit.
     const prerolled = plan.pendingPaceDelta === undefined || plan.pendingFailed === undefined
-      ? rollUpgrade(plan.cycleLength, leaderPace() - (team?.carPace ?? 75), rng)
+      ? rollUpgrade(plan.cycleLength, leaderPace() - (team ? overallCarPace(team) : 75), rng)
       : { paceDelta: plan.pendingPaceDelta, failed: plan.pendingFailed }
     const failed = prerolled.failed
     const paceDelta = failed ? 0 : prerolled.paceDelta
@@ -218,8 +222,8 @@ export function applyUpgradeEvents(
     upgradeEvents.push({ teamId: plan.teamId, round, paceDelta, failed, packageName: plan.pendingPackageName })
 
     if (team && paceDelta > 0) {
-      team.carPace = round1(team.carPace + paceDelta)
-      teamMap.set(plan.teamId, team)
+      // Allocate the gain across the four ratings by the team's focus split (#upgrade-focus); absent → pace.
+      teamMap.set(plan.teamId, addUpgradeFocused(team, paceDelta, plan.focusSplit ?? DEFAULT_FOCUS))
     }
 
     // A player-controlled team (Team Manager) does NOT auto-continue: once an upgrade lands its plan goes
@@ -231,10 +235,11 @@ export function applyUpgradeEvents(
     // AI teams pick a fresh cycle for the next upgrade and pre-roll its outcome against the freshly-updated
     // deficit, so a car that has caught up rolls a smaller catch-up next time (it self-limits).
     const nextCycle = randomCycleLength(rng)
-    const nextPending = rollUpgrade(nextCycle, leaderPace() - (team?.carPace ?? 75), rng)
+    const nextPending = rollUpgrade(nextCycle, leaderPace() - (teamMap.get(plan.teamId) ? overallCarPace(teamMap.get(plan.teamId)!) : 75), rng)
     return {
       ...plan,
       cycleLength: nextCycle,
+      focusSplit: aiFocusSplit(rng), // a fresh pace-leaning split each cycle, so AI cars keep some character
       nextUpgradeRound: plan.nextUpgradeRound + nextCycle,
       cumulativePenalty: 0,
       pendingPaceDelta: nextPending.paceDelta,
@@ -250,8 +255,10 @@ export function applyUpgradeEvents(
 }
 
 // End of season: number teams by car pace (fastest = 1), add a Uniform(−1.5, +3) modifier to that rank
-// PLUS a small financial-tier nudge (richer teams drift up), re-rank by the total (smallest = best),
-// then redistribute 75/70/65… Tier only tilts the existing jitter; it does not dictate the order.
+// PLUS a small financial-tier nudge (richer teams drift up), re-rank by the total (smallest = best), then
+// hand each rank a freshly-randomised overall + a random four-stat split (#season-init-random), so every
+// season's grid is varied (some teams straight-line-biased, others corner/tyre) rather than flat. Tier only
+// tilts the existing jitter; it does not dictate the order.
 export function computeCarReshuffle(
   teams: Team[],
   tiers: Map<string, FundingTier>,
@@ -260,18 +267,17 @@ export function computeCarReshuffle(
   const oldPaces: Record<string, number> = {}
   for (const t of teams) oldPaces[t.id] = t.carPace
 
-  const byPace = [...teams].sort((a, b) => b.carPace - a.carPace)
+  const byPace = [...teams].sort((a, b) => overallCarPace(b) - overallCarPace(a))
   const scored = byPace.map((t, i) => ({
     id: t.id,
     total: (i + 1) + (rng() * 4.5 - 1.5) + (tiers.get(t.id) ?? 2) * FUNDING_TIER_STEP, // rank + jitter + tier nudge
   }))
   scored.sort((a, b) => a.total - b.total)
 
+  const ratings = randomiseRatingsByRank(scored.map((s) => s.id), rng)
   const newPaces: Record<string, number> = {}
-  scored.forEach((s, i) => {
-    newPaces[s.id] = Math.max(5, 75 - i * 5)
-  })
+  for (const [id, r] of ratings) newPaces[id] = r.carPace
 
-  const updatedTeams = teams.map((t) => ({ ...t, carPace: newPaces[t.id] }))
+  const updatedTeams = teams.map((t) => ({ ...t, ...(ratings.get(t.id) ?? {}) }))
   return { updatedTeams, oldPaces, newPaces }
 }

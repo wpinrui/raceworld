@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { initRaceState, simulateLap, rollForms } from './race'
-import type { Driver, Team, Circuit, QualifyingResult, RaceState, GodModeAction } from './types'
+import type { Driver, Team, Circuit, QualifyingResult, RaceState, GodModeAction, PushState } from './types'
 
 // Characterization test for the race-lap simulation. simulateLap is the hot path every race runs
 // through, and it consumes Math.random heavily (lap-time noise, mistakes, reliability, tyre wear). To
@@ -125,65 +125,52 @@ describe('simulateLap (characterization)', () => {
     expect(project(runRace(2))).toEqual(project(runRace(2)))
   })
 
-  // Driver-mode pace tools. Both runs share the RNG sequence (back-off adds no draws), so the only
-  // differences are the ones the tool introduces: a flat +2s/lap and halved tyre wear.
-  describe('driver pace modes', () => {
-    function lapOne(modes?: Record<string, 'normal' | 'defend' | 'backoff'>) {
+  // Push controls (#sim-overhaul). d1 leads (pole), so it runs in clean air — its lap reflects ONLY its own
+  // push. Both runs share the RNG sequence (the push curve adds no draws), so the only differences are the
+  // ones intensity introduces: pace, heat, and wear.
+  describe('push controls', () => {
+    function lapOne(push: PushState) {
       vi.spyOn(Math, 'random').mockImplementation(lcg(2))
       const forms = Object.fromEntries(DRIVERS.map((d) => [d.id, 5]))
       let state = initRaceState(DRIVERS, TEAMS, CIRCUIT, quali(), [], forms, 2025)
-      state = simulateLap(state, DRIVERS, TEAMS, CIRCUIT, 2025, undefined, false, modes)
-      return state.drivers.find((d) => d.driverId === 'd1')! // d1 leads (pole), so it runs in clean air
+      state = { ...state, drivers: state.drivers.map((d) => (d.driverId === 'd1' ? { ...d, push } : d)) }
+      state = simulateLap(state, DRIVERS, TEAMS, CIRCUIT, 2025, undefined, false, ['d1']) // d1 player-driven
+      return state.drivers.find((d) => d.driverId === 'd1')!
     }
+    const normal = () => lapOne({ kind: 'manual', level: 0 })
 
-    it('back-off adds ~2s/lap and roughly halves the tyre wear', () => {
-      const normal = lapOne()
-      const backoff = lapOne({ d1: 'backoff' })
-      expect(backoff.lapTimes[0] - normal.lapTimes[0]).toBeCloseTo(2.0, 5)
-      const normalWear = 100 - normal.currentTyre.condition
-      const backoffWear = 100 - backoff.currentTyre.condition
-      expect(backoffWear).toBeLessThan(normalWear)            // wore less
-      expect(backoffWear).toBeGreaterThan(0)                  // but still wore some
+    it('max push is quicker, heats the tyre, and wears it more than normal', () => {
+      const n = normal(), max = lapOne({ kind: 'manual', level: 2 })
+      expect(max.lapTimes[0]).toBeLessThan(n.lapTimes[0])
+      expect(max.tyreTemp!).toBeGreaterThan(n.tyreTemp!)
+      expect(100 - max.currentTyre.condition).toBeGreaterThan(100 - n.currentTyre.condition)
     })
 
-    // A much faster car stuck behind a slow leader: free racing closes it into dirty air (or it passes),
-    // but in Defend it backs off and never tucks inside DIRTY_RANGE + buffer (1.4s).
-    const LEAD = makeDriver('lead', 'tSlow', 60)
-    const CHASE = makeDriver('chase', 'tFast', 99)
-    const ARC_DRIVERS = [LEAD, CHASE]
-    const ARC_TEAMS = [makeTeam('tSlow', 60), makeTeam('tFast', 96)]
-    const arcQuali = (): QualifyingResult[] => [
-      { driverId: 'lead', gridPosition: 1, bestTime: 80, q1Time: null, q2Time: null, q3Time: null },
-      { driverId: 'chase', gridPosition: 2, bestTime: 80.1, q1Time: null, q2Time: null, q3Time: null },
-    ]
-    // Seed 1 + a 4-lap window keeps both cars out (no retirement) and before any pit stop, so the gap
-    // reflects pure on-track pace management — exactly what Defend governs.
-    function chaseArc(modes?: Record<string, 'normal' | 'defend' | 'backoff'>) {
-      vi.spyOn(Math, 'random').mockImplementation(lcg(1))
-      let state = initRaceState(ARC_DRIVERS, ARC_TEAMS, CIRCUIT, arcQuali(), [], { lead: 5, chase: 5 }, 2025)
-      const out: { pos: number; gap: number }[] = []
-      for (let lap = 1; lap <= 4; lap++) {
-        state = simulateLap(state, ARC_DRIVERS, ARC_TEAMS, CIRCUIT, 2025, undefined, false, modes)
-        const c = state.drivers.find((d) => d.driverId === 'chase')!
-        if (!c.retired) out.push({ pos: c.position, gap: c.gap })
-      }
-      return out
-    }
-
-    it('defend holds the gap to the car ahead outside dirty air (>= DIRTY_RANGE + buffer)', () => {
-      const defend = chaseArc({ chase: 'defend' })
-      let behindLaps = 0
-      for (const { pos, gap } of defend) {
-        if (pos === 2) { behindLaps++; expect(gap).toBeGreaterThanOrEqual(1.4 - 0.02) } // never inside dirty air
-      }
-      expect(behindLaps).toBe(4) // it held station behind for the whole window, never tucked in or passed
+    it('backing off is slower, cools the tyre, and conserves it', () => {
+      const n = normal(), back = lapOne({ kind: 'manual', level: -2 })
+      expect(back.lapTimes[0]).toBeGreaterThan(n.lapTimes[0])
+      expect(back.tyreTemp!).toBeLessThan(n.tyreTemp!)
+      expect(100 - back.currentTyre.condition).toBeLessThan(100 - n.currentTyre.condition)
     })
 
-    it('without defend, the faster car does NOT sit politely outside dirty air', () => {
-      const free = chaseArc()
-      const passed = free.some((g) => g.pos === 1)
-      const enteredDirtyAir = free.some((g) => g.pos === 2 && g.gap < 1.4)
-      expect(passed || enteredDirtyAir).toBe(true) // it closed up or went by — the opposite of defending
+    // The careful #push-auto case: a player car in Normal with auto-defend armed, a genuine threat right behind.
+    // The sim pushes to defend FOR the lap, but that is NOT the driver changing push — the Normal selection and
+    // the armed toggle must both survive untouched, so it keeps defending lap after lap.
+    it('auto-defend defends without altering the driver\'s Normal intent', () => {
+      vi.spyOn(Math, 'random').mockImplementation(lcg(2))
+      const P = makeDriver('p', 'tA', 75), C = makeDriver('c', 'tA', 85) // same team → chaser edge is pure driver pace
+      const ds = [P, C], ts = [makeTeam('tA', 75)]
+      const q: QualifyingResult[] = [
+        { driverId: 'p', gridPosition: 1, bestTime: 80, q1Time: null, q2Time: null, q3Time: null },
+        { driverId: 'c', gridPosition: 2, bestTime: 80.1, q1Time: null, q2Time: null, q3Time: null },
+      ]
+      let state = initRaceState(ds, ts, CIRCUIT, q, [], { p: 5, c: 5 }, 2025)
+      state = { ...state, drivers: state.drivers.map((d) => (d.driverId === 'p' ? { ...d, autoDefend: true, push: { kind: 'manual', level: 0 } } : d)) }
+      state = simulateLap(state, ds, ts, CIRCUIT, 2025, undefined, false, ['p'])
+      const p = state.drivers.find((d) => d.driverId === 'p')!
+      expect(p.defending).toBe(true)                       // it actually defended this lap
+      expect(p.autoDefend).toBe(true)                      // ...and the toggle is still armed
+      expect(p.push).toEqual({ kind: 'manual', level: 0 }) // ...and the driver's intent is untouched
     })
   })
 

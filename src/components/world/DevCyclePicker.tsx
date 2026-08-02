@@ -5,8 +5,56 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { useSettingsStore } from '@/lib/store/settings-store'
 import { calendarForYear } from '@/data/calendars'
 import { drawPackages, CATCHUP_PER_POINT_PER_RACE } from '@/lib/sim/development'
+import { DEFAULT_FOCUS } from '@/lib/sim/car-rating'
+import type { FocusSplit } from '@/lib/sim/types'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { ConfirmModal } from '@/components/race/ConfirmModal'
+
+// The four ratings an upgrade's gain can be poured into, in display order.
+const FOCUS_RATINGS: { key: keyof FocusSplit; label: string }[] = [
+  { key: 'straightLine', label: 'Straight-line' },
+  { key: 'cornering', label: 'Cornering' },
+  { key: 'tyreWarming', label: 'Tyre warming' },
+  { key: 'tyreWear', label: 'Tyre wear' },
+]
+
+// Normalise four raw slider weights to a FocusSplit summing to 1 (all-zero → an even split).
+function toFocusSplit(w: number[]): FocusSplit {
+  const sum = w[0] + w[1] + w[2] + w[3]
+  const f = sum > 0 ? w.map((x) => x / sum) : [0.25, 0.25, 0.25, 0.25]
+  return { straightLine: f[0], cornering: f[1], tyreWarming: f[2], tyreWear: f[3] }
+}
+
+// Upgrade focus allocator: four sliders set the relative emphasis; the gain is split by the normalised share.
+function FocusAllocator({ focus, onChange }: { focus: FocusSplit; onChange: (f: FocusSplit) => void }) {
+  // Local raw weights (0–100) drive the sliders; the displayed % is each one's normalised share.
+  const [weights, setWeights] = useState<number[]>(() => FOCUS_RATINGS.map((r) => Math.round(focus[r.key] * 100)))
+  const sum = weights[0] + weights[1] + weights[2] + weights[3]
+  const pct = (i: number) => (sum > 0 ? Math.round((weights[i] / sum) * 100) : 25)
+  const set = (i: number, v: number) => {
+    const next = weights.map((w, j) => (j === i ? v : w))
+    setWeights(next)
+    onChange(toFocusSplit(next))
+  }
+  return (
+    <div className="mt-3 w-[46rem] max-w-full rounded-lg border border-[#303848] bg-[#0F1419] p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#FFFFFF]">Development focus</p>
+      <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-2">
+        {FOCUS_RATINGS.map((r, i) => (
+          <label key={r.key} className="flex items-center gap-2 text-xs text-[#FFFFFF]">
+            <span className="w-24 shrink-0">{r.label}</span>
+            <input
+              type="range" min={0} max={100} value={weights[i]}
+              onChange={(e) => set(i, Number(e.target.value))}
+              className="flex-1 accent-[#00D9FF]"
+            />
+            <span className="w-9 shrink-0 text-right tabular-nums font-semibold">{pct(i)}%</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // 1 car-pace point = 0.04s/lap (engine.ts: carMod = (75 − carPace)/25, added to the base lap). The 5% flat
 // failure and the median/catch-up gain mirror rollUpgrade in development.ts (catch-up accrues per race); the
@@ -113,6 +161,12 @@ export function DevCyclePicker({ className }: { className?: string }) {
           )
         })}
       </div>
+
+      <FocusAllocator
+        key={`${playerTeamId}:${seasonYear}`} // remount on team change / season rollover so the sliders re-read the plan's focus
+        focus={devPlan?.focusSplit ?? DEFAULT_FOCUS}
+        onChange={(f) => useSeasonStore.getState().setPlayerFocus(f)}
+      />
 
       <p className="mt-3 text-xs text-[#FFFFFF]">
         {!active

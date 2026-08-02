@@ -5,6 +5,7 @@ import { useSeasonStore } from '@/lib/store/season-store'
 import { calendarForYear } from '@/data/calendars'
 import { isOffSeason } from '@/lib/sim/types'
 import { shownStats } from '@/lib/sim/progression'
+import { overallCarPace } from '@/lib/sim/car-rating'
 import { Panel } from '@/components/world/ui'
 import { DriverLink } from '@/components/world/EntityLink'
 import { DriverHover } from '@/components/world/DriverHover'
@@ -37,7 +38,7 @@ function predict(drivers: Driver[], teams: Team[], raceResults: RaceResult[][], 
   const field = grid.length || 20
 
   // Raw expected position from car pace + driver pace.
-  const byBase = [...grid].sort((a, b) => b.team.carPace + b.d.pace * 0.5 - (a.team.carPace + a.d.pace * 0.5))
+  const byBase = [...grid].sort((a, b) => overallCarPace(b.team) + b.d.pace * 0.5 - (overallCarPace(a.team) + a.d.pace * 0.5))
   const basePos = new Map<string, number>()
   byBase.forEach((x, i) => basePos.set(x.d.id, i + 1))
 

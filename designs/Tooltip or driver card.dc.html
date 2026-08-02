@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1319;font-family:'Barlow',sans-serif;}
+a{color:#FFFFFF;text-decoration:none;} a:hover{color:#00D9FF;}
+</style>
+</helmet>
+<section id="1a" style="display:flex;flex-direction:column;gap:30px;padding:40px;align-items:flex-start">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="background:#00D9FF;color:#0F1319;font-weight:800;font-size:11px;padding:2px 7px;border-radius:4px;font-family:'JetBrains Mono',monospace">1a</div>
+    <div style="color:#8A93A6;font-size:12px;letter-spacing:1px;font-weight:700">DRIVER TOOLTIP — TRACK HOVER</div>
+  </div>
+
+  <div style="display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start">
+
+    <!-- rival car (not player-controlled) -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">rival car — hover</div>
+      <div style="background:#3D5A3F;border-radius:8px;padding:36px 44px 20px;display:flex;flex-direction:column;align-items:center">
+        <div style="width:max-content;min-width:240px;background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF;box-shadow:0 10px 30px rgba(0,0,0,0.5);position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#DC0000"></div>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:9px 12px 0 15px">
+            <span style="color:#00D9FF;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums">P7</span>
+            <span style="font-size:15px;font-weight:700">Felipe Massa</span>
+            <span style="margin-left:auto;font-size:11px;color:#8A93A6;font-weight:600">Ferrari</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 12px 9px 15px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:18px;height:18px;border-radius:50%;background:#FFB020;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">M</div>
+              <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">65%</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">L12</div></div>
+            </div>
+            <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">1:32.154</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">LAST LAP</div></div>
+            <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">1</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">STOPS</div></div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:0 12px 8px 15px;white-space:nowrap">
+            <span style="font-size:7.5px;font-weight:800;letter-spacing:1px;color:#5C6779">AHEAD</span>
+            <span style="font-size:10.5px;font-weight:700"><span style="color:#8A93A6;font-weight:700">P6</span> David Coulthard</span>
+            <span style="margin-left:auto;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums">+0.4s</span>
+            <span style="font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#2ECC71">−0.3s lap</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;background:#141924;border-top:1px solid #2A3142;padding:5px 12px 5px 15px">
+            <span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span>
+            <span style="font-size:8.5px;font-weight:800;letter-spacing:1px;color:#8A93A6">RUNNING</span>
+            <span style="margin-left:auto;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779">−1.1s TO P8</span>
+          </div>
+        </div>
+        <div style="width:14px;height:14px;background:#141924;border-right:1px solid #2A3142;border-bottom:1px solid #2A3142;transform:rotate(45deg);margin-top:-8px"></div>
+      </div>
+    </div>
+
+    <!-- player car -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">player car — adds push level + pit plan</div>
+      <div style="background:#3D5A3F;border-radius:8px;padding:36px 44px 20px;display:flex;flex-direction:column;align-items:center">
+        <div style="width:max-content;min-width:240px;background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF;box-shadow:0 10px 30px rgba(0,0,0,0.5);position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ teamColor }}"></div>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:9px 12px 0 15px">
+            <span style="color:#00D9FF;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums">P8</span>
+            <a href="#1a" style="font-size:15px;font-weight:700">Christoffer Andersen</a>
+            <span style="margin-left:auto;font-size:11px;color:#8A93A6;font-weight:600">You</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 12px 9px 15px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:18px;height:18px;border-radius:50%;background:#DC143C;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">S</div>
+              <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;color:#DC143C">18%</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">L30</div></div>
+            </div>
+            <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">1:31.884</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">LAST LAP</div></div>
+            <div>
+              <div style="display:flex;gap:2px;align-items:center;height:13px">
+                <span style="width:7px;height:5px;border-radius:1px;background:#2A3142"></span>
+                <span style="width:7px;height:5px;border-radius:1px;background:#2A3142"></span>
+                <span style="width:7px;height:5px;border-radius:1px;background:#8B7CF6"></span>
+                <span style="width:7px;height:5px;border-radius:1px;background:#8B7CF6"></span>
+                <span style="width:7px;height:5px;border-radius:1px;background:#2A3142"></span>
+              </div>
+              <div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">PUSH</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:0 12px 8px 15px;white-space:nowrap">
+            <span style="font-size:7.5px;font-weight:800;letter-spacing:1px;color:#5C6779">AHEAD</span>
+            <span style="font-size:10.5px;font-weight:700"><span style="color:#8A93A6;font-weight:700">P7</span> Felipe Massa</span>
+            <span style="margin-left:auto;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums">+1.3s</span>
+            <span style="font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#2ECC71">−0.3s lap</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;background:#141924;border-top:1px solid #2A3142;padding:5px 12px 5px 15px">
+            <span style="width:5px;height:5px;border-radius:50%;background:#2ECC71"></span>
+            <span style="font-size:8.5px;font-weight:800;letter-spacing:1px;color:#8A93A6">RUNNING</span>
+            <span style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#5C6779;white-space:nowrap">PLAN L41
+              <span style="width:12px;height:12px;border-radius:50%;background:#E8EAF0;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800">H</span>
+            </span>
+          </div>
+        </div>
+        <div style="width:14px;height:14px;background:#141924;border-right:1px solid #2A3142;border-bottom:1px solid #2A3142;transform:rotate(45deg);margin-top:-8px"></div>
+      </div>
+    </div>
+
+    <!-- pitting state -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5C6779">in pit lane</div>
+      <div style="background:#3D5A3F;border-radius:8px;padding:36px 44px 20px;display:flex;flex-direction:column;align-items:center">
+        <div style="width:max-content;min-width:240px;background:#1E2431;border:1px solid #2A3142;border-radius:8px;overflow:hidden;color:#FFFFFF;box-shadow:0 10px 30px rgba(0,0,0,0.5);position:relative">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#0090D0"></div>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:9px 12px 0 15px">
+            <span style="color:#00D9FF;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums">P14</span>
+            <span style="font-size:15px;font-weight:700">Robert Kubica</span>
+            <span style="margin-left:auto;font-size:11px;color:#8A93A6;font-weight:600">BMW Sauber</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 12px 9px 15px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:18px;height:18px;border-radius:50%;background:#FFB020;color:#0F1319;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">M</div>
+              <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">4%</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">L27</div></div>
+            </div>
+            <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">1:49.310</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">LAST LAP</div></div>
+            <div><div style="font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1">1</div><div style="font-size:7px;font-weight:700;letter-spacing:1px;color:#5C6779">STOPS</div></div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;padding:0 12px 8px 15px;white-space:nowrap">
+            <span style="font-size:7.5px;font-weight:800;letter-spacing:1px;color:#5C6779">AHEAD</span>
+            <span style="font-size:10.5px;font-weight:700"><span style="color:#8A93A6;font-weight:700">P13</span> Jarno Trulli</span>
+            <span style="margin-left:auto;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#8A93A6">—</span>
+            <span style="font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:#8A93A6">— lap</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;background:rgba(0,217,255,0.08);border-top:1px solid #2A3142;padding:5px 12px 5px 15px">
+            <span style="width:5px;height:5px;border-radius:50%;background:#00D9FF"></span>
+            <span style="font-size:8.5px;font-weight:800;letter-spacing:1px;color:#00D9FF">IN PIT</span>
+            <span style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:800;letter-spacing:1px;color:#00D9FF;white-space:nowrap">BOX FOR
+              <span style="width:12px;height:12px;border-radius:50%;background:#DC143C;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800">S</span>
+            </span>
+          </div>
+        </div>
+        <div style="width:14px;height:14px;background:#182733;border-right:1px solid #2A3142;border-bottom:1px solid #2A3142;transform:rotate(45deg);margin-top:-8px"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="max-width:760px;color:#5C6779;font-size:11px;line-height:1.6;font-family:'JetBrains Mono',monospace">
+    notes — width fits content (min 240px), anchors above the car with a notch (flips below when near the top edge). header: position, name, team. stat row: compound + wear + stint laps, last lap, stops (player car swaps stops for its 5-step push indicator). AHEAD strip: who is in front, gap, and last-lap pace delta to them (green − = you were faster, red + = slower). footer strip: status (RUNNING / IN PIT / OUT LAP) with gap behind, or pit plan / box compound for the player. gap colour: green = closing, red = losing time.
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;teamColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#F97316&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#F97316&quot;,&quot;#DC0000&quot;,&quot;#0090D0&quot;,&quot;#2ECC71&quot;],&quot;section&quot;:&quot;Card&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { teamColor: this.props.teamColor ?? '#F97316' };
+  }
+}
+</script>
+</body>
+</html>

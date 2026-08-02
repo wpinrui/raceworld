@@ -46,3 +46,14 @@ raceworld.db-wal
 # generated news-playthrough output (organic analysis dumps)
 /news-playthrough*.md
 /news*.md
+scripts/.preview/
+
+# Subagent review scratch (never committed)
+scripts/_tmp_*
+**/zz-scratch-*
+public/models/f1.glb
+
+# Scanned PBR sets: half a gigabyte of CC0 downloads, the folders they unzip to, and every map
+# generated from them. All of it rebuilds from the archives with `npx tsx scripts/material-web.ts`
+# and `npx tsx scripts/material-gauss.ts`, so none of it belongs in history.
+public/materials/

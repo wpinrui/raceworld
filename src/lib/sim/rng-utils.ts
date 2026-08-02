@@ -24,6 +24,13 @@ export function sampleNormal(mean: number, stddev: number, rng: () => number): n
   return mean + stddev * z
 }
 
+// Rescale a per-lap probability to a slice covering `frac` of a lap so the per-lap rate is preserved:
+// 1 − (1 − p)^frac (the same transform reliability.ts uses per lap). Exactly p at frac = 1, so the
+// whole-lap engine path is bit-untouched (#sector-engine).
+export function perSliceProb(p: number, frac: number): number {
+  return frac === 1 ? p : 1 - (1 - p) ** frac
+}
+
 // Exponential distribution via inverse-CDF. Mean is the distribution mean (1/rate);
 // returns a non-negative value with a flat right tail. Floor the argument away from 0 so an
 // rng() of exactly 1 can't produce log(0) = -Infinity.

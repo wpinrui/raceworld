@@ -1,4 +1,5 @@
 import type { Driver, Team, Circuit, TyreCompound, FuelBand, PreSeasonTest, PreSeasonTestEntry } from './types'
+import { effectiveCarPace } from './car-rating'
 
 // Dry compounds available for a test run.
 const DRY_COMPOUNDS: TyreCompound[] = ['soft', 'medium', 'hard']
@@ -50,7 +51,7 @@ export function runPreSeasonTest(
 
     const compound = DRY_COMPOUNDS[Math.floor(rng() * DRY_COMPOUNDS.length)]
     const fuelLaps = MIN_FUEL_LAPS + Math.floor(rng() * (MAX_FUEL_LAPS - MIN_FUEL_LAPS + 1))
-    const lapTime = testLapTime(team.carPace, driver.pace, compound, fuelLaps, circuit.flatModifier, rng)
+    const lapTime = testLapTime(effectiveCarPace(team, circuit.straightness), driver.pace, compound, fuelLaps, circuit.flatModifier, rng)
 
     entries.push({
       teamId: team.id,

@@ -1,0 +1,218 @@
+// Probe: rasterise the world for a few circuits so it can be eyeballed without starting the app.
+//
+// It builds the scene through `sceneryScene` and `roadOps` — the exact calls the map makes — and maps
+// each `DrawOp` to an SVG path, so what is previewed is what ships. The one thing SVG needs that the
+// canvas supplies itself is the gradients and patterns a `ref:` names, which are written out below from
+// the same numbers lib/ui/scenery-paint.ts builds them from.
+//
+// Run: npx tsx scripts/scenery-preview.ts [--terrain] [--mood=afternoon|midday|dusk|overcast|night]
+//        [--zoom=N] [--at=fx,fy] [--cars[=N]] [circuitId ...]
+
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { writeFileSync, mkdirSync } from 'node:fs'
+import sharp from 'sharp'
+import { TRACK_LAYOUTS } from '../src/data/tracks'
+import { buildScenery } from '../src/lib/ui/track-scenery'
+import { TRACK_WIDTH_M } from '../src/lib/ui/track-path'
+import { PitGarageSigns, pitComplexOps, pitFloorOps } from '../src/components/race/PitBuilding'
+import { buildPitSlots, buildPitZone, pitViewAzimuth } from '../src/lib/ui/pit-zone'
+import { MOODS, shadowFill, screenUpAzimuth, type Mood } from '../src/lib/ui/lighting'
+import { CarSprite } from '../src/components/race/CarSprite'
+import { CAR_LENGTH_M, CAR_SCALE, SPRITE, carLight } from '../src/lib/ui/car-sprite'
+import { PREVIEW_LIVERIES as LIVERIES, carField } from '../src/lib/ui/car-field'
+import { roadLap, solveLap } from '../src/lib/ui/lap-solve'
+import { roadOps } from '../src/lib/ui/road-ops'
+import { gridBoxOps, kerbOps, startLineOps, startPose } from '../src/lib/ui/road-marks'
+import { isGroup, refName, sceneryScene, type DrawOp, type SceneItem } from '../src/lib/ui/scenery-draw'
+import type { Lighting } from '../src/lib/ui/lighting'
+import type { TrackLayout } from '../src/data/tracks'
+
+const OUT = 'scripts/.preview'
+const argv = process.argv.slice(2)
+const terrainDetail = argv.includes('--terrain')
+const moodArg = (argv.find((a) => a.startsWith('--mood='))?.split('=')[1] ?? 'afternoon') as Mood
+const mood = MOODS[moodArg] ?? MOODS.afternoon
+// Crop to a fraction of the viewBox around a normalised centre, so detail that only exists at
+// racing zoom (glazing, kerb faces, the ink worn into the tarmac) can be judged from a still.
+const zoom = Number(argv.find((a) => a.startsWith('--zoom='))?.split('=')[1] ?? 1)
+const [cxf, cyf] = (argv.find((a) => a.startsWith('--at='))?.split('=')[1] ?? '0.5,0.5').split(',').map(Number)
+// Cars round the lap, each at its real heading, so the contact shadow and the world-locked sheen can
+// be checked at every angle at once -- which is the only way to tell whether they are locked to the
+// world or just painted on the sprite.
+const carsArg = argv.find((a) => a === '--cars' || a.startsWith('--cars='))
+const carCount = carsArg ? Number(carsArg.split('=')[1] ?? 12) : 0
+const named = argv.filter((a) => !a.startsWith('--'))
+const ids = named.length ? named : ['britain', 'monaco', 'belgium', 'bahrain']
+
+
+const paintAttr = (v: string) => (refName(v) ? `url(#${refName(v)})` : v)
+
+/** One draw op as an SVG path. A gradient resolves against the shape's own extent in SVG, so the op's
+ *  `bbox` (which only the canvas needs) is simply ignored here. */
+function opSvg(op: DrawOp): string {
+  const parts = [`d="${op.d}"`, `fill="${op.fill ? paintAttr(op.fill) : 'none'}"`]
+  if (op.stroke) parts.push(`stroke="${paintAttr(op.stroke)}"`, `stroke-width="${op.width ?? 1}"`)
+  if (op.cap) parts.push(`stroke-linecap="${op.cap}"`)
+  if (op.alpha != null) parts.push(`opacity="${op.alpha}"`)
+  if (op.dash) parts.push(`stroke-dasharray="${op.dash.on} ${op.dash.off}"`, `stroke-dashoffset="${op.dash.shift}"`)
+  if (op.evenOdd) parts.push('fill-rule="evenodd"')
+  parts.push('stroke-linejoin="round"')
+  return `<path ${parts.join(' ')} />`
+}
+
+const itemSvg = (item: SceneItem): string => (isGroup(item)
+  ? `<g transform="translate(${item.x} ${item.y}) rotate(${(item.rot * 180) / Math.PI})">`
+    + `${item.ops.map(opSvg).join('')}</g>`
+  : opSvg(item))
+
+/** The gradients and patterns a `ref:` names, from the same numbers the canvas builds them from. */
+function defs(u: (m: number) => number, lighting: Lighting): string {
+  const deg = (lighting.azimuth * 180) / Math.PI
+  const dx = Math.cos(lighting.azimuth)
+  const dy = Math.sin(lighting.azimuth)
+  const canopy = (id: string, [a, b, c]: [string, string, string]) =>
+    `<radialGradient id="${id}" fx="${0.5 - dx * 0.3}" fy="${0.5 - dy * 0.3}">`
+    + `<stop offset="0%" stop-color="${a}"/><stop offset="45%" stop-color="${b}"/>`
+    + `<stop offset="100%" stop-color="${c}"/></radialGradient>`
+  return '<defs>'
+    + `<pattern id="tm-seats" width="${u(2.4)}" height="${u(1.5)}" patternUnits="userSpaceOnUse">`
+    + `<rect width="${u(2.4)}" height="${u(1.5)}" fill="#3E4552"/>`
+    + `<rect y="${u(0.95)}" width="${u(2.4)}" height="${u(0.55)}" fill="#575F6E"/></pattern>`
+    + `<pattern id="tm-crowd" width="${u(3.2)}" height="${u(3.2)}" patternUnits="userSpaceOnUse">`
+    + `<circle cx="${u(0.7)}" cy="${u(0.8)}" r="${u(0.3)}" fill="#DC143C" opacity="0.5"/>`
+    + `<circle cx="${u(2.2)}" cy="${u(1.7)}" r="${u(0.3)}" fill="#00D9FF" opacity="0.45"/>`
+    + `<circle cx="${u(1.3)}" cy="${u(2.6)}" r="${u(0.3)}" fill="#E8B923" opacity="0.45"/>`
+    + `<circle cx="${u(2.7)}" cy="${u(0.5)}" r="${u(0.3)}" fill="#FFFFFF" opacity="0.4"/></pattern>`
+    + `<pattern id="tm-roof" width="${u(3.6)}" height="${u(3.6)}" patternUnits="userSpaceOnUse">`
+    + `<rect width="${u(0.35)}" height="${u(3.6)}" fill="#000000" opacity="0.055"/>`
+    + `<rect x="${u(0.35)}" width="${u(0.3)}" height="${u(3.6)}" fill="#FFFFFF" opacity="0.04"/></pattern>`
+    + `<pattern id="tm-water" width="${u(9)}" height="${u(6)}" patternUnits="userSpaceOnUse">`
+    + `<path d="M 0 ${u(2)} q ${u(2.2)} ${-u(1.4)} ${u(4.5)} 0 t ${u(4.5)} 0" fill="none" stroke="#A8D4E6" stroke-width="${u(0.35)}" opacity="0.3"/>`
+    + `<path d="M ${-u(2)} ${u(4.6)} q ${u(2.2)} ${-u(1.4)} ${u(4.5)} 0 t ${u(4.5)} 0" fill="none" stroke="#A8D4E6" stroke-width="${u(0.35)}" opacity="0.2"/></pattern>`
+    + `<pattern id="tm-crop" width="${u(11)}" height="${u(11)}" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">`
+    + `<rect width="${u(3.4)}" height="${u(11)}" fill="#FFFFFF" opacity="0.05"/></pattern>`
+    + canopy('tm-tree0', ['#8FB35F', '#4F7B3A', '#2C4B22'])
+    + canopy('tm-tree1', ['#A8B368', '#6B7A35', '#3D4A1E'])
+    + `<linearGradient id="tm-bevel" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${deg - 45} 0.5 0.5)">`
+    + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"/>'
+    + '<stop offset="45%" stop-color="#FFFFFF" stop-opacity="0"/>'
+    + '<stop offset="100%" stop-color="#000000" stop-opacity="0.22"/></linearGradient>'
+    + '<linearGradient id="tm-rake" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>'
+    + '<stop offset="100%" stop-color="#000000" stop-opacity="0.30"/></linearGradient>'
+    + '<linearGradient id="tm-rake-flip" x1="0" y1="1" x2="0" y2="0">'
+    + '<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>'
+    + '<stop offset="100%" stop-color="#000000" stop-opacity="0.30"/></linearGradient>'
+    + '</defs>'
+}
+
+/** The cars, strung round the solved RACING LINE by the shared field, dressed as SVG sprites. */
+function carsMarkup(layout: TrackLayout, lighting: Lighting, n: number): string[] {
+  const light = carLight(lighting)
+  const carLen = (CAR_LENGTH_M * CAR_SCALE) / layout.metresPerUnit
+  const scale = carLen / SPRITE.len
+  return carField(layout, n).map((car, i) => {
+    const sprite = renderToStaticMarkup(createElement(CarSprite, {
+      id: `p${i}`, color: LIVERIES[i % LIVERIES.length], length: SPRITE.len, light,
+      spriteRot: car.rot, attitude: car.attitude, steer: car.steer,
+    }))
+    // The sprite is its own <svg>, and a nested one CLIPS to its viewBox, which would cut the contact
+    // shadow's tail off. So it goes in as a <g> instead, scaled from sprite units into track units.
+    const body = sprite.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')
+    return `<g transform="translate(${car.x} ${car.y}) rotate(${(car.rot * 180) / Math.PI}) `
+      + `scale(${scale}) translate(${-SPRITE.cx} ${-SPRITE.cy})">${body}</g>`
+  })
+}
+
+mkdirSync(OUT, { recursive: true })
+
+async function main() {
+  for (const id of ids) {
+    const layout = TRACK_LAYOUTS[id]
+    if (!layout) {
+      console.log(`${id}: no such layout`)
+      continue
+    }
+    // Same standardised bearing the map opens on, or the preview would not be checking what ships.
+    const az = pitViewAzimuth(layout)
+    const lighting = az === null ? mood : { ...mood, azimuth: az }
+    const viewAz = az === null ? mood.azimuth : screenUpAzimuth(screenUpAzimuth(az))
+    const mpu = layout.metresPerUnit
+    const u = (m: number) => m / mpu
+    const scenery = buildScenery(layout.trace, layout.pit, {
+      circuitId: layout.circuitId,
+      metresPerUnit: mpu,
+      viewBox: layout.viewBox,
+      pitOutside: layout.pitOutside,
+      biome: layout.biome,
+      terrainDetail,
+    })
+    const pitSlots = buildPitSlots(layout, 10)
+    const pitZone = buildPitZone(layout, pitSlots)
+    const lap = solveLap(layout)
+
+    const [vx, vy, vw, vh] = layout.viewBox.split(' ').map(Number)
+    const m = TRACK_WIDTH_M / mpu / 2 + 8
+    const full = { x: vx - m, y: vy - m, w: vw + 2 * m, h: vh + 2 * m }
+    const vb = zoom > 1
+      ? {
+        x: full.x + full.w * cxf - full.w / zoom / 2, y: full.y + full.h * cyf - full.h / zoom / 2,
+        w: full.w / zoom, h: full.h / zoom,
+      }
+      : full
+
+    const startAt = startPose(layout.start, mpu)
+    const scene = sceneryScene(scenery, {
+      u,
+      lighting,
+      view: viewAz,
+      ground: true,
+      track: roadOps({
+        layout, u, pitZone, pitSlots, ground: scenery.base, shadow: shadowFill(lighting),
+        lap: roadLap(lap),
+      }),
+      kerbs: kerbOps(scenery.kerbs, u),
+      pitUnder: pitZone ? pitFloorOps(pitZone, lighting) : [],
+      pitOver: pitZone ? pitComplexOps(pitZone, u, lighting, viewAz) : [],
+      overlay: [...startLineOps(startAt, u), ...gridBoxOps([], u)],
+    })
+
+    const body = [
+      defs(u, lighting),
+      // The surface the canvas CLEARS to, which is what the ground plane is at runtime.
+      `<rect x="${vb.x - 4000}" y="${vb.y - 4000}" width="${vb.w + 8000}" height="${vb.h + 8000}" fill="${scenery.base}"/>`,
+      ...scene.map(itemSvg),
+      // The garage boards are the one part of the world that stays real SVG in the map too.
+      ...(pitZone ? [renderToStaticMarkup(createElement(PitGarageSigns, {
+        zone: pitZone,
+        u,
+        lighting,
+        view: viewAz,
+        drivers: () => [
+          { name: 'Kimi Raikkonen', nationality: 'FI' },
+          { name: 'Felipe Massa', nationality: 'BR' },
+        ],
+      }))] : []),
+      // Last: the cars sit on top of the world, as they do in the map.
+      ...(carCount > 0 ? carsMarkup(layout, lighting, carCount) : []),
+    ].join('\n')
+
+    // Fixed output width whatever the zoom, so a hard crop is actually inspectable rather than
+    // shrinking with the region it selects.
+    const outW = Math.round(Math.max(vb.w * 2, 900))
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${outW}" height="${Math.round((outW * vb.h) / vb.w)}">${body}</svg>`
+    const tag = `${id}${terrainDetail ? '-terrain' : ''}${moodArg === 'afternoon' ? '' : `-${moodArg}`}${zoom > 1 ? `-z${zoom}` : ''}`
+    writeFileSync(`${OUT}/${tag}.svg`, svg)
+    const counts = `${scene.length} items; trees ${scenery.trees.length}, `
+      + `stands ${scenery.stands.length}, buildings ${scenery.buildings.length}`
+    try {
+      await sharp(Buffer.from(svg)).png().toFile(`${OUT}/${tag}.png`)
+      console.log(`${tag.padEnd(16)} ${layout.biome.padEnd(10)} ${moodArg.padEnd(9)} -> ${OUT}/${tag}.png   (${counts})`)
+    } catch (err) {
+      console.log(`${id.padEnd(12)} SVG written, raster failed: ${(err as Error).message}`)
+    }
+  }
+}
+
+main()
