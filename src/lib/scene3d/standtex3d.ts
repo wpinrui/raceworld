@@ -84,6 +84,17 @@ export interface StandSkin {
   wood: SkinSurface
   /** The ground the stand sits on. Probe scenery rather than part of the stand. */
   grass: SkinSurface
+  /** Dark damp soil, the worn-earth partner for anywhere green.
+   *
+   *  A second earth rather than one for everywhere, because the two are not the same landscape.
+   *  `ground037` is a pale dry sand at luma 144 against the grass's 119, so every patch of it reads
+   *  as a bright blotch on a green field: right for a desert circuit, where the ground genuinely is
+   *  sand and the grass is the exception, and wrong everywhere it rains. `ground068` measures 92,
+   *  just under the grass, so a worn patch in the Ardennes reads as the mud it would actually be.
+   *
+   *  Carried as its own surface and grafted on as the blend by `addGround3D`, since which one a
+   *  circuit takes is the biome's call and not a fixed property of the grass. */
+  soil: SkinSurface
 }
 
 interface SkinSpec {
@@ -182,8 +193,14 @@ const SPEC: Record<keyof StandSkin, SkinSpec> = {
   // was after a 40% pull, with its structure intact rather than compressed. It is also the greener
   // and brighter of the two (luma 119 against 101), which is what a watered verge looks like.
   grass: {
-    set: 'grass008', tileM: 2, normalScale: 0.4, albedo: true, maxPx: 512, sampling: 'stochastic',
+    set: 'grass008', tileM: 2, normalScale: 0.4, albedo: true, maxPx: 1024, sampling: 'stochastic',
     blend: { set: 'ground037', tileM: 2.3, maskM: 20, coverage: 0.33 },
+  },
+  // The green biomes' earth. Same tile and strength as the sand it stands in for, so swapping one
+  // for the other changes the material and nothing else about how the ground is laid.
+  soil: {
+    set: 'ground068', tileM: 2.3, normalScale: 0.4, albedo: true, maxPx: 1024,
+    sampling: 'stochastic',
   },
 }
 

@@ -165,7 +165,7 @@ export function buildWorld3D(
   ground.rotateX(-Math.PI / 2)
   ground.translate(vx + vw / 2, 0, vy + vh / 2)
   addGround3D(group, ground, {
-    skin: standSkin?.grass ?? null, biome: layout.biome, u, fallback: () => add(ground, scenery.base),
+    skin: standSkin ?? null, biome: layout.biome, u, fallback: () => add(ground, scenery.base),
   })
 
   group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors, detail?.ground ?? null))

@@ -29,6 +29,12 @@ export interface BiomePreset {
    *  occasional scrub surviving in it. Approximate rather than exact, since the mask comes out of
    *  the scan's own statistics rather than a uniform distribution. */
   earth: number
+  /** Which earth that is: pale dry sand, or dark damp soil.
+   *
+   *  A desert's bare ground and a wood's are opposite in value as well as hue, and using one scan
+   *  for both put bright sand blotches across the Ardennes. Sand for the places that genuinely are
+   *  sand (deserts, dunes and the coast), soil everywhere it rains. */
+  earthScan: 'sand' | 'soil'
   /** How tall this venue's tallest buildings get. A street circuit has a skyline; a forest does not. */
   towers: number
   /** Rooftop palette. */
@@ -43,42 +49,42 @@ export const BIOMES: Record<Biome, BiomePreset> = {
   temperate: {
     ramp: ['#3D5D2C', '#446733', '#4C713A', '#547B42', '#5D854B', '#679055'],
     base: '#3A5829',
-    reliefM: 55, featureM: 900, trees: 3, buildings: 3, water: 0.16, fields: 0.35, earth: 0.3, towers: 1.0,
+    reliefM: 55, featureM: 900, trees: 3, buildings: 3, water: 0.16, fields: 0.35, earth: 0.3, earthScan: 'soil', towers: 1.0,
     roofs: ['#59616E', '#4E5663', '#665D52', '#57504A', '#7A5147'],
     runoff: ['#8F8568', '#565C66'],
   },
   farmland: {
     ramp: ['#43642F', '#4B6E37', '#54783F', '#5D8248', '#678D52', '#71985D'],
     base: '#3F602C',
-    reliefM: 32, featureM: 1200, trees: 2.2, buildings: 2.4, water: 0.14, fields: 0.78, earth: 0.34, towers: 0.45,
+    reliefM: 32, featureM: 1200, trees: 2.2, buildings: 2.4, water: 0.14, fields: 0.78, earth: 0.34, earthScan: 'soil', towers: 0.45,
     roofs: ['#6B5F52', '#7A5147', '#5A5348', '#655C50', '#4E5663'],
     runoff: ['#8F8568', '#565C66'],
   },
   forest: {
     ramp: ['#2E4C21', '#355527', '#3C5E2E', '#446836', '#4C723E', '#557C47'],
     base: '#2B481F',
-    reliefM: 85, featureM: 750, trees: 4.4, buildings: 1.8, water: 0.2, fields: 0.12, earth: 0.2, towers: 0.5,
+    reliefM: 85, featureM: 750, trees: 4.4, buildings: 1.8, water: 0.2, fields: 0.12, earth: 0.2, earthScan: 'soil', towers: 0.5,
     roofs: ['#54524A', '#5E5548', '#4A4F52', '#665D52', '#57504A'],
     runoff: ['#8F8568', '#6E6A5C'],
   },
   arid: {
     ramp: ['#8B7752', '#95825C', '#9F8D66', '#A99871', '#B3A37C', '#BDAE88'],
     base: '#87734E',
-    reliefM: 40, featureM: 1400, trees: 0.35, buildings: 2.6, water: 0, fields: 0.05, earth: 0.92, towers: 1.1,
+    reliefM: 40, featureM: 1400, trees: 0.35, buildings: 2.6, water: 0, fields: 0.05, earth: 0.92, earthScan: 'sand', towers: 1.1,
     roofs: ['#8C8478', '#9A9184', '#7E766B', '#A39887', '#6F685E'],
     runoff: ['#565C66', '#8F8568'],
   },
   urban: {
     ramp: ['#4B5F39', '#53683F', '#5B7146', '#637A4D', '#6B8354', '#748C5C'],
     base: '#475B36',
-    reliefM: 22, featureM: 1100, trees: 1.3, buildings: 5.5, water: 0.1, fields: 0.05, earth: 0.42, towers: 1.9,
+    reliefM: 22, featureM: 1100, trees: 1.3, buildings: 5.5, water: 0.1, fields: 0.05, earth: 0.42, earthScan: 'soil', towers: 1.9,
     roofs: ['#59616E', '#4E5663', '#6A7180', '#525A67', '#7A5147'],
     runoff: ['#565C66', '#6E6A5C'],
   },
   coastal: {
     ramp: ['#576343', '#5F6C4B', '#687554', '#717E5D', '#7A8766', '#849170'],
     base: '#535F40',
-    reliefM: 45, featureM: 850, trees: 1.6, buildings: 2.6, water: 0.34, fields: 0.2, earth: 0.5, towers: 1.0,
+    reliefM: 45, featureM: 850, trees: 1.6, buildings: 2.6, water: 0.34, fields: 0.2, earth: 0.5, earthScan: 'sand', towers: 1.0,
     roofs: ['#6E7480', '#5C636E', '#7A7266', '#665D52', '#87796B'],
     runoff: ['#8F8568', '#565C66'],
   },

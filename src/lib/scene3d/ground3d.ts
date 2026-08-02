@@ -10,7 +10,7 @@ import type { Scenery } from '@/lib/ui/track-scenery'
 import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
-import { blendSurfaces, maskWindow, type SkinSurface } from './standtex3d'
+import { blendSurfaces, maskWindow, type SkinSurface, type StandSkin } from './standtex3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
 
 /** Hedgerow width, matching the 2D's stroke. */
@@ -57,13 +57,14 @@ function ringStrokeGeometry(d: string, halfW: number, y: number): THREE.BufferGe
  *  browner shade of the same pixels.
  *
  *  Stochastically sampled (`standtex3d`), which is what makes this survivable at all. The plane is
- *  kilometres across and the tile is four metres, so a plainly-tiled scan would repeat some two
+ *  kilometres across and the tile is two metres, so a plainly-tiled scan would repeat some four
  *  thousand times down one straight, and a repeat at that count is not a texture, it is wallpaper.
  *  Heitz and Neyret's histogram-preserving blend removes the lattice entirely: nothing repeats, at
  *  any scale, at any distance.
  *
- *  Where the mix SITS is the biome's call (`BiomePreset.earth`). It is most of what separates one
- *  venue's ground from another's, and it costs one number rather than a second pair of scans.
+ *  The biome decides both halves of the mix: how much earth shows (`BiomePreset.earth`) and which
+ *  earth it is (`earthScan`, sand or soil). Between them they are most of what separates one venue's
+ *  ground from another's.
  *
  *  Falls back to the flat fill wherever the maps are absent, which is every test and every frame
  *  before the download lands. The world is never groundless. */
@@ -71,8 +72,8 @@ export function addGround3D(
   group: THREE.Group,
   geometry: THREE.BufferGeometry,
   { skin, biome, u, fallback }: {
-    /** The loaded grass surface, or null to take the flat path. */
-    skin: SkinSurface | null
+    /** The loaded scans, or null to take the flat path. */
+    skin: StandSkin | null
     biome?: Biome
     u: (m: number) => number
     /** How this ground is laid when there is no scan behind it. */
@@ -83,10 +84,15 @@ export function addGround3D(
     fallback()
     return
   }
-  // A COPY. The loaded skin is shared with every stand in the scene, and the mask window is this
-  // circuit's answer rather than the scan pair's: writing it back would put the last-built world's
-  // biome on all of them.
-  const surface: SkinSurface = { ...skin, ...maskWindow(biomeOf(biome).earth) }
+  const bio = biomeOf(biome)
+  // Which earth this landscape wears. A loaded surface carries everything a blend needs (its maps,
+  // its Gaussianised pair, its tile), so the soil can simply stand in for the sand the grass was
+  // specified against.
+  const earth = bio.earthScan === 'soil' ? skin.soil : skin.grass.blend
+  // A COPY. The loaded skin is shared with every stand in the scene, and both the earth and the mask
+  // window are this circuit's answer rather than the scan pair's: writing them back would put the
+  // last-built world's biome on all of them.
+  const surface: SkinSurface = { ...skin.grass, blend: earth, ...maskWindow(bio.earth) }
   // World-projected, exactly as the generated grain is, so the ground and the road running through
   // it share one continuous surface and their join carries no seam.
   planarUV(geometry, u(surface.tileM))
