@@ -55,9 +55,14 @@ const AUTUMN_IN = 11
  *
  *  A tree here is 14k-21k triangles, so this band is a budget as much as a quality dial. Where it
  *  sits was chosen by watching the tier change rather than by arithmetic: near enough that a tree
- *  swapping cards is small in frame, far enough that nothing swaps while it still reads as a tree. */
-const HERO_IN_M = 260
-const HERO_OUT_M = 340
+ *  swapping cards is small in frame, far enough that nothing swaps while it still reads as a tree.
+ *
+ *  Brought in from 260/340 on measurement: the near tier was 2.1M triangles on the grid at Britain,
+ *  the biggest single block in the scene, and the band's area goes as the square of its radius so a
+ *  fifth off the radius is a third off the wood. Tightened only a little on purpose, since the
+ *  impostors are already noticeable and pulling them closer is the thing that makes them more so. */
+const HERO_IN_M = 210
+const HERO_OUT_M = 280
 
 /** How far the eye has to move before the wood is repacked, in metres. A camera drifting a few
  *  centimetres cannot have changed any tree's tier, and the walk is pure waste when it has not. */

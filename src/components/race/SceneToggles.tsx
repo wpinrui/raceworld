@@ -150,7 +150,9 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
 }) {
   const [open, setOpen] = useState(false)
   const [off, setOff] = useState<ReadonlySet<string>>(() => new Set())
-  const [passOff, setPassOff] = useState<ReadonlySet<PassKey>>(() => new Set())
+  // Occlusion starts OFF, as the chain builds it (`post3d`). The switch reports what is actually
+  // running, so its initial state has to agree with that rather than with a tidier default.
+  const [passOff, setPassOff] = useState<ReadonlySet<PassKey>>(() => new Set<PassKey>(['ao']))
   const [cost, setCost] = useState<Record<string, { draws: number; tris: number }>>({})
   const [spin, setSpin] = useState(false)
   // What this panel hid, so it can restore exactly that and nothing else.

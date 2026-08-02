@@ -110,7 +110,7 @@ export function buildBuildings3D(
 export function buildStands3D(
   stands: readonly SceneryStand[], u: (m: number) => number,
   skin: StandSkin | null = null,
-  seats: { form: SeatForm; lod: SeatLod } | null = { form: 'bucket', lod: 'auto' },
+  seats: { form: SeatForm; lod: SeatLod; metresPerUnit?: number } | null = { form: 'bucket', lod: 'auto' },
   crowdFill = 0.9,
 ): THREE.Group {
   const group = new THREE.Group()
@@ -126,7 +126,10 @@ export function buildStands3D(
     const holder = new THREE.Group()
     holder.position.set(s.x, 0, s.y)
     holder.rotation.y = -s.rot
-    const stand = buildGrandstand(spec, seats, null, skin)
+    // The seat ladder's bands are METRES and LOD measures in world units, so it needs the circuit's
+    // scale to convert them. Passed here rather than defaulted inside, because a stand built for the
+    // standalone viewer really is one unit to the metre and would be wrong to divide.
+    const stand = buildGrandstand(spec, seats && { ...seats, metresPerUnit: mpu }, null, skin)
     // Collapsed PER STAND, before it is placed, so the bake is relative to the stand's own frame.
     // A stand is a couple of dozen solids (deck, ends, aisles, frontage, barriers, towers, roof) and
     // there are thirty of them round a circuit; every one that shares a finish shares a draw now.

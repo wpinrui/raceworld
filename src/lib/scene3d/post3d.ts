@@ -179,6 +179,10 @@ export function buildPost(
       draw(r, write, read, delta, mask)
       for (const o of hidden) o.visible = true
     }
+    // OFF unless something asks for it. The pass is a whole second submission of the scene for depth
+    // and normals: measured on the grid at Britain it was 597 of 2027 draws and five frames of
+    // twenty-three. It stays built, so the scene switches can turn it back on without a rebuild.
+    ao.enabled = false
     composer.addPass(ao)
   }
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), STRENGTH, RADIUS, THRESHOLD)

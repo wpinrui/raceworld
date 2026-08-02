@@ -341,7 +341,14 @@ export type SeatLod = 'high' | 'mid' | 'low' | 'auto'
  *  wings and the pan rim stop being separable, `mid` until the pedestal does; past `low` a seat is a
  *  dark notch over a bright pan and there is nothing left to lose. A 64 m stand is one object to
  *  three.js, so these are distances to its middle: the far end of a stand seen down the straight
- *  switches with the near end, which is the price of one draw call for four thousand seats. */
+ *  switches with the near end, which is the price of one draw call for four thousand seats.
+ *
+ *  METRES, and they have to be converted before `THREE.LOD` sees them. LOD compares against a WORLD
+ *  distance, and a world unit is `metresPerUnit` metres, which runs from 2 at the Netherlands to 6.2
+ *  at Saudi Arabia. Handed over raw, as they were, "55 metres" meant 111 m at one circuit and 343 m
+ *  at another, and every stand for a third of a kilometre rendered its full seat. That was 1.8M
+ *  triangles on the grid at Britain, the biggest single block in the scene. `trees3d` divides its own
+ *  band by the same scalar; this did not. */
 const LOD_M = { mid: 55, low: 130 } as const
 
 /** Seat pitch across the width. 500 mm is a real circuit's spacing. */
@@ -571,6 +578,8 @@ export function buildAisles(
  *  run of plank per row, because that is what a bench is. */
 export function buildSeats(
   spec: GrandstandSpec, rows: readonly StandRow[], form: SeatForm, lod: SeatLod, skin: Skin = null,
+  /** Metres per WORLD unit, for converting the ladder's bands into the space LOD measures in. */
+  metresPerUnit = 1,
 ): THREE.Object3D {
   const grain = of(skin, 'seat')
   const mat = skinned(SEAT_COLOUR, grain, { roughness: ROUGH.paint })
@@ -611,8 +620,8 @@ export function buildSeats(
   // on every render, so anything switching the seats off has to switch off the thing that owns them.
   ladder.name = 'seats'
   ladder.addLevel(bank('high'), 0)
-  ladder.addLevel(bank('mid'), LOD_M.mid)
-  ladder.addLevel(bank('low'), LOD_M.low)
+  ladder.addLevel(bank('mid'), LOD_M.mid / metresPerUnit)
+  ladder.addLevel(bank('low'), LOD_M.low / metresPerUnit)
   return ladder
 }
 
@@ -1043,7 +1052,7 @@ export function standSpecFor(widthM: number, depthM: number): GrandstandSpec {
 
 /** The bowl: seating deck, ends, and whatever holds it up. No seats, no roof, no crowd yet. */
 export function buildGrandstand(
-  spec: GrandstandSpec, seats: { form: SeatForm; lod: SeatLod } | null = null,
+  spec: GrandstandSpec, seats: { form: SeatForm; lod: SeatLod; metresPerUnit?: number } | null = null,
   crowd: { fill: number; seed?: number; scale?: number } | null = null, skin: Skin = null,
 ): THREE.Group {
   const group = new THREE.Group()
@@ -1107,7 +1116,7 @@ export function buildGrandstand(
   group.add(buildBarriers(spec, band, skin))
   group.add(buildTowers(spec, pts, skin))
   if (band) group.add(buildBand(spec, band, skin))
-  if (seats) group.add(buildSeats(spec, rows, seats.form, seats.lod, skin))
+  if (seats) group.add(buildSeats(spec, rows, seats.form, seats.lod, skin, seats.metresPerUnit))
   if (crowd) {
     // A stand built on its own faces -z, so that is where its crowd looks. Placed in a circuit, the
     // world builder pools every stand's seats into one crowd instead and hands each its own facing.

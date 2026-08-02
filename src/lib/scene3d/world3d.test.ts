@@ -275,4 +275,20 @@ describe('buildWorld3D', () => {
     // past it would silently paint the grime over the pad again. The regression that hid them.
     expect(maxOrder).toBeLessThan(900)
   })
+
+  it('converts the seat ladder bands into the units LOD actually measures in', () => {
+    // The bug: LOD_M is authored in METRES and `THREE.LOD` compares a WORLD distance. Handed over
+    // raw, "55 metres" meant 111 m at the Netherlands and 343 m at Saudi Arabia, so every stand for
+    // a third of a kilometre rendered its full seat: 1.8M triangles, the biggest block in the scene.
+    const ladders: THREE.LOD[] = []
+    world.group.traverse((o) => { if (o instanceof THREE.LOD) ladders.push(o) })
+    expect(ladders.length).toBeGreaterThan(0)
+    expect(layout.metresPerUnit).not.toBe(1)
+    for (const ladder of ladders) {
+      const bands = ladder.levels.map((l) => l.distance)
+      expect(bands[0]).toBe(0)
+      // In world units, so a metre band is SHORTER than its number wherever a unit is several metres.
+      for (const band of bands.slice(1)) expect(band).toBeLessThan(55)
+    }
+  })
 })
