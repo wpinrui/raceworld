@@ -6,7 +6,6 @@ import * as THREE from 'three'
 import { shade } from '@/lib/color'
 import type { PitZone } from '@/lib/ui/pit-zone'
 import type { Scenery } from '@/lib/ui/track-scenery'
-import { SOFT_BAND_ALPHA } from '@/lib/ui/terrain-field'
 import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
 import type { SceneMaterials } from './materials3d'
@@ -64,7 +63,7 @@ export function buildGroundStack3D(
     group.add(mesh)
   }
   for (const b of scenery.bands) {
-    add(pathFillGeometry(b.d, lift(layers.bands)), b.fill, layers.bands, b.soft ? SOFT_BAND_ALPHA : 1)
+    add(pathFillGeometry(b.d, lift(layers.bands)), b.fill, layers.bands)
   }
   for (const f of scenery.fields) {
     add(pathFillGeometry(f.d, lift(layers.fields)), f.fill, layers.fields, 0.75)

@@ -18,7 +18,6 @@ import {
 import type { Scenery, SceneryRect, SceneryTree } from './track-scenery'
 import type { SceneryFence } from './scenery-props'
 import type { Vec } from './geom'
-import { SOFT_BAND_ALPHA } from './terrain-field'
 
 /** One drawing instruction. `fill` and `stroke` are colours, or a `ref:NAME` naming a gradient or
  *  pattern the renderer supplies — the canvas resolves those to a CanvasGradient. Keeping them
@@ -392,7 +391,7 @@ export function groundOps(
   const ops: DrawOp[] = []
   if (ground) {
     for (const b of scenery.bands) {
-      ops.push({ d: b.d, fill: b.fill, alpha: b.soft ? SOFT_BAND_ALPHA : 1, evenOdd: true })
+      ops.push({ d: b.d, fill: b.fill, evenOdd: true })
     }
     for (const f of scenery.fields) {
       ops.push({ d: f.d, fill: f.fill, alpha: 0.75 })

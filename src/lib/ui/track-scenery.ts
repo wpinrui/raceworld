@@ -171,11 +171,15 @@ export function buildScenery(
   // Grade the land to the circuit's own smoothed profile, so the track sits in a corridor of
   // cuttings and embankments rather than on a shelf laid over the noise.
   const field = gradeToTrack(rawField, centreline, { corridorU: u(70), distTo: trackDist })
-  // Off the flag, a handful of very low-contrast levels: enough that the ground is not one flat
-  // sheet stretching to the horizon, without the map-like terracing.
-  const bands = terrainDetail
-    ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM })
-    : bandsFor(field, farBox, [bio.ramp[2], bio.ramp[4]], { reliefM: bio.reliefM, soft: true })
+  // Off the flag, NONE. The soft wash that used to stand here was a 2D device: a top-down
+  // orthographic view has no light, so the only way to say "this ground is higher" was to paint it
+  // a lighter green, and the contour between two levels was the edge of that paint. In a lit scene
+  // that device cannot work. The shading says the ground is flat because it IS flat, the colour
+  // says it is not, and at a low camera the colour edge stops reading as relief and reads as a
+  // seam: a dead-straight line across the grass, eight grey levels deep, sweeping over the field
+  // as the camera tilts (`scripts/scene3d-grass-band.ts`). Relief in a lit renderer has to be
+  // geometry or nothing.
+  const bands = terrainDetail ? bandsFor(field, farBox, bio.ramp, { reliefM: bio.reliefM }) : []
 
   // ── Water bodies ──
   // Lakes only: the relief bands carry ground tone now, so the old translucent tint patches just

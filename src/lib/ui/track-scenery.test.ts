@@ -119,9 +119,11 @@ describe.each(ids)('%s', (id) => {
     }
   })
 
-  it('tints the ground softly by default, with no field quilt', () => {
-    expect(scenery.bands.length).toBeGreaterThan(0)
-    expect(scenery.bands.every((b) => b.soft)).toBe(true)
+  it('leaves the ground unpainted by default, with no relief bands and no field quilt', () => {
+    // The soft wash that used to stand here is gone. A colour step standing in for height only
+    // works in a top-down view with no light in it; lit, its contour draws a straight seam across
+    // the grass that sweeps as the camera tilts.
+    expect(scenery.bands).toEqual([])
     expect(scenery.fields).toEqual([])
   })
 
@@ -147,14 +149,12 @@ describe('terrainDetail', () => {
   it('draws hard terracing and the field quilt when switched on', () => {
     const on = build(true)
     expect(on.bands.length).toBeGreaterThan(2)
-    expect(on.bands.every((b) => b.soft)).toBe(false)
     expect(on.fields.length).toBeGreaterThan(40)
   })
 
-  it('falls back to a soft tint and no quilt, and changes nothing else', () => {
+  it('paints no relief and no quilt when switched off, and changes nothing else', () => {
     const off = build(false)
-    expect(off.bands.every((b) => b.soft)).toBe(true)
-    expect(off.bands.length).toBeLessThan(build(true).bands.length)
+    expect(off.bands).toEqual([])
     expect(off.fields).toEqual([])
     // The flag must not disturb placement: same trees, stands and buildings either way.
     const on = build(true)

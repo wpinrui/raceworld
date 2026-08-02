@@ -326,7 +326,7 @@ describe('marshalGroups', () => {
 
 describe('groundOps', () => {
   const ground = {
-    bands: [{ d: 'M 0 0 L 1 0 L 1 1 Z', fill: '#3F602C', soft: true }],
+    bands: [{ d: 'M 0 0 L 1 0 L 1 1 Z', fill: '#3F602C' }],
     fields: [{ d: 'M 2 2 L 3 2 L 3 3 Z', fill: '#4A6B31', crop: true }],
     terrain: [{ d: 'M 4 4 L 5 4 L 5 5 Z', fill: '#2E4A6B', water: true }],
     runoffs: [{ d: 'M 6 6 L 7 6 L 7 7 Z', fill: '#7A6A55' }],
@@ -337,7 +337,8 @@ describe('groundOps', () => {
     // Filled nonzero, a band's hole fills in and the terracing disappears.
     const [band] = groundOps(ground, u, { ground: true })
     expect(band.evenOdd).toBe(true)
-    expect(band.alpha).toBeCloseTo(0.3, 9)
+    // Opaque: a terrace is a step in the ground's own colour, not a wash laid over it.
+    expect(band.alpha).toBeUndefined()
   })
 
   it('gives a cultivated parcel its crop rows and every parcel its hedgerow', () => {
