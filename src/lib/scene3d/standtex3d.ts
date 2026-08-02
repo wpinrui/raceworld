@@ -54,6 +54,18 @@ export interface SkinBlend extends SurfaceDetail {
  *  distance, which here means the ground. */
 export type Sampling = 'plain' | 'tile' | 'stochastic'
 
+/** Coverage to a smoothstep window. The mask is a ratio centred on 0.5, so sliding the window off
+ *  centre is what makes a scan rare or dominant; the width stays put, because that is the softness
+ *  of a patch edge and not its size.
+ *
+ *  Exported because the ground re-solves it per biome. A stand is a stand wherever it is built, but
+ *  the ratio of grass to bare earth is most of what separates a forest circuit from a desert one,
+ *  and that is a biome's call rather than a fixed property of the scan pair (`world3d`). */
+export function maskWindow(coverage: number): { maskLow: number; maskHigh: number } {
+  const centre = 0.5 + (0.5 - coverage) * 0.09
+  return { maskLow: centre - 0.028, maskHigh: centre + 0.028 }
+}
+
 /** Every surface of a stand that has a scan behind it. */
 export interface StandSkin {
   /** Horizontal concrete: treads, risers, gangway steps, the walked-on surfaces. */
@@ -148,9 +160,23 @@ const SPEC: Record<keyof StandSkin, SkinSpec> = {
   // blend partner as well: detiling and blending answer DIFFERENT questions, one being "does this
   // surface repeat" and the other "is it all the same material", and a verge worn through to dirt in
   // stretches is the second one.
+  // A TWO metre tile, not the four it started at, and the blade is what sets it. A scan of turf is a
+  // photograph of a patch about a metre across, so stretching it over four puts every blade at four
+  // times life size: from a racing camera that is coarse tussock rather than mown grass, and from
+  // the air it is the reason individual blades were still resolving at a hundred metres up, where
+  // real grass has long since averaged into a field. Halving the tile halves the blade, which both
+  // sizes it correctly underfoot and puts it under a pixel far sooner from above. The blend and the
+  // mask come down with it, so the ratio of patch to tile that was tuned here is preserved.
+  //
+  // The normals come down with it, 0.8 to 0.4. A scan's normal map describes blade-deep relief, and
+  // this is the one surface in the world looked at from directly above with the sun high: that is
+  // the geometry least able to hide a strong normal, because every bump is lit square on and throws
+  // its own little shadow. At full strength the shading speckle sat on top of the albedo's own and
+  // the two together read as noise rather than as grass. The generated ground grain this replaced
+  // ran at 0.3 for the same reason.
   grass: {
-    set: 'grass004', tileM: 4, normalScale: 0.8, albedo: true, maxPx: 512, sampling: 'stochastic',
-    blend: { set: 'ground037', tileM: 4.6, maskM: 26, coverage: 0.33 },
+    set: 'grass004', tileM: 2, normalScale: 0.4, albedo: true, maxPx: 512, sampling: 'stochastic',
+    blend: { set: 'ground037', tileM: 2.3, maskM: 20, coverage: 0.33 },
   },
 }
 
@@ -352,33 +378,68 @@ void standTriGrid( vec2 uv, out vec3 w, out vec2 v1, out vec2 v2, out vec2 v3 ) 
   }
 }
 
-vec3 standStochastic( sampler2D gaussMap, sampler2D lutMap, vec2 uv ) {
+/** How far into minification this pixel is, 0 near to 1 far, as the footprint in TILES per pixel.
+ *
+ *  This is the correction the technique needs to survive being looked at from the air, and it is
+ *  needed BECAUSE the technique works. Mipmapping answers minification by averaging, which is right:
+ *  a hundred blades of grass under one pixel are one colour, not a hundred. Histogram-preserving
+ *  blending exists to undo exactly that averaging, and it cannot tell the difference between
+ *  contrast lost to the three-way blend, which it should restore, and contrast lost to the mip
+ *  chain, which it must not. Left alone it re-inflates every mip level back to the full range of the
+ *  original scan, so a field seen from two hundred metres up keeps the per-blade contrast of a
+ *  photograph taken from one metre and reads as static.
+ *
+ *  So the stochastic term is faded out as the footprint grows, back to an ordinary filtered sample.
+ *  Nothing is lost by that: the whole purpose of the detiling is to hide a lattice, and by the far
+ *  end of this ramp a tile is a few pixels of an almost flat mip level, with no structure left in it
+ *  to give a lattice away.
+ *
+ *  The window is in tile units so it holds whatever tile a surface is authored at. At the ground's
+ *  two metres it runs from a pixel covering six centimetres to one covering forty. */
+float standMinify( vec2 ddx, vec2 ddy ) {
+  return smoothstep( 0.03, 0.20, max( length( ddx ), length( ddy ) ) );
+}
+
+vec3 standStochastic( sampler2D gaussMap, sampler2D lutMap, sampler2D plainMap, vec2 uv ) {
+  vec2 ddx = dFdx( uv );
+  vec2 ddy = dFdy( uv );
+  float far = standMinify( ddx, ddy );
+  // textureGrad rather than texture2D on the far branch: the gradients are explicit, which is what
+  // makes the sample legal inside non-uniform control flow.
+  if ( far >= 0.998 ) return textureGrad( plainMap, uv, ddx, ddy ).rgb;
   vec3 w;
   vec2 v1, v2, v3;
   standTriGrid( uv, w, v1, v2, v3 );
-  vec2 ddx = dFdx( uv );
-  vec2 ddy = dFdy( uv );
   vec3 g = w.x * textureGrad( gaussMap, uv + standHash4( v1 ).xy, ddx, ddy ).rgb
          + w.y * textureGrad( gaussMap, uv + standHash4( v2 ).xy, ddx, ddy ).rgb
          + w.z * textureGrad( gaussMap, uv + standHash4( v3 ).xy, ddx, ddy ).rgb;
   g = ( g - 0.5 ) * inversesqrt( dot( w, w ) ) + 0.5;
-  return vec3(
+  vec3 near = vec3(
     texture2D( lutMap, vec2( g.r, 0.5 ) ).r,
     texture2D( lutMap, vec2( g.g, 0.5 ) ).g,
     texture2D( lutMap, vec2( g.b, 0.5 ) ).b );
+  if ( far <= 0.002 ) return near;
+  return mix( near, textureGrad( plainMap, uv, ddx, ddy ).rgb, far );
 }
 
 /** The same grid and offsets, blended plainly. For normal and roughness, which are low-contrast
- *  enough that the variance loss does not read, and which have no meaningful histogram to preserve. */
+ *  enough that the variance loss does not read, and which have no meaningful histogram to preserve.
+ *
+ *  Fades the same way, and for a sharper reason: a normal map re-inflated across a minified surface
+ *  is a field of shading noise standing in for geometry that is far too small to see. */
 vec3 standStochasticPlain( sampler2D samp, vec2 uv ) {
+  vec2 ddx = dFdx( uv );
+  vec2 ddy = dFdy( uv );
+  float far = standMinify( ddx, ddy );
+  if ( far >= 0.998 ) return textureGrad( samp, uv, ddx, ddy ).rgb;
   vec3 w;
   vec2 v1, v2, v3;
   standTriGrid( uv, w, v1, v2, v3 );
-  vec2 ddx = dFdx( uv );
-  vec2 ddy = dFdy( uv );
-  return w.x * textureGrad( samp, uv + standHash4( v1 ).xy, ddx, ddy ).rgb
-       + w.y * textureGrad( samp, uv + standHash4( v2 ).xy, ddx, ddy ).rgb
-       + w.z * textureGrad( samp, uv + standHash4( v3 ).xy, ddx, ddy ).rgb;
+  vec3 near = w.x * textureGrad( samp, uv + standHash4( v1 ).xy, ddx, ddy ).rgb
+            + w.y * textureGrad( samp, uv + standHash4( v2 ).xy, ddx, ddy ).rgb
+            + w.z * textureGrad( samp, uv + standHash4( v3 ).xy, ddx, ddy ).rgb;
+  if ( far <= 0.002 ) return near;
+  return mix( near, textureGrad( samp, uv, ddx, ddy ).rgb, far );
 }
 `
 
@@ -405,24 +466,29 @@ export function blendSurfaces(mat: THREE.Material, base: SkinSurface): void {
    *  path: leaving the second scan on plain tiling puts its own lattice inside every patch of it,
    *  which is detiling done to one of the two materials on screen. */
   const read = (
-    map: string, uv: string, gauss: string, lut: string, scaled: boolean,
+    map: string, uv: string, scaled: boolean,
+    /** The Gaussianised pair, for the one map that has a histogram worth preserving. */
+    histogram?: { gauss: string; lut: string },
   ): string => {
     const at = scaled ? `${uv} * ${u}` : uv
-    if (mode === 'stochastic') return `standStochastic( ${gauss}, ${lut}, ${at} )`
+    if (mode === 'stochastic') {
+      // The histogram-preserving path is for the COLOUR alone. The lookup inverts that map's own
+      // distribution, and a normal or a roughness has no share in it: pushing a normal through it
+      // remaps a tangent basis centred on 0.5 onto the colour's median instead, which tilts every
+      // normal on the surface by a fixed amount and lights the whole thing off-axis. Those two go
+      // through the same triangle grid with the same offsets, blended plainly.
+      return histogram
+        ? `standStochastic( ${histogram.gauss}, ${histogram.lut}, ${map}, ${at} )`
+        : `standStochasticPlain( ${map}, ${at} )`
+    }
     if (mode === 'tile') return `standTileBreak( ${map}, ${at} ).rgb`
     return `texture2D( ${map}, ${at} ).rgb`
   }
-  const colour = (b: boolean) => read(
-    b ? 'blendMap' : 'map', 'vMapUv', b ? 'blendGaussMap' : 'gaussMap', b ? 'blendLutMap' : 'lutMap', b,
-  )
-  const normal = (b: boolean) => read(
-    b ? 'blendNormalMap' : 'normalMap', 'vNormalMapUv',
-    b ? 'blendNormalMap' : 'normalMap', b ? 'blendLutMap' : 'lutMap', b,
-  )
-  const rough = (b: boolean) => `${read(
-    b ? 'blendRoughnessMap' : 'roughnessMap', 'vRoughnessMapUv',
-    b ? 'blendRoughnessMap' : 'roughnessMap', b ? 'blendLutMap' : 'lutMap', b,
-  )}.g`
+  const colour = (b: boolean) => read(b ? 'blendMap' : 'map', 'vMapUv', b, {
+    gauss: b ? 'blendGaussMap' : 'gaussMap', lut: b ? 'blendLutMap' : 'lutMap',
+  })
+  const normal = (b: boolean) => read(b ? 'blendNormalMap' : 'normalMap', 'vNormalMapUv', b)
+  const rough = (b: boolean) => `${read(b ? 'blendRoughnessMap' : 'roughnessMap', 'vRoughnessMapUv', b)}.g`
 
   /** Mix base and blend, taking only one of the two branches wherever the mask has settled.
    *
@@ -541,14 +607,9 @@ export function loadStandSkin(
     for (const key of Object.keys(SPEC) as (keyof StandSkin)[]) {
       const spec = SPEC[key]
       const blend = spec.blend
-      // Coverage to a smoothstep window. The mask is a ratio centred on 0.5, so sliding the window
-      // off centre is what makes a scan rare or dominant; the width stays put, because that is the
-      // softness of a patch edge and not its size.
-      const centre = 0.5 + (0.5 - (blend?.coverage ?? 0.5)) * 0.09
       skin[key] = {
         maskM: blend?.maskM ?? 0,
-        maskLow: centre - 0.028,
-        maskHigh: centre + 0.028,
+        ...maskWindow(blend?.coverage ?? 0.5),
         sampling: spec.sampling,
         ...(spec.sampling === 'stochastic' ? {
           gaussMap: configure(loader.load(url(`${spec.set}-gauss.png`)), false),
