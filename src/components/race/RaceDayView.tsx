@@ -10,7 +10,7 @@ import type { ConstructorStanding, DriverStanding } from '@/lib/sim/types'
 import type { TrackLayout } from '@/data/tracks'
 import { RaceTrackMap, type TrackCarMeta, type TrackSample } from './RaceTrackMap'
 import { liveryFor } from '@/data/history/liveries'
-import type { Mood } from '@/lib/ui/lighting'
+import { raceLight } from '@/data/tracks/venues'
 import RaceTable, { ALL_RACE_TABLE_COLUMNS, type RaceTableColumn } from './RaceTable'
 import CommentaryFeed from './CommentaryFeed'
 import { LiveChampionship } from './LiveChampionship'
@@ -130,12 +130,18 @@ export function RaceDayView({
     [baselineConstructors, teamOf],
   )
 
-  // The race's mood, picked once: night where the venue races under floodlights, overcast when the
-  // weather brings rain at any point, the standard afternoon otherwise.
-  const mood: Mood = useMemo(() => {
-    if (layout.night) return 'night'
-    return raceState.weather.some((w) => w.moisture >= 0.5) ? 'overcast' : 'afternoon'
-  }, [layout.night, raceState.weather])
+  // The race's light, worked out from where this circuit is and when it races rather than picked off
+  // a list of moods. `venues.ts` carries the latitude, the date and the start time; `sun.ts` turns
+  // them into an altitude and a bearing, and every scalar the renderers read falls out of those.
+  //
+  // Cloud is a step and not a ramp, deliberately: it is the one input here that changes DURING the
+  // race, and the world rebuilds when the light does. One flip when the race turns wet is exactly
+  // what the mood this replaces already cost.
+  const cloud = raceState.weather.some((w) => w.moisture >= 0.5) ? 1 : 0
+  const { lighting, floodlit } = useMemo(
+    () => raceLight(layout.circuitId, { cloud }),
+    [layout.circuitId, cloud],
+  )
 
   const cars: TrackCarMeta[] = useMemo(
     () =>
@@ -257,7 +263,8 @@ export function RaceDayView({
             followId={effectiveFollow}
             onFollow={setFollowId}
             view={mapView ? 'map' : 'live'}
-            mood={mood}
+            lighting={lighting}
+            floodlit={floodlit}
             pinnedCard={(() => {
               if (!effectiveFollow || !pinnedTip || mapView) return undefined
               const ds = raceState.drivers.find((s) => s.driverId === effectiveFollow)

@@ -11,7 +11,8 @@
 // Circuits that have left the calendar keep the slot they last raced in, which is the honest answer
 // for a historical season and the only one available for one that never had a modern date.
 
-import type { Venue } from '@/lib/ui/sun'
+import type { Lighting } from '@/lib/ui/lighting'
+import { isFloodlit, lightingAt, raceClock, type SkyState, type Venue } from '@/lib/ui/sun'
 
 /** Every venue, by the circuit id `TRACK_LAYOUTS` keys on. */
 export const VENUES: Record<string, Venue> = {
@@ -60,4 +61,21 @@ export const DEFAULT_VENUE: Venue = VENUES.britain
 
 export function venueFor(circuitId: string): Venue {
   return VENUES[circuitId] ?? DEFAULT_VENUE
+}
+
+/** The light a circuit races in, and whether the floodlights are carrying it.
+ *
+ *  Sampled at the race's MIDPOINT, which is the one decision in here worth stating: the world's road
+ *  ink, its baked sky and its light rig are all built from this value, so a sun that moved per lap
+ *  would rebuild the circuit and re-bake the environment under the player. The midpoint is the
+ *  fairest single sample, being the light most of the distance is actually run in.
+ *
+ *  One function rather than three call sites doing the same three calls, because they must agree:
+ *  the sky, the floodlights and the shadows all have to be describing the same moment. */
+export function raceLight(
+  circuitId: string, sky: SkyState = { cloud: 0 },
+): { lighting: Lighting; floodlit: boolean } {
+  const venue = venueFor(circuitId)
+  const clock = raceClock(venue, 0.5)
+  return { lighting: lightingAt(venue, clock, sky), floodlit: isFloodlit(venue, clock) }
 }

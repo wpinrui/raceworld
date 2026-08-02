@@ -5,8 +5,9 @@ import { Maximize } from 'lucide-react'
 import type { TrackLayout } from '@/data/tracks'
 import { gridBoxOps, startLineOps, startPose } from '@/lib/ui/road-marks'
 import { buildScenery, type SceneryDensity } from '@/lib/ui/track-scenery'
-import { MOODS, type Mood } from '@/lib/ui/lighting'
-import { buildPitSlots, buildPitZone, pitCameraRotation, pitViewAzimuth } from '@/lib/ui/pit-zone'
+import { raceLight } from '@/data/tracks/venues'
+import type { Lighting } from '@/lib/ui/lighting'
+import { buildPitSlots, buildPitZone, pitCameraRotation } from '@/lib/ui/pit-zone'
 import * as THREE from 'three'
 import { Scene3DCanvas } from './Scene3DCanvas'
 import { groundPoint, type OrbitCam } from '@/lib/scene3d/camera3d'
@@ -136,8 +137,10 @@ interface Props {
   sceneryDensity?: SceneryDensity
   /** 'live' = sprites + camera; 'map' = the classic static full-track view with numbered dots. */
   view?: 'live' | 'map'
-  /** The race's light: night venues, wet-race overcast, or the standard afternoon. */
-  mood?: Mood
+  /** The race's light, computed from the venue's latitude, date and start time (`lib/ui/sun`). */
+  lighting?: Lighting
+  /** Whether the floodlights are carrying the race, i.e. the sun is too low to be doing it. */
+  floodlit?: boolean
   /** Card pinned to the followed car; the map positions it clear of the track ribbon each frame. */
   pinnedCard?: React.ReactNode
   /** Coarse freshness counter (#live-engine): bump ~1/s so memoised renders refresh tooltip content
@@ -148,7 +151,7 @@ interface Props {
   teamOrder?: string[]
 }
 
-function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, view = 'live', mood = 'afternoon', pinnedCard, teamOrder }: Props) {
+function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLabels = false, sceneryDensity, view = 'live', lighting: lightingProp, floodlit = false, pinnedCard, teamOrder }: Props) {
   const pathRef = useRef<SVGPathElement>(null)
   const pitPathRef = useRef<SVGPathElement>(null)
   const lenRef = useRef(0)
@@ -206,13 +209,17 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   const camRef = useRef<OrbitCam>({ tx: 0, tz: 0, rot: defaultRot, pitch: 0, z: ZOOM_DEFAULT })
   const glCamera = useMemo(() => new THREE.PerspectiveCamera(), [])
   const zoomReadRef = useRef<HTMLSpanElement>(null)
-  // The sun is fixed to the circuit, standardised against the pit complex so the light
-  // falls the same way on every track; it must NOT move with the camera, or shadows would sit still
-  // on screen while the world turned under them, which reads as the sun following the player.
-  const lighting = useMemo(
-    () => ({ ...MOODS[mood], azimuth: pitViewAzimuth(layout) ?? MOODS[mood].azimuth }),
-    [layout, mood],
-  )
+  // The sun is fixed to the CIRCUIT: it must not move with the camera, or shadows would sit still on
+  // screen while the world turned under them, which reads as the sun following the player.
+  //
+  // Where it stands is no longer this component's business. It used to standardise the bearing
+  // against the pit complex (`pitViewAzimuth`), so the light fell the same way on every track, which
+  // meant the sun stood in the NORTH on every northern-hemisphere circuit: a thing that cannot
+  // happen. The traces are imported north-up, so the venue's real solar bearing lands in world space
+  // directly, and the caller hands it down already computed.
+  const fallbackLight = useMemo(() => raceLight(layout.circuitId), [layout.circuitId])
+  const lighting = lightingProp ?? fallbackLight.lighting
+  const night = lightingProp ? floodlit : fallbackLight.floodlit
   // The circuit's own cloud field: the sky shader drifts its noise with `time`, so freezing it at a
   // number derived from the id gives every venue its own weather instead of one pattern everywhere.
   const skySeed = useMemo(() => skySeedFor(layout.circuitId), [layout.circuitId])
@@ -1313,11 +1320,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       overlay: gridOverlay,
       garageColors: (gi) => slotOf.colors[gi],
       extras: () => (pitZone ? [buildGarageSigns3D(pitZone, u, (gi) => garageCars[gi] ?? [])] : []),
-      night: mood === 'night',
+      night,
       treePack,
       standSkin,
     })
-  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, worldDetail, vb, gridOverlay, slotOf, u, garageCars, mood, treePack, standSkin])
+  }, [view, layout, scenery, pitZone, pitSlots, lapLine, lighting, worldTextures, worldDetail, vb, gridOverlay, slotOf, u, garageCars, night, treePack, standSkin])
   // The painter repaints when the CAMERA moves; anything that changes the picture WITHOUT one has to
   // ask: a freshly built world, or the STAGE being measured or resized (it is half of
   // pixels-per-metre).
@@ -1351,7 +1358,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
           crewGroup={crew3d?.group ?? null}
           base={scenery.base}
           lighting={lighting}
-          night={mood === 'night'}
+          night={night}
           skySeed={skySeed}
           ppu={vb.w > 0 && stage.w > 0 ? stage.w / vb.w : 1}
           unitsPerMetre={u(1)}
@@ -1501,7 +1508,8 @@ function sameCars(a: TrackCarMeta[], b: TrackCarMeta[], comparePos: boolean): bo
 export const RaceTrackMap = memo(RaceTrackMapImpl, (p, n) =>
   p.layout === n.layout &&
   p.view === n.view &&
-  p.mood === n.mood &&
+  p.lighting === n.lighting &&
+  p.floodlit === n.floodlit &&
   p.followId === n.followId &&
   p.showLabels === n.showLabels &&
   p.sceneryDensity === n.sceneryDensity &&
