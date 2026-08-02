@@ -72,9 +72,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
     const h = canvas.clientHeight
     if (w === 0 || h === 0) return
     if (world) {
-      // The orbit target rides the circuit's own surface: on a track that climbs, a target pinned
-      // at zero sits under the road and the whole frame tips off the thing it is following.
-      const frame = applyOrbitCam(camera, cam, { w, h }, ppu, world.ground.heightAt(cam.tx, cam.tz))
+      const frame = applyOrbitCam(camera, cam, { w, h }, ppu)
       // The shadow box wraps the framed extent with roll slack: a rotated viewport's world
       // footprint is its diagonal, and a box fitted to the unrotated frame clips corner shadows.
       const half = Math.hypot(frame.halfW, frame.halfH)

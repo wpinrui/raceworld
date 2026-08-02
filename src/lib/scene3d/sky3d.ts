@@ -15,7 +15,6 @@
 // own noise, frozen at a per-circuit seed, so Silverstone and Monaco do not wear the same sky.
 
 import * as THREE from 'three'
-import type { Ground } from './terrain3d'
 import { Sky } from 'three/addons/objects/Sky.js'
 import type { Lighting } from '@/lib/ui/lighting'
 import { sunAltitude } from './lighting3d'
@@ -189,10 +188,6 @@ export interface GroundExtent {
   z: number
   radius: number
   metresPerUnit: number
-  /** How high the ground is at a point, in world units. The world is no longer a plane at zero, so
-   *  anything that measures FROM the ground (the haze's near ramp, the camera's own orbit target)
-   *  has to ask rather than assume. */
-  heightAt: Ground
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -472,9 +467,9 @@ export function buildSky(
 /** How far the camera is from the ground it is pointed at: the orbit's own distance, recovered from
  *  the camera rather than passed in, so an ortho probe shot and the live perspective view fit their
  *  haze the same way. Infinite for a camera not looking down at all, which the map cannot reach. */
-function groundDistance(camera: THREE.Camera, groundY: number): number {
+function groundDistance(camera: THREE.Camera): number {
   const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
-  return forward.y < -1e-6 ? (groundY - camera.position.y) / forward.y : Infinity
+  return forward.y < -1e-6 ? -camera.position.y / forward.y : Infinity
 }
 
 /** Fit the fog to what the camera can actually see, per camera move, the way the sun's shadow box is
@@ -495,10 +490,7 @@ export function refitFog(
   const toEdge = Math.hypot(camera.position.x - ground.x, camera.position.z - ground.z) + ground.radius
   fog.far = Math.min(camera.far, toEdge) * FOG_FAR
   fog.near = Math.min(
-    Math.max(
-      FOG_CLEAR_M / ground.metresPerUnit,
-      groundDistance(camera, ground.heightAt(camera.position.x, camera.position.z)) * FOG_NEAR_DIST,
-    ),
+    Math.max(FOG_CLEAR_M / ground.metresPerUnit, groundDistance(camera) * FOG_NEAR_DIST),
     fog.far * FOG_NEAR_CAP,
   )
 }

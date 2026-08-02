@@ -76,8 +76,7 @@ describe('skySeedFor', () => {
 
 describe('refitFog', () => {
   /** Britain's numbers: 3.906 metres per unit, ground plane reaching 4132 units from the centre. */
-  // Flat, deliberately: these pin the haze's fit to the framing, not to any landform.
-  const ground = { x: 0, z: 0, radius: 4132, metresPerUnit: 3.906, heightAt: () => 0 }
+  const ground = { x: 0, z: 0, radius: 4132, metresPerUnit: 3.906 }
 
   /** A camera looking down at the origin from `distance` away, leant `pitch` radians off vertical,
    *  with the near and far planes `applyOrbitCam` would give it, INCLUDING the way its reach opens

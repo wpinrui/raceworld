@@ -11,7 +11,6 @@ import type { PitSlot } from '@/lib/ui/pit-zone'
 import { WHEELS } from './car-mesh'
 import { scaleUV } from './detail3d'
 import { DECAL_PULL, ROUGH, surface } from './materials3d'
-import { FLAT_GROUND, type Ground } from './terrain3d'
 import { grainTile, radialShade, treadSurface, wallSurface } from './rubber3d'
 import { GeometrySink, v3 } from './solids3d'
 
@@ -55,8 +54,6 @@ export interface PitCrew3DInput {
   carScale: number
   /** The cars' ride height in world units; a prop seated on a hub must sit at hub height. */
   rideY: number
-  /** The paddock each box stands on. Absent, the world is flat. */
-  ground?: Ground
 }
 
 export class PitCrew3D {
@@ -64,7 +61,7 @@ export class PitCrew3D {
   private slots3d: Slot3D[] = []
   private u: (m: number) => number
 
-  constructor({ slots, u, colors, carScale, rideY, ground = FLAT_GROUND }: PitCrew3DInput) {
+  constructor({ slots, u, colors, carScale, rideY }: PitCrew3DInput) {
     this.u = u
     const personGeo = new THREE.CapsuleGeometry(u(PERSON_R_M), u(PERSON_H_M - 2 * PERSON_R_M), 3, 8)
     const person = (colour: string): THREE.Mesh => {
@@ -83,7 +80,7 @@ export class PitCrew3D {
 
     slots.forEach((s, i) => {
       const root = new THREE.Group()
-      root.position.set(s.x, ground(s.x, s.y), s.y)
+      root.position.set(s.x, 0, s.y)
       root.rotation.y = -s.rot
       const inner = new THREE.Group()
       root.add(inner)
