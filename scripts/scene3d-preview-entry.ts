@@ -34,6 +34,7 @@ import { buildWorldDetail } from '../src/lib/scene3d/detail3d'
 import { buildPost } from '../src/lib/scene3d/post3d'
 import { buildWorld3D, type World3D } from '../src/lib/scene3d/world3d'
 import { loadTreePack, type TreePack } from '../src/lib/scene3d/treepack3d'
+import { loadStandSkin, type StandSkin } from '../src/lib/scene3d/standtex3d'
 
 /** The probe runs off file://, where `public/` is not a served root; the .glb is addressed relative
  *  to the written page instead, and the node half copies it in beside the viewer. */
@@ -41,11 +42,17 @@ const PACK_URLS = { broadleaf: 'trees.glb', conifer: 'low_poly_forest_tree_pack.
 
 /** Loaded once before any scene is built, and read by every `buildScene`. */
 let treePack: TreePack | null = null
+/** The scanned materials, packed into the page by the node half. Null leaves the ground on its flat
+ *  biome fill, which is what the world looked like before it had a surface. */
+let standSkin: StandSkin | null = null
 
 declare global {
   interface Window {
     __done?: boolean
     __error?: string
+    /** Scanned maps as data: URIs. A page on file:// is its own origin, so a file:// image is
+     *  cross-origin data WebGL refuses to upload; inlining is the only way in. */
+    __standTex?: Record<string, string>
     __stats?: {
       meshes: number; triangles: number; w: number; h: number
       /** The baked sky's horizon radiance, already scaled: the number to tune `SKY_INTENSITY` on,
@@ -180,6 +187,7 @@ function buildScene(id: string, moodName: string, frame?: ViewBox3D): BuiltScene
     overlay: gridOverlayOps(layout, Number(q.get('grid') ?? '0')),
     night: moodName === 'night',
     treePack,
+    standSkin,
     // The same stand-in names the 2D preview letters its boards with.
     extras: () => (pitZone
       ? [buildGarageSigns3D(pitZone, (m) => m / mpu, () => [
@@ -547,6 +555,9 @@ function viewerMain() {
     // falls back to the old spheres. The live canvas can afford to build twice and swap; a probe
     // shooting one frame cannot.
     treePack = await loadTreePack(PACK_URLS).catch(() => null)
+    // Same reasoning as the pack: the ground is skinned at build time, so the maps have to be in
+    // hand before the first scene rather than swapped in after it.
+    standSkin = await loadStandSkin('tex/', window.__standTex).catch(() => null)
     if (q.has('shot')) await (q.has('pitch') ? eyeShot() : shotMain())
     else viewerMain()
   } catch (err) {

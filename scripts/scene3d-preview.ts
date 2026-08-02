@@ -17,6 +17,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 import { chromium } from 'playwright-core'
+import { packSkinMaps } from './skin-pack'
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
@@ -46,6 +47,12 @@ async function main() {
   // The tree pack, beside the page: the viewer runs off file://, where `public/` is not a root and
   // a fetch up out of the output directory is refused as cross-origin.
   for (const f of ['trees.glb', 'low_poly_forest_tree_pack.glb']) copyFileSync(`public/models/${f}`, resolve(OUT, f))
+  // The scanned maps, which the ground and the stands are both skinned in. Not fatal when they are
+  // missing: the world falls back to flat fills, which is worth being able to shoot on its own.
+  const packed = await packSkinMaps()
+  if (packed) {
+    console.log(`packed ${Object.keys(packed.inline).length} maps, ${(packed.bytes / 1048576).toFixed(1)} MB`)
+  }
   const viewer = resolve(OUT, 'scene3d-viewer.html')
   writeFileSync(viewer, '<!doctype html><html><head><meta charset="utf-8"><title>scene3d preview</title>'
     + '<style>'
@@ -68,6 +75,7 @@ async function main() {
     + '<button id="tilt">Tilt</button>'
     + '<span id="stat"></span>'
     + '</div><canvas id="gl"></canvas>'
+    + `<script>window.__standTex=${JSON.stringify(packed?.inline ?? {})}</script>`
     + `<script>${bundle.outputFiles[0].text}</script></body></html>`)
 
   let browser = null

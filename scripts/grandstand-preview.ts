@@ -6,13 +6,12 @@
 //   -> scripts/.preview/grandstand-viewer.html   (open this)
 //   -> scripts/.preview/stand-<massing>-<angle>.png
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 import { chromium } from 'playwright-core'
-import sharp from 'sharp'
-import { skinFiles } from '../src/lib/scene3d/standtex3d'
+import { packSkinMaps } from './skin-pack'
 
 const OUT = 'scripts/.preview'
 const argv = process.argv.slice(2)
@@ -90,39 +89,12 @@ const BAR = `
 
 async function main() {
   mkdirSync(OUT, { recursive: true })
-  const web = 'public/materials/web'
-  if (!existsSync(web)) {
-    console.error(`no converted maps at ${web}: run npx tsx scripts/material-web.ts first`)
+  const packed = await packSkinMaps()
+  if (!packed) {
     process.exitCode = 1
     return
   }
-  // Packed INTO the page as data: URIs rather than copied beside it. A page opened off file:// is a
-  // unique origin, so a file:// image is cross-origin data that WebGL will not upload: it throws
-  // SecurityError and the sampler reads black, which turns every roughness map into a mirror. Only
-  // the maps that are actually sampled get packed, each no larger than the surface can resolve, so
-  // the page stays a handful of megabytes instead of the 235 MB the downloads are.
-  const inline: Record<string, string> = {}
-  let bytes = 0
-  for (const { file, maxPx, normal } of skinFiles()) {
-    const src = join(web, file)
-    if (!existsSync(src)) {
-      console.error(`missing ${src}: run npx tsx scripts/material-web.ts`)
-      process.exitCode = 1
-      return
-    }
-    // maxPx 0 means "do not touch it": the inverse-histogram lookup is a 256x1 function table and
-    // resizing it would resample the histogram itself.
-    const img = maxPx > 0
-      ? sharp(src).resize(maxPx, maxPx, { fit: 'inside', withoutEnlargement: true })
-      : sharp(src)
-    // Normals stay lossless. JPEG's ringing around an edge becomes a shading ripple in a normal map,
-    // and a deck is exactly the large flat surface where that reads.
-    const buf = normal
-      ? await img.png({ compressionLevel: 9 }).toBuffer()
-      : await img.jpeg({ quality: 90, chromaSubsampling: '4:4:4' }).toBuffer()
-    inline[file] = `data:image/${normal ? 'png' : 'jpeg'};base64,${buf.toString('base64')}`
-    bytes += buf.length
-  }
+  const { inline, bytes } = packed
   console.log(`packed ${Object.keys(inline).length} maps, ${(bytes / 1048576).toFixed(1)} MB`)
   const bundle = await build({
     entryPoints: ['scripts/grandstand-preview-entry.ts'],

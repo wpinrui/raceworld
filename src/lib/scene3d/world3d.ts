@@ -24,7 +24,7 @@ import { probePoint } from './env3d'
 import type { GroundExtent } from './sky3d'
 import { localRectsGeometry, ribbonGeometry, ringGeometry } from './road3d'
 import { DECAL_PULL, ROUGH, SceneMaterials } from './materials3d'
-import { buildGroundStack3D } from './ground3d'
+import { addGround3D, buildGroundStack3D } from './ground3d'
 import { buildKerbs3D } from './kerb3d'
 import { buildLightRig } from './lighting3d'
 import { buildStructures3D } from './structures3d'
@@ -164,7 +164,9 @@ export function buildWorld3D(
   const ground = new THREE.PlaneGeometry(vw + 2 * GROUND_PAD, vh + 2 * GROUND_PAD)
   ground.rotateX(-Math.PI / 2)
   ground.translate(vx + vw / 2, 0, vy + vh / 2)
-  add(ground, scenery.base)
+  addGround3D(group, ground, {
+    skin: standSkin?.grass ?? null, biome: layout.biome, u, fallback: () => add(ground, scenery.base),
+  })
 
   group.add(buildGroundStack3D(scenery, pitZone, u, materials, lift, LAYER, garageColors, detail?.ground ?? null))
 

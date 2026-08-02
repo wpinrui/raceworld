@@ -4,11 +4,13 @@
 
 import * as THREE from 'three'
 import { shade } from '@/lib/color'
+import { biomeOf, type Biome } from '@/lib/ui/biomes'
 import type { PitZone } from '@/lib/ui/pit-zone'
 import type { Scenery } from '@/lib/ui/track-scenery'
 import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
-import type { SceneMaterials } from './materials3d'
+import { ROUGH, type SceneMaterials } from './materials3d'
+import { blendSurfaces, maskWindow, type SkinSurface } from './standtex3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
 
 /** Hedgerow width, matching the 2D's stroke. */
@@ -43,6 +45,75 @@ function ringStrokeGeometry(d: string, halfW: number, y: number): THREE.BufferGe
     }
   }
   return s.build()
+}
+
+/** Lay the world's base plane: the ground everything else in this file is painted onto.
+ *
+ *  Two scanned materials rather than one flat fill, and the reason is the same one the relief wash
+ *  failed on. A single colour cannot be made to look like ground by any amount of shading, because
+ *  what makes real ground read is that it is not all the same MATERIAL: grass in the main, worn
+ *  through to bare earth in stretches. `blendSurfaces` mixes the two and cross-fades their colour,
+ *  normal and roughness together, so a worn patch is genuinely different ground rather than a
+ *  browner shade of the same pixels.
+ *
+ *  Stochastically sampled (`standtex3d`), which is what makes this survivable at all. The plane is
+ *  kilometres across and the tile is four metres, so a plainly-tiled scan would repeat some two
+ *  thousand times down one straight, and a repeat at that count is not a texture, it is wallpaper.
+ *  Heitz and Neyret's histogram-preserving blend removes the lattice entirely: nothing repeats, at
+ *  any scale, at any distance.
+ *
+ *  Where the mix SITS is the biome's call (`BiomePreset.earth`). It is most of what separates one
+ *  venue's ground from another's, and it costs one number rather than a second pair of scans.
+ *
+ *  Falls back to the flat fill wherever the maps are absent, which is every test and every frame
+ *  before the download lands. The world is never groundless. */
+export function addGround3D(
+  group: THREE.Group,
+  geometry: THREE.BufferGeometry,
+  { skin, biome, u, fallback }: {
+    /** The loaded grass surface, or null to take the flat path. */
+    skin: SkinSurface | null
+    biome?: Biome
+    u: (m: number) => number
+    /** How this ground is laid when there is no scan behind it. */
+    fallback: () => void
+  },
+): void {
+  if (!skin) {
+    fallback()
+    return
+  }
+  // A COPY. The loaded skin is shared with every stand in the scene, and the mask window is this
+  // circuit's answer rather than the scan pair's: writing it back would put the last-built world's
+  // biome on all of them.
+  const surface: SkinSurface = { ...skin, ...maskWindow(biomeOf(biome).earth) }
+  // World-projected, exactly as the generated grain is, so the ground and the road running through
+  // it share one continuous surface and their join carries no seam.
+  planarUV(geometry, u(surface.tileM))
+  // NO roughness map, and this is the one channel of the scan that is deliberately thrown away.
+  //
+  // Measured, `grass004-rough` has a mean of 0.263 and reaches 0.0. That is a wet or waxed surface,
+  // and multiplied onto the ground it made the single largest object in the scene a near-mirror:
+  // the far field returned the sky hard enough to blow out to white, and the sun left a specular
+  // pool burnt into the grass. A scan's roughness describes the lit sample in front of the scanner,
+  // and a lawn photographed from a foot away genuinely does glint; a field seen from a hundred
+  // metres does not, because at that distance the blade-level glints average out to nothing.
+  //
+  // `chalk` flat, therefore, which is the answer this scene had already reached once: the ground
+  // stack was moved to it precisely because grass sheened at grazing angles (`world3d`). The scan
+  // supplies the colour and the grain, which is what it is here for; how the surface returns light
+  // stays the renderer's decision.
+  const material = new THREE.MeshStandardMaterial({
+    map: surface.albedoMap,
+    normalMap: surface.normalMap,
+    normalScale: new THREE.Vector2(surface.normalScale, surface.normalScale),
+    roughness: ROUGH.chalk,
+    side: THREE.DoubleSide,
+  })
+  blendSurfaces(material, surface)
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.receiveShadow = true
+  group.add(mesh)
 }
 
 export function buildGroundStack3D(
