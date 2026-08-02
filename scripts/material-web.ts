@@ -58,6 +58,26 @@ const TINT: Record<string, { hue: number; saturation: number; brightness: number
   wood058: { hue: 10, saturation: 1.683, brightness: 1.588 },
 }
 
+/** How much of a scan's own colour spread to keep, per channel, around that channel's mean.
+ *
+ *  For the ground, where a scan's contrast is not a neutral property of the material but an artefact
+ *  of how close the camera was. `grass004` is a macro photograph of rough turf: measured, its channels
+ *  carry a standard deviation of 22-24% of their mean and 39% in blue, so the hue swings from
+ *  yellow-green to near-black between one blade and the next. That is honest at the range it was shot
+ *  from and wrong at every range this ground is seen from, because a field is not looked at from six
+ *  inches. Rendered at full spread it reads as noise rather than as grass.
+ *
+ *  Pulled toward the mean rather than blurred, which is the distinction that matters: blurring would
+ *  cost the blade STRUCTURE that makes it read as grass at all, while this keeps every edge exactly
+ *  where it is and only narrows how far apart the light and dark ends sit. 0.6 takes the spread to
+ *  about 14% of the mean, which is roughly what mown turf measures from a few metres up.
+ *
+ *  Applied per channel around each channel's OWN mean, so the average colour does not move: a single
+ *  luma-based offset would drag the hue toward grey as it narrowed the range. */
+const CONTRAST: Record<string, number> = {
+  grass004: 0.6,
+}
+
 const CHANNELS: Record<string, { name: string; png: boolean }> = {
   Color: { name: 'color', png: false },
   NormalGL: { name: 'normal', png: true },
@@ -101,6 +121,21 @@ async function main() {
       if (tint) {
         img = img.modulate(tint)
         note += `  hue +${tint.hue} sat x${tint.saturation} val x${tint.brightness}`
+      }
+      const keep = channel.name === 'color' ? CONTRAST[slug] : undefined
+      if (keep !== undefined) {
+        // Measured off whatever the pipeline has produced SO FAR, not off the file on disk: a gain or
+        // a tint above has already moved these means, and narrowing around a stale one would shift
+        // the colour as well as the spread.
+        const stats = await img.clone().stats()
+        const before = stats.channels.slice(0, 3).map((c) => c.stdev)
+        const means = stats.channels.slice(0, 3).map((c) => c.mean)
+        img = img.linear(
+          [keep, keep, keep],
+          means.map((m) => m * (1 - keep)),
+        )
+        const sd = (v: number[]) => v.map((s) => s.toFixed(0)).join('/')
+        note += `  spread ${sd(before)} -> ${sd(before.map((s) => s * keep))} (x${keep})`
       }
       await (channel.png
         ? img.png({ compressionLevel: 9 }).toFile(to)
