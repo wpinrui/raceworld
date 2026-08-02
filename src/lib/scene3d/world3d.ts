@@ -306,6 +306,7 @@ export function buildWorld3D(
       z: vy + vh / 2,
       radius: Math.min(vw, vh) / 2 + GROUND_PAD,
       metresPerUnit: layout.metresPerUnit,
+      heightAt: elevation.at,
     },
     // Off the densified centreline built above, so the probe stands on the road rather than at
     // whatever the raw trace's nearest sample happened to be.

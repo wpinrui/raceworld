@@ -181,6 +181,9 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
   }>())
   const raceLineRef = useRef<SVGPathElement>(null)
   const raceLenRef = useRef(0)
+  // The circuit's landform, held in a ref so the frame loop reads it without taking the scenery as a
+  // dependency: rebinding the rAF loop every time a world is rebuilt would drop a frame mid-race.
+  const groundRef = useRef<(x: number, y: number) => number>(() => 0)
   const elRefs = useRef(new Map<string, HTMLDivElement>())
   const sprRefs = useRef(new Map<string, HTMLDivElement>())
   const posRef = useRef(new Map<string, { left: number; top: number }>())
@@ -390,7 +393,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         const rect = outer.getBoundingClientRect()
         const q = groundPoint(
           glCamera, { w: rect.width, h: rect.height },
-          e.clientX - rect.left, e.clientY - rect.top,
+          e.clientX - rect.left, e.clientY - rect.top, groundRef.current,
         )
         const pxPerZ = (stageDimsRef.current.w / vbRef.current.w) / layout.metresPerUnit
         const zMax = pxPerZ > 0 ? ZOOM_MAX_PXM / pxPerZ : ZOOM_DEFAULT
@@ -630,6 +633,7 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
         const dyn = dynRef.current!
         const lenTotal = lenRef.current
         const uu = (m: number) => m / layout.metresPerUnit
+        const groundAt = groundRef.current
         const look = uu(8) // heading from ~8m of track ahead
 
         // Pass 1: place every car in arc space. Racing cars live on the RACING LINE path; grid slots
@@ -922,6 +926,10 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
               long: racing ? sampleLap(dyn.long, frac) : 0,
               // Wrapping the S/F line reads as a huge negative step; roll it over the lap length.
               ds: raw >= 0 ? raw : racing ? raw + raceLenRef.current : 0,
+              // The road under this car. Sampled at the car's own position rather than off its lap
+              // fraction: a car in the pit lane, on the grid or off in the run-off is nowhere near
+              // the arc position its distance implies, and all three have to stay planted.
+              ground: groundAt(x, y),
             })
           }
         }
@@ -1242,6 +1250,11 @@ function RaceTrackMapImpl({ layout, cars, sampleRef, followId, onFollow, showLab
       if (victim) setTimeout(() => { if (carField3dRef.current !== victim) victim.dispose() }, 0)
     }
   }, [carField3d])
+  // Every car rides the same ground the road is built on, so the field is planted on a gradient
+  // rather than sunk into or hovering over the hill the circuit climbs.
+  useEffect(() => {
+    groundRef.current = scenery.elevation.at
+  }, [scenery])
   // The pit crew, in-scene (#3d-port): people and props the choreography drives through the same
   // slot-local metres it always computed. Tyre props are cut from the car's own wheel table. The
   // measured lane-side flips outlive any rebuild in `slotFlipRef`, so a fresh crew inherits them.
