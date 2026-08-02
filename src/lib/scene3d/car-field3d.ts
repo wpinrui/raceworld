@@ -67,7 +67,15 @@ function disposeDeep(root: THREE.Object3D): void {
 }
 
 export class CarField3D {
-  readonly group = new THREE.Group()
+  /** The cars sit out the ambient occlusion pass.
+   *
+   *  Screen-space AO cannot tell a crease that should hold dirt from a panel gap that should hold a
+   *  highlight, so it darkens every seam on a lofted body indiscriminately. On car paint that is
+   *  worse than nothing: the finish is carried by the clear coat's reflection of the environment,
+   *  and multiplying an occlusion term into it dulls exactly the surfaces the two-lobe material
+   *  exists to make shine. A car's own contact shadow comes from the shadow map, which is the right
+   *  tool for it. */
+  readonly group = Object.assign(new THREE.Group(), { userData: { noAO: true } })
   private entries = new Map<string, Entry>()
   /** One texture and geometry for the whole field, one material per car. */
   private shadows = new ContactShadows()
