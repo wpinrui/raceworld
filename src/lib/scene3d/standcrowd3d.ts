@@ -470,7 +470,18 @@ function billboard(mat: THREE.Material): void {
       float len = max(length(toCam), 1e-4);
       toCam /= len;
       vec3 right = vec3(-toCam.z, 0.0, toCam.x);
-      vec3 worldPos = anchor + right * transformed.x + vec3(0.0, 1.0, 0.0) * transformed.y;
+      // The quad is spanned in WORLD space, so its corner offsets have to be carried into world
+      // space too. transformed is a LOCAL coordinate: using it raw draws the billboard at its local
+      // size whatever the parent is scaled by. That is invisible wherever the scale happens to be 1
+      // (the probe, where the world IS metres) and multiplies every spectator by metresPerUnit
+      // everywhere else. No CPU bounding box can catch it either, because the box applies exactly
+      // the scale the shader is ignoring.
+      //
+      // Uniform scale throughout, so one column's length is the whole story.
+      float bbScale = length(modelMatrix[0].xyz) * length(instanceMatrix[0].xyz);
+      vec3 worldPos = anchor
+        + right * transformed.x * bbScale
+        + vec3(0.0, 1.0, 0.0) * transformed.y * bbScale;
       vec4 mvPosition = viewMatrix * vec4(worldPos, 1.0);
       gl_Position = projectionMatrix * mvPosition;
       `,
