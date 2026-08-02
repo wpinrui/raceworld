@@ -171,7 +171,7 @@ const SPEC: Record<keyof StandSkin, SkinSpec> = {
   // blend partner as well: detiling and blending answer DIFFERENT questions, one being "does this
   // surface repeat" and the other "is it all the same material", and a verge worn through to dirt in
   // stretches is the second one.
-  // A TWO metre tile, not the four it started at, and the blade is what sets it. A scan of turf is a
+  // An EIGHT metre tile, and the blade is what sets it. A scan of turf is a
   // photograph of a patch about a metre across, so stretching it over four puts every blade at four
   // times life size: from a racing camera that is coarse tussock rather than mown grass, and from
   // the air it is the reason individual blades were still resolving at a hundred metres up, where
@@ -193,13 +193,13 @@ const SPEC: Record<keyof StandSkin, SkinSpec> = {
   // was after a 40% pull, with its structure intact rather than compressed. It is also the greener
   // and brighter of the two (luma 119 against 101), which is what a watered verge looks like.
   grass: {
-    set: 'grass008', tileM: 2, normalScale: 0.4, albedo: true, maxPx: 1024, sampling: 'stochastic',
-    blend: { set: 'ground037', tileM: 2.3, maskM: 20, coverage: 0.33 },
+    set: 'grass008', tileM: 8, normalScale: 0.4, albedo: true, maxPx: 1024, sampling: 'stochastic',
+    blend: { set: 'ground037', tileM: 9.2, maskM: 20, coverage: 0.33 },
   },
   // The green biomes' earth. Same tile and strength as the sand it stands in for, so swapping one
   // for the other changes the material and nothing else about how the ground is laid.
   soil: {
-    set: 'ground068', tileM: 2.3, normalScale: 0.4, albedo: true, maxPx: 1024,
+    set: 'ground068', tileM: 9.2, normalScale: 0.4, albedo: true, maxPx: 1024,
     sampling: 'stochastic',
   },
 }
@@ -419,7 +419,7 @@ void standTriGrid( vec2 uv, out vec3 w, out vec2 v1, out vec2 v2, out vec2 v3 ) 
  *  to give a lattice away.
  *
  *  The window is in tile units so it holds whatever tile a surface is authored at. At the ground's
- *  two metres it runs from a pixel covering six centimetres to one covering forty. */
+ *  eight metres it runs from a pixel covering a quarter of a metre to one covering a metre and a half. */
 float standMinify( vec2 ddx, vec2 ddy ) {
   return smoothstep( 0.03, 0.20, max( length( ddx ), length( ddy ) ) );
 }

@@ -57,7 +57,7 @@ function ringStrokeGeometry(d: string, halfW: number, y: number): THREE.BufferGe
  *  browner shade of the same pixels.
  *
  *  Stochastically sampled (`standtex3d`), which is what makes this survivable at all. The plane is
- *  kilometres across and the tile is two metres, so a plainly-tiled scan would repeat some four
+ *  kilometres across and the tile is eight metres, so a plainly-tiled scan would repeat a
  *  thousand times down one straight, and a repeat at that count is not a texture, it is wallpaper.
  *  Heitz and Neyret's histogram-preserving blend removes the lattice entirely: nothing repeats, at
  *  any scale, at any distance.
