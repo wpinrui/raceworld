@@ -37,20 +37,17 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 /** The sun's shadow map, per side.
  *
- *  WAS 4096, which is 16.8 million texels rasterised every frame regardless of how small the window
- *  is. That is eight times the pixel count of a 1080p viewport, spent on a buffer nobody looks at
- *  directly, and it is why shrinking the window did nothing to the frame: the largest single piece of
- *  GPU work in this renderer does not scale with the window at all. Measured on the grid at Britain,
- *  the whole shadow pass was 2.5 ms of an 18.8 ms frame.
+ *  TRIED AT 2048 AND PUT BACK. 4096 is 16.8 million texels rasterised every frame regardless of the
+ *  window size, eight times a 1080p viewport, and it looked like the obvious explanation for why
+ *  shrinking the window never moved the frame. It is not: halving it changed the frame time by
+ *  nothing measurable, while switching shadows off entirely was worth 2.5 ms AND dropped the
+ *  submission figure with it.
  *
- *  2048 buys most of that back for less quality than it sounds. The box this map covers is fitted per
- *  camera move (`refitShadow`) and multiplied by `1/cos(pitch)`, so at a pitched racing camera it
- *  already spans hundreds of metres and 4096 was delivering about 18 cm a texel: coarse enough that
- *  halving it costs a step of softness rather than a visible edge. At a close camera the box is small
- *  and 2048 is ample.
+ *  So the shadow pass costs what it costs because of the GEOMETRY drawn into it, not the texels it
+ *  fills. Fewer casters is the lever here; a smaller map is only lost quality.
  *
  *  Both biases below are derived from this, so it is one number and not three. */
-export const SHADOW_MAP = 2048
+export const SHADOW_MAP = 4096
 
 /** Sunlight's own colour: cream under a warm sun, blue-white under a cool one — `litWhite`'s ramp. */
 export function sunColor(l: Lighting): THREE.Color {
