@@ -13,9 +13,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Aperture, Armchair, Building2, Car, ChevronDown, ChevronUp, Container, Fence, Gauge, HardHat,
-  Image as ImageIcon, Layers, Mountain, Repeat, Sparkles, Sun, TreePine, Users, Warehouse, Wrench,
-  type LucideIcon,
+  Aperture, Armchair, Boxes, Building2, Car, ChevronDown, ChevronUp, Container, Fence, Gauge,
+  HardHat, Image as ImageIcon, Layers, Mountain, Repeat, Shapes, Sparkles, Sun, TreePine, Users,
+  Warehouse, Wrench, type LucideIcon,
 } from 'lucide-react'
 import * as THREE from 'three'
 import type { Post } from '@/lib/scene3d/post3d'
@@ -106,21 +106,29 @@ function named(scene: THREE.Object3D, names: readonly string[]): THREE.Object3D[
   return found
 }
 
-/** What a population is submitting right now: instanced draws at their LIVE count, and only the
- *  levels of a detail ladder that are actually up. Invisible branches are skipped for the same
- *  reason: the number has to be what this frame pays, not what the scene holds. */
-function trianglesOf(roots: readonly THREE.Object3D[]): number {
-  let total = 0
+/** What a population is submitting right now: one entry per mesh, since a mesh is a draw call, and
+ *  triangles with instanced meshes counted at their LIVE count. Only the levels of a detail ladder
+ *  that are actually up, and invisible branches skipped, for the same reason: the numbers have to be
+ *  what this frame pays, not what the scene holds.
+ *
+ *  Collected into a Set rather than counted, because the populations NEST (seats and the crowd live
+ *  inside the stands) and a scene-wide remainder has to be a union, not a sum. */
+function submittedBy(roots: readonly THREE.Object3D[], into: Set<THREE.Mesh>): void {
   const walk = (o: THREE.Object3D) => {
     if (!o.visible) return
-    if (o instanceof THREE.Mesh) {
-      const g = o.geometry as THREE.BufferGeometry
-      const per = (g.index ? g.index.count : g.attributes.position.count) / 3
-      total += o instanceof THREE.InstancedMesh ? per * o.count : per
-    }
+    if (o instanceof THREE.Mesh) into.add(o)
     for (const child of o.children) walk(child)
   }
   for (const root of roots) walk(root)
+}
+
+function trianglesIn(meshes: Iterable<THREE.Mesh>): number {
+  let total = 0
+  for (const o of meshes) {
+    const g = o.geometry as THREE.BufferGeometry
+    const per = (g.index ? g.index.count : g.attributes.position.count) / 3
+    total += o instanceof THREE.InstancedMesh ? per * o.count : per
+  }
   return Math.round(total)
 }
 
@@ -143,7 +151,7 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
   const [open, setOpen] = useState(false)
   const [off, setOff] = useState<ReadonlySet<string>>(() => new Set())
   const [passOff, setPassOff] = useState<ReadonlySet<PassKey>>(() => new Set())
-  const [tris, setTris] = useState<Record<string, number>>({})
+  const [cost, setCost] = useState<Record<string, { draws: number; tris: number }>>({})
   const [spin, setSpin] = useState(false)
   // What this panel hid, so it can restore exactly that and nothing else.
   const held = useRef(new Map<string, THREE.Object3D[]>())
@@ -161,9 +169,23 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
   const measure = useCallback(() => {
     const parts = gl()
     if (!parts) return
-    const counts: Record<string, number> = {}
-    for (const p of PARTS) counts[p.key] = trianglesOf(named(parts.scene, p.names))
-    setTris(counts)
+    const counts: Record<string, { draws: number; tris: number }> = {}
+    const attributed = new Set<THREE.Mesh>()
+    for (const p of PARTS) {
+      const mine = new Set<THREE.Mesh>()
+      submittedBy(named(parts.scene, p.names), mine)
+      counts[p.key] = { draws: mine.size, tris: trianglesIn(mine) }
+      for (const m of mine) attributed.add(m)
+    }
+    // Whatever no row owns: the ground stack's paint layers, the road ribbons, the compiled ink, the
+    // kerbs, the start line. Named as a residual on purpose, because a breakdown that quietly leaves
+    // half the scene out of the total is how you end up optimising the wrong half.
+    const all = new Set<THREE.Mesh>()
+    submittedBy([parts.scene], all)
+    const rest = [...all].filter((m) => !attributed.has(m))
+    counts.rest = { draws: rest.length, tris: trianglesIn(rest) }
+    counts.all = { draws: all.size, tris: trianglesIn(all) }
+    setCost(counts)
   }, [gl])
 
   // Lay the current switch positions on the scene. Runs on a toggle and on a world swap alike: after
@@ -265,7 +287,7 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
 
   const row = (
     key: string, label: string, Icon: LucideIcon, on: boolean, click: () => void,
-    count?: number, within?: boolean,
+    spend?: { draws: number; tris: number }, within?: boolean,
   ) => (
     <button
       key={key}
@@ -275,8 +297,13 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
     >
       <Icon className={`h-3.5 w-3.5 shrink-0 ${on ? 'text-[#00D9FF]' : 'text-[#6B7280]'}`} />
       <span className="flex-1">{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className="tabular-nums text-white">{Math.round(count / 1000)}k</span>
+      {spend && spend.draws > 0 && (
+        <>
+          <span className="w-10 text-right tabular-nums text-white">{spend.draws}</span>
+          <span className="w-10 text-right tabular-nums text-white">
+            {spend.tris >= 1000 ? `${Math.round(spend.tris / 1000)}k` : spend.tris}
+          </span>
+        </>
       )}
     </button>
   )
@@ -284,7 +311,7 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
   return (
     // Top LEFT: the map's own controls own the right-hand side (driver card and map view at the top,
     // the zoom readout and reset at the bottom), and a debug panel does not get to sit on them.
-    <div className="pointer-events-none absolute left-2 top-2 flex w-40 flex-col items-stretch gap-1 font-mono text-xs">
+    <div className="pointer-events-none absolute left-2 top-2 flex w-56 flex-col items-stretch gap-1 font-mono text-xs">
       <button
         type="button"
         onClick={() => { setOpen(!open); measure() }}
@@ -305,8 +332,11 @@ export function SceneToggles({ gl, repaint, world, fpsRef, costRef, frames }: {
         <div className="pointer-events-auto flex flex-col rounded bg-black/70 p-1">
           {PARTS.map((p) => row(
             p.key, p.label, p.icon, !off.has(p.key),
-            () => setOff((s) => flip(s, p.key)), tris[p.key], p.within,
+            () => setOff((s) => flip(s, p.key)), cost[p.key], p.within,
           ))}
+          <div className="my-1 h-px bg-white/20" />
+          {row('rest', 'Unlisted', Shapes, true, measure, cost.rest)}
+          {row('all', 'Scene', Boxes, true, measure, cost.all)}
           <div className="my-1 h-px bg-white/20" />
           {PASSES.map((p) => row(
             p.key, p.label, p.icon, !passOff.has(p.key),
