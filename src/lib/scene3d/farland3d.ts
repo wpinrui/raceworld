@@ -138,6 +138,22 @@ const PLANTINGS = 70000
  *  a town is one thing with a middle and an edge, not a scatter of hamlets. */
 const TOWN_FEATURE_M = 2600
 
+/** How far out the town starts, in metres, and where the wood stops. The SAME line, and that is the
+ *  point of it: the near band belongs to the hills alone.
+ *
+ *  The town used to start where the built world stopped, which on Britain is 1.38 km, and with the
+ *  radius drawn toward the near end a quarter of it landed inside 1.8 km. That is not a skyline, it
+ *  is a wall across the circuit, and it stood in front of the very hills it was added to sit behind.
+ *  At five kilometres a 180 m block covers two degrees of a 35 degree lens, the aerial ramp is
+ *  halfway through it, and a plain box is the right amount of building: no roof line, no window
+ *  band, nothing that a fidelity argument could be had about.
+ *
+ *  The wood stops at the same distance for the same reason in reverse. Past five kilometres a tree
+ *  is a couple of pixels and thousands of them buy a faint speckle; the hillside's own wood tint
+ *  says forest out there, which is what a far ridge actually reads as. */
+const TOWN_NEAR_M = 5000
+const WOOD_FAR_M = 5000
+
 /** Attempted sitings for the distant town, cut down by the urban mask the same way the plantings
  *  are cut by the forest one. */
 const SITINGS = 9000
@@ -153,7 +169,7 @@ const TOWN_PLAN_SD_M = 9
 const TOWN_H_M = 26
 const TOWN_H_SD_M = 12
 const TOWN_MIN_H_M = 11
-const TOWN_CORE_GAIN = 2.6
+const TOWN_CORE_GAIN = 2
 
 /** What a distant building is made of before the air gets to it: pale, desaturated, and barely
  *  varied. Concrete and glass at range is one value with a little scatter in it, and anything more
@@ -314,14 +330,23 @@ function fieldsFor({ view, metresPerUnit, circuitId, biome }: FarLand3DInput) {
   const townThreshold = 0.5 + (0.5 - clamp01(bio.buildings / 8)) * 0.45
   const townAt = (x: number, z: number): number => fbm(x / townU, z / townU, seed ^ 0x7feb352d, 3)
 
-  return { u, cx, cz, builtR, nominal, heightAt, woodAt, woodThreshold, townAt, townThreshold }
+  // The air anything at radius `r` is seen through, measured from the FIRST RISE for everything
+  // alike. The town starts far outside that, and letting it ramp from its own near edge instead
+  // would hand a five kilometre block the haze of a rim one, i.e. a hard-edged grey skyline
+  // standing in front of hills already halfway to blue.
+  const aerialSpan = u(AERIAL_FULL_M)
+  const aerialAt = (r: number, out: THREE.Color): THREE.Color => (
+    aerialTint(clamp01((r - nominal) / aerialSpan), out)
+  )
+
+  return { u, cx, cz, builtR, nominal, heightAt, woodAt, woodThreshold, townAt, townThreshold, aerialAt }
 }
 
 /** The hills, as one indexed polar grid. */
 function beltGeometry(
   fields: ReturnType<typeof fieldsFor>, inner: number, outer: number,
 ): THREE.BufferGeometry {
-  const { u, cx, cz, heightAt, woodAt, woodThreshold } = fields
+  const { cx, cz, heightAt, woodAt, woodThreshold, aerialAt } = fields
   const count = SPOKES * (RINGS + 1)
   const positions = new Float32Array(count * 3)
   const colours = new Float32Array(count * 3)
@@ -329,12 +354,11 @@ function beltGeometry(
   const wood = new THREE.Color(WOOD_TINT)
   const air = new THREE.Color()
   const tint = new THREE.Color()
-  const aerialSpan = u(AERIAL_FULL_M)
   for (let j = 0; j <= RINGS; j++) {
     const r = inner * (outer / inner) ** (j / RINGS)
     // The air this whole ring is seen through. Radial, so it is one value per ring rather than one
     // per vertex, and zero at the rim where the belt meets the flat plane.
-    aerialTint(clamp01((r - inner) / aerialSpan), air)
+    aerialAt(r, air)
     for (let i = 0; i < SPOKES; i++) {
       const theta = (i / SPOKES) * Math.PI * 2
       const x = cx + Math.cos(theta) * r
@@ -381,11 +405,11 @@ function plantWood(
   const rng = seededRng(`farland-wood:${circuitId}`)
   const trees: TreeStance[] = []
   for (let i = 0; i < PLANTINGS; i++) {
-    // Radius drawn LOG-uniformly, then squared toward the near end. Uniform over the belt's area
-    // would put nearly every tree at the back, where it covers a couple of pixels and the haze has
-    // it anyway; this spends the instances where a card still reads as a tree, and leaves the far
-    // hillsides to carry their wood as colour instead.
-    const r = from * (to / from) ** (rng() ** 2)
+    // Uniform in RADIUS across the band, which puts a little more of the wood near than far (a ring
+    // holds area in proportion to its radius) without stacking it all at the front. The band is
+    // bounded now, so the old log-squared draw is not needed to keep trees out of the far distance:
+    // there is no far distance left in here to keep them out of.
+    const r = from + (to - from) * rng()
     const theta = rng() * Math.PI * 2
     const x = cx + Math.cos(theta) * r
     const z = cz + Math.sin(theta) * r
@@ -418,11 +442,10 @@ function plantWood(
 function buildTown(
   fields: ReturnType<typeof fieldsFor>, circuitId: string, from: number, to: number,
 ): THREE.InstancedMesh | null {
-  const { u, cx, cz, heightAt, townAt, townThreshold } = fields
+  const { u, cx, cz, heightAt, townAt, townThreshold, aerialAt } = fields
   const rng = seededRng(`farland-town:${circuitId}`)
   const air = new THREE.Color()
   const base = new THREE.Color(TOWN_TINT)
-  const aerialSpan = u(AERIAL_FULL_M)
   const matrices: THREE.Matrix4[] = []
   const colours: THREE.Color[] = []
   for (let i = 0; i < SITINGS; i++) {
@@ -445,7 +468,7 @@ function buildTown(
     ))
     // The same air the ground at this radius is behind, and a little value scatter under it so a
     // block face is not the identical grey as its neighbour's.
-    aerialTint(clamp01((r - from) / aerialSpan), air)
+    aerialAt(r, air)
     colours.push(new THREE.Color().copy(base)
       .multiplyScalar(1 - TOWN_TINT_SPREAD / 2 + rng() * TOWN_TINT_SPREAD).multiply(air))
   }
@@ -501,14 +524,15 @@ export function buildFarLand3D(input: FarLand3DInput): FarLand3D {
   group.add(mesh)
   // A town on the far land as well as wood on it. Some of what closes a horizon is landform and
   // some of it is a place: a ridge with a sprawl at its foot reads as somewhere, and a ridge on its
-  // own reads as scenery.
-  const town = buildTown(fields, input.circuitId, builtR, outer)
+  // own reads as scenery. It starts well beyond the hills so it sits BEHIND them.
+  const town = buildTown(fields, input.circuitId, Math.min(u(TOWN_NEAR_M), outer * 0.9), outer)
   if (town) group.add(town)
   return {
     group,
     // Planting starts where the built world stops rather than at the first hill, so the level band
     // between the two is wooded too. That band is most of what a low camera actually sees down the
-    // road, and leaving it bare would just move the empty stretch further out.
-    trees: plantWood(fields, input.circuitId, builtR, outer),
+    // road, and leaving it bare would just move the empty stretch further out. It finishes where
+    // the town begins: the whole wood is now inside the band the hills own.
+    trees: plantWood(fields, input.circuitId, builtR, Math.max(builtR * 1.2, u(WOOD_FAR_M))),
   }
 }

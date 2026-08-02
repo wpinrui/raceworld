@@ -204,19 +204,46 @@ describe('buildFarLand3D', () => {
     expect(mesh.receiveShadow).toBe(false)
   })
 
-  it('stands a town on the far land, clear of everything built', () => {
+  it('keeps the town five kilometres out, behind the hills rather than in front of them', () => {
     const land = buildFarLand3D(input())
     const cx = VIEW.x + VIEW.w / 2
     const cz = VIEW.y + VIEW.h / 2
     const town = blocks(land)
     expect(town.length).toBeGreaterThan(0)
     for (const b of town) {
-      expect(Math.hypot(b.x - cx, b.z - cz)).toBeGreaterThanOrEqual(BUILT_R)
+      // A block nearer than this is a wall across the circuit rather than a skyline, and it stands
+      // in front of the landform it exists to sit behind. A millimetre of slack: the band's near
+      // edge IS 5000 m and the radius is reconstructed back out of a float32 matrix.
+      expect(Math.hypot(b.x - cx, b.z - cz) * MPU).toBeGreaterThan(4999.999)
       // Standing ON the ground: the box is modelled with its base at the origin, so the instance's
       // own Y is the ground height and never below the plane.
       expect(b.y).toBeGreaterThanOrEqual(0)
       expect(b.h * MPU).toBeGreaterThanOrEqual(11)
     }
+  })
+
+  it('leaves the near band to the hills alone, and stops the wood where the town starts', () => {
+    const land = buildFarLand3D(input())
+    const cx = VIEW.x + VIEW.w / 2
+    const cz = VIEW.y + VIEW.h / 2
+    const reach = Math.max(...land.trees.map((t) => Math.hypot(t.x - cx, t.z - cz)))
+    // Past five kilometres a card is a couple of pixels; the hillside's own wood tint carries
+    // forest from there out.
+    expect(reach * MPU).toBeLessThanOrEqual(5000)
+    // ...and the wood and the town do not overlap: one band each.
+    const nearest = Math.min(...blocks(land).map((b) => Math.hypot(b.x - cx, b.z - cz)))
+    expect(nearest).toBeGreaterThanOrEqual(reach)
+  })
+
+  it('hazes the town by the ground it stands on rather than by its own near edge', () => {
+    const land = buildFarLand3D(input())
+    const town = townOf(land)
+    const colour = new THREE.Color()
+    town.getColorAt(0, colour)
+    // The town starts five kilometres out, well into an aerial ramp measured from the first rise.
+    // Ramped from its own near edge instead, the nearest block would come back unhazed, and a hard
+    // grey skyline would stand in front of hills already halfway to blue.
+    expect(colour.b / colour.r).toBeGreaterThan(1.05)
   })
 
   it('gives the town a middle, rather than one height across the sprawl', () => {
