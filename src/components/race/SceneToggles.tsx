@@ -124,7 +124,7 @@ function trianglesOf(roots: readonly THREE.Object3D[]): number {
   return Math.round(total)
 }
 
-export function SceneToggles({ gl, repaint, world, fpsRef }: {
+export function SceneToggles({ gl, repaint, world, fpsRef, frames }: {
   /** The live GL trio, read on demand: the renderer effect owns it and it outlives no world. */
   gl: () => SceneParts | null
   /** Redraw with the switches as they now stand. */
@@ -135,6 +135,8 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
   /** The frame counter's node. The painter writes into it directly, outside React, because a
    *  counter that re-renders on every frame it measures is measuring itself. */
   fpsRef: React.RefObject<HTMLSpanElement | null>
+  /** The painter's running tally, for Spin to tell a frame nobody drew from one already drawn. */
+  frames: React.RefObject<{ total: number }>
 }) {
   const [open, setOpen] = useState(false)
   const [off, setOff] = useState<ReadonlySet<string>>(() => new Set())
@@ -236,16 +238,22 @@ export function SceneToggles({ gl, repaint, world, fpsRef }: {
   // A paint loop, for reading the counter while nothing moves. The counter only ticks on a paint,
   // and outside a running race the map paints when the camera does, so a standing measurement has
   // nothing to count. This gives it something.
+  //
+  // It FILLS IN rather than adds: a display refresh that the race loop or a camera drag has already
+  // painted is left alone. Painting it twice would put two frames into the counter's window for one
+  // frame on screen, and the readout would come back at double, which is worse than no readout.
   useEffect(() => {
     if (!spin) return
     let raf = 0
+    let seen = -1
     const tick = () => {
-      repaint()
+      if (frames.current.total === seen) repaint()
+      seen = frames.current.total
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [spin, repaint])
+  }, [spin, repaint, frames])
 
   const flip = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => {
     const next = new Set(set)

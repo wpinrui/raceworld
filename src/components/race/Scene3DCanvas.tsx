@@ -54,7 +54,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   // The frame counter writes straight into its own node. Through React state it would set state on
   // every frame it measures, re-render the canvas host, and be reporting the cost of reporting.
   const fpsRef = useRef<HTMLSpanElement>(null)
-  const frames = useRef({ n: 0, since: 0 })
+  // `n` and `since` are the counter's own window, reset twice a second. `total` never resets: it is
+  // how anything else can tell whether a paint has happened, which is what keeps a second painter
+  // from adding frames to a display refresh that already had one.
+  const frames = useRef({ n: 0, since: 0, total: 0 })
   const glRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
@@ -100,6 +103,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       const f = frames.current
       const now = performance.now()
       f.n++
+      f.total++
       if (f.since === 0) {
         f.since = now
       } else if (now - f.since >= 500) {
@@ -250,7 +254,7 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   return (
     <div ref={boxRef} className={className}>
       <canvas ref={canvasRef} className="absolute inset-0" />
-      <SceneToggles gl={glParts} repaint={paint} world={world} fpsRef={fpsRef} />
+      <SceneToggles gl={glParts} repaint={paint} world={world} fpsRef={fpsRef} frames={frames} />
     </div>
   )
 }
