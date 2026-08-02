@@ -178,7 +178,17 @@ function trunkFoot(bark: THREE.BufferGeometry): { x: number; z: number } {
 
 /** How dark the deepest interior of a canopy goes, and how fast the shading falls off from the
  *  outer shell towards the core. */
-const AO_CORE = 0.55
+/** MEASURED, and raised from 0.55. At that value the bake was a 45% crush on the crown's interior,
+ *  laid over a leaf map already at 0.171 linear luminance and under a per-instance tint averaging
+ *  0.81, and the three compounded to a typical leaf albedo of 0.099 against the 0.15 to 0.20 real
+ *  foliage sits at. The interior went to 0.073, which is bark.
+ *
+ *  It is also the same volume cue TWICE. `bulgeNormals` above lends every leaf its crown's normal,
+ *  so the outer shell already shades like the surface of the volume and the interior already faces
+ *  away from the light: the radial darkening was re-stating in albedo what the normals state in
+ *  shading. A fifth is a trim on top of that, which is what this is meant to be, and it lifts the
+ *  interior 49% while leaving the sunlit shell within 5% of where it was. */
+const AO_CORE = 0.78
 const AO_FALLOFF = 1.6
 /** How dark the underside of a canopy goes relative to its top. A light touch, no more: the crown
  *  normal below darkens an underside by pointing it at the ground, which is the same shading arrived

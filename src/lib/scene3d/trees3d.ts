@@ -26,6 +26,18 @@ import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
 /** Canopy tints, multiplied over the canopy map. Both families take a near-white palette, for the
  *  same reason by two routes.
  *
+ *  LIFTED, and the reason is that "near-white" was not true of the numbers. The broadleaf palette
+ *  measured a mean linear luminance of 0.81 and bottomed out at 0.65: a fifth to a third of the
+ *  light gone, before the canopy's own occlusion bake takes its share and before any sun arrives.
+ *  Three darkenings compounded on one photograph is what made the wood read underexposed.
+ *
+ *  Each swatch is lifted TOWARD WHITE rather than rescaled, which raises its value while keeping the
+ *  direction of its hue: broadleaf now means 0.85 and conifer 0.78, and both keep about three
+ *  quarters of the chroma they had. That matters more than the brightness here. The palette exists so
+ *  a stand is not one flat green, and a lift big enough to fix the exposure on its own would have
+ *  taken every swatch to within a couple of points of white and deleted the variation. Most of the
+ *  correction is in `AO_CORE` instead, where the double-counting actually was.
+ *
  *  The broadleaf leaf map is a PHOTOGRAPH, already exactly the right green, so its tints sit near
  *  white: a couple of steps cooler, warmer, darker and lighter. Anything stronger fights the photo
  *  and the wood starts reading as painted plastic.
@@ -39,8 +51,8 @@ import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
  *  value that colours the needles instead of crushing them. Conifers still come out the darker tree,
  *  because their map is darker: that difference is now the map's to make, not the palette's. */
 const TINTS: Record<TreeFamily, string[]> = {
-  broadleaf: ['#FFFFFF', '#EAF2DC', '#D8E4C4', '#F2ECD6', '#C9D8B4', '#E2E8CE'],
-  conifer: ['#DDEBC4', '#CBDCAE', '#EAF2D8', '#BCD09C', '#D3E4BA'],
+  broadleaf: ['#FFFFFF', '#EEF5E4', '#E1EAD2', '#F5F0DF', '#D5E1C6', '#E8EDD9'],
+  conifer: ['#E4EFD2', '#D7E4C2', '#EEF5E1', '#CCDAB6', '#DDEACA'],
 }
 /** One broadleaf in this many is caught turning. Warm and desaturating rather than orange:
  *  multiplying a green photograph by orange gives mud, and this is as far as a multiply can honestly
