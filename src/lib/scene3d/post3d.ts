@@ -148,6 +148,17 @@ export function buildPost(
     : null
   if (ao) {
     ao.updateGtaoMaterial({ ...AO_PARAMS, radius: AO_RADIUS_M * unitsPerMetre! })
+    // The occlusion buffer has to be drawn with the same sidedness as the picture.
+    //
+    // GTAO builds depth and normals by redrawing the scene under one override material, and an
+    // override brings its own `side`, which defaults to front faces only. Half this world is sheets
+    // and every material it owns is DOUBLE sided, so the beauty pass draws back faces that the
+    // occlusion pass does not: the inside of a wall, the underside of a roof, the far side of a
+    // barrier. Those pixels then have no depth of their own in the buffer and inherit whatever
+    // front-facing geometry stands behind them, so they are shaded as if they were that surface.
+    // What it looks like is occlusion cast onto walls from things on the other side of them, which
+    // reads as the wall having gone transparent.
+    ao.normalMaterial.side = THREE.DoubleSide
     // Anything marked `noAO` sits out the pass entirely, by being invisible while it runs. Hiding
     // rather than filtering by layer on purpose: a layer has to be enabled on every camera that ever
     // looks at the scene, and the failure mode when one is missed is an invisible crowd. The worst a
