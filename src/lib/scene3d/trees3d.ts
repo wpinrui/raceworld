@@ -57,12 +57,14 @@ const AUTUMN_IN = 11
  *  sits was chosen by watching the tier change rather than by arithmetic: near enough that a tree
  *  swapping cards is small in frame, far enough that nothing swaps while it still reads as a tree.
  *
- *  Brought in from 260/340 on measurement: the near tier was 2.1M triangles on the grid at Britain,
- *  the biggest single block in the scene, and the band's area goes as the square of its radius so a
- *  fifth off the radius is a third off the wood. Tightened only a little on purpose, since the
- *  impostors are already noticeable and pulling them closer is the thing that makes them more so. */
-const HERO_IN_M = 210
-const HERO_OUT_M = 280
+ *  TRIED AT 210/280 AND PUT BACK, on measurement. The near tier was 2.1M triangles, the biggest
+ *  single block in the scene, and pulling the band in did remove them: the frame's triangle count
+ *  halved. The frame time did not move. Triangles are not what this scene is short of, and swapping
+ *  a mesh tree for an impostor trades them for something it IS short of, since a card is alpha-tested
+ *  foliage and that is fill and overdraw rather than geometry. Tightening this band costs picture at
+ *  the exact distance the impostors are already noticeable, and buys nothing. */
+const HERO_IN_M = 260
+const HERO_OUT_M = 340
 
 /** How far the eye has to move before the wood is repacked, in metres. A camera drifting a few
  *  centimetres cannot have changed any tree's tier, and the walk is pure waste when it has not. */
