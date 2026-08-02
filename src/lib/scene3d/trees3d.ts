@@ -32,8 +32,8 @@ import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
  *  Three darkenings compounded on one photograph is what made the wood read underexposed.
  *
  *  Each swatch is lifted TOWARD WHITE rather than rescaled, which raises its value while keeping the
- *  direction of its hue: broadleaf now means 0.85 and conifer 0.78, and both keep about three
- *  quarters of the chroma they had. That matters more than the brightness here. The palette exists so
+ *  direction of its hue: broadleaf now means 0.92 and conifer 0.88, and both keep most of the
+ *  chroma they had. That matters more than the brightness here. The palette exists so
  *  a stand is not one flat green, and a lift big enough to fix the exposure on its own would have
  *  taken every swatch to within a couple of points of white and deleted the variation. Most of the
  *  correction is in `AO_CORE` instead, where the double-counting actually was.
@@ -51,8 +51,8 @@ import type { PackKind, TreeFamily, TreeKind, TreePack } from './treepack3d'
  *  value that colours the needles instead of crushing them. Conifers still come out the darker tree,
  *  because their map is darker: that difference is now the map's to make, not the palette's. */
 const TINTS: Record<TreeFamily, string[]> = {
-  broadleaf: ['#FFFFFF', '#EEF5E4', '#E1EAD2', '#F5F0DF', '#D5E1C6', '#E8EDD9'],
-  conifer: ['#E4EFD2', '#D7E4C2', '#EEF5E1', '#CCDAB6', '#DDEACA'],
+  broadleaf: ['#FFFFFF', '#F6FAF1', '#EFF4E8', '#FAF7EE', '#E9EFE2', '#F3F5EB'],
+  conifer: ['#F1F6E8', '#EAF1E0', '#F6FAEF', '#E5ECDB', '#EDF4E4'],
 }
 /** One broadleaf in this many is caught turning. Warm and desaturating rather than orange:
  *  multiplying a green photograph by orange gives mud, and this is as far as a multiply can honestly
