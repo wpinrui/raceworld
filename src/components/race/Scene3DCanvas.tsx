@@ -12,6 +12,7 @@
 // shadows real at racing zoom.
 
 import { useCallback, useEffect, useRef } from 'react'
+import { Gauge } from 'lucide-react'
 import * as THREE from 'three'
 import type { Lighting } from '@/lib/ui/lighting'
 import { applyOrbitCam, type OrbitCam } from '@/lib/scene3d/camera3d'
@@ -50,6 +51,10 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The frame counter writes straight into its own node. Through React state it would set state on
+  // every frame it measures, re-render the canvas host, and be reporting the cost of reporting.
+  const fpsRef = useRef<HTMLSpanElement>(null)
+  const frames = useRef({ n: 0, since: 0 })
   const glRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
@@ -89,6 +94,19 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
       // finished before any edge of it can show.
       if (gl.scene.fog instanceof THREE.Fog) refitFog(gl.scene.fog, camera, world.ground)
       gl.post.render()
+      // Counted HERE rather than off a rAF loop of its own: this is the app's only render, so its
+      // rate is the frame rate. A separate loop would report how often the browser offered a frame,
+      // which is 60 whatever the scene costs.
+      const f = frames.current
+      const now = performance.now()
+      f.n++
+      if (f.since === 0) {
+        f.since = now
+      } else if (now - f.since >= 500) {
+        if (fpsRef.current) fpsRef.current.textContent = ((f.n * 1000) / (now - f.since)).toFixed(0)
+        f.n = 0
+        f.since = now
+      }
     }
   }, [camRef, camera])
 
@@ -228,6 +246,11 @@ export function Scene3DCanvas({ world, carsGroup, crewGroup, base, lighting, nig
   return (
     <div ref={boxRef} className={className}>
       <canvas ref={canvasRef} className="absolute inset-0" />
+      <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1.5 rounded bg-black/55 px-2 py-1 font-mono text-xs text-white">
+        <Gauge className="h-3.5 w-3.5" />
+        <span ref={fpsRef}>--</span>
+        <span>fps</span>
+      </div>
     </div>
   )
 }
