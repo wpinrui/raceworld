@@ -154,9 +154,16 @@ describe('buildWorld3D', () => {
       overlay, garageColors: () => '#123456',
     })
     const colours = new Set<string>()
+    const painted = new THREE.Color()
     teamed.group.traverse((o) => {
-      if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) {
-        colours.add((o.material as THREE.MeshLambertMaterial).color.getHexString())
+      if (!(o instanceof THREE.Mesh) || o instanceof THREE.InstancedMesh) return
+      colours.add((o.material as THREE.MeshLambertMaterial).color.getHexString())
+      // Decals carry their paint on the VERTICES, over a white material, so a colour laid on the
+      // road is found there rather than on the material it was drawn with.
+      const vertex = o.geometry.attributes.color
+      if (!vertex) return
+      for (let i = 0; i < vertex.count; i++) {
+        colours.add(painted.fromBufferAttribute(vertex, i).getHexString())
       }
     })
     expect(colours).toContain('e8c33a')
@@ -233,28 +240,36 @@ describe('buildWorld3D', () => {
     // The ink is the road wearing a lap's worth of rubber, and it is a separate stack of materials
     // built through `buildOpsDecals`: left at full it would be a glossier, bluer racing line drawn
     // down the middle of the surface it belongs to.
-    let inkMeshes = 0
+    let inkTriangles = 0
     world.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh) || o.renderOrder === 0 || o.renderOrder >= 1000) return
-      inkMeshes++
+      const g = o.geometry as THREE.BufferGeometry
+      inkTriangles += (g.index ? g.index.count : g.attributes.position.count) / 3
       expect((o.material as THREE.MeshPhysicalMaterial).specularIntensity).toBe(0.25)
     })
-    expect(inkMeshes).toBeGreaterThan(10)
+    // Counted in TRIANGLES rather than in meshes: the ink is hundreds of ops merged down to a draw
+    // per alpha, so a mesh count now says how well it batched and nothing about whether it is there.
+    expect(inkTriangles).toBeGreaterThan(1000)
   })
 
   it('lays the driven-in ink as ordered decals that never write depth', () => {
     let decals = 0
     let maxOrder = 0
+    let triangles = 0
     world.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh) || o.renderOrder === 0 || o.renderOrder >= 1000) return
       decals++
       maxOrder = Math.max(maxOrder, o.renderOrder)
+      const g = o.geometry as THREE.BufferGeometry
+      triangles += (g.index ? g.index.count : g.attributes.position.count) / 3
       const mat = o.material as THREE.MeshLambertMaterial
       expect(mat.transparent).toBe(true)
       expect(mat.depthWrite).toBe(false)
     })
-    // The surface story is hundreds of ops but only dozens of paints: runs merged, order kept.
-    expect(decals).toBeGreaterThan(10)
+    // The surface story is hundreds of ops and a continuum of shades, landing as a draw per alpha
+    // with the paint on the vertices. What has to survive is the INK, not the mesh count.
+    expect(triangles).toBeGreaterThan(1000)
+    expect(decals).toBeGreaterThan(0)
     expect(maxOrder).toBe(decals)
     // The pit box pad and markings paint at 900, over the whole ink range: an ink stack that grew
     // past it would silently paint the grime over the pad again. The regression that hid them.

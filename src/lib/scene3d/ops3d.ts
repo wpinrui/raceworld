@@ -63,8 +63,36 @@ function opGeometries(op: DrawOp, y: number): THREE.BufferGeometry[] {
   return out.filter((g) => g.attributes.position.count > 0)
 }
 
-/** Compile a paint-ordered op list into decal meshes, merging CONSECUTIVE ops that share a paint so
- *  a few hundred soft strokes land as a handful of draws without ever reordering the painter. */
+/** Paint a whole run's colour onto its vertices, so a hundred shades share one material.
+ *
+ *  The ink is a CONTINUUM: every arc of the rubber band, every marble patch, every grain stripe is
+ *  `blend(tarmac, RUBBER, weight)` at its own weight, so consecutive ops almost never share a colour
+ *  and a run-per-colour is a run per op. Measured on the grid at Britain that was 834 meshes for the
+ *  road surface alone, most of the world's draw calls, for a few triangles apiece.
+ *
+ *  Written LINEAR, because that is the space a vertex colour is consumed in. `THREE.Color.set` does
+ *  the sRGB decode on the way in, the same decode `material.color` gets, so the product of a white
+ *  material and this attribute is the colour the op asked for to the bit. */
+function paintVertices(geometry: THREE.BufferGeometry, colour: THREE.Color): void {
+  const n = geometry.attributes.position.count
+  const rgb = new Float32Array(n * 3)
+  for (let i = 0; i < n; i++) {
+    rgb[i * 3] = colour.r
+    rgb[i * 3 + 1] = colour.g
+    rgb[i * 3 + 2] = colour.b
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(rgb, 3))
+}
+
+/** Compile a paint-ordered op list into decal meshes.
+ *
+ *  One draw per ALPHA, not per colour: colour rides on the vertices (`paintVertices`), which is what
+ *  lets a continuum of shades share a buffer. Alpha cannot join it, because it decides whether the
+ *  material blends at all and that is a property of the material rather than of a vertex.
+ *
+ *  The painter survives the merge. Within one buffer, triangles rasterise in the order they were
+ *  written, and a decal does not write depth, so ops laid later still paint over ops laid earlier
+ *  exactly as they did when each was its own draw. Between buffers the renderOrder still carries it. */
 export function buildOpsDecals(
   ops: readonly DrawOp[], o: OpsDecalOpts, materials: SceneMaterials,
 ): { group: THREE.Group; nextOrder: number } {
@@ -84,6 +112,7 @@ export function buildOpsDecals(
     }
     runGeometries = []
   }
+  const paint = new THREE.Color()
   for (const op of ops) {
     const colour = (op.fill && !refName(op.fill) ? op.fill : undefined)
       ?? (op.stroke && !refName(op.stroke) ? op.stroke : undefined)
@@ -93,20 +122,27 @@ export function buildOpsDecals(
     if (op.fill && op.stroke && op.fill !== op.stroke && !refName(op.fill)) {
       throw new Error('buildOpsDecals: an op with distinct fill and stroke colours is not mergeable')
     }
-    const key = `${colour}@${op.alpha ?? 1}`
+    const alpha = op.alpha ?? 1
+    const key = `@${alpha}`
     if (key !== runKey) {
       flush()
       runKey = key
-      runMaterial = materials.get(colour, {
-        alpha: op.alpha ?? 1,
+      // WHITE, so the vertex colour is the whole of the paint rather than a tint over one op's.
+      runMaterial = materials.get('#FFFFFF', {
+        alpha,
         decal: true,
         layer: o.bias,
         roughness: ROUGH.matte,
         detail: o.detail,
         specular: o.specular,
+        vertexColors: true,
       })
     }
-    runGeometries.push(...opGeometries(op, o.y))
+    paint.set(colour)
+    for (const geometry of opGeometries(op, o.y)) {
+      paintVertices(geometry, paint)
+      runGeometries.push(geometry)
+    }
   }
   flush()
   return { group, nextOrder: order }
