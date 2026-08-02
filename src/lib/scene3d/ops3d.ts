@@ -84,15 +84,21 @@ function paintVertices(geometry: THREE.BufferGeometry, colour: THREE.Color): voi
   geometry.setAttribute('color', new THREE.BufferAttribute(rgb, 3))
 }
 
-/** Compile a paint-ordered op list into decal meshes.
+/** Compile a paint-ordered op list into decal meshes, merging CONSECUTIVE ops that share a paint.
  *
- *  One draw per ALPHA, not per colour: colour rides on the vertices (`paintVertices`), which is what
- *  lets a continuum of shades share a buffer. Alpha cannot join it, because it decides whether the
- *  material blends at all and that is a property of the material rather than of a vertex.
+ *  ONE MATERIAL serves every shade. The paint rides on the vertices instead (`paintVertices`), so the
+ *  circuit's ink is a single white decal material rather than the eight hundred distinct ones a
+ *  continuum of blended shades used to mint, and consecutive draws no longer rebind a program and a
+ *  uniform block between them.
  *
- *  The painter survives the merge. Within one buffer, triangles rasterise in the order they were
- *  written, and a decal does not write depth, so ops laid later still paint over ops laid earlier
- *  exactly as they did when each was its own draw. Between buffers the renderOrder still carries it. */
+ *  THE RUN STILL BREAKS ON COLOUR, though the material no longer depends on it, and that is not an
+ *  oversight. Keying the run on alpha alone collapses the whole road surface to a couple of draws,
+ *  and it visibly changes the picture: the soft strokes that build a brake mark come out with hard
+ *  blocky edges where they were continuous. Measured, not assumed, on a controlled before-and-after
+ *  of one shot with only this file differing, and the same shot with the paint on the vertices and
+ *  the colour key kept is identical to the original. I do not have the mechanism: the ops are opaque
+ *  decals that never write depth, so submission order inside one buffer should composite exactly as
+ *  submission order across many. Until that is understood, the break stays. */
 export function buildOpsDecals(
   ops: readonly DrawOp[], o: OpsDecalOpts, materials: SceneMaterials,
 ): { group: THREE.Group; nextOrder: number } {
@@ -123,7 +129,7 @@ export function buildOpsDecals(
       throw new Error('buildOpsDecals: an op with distinct fill and stroke colours is not mergeable')
     }
     const alpha = op.alpha ?? 1
-    const key = `@${alpha}`
+    const key = `${colour}@${alpha}`
     if (key !== runKey) {
       flush()
       runKey = key

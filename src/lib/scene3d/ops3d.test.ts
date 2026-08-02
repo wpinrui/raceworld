@@ -13,26 +13,33 @@ const meshes = (g: THREE.Group) => g.children as THREE.Mesh[]
 describe('buildOpsDecals', () => {
   const materials = new SceneMaterials()
 
-  it('merges ops of different paints into one draw, carrying each paint on its vertices', () => {
+  it('merges consecutive same-paint ops and breaks the run when the paint changes', () => {
     const { group, nextOrder } = buildOpsDecals(
       [line('#111111'), line('#111111'), line('#222222')], { y: 0.1, order: 5, bias: 9 }, materials,
     )
-    // Colour no longer breaks a run. The driven-in ink is a continuum of blended shades, so a run
-    // per colour was a run per op, and the road surface alone was most of the world's draw calls.
-    expect(meshes(group)).toHaveLength(1)
-    const [mesh] = meshes(group)
-    expect(mesh.renderOrder).toBe(5)
-    expect(nextOrder).toBe(6)
-    // The material carries none of it: white, so the vertex colour IS the paint.
-    expect((mesh.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('ffffff')
-    expect((mesh.material as THREE.MeshStandardMaterial).vertexColors).toBe(true)
-    // Every op's own colour survives, at the vertex, in the order the ops were laid.
-    const colour = mesh.geometry.attributes.color
-    const at = (i: number) => new THREE.Color().fromBufferAttribute(colour, i).getHexString()
-    const per = colour.count / 3
-    expect(at(0)).toBe('111111')
-    expect(at(per)).toBe('111111')
-    expect(at(2 * per)).toBe('222222')
+    expect(meshes(group)).toHaveLength(2)
+    expect(meshes(group).map((m) => m.renderOrder)).toEqual([5, 6])
+    expect(nextOrder).toBe(7)
+    // Two merged strokes carry twice one stroke's vertices.
+    const [both, one] = meshes(group)
+    expect(both.geometry.attributes.position.count).toBe(2 * one.geometry.attributes.position.count)
+  })
+
+  it('paints every run through one shared material, colour carried on the vertices', () => {
+    const { group } = buildOpsDecals(
+      [line('#111111'), line('#222222')], { y: 0.1, order: 5, bias: 9 }, materials,
+    )
+    const [first, second] = meshes(group)
+    // ONE material for the whole road surface. The ink is a continuum of blended shades, and a
+    // material per shade was eight hundred programs and uniform blocks for one surface.
+    expect(first.material).toBe(second.material)
+    expect((first.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('ffffff')
+    expect((first.material as THREE.MeshStandardMaterial).vertexColors).toBe(true)
+    // Each op's own paint survives on its buffer, or one material would mean one colour.
+    const at = (m: THREE.Mesh) => new THREE.Color()
+      .fromBufferAttribute(m.geometry.attributes.color, 0).getHexString()
+    expect(at(first)).toBe('111111')
+    expect(at(second)).toBe('222222')
   })
 
   it('keeps alpha apart from opaque runs of the same colour, as decal materials', () => {

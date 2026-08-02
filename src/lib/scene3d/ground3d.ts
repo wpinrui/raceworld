@@ -10,7 +10,6 @@ import type { Scenery } from '@/lib/ui/track-scenery'
 import { ringsToPolys, samplePathRings } from './paths3d'
 import { GeometrySink, addPolyCap } from './solids3d'
 import { ROUGH, type SceneMaterials } from './materials3d'
-import { MeshBatch } from './batch3d'
 import { blendSurfaces, maskWindow, type SkinSurface, type StandSkin } from './standtex3d'
 import { planarUV, type SurfaceDetail } from './detail3d'
 
@@ -150,18 +149,23 @@ export function buildGroundStack3D(
   detail: SurfaceDetail | null = null,
 ): THREE.Group {
   const group = new THREE.Group()
-  // Every band, field, hedgerow, terrain patch and runoff is a flat fill in the world's own frame,
-  // and there are hundreds of them across a circuit for a few thousand triangles apiece. Gathered per
-  // material they come out as one mesh per colour.
+  // NOT batched per material, though it looks like the obvious candidate.
   //
-  // Nothing about the picture rides on them being separate. The painter's stack is held by the
-  // per-layer polygonOffset each material already carries, not by the order these were added: three
-  // sorts opaque draws by renderOrder and program, and never by position in a group.
-  const batch = new MeshBatch()
+  // These fills are opaque and they overlap WITHIN a layer, where every one of them carries the same
+  // polygonOffset. Coplanar opaque fragments at equal depth pass three's LessEqual test, so the last
+  // one submitted is the one that shows, and which that is comes out of the renderer's own ordering
+  // of separate meshes. Gathered into one buffer per colour it becomes buffer order instead, and the
+  // ground visibly repaints: measured against a before-and-after of the same shot, the grass and the
+  // runoff came out as different surfaces.
+  //
+  // It was not worth it anyway. The ground stack and the kerbs together were 64 of the 898 meshes
+  // this pass was chasing; the road's compiled ink was the other 834.
   const add = (geo: THREE.BufferGeometry | null, colour: string, layer: number, alpha = 1) => {
     if (!geo) return
     if (detail) planarUV(geo, u(detail.tileM))
-    batch.add(geo, materials.get(colour, { alpha, layer, detail }))
+    const mesh = new THREE.Mesh(geo, materials.get(colour, { alpha, layer, detail }))
+    mesh.receiveShadow = true
+    group.add(mesh)
   }
   for (const b of scenery.bands) {
     add(pathFillGeometry(b.d, lift(layers.bands)), b.fill, layers.bands)
@@ -188,8 +192,5 @@ export function buildGroundStack3D(
     })
     for (const [colour, s] of byColour) add(s.empty ? null : s.build(), colour, layers.floors)
   }
-  batch.into(group, (mesh) => {
-    mesh.receiveShadow = true
-  })
   return group
 }
